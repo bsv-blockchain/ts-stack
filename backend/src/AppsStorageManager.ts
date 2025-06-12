@@ -1,71 +1,119 @@
 import { Collection, Db } from 'mongodb'
-import { TimeCrateRecord } from './types.js'
-import { Base64String } from '@bsv/sdk'
 import { LookupFormula } from '@bsv/overlay'
+import { AppCatalogRecord, PublishedAppMetadata } from './types.js'
 
-// Implements a Lookup Storage Manager for Apps tokens
+/**
+ * Storage manager for the on-chain Apps catalogue overlay.
+ */
 export class AppsStorageManager {
-  private readonly records: Collection<TimeCrateRecord>
+  private readonly records: Collection<AppCatalogRecord>
 
   /**
-   * Constructs a new TimeCrateStorage instance
-   * @param {Db} db - connected mongo database instance
+   * @param db  A connected MongoDB database handle.
    */
   constructor(private readonly db: Db) {
-    this.records = db.collection<TimeCrateRecord>('timeCrateRecords')
-    this.records.createIndex({
-      searchableAttributes: 'text'
-    }).catch((e) => console.error(e))
+    this.records = db.collection<AppCatalogRecord>('appsCatalogRecords')
+
+    // Simple full-text index so callers can perform ad-hoc searches.
+    this.records
+      .createIndex({
+        'metadata.name': 'text',
+        'metadata.description': 'text',
+        'metadata.tags': 'text',
+        'metadata.domain': 'text'
+      })
+      .catch(console.error)
   }
 
   /**
-   * Stores a new TimeCrate record
-   * @param {string} txid transaction id
-   * @param {number} outputIndex index of the UTXO
-   * @param {Base64String} serialNumber certificate serial number to store
+   * Insert a new app-token record.
    */
-  async storeRecord(txid: string, outputIndex: number, serialNumber: Base64String): Promise<void> {
+  async storeRecord(
+    txid: string,
+    outputIndex: number,
+    metadata: PublishedAppMetadata
+  ): Promise<void> {
     await this.records.insertOne({
       txid,
       outputIndex,
-      serialNumber,
+      metadata,
       createdAt: new Date()
     })
   }
 
   /**
-   * Delete a matching TimeCrate record
-   * @param {string} txid transaction id
-   * @param {number} outputIndex index of the UTXO
+   * Remove an app-token record identified by its UTXO.
    */
   async deleteRecord(txid: string, outputIndex: number): Promise<void> {
     await this.records.deleteOne({ txid, outputIndex })
   }
 
   /**
-   * Find a matching TimeCrate record by matching certificate serial number
-   * @param {Base64String} serialNumber - Unique certificate serial number to query by
-   * @returns {Promise<LookupFormula>} - Returns matching UTXO references
+   * Fetch every record published for a specific domain.
    */
-  async findByCertificateSerialNumber(serialNumber: Base64String): Promise<LookupFormula> {
-    return await this.findRecordWithQuery({ serialNumber })
+  async findByDomain(domain: string): Promise<LookupFormula> {
+    return this.findRecordWithQuery({ 'metadata.domain': domain })
   }
 
   /**
-   * Find a matching TimeCrate record by matching outpoint
-   * @param {string} outpoint - Outpoint to query by (format: "txid.outputIndex")
-   * @returns {Promise<LookupFormula>} - Returns matching UTXO references
+   * Fetch every record by publisher (identity key).
+   */
+  async findByPublisher(publisher: string): Promise<LookupFormula> {
+    return this.findRecordWithQuery({ 'metadata.publisher': publisher })
+  }
+
+  /**
+   * Look up the single record behind an outpoint ("txid.outputIndex").
+   * Throws if the outpoint string is malformed.
    */
   async findByOutpoint(outpoint: string): Promise<LookupFormula> {
-    // Parse txid and outputIndex from the outpoint string (format: "txid.outputIndex")
-    const [txid, outputIndexStr] = outpoint.split('.')
-    const outputIndex = parseInt(outputIndexStr, 10)
+    const [txid, indexStr] = outpoint.split('.')
+    const outputIndex = Number(indexStr)
 
-    if (!txid || isNaN(outputIndex)) {
-      throw new Error('Invalid outpoint format. Expected "txid.outputIndex"')
+    if (!txid || Number.isNaN(outputIndex)) {
+      throw new Error('Invalid outpoint format – expected "txid.outputIndex"')
     }
 
-    return await this.findRecordWithQuery({ txid, outputIndex })
+    return this.findRecordWithQuery({ txid, outputIndex })
+  }
+
+  /**
+  * Fuzzy-match apps by (partial) name.
+  * By default uses a case-insensitive RegExp; adjust `limit` as needed.
+  *
+  * If you have MongoDB Atlas Search, prefer the commented aggregation
+  * below for better fuzzy scoring/ordering.
+  */
+  async findByNameFuzzy(
+    partialName: string,
+    limit = 20
+  ): Promise<LookupFormula> {
+    // Escape regex metacharacters so user input is safe
+    const escaped = partialName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(escaped, 'i')
+
+    return this.records
+      .find({ 'metadata.name': { $regex: regex } })
+      .limit(limit)
+      .toArray()
+
+    /* ---------- Note: Consider supporting Atlas Search version ----------
+    return this.records
+      .aggregate<AppCatalogRecord>([
+        {
+          $search: {
+            index: 'default',                 // Atlas Search index
+            text: {
+              query: partialName,
+              path: 'metadata.name',
+              fuzzy: { maxEdits: 2 }
+            }
+          }
+        },
+        { $limit: limit }
+      ])
+      .toArray()
+    ------------------------------------------- */
   }
 
   /**

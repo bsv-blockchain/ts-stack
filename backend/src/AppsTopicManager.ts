@@ -1,14 +1,15 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { PushDrop, Transaction, Utils } from '@bsv/sdk'
-import docs from './docs/TimeCrateTopicManagerDocs.md.js'
+import docs from './docs/AppsTopicManagerDocs.md.js'
+import { PublishedAppMetadata } from 'mod.js'
 
 /**
- * Implements a topic manager for Apps tokens
+ * Implements a topic manager for App tokens
  * @public
  */
 export default class AppsTopicManager implements TopicManager {
   /**
-   * Returns the outputs from the Apps transaction that are admissible.
+   * Returns the outputs from the App transaction that are admissible.
    * @param beef - The transaction data in BEEF format
    * @param previousCoins - The previous coins to consider
    * @returns A promise that resolves with the admittance instructions
@@ -22,7 +23,7 @@ export default class AppsTopicManager implements TopicManager {
       // Validate params
       if (!Array.isArray(parsedTransaction.inputs) || parsedTransaction.inputs.length < 1) throw new Error('Missing parameter: inputs')
       if (!Array.isArray(parsedTransaction.outputs) || parsedTransaction.outputs.length < 1) throw new Error('Missing parameter: outputs')
-      console.log('TimeCrate topic manager has parsed a the transaction: ', parsedTransaction.id('hex'))
+      console.log('Apps topic manager has parsed a the transaction: ', parsedTransaction.id('hex'))
 
       // Try to decode and validate transaction outputs
       for (const [i, output] of parsedTransaction.outputs.entries()) {
@@ -32,18 +33,32 @@ export default class AppsTopicManager implements TopicManager {
 
           // Check that there is exactly one field + signature
           if (result.fields.length !== 2) {
-            throw new Error('TimeCrate token must have exactly one field + signature')
+            throw new Error('App token must have exactly one metadata field + signature')
           }
 
-          const serialNumber = Utils.toUTF8(result.fields[0])
-
-          if (serialNumber === undefined || serialNumber === null) {
-            throw new Error('TimeCrate token must contain a valid serialNumber')
+          const metadataJSON = Utils.toUTF8(result.fields[0])
+          let metadata: PublishedAppMetadata
+          try {
+            metadata = JSON.parse(metadataJSON)
+          } catch {
+            throw new Error('Metadata field is not valid JSON')
           }
 
-          // Check that the field is exactly 32 bytes in length
-          if (result.fields[0].length !== 32) {
-            throw new Error('TimeCrate token serial number must be exactly 32 bytes in length')
+          if (metadata == null) {
+            throw new Error('App token must contain valid metadata')
+          }
+
+          if (
+            typeof metadata?.version !== 'string' ||
+            typeof metadata.name !== 'string' ||
+            typeof metadata.description !== 'string' ||
+            typeof metadata.icon !== 'string' ||
+            !(typeof metadata.httpURL === 'string' || typeof metadata.uhrpURL === 'string') ||
+            typeof metadata.domain !== 'string' ||
+            typeof metadata.publisher !== 'string' ||
+            typeof metadata.release_date !== 'string'
+          ) {
+            throw new Error('App metadata missing required fields')
           }
 
           outputsToAdmit.push(i)
@@ -71,15 +86,15 @@ export default class AppsTopicManager implements TopicManager {
     }
 
     if (outputsToAdmit.length > 0) {
-      console.log(`Admitted ${outputsToAdmit.length} TimeCrate ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`)
+      console.log(`Admitted ${outputsToAdmit.length} App Catalog ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`)
     }
 
     if (previousCoins !== undefined && previousCoins.length > 0) {
-      console.log(`Consumed ${previousCoins.length} previous TimeCrate ${previousCoins.length === 1 ? 'coin' : 'coins'}!`)
+      console.log(`Consumed ${previousCoins.length} previous App Catalog ${previousCoins.length === 1 ? 'coin' : 'coins'}!`)
     }
 
     if (outputsToAdmit.length === 0 && (previousCoins === undefined || previousCoins.length === 0)) {
-      console.warn('No TimeCrate outputs admitted, and no previous TimeCrate coins were consumed.')
+      console.warn('No App Catalog outputs admitted, and no previous App Catalog coins were consumed.')
     }
 
     return {
@@ -92,7 +107,7 @@ export default class AppsTopicManager implements TopicManager {
   // identifyNeededInputs?: ((beef: number[]) => Promise<Array<{ txid: string; outputIndex: number }>>) | undefined
 
   /**
-   * Get the documentation associated with this TimeCrate topic manager
+   * Get the documentation associated with this Apps topic manager
    * @returns A promise that resolves to a string containing the documentation
    */
   async getDocumentation(): Promise<string> {
@@ -112,8 +127,9 @@ export default class AppsTopicManager implements TopicManager {
     informationURL?: string
   }> {
     return {
-      name: 'TimeCrate Topic Manager',
-      shortDescription: 'TimeCrate Resolution Protocol'
+      name: 'Apps Topic Manager',
+      shortDescription: 'Admits PushDrop tokens representing published Metanet Apps into an overlay.',
+      version: '0.1.0',
     }
   }
 }

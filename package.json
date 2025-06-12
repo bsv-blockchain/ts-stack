@@ -2,7 +2,7 @@
   "name": "@bsv/apps-overlay-services",
   "private": true,
   "version": "1.0.0",
-  "description": "Standard BSV project structure",
+  "description": "Overlay for tracking published Metanet applications.",
   "scripts": {
     "lars": "lars",
     "cars": "cars",
