@@ -87,17 +87,52 @@ class AppsLookupService implements LookupService {
 
     // --- Domain lookup -----------------------------------------------------
     if (query.domain) {
-      return await this.storageManager.findByDomain(query.domain)
+      return await this.storageManager.findByDomain(
+        query.domain, 
+        query.limit, 
+        query.skip, 
+        query.sortOrder
+      )
     }
 
     // --- Publisher lookup --------------------------------------------------
     if (query.publisher) {
-      return await this.storageManager.findByPublisher(query.publisher)
+      return await this.storageManager.findByPublisher(
+        query.publisher,
+        query.limit,
+        query.skip,
+        query.sortOrder
+      )
+    }
+
+    // --- Tag lookup --------------------------------------------------------
+    if (query.tags?.length) {
+      return await this.storageManager.findByTags(
+        query.tags,
+        query.limit,
+        query.skip,
+        query.sortOrder
+      )
+    }
+
+    // --- Category lookup ---------------------------------------------------
+    if (query.category) {
+      return await this.storageManager.findByCategory(
+        query.category,
+        query.limit,
+        query.skip,
+        query.sortOrder
+      )
     }
 
     // --- Fuzzy name lookup -------------------------------------------------
     if (query.name) {
-      return await this.storageManager.findByNameFuzzy(query.name, query.limit ?? 20)
+      return await this.storageManager.findByNameFuzzy(
+        query.name,
+        query.limit,
+        query.skip,
+        query.sortOrder
+      )
     }
 
     // --- Outpoint lookup ---------------------------------------------------
@@ -105,7 +140,12 @@ class AppsLookupService implements LookupService {
       return await this.storageManager.findByOutpoint(query.outpoint)
     }
 
-    throw new Error('No valid query parameters provided!')
+    // --- No specific query parameters - return all apps -------------------
+    return await this.storageManager.findAllApps(
+      query.limit,
+      query.skip,
+      query.sortOrder
+    )
   }
 
   async getDocumentation(): Promise<string> {

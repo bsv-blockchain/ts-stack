@@ -2,6 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { PushDrop, Transaction, Utils } from '@bsv/sdk'
 import docs from './docs/AppsTopicManagerDocs.md.js'
 import { PublishedAppMetadata } from 'mod.js'
+import { isTokenSignatureCorrectlyLinked } from './isTokenSignatureCorrectlyLinked.js'
 
 /**
  * Implements a topic manager for App tokens
@@ -61,9 +62,14 @@ export default class AppsTopicManager implements TopicManager {
             throw new Error('App metadata missing required fields')
           }
 
+          // Check key linages
+          const isLinked = await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, metadata.publisher, result.fields)
+          if (!isLinked) {
+            throw new Error('Signature is not properly linked')
+          }
+
           outputsToAdmit.push(i)
         } catch (error) {
-          console.error(`Error parsing output ${i}`, error)
           // It's common for other outputs to be invalid; no need to log an error here
           continue
         }

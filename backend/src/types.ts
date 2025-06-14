@@ -1,11 +1,20 @@
 import { OutpointString, PubKeyHex } from "@bsv/sdk"
 
 export interface AppCatalogQuery {
+  // Filter parameters
   domain?: string
   publisher?: PubKeyHex
   name?: string
   outpoint?: OutpointString
-  limit?: number
+  tags?: string[]
+  category?: string
+  
+  // Pagination parameters
+  limit?: number    // Maximum number of results to return (default: 50)
+  skip?: number     // Number of results to skip (default: 0)
+  
+  // Sorting parameters
+  sortOrder?: 'asc' | 'desc'  // Sort direction (default: 'desc' - newest first)
 }
 
 /**
