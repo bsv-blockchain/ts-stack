@@ -2,7 +2,7 @@
 
 BSV BLOCKCHAIN | BRC100 Conforming Wallet Example Code
 
-The BSV Wallet Toolbox builds on the [SDK](https://bitcoin-sv.github.io/ts-sdk) to add support for:
+The BSV Wallet Toolbox builds on the [SDK](https://bsv-blockchain.github.io/ts-sdk) to add support for:
 
     - Persistent UTXO and transaction history management
     - Standardized key derivation protocols.
@@ -22,7 +22,7 @@ The BSV Wallet Toolbox Examples provides a collection of self-contained sample c
 
 ## Documentation
 
-[The Docs](https://bitcoin-sv.github.io/wallet-toolbox) are available here on Github pages.  
+[The Docs](https://bsv-blockchain.github.io/wallet-toolbox) are available here on Github pages.  
 [Example code](https://docs.bsvblockchain.org/guides/sdks/ts/examples) is available over on our gitbook.  
 
 The Toolbox is richly documented with code-level annotations. This should show up well within editors like VSCode.  
