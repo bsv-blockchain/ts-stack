@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-examples",
-  "version": "1.1.106",
+  "version": "1.1.107",
   "description": "Examples for @bsv/wallet-toolbox",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
