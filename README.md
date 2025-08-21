@@ -1,6 +1,6 @@
 # KVStore Services
 
-A modern TypeScript implementation of the KVStore lookup service for BSV blockchain, following the overlay services architecture.
+Overlay services for tracking on-chain key-value store data.
 
 ## Overview
 
@@ -114,17 +114,6 @@ npm run dev
 - **Topic**: `kvstore`
 - **Admission Mode**: `locking-script`
 - **Spend Notification Mode**: `none`
-
-## Migration from JavaScript Version
-
-This TypeScript implementation replaces the original JavaScript version with:
-
-✅ **Modern Architecture**: ES modules, TypeScript, overlay protocol compliance  
-✅ **Better Storage**: MongoDB with proper indexing vs. Knex/SQL  
-✅ **Type Safety**: Full TypeScript interfaces and type checking  
-✅ **Comprehensive Testing**: Unit tests with in-memory MongoDB  
-✅ **Better Documentation**: Generated docs and examples  
-✅ **Performance**: Optimized queries and caching  
 
 ## License
 
