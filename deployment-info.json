@@ -9,7 +9,7 @@
       "serviceFactory": "./backend/src/KVStoreLookupServiceFactory.ts",
       "hydrateWith": "mongo"
     }
-  },  
+  },
   "configs": [
     {
       "name": "Local LARS",
@@ -23,7 +23,7 @@
       "name": "Babbage",
       "provider": "CARS",
       "CARSCloudURL": "https://cars.babbage.systems",
-      "projectID": "",
+      "projectID": "2b63ed8575c49054dd0ac65c61e7e6c6",
       "network": "mainnet",
       "deploy": [
         "backend"
@@ -33,7 +33,7 @@
       "name": "Babbage testnet",
       "provider": "CARS",
       "CARSCloudURL": "https://cars.babbage.systems",
-      "projectID": "",
+      "projectID": "136860c08976264275a009403759e6ad",
       "network": "testnet",
       "deploy": [
         "backend"

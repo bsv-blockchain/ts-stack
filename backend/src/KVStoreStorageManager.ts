@@ -37,7 +37,8 @@ export class KVStoreStorageManager {
       txid,
       outputIndex,
       protectedKey,
-      createdAt: new Date()
+      createdAt: new Date(),
+      spent: false
     })
   }
 
@@ -46,6 +47,16 @@ export class KVStoreStorageManager {
    */
   async deleteRecord(txid: string, outputIndex: number): Promise<void> {
     await this.records.deleteOne({ txid, outputIndex })
+  }
+
+  /**
+   * Mark a KVStore record as spent (preserve for history).
+   */
+  async markRecordAsSpent(txid: string, outputIndex: number): Promise<void> {
+    await this.records.updateOne(
+      { txid, outputIndex },
+      { $set: { spent: true, spentAt: new Date() } }
+    )
   }
 
   /**
@@ -60,10 +71,15 @@ export class KVStoreStorageManager {
     protectedKey: string,
     limit: number = 50,
     skip: number = 0,
-    sortOrder: 'asc' | 'desc' = 'desc'
+    sortOrder: 'asc' | 'desc' = 'desc',
+    includeSpent: boolean = false
   ): Promise<LookupFormula> {
+    const query = includeSpent
+      ? { protectedKey }
+      : { protectedKey, spent: { $ne: true } }
+
     return this.findRecordWithQuery(
-      { protectedKey },
+      query,
       limit,
       skip,
       sortOrder
@@ -101,7 +117,7 @@ export class KVStoreStorageManager {
   ): Promise<LookupFormula> {
     // Apply sort on createdAt for chronological ordering
     const sortDirection = sortOrder === 'desc' ? -1 : 1
-    
+
     // Find matching results from the DB with pagination and sorting
     const results = await this.records
       .find(query)
@@ -110,7 +126,7 @@ export class KVStoreStorageManager {
       .limit(limit)
       .project({ txid: 1, outputIndex: 1 })
       .toArray()
-    
+
     return results.map((record: any) => {
       return {
         txid: record.txid,

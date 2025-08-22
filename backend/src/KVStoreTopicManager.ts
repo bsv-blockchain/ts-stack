@@ -1,5 +1,5 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { PushDrop, Transaction, Utils } from '@bsv/sdk'
+import { PushDrop, Transaction } from '@bsv/sdk'
 import docs from './docs/KVStoreTopicManagerDocs.md.js'
 
 /**
@@ -15,72 +15,36 @@ export default class KVStoreTopicManager implements TopicManager {
    */
   async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
-    try {
-      console.log('KVStore topic manager was invoked')
-      const parsedTransaction = Transaction.fromBEEF(beef)
+    const parsedTransaction = Transaction.fromBEEF(beef)
 
-      // Validate params
-      if (!Array.isArray(parsedTransaction.inputs) || parsedTransaction.inputs.length < 1) {
-        throw new Error('Missing parameter: inputs')
-      }
-      if (!Array.isArray(parsedTransaction.outputs) || parsedTransaction.outputs.length < 1) {
-        throw new Error('Missing parameter: outputs')
-      }
+    if (!Array.isArray(parsedTransaction.inputs) || parsedTransaction.inputs.length < 1) {
+      throw new Error('Missing parameter: inputs')
+    }
+    if (!Array.isArray(parsedTransaction.outputs) || parsedTransaction.outputs.length < 1) {
+      throw new Error('Missing parameter: outputs')
+    }
 
-      console.log('KVStore topic manager has parsed the transaction: ', parsedTransaction.id('hex'))
+    for (const [i, output] of parsedTransaction.outputs.entries()) {
+      try {
+        const result = PushDrop.decode(output.lockingScript)
 
-      // Try to decode and validate transaction outputs
-      for (const [i, output] of parsedTransaction.outputs.entries()) {
-        try {
-          // Decode the KVStore fields from the Bitcoin outputScript
-          const result = PushDrop.decode(output.lockingScript)
-
-          // KVStore protocol validation
-          // Expected structure: [protectedKey, value] in the PushDrop fields
-          if (result.fields.length !== 2) {
-            throw new Error('KVStore token must have exactly two PushDrop fields (protectedKey and value)')
-          }
-
-          // Validate the protected key (first field) - must be 32 bytes
-          const protectedKeyBuffer = result.fields[0]
-          if (protectedKeyBuffer.length !== 32) {
-            throw new Error(`KVStore tokens have 32-byte protected keys, but this token has ${protectedKeyBuffer.length} bytes`)
-          }
-
-          // Validate the value field (second field) - must exist but can be any length
-          const valueBuffer = result.fields[1]
-          if (!valueBuffer || valueBuffer.length === 0) {
-            throw new Error('KVStore tokens must have a non-empty value field')
-          }
-
-          console.log(
-            `KVStore output ${i} validated:`,
-            'protectedKey:', Utils.toBase64(protectedKeyBuffer).substring(0, 10) + '...',
-            'valueLength:', valueBuffer.length
-          )
-
-          outputsToAdmit.push(i)
-        } catch (error) {
-          // It's common for other outputs to be invalid; no need to log an error here
-          console.log(`Output ${i} not a valid KVStore token:`, (error as Error).message)
+        if (result.fields.length !== 3) {
           continue
         }
-      }
 
-      if (outputsToAdmit.length === 0) {
-        throw new Error('KVStore topic manager: no valid KVStore outputs found!')
-      }
+        const protectedKeyBuffer = result.fields[0]
+        if (protectedKeyBuffer.length !== 32) {
+          continue
+        }
 
-      // Returns an array of outputs admitted
-      // And previousOutputsRetained (none by default for KVStore)
-      return {
-        outputsToAdmit,
-        coinsToRetain: []
-      }
-    } catch (error) {
-      // Only log an error if no outputs were admitted and no previous coins consumed
-      if (outputsToAdmit.length === 0 && (previousCoins === undefined || previousCoins.length === 0)) {
-        console.error('Error identifying admissible KVStore outputs:', error)
+        const valueBuffer = result.fields[1]
+        if (!valueBuffer || valueBuffer.length === 0) {
+          continue
+        }
+
+        outputsToAdmit.push(i)
+      } catch (error) {
+        continue
       }
     }
 
@@ -96,9 +60,10 @@ export default class KVStoreTopicManager implements TopicManager {
       console.warn('No KVStore outputs admitted, and no previous KVStore coins were consumed.')
     }
 
+    console.log(`🔗 Retaining ${previousCoins?.length || 0} previous coins for history tracking`)
     return {
       outputsToAdmit,
-      coinsToRetain: []
+      coinsToRetain: previousCoins || []
     }
   }
 

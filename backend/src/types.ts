@@ -34,6 +34,8 @@ export interface KVStoreRecord {
   outputIndex: number
   protectedKey: string
   createdAt: Date
+  spent?: boolean
+  spentAt?: Date
 }
 
 /**
