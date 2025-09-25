@@ -46,10 +46,11 @@ export default class KVStoreTopicManager implements TopicManager {
         // Ensure same namespace?
         // Verify key linkage
         const anyoneWallet = new ProtoWallet('anyone')
+        const signature = result.fields.pop() as number[]
         const { valid } = await anyoneWallet.verifySignature({
           data: result.fields.reduce((a, e) => [...a, ...e], []),
-          signature: result.fields[kvProtocol.signature],
-          counterparty: Utils.toUTF8(result.fields[kvProtocol.controller]),
+          signature,
+          counterparty: Utils.toHex(result.fields[kvProtocol.controller]),
           protocolID: JSON.parse(Utils.toUTF8(result.fields[kvProtocol.namespace])),
           keyID: Utils.toBase64(protectedKeyBuffer)
         })
@@ -59,6 +60,7 @@ export default class KVStoreTopicManager implements TopicManager {
 
         outputsToAdmit.push(i)
       } catch (error) {
+        console.error(error)
         continue
       }
     }

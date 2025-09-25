@@ -177,19 +177,19 @@ export class KVStoreStorageManager {
   ): Promise<LookupFormula> {
     // Build dynamic query object
     const query: any = {}
-    
+
     if (filters.protectedKey) {
       query.protectedKey = filters.protectedKey
     }
-    
+
     if (filters.namespace) {
       query.namespace = filters.namespace
     }
-    
+
     if (filters.controller) {
       query.controller = filters.controller
     }
-    
+
     // Add spent filter unless explicitly including spent records
     if (!includeSpent) {
       query.spent = { $ne: true }
@@ -230,6 +230,7 @@ export class KVStoreStorageManager {
     // Apply sort on createdAt for chronological ordering
     const sortDirection = sortOrder === 'desc' ? -1 : 1
 
+    console.log('querying', query)
     // Find matching results from the DB with pagination and sorting
     const results = await this.records
       .find(query)
@@ -239,6 +240,7 @@ export class KVStoreStorageManager {
       .project({ txid: 1, outputIndex: 1 })
       .toArray()
 
+    console.log('results', results)
     return results.map((record: any) => {
       return {
         txid: record.txid,

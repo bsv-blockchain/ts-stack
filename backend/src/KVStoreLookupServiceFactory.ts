@@ -45,8 +45,9 @@ class KVStoreLookupService implements LookupService {
         outputIndex,
         Utils.toBase64(protectedKeyBuffer),
         Utils.toUTF8(decoded.fields[kvProtocol.namespace]),
-        Utils.toUTF8(decoded.fields[kvProtocol.controller]))
+        Utils.toHex(decoded.fields[kvProtocol.controller]))
     } catch (error) {
+      console.error(error)
       throw error
     }
   }
@@ -77,7 +78,7 @@ class KVStoreLookupService implements LookupService {
     const hasFilters = query.protectedKey || query.namespace || query.controller
 
     let results: any[]
-    
+
     if (hasFilters) {
       // Use dynamic filtering for any combination of filters
       results = await this.storageManager.findWithFilters(
