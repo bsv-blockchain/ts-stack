@@ -1,6 +1,7 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { PushDrop, Transaction } from '@bsv/sdk'
+import { ProtoWallet, PushDrop, Transaction, Utils } from '@bsv/sdk'
 import docs from './docs/KVStoreTopicManagerDocs.md.js'
+import { kvProtocol } from './types.js'
 
 /**
  * Implements a topic manager for KVStore tokens
@@ -28,18 +29,32 @@ export default class KVStoreTopicManager implements TopicManager {
       try {
         const result = PushDrop.decode(output.lockingScript)
 
-        if (result.fields.length !== 3) {
+        if (result.fields.length !== Object.keys(kvProtocol).length) {
           continue
         }
 
-        const protectedKeyBuffer = result.fields[0]
+        const protectedKeyBuffer = result.fields[kvProtocol.protectedKey]
         if (protectedKeyBuffer.length !== 32) {
           continue
         }
 
-        const valueBuffer = result.fields[1]
+        const valueBuffer = result.fields[kvProtocol.value]
         if (!valueBuffer || valueBuffer.length === 0) {
           continue
+        }
+
+        // Ensure same namespace?
+        // Verify key linkage
+        const anyoneWallet = new ProtoWallet('anyone')
+        const { valid } = await anyoneWallet.verifySignature({
+          data: result.fields.reduce((a, e) => [...a, ...e], []),
+          signature: result.fields[kvProtocol.signature],
+          counterparty: Utils.toUTF8(result.fields[kvProtocol.controller]),
+          protocolID: JSON.parse(Utils.toUTF8(result.fields[kvProtocol.namespace])),
+          keyID: Utils.toBase64(protectedKeyBuffer)
+        })
+        if (!valid) {
+          throw new Error('Invalid KVStore token: signature verification failed')
         }
 
         outputsToAdmit.push(i)

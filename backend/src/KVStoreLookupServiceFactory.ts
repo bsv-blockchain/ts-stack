@@ -3,7 +3,7 @@ import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmi
 import { PushDrop, Transaction, Utils } from '@bsv/sdk'
 import docs from './docs/KVStoreLookupDocs.md.js'
 import { Db } from 'mongodb'
-import { KVStoreQuery } from './types.js'
+import { kvProtocol, KVStoreQuery } from './types.js'
 
 /**
  * Implements a lookup service for KVStore tokens
@@ -31,17 +31,21 @@ class KVStoreLookupService implements LookupService {
     try {
       const decoded = PushDrop.decode(lockingScript)
 
-      if (decoded.fields.length !== 3) {
-        throw new Error(`KVStore token must have exactly two PushDrop fields (protectedKey and value) + signature, got ${decoded.fields.length} fields`)
+      if (decoded.fields.length !== Object.keys(kvProtocol).length) {
+        throw new Error(`KVStore token must have exactly ${Object.keys(kvProtocol).length} PushDrop fields (protectedKey and value) + signature, got ${decoded.fields.length} fields`)
       }
 
-      const protectedKeyBuffer = decoded.fields[0]
+      const protectedKeyBuffer = decoded.fields[kvProtocol.protectedKey]
       if (protectedKeyBuffer.length !== 32) {
         throw new Error(`KVStore tokens have 32-byte protected keys, but this token has ${protectedKeyBuffer.length} bytes`)
       }
 
-      const protectedKey = Utils.toBase64(protectedKeyBuffer)
-      await this.storageManager.storeRecord(txid, outputIndex, protectedKey)
+      await this.storageManager.storeRecord(
+        txid,
+        outputIndex,
+        Utils.toBase64(protectedKeyBuffer),
+        Utils.toUTF8(decoded.fields[kvProtocol.namespace]),
+        Utils.toUTF8(decoded.fields[kvProtocol.controller]))
     } catch (error) {
       throw error
     }
@@ -69,28 +73,39 @@ class KVStoreLookupService implements LookupService {
 
     const query = (question.query as KVStoreQuery)
 
-    if (query.protectedKey) {
-      return await this.storageManager.findByProtectedKey(
-        query.protectedKey,
+    // Check if we have any filters to apply
+    const hasFilters = query.protectedKey || query.namespace || query.controller
+
+    let results: any[]
+    
+    if (hasFilters) {
+      // Use dynamic filtering for any combination of filters
+      results = await this.storageManager.findWithFilters(
+        {
+          protectedKey: query.protectedKey,
+          namespace: query.namespace,
+          controller: query.controller
+        },
+        query.limit,
+        query.skip,
+        query.sortOrder
+      )
+    } else {
+      // No filters - return all records
+      results = await this.storageManager.findAllRecords(
         query.limit,
         query.skip,
         query.sortOrder
       )
     }
 
-    const allResults = await this.storageManager.findAllRecords(
-      query.limit,
-      query.skip,
-      query.sortOrder
-    )
-
-    for (const i in allResults) {
-      allResults[i].history = async (beef, outputIndex, currentDepth) => {
+    for (const i in results) {
+      results[i].history = async (beef: number[], outputIndex: number, currentDepth: number) => {
         return await this.historySelector(beef, outputIndex, currentDepth)
       }
     }
 
-    return allResults
+    return results
   }
 
   /**
