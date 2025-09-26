@@ -117,11 +117,11 @@ class KVStoreLookupService implements LookupService {
       const tx = Transaction.fromBEEF(beef)
       const result = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
 
-      if (result.fields.length !== 3) {
+      if (result.fields.length !== Object.keys(kvProtocol).length) {
         return false
       }
 
-      if (result.fields[0].length !== 32) {
+      if (result.fields[kvProtocol.protectedKey].length !== 32) {
         return false
       }
 
