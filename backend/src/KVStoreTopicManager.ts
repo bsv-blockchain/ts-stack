@@ -33,17 +33,12 @@ export default class KVStoreTopicManager implements TopicManager {
           continue
         }
 
-        const protectedKeyBuffer = result.fields[kvProtocol.protectedKey]
-        if (protectedKeyBuffer.length !== 32) {
-          continue
-        }
-
+        const keyBuffer = result.fields[kvProtocol.key]
         const valueBuffer = result.fields[kvProtocol.value]
-        if (!valueBuffer || valueBuffer.length === 0) {
+        if (!keyBuffer || keyBuffer.length === 0 || !valueBuffer || valueBuffer.length === 0) {
           continue
         }
 
-        // Ensure same namespace?
         // Verify key linkage
         const anyoneWallet = new ProtoWallet('anyone')
         const signature = result.fields.pop() as number[]
@@ -51,8 +46,8 @@ export default class KVStoreTopicManager implements TopicManager {
           data: result.fields.reduce((a, e) => [...a, ...e], []),
           signature,
           counterparty: Utils.toHex(result.fields[kvProtocol.controller]),
-          protocolID: JSON.parse(Utils.toUTF8(result.fields[kvProtocol.namespace])),
-          keyID: Utils.toBase64(protectedKeyBuffer)
+          protocolID: JSON.parse(Utils.toUTF8(result.fields[kvProtocol.protocolID])),
+          keyID: Utils.toUTF8(keyBuffer)
         })
         if (!valid) {
           throw new Error('Invalid KVStore token: signature verification failed')

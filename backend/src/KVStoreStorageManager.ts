@@ -15,14 +15,14 @@ export class KVStoreStorageManager {
   constructor(private readonly db: Db) {
     this.records = db.collection<KVStoreRecord>('kvstoreRecords')
 
-    // Create index on protectedKey for efficient lookups
+    // Create index on key for efficient lookups
     this.records
-      .createIndex({ protectedKey: 1 })
+      .createIndex({ key: 1 })
       .catch(console.error)
 
-    // Create index on namespace for efficient lookups
+    // Create index on protocolID for efficient lookups
     this.records
-      .createIndex({ namespace: 1 })
+      .createIndex({ protocolID: 1 })
       .catch(console.error)
 
     // Create index on controller for efficient lookups
@@ -42,15 +42,15 @@ export class KVStoreStorageManager {
   async storeRecord(
     txid: string,
     outputIndex: number,
-    protectedKey: string,
-    namespace: string,
+    key: string,
+    protocolID: string,
     controller: PubKeyHex
   ): Promise<void> {
     await this.records.insertOne({
       txid,
       outputIndex,
-      protectedKey,
-      namespace,
+      key,
+      protocolID,
       controller,
       createdAt: new Date(),
       spent: false
@@ -76,22 +76,22 @@ export class KVStoreStorageManager {
 
   /**
    * Find records by protected key with pagination and sorting.
-   * @param {string} protectedKey - Base64 encoded protected key to search for
+   * @param {string} key - Base64 encoded protected key to search for
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
    * @returns {Promise<LookupFormula>} Matching UTXO references
    */
-  async findByProtectedKey(
-    protectedKey: string,
+  async findByKey(
+    key: string,
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc',
     includeSpent: boolean = false
   ): Promise<LookupFormula> {
     const query = includeSpent
-      ? { protectedKey }
-      : { protectedKey, spent: { $ne: true } }
+      ? { key }
+      : { key, spent: { $ne: true } }
 
     return this.findRecordWithQuery(
       query,
@@ -102,23 +102,23 @@ export class KVStoreStorageManager {
   }
 
   /**
-   * Find records by namespace with pagination and sorting.
-   * @param {string} namespace - Namespace to search for
+   * Find records by protocolID with pagination and sorting.
+   * @param {string} protocolID - protocolID to search for
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
    * @returns {Promise<LookupFormula>} Matching UTXO references
    */
-  async findByNamespace(
-    namespace: string,
+  async findByProtocolID(
+    protocolID: string,
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc',
     includeSpent: boolean = false
   ): Promise<LookupFormula> {
     const query = includeSpent
-      ? { namespace }
-      : { namespace, spent: { $ne: true } }
+      ? { protocolID }
+      : { protocolID, spent: { $ne: true } }
 
     return this.findRecordWithQuery(
       query,
@@ -157,7 +157,7 @@ export class KVStoreStorageManager {
 
   /**
    * Find records with dynamic filter combinations.
-   * @param {object} filters - Object containing any combination of protectedKey, namespace, controller
+   * @param {object} filters - Object containing any combination of key, protocolID, controller
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
@@ -166,8 +166,8 @@ export class KVStoreStorageManager {
    */
   async findWithFilters(
     filters: {
-      protectedKey?: string
-      namespace?: string
+      key?: string
+      protocolID?: string
       controller?: string
     },
     limit: number = 50,
@@ -178,12 +178,12 @@ export class KVStoreStorageManager {
     // Build dynamic query object
     const query: any = {}
 
-    if (filters.protectedKey) {
-      query.protectedKey = filters.protectedKey
+    if (filters.key) {
+      query.key = filters.key
     }
 
-    if (filters.namespace) {
-      query.namespace = filters.namespace
+    if (filters.protocolID) {
+      query.protocolID = filters.protocolID
     }
 
     if (filters.controller) {

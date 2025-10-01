@@ -1,9 +1,9 @@
-import { OutpointString, PubKeyHex } from "@bsv/sdk"
+import { PubKeyHex, WalletProtocol } from "@bsv/sdk"
 
 export interface KVStoreQuery {
   // Filter parameters
-  protectedKey?: string
-  namespace?: string
+  key?: string
+  protocolID?: WalletProtocol
   controller?: string
 
   // Pagination parameters
@@ -18,24 +18,13 @@ export interface KVStoreQuery {
 }
 
 /**
- * KVStore token metadata extracted from PushDrop fields
- * Field 0: Public key (32 bytes)
- * Field 1: Value data
- */
-export interface KVStoreTokenData {
-  publicKey: Buffer
-  value: Buffer
-  protectedKey: string // base64 encoded protected key
-}
-
-/**
  * A record stored in the KVStore lookup database
  */
 export interface KVStoreRecord {
   txid: string
   outputIndex: number
-  protectedKey: string
-  namespace: string
+  key: string
+  protocolID: WalletProtocol
   controller: PubKeyHex
   createdAt: Date
   spent?: boolean
@@ -52,8 +41,8 @@ export interface KVStoreLookupResult {
 }
 
 export const kvProtocol = {
-  namespace: 0,
-  protectedKey: 1,
+  protocolID: 0,
+  key: 1,
   value: 2,
   controller: 3,
   signature: 4

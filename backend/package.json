@@ -45,8 +45,8 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@bsv/overlay": "^0.4.1",
-    "@bsv/sdk": "^1.6.11",
+    "@bsv/overlay": "^0.4.8",
+    "@bsv/sdk": "^1.7.6",
     "mongodb": "^6.11.0"
   }
 }

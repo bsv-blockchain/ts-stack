@@ -32,19 +32,23 @@ class KVStoreLookupService implements LookupService {
       const decoded = PushDrop.decode(lockingScript)
 
       if (decoded.fields.length !== Object.keys(kvProtocol).length) {
-        throw new Error(`KVStore token must have exactly ${Object.keys(kvProtocol).length} PushDrop fields (protectedKey and value) + signature, got ${decoded.fields.length} fields`)
+        throw new Error(`KVStore token must have exactly ${Object.keys(kvProtocol).length} PushDrop fields (key and value) + signature, got ${decoded.fields.length} fields`)
       }
 
-      const protectedKeyBuffer = decoded.fields[kvProtocol.protectedKey]
-      if (protectedKeyBuffer.length !== 32) {
-        throw new Error(`KVStore tokens have 32-byte protected keys, but this token has ${protectedKeyBuffer.length} bytes`)
+      const keyBuffer = decoded.fields[kvProtocol.key]
+      if (!keyBuffer || keyBuffer.length === 0) {
+        throw new Error('KVStore tokens must have a non-empty key')
+      }
+      const valueBuffer = decoded.fields[kvProtocol.value]
+      if (!valueBuffer || valueBuffer.length === 0) {
+        throw new Error('KVStore tokens must have a non-empty value')
       }
 
       await this.storageManager.storeRecord(
         txid,
         outputIndex,
-        Utils.toBase64(protectedKeyBuffer),
-        Utils.toUTF8(decoded.fields[kvProtocol.namespace]),
+        Utils.toUTF8(keyBuffer),
+        Utils.toUTF8(decoded.fields[kvProtocol.protocolID]),
         Utils.toHex(decoded.fields[kvProtocol.controller]))
     } catch (error) {
       console.error(error)
@@ -75,7 +79,7 @@ class KVStoreLookupService implements LookupService {
     const query = (question.query as KVStoreQuery)
 
     // Check if we have any filters to apply
-    const hasFilters = query.protectedKey || query.namespace || query.controller
+    const hasFilters = query.key || query.protocolID || query.controller
 
     let results: any[]
 
@@ -83,8 +87,8 @@ class KVStoreLookupService implements LookupService {
       // Use dynamic filtering for any combination of filters
       results = await this.storageManager.findWithFilters(
         {
-          protectedKey: query.protectedKey,
-          namespace: query.namespace,
+          key: query.key,
+          protocolID: JSON.stringify(query.protocolID),
           controller: query.controller
         },
         query.limit,
@@ -101,9 +105,9 @@ class KVStoreLookupService implements LookupService {
     }
 
     for (const i in results) {
-      results[i].history = async (beef: number[], outputIndex: number, currentDepth: number) => {
+      results[i].history = query.history ? async (beef: number[], outputIndex: number, currentDepth: number) => {
         return await this.historySelector(beef, outputIndex, currentDepth)
-      }
+      } : undefined
     }
 
     return results
@@ -117,11 +121,21 @@ class KVStoreLookupService implements LookupService {
       const tx = Transaction.fromBEEF(beef)
       const result = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
 
+      // Validate protocol structure
       if (result.fields.length !== Object.keys(kvProtocol).length) {
         return false
       }
 
-      if (result.fields[kvProtocol.protectedKey].length !== 32) {
+      // Validate protocolID - this is the key identifier
+      const protocolID = Utils.toUTF8(result.fields[kvProtocol.protocolID])
+      if (protocolID !== JSON.stringify([1, 'kvstore'])) {
+        return false
+      }
+
+      // Additional validations you might want:
+
+      // 1. Validate required fields exist
+      if (!result.fields[kvProtocol.key] || !result.fields[kvProtocol.value]) {
         return false
       }
 
