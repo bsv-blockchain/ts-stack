@@ -1,16 +1,11 @@
 import { PubKeyHex, WalletProtocol } from "@bsv/sdk"
 
 export interface KVStoreQuery {
-  // Filter parameters
   key?: string
-  protocolID?: WalletProtocol
-  controller?: string
-
-  // Pagination parameters
-  limit?: number    // Maximum number of results to return (default: 50)
-  skip?: number     // Number of results to skip (default: 0)
-
-  // Sorting parameters
+  controller?: PubKeyHex
+  protocolID?: WalletProtocol  // Client sends this as WalletProtocol, we stringify for storage
+  limit?: number
+  skip?: number
   sortOrder?: 'asc' | 'desc'  // Sort direction (default: 'desc' - newest first)
 
   // History depth for chain tracking
@@ -24,11 +19,9 @@ export interface KVStoreRecord {
   txid: string
   outputIndex: number
   key: string
-  protocolID: WalletProtocol
+  protocolID: string
   controller: PubKeyHex
   createdAt: Date
-  spent?: boolean
-  spentAt?: Date
 }
 
 /**
@@ -37,7 +30,7 @@ export interface KVStoreRecord {
 export interface KVStoreLookupResult {
   txid: string
   outputIndex: number
-  history?: (output: any, currentDepth: number) => Promise<boolean>
+  history?: (beef: number[], outputIndex: number, currentDepth: number) => Promise<boolean>
 }
 
 export const kvProtocol = {

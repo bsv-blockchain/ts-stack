@@ -1,5 +1,4 @@
 import { Collection, Db } from 'mongodb'
-import { LookupFormula } from '@bsv/overlay'
 import { KVStoreRecord } from './types.js'
 import { PubKeyHex, WalletProtocol } from '@bsv/sdk'
 
@@ -52,8 +51,7 @@ export class KVStoreStorageManager {
       key,
       protocolID,
       controller,
-      createdAt: new Date(),
-      spent: false
+      createdAt: new Date()
     })
   }
 
@@ -65,116 +63,23 @@ export class KVStoreStorageManager {
   }
 
   /**
-   * Mark a KVStore record as spent (preserve for history).
-   */
-  async markRecordAsSpent(txid: string, outputIndex: number): Promise<void> {
-    await this.records.updateOne(
-      { txid, outputIndex },
-      { $set: { spent: true, spentAt: new Date() } }
-    )
-  }
-
-  /**
-   * Find records by protected key with pagination and sorting.
-   * @param {string} key - Base64 encoded protected key to search for
-   * @param {number} limit - Maximum number of records to return
-   * @param {number} skip - Number of records to skip (for pagination)
-   * @param {string} sortOrder - Sort direction ('asc' or 'desc')
-   * @returns {Promise<LookupFormula>} Matching UTXO references
-   */
-  async findByKey(
-    key: string,
-    limit: number = 50,
-    skip: number = 0,
-    sortOrder: 'asc' | 'desc' = 'desc',
-    includeSpent: boolean = false
-  ): Promise<LookupFormula> {
-    const query = includeSpent
-      ? { key }
-      : { key, spent: { $ne: true } }
-
-    return this.findRecordWithQuery(
-      query,
-      limit,
-      skip,
-      sortOrder
-    )
-  }
-
-  /**
-   * Find records by protocolID with pagination and sorting.
-   * @param {string} protocolID - protocolID to search for
-   * @param {number} limit - Maximum number of records to return
-   * @param {number} skip - Number of records to skip (for pagination)
-   * @param {string} sortOrder - Sort direction ('asc' or 'desc')
-   * @returns {Promise<LookupFormula>} Matching UTXO references
-   */
-  async findByProtocolID(
-    protocolID: string,
-    limit: number = 50,
-    skip: number = 0,
-    sortOrder: 'asc' | 'desc' = 'desc',
-    includeSpent: boolean = false
-  ): Promise<LookupFormula> {
-    const query = includeSpent
-      ? { protocolID }
-      : { protocolID, spent: { $ne: true } }
-
-    return this.findRecordWithQuery(
-      query,
-      limit,
-      skip,
-      sortOrder
-    )
-  }
-
-  /**
-   * Find records by controller with pagination and sorting.
-   * @param {string} controller - Controller public key to search for
-   * @param {number} limit - Maximum number of records to return
-   * @param {number} skip - Number of records to skip (for pagination)
-   * @param {string} sortOrder - Sort direction ('asc' or 'desc')
-   * @returns {Promise<LookupFormula>} Matching UTXO references
-   */
-  async findByController(
-    controller: string,
-    limit: number = 50,
-    skip: number = 0,
-    sortOrder: 'asc' | 'desc' = 'desc',
-    includeSpent: boolean = false
-  ): Promise<LookupFormula> {
-    const query = includeSpent
-      ? { controller }
-      : { controller, spent: { $ne: true } }
-
-    return this.findRecordWithQuery(
-      query,
-      limit,
-      skip,
-      sortOrder
-    )
-  }
-
-  /**
    * Find records with dynamic filter combinations.
    * @param {object} filters - Object containing any combination of key, protocolID, controller
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
-   * @param {boolean} includeSpent - Whether to include spent records
-   * @returns {Promise<LookupFormula>} Matching UTXO references
+   * @returns {Promise<KVStoreRecord[]>} Matching records
    */
   async findWithFilters(
     filters: {
       key?: string
-      protocolID?: string
+      protocolID?: WalletProtocol
       controller?: string
     },
     limit: number = 50,
     skip: number = 0,
-    sortOrder: 'asc' | 'desc' = 'desc',
-    includeSpent: boolean = false
-  ): Promise<LookupFormula> {
+    sortOrder: 'asc' | 'desc' = 'desc'
+  ): Promise<KVStoreRecord[]> {
     // Build dynamic query object
     const query: any = {}
 
@@ -183,16 +88,11 @@ export class KVStoreStorageManager {
     }
 
     if (filters.protocolID) {
-      query.protocolID = filters.protocolID
+      query.protocolID = JSON.stringify(filters.protocolID)
     }
 
     if (filters.controller) {
       query.controller = filters.controller
-    }
-
-    // Add spent filter unless explicitly including spent records
-    if (!includeSpent) {
-      query.spent = { $ne: true }
     }
 
     return this.findRecordWithQuery(query, limit, skip, sortOrder)
@@ -203,13 +103,13 @@ export class KVStoreStorageManager {
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
-   * @returns {Promise<LookupFormula>} All KVStore UTXO references
+   * @returns {Promise<KVStoreRecord[]>} All KVStore records
    */
   async findAllRecords(
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
-  ): Promise<LookupFormula> {
+  ): Promise<KVStoreRecord[]> {
     return this.findRecordWithQuery({}, limit, skip, sortOrder)
   }
 
@@ -219,14 +119,14 @@ export class KVStoreStorageManager {
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
-   * @returns {Promise<LookupFormula>} returns matching UTXO references
+   * @returns {Promise<KVStoreRecord[]>} returns matching records
    */
   private async findRecordWithQuery(
     query: object,
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
-  ): Promise<LookupFormula> {
+  ): Promise<KVStoreRecord[]> {
     // Apply sort on createdAt for chronological ordering
     const sortDirection = sortOrder === 'desc' ? -1 : 1
 
@@ -240,12 +140,6 @@ export class KVStoreStorageManager {
       .project({ txid: 1, outputIndex: 1 })
       .toArray()
 
-    console.log('results', results)
-    return results.map((record: any) => {
-      return {
-        txid: record.txid,
-        outputIndex: record.outputIndex
-      }
-    })
+    return results as KVStoreRecord[]
   }
 }

@@ -3,7 +3,7 @@ import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmi
 import { PushDrop, Transaction, Utils } from '@bsv/sdk'
 import docs from './docs/KVStoreLookupDocs.md.js'
 import { Db } from 'mongodb'
-import { kvProtocol, KVStoreQuery } from './types.js'
+import { kvProtocol, KVStoreLookupResult, KVStoreQuery, KVStoreRecord } from './types.js'
 
 /**
  * Implements a lookup service for KVStore tokens
@@ -81,14 +81,14 @@ class KVStoreLookupService implements LookupService {
     // Check if we have any filters to apply
     const hasFilters = query.key || query.protocolID || query.controller
 
-    let results: any[]
+    let results: KVStoreRecord[]
 
     if (hasFilters) {
       // Use dynamic filtering for any combination of filters
       results = await this.storageManager.findWithFilters(
         {
           key: query.key,
-          protocolID: JSON.stringify(query.protocolID),
+          protocolID: query.protocolID,
           controller: query.controller
         },
         query.limit,
@@ -104,19 +104,29 @@ class KVStoreLookupService implements LookupService {
       )
     }
 
+    const lookupResults: KVStoreLookupResult[] = []
+
     for (const i in results) {
-      results[i].history = query.history ? async (beef: number[], outputIndex: number, currentDepth: number) => {
-        return await this.historySelector(beef, outputIndex, currentDepth)
-      } : undefined
+      lookupResults.push({
+        txid: results[i].txid,
+        outputIndex: results[i].outputIndex,
+        history: query.history ? async (beef: number[], outputIndex: number, currentDepth: number) => {
+          return await this.historySelector(beef, outputIndex, results[i].key, results[i].protocolID)
+        } : undefined
+      })
     }
 
-    return results
+    return lookupResults
   }
 
   /**
    * History selector for determining which outputs to include in chain tracking
+   * @param {number[]} beef - Transaction BEEF data
+   * @param {number} outputIndex - Output index in the transaction
+   * @param {string} [key] - Optional KVStore key for context
+   * @param {string} [protocolID] - Optional protocolID for context
    */
-  private async historySelector(beef: number[], outputIndex: number, currentDepth: number): Promise<boolean> {
+  private async historySelector(beef: number[], outputIndex: number, key?: string, protocolID?: string): Promise<boolean> {
     try {
       const tx = Transaction.fromBEEF(beef)
       const result = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
@@ -126,16 +136,21 @@ class KVStoreLookupService implements LookupService {
         return false
       }
 
-      // Validate protocolID - this is the key identifier
-      const protocolID = Utils.toUTF8(result.fields[kvProtocol.protocolID])
-      if (protocolID !== JSON.stringify([1, 'kvstore'])) {
+      // Validate required fields exist
+      if (!result.fields[kvProtocol.key] || !result.fields[kvProtocol.value] || !result.fields[kvProtocol.protocolID]) {
         return false
       }
 
-      // Additional validations you might want:
+      // Extract the output's key and protocolID
+      const outputKey = Utils.toUTF8(result.fields[kvProtocol.key])
+      const outputProtocolID = Utils.toUTF8(result.fields[kvProtocol.protocolID])
 
-      // 1. Validate required fields exist
-      if (!result.fields[kvProtocol.key] || !result.fields[kvProtocol.value]) {
+      // If we have context (key/protocolID), only include outputs that match exactly
+      if (key !== undefined && outputKey !== key) {
+        return false
+      }
+
+      if (protocolID !== undefined && outputProtocolID !== protocolID) {
         return false
       }
 
