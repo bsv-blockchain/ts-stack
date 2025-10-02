@@ -130,14 +130,12 @@ export class KVStoreStorageManager {
     // Apply sort on createdAt for chronological ordering
     const sortDirection = sortOrder === 'desc' ? -1 : 1
 
-    console.log('querying', query)
     // Find matching results from the DB with pagination and sorting
     const results = await this.records
       .find(query)
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)
-      .project({ txid: 1, outputIndex: 1 })
       .toArray()
 
     return results as KVStoreRecord[]

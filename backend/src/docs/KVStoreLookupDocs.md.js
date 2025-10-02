@@ -53,7 +53,7 @@ Whether to include historical chain of spends for each token returned in the res
 ### Find All Entries by Controller
 \`\`\`json
 {
-  "controller": "0350fa50d7c23f63d949c9532f41a7ea0c01112ffb1404cfb8a9f732b11a54a1ce"
+  "controller": "02f6e1e4c00f8a7e746f106a5d8a0b8a6b3e7c5f2d1e8b9a3c6f9e2d5b8a1f4e7c"
 }
 \`\`\`
 
@@ -68,7 +68,7 @@ Whether to include historical chain of spends for each token returned in the res
 \`\`\`json
 {
   "key": "user-profile",
-  "controller": "0350fa50d7c23f63d949c9532f41a7ea0c01112ffb1404cfb8a9f732b11a54a1ce"
+  "controller": "02f6e1e4c00f8a7e746f106a5d8a0b8a6b3e7c5f2d1e8b9a3c6f9e2d5b8a1f4e7c"
 }
 \`\`\`
 

@@ -55,7 +55,7 @@ export default class KVStoreTopicManager implements TopicManager {
 
         outputsToAdmit.push(i)
       } catch (error) {
-        console.error(error)
+        // Skip invalid tokens
         continue
       }
     }
@@ -71,8 +71,8 @@ export default class KVStoreTopicManager implements TopicManager {
     if (outputsToAdmit.length === 0 && (previousCoins === undefined || previousCoins.length === 0)) {
       console.warn('No KVStore outputs admitted, and no previous KVStore coins were consumed.')
     }
-
     console.log(`🔗 Retaining ${previousCoins?.length || 0} previous coins for history tracking`)
+
     return {
       outputsToAdmit,
       coinsToRetain: previousCoins || []
