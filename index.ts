@@ -42,7 +42,7 @@ async function fundWallet (
   const remote = await wallet.isAuthenticated({})
   console.log({ remote })
 
-  const localWallet = new WalletClient('json-api', 'deggen.com')
+  const localWallet = new WalletClient('auto', 'deggen.com')
   const local = await localWallet.isAuthenticated({})
   console.log({ local })
   try {
