@@ -6,6 +6,8 @@ import { createInterface } from 'readline';
 import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, InternalizeActionArgs } from '@bsv/sdk'
 import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient, WalletPermissionsManager } from '@bsv/wallet-toolbox'
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
 async function makeWallet (
   chain: 'test' | 'main',
   storageURL: string,
@@ -42,7 +44,7 @@ async function fundWallet (
   const remote = await wallet.isAuthenticated({})
   console.log({ remote })
 
-  const localWallet = new WalletClient('auto', 'deggen.com')
+  const localWallet = new WalletClient('secure-json-api', 'deggen.com')
   const local = await localWallet.isAuthenticated({})
   console.log({ local })
   try {
