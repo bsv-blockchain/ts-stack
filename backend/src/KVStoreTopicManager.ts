@@ -29,8 +29,13 @@ export default class KVStoreTopicManager implements TopicManager {
       try {
         const result = PushDrop.decode(output.lockingScript)
 
-        if (result.fields.length !== Object.keys(kvProtocol).length) {
-          continue
+        // Support backwards compatibility: old format without tags, new format with tags
+        const expectedFieldCount = Object.keys(kvProtocol).length
+        const hasTagsField = result.fields.length === expectedFieldCount
+        const isOldFormat = result.fields.length === expectedFieldCount - 1
+
+        if (!isOldFormat && !hasTagsField) {
+          continue // Invalid field count
         }
 
         const keyBuffer = result.fields[kvProtocol.key]

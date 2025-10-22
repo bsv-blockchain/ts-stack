@@ -31,8 +31,13 @@ class KVStoreLookupService implements LookupService {
     try {
       const decoded = PushDrop.decode(lockingScript)
 
-      if (decoded.fields.length !== Object.keys(kvProtocol).length) {
-        throw new Error(`KVStore token must have exactly ${Object.keys(kvProtocol).length} PushDrop fields (key and value) + signature, got ${decoded.fields.length} fields`)
+      // Support backwards compatibility: old format without tags, new format with tags
+      const expectedFieldCount = Object.keys(kvProtocol).length
+      const hasTagsField = decoded.fields.length === expectedFieldCount
+      const isOldFormat = decoded.fields.length === expectedFieldCount - 1
+      
+      if (!isOldFormat && !hasTagsField) {
+        throw new Error(`KVStore token must have ${expectedFieldCount - 1} fields (old format) or ${expectedFieldCount} fields (with tags), got ${decoded.fields.length} fields`)
       }
 
       const keyBuffer = decoded.fields[kvProtocol.key]
@@ -44,12 +49,26 @@ class KVStoreLookupService implements LookupService {
         throw new Error('KVStore tokens must have a non-empty value')
       }
 
+      // Extract tags if present (backwards compatible)
+      let tags: string[] | undefined
+      if (hasTagsField && decoded.fields[kvProtocol.tags]) {
+        try {
+          const tagsBuffer = decoded.fields[kvProtocol.tags]
+          tags = JSON.parse(Utils.toUTF8(tagsBuffer))
+        } catch (e) {
+          console.warn('Failed to parse tags from KVStore token:', e)
+          tags = undefined
+        }
+      }
+
       await this.storageManager.storeRecord(
         txid,
         outputIndex,
         Utils.toUTF8(keyBuffer),
         Utils.toUTF8(decoded.fields[kvProtocol.protocolID]),
-        Utils.toHex(decoded.fields[kvProtocol.controller]))
+        Utils.toHex(decoded.fields[kvProtocol.controller]),
+        tags
+      )
     } catch (error) {
       console.error(error)
       throw error
@@ -79,7 +98,7 @@ class KVStoreLookupService implements LookupService {
     const query = (question.query as KVStoreQuery)
 
     // Check if we have any filters to apply
-    const hasFilters = query.key || query.protocolID || query.controller
+    const hasFilters = query.key || query.protocolID || query.controller || (query.tags && query.tags.length > 0)
 
     let results: KVStoreRecord[]
 
@@ -89,7 +108,8 @@ class KVStoreLookupService implements LookupService {
         {
           key: query.key,
           protocolID: query.protocolID,
-          controller: query.controller
+          controller: query.controller,
+          tags: query.tags
         },
         query.limit,
         query.skip,

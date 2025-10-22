@@ -4,6 +4,7 @@ export interface KVStoreQuery {
   key?: string
   controller?: PubKeyHex
   protocolID?: WalletProtocol  // Client sends this as WalletProtocol, we stringify for storage
+  tags?: string[]  // Optional tags for advanced querying
   limit?: number
   skip?: number
   sortOrder?: 'asc' | 'desc'  // Sort direction (default: 'desc' - newest first)
@@ -21,6 +22,7 @@ export interface KVStoreRecord {
   key: string
   protocolID: string
   controller: PubKeyHex
+  tags?: string[]  // Optional tags for advanced querying
   createdAt: Date
 }
 
@@ -38,5 +40,6 @@ export const kvProtocol = {
   key: 1,
   value: 2,
   controller: 3,
-  signature: 4
+  tags: 4,
+  signature: 5 // Note: signature moves to position 5 when tags are present
 }

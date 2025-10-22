@@ -33,6 +33,11 @@ export class KVStoreStorageManager {
     this.records
       .createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
       .catch(console.error)
+
+    // Create index on tags for efficient lookups
+    this.records
+      .createIndex({ tags: 1 })
+      .catch(console.error)
   }
 
   /**
@@ -43,16 +48,19 @@ export class KVStoreStorageManager {
     outputIndex: number,
     key: string,
     protocolID: string,
-    controller: PubKeyHex
+    controller: PubKeyHex,
+    tags?: string[]
   ): Promise<void> {
-    await this.records.insertOne({
+    const record: KVStoreRecord = {
       txid,
       outputIndex,
       key,
       protocolID,
       controller,
+      tags: tags && tags.length > 0 ? tags : undefined,
       createdAt: new Date()
-    })
+    }
+    await this.records.insertOne(record)
   }
 
   /**
@@ -64,7 +72,7 @@ export class KVStoreStorageManager {
 
   /**
    * Find records with dynamic filter combinations.
-   * @param {object} filters - Object containing any combination of key, protocolID, controller
+   * @param {object} filters - Object containing any combination of key, protocolID, controller, tags
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
@@ -75,6 +83,7 @@ export class KVStoreStorageManager {
       key?: string
       protocolID?: WalletProtocol
       controller?: string
+      tags?: string[]
     },
     limit: number = 50,
     skip: number = 0,
@@ -93,6 +102,12 @@ export class KVStoreStorageManager {
 
     if (filters.controller) {
       query.controller = filters.controller
+    }
+
+    // Support tag-based querying
+    if (filters.tags && filters.tags.length > 0) {
+      // Use MongoDB $all operator to match records that contain ALL specified tags
+      query.tags = { $all: filters.tags }
     }
 
     return this.findRecordWithQuery(query, limit, skip, sortOrder)
