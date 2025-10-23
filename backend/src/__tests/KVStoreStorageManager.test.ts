@@ -206,6 +206,7 @@ describe('KVStoreStorageManager', () => {
 
         const results = await storageManager.findWithFilters(
           { key: 'paginate-test' },
+          'all', // tagQueryMode
           3, // limit
           2, // skip
           'asc' // sortOrder
@@ -228,13 +229,13 @@ describe('KVStoreStorageManager', () => {
         }
 
         // Test ascending order
-        const ascResults = await storageManager.findWithFilters({}, 50, 0, 'asc')
+        const ascResults = await storageManager.findWithFilters({}, 'all', 50, 0, 'asc')
         expect(ascResults).toHaveLength(3)
         expect(ascResults[0].txid).toBe(timeOrderedRecords[0].txid)
         expect(ascResults[2].txid).toBe(timeOrderedRecords[2].txid)
 
         // Test descending order (default)
-        const descResults = await storageManager.findWithFilters({}, 50, 0, 'desc')
+        const descResults = await storageManager.findWithFilters({}, 'all', 50, 0, 'desc')
         expect(descResults).toHaveLength(3)
         expect(descResults[0].txid).toBe(timeOrderedRecords[2].txid)
         expect(descResults[2].txid).toBe(timeOrderedRecords[0].txid)
@@ -324,6 +325,204 @@ describe('KVStoreStorageManager', () => {
         const results = await storageManager.findWithFilters({ key: specialKey })
         expect(results).toHaveLength(1)
         expect(results[0].key).toBe(specialKey)
+      })
+    })
+  })
+
+  describe('Tag Query Mode Tests', () => {
+    beforeEach(async () => {
+      // Setup test data with tags
+      const recordsWithTags = [
+        { key: 'music-track', controller: 'controller1', tags: ['music', 'rock', 'album'] },
+        { key: 'video-clip', controller: 'controller2', tags: ['video', 'music'] },
+        { key: 'news-article', controller: 'controller3', tags: ['news', 'politics'] },
+        { key: 'tech-review', controller: 'controller4', tags: ['tech', 'review', 'mobile'] },
+        { key: 'mixed-content', controller: 'controller5', tags: ['music', 'news'] }
+      ]
+
+      for (const recordData of recordsWithTags) {
+        const record = KVStoreRecordFactory.create(recordData)
+        await storageManager.storeRecord(
+          record.txid,
+          record.outputIndex,
+          record.key,
+          record.protocolID,
+          record.controller,
+          recordData.tags
+        )
+      }
+    })
+
+    describe('tagQueryMode = "all" (default)', () => {
+      it('should find records that contain ALL specified tags', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['music', 'rock'] },
+          'all' // tagQueryMode
+        )
+
+        expect(results).toHaveLength(1)
+        expect(results[0].key).toBe('music-track')
+        expect(results[0].tags).toEqual(expect.arrayContaining(['music', 'rock', 'album']))
+      })
+
+      it('should return empty array when no records contain ALL tags', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['music', 'politics'] }, // No record has both
+          'all'
+        )
+
+        expect(results).toHaveLength(0)
+      })
+
+      it('should work with single tag queries', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['news'] },
+          'all'
+        )
+
+        expect(results).toHaveLength(2) // news-article and mixed-content
+        expect(results.map(r => r.key)).toEqual(
+          expect.arrayContaining(['news-article', 'mixed-content'])
+        )
+      })
+
+      it('should default to "all" mode when tagQueryMode not specified', async () => {
+        const resultsWithExplicitAll = await storageManager.findWithFilters(
+          { tags: ['music', 'rock'] },
+          'all'
+        )
+
+        const resultsWithDefault = await storageManager.findWithFilters(
+          { tags: ['music', 'rock'] }
+          // tagQueryMode defaults to 'all'
+        )
+
+        expect(resultsWithDefault).toHaveLength(resultsWithExplicitAll.length)
+        expect(resultsWithDefault[0]?.key).toBe(resultsWithExplicitAll[0]?.key)
+      })
+    })
+
+    describe('tagQueryMode = "any"', () => {
+      it('should find records that contain ANY of the specified tags', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['music', 'politics'] },
+          'any' // tagQueryMode
+        )
+
+        expect(results).toHaveLength(4) // music-track, video-clip, news-article, mixed-content
+        const keys = results.map(r => r.key)
+        expect(keys).toEqual(
+          expect.arrayContaining(['music-track', 'video-clip', 'news-article', 'mixed-content'])
+        )
+      })
+
+      it('should find all records with a common tag', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['music'] },
+          'any'
+        )
+
+        expect(results).toHaveLength(3) // music-track, video-clip, mixed-content
+        const keys = results.map(r => r.key)
+        expect(keys).toEqual(
+          expect.arrayContaining(['music-track', 'video-clip', 'mixed-content'])
+        )
+      })
+
+      it('should return empty array when no records contain ANY of the tags', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['nonexistent-tag', 'another-missing-tag'] },
+          'any'
+        )
+
+        expect(results).toHaveLength(0)
+      })
+
+      it('should work with single tag in "any" mode', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['tech'] },
+          'any'
+        )
+
+        expect(results).toHaveLength(1)
+        expect(results[0].key).toBe('tech-review')
+      })
+    })
+
+    describe('Combined with other filters', () => {
+      it('should combine tagQueryMode "all" with key filter', async () => {
+        const results = await storageManager.findWithFilters(
+          { 
+            key: 'music-track',
+            tags: ['music', 'rock'] 
+          },
+          'all'
+        )
+
+        expect(results).toHaveLength(1)
+        expect(results[0].key).toBe('music-track')
+      })
+
+      it('should combine tagQueryMode "any" with controller filter', async () => {
+        const results = await storageManager.findWithFilters(
+          { 
+            controller: 'controller2',
+            tags: ['music', 'politics'] // Only video-clip (controller2) has 'music'
+          },
+          'any'
+        )
+
+        expect(results).toHaveLength(1)
+        expect(results[0].key).toBe('video-clip')
+        expect(results[0].controller).toBe('controller2')
+      })
+
+      it('should work with pagination in tag queries', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: ['music'] },
+          'any',
+          2, // limit
+          0, // skip
+          'desc' // sortOrder
+        )
+
+        expect(results).toHaveLength(2)
+        expect(results.every(r => r.tags?.includes('music'))).toBe(true)
+      })
+    })
+
+    describe('Edge cases', () => {
+      it('should handle empty tags array', async () => {
+        const results = await storageManager.findWithFilters(
+          { tags: [] },
+          'all'
+        )
+
+        // Empty tags should return all records (no tag filter applied)
+        expect(results).toHaveLength(5)
+      })
+
+      it('should handle records without tags when querying with tagQueryMode', async () => {
+        // Add a record without tags
+        const recordWithoutTags = KVStoreRecordFactory.create({ key: 'no-tags-record' })
+        await storageManager.storeRecord(
+          recordWithoutTags.txid,
+          recordWithoutTags.outputIndex,
+          recordWithoutTags.key,
+          recordWithoutTags.protocolID,
+          recordWithoutTags.controller
+          // No tags parameter
+        )
+
+        const results = await storageManager.findWithFilters(
+          { tags: ['music'] },
+          'any'
+        )
+
+        // Should only return records with tags that match
+        expect(results).toHaveLength(3)
+        expect(results.every(r => r.tags?.includes('music'))).toBe(true)
+        expect(results.map(r => r.key)).not.toContain('no-tags-record')
       })
     })
   })

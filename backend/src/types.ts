@@ -5,6 +5,12 @@ export interface KVStoreQuery {
   controller?: PubKeyHex
   protocolID?: WalletProtocol  // Client sends this as WalletProtocol, we stringify for storage
   tags?: string[]  // Optional tags for advanced querying
+  /** 
+   * Controls tag matching behavior when tags are specified.
+   * - 'all': Requires all specified tags to be present (default)
+   * - 'any': Requires at least one of the specified tags to be present
+   */
+  tagQueryMode?: 'all' | 'any'
   limit?: number
   skip?: number
   sortOrder?: 'asc' | 'desc'  // Sort direction (default: 'desc' - newest first)

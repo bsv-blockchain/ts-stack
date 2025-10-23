@@ -111,6 +111,7 @@ class KVStoreLookupService implements LookupService {
           controller: query.controller,
           tags: query.tags
         },
+        query.tagQueryMode ?? 'all',
         query.limit,
         query.skip,
         query.sortOrder

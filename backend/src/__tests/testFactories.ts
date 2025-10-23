@@ -9,6 +9,7 @@ export interface TestKVStoreRecord {
   key: string
   protocolID: string
   controller: string
+  tags?: string[]
 }
 
 export interface TestKVStoreFields {

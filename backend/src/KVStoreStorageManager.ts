@@ -73,6 +73,7 @@ export class KVStoreStorageManager {
   /**
    * Find records with dynamic filter combinations.
    * @param {object} filters - Object containing any combination of key, protocolID, controller, tags
+   * @param {string} tagQueryMode - Tag matching mode: 'all' (default) or 'any'
    * @param {number} limit - Maximum number of records to return
    * @param {number} skip - Number of records to skip (for pagination)
    * @param {string} sortOrder - Sort direction ('asc' or 'desc')
@@ -85,6 +86,7 @@ export class KVStoreStorageManager {
       controller?: string
       tags?: string[]
     },
+    tagQueryMode: 'all' | 'any' = 'all',
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
@@ -106,8 +108,13 @@ export class KVStoreStorageManager {
 
     // Support tag-based querying
     if (filters.tags && filters.tags.length > 0) {
-      // Use MongoDB $all operator to match records that contain ALL specified tags
-      query.tags = { $all: filters.tags }
+      if (tagQueryMode === 'any') {
+        // Use MongoDB $in operator to match records that contain ANY of the specified tags
+        query.tags = { $in: filters.tags }
+      } else {
+        // Use MongoDB $all operator to match records that contain ALL specified tags (default)
+        query.tags = { $all: filters.tags }
+      }
     }
 
     return this.findRecordWithQuery(query, limit, skip, sortOrder)
