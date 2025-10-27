@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@bsv/overlay": "^0.5.1",
-    "@bsv/sdk": "^1.8.5",
+    "@bsv/sdk": "^1.8.8",
     "mongodb": "^6.11.0"
   }
 }
