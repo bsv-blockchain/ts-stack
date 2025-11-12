@@ -38,6 +38,16 @@
       "deploy": [
         "backend"
       ]
+    },
+    {
+      "name": "club",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.metanet.club",
+      "projectID": "463a5e81e29fe79f94d3381b7a42d6be",
+      "network": "mainnet",
+      "deploy": [
+        "backend"
+      ]
     }
   ]
 }
