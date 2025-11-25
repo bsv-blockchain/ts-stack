@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto'
 import chalk from 'chalk'
 import { createInterface } from 'readline';
 import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, InternalizeActionArgs } from '@bsv/sdk'
-import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient, WalletPermissionsManager } from '@bsv/wallet-toolbox'
+import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
