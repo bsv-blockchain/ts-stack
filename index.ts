@@ -112,47 +112,143 @@ async function fundWallet (
   console.log(chalk.blue(`🔗 View on WhatsOnChain: https://whatsonchain.com/tx/${transaction.txid}`))
 }
 
-// Create a readline interface
-const rl = createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+// Parse command-line arguments
+const args = process.argv.slice(2)
 
-// Prompt the user for input
-rl.question('Enter network (test or main), default main: ', (network) => {
-  network = network || 'main'
-  if (network !== 'test' && network !== 'main') {
-    console.error('❌ Invalid network: ', network);
-    process.exit(1);
+function showHelp(errorMessage?: string) {
+  if (errorMessage) {
+    console.error(chalk.red(`\n❌ ${errorMessage}\n`))
   }
-  rl.question('Enter Wallet Storage URL you want to store the funds with, default https://storage.babbage.systems : ', (storageURL) => {
-    storageURL = storageURL || 'https://storage.babbage.systems'
-    if (!storageURL.startsWith('https://')) {
-      console.error('❌ Invalid storage URL: ', storageURL);
+
+  console.log(chalk.bold('fund-metanet') + ' - Fund a Metanet wallet\n')
+  console.log(chalk.bold('USAGE:'))
+  console.log('  npx fund-metanet [OPTIONS]\n')
+  console.log(chalk.bold('OPTIONS:'))
+  console.log('  --chain <network>           Network to use: "test" or "main" (required)')
+  console.log('  --private-key <hex>         Wallet private key in hex format (required)')
+  console.log('  --storage-url <url>         Storage provider URL')
+  console.log('                              (default: https://store-us-1.bsvb.tech)')
+  console.log('  --satoshis <amount>         Amount to fund in satoshis')
+  console.log('                              (omit to check balance only)')
+  console.log('  --help                      Show this help message\n')
+  console.log(chalk.bold('EXAMPLES:'))
+  console.log('  # Fund wallet with 1000 satoshis:')
+  console.log('  npx fund-metanet --chain main --private-key abc123... --satoshis 1000\n')
+  console.log('  # Check balance only:')
+  console.log('  npx fund-metanet --chain main --private-key abc123...\n')
+  console.log('  # Use custom storage URL:')
+  console.log('  npx fund-metanet --chain main --private-key abc123... \\')
+  console.log('    --storage-url https://store-us-1.bsvb.tech --satoshis 500\n')
+  console.log('  # Interactive mode (no arguments):')
+  console.log('  npx fund-metanet\n')
+
+  process.exit(errorMessage ? 1 : 0)
+}
+
+// Check for help flag
+if (args.includes('--help') || args.includes('-h')) {
+  showHelp()
+}
+
+const getArg = (name: string): string | undefined => {
+  const index = args.findIndex(arg => arg === `--${name}`)
+  if (index !== -1 && index + 1 < args.length) {
+    return args[index + 1]
+  }
+  return undefined
+}
+
+const cliNetwork = getArg('chain') || getArg('network')
+const cliStorageURL = getArg('storage-url') || getArg('storageURL')
+const cliPrivateKey = getArg('private-key') || getArg('privateKey')
+const cliSatoshis = getArg('satoshis')
+
+// Check if any CLI arguments were provided
+const hasCliArgs = args.length > 0
+
+// If CLI arguments are provided, validate them
+if (hasCliArgs && args[0] !== '--help' && args[0] !== '-h') {
+  // Check for required arguments
+  if (!cliNetwork) {
+    showHelp('Missing required argument: --chain')
+  }
+  if (!cliPrivateKey) {
+    showHelp('Missing required argument: --private-key')
+  }
+}
+
+// If all required arguments are provided via CLI, use them directly
+if (cliNetwork && cliPrivateKey) {
+  const network = cliNetwork
+  if (network !== 'test' && network !== 'main') {
+    showHelp(`Invalid network: ${network}. Must be "test" or "main"`)
+  }
+
+  const storageURL = cliStorageURL || 'https://store-us-1.bsvb.tech'
+  if (!storageURL.startsWith('https://')) {
+    showHelp(`Invalid storage URL: ${storageURL}. Must start with "https://"`)
+  }
+
+  const walletPrivateKey = cliPrivateKey
+  try {
+    PrivateKey.fromHex(walletPrivateKey)
+  } catch (err) {
+    showHelp(`Invalid private key: Must be valid hex format`)
+  }
+
+  const amount = cliSatoshis ? Number(cliSatoshis) : 0
+  if (cliSatoshis && (isNaN(amount) || amount < 0)) {
+    showHelp(`Invalid satoshis: ${cliSatoshis}. Must be a positive number`)
+  }
+
+  fundWallet(network as 'test' | 'main', storageURL, amount, walletPrivateKey)
+    .catch((err) => {
+      console.error('❌', err);
+      process.exit(1);
+    })
+} else if (!hasCliArgs) {
+  // Fall back to interactive prompts
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  // Prompt the user for input
+  rl.question('Enter network (test or main), default main: ', (network) => {
+    network = network || 'main'
+    if (network !== 'test' && network !== 'main') {
+      console.error('❌ Invalid network: ', network);
       process.exit(1);
     }
-    rl.question('Enter wallet private key: ', (walletPrivateKey) => {
-      if (!walletPrivateKey) {
-        console.error('❌ Missing required input: ', { walletPrivateKey });
+    rl.question('Enter Wallet Storage URL you want to store the funds with, default https://store-us-1.bsvb.tech : ', (storageURL) => {
+      storageURL = storageURL || 'https://store-us-1.bsvb.tech'
+      if (!storageURL.startsWith('https://')) {
+        console.error('❌ Invalid storage URL: ', storageURL);
         process.exit(1);
       }
-      try {
-        PrivateKey.fromHex(walletPrivateKey)
-      } catch (err) {
-        console.error('❌ Invalid private key: ', walletPrivateKey);
-        process.exit(1);
-      }
-      rl.question('Enter amount in satoshis or leave blank to get balance: ', (amount) => {
-        if (amount === '') amount = '0'
-        fundWallet(network as 'test' | 'main', storageURL, Number(amount), walletPrivateKey)
-        .catch((err) => {
-          console.error('❌', err);
+      rl.question('Enter wallet private key: ', (walletPrivateKey) => {
+        if (!walletPrivateKey) {
+          console.error('❌ Missing required input: ', { walletPrivateKey });
           process.exit(1);
+        }
+        try {
+          PrivateKey.fromHex(walletPrivateKey)
+        } catch (err) {
+          console.error('❌ Invalid private key: ', walletPrivateKey);
+          process.exit(1);
+        }
+        rl.question('Enter amount in satoshis or leave blank to get balance: ', (amount) => {
+          if (amount === '') amount = '0'
+          fundWallet(network as 'test' | 'main', storageURL, Number(amount), walletPrivateKey)
+          .catch((err) => {
+            console.error('❌', err);
+            process.exit(1);
+          })
+          .finally(() => {
+            rl.close();
+          });
         })
-        .finally(() => {
-          rl.close();
-        });
       })
     })
-  })
-});
+  });
+}
