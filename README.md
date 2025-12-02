@@ -109,24 +109,20 @@ Your server can become a CDN node:
 
 ### ChaintracksService API (Port 3011)
 
-All endpoints return JSON with `{ status: "success", result: <data> }` or `{ status: "error", ... }`
+All endpoints return JSON with `{ status: "success", value: <data> }` or `{ status: "error", code: "...", description: "..." }`
 
 #### Chain Information
-- `GET /` - Server information
 - `GET /getChain` - Get blockchain network ('main' or 'test')
 - `GET /getInfo` - Detailed service information
-- `GET /currentHeight` - Current blockchain height
 - `GET /getPresentHeight` - Latest available height
 
 #### Header Queries
-- `GET /findChainTipHeader` - Get chain tip header
-- `GET /findChainTipHash` - Get chain tip hash
-- `GET /findHeaderForHeight?height=N` - Get header at height N
-- `GET /findHeaderForBlockHash?hash=HASH` - Get header by hash
-- `GET /getHeaders?height=N&count=M` - Get M headers from height N
-
-#### Validation
-- `GET /isValidRootForHeight?root=ROOT&height=N` - Validate merkle root
+- `GET /findChainTipHeaderHex` - Get chain tip header as hex
+- `GET /findChainTipHashHex` - Get chain tip hash as hex
+- `GET /findHeaderHexForHeight?height=N` - Get header at height N as hex
+- `GET /findHeaderHexForBlockHash?hash=HASH` - Get header by hash as hex
+- `GET /getHeaders?height=N&count=M` - Get M headers from height N (returns hex string)
+- `POST /addHeaderHex` - Submit a new block header (JSON body with version, previousHash, merkleRoot, time, bits, nonce)
 
 ### Bulk Headers CDN (Port 3012)
 

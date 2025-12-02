@@ -13,8 +13,6 @@
 # Documentation:
 #   See DOCKER.md and README.md for complete information
 
-version: '3.8'
-
 services:
   chaintracks-server:
     build:
