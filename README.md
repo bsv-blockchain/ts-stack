@@ -120,9 +120,14 @@ All endpoints return JSON with `{ status: "success", value: <data> }` or `{ stat
 - `GET /findChainTipHeaderHex` - Get chain tip header as hex
 - `GET /findChainTipHashHex` - Get chain tip hash as hex
 - `GET /findHeaderHexForHeight?height=N` - Get header at height N as hex
-- `GET /findHeaderHexForBlockHash?hash=HASH` - Get header by hash as hex
+- `GET /findHeaderHexForBlockHash?hash=HASH` - Get header by hash as hex (⚠️ **Limited to recent/retained headers in memory**)
 - `GET /getHeaders?height=N&count=M` - Get M headers from height N (returns hex string)
 - `POST /addHeaderHex` - Submit a new block header (JSON body with version, previousHash, merkleRoot, time, bits, nonce)
+
+**Note:** The `findHeaderHexForBlockHash` endpoint only works for headers currently retained in memory:
+- Recent headers within ~2,000 blocks of chain tip ("live" headers)
+- Headers in the most recently retained bulk files (~200k headers with default `maxRetained: 2`)
+- For querying arbitrary historical headers, use `findHeaderHexForHeight?height=N` instead
 
 ### Bulk Headers CDN (Port 3012)
 
