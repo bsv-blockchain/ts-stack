@@ -755,111 +755,121 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
 
-    const originalRequest = matching.request as {
-      originator: string
-      permissions: GroupedPermissions
-      displayOriginator?: string
-    }
-    const { originator, permissions: requestedPermissions, displayOriginator } = originalRequest
-    const originLookupValues = this.buildOriginatorLookupValues(displayOriginator, originator)
+    try {
+      const originalRequest = matching.request as {
+        originator: string
+        permissions: GroupedPermissions
+        displayOriginator?: string
+      }
+      const { originator, permissions: requestedPermissions, displayOriginator } = originalRequest
+      const originLookupValues = this.buildOriginatorLookupValues(displayOriginator, originator)
 
-    // --- Validation: Ensure granted permissions are a subset of what was requested ---
-    if (
-      params.granted.spendingAuthorization &&
-      !deepEqual(params.granted.spendingAuthorization, requestedPermissions.spendingAuthorization)
-    ) {
-      throw new Error('Granted spending authorization does not match the original request.')
-    }
-    if (
-      params.granted.protocolPermissions?.some(
-        g => !requestedPermissions.protocolPermissions?.find(r => deepEqual(r, g))
-      )
-    ) {
-      throw new Error('Granted protocol permissions are not a subset of the original request.')
-    }
-    if (params.granted.basketAccess?.some(g => !requestedPermissions.basketAccess?.find(r => deepEqual(r, g)))) {
-      throw new Error('Granted basket access permissions are not a subset of the original request.')
-    }
-    if (
-      params.granted.certificateAccess?.some(g => !requestedPermissions.certificateAccess?.find(r => deepEqual(r, g)))
-    ) {
-      throw new Error('Granted certificate access permissions are not a subset of the original request.')
-    }
-    // --- End Validation ---
+      // --- Validation: Ensure granted permissions are a subset of what was requested ---
+      if (
+        params.granted.spendingAuthorization &&
+        !deepEqual(params.granted.spendingAuthorization, requestedPermissions.spendingAuthorization)
+      ) {
+        throw new Error('Granted spending authorization does not match the original request.')
+      }
+      if (
+        params.granted.protocolPermissions?.some(
+          g => !requestedPermissions.protocolPermissions?.find(r => deepEqual(r, g))
+        )
+      ) {
+        throw new Error('Granted protocol permissions are not a subset of the original request.')
+      }
+      if (params.granted.basketAccess?.some(g => !requestedPermissions.basketAccess?.find(r => deepEqual(r, g)))) {
+        throw new Error('Granted basket access permissions are not a subset of the original request.')
+      }
+      if (
+        params.granted.certificateAccess?.some(g => !requestedPermissions.certificateAccess?.find(r => deepEqual(r, g)))
+      ) {
+        throw new Error('Granted certificate access permissions are not a subset of the original request.')
+      }
+      // --- End Validation ---
 
-    const expiry = params.expiry || 0 // default: never expires
+      const expiry = params.expiry || 0 // default: never expires
 
-    if (params.granted.spendingAuthorization) {
-      await this.createPermissionOnChain(
-        {
-          type: 'spending',
+      if (params.granted.spendingAuthorization) {
+        await this.createPermissionOnChain(
+          {
+            type: 'spending',
+            originator,
+            spending: { satoshis: params.granted.spendingAuthorization.amount },
+            reason: params.granted.spendingAuthorization.description
+          },
+          0, // No expiry for spending tokens
+          params.granted.spendingAuthorization.amount
+        )
+      }
+      for (const p of params.granted.protocolPermissions || []) {
+        const token = await this.findProtocolToken(
           originator,
-          spending: { satoshis: params.granted.spendingAuthorization.amount },
-          reason: params.granted.spendingAuthorization.description
-        },
-        0, // No expiry for spending tokens
-        params.granted.spendingAuthorization.amount
-      )
-    }
-    for (const p of params.granted.protocolPermissions || []) {
-      const token = await this.findProtocolToken(
-        originator,
-        false, // No privileged protocols allowed in groups for added security.
-        p.protocolID,
-        p.counterparty || 'self',
-        true,
-        originLookupValues
-      )
-      if (token) {
-        const request: PermissionRequest = {
-          type: 'protocol',
-          originator,
-          privileged: false, // No privileged protocols allowed in groups for added security.
-          protocolID: p.protocolID,
-          counterparty: p.counterparty || 'self',
-          reason: p.description
+          false, // No privileged protocols allowed in groups for added security.
+          p.protocolID,
+          p.counterparty || 'self',
+          true,
+          originLookupValues
+        )
+        if (token) {
+          const request: PermissionRequest = {
+            type: 'protocol',
+            originator,
+            privileged: false, // No privileged protocols allowed in groups for added security.
+            protocolID: p.protocolID,
+            counterparty: p.counterparty || 'self',
+            reason: p.description
+          }
+          await this.renewPermissionOnChain(token, request, expiry)
+          this.markRecentGrant(request)
+        } else {
+          const request: PermissionRequest = {
+            type: 'protocol',
+            originator,
+            privileged: false, // No privileged protocols allowed in groups for added security.
+            protocolID: p.protocolID,
+            counterparty: p.counterparty || 'self',
+            reason: p.description
+          }
+          await this.createPermissionOnChain(request, expiry)
+          this.markRecentGrant(request)
         }
-        await this.renewPermissionOnChain(token, request, expiry)
+      }
+      for (const b of params.granted.basketAccess || []) {
+        const request: PermissionRequest = { type: 'basket', originator, basket: b.basket, reason: b.description }
+        await this.createPermissionOnChain(request, expiry)
         this.markRecentGrant(request)
-      } else {
+      }
+      for (const c of params.granted.certificateAccess || []) {
         const request: PermissionRequest = {
-          type: 'protocol',
+          type: 'certificate',
           originator,
-          privileged: false, // No privileged protocols allowed in groups for added security.
-          protocolID: p.protocolID,
-          counterparty: p.counterparty || 'self',
-          reason: p.description
+          privileged: false, // No certificates on the privileged identity are allowed as part of groups.
+          certificate: {
+            verifier: c.verifierPublicKey,
+            certType: c.type,
+            fields: c.fields
+          },
+          reason: c.description
         }
         await this.createPermissionOnChain(request, expiry)
         this.markRecentGrant(request)
       }
-    }
-    for (const b of params.granted.basketAccess || []) {
-      const request: PermissionRequest = { type: 'basket', originator, basket: b.basket, reason: b.description }
-      await this.createPermissionOnChain(request, expiry)
-      this.markRecentGrant(request)
-    }
-    for (const c of params.granted.certificateAccess || []) {
-      const request: PermissionRequest = {
-        type: 'certificate',
-        originator,
-        privileged: false, // No certificates on the privileged identity are allowed as part of groups.
-        certificate: {
-          verifier: c.verifierPublicKey,
-          certType: c.type,
-          fields: c.fields
-        },
-        reason: c.description
-      }
-      await this.createPermissionOnChain(request, expiry)
-      this.markRecentGrant(request)
-    }
 
-    // Resolve all pending promises for this request
-    for (const p of matching.pending) {
-      p.resolve(true)
+      // Success - resolve all pending promises for this request
+      for (const p of matching.pending) {
+        p.resolve(true)
+      }
+    } catch (error) {
+      // Failure - reject all pending promises so callers don't hang forever
+      for (const p of matching.pending) {
+        p.reject(error)
+      }
+      throw error
+    } finally {
+      // Always clean up the request entry
+      this.activeRequests.delete(params.requestID)
     }
-    this.activeRequests.delete(params.requestID)
   }
 
   /**
