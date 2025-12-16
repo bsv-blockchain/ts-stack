@@ -7,11 +7,15 @@
  * - WhatsOnChain API key configuration
  * - Custom bulk/live ingestor settings
  * - Event subscriptions (header and reorg listeners)
+ * - V1 and V2 API routes
  */
 
-import { ChaintracksService, ChaintracksServiceOptions, BlockHeader, Chaintracks, createDefaultNoDbChaintracksOptions, Services, Chain, ChaintracksFs } from '@bsv/wallet-toolbox'
+import { BlockHeader, Chaintracks, createDefaultNoDbChaintracksOptions, Services, Chain, ChaintracksFs } from '@bsv/wallet-toolbox'
 import * as path from 'path'
 import * as express from 'express'
+import * as bodyParser from 'body-parser'
+import { createV1Routes } from './v1-routes'
+import { createV2Routes } from './v2-routes'
 
 async function main() {
   const chain: Chain = (process.env.CHAIN as Chain) || 'main'
@@ -211,19 +215,42 @@ async function main() {
   // Note: Services uses the chain parameter to configure network services
   const services = new Services(chain)
 
-  // Create ChaintracksService with custom chaintracks and services
-  const serviceOptions: ChaintracksServiceOptions = {
-    chain,
-    routingPrefix: '',
-    chaintracks, // Use our custom chaintracks instance
-    services, // Use our custom services instance
-    port
-  }
+  // Create Express app with both v1 and v2 routes
+  const app = express.default()
 
-  const service = new ChaintracksService(serviceOptions)
+  // CORS middleware
+  app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.header('Access-Control-Allow-Origin', '*')
+    res.header('Access-Control-Allow-Headers', '*')
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    next()
+  })
 
-  // Start the ChaintracksService server
-  await service.startJsonRpcServer(port)
+  // Body parser for POST requests
+  app.use(bodyParser.json())
+
+  // Root endpoint
+  app.get('/', (_req: express.Request, res: express.Response) => {
+    res.json({ status: 'success', value: 'chaintracks-server' })
+  })
+
+  // Robots.txt
+  app.get('/robots.txt', (_req: express.Request, res: express.Response) => {
+    res.type('text/plain').send('User-agent: *\nDisallow: /\n')
+  })
+
+  // Mount v1 routes (RPC-style, original API)
+  const v1Routes = createV1Routes({ chaintracks, services, chain })
+  app.use('/', v1Routes)
+
+  // Mount v2 routes (RESTful, go-chaintracks compatible)
+  const v2Routes = createV2Routes(chaintracks)
+  app.use('/v2', v2Routes)
+
+  // Start the API server
+  const apiServer = app.listen(port, () => {
+    console.log(`✓ API server running on port ${port}`)
+  })
 
   // Start a separate CDN server for bulk headers if enabled
   let cdnServer: any
@@ -274,17 +301,28 @@ async function main() {
     }, bulkHeadersAutoExportInterval)
   }
 
-  console.log(`\n✓ ChaintracksService is running on port ${port}`)
-  console.log('\nAvailable Endpoints:')
+  console.log(`\n✓ Chaintracks API server is running on port ${port}`)
+  console.log('\nV1 Endpoints (original API):')
+  console.log(`  GET  http://localhost:${port}/getChain - Get chain name`)
   console.log(`  GET  http://localhost:${port}/getInfo - Get detailed service info`)
   console.log(`  GET  http://localhost:${port}/getPresentHeight - Get current height`)
-  console.log(`  GET  http://localhost:${port}/findChainTipHeaderHex - Get chain tip`)
+  console.log(`  GET  http://localhost:${port}/findChainTipHashHex - Get chain tip hash`)
+  console.log(`  GET  http://localhost:${port}/findChainTipHeaderHex - Get chain tip header`)
+  console.log(`  GET  http://localhost:${port}/findHeaderHexForHeight?height=N - Get header by height`)
+  console.log(`  GET  http://localhost:${port}/findHeaderHexForBlockHash?hash=X - Get header by hash`)
+  console.log(`  GET  http://localhost:${port}/getHeaders?height=N&count=M - Get multiple headers`)
+  console.log(`  POST http://localhost:${port}/addHeaderHex - Submit new header`)
+  console.log('\nV2 Endpoints (RESTful API):')
+  console.log(`  GET  http://localhost:${port}/v2/network - Get chain name`)
+  console.log(`  GET  http://localhost:${port}/v2/tip - Get chain tip header`)
+  console.log(`  GET  http://localhost:${port}/v2/header/height/:height - Get header by height`)
+  console.log(`  GET  http://localhost:${port}/v2/header/hash/:hash - Get header by hash`)
+  console.log(`  GET  http://localhost:${port}/v2/headers?height=N&count=M - Get multiple headers (binary)`)
   if (enableBulkHeadersCDN) {
-    console.log(`\n  CDN Endpoints (port ${cdnPort}):`)
+    console.log(`\nCDN Endpoints (port ${cdnPort}):`)
     console.log(`  GET  http://localhost:${cdnPort}/${chain}NetBlockHeaders.json - Bulk headers metadata`)
     console.log(`  GET  http://localhost:${cdnPort}/*.headers - Bulk header files`)
   }
-  console.log('\nAll standard ChaintracksService endpoints are available.')
   console.log('Press Ctrl+C to stop the server')
 
   // Enhanced shutdown with cleanup
@@ -313,9 +351,18 @@ async function main() {
       await chaintracks.unsubscribe(headerSubscriptionId)
       await chaintracks.unsubscribe(reorgSubscriptionId)
 
-      // Stop the service (this also destroys chaintracks)
-      console.log('Stopping ChaintracksService server...')
-      await service.stopJsonRpcServer()
+      // Stop the API server
+      console.log('Stopping API server...')
+      await new Promise<void>((resolve) => {
+        apiServer.close(() => {
+          console.log('✓ API server stopped')
+          resolve()
+        })
+      })
+
+      // Stop chaintracks
+      console.log('Stopping chaintracks...')
+      await chaintracks.destroy()
 
       console.log('✓ All servers stopped successfully')
       process.exit(0)
