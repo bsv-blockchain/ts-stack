@@ -52,7 +52,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@bsv/sdk": "^1.9.9",
-    "@bsv/wallet-toolbox": "^1.7.13"
+    "@bsv/sdk": "^1.9.29",
+    "@bsv/wallet-toolbox": "^1.7.15"
   }
 }
