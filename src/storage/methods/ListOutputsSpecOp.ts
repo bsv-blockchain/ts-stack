@@ -160,11 +160,14 @@ let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
 
 /**
  * Check basket and tags arguments passed to listOutputs to determine if they trigger a special operation execution mode.
- * @param basket 
- * @param tags 
- * @returns 
+ * @param basket
+ * @param tags
+ * @returns
  */
-export function getListOutputsSpecOp(basket: string, tags: string[]): { specOp: ListOutputsSpecOp | undefined, basket?: string, tags: string[] } {
+export function getListOutputsSpecOp(
+  basket: string,
+  tags: string[]
+): { specOp: ListOutputsSpecOp | undefined; basket?: string; tags: string[] } {
   let specOp: ListOutputsSpecOp | undefined
   if (basket) {
     if (_basketSpecOps === undefined) {
@@ -172,7 +175,7 @@ export function getListOutputsSpecOp(basket: string, tags: string[]): { specOp: 
     }
     specOp = _basketSpecOps[basket]
     if (specOp) {
-      return { specOp, basket: specOp.useBasket, tags: tags || []}
+      return { specOp, basket: specOp.useBasket, tags: tags || [] }
     }
   }
   if (tags) {

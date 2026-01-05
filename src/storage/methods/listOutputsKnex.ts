@@ -119,14 +119,10 @@ export async function listOutputs(
     'satoshis',
     'customInstructions',
     'outputDescription',
-    'spendingDescription',
+    'spendingDescription'
   ]
-  if (vargs.includeLockingScripts || specOp?.includeOutputScripts) columns = [
-    ...columns,
-    'lockingScript',
-    'scriptLength',
-    'scriptOffset'
-  ]
+  if (vargs.includeLockingScripts || specOp?.includeOutputScripts)
+    columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset']
 
   const noTags = tagIds.length === 0
   const includeSpent = specOp && specOp.includeSpent ? specOp.includeSpent : false
@@ -185,7 +181,7 @@ export async function listOutputs(
       r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
       return r
     } else {
-      columns = [ 'outputId', 'basketId', 'spendable', 'satoshis' ]
+      columns = ['outputId', 'basketId', 'spendable', 'satoshis']
       const q = makeWithTagsQuery()
       q.sum('satoshis as totalSatoshis')
       const rsum = await q.first()

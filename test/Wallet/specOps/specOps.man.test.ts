@@ -16,14 +16,13 @@ describe('specOps tests', () => {
   if (_tu.noTestEnv('main')) return
 
   test('0 wallet balance specOp', async () => {
-
     const tcs: ListOutputsArgs[] = [
       // Custom basket with tag
       { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
       // Custom basket without tag
       { basket: 'test-output' },
       // Default basket without tag
-      { basket: 'default' },
+      { basket: 'default' }
     ]
 
     const setup = await createSetup('test')
@@ -33,24 +32,25 @@ describe('specOps tests', () => {
       const r = await setup.wallet.listOutputs(tc)
       const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
 
-      const tc1 = tc.basket === 'default' ? { ...tc, basket: specOpWalletBalance }
-       : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
+      const tc1 =
+        tc.basket === 'default'
+          ? { ...tc, basket: specOpWalletBalance }
+          : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
       const r1 = await setup.wallet.listOutputs(tc1)
-      
+
       expect(r1.totalOutputs).toBe(sum)
     }
     await setup.wallet.destroy()
   })
 
   test('0aa storage balance specOp', async () => {
-
     const tcs: ListOutputsArgs[] = [
       // Default basket without tag
       { basket: 'default' },
       // Custom basket with tag
       { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
       // Custom basket without tag
-      { basket: 'test-output' },
+      { basket: 'test-output' }
     ]
 
     const s = await _tu.createMainReviewSetup()
@@ -62,11 +62,13 @@ describe('specOps tests', () => {
       const r = await s.storage.listOutputs(auth, vtc)
       const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
 
-      const tc1 = tc.basket === 'default' ? { ...tc, basket: specOpWalletBalance }
-       : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
+      const tc1 =
+        tc.basket === 'default'
+          ? { ...tc, basket: specOpWalletBalance }
+          : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
       const vtc1 = sdk.Validation.validateListOutputsArgs(tc1)
       const r1 = await s.storage.listOutputs(auth, vtc1)
-      
+
       expect(r1.totalOutputs).toBe(sum)
     }
     await s.storage.destroy()
@@ -82,7 +84,7 @@ describe('specOps tests', () => {
       // Custom basket with tag
       { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
       // Custom basket without tag
-      { basket: 'test-output' },
+      { basket: 'test-output' }
     ]
     for (const tc of tcs) {
       const args = tc || { basket: 'default' }
