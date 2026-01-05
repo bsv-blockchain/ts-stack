@@ -1,6 +1,6 @@
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
 import { StorageKnex } from '../StorageKnex'
-import { getBasketToSpecOp, ListOutputsSpecOp } from './ListOutputsSpecOp'
+import { getBasketToSpecOp, getListOutputSpecOp, ListOutputsSpecOp } from './ListOutputsSpecOp'
 import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
@@ -43,30 +43,24 @@ export async function listOutputs(
         }
     */
 
-  let specOp: ListOutputsSpecOp | undefined = undefined
+  let { specOp, basket, tags } = getListOutputSpecOp(vargs.basket, vargs.tags)
+
   let basketId: number | undefined = undefined
   const basketsById: Record<number, TableOutputBasket> = {}
-  if (vargs.basket) {
-    let b = vargs.basket
-    specOp = getBasketToSpecOp()[b]
-    b = specOp ? (specOp.useBasket ? specOp.useBasket : '') : b
-    if (b) {
+  if (basket) {
       const baskets = await dsk.findOutputBaskets({
-        partial: { userId, name: b },
+        partial: { userId, name: basket },
         trx
       })
       if (baskets.length !== 1) {
         // If basket does not exist, result is no outputs.
         return r
       }
-      const basket = baskets[0]
-      basketId = basket.basketId!
-      basketsById[basketId!] = basket
-    }
+      basketId = baskets[0].basketId!
+      basketsById[basketId!] = baskets[0]
   }
 
   let tagIds: number[] = []
-  let tags = [...vargs.tags]
   const specOpTags: string[] = []
   if (specOp && specOp.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
@@ -111,7 +105,7 @@ export async function listOutputs(
     return r
 
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0)
-    // any and only non-existing labels, impossible to satisfy.
+    // any and only non-existing tags, impossible to satisfy.
     return r
 
   const columns: string[] = [
