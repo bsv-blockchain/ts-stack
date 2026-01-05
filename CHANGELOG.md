@@ -4,6 +4,14 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.0.1
+
+Changes to improve computing balances (sum of satoshis) over various sets of wallet spendable outputs:
+
+- Added optional ListOutputsArgs argument to Wallet balance method. This enables using the same arguments in a call to listOutputs and balance. This method injects the specOpWalletBalance string constant into the appropriate basket or tag property and returns totalOutputs as its result.
+- Fully optimized specOpWalletBalance processing within listOutputsKnex to use SQL sum(satoshis). Much faster than returning arrays of outputs and summing WalletOutput results.
+- specOpWalletBalance can now be specified as a ListOutputsArgs tag value. This enables computing sum of satoshis on any basket and with optional tag filtering.
+
 ## wallet-toolbox 1.7.17
 
 - Fix push.yaml to sync versions, correct root package contents (no mobile), and publish client and mobile
