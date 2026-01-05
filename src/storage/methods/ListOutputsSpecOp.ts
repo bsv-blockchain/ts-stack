@@ -165,7 +165,7 @@ let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
  * @param tags 
  * @returns 
  */
-export function getListOutputSpecOp(basket: string, tags: string[]): { specOp: ListOutputsSpecOp | undefined, basket?: string, tags: string[] } {
+export function getListOutputsSpecOp(basket: string, tags: string[]): { specOp: ListOutputsSpecOp | undefined, basket?: string, tags: string[] } {
   let specOp: ListOutputsSpecOp | undefined
   if (basket) {
     if (_basketSpecOps === undefined) {
@@ -188,5 +188,5 @@ export function getListOutputSpecOp(basket: string, tags: string[]): { specOp: L
       }
     }
   }
-  return { specOp: undefined, basket, tags: [] }
+  return { specOp: undefined, basket, tags }
 }
