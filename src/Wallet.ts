@@ -1011,9 +1011,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
    *
    * @returns {number} sum of output satoshis
    */
-  async balance(): Promise<number> {
-    const args: ListOutputsArgs = {
-      basket: specOpWalletBalance
+  async balance(args?: ListOutputsArgs): Promise<number> {
+    args ||= { basket: specOpWalletBalance }
+    if (args.basket !== specOpWalletBalance) {
+      args.tags = [...(args.tags || []), specOpWalletBalance]
     }
     const r = await this.listOutputs(args)
     return r.totalOutputs

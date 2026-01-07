@@ -1,4 +1,4 @@
-import { WalletClient } from '@bsv/sdk'
+import { WalletClient, ListOutputsArgs } from '@bsv/sdk'
 import { sdk, verifyOne } from '../../../src'
 import {
   specOpInvalidChange,
@@ -16,23 +16,87 @@ describe('specOps tests', () => {
   if (_tu.noTestEnv('main')) return
 
   test('0 wallet balance specOp', async () => {
+    const tcs: ListOutputsArgs[] = [
+      // Custom basket with tag
+      { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
+      // Custom basket without tag
+      { basket: 'test-output' },
+      // Default basket without tag
+      { basket: 'default' }
+    ]
+
     const setup = await createSetup('test')
+    for (const tc of tcs) {
+      tc.limit = 10000
+      tc.offset = 0
+      const r = await setup.wallet.listOutputs(tc)
+      const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
 
-    const r = await setup.wallet.listOutputs({ basket: specOpWalletBalance })
+      const tc1 =
+        tc.basket === 'default'
+          ? { ...tc, basket: specOpWalletBalance }
+          : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
+      const r1 = await setup.wallet.listOutputs(tc1)
 
-    expect(r.totalOutputs > 0).toBe(true)
-    expect(r.outputs.length === 0).toBe(true)
-
+      expect(r1.totalOutputs).toBe(sum)
+    }
     await setup.wallet.destroy()
+  })
+
+  test('0aa storage balance specOp', async () => {
+    const tcs: ListOutputsArgs[] = [
+      // Default basket without tag
+      { basket: 'default' },
+      // Custom basket with tag
+      { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
+      // Custom basket without tag
+      { basket: 'test-output' }
+    ]
+
+    const s = await _tu.createMainReviewSetup()
+    const auth: sdk.AuthId = { userId: 88, identityKey: s.env.identityKey! }
+    for (const tc of tcs) {
+      const vtc = sdk.Validation.validateListOutputsArgs(tc)
+      vtc.limit = 10000
+      vtc.offset = 0
+      const r = await s.storage.listOutputs(auth, vtc)
+      const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
+
+      const tc1 =
+        tc.basket === 'default'
+          ? { ...tc, basket: specOpWalletBalance }
+          : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
+      const vtc1 = sdk.Validation.validateListOutputsArgs(tc1)
+      const r1 = await s.storage.listOutputs(auth, vtc1)
+
+      expect(r1.totalOutputs).toBe(sum)
+    }
+    await s.storage.destroy()
   })
 
   test('0a wallet balance method', async () => {
     const setup = await createSetup('test')
 
-    const r = await setup.wallet.balance()
+    const tcs: (ListOutputsArgs | undefined)[] = [
+      undefined,
+      // Default basket without tag
+      { basket: 'default' },
+      // Custom basket with tag
+      { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
+      // Custom basket without tag
+      { basket: 'test-output' }
+    ]
+    for (const tc of tcs) {
+      const args = tc || { basket: 'default' }
+      args.limit = 10000
+      args.offset = 0
+      const r = await setup.wallet.listOutputs(args)
+      const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
 
-    expect(r > 0).toBe(true)
+      const sum2 = await setup.wallet.balance(tc)
 
+      expect(sum2).toBe(sum)
+    }
     await setup.wallet.destroy()
   })
 

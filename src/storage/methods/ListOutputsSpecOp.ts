@@ -12,6 +12,10 @@ export interface ListOutputsSpecOp {
   ignoreLimit?: boolean
   includeOutputScripts?: boolean
   includeSpent?: boolean
+  /**
+   * If true, and supported by storage, maximum performance optimization, computing balance done in the query itself.
+   */
+  totalOutputsIsSumOfSatoshis?: boolean
   resultFromTags?: (
     s: StorageProvider,
     auth: AuthId,
@@ -44,12 +48,13 @@ export interface ListOutputsSpecOp {
   tagsParamsCount?: number
 }
 
-export const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
+const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
   return {
     [specOpWalletBalance]: {
       name: 'totalOutputsIsWalletBalance',
       useBasket: 'default',
       ignoreLimit: true,
+      totalOutputsIsSumOfSatoshis: true,
       resultFromOutputs: async (
         s: StorageProvider,
         auth: AuthId,
@@ -126,4 +131,64 @@ export const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => 
       }
     }
   }
+}
+
+const getTagToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
+  return {
+    [specOpWalletBalance]: {
+      name: 'totalOutputsIsWalletBalance',
+      useBasket: 'default',
+      ignoreLimit: true,
+      totalOutputsIsSumOfSatoshis: true,
+      resultFromOutputs: async (
+        s: StorageProvider,
+        auth: AuthId,
+        vargs: Validation.ValidListOutputsArgs,
+        specOpTags: string[],
+        outputs: TableOutput[]
+      ): Promise<ListOutputsResult> => {
+        let totalOutputs = 0
+        for (const o of outputs) totalOutputs += o.satoshis
+        return { totalOutputs, outputs: [] }
+      }
+    }
+  }
+}
+
+let _basketSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
+let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
+
+/**
+ * Check basket and tags arguments passed to listOutputs to determine if they trigger a special operation execution mode.
+ * @param basket
+ * @param tags
+ * @returns
+ */
+export function getListOutputsSpecOp(
+  basket: string,
+  tags: string[]
+): { specOp: ListOutputsSpecOp | undefined; basket?: string; tags: string[] } {
+  let specOp: ListOutputsSpecOp | undefined
+  if (basket) {
+    if (_basketSpecOps === undefined) {
+      _basketSpecOps = getBasketToSpecOp()
+    }
+    specOp = _basketSpecOps[basket]
+    if (specOp) {
+      return { specOp, basket: specOp.useBasket, tags: tags || [] }
+    }
+  }
+  if (tags) {
+    if (_tagSpecOps === undefined) {
+      _tagSpecOps = getTagToSpecOp()
+    }
+    for (const tag of tags) {
+      specOp = _tagSpecOps[tag]
+      if (specOp) {
+        if (!basket && specOp.useBasket) basket = specOp.useBasket
+        return { specOp, basket, tags: tags.filter(t => t !== tag) }
+      }
+    }
+  }
+  return { specOp: undefined, basket, tags }
 }

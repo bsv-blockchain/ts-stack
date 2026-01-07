@@ -1,12 +1,13 @@
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
 import { StorageKnex } from '../StorageKnex'
-import { getBasketToSpecOp, ListOutputsSpecOp } from './ListOutputsSpecOp'
+import { getListOutputsSpecOp } from './ListOutputsSpecOp'
 import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { WERR_INTERNAL } from '../../sdk'
 
 export async function listOutputs(
   dsk: StorageKnex,
@@ -43,30 +44,24 @@ export async function listOutputs(
         }
     */
 
-  let specOp: ListOutputsSpecOp | undefined = undefined
+  let { specOp, basket, tags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
+
   let basketId: number | undefined = undefined
   const basketsById: Record<number, TableOutputBasket> = {}
-  if (vargs.basket) {
-    let b = vargs.basket
-    specOp = getBasketToSpecOp()[b]
-    b = specOp ? (specOp.useBasket ? specOp.useBasket : '') : b
-    if (b) {
-      const baskets = await dsk.findOutputBaskets({
-        partial: { userId, name: b },
-        trx
-      })
-      if (baskets.length !== 1) {
-        // If basket does not exist, result is no outputs.
-        return r
-      }
-      const basket = baskets[0]
-      basketId = basket.basketId!
-      basketsById[basketId!] = basket
+  if (basket) {
+    const baskets = await dsk.findOutputBaskets({
+      partial: { userId, name: basket },
+      trx
+    })
+    if (baskets.length !== 1) {
+      // If basket does not exist, result is no outputs.
+      return r
     }
+    basketId = baskets[0].basketId!
+    basketsById[basketId!] = baskets[0]
   }
 
   let tagIds: number[] = []
-  let tags = [...vargs.tags]
   const specOpTags: string[] = []
   if (specOp && specOp.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
@@ -111,10 +106,10 @@ export async function listOutputs(
     return r
 
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0)
-    // any and only non-existing labels, impossible to satisfy.
+    // any and only non-existing tags, impossible to satisfy.
     return r
 
-  const columns: string[] = [
+  let columns: string[] = [
     'outputId',
     'transactionId',
     'basketId',
@@ -122,13 +117,12 @@ export async function listOutputs(
     'txid',
     'vout',
     'satoshis',
-    'lockingScript',
     'customInstructions',
     'outputDescription',
-    'spendingDescription',
-    'scriptLength',
-    'scriptOffset'
+    'spendingDescription'
   ]
+  if (vargs.includeLockingScripts || specOp?.includeOutputScripts)
+    columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset']
 
   const noTags = tagIds.length === 0
   const includeSpent = specOp && specOp.includeSpent ? specOp.includeSpent : false
@@ -136,7 +130,7 @@ export async function listOutputs(
   const txStatusOk = `(select status as tstatus from transactions where transactions.transactionId = outputs.transactionId) in ('completed', 'unproven', 'nosend', 'sending')`
   const txStatusOkCteq = `(select status as tstatus from transactions where transactions.transactionId = o.transactionId) in ('completed', 'unproven', 'nosend', 'sending')`
 
-  const makeWithTagsQueries = () => {
+  const makeWithTagsQuery = () => {
     let cteqOptions = ''
     if (basketId) cteqOptions += ` AND o.basketId = ${basketId}`
     if (!includeSpent) cteqOptions += ` AND o.spendable`
@@ -155,19 +149,45 @@ export async function listOutputs(
     q.from('otc')
     if (isQueryModeAll) q.where('tc', tagIds.length)
     else q.where('tc', '>', 0)
+    return q
+  }
+  const makeWithTagsQueries = () => {
+    const q = makeWithTagsQuery()
     const qcount = q.clone()
     q.select(columns)
     qcount.count('outputId as total')
     return { q, qcount }
   }
 
-  const makeWithoutTagsQueries = () => {
+  const makeWhere = () => {
     const where: Partial<TableOutput> = { userId }
     if (basketId) where.basketId = basketId
     if (!includeSpent) where.spendable = true
+    return where
+  }
+  const makeWithoutTagsQueries = () => {
+    const where = makeWhere()
     const q = k('outputs').where(where).whereRaw(txStatusOk)
     const qcount = q.clone().count('outputId as total')
+    q.columns(columns)
     return { q, qcount }
+  }
+
+  if (specOp?.totalOutputsIsSumOfSatoshis) {
+    if (noTags) {
+      const where = makeWhere()
+      const q = k('outputs').sum('satoshis as totalSatoshis').where(where).whereRaw(txStatusOk)
+      const rsum = await q.first()
+      r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
+      return r
+    } else {
+      columns = ['outputId', 'basketId', 'spendable', 'satoshis']
+      const q = makeWithTagsQuery()
+      q.sum('satoshis as totalSatoshis')
+      const rsum = await q.first()
+      r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
+      return r
+    }
   }
 
   const { q, qcount } = noTags ? makeWithoutTagsQueries() : makeWithTagsQueries()

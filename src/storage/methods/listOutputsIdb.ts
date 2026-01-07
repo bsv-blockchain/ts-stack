@@ -1,5 +1,5 @@
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
-import { getBasketToSpecOp, ListOutputsSpecOp } from './ListOutputsSpecOp'
+import { getListOutputsSpecOp } from './ListOutputsSpecOp'
 import { StorageIdb } from '../StorageIdb'
 import { AuthId, FindOutputsArgs } from '../../sdk/WalletStorage.interfaces'
 import { verifyId } from '../../utility/utilityHelpers'
@@ -36,28 +36,22 @@ export async function listOutputsIdb(
         }
     */
 
-  let specOp: ListOutputsSpecOp | undefined = undefined
+  let { specOp, basket, tags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
+
   let basketId: number | undefined = undefined
   const basketsById: Record<number, TableOutputBasket> = {}
-  if (vargs.basket) {
-    let b = vargs.basket
-    specOp = getBasketToSpecOp()[b]
-    b = specOp ? (specOp.useBasket ? specOp.useBasket : '') : b
-    if (b) {
-      const baskets = await storage.findOutputBaskets({
-        partial: { userId, name: b }
-      })
-      if (baskets.length !== 1) {
-        // If basket does not exist, result is no outputs.
-        return r
-      }
-      const basket = baskets[0]
-      basketId = basket.basketId!
-      basketsById[basketId!] = basket
+  if (basket) {
+    const baskets = await storage.findOutputBaskets({
+      partial: { userId, name: basket }
+    })
+    if (baskets.length !== 1) {
+      // If basket does not exist, result is no outputs.
+      return r
     }
+    basketId = baskets[0].basketId!
+    basketsById[basketId!] = baskets[0]
   }
 
-  let tags = [...vargs.tags]
   const specOpTags: string[] = []
   if (specOp && specOp.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
