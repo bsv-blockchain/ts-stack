@@ -1404,6 +1404,124 @@ export class WalletPermissionsManager implements WalletInterface {
     )
   }
 
+  private hasGroupedPermissionRequestedHandlers(): boolean {
+    const handlers = this.callbacks.onGroupedPermissionRequested || []
+    return handlers.some(h => typeof h === 'function')
+  }
+
+  private async maybeRequestPeerGroupedLevel2ProtocolPermissions(
+    currentRequest: PermissionRequest
+  ): Promise<boolean | null> {
+    if (!this.config.seekGroupedPermission) {
+      return null
+    }
+    if (!this.hasGroupedPermissionRequestedHandlers()) {
+      return null
+    }
+    if (currentRequest.type !== 'protocol') {
+      return null
+    }
+    const [level] = currentRequest.protocolID!
+    if (level !== 2) {
+      return null
+    }
+
+    const originator = currentRequest.originator
+    const privileged = currentRequest.privileged ?? false
+    const counterparty = currentRequest.counterparty ?? 'self'
+
+    const groupPermissions = await this.fetchManifestGroupPermissions(originator)
+    if (!groupPermissions) {
+      return null
+    }
+
+    const normalizeManifestCounterparty = (cp: string | undefined): string => {
+      if (cp === '') return counterparty
+      return cp ?? 'self'
+    }
+
+    const manifestLevel2ForThisPeer = (groupPermissions.protocolPermissions || [])
+      .filter(p => (p.protocolID?.[0] ?? 0) === 2)
+      .map(p => ({
+        protocolID: p.protocolID,
+        counterparty: normalizeManifestCounterparty(p.counterparty),
+        description: p.description
+      }))
+      .filter(p => p.counterparty === counterparty)
+
+    const isCurrentRequestInManifest = manifestLevel2ForThisPeer.some(p => deepEqual(p.protocolID, currentRequest.protocolID!))
+    if (!isCurrentRequestInManifest) {
+      return null
+    }
+
+    const permissionsToRequest: GroupedPermissions = {
+      protocolPermissions: []
+    }
+
+    for (const p of manifestLevel2ForThisPeer) {
+      const hasPerm = await this.hasProtocolPermission({
+        originator,
+        privileged,
+        protocolID: p.protocolID,
+        counterparty: p.counterparty
+      })
+      if (!hasPerm) {
+        permissionsToRequest.protocolPermissions!.push({
+          protocolID: p.protocolID,
+          counterparty: p.counterparty,
+          description: p.description
+        })
+      }
+    }
+
+    if (!this.hasAnyPermissionsToRequest(permissionsToRequest)) {
+      return null
+    }
+
+    const key = `group-peer:${originator}:${privileged}:${counterparty}`
+    const existing = this.activeRequests.get(key)
+    if (existing) {
+      const existingRequest = existing.request as {
+        originator: string
+        permissions: GroupedPermissions
+        displayOriginator?: string
+      }
+      if (!existingRequest.permissions.protocolPermissions) {
+        existingRequest.permissions.protocolPermissions = []
+      }
+      for (const p of permissionsToRequest.protocolPermissions || []) {
+        if (!existingRequest.permissions.protocolPermissions.find(x => deepEqual(x, p))) {
+          existingRequest.permissions.protocolPermissions.push(p)
+        }
+      }
+      await new Promise<boolean>((resolve, reject) => {
+        existing.pending.push({ resolve, reject })
+      })
+    } else {
+      await new Promise<boolean>(async (resolve, reject) => {
+        const permissions: GroupedPermissions = permissionsToRequest
+
+        this.activeRequests.set(key, {
+          request: {
+            originator,
+            permissions,
+            displayOriginator: currentRequest.displayOriginator
+          },
+          pending: [{ resolve, reject }]
+        })
+
+        await this.callEvent('onGroupedPermissionRequested', {
+          requestID: key,
+          originator,
+          permissions
+        })
+      })
+    }
+
+    const satisfied = await this.checkSpecificPermissionAfterGroupFlow(currentRequest)
+    return satisfied ? true : null
+  }
+
   private async checkSpecificPermissionAfterGroupFlow(request: PermissionRequest): Promise<boolean> {
     switch (request.type) {
       case 'protocol':
@@ -1443,7 +1561,10 @@ export class WalletPermissionsManager implements WalletInterface {
         const pid = request.protocolID
         if (!pid) return false
         const cp = request.counterparty ?? 'self'
-        return !!groupPermissions.protocolPermissions?.some(p => deepEqual(p.protocolID, pid) && (p.counterparty ?? 'self') === cp)
+        return !!groupPermissions.protocolPermissions?.some(p => {
+          const manifestCp = p.counterparty === '' ? cp : (p.counterparty ?? 'self')
+          return deepEqual(p.protocolID, pid) && manifestCp === cp
+        })
       }
       case 'basket': {
         const basket = request.basket
@@ -1531,6 +1652,11 @@ export class WalletPermissionsManager implements WalletInterface {
       ...r,
       originator: normalizedOriginator,
       displayOriginator: r.displayOriginator ?? r.previousToken?.rawOriginator ?? r.originator
+    }
+
+    const peerGroupResult = await this.maybeRequestPeerGroupedLevel2ProtocolPermissions(preparedRequest)
+    if (peerGroupResult !== null) {
+      return peerGroupResult
     }
 
     const groupResult = await this.maybeRequestGroupedPermissions(preparedRequest)
