@@ -17,11 +17,13 @@ describe('operations.man tests', () => {
     const target = tags.includes('all') ? 'spendable utxos' : 'spendable change utxos'
     const { env, storage } = await _tu.createMainReviewSetup()
     const limit = 10
-    let offset = 1593
-    for (; ;) {
-      let log = `Users offset ${offset} limit ${limit}\n`
-      // const users = await storage.findUsers({ partial: { userId: 2493 } })
-      const users = await storage.findUsers({ partial: {}, paged: { limit, offset } }) // all users...
+    let offset = 0
+    const userIds = [ 2553 ]
+    //for (; ;) {
+    let log = ``
+    for (const userId of userIds) {
+      const users = await storage.findUsers({ partial: { userId } })
+      // const users = await storage.findUsers({ partial: {}, paged: { limit, offset } }) // all users...
       if (users.length === 0) break
       offset += users.length
       const withInvalid: Record<number, { user: TableUser; outputs: WalletOutput[]; total: number }> = {}
@@ -62,7 +64,7 @@ describe('operations.man tests', () => {
 
   test('1 review and unfail false doubleSpends', async () => {
     const { env, storage, services } = await _tu.createMainReviewSetup()
-    let offset = 1400
+    let offset = 1500
     const limit = 100
     let allUnfails: number[] = []
     let reviewed = 0
