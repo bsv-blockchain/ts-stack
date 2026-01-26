@@ -125,6 +125,24 @@ export interface GroupedPermissionRequest {
  */
 export type GroupedPermissionEventHandler = (request: GroupedPermissionRequest) => void | Promise<void>
 
+export interface CounterpartyPermissions {
+  description?: string
+  protocols: Array<{
+    protocolID: WalletProtocol
+    description: string
+  }>
+}
+
+export interface CounterpartyPermissionRequest {
+  originator: string
+  requestID: string
+  counterparty: PubKeyHex
+  counterpartyLabel?: string
+  permissions: CounterpartyPermissions
+}
+
+export type CounterpartyPermissionEventHandler = (request: CounterpartyPermissionRequest) => void | Promise<void>
+
 /**
  * Describes a single requested permission that the user must either grant or deny.
  *
@@ -267,6 +285,7 @@ export interface WalletPermissionsManagerCallbacks {
   onCertificateAccessRequested?: PermissionEventHandler[]
   onSpendingAuthorizationRequested?: PermissionEventHandler[]
   onGroupedPermissionRequested?: GroupedPermissionEventHandler[]
+  onCounterpartyPermissionRequested?: CounterpartyPermissionEventHandler[]
 }
 
 /**
@@ -441,7 +460,8 @@ export class WalletPermissionsManager implements WalletInterface {
     onBasketAccessRequested: [],
     onCertificateAccessRequested: [],
     onSpendingAuthorizationRequested: [],
-    onGroupedPermissionRequested: []
+    onGroupedPermissionRequested: [],
+    onCounterpartyPermissionRequested: []
   }
 
   /**
@@ -457,7 +477,16 @@ export class WalletPermissionsManager implements WalletInterface {
   private activeRequests: Map<
     string,
     {
-      request: PermissionRequest | { originator: string; permissions: GroupedPermissions; displayOriginator?: string }
+      request:
+        | PermissionRequest
+        | { originator: string; permissions: GroupedPermissions; displayOriginator?: string }
+        | {
+            originator: string
+            counterparty: PubKeyHex
+            permissions: CounterpartyPermissions
+            displayOriginator?: string
+            counterpartyLabel?: string
+          }
       pending: Array<{
         resolve: (val: any) => void
         reject: (err: any) => void
@@ -469,9 +498,17 @@ export class WalletPermissionsManager implements WalletInterface {
   private permissionCache: Map<string, { expiry: number; cachedAt: number }> = new Map()
   private recentGrants: Map<string, number> = new Map()
 
-  private manifestCache: Map<string, { groupPermissions: GroupedPermissions | null; fetchedAt: number }> = new Map()
-  private manifestFetchInProgress: Map<string, Promise<GroupedPermissions | null>> = new Map()
+  private manifestCache: Map<
+    string,
+    { groupPermissions: GroupedPermissions | null; counterpartyPermissions: CounterpartyPermissions | null; fetchedAt: number }
+  > = new Map()
+  private manifestFetchInProgress: Map<
+    string,
+    Promise<{ groupPermissions: GroupedPermissions | null; counterpartyPermissions: CounterpartyPermissions | null }>
+  > = new Map()
   private static readonly MANIFEST_CACHE_TTL_MS = 5 * 60 * 1000
+
+  private pactEstablishedCache: Map<string, number> = new Map()
 
   /** How long a cached permission remains valid (5 minutes). */
   private static readonly CACHE_TTL_MS = 5 * 60 * 1000
@@ -606,7 +643,7 @@ export class WalletPermissionsManager implements WalletInterface {
    */
   public bindCallback(
     eventName: keyof WalletPermissionsManagerCallbacks,
-    handler: PermissionEventHandler | GroupedPermissionEventHandler
+    handler: PermissionEventHandler | GroupedPermissionEventHandler | CounterpartyPermissionEventHandler
   ): number {
     const arr = this.callbacks[eventName]! as any[]
     arr.push(handler)
@@ -890,6 +927,87 @@ export class WalletPermissionsManager implements WalletInterface {
     }
     for (const p of matching.pending) {
       p.resolve(true)
+    }
+    this.activeRequests.delete(requestID)
+  }
+
+  public async grantCounterpartyPermission(params: {
+    requestID: string
+    granted: Partial<CounterpartyPermissions>
+    expiry?: number
+  }): Promise<void> {
+    const matching = this.activeRequests.get(params.requestID)
+    if (!matching) {
+      throw new Error('Request ID not found.')
+    }
+
+    const originalRequest = matching.request as {
+      originator: string
+      counterparty: PubKeyHex
+      permissions: CounterpartyPermissions
+      displayOriginator?: string
+      counterpartyLabel?: string
+    }
+    const { originator, counterparty, permissions: requestedPermissions, displayOriginator } = originalRequest
+    const originLookupValues = this.buildOriginatorLookupValues(displayOriginator, originator)
+
+    if (params.granted.protocols?.some(g => !requestedPermissions.protocols.find(r => deepEqual(r, g)))) {
+      throw new Error('Granted protocol permissions are not a subset of the original request.')
+    }
+
+    const expiry = params.expiry || 0
+
+    for (const p of params.granted.protocols || []) {
+      const token = await this.findProtocolToken(
+        originator,
+        false,
+        p.protocolID,
+        counterparty,
+        true,
+        originLookupValues
+      )
+      if (token) {
+        const request: PermissionRequest = {
+          type: 'protocol',
+          originator,
+          privileged: false,
+          protocolID: p.protocolID,
+          counterparty,
+          reason: p.description
+        }
+        await this.renewPermissionOnChain(token, request, expiry)
+        this.markRecentGrant(request)
+      } else {
+        const request: PermissionRequest = {
+          type: 'protocol',
+          originator,
+          privileged: false,
+          protocolID: p.protocolID,
+          counterparty,
+          reason: p.description
+        }
+        await this.createPermissionOnChain(request, expiry)
+        this.markRecentGrant(request)
+      }
+    }
+
+    this.markPactEstablished(originator, counterparty)
+
+    for (const p of matching.pending) {
+      p.resolve(true)
+    }
+    this.activeRequests.delete(params.requestID)
+  }
+
+  public async denyCounterpartyPermission(requestID: string): Promise<void> {
+    const matching = this.activeRequests.get(requestID)
+    if (!matching) {
+      throw new Error('Request ID not found.')
+    }
+    const err = new Error('The user has denied the request for permission.')
+    ;(err as any).code = 'ERR_PERMISSION_DENIED'
+    for (const p of matching.pending) {
+      p.reject(err)
     }
     this.activeRequests.delete(requestID)
   }
@@ -1301,10 +1419,36 @@ export class WalletPermissionsManager implements WalletInterface {
     })
   }
 
-  private async fetchManifestGroupPermissions(originator: string): Promise<GroupedPermissions | null> {
+  private validateCounterpartyPermissions(raw: any): CounterpartyPermissions | null {
+    if (!raw || !Array.isArray(raw.protocols) || raw.protocols.length === 0) return null
+
+    const validProtocols = raw.protocols.filter((p: any) => {
+      return (
+        Array.isArray(p?.protocolID) &&
+        p.protocolID[0] === 2 &&
+        typeof p.protocolID[1] === 'string' &&
+        typeof p?.description === 'string'
+      )
+    })
+
+    if (validProtocols.length === 0) return null
+
+    return {
+      description: typeof raw.description === 'string' ? raw.description : undefined,
+      protocols: validProtocols
+    }
+  }
+
+  private async fetchManifestPermissions(originator: string): Promise<{
+    groupPermissions: GroupedPermissions | null
+    counterpartyPermissions: CounterpartyPermissions | null
+  }> {
     const cached = this.manifestCache.get(originator)
     if (cached && Date.now() - cached.fetchedAt < WalletPermissionsManager.MANIFEST_CACHE_TTL_MS) {
-      return cached.groupPermissions
+      return {
+        groupPermissions: cached.groupPermissions,
+        counterpartyPermissions: cached.counterpartyPermissions
+      }
     }
 
     const inProgress = this.manifestFetchInProgress.get(originator)
@@ -1312,20 +1456,27 @@ export class WalletPermissionsManager implements WalletInterface {
       return inProgress
     }
 
-    const fetchPromise = (async (): Promise<GroupedPermissions | null> => {
+    const fetchPromise = (async (): Promise<{
+      groupPermissions: GroupedPermissions | null
+      counterpartyPermissions: CounterpartyPermissions | null
+    }> => {
       try {
         const proto = originator.startsWith('localhost:') ? 'http' : 'https'
         const response = await fetch(`${proto}://${originator}/manifest.json`)
         if (response.ok) {
           const manifest = await response.json()
           const groupPermissions: GroupedPermissions | null = manifest?.babbage?.groupPermissions || null
-          this.manifestCache.set(originator, { groupPermissions, fetchedAt: Date.now() })
-          return groupPermissions
+          const counterpartyPermissions: CounterpartyPermissions | null = this.validateCounterpartyPermissions(
+            manifest?.babbage?.counterpartyPermissions
+          )
+          this.manifestCache.set(originator, { groupPermissions, counterpartyPermissions, fetchedAt: Date.now() })
+          return { groupPermissions, counterpartyPermissions }
         }
       } catch (e) {}
 
-      this.manifestCache.set(originator, { groupPermissions: null, fetchedAt: Date.now() })
-      return null
+      const result = { groupPermissions: null, counterpartyPermissions: null }
+      this.manifestCache.set(originator, { ...result, fetchedAt: Date.now() })
+      return result
     })()
 
     this.manifestFetchInProgress.set(originator, fetchPromise)
@@ -1334,6 +1485,11 @@ export class WalletPermissionsManager implements WalletInterface {
     } finally {
       this.manifestFetchInProgress.delete(originator)
     }
+  }
+
+  private async fetchManifestGroupPermissions(originator: string): Promise<GroupedPermissions | null> {
+    const { groupPermissions } = await this.fetchManifestPermissions(originator)
+    return groupPermissions
   }
 
   private async filterAlreadyGrantedPermissions(
@@ -1407,6 +1563,155 @@ export class WalletPermissionsManager implements WalletInterface {
   private hasGroupedPermissionRequestedHandlers(): boolean {
     const handlers = this.callbacks.onGroupedPermissionRequested || []
     return handlers.some(h => typeof h === 'function')
+  }
+
+  private hasCounterpartyPermissionRequestedHandlers(): boolean {
+    const handlers = this.callbacks.onCounterpartyPermissionRequested || []
+    return handlers.some(h => typeof h === 'function')
+  }
+
+  private async hasPactEstablished(originator: string, counterparty: string): Promise<boolean> {
+    if (counterparty === 'self' || counterparty === 'anyone') {
+      return true
+    }
+
+    const cacheKey = `${originator}:${counterparty}`
+    if (this.pactEstablishedCache.has(cacheKey)) {
+      return true
+    }
+
+    const { counterpartyPermissions } = await this.fetchManifestPermissions(originator)
+    if (!counterpartyPermissions?.protocols?.length) {
+      return true
+    }
+
+    const firstProtocol = counterpartyPermissions.protocols[0]
+    const hasToken = await this.hasProtocolPermission({
+      originator,
+      privileged: false,
+      protocolID: firstProtocol.protocolID,
+      counterparty
+    })
+
+    if (hasToken) {
+      this.pactEstablishedCache.set(cacheKey, Date.now())
+      return true
+    }
+
+    return false
+  }
+
+  private markPactEstablished(originator: string, counterparty: string): void {
+    const cacheKey = `${originator}:${counterparty}`
+    this.pactEstablishedCache.set(cacheKey, Date.now())
+  }
+
+  private async maybeRequestPact(currentRequest: PermissionRequest): Promise<boolean | null> {
+    if (!this.config.seekGroupedPermission) {
+      return null
+    }
+    if (!this.hasCounterpartyPermissionRequestedHandlers()) {
+      return null
+    }
+    if (currentRequest.type !== 'protocol') {
+      return null
+    }
+    if (currentRequest.privileged) {
+      return null
+    }
+    const [level] = currentRequest.protocolID!
+    if (level !== 2) {
+      return null
+    }
+
+    const originator = currentRequest.originator
+    const counterparty = currentRequest.counterparty
+    if (!counterparty || counterparty === 'self' || counterparty === 'anyone') {
+      return null
+    }
+    if (!/^[0-9a-fA-F]{66}$/.test(counterparty)) {
+      return null
+    }
+
+    if (await this.hasPactEstablished(originator, counterparty)) {
+      return null
+    }
+
+    const { counterpartyPermissions } = await this.fetchManifestPermissions(originator)
+    if (!counterpartyPermissions?.protocols?.length) {
+      return null
+    }
+
+    const protocolsToRequest: CounterpartyPermissions['protocols'] = []
+    for (const p of counterpartyPermissions.protocols) {
+      const hasPerm = await this.hasProtocolPermission({
+        originator,
+        privileged: false,
+        protocolID: p.protocolID,
+        counterparty
+      })
+      if (!hasPerm) {
+        protocolsToRequest.push(p)
+      }
+    }
+
+    if (protocolsToRequest.length === 0) {
+      this.markPactEstablished(originator, counterparty)
+      return null
+    }
+
+    const permissionsToRequest: CounterpartyPermissions = {
+      description: counterpartyPermissions.description,
+      protocols: protocolsToRequest
+    }
+
+    const key = `pact:${originator}:${counterparty}`
+    const existing = this.activeRequests.get(key)
+    if (existing) {
+      const existingRequest = existing.request as {
+        originator: string
+        counterparty: PubKeyHex
+        permissions: CounterpartyPermissions
+        displayOriginator?: string
+        counterpartyLabel?: string
+      }
+      for (const p of permissionsToRequest.protocols) {
+        if (!existingRequest.permissions.protocols.find(x => deepEqual(x, p))) {
+          existingRequest.permissions.protocols.push(p)
+        }
+      }
+      await new Promise<boolean>((resolve, reject) => {
+        existing.pending.push({ resolve, reject })
+      })
+    } else {
+      await new Promise<boolean>(async (resolve, reject) => {
+        this.activeRequests.set(key, {
+          request: {
+            originator,
+            counterparty,
+            permissions: permissionsToRequest,
+            displayOriginator: currentRequest.displayOriginator
+          },
+          pending: [{ resolve, reject }]
+        })
+
+        await this.callEvent('onCounterpartyPermissionRequested', {
+          requestID: key,
+          originator,
+          counterparty,
+          permissions: permissionsToRequest
+        })
+      })
+    }
+
+    this.markPactEstablished(originator, counterparty)
+    const satisfied = await this.hasProtocolPermission({
+      originator,
+      privileged: false,
+      protocolID: currentRequest.protocolID!,
+      counterparty
+    })
+    return satisfied ? true : null
   }
 
   private async maybeRequestPeerGroupedLevel2ProtocolPermissions(
@@ -1652,6 +1957,11 @@ export class WalletPermissionsManager implements WalletInterface {
       ...r,
       originator: normalizedOriginator,
       displayOriginator: r.displayOriginator ?? r.previousToken?.rawOriginator ?? r.originator
+    }
+
+    const pactResult = await this.maybeRequestPact(preparedRequest)
+    if (pactResult !== null) {
+      return pactResult
     }
 
     const peerGroupResult = await this.maybeRequestPeerGroupedLevel2ProtocolPermissions(preparedRequest)
