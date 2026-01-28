@@ -442,17 +442,17 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   /**
    * Pulls data from storage to build a valid beef for a txid.
-   * 
+   *
    * Optionally merges the data into an existing beef.
    * Optionally requires a minimum number of proof levels.
-   * 
-   * @param txid 
-   * @param mergeToBeef 
-   * @param trustSelf 
-   * @param knownTxids 
-   * @param trx 
-   * @param requiredLevels 
-   * @returns 
+   *
+   * @param txid
+   * @param mergeToBeef
+   * @param trustSelf
+   * @param knownTxids
+   * @param trx
+   * @param requiredLevels
+   * @returns
    */
   async getValidBeefForKnownTxid(
     txid: string,

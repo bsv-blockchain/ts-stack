@@ -140,14 +140,13 @@ describe('offsetKey tests', () => {
         paged: { limit: 400, offset: 0 }
       }
 
-      for (; ;) {
-
+      for (;;) {
         const comms: TableCommission[] = []
         let beef = new Beef()
         const chainTracker = await setup.services.getChainTracker()
         const inputs: CreateActionInput[] = []
 
-        for (; comms.length < fca.paged!.limit ;) {
+        for (; comms.length < fca.paged!.limit; ) {
           const unredeemedComms = await storage.findCommissions(fca)
           if (unredeemedComms.length < 1) break
 
@@ -168,15 +167,14 @@ describe('offsetKey tests', () => {
               }
               inputs.push(input)
               comms.push(comm)
-              if (comms.length === fca.paged!.limit)
-                break;
+              if (comms.length === fca.paged!.limit) break
             }
           }
         }
 
         if (comms.length < fca.paged!.limit)
           // Only redeem full quota of commissions per cycle to avoid paying higher percentage of fees.
-          break;
+          break
 
         if (comms.length > 0) {
           fca.paged!.offset! -= comms.length
@@ -307,14 +305,12 @@ describe('offsetKey tests', () => {
     storage.setServices(setup.services)
 
     try {
-
       const fca: FindCommissionsArgs = {
         partial: { isRedeemed: false },
         paged: { limit: 400, offset: 0 }
       }
 
-      for (; ;) {
-
+      for (;;) {
         const comms: TableCommission[] = []
         let beef = new Beef()
         const chainTracker = await setup.services.getChainTracker()
@@ -326,7 +322,8 @@ describe('offsetKey tests', () => {
         // All the inputs will be from proven txs.
         // Processors should accept the aggregate rawTx without any other input rawTxs or merkle proofs.
         // i.e. All the input txids should be "known"
-        const r = await storage.knex.raw(`
+        const r = await storage.knex.raw(
+          `
           SELECT c.*, t.provenTxId, p.height, p.index, p.merklePath, p.rawTx, p.blockHash, p.merkleRoot
           FROM commissions c
           JOIN transactions t ON c.transactionId = t.transactionId
@@ -335,9 +332,11 @@ describe('offsetKey tests', () => {
           AND NOT t.provenTxId IS NOT NULL
           ORDER BY c.commissionId
           LIMIT ? OFFSET ?;
-        `, [fca.paged!.limit, fca.paged!.offset!])
+        `,
+          [fca.paged!.limit, fca.paged!.offset!]
+        )
 
-        for (; comms.length < fca.paged!.limit ;) {
+        for (; comms.length < fca.paged!.limit; ) {
           const unredeemedComms = await storage.findCommissions(fca)
           if (unredeemedComms.length < 1) break
 
@@ -358,15 +357,14 @@ describe('offsetKey tests', () => {
               }
               inputs.push(input)
               comms.push(comm)
-              if (comms.length === fca.paged!.limit)
-                break;
+              if (comms.length === fca.paged!.limit) break
             }
           }
         }
 
         if (comms.length < fca.paged!.limit)
           // Only redeem full quota of commissions per cycle to avoid paying higher percentage of fees.
-          break;
+          break
 
         if (comms.length > 0) {
           fca.paged!.offset! -= comms.length

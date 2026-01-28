@@ -813,7 +813,7 @@ enableCache: boolean
 
 ###### Property idleWait
 
-Maximum msces of "normal" pause with no new data arriving.
+Maximum msecs of "normal" pause with no new data arriving.
 
 ```ts
 idleWait: number | undefined
@@ -13184,7 +13184,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     async listCertificates(auth: AuthId, args: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> 
     async verifyKnownValidTransaction(txid: string, trx?: TrxToken): Promise<boolean> 
     async getValidBeefForKnownTxid(txid: string, mergeToBeef?: Beef, trustSelf?: TrustSelf, knownTxids?: string[], trx?: TrxToken, requiredLevels?: number): Promise<Beef> 
-    async getValidBeefForTxid(txid: string, mergeToBeef?: Beef, trustSelf?: TrustSelf, knownTxids?: string[], trx?: TrxToken, requiredLevels?: number): Promise<Beef | undefined> 
+    async getValidBeefForTxid(txid: string, mergeToBeef?: Beef, trustSelf?: TrustSelf, knownTxids?: string[], trx?: TrxToken, requiredLevels?: number, chainTracker?: ChainTracker, skipInvalidProofs?: boolean): Promise<Beef | undefined> 
     async getBeefForTransaction(txid: string, options: StorageGetBeefOptions): Promise<Beef> 
     async findMonitorEventById(id: number, trx?: TrxToken): Promise<TableMonitorEvent | undefined> 
     async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> 
@@ -13244,6 +13244,18 @@ For the txids with reqs and status still ready to send construct a single merged
 async getReqsAndBeefToShareWithWorld(txids: string[], knownTxids: string[], trx?: TrxToken): Promise<GetReqsAndBeefResult> 
 ```
 See also: [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method getValidBeefForKnownTxid
+
+Pulls data from storage to build a valid beef for a txid.
+
+Optionally merges the data into an existing beef.
+Optionally requires a minimum number of proof levels.
+
+```ts
+async getValidBeefForKnownTxid(txid: string, mergeToBeef?: Beef, trustSelf?: TrustSelf, knownTxids?: string[], trx?: TrxToken, requiredLevels?: number): Promise<Beef> 
+```
+See also: [TrxToken](./client.md#interface-trxtoken)
 
 ###### Method updateProvenTxReqWithNewProvenTx
 
@@ -19613,6 +19625,18 @@ validBulkHeaderFiles: BulkHeaderFileInfo[] = [
         prevHash: "00000000000000000e7dcc27c06ee353bd37260b2e7e664314c204f0324a5087",
         sourceUrl: "https://cdn.projectbabbage.com/blockheaders",
         validated: true
+    },
+    {
+        chain: "main",
+        count: 31772,
+        fileHash: "NuVsRUrI5QnjILbYy4LS3A/Udl6PH/m8Y9uVguEsekM=",
+        fileName: "mainNet_9.headers",
+        firstHeight: 900000,
+        lastChainWork: "0000000000000000000000000000000000000000016ab16bb9b31430588788d3",
+        lastHash: "0000000000000000024a2f1caef4b0ffdc1a036b09f9ed7f48b538f619f32ef2",
+        prevChainWork: "000000000000000000000000000000000000000001664db1f2d50327928007e0",
+        prevHash: "00000000000000000e7dcc27c06ee353bd37260b2e7e664314c204f0324a5087",
+        sourceUrl: "https://cdn.projectbabbage.com/blockheaders"
     }
 ]
 ```
