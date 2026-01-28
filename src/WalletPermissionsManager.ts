@@ -3075,7 +3075,7 @@ export class WalletPermissionsManager implements WalletInterface {
           tags,
           tagQueryMode: 'all',
           include: 'entire transactions',
-          limit: 100
+          limit: 10000
         },
         this.adminOriginator
       )
@@ -3428,6 +3428,14 @@ export class WalletPermissionsManager implements WalletInterface {
       this.adminOriginator
     )
     const tx = Transaction.fromBEEF(signableTransaction!.tx)
+    const permInputIndex = tx.inputs.findIndex(
+      input =>
+        input.sourceTXID === oldToken.txid &&
+        input.sourceOutputIndex === oldToken.outputIndex
+    )
+    if (permInputIndex === -1) {
+      throw new Error('Unable to locate permission token input for revocation.')
+    }
     const unlocker = new PushDrop(this.underlying).unlock(
       WalletPermissionsManager.PERM_TOKEN_ENCRYPTION_PROTOCOL,
       '1',
@@ -3437,11 +3445,11 @@ export class WalletPermissionsManager implements WalletInterface {
       1,
       LockingScript.fromHex(oldToken.outputScript)
     )
-    const unlockingScript = await unlocker.sign(tx, 0)
+    const unlockingScript = await unlocker.sign(tx, permInputIndex)
     await this.underlying.signAction({
       reference: signableTransaction!.reference,
       spends: {
-        0: {
+        [permInputIndex]: {
           unlockingScript: unlockingScript.toHex()
         }
       }
