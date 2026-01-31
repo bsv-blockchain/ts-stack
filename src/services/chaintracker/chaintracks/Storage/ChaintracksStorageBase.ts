@@ -365,7 +365,10 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
   private async addLiveHeadersToBulk(liveHeaders: LiveBlockHeader[]) {
     if (liveHeaders.length === 0) return
     const lastChainWork = liveHeaders.slice(-1)[0].chainWork
-    await this.bulkManager.mergeIncrementalBlockHeaders(liveHeaders, lastChainWork)
+    const firstHeader = liveHeaders[0]
+    const previousWork = subWork(firstHeader.chainWork, convertBitsToWork(liveHeaders[0].bits))
+    const incrementalWork = subWork(lastChainWork, previousWork)
+    await this.bulkManager.mergeIncrementalBlockHeaders(liveHeaders, incrementalWork)
   }
 }
 
