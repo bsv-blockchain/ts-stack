@@ -480,15 +480,15 @@ export class WalletPermissionsManager implements WalletInterface {
     string,
     {
       request:
-      | PermissionRequest
-      | { originator: string; permissions: GroupedPermissions; displayOriginator?: string }
-      | {
-        originator: string
-        counterparty: PubKeyHex
-        permissions: CounterpartyPermissions
-        displayOriginator?: string
-        counterpartyLabel?: string
-      }
+        | PermissionRequest
+        | { originator: string; permissions: GroupedPermissions; displayOriginator?: string }
+        | {
+            originator: string
+            counterparty: PubKeyHex
+            permissions: CounterpartyPermissions
+            displayOriginator?: string
+            counterpartyLabel?: string
+          }
       pending: Array<{
         resolve: (val: any) => void
         reject: (err: any) => void
@@ -638,6 +638,20 @@ export class WalletPermissionsManager implements WalletInterface {
 
   /**
    * Splits labels into P and non-P lists, registering any P-modules encountered.
+   *
+   * P-labels follow BRC-111 format: `p <moduleId> <payload>`
+   * - Must start with "p " (lowercase p + space)
+   * - Module ID must be at least 1 character with no spaces
+   * - Single space separates module ID from payload
+   * - Payload must be at least 1 character
+   *
+   * @example Valid: "p btms token123", "p invoicing invoice 2026-02-02"
+   * @example Invalid: "p btms" (no payload), "p btms " (empty payload), "p  data" (empty moduleId)
+   *
+   * @param labels - Array of label strings to process
+   * @param pModulesByScheme - Map to populate with discovered p-modules
+   * @returns Array of non-P labels for normal permission checks
+   * @throws Error if p-label format is invalid or module is unsupported
    */
   private splitLabelsByPermissionModule(
     labels: string[] | undefined,
@@ -648,9 +662,31 @@ export class WalletPermissionsManager implements WalletInterface {
 
     for (const label of labels) {
       if (label.startsWith('p ')) {
-        const schemeID = label.split(' ')[1]
+        // Remove "p " prefix to get "moduleId payload"
+        const remainder = label.slice(2)
+
+        // Find the space that separates moduleId from payload
+        const separatorIndex = remainder.indexOf(' ')
+
+        // Validate: must have a space (separatorIndex > 0) and payload after it
+        // separatorIndex <= 0 means no space found or moduleId is empty
+        // separatorIndex === remainder.length - 1 means space is last char (no payload)
+        if (separatorIndex <= 0 || separatorIndex === remainder.length - 1) {
+          throw new Error(`Invalid P-label format: ${label}`)
+        }
+
+        // Reject double spaces after moduleId (payload can't start with space)
+        if (remainder[separatorIndex + 1] === ' ') {
+          throw new Error(`Invalid P-label format: ${label}`)
+        }
+
+        // Extract moduleId (substring before first space)
+        const schemeID = remainder.slice(0, separatorIndex)
+
+        // Register the module (throws if unsupported)
         this.addPModuleByScheme(schemeID, 'label', pModulesByScheme)
       } else {
+        // Regular label - add to list for normal permission checks
         nonPLabels.push(label)
       }
     }
@@ -1001,7 +1037,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
     const err = new Error('The user has denied the request for permission.')
-      ; (err as any).code = 'ERR_PERMISSION_DENIED'
+    ;(err as any).code = 'ERR_PERMISSION_DENIED'
     for (const p of matching.pending) {
       p.reject(err)
     }
@@ -1096,7 +1132,7 @@ export class WalletPermissionsManager implements WalletInterface {
       throw new Error('Request ID not found.')
     }
     const err = new Error('The user has denied the request for permission.')
-      ; (err as any).code = 'ERR_PERMISSION_DENIED'
+    ;(err as any).code = 'ERR_PERMISSION_DENIED'
     for (const p of matching.pending) {
       p.reject(err)
     }
@@ -1563,7 +1599,7 @@ export class WalletPermissionsManager implements WalletInterface {
           this.manifestCache.set(originator, { groupPermissions, counterpartyPermissions, fetchedAt: Date.now() })
           return { groupPermissions, counterpartyPermissions }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const result = { groupPermissions: null, counterpartyPermissions: null }
       this.manifestCache.set(originator, { ...result, fetchedAt: Date.now() })

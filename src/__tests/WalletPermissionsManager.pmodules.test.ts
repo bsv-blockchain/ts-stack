@@ -786,12 +786,26 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
   })
 
   describe('P-Module Error Handling', () => {
+    it('should reject invalid P-label formats', async () => {
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {})
+
+      await expect(manager.listActions({ labels: ['p schemeOnly'] }, 'app.com')).rejects.toThrow(
+        'Invalid P-label format'
+      )
+      await expect(manager.listActions({ labels: ['p  missingScheme'] }, 'app.com')).rejects.toThrow(
+        'Invalid P-label format'
+      )
+      await expect(manager.listActions({ labels: ['p scheme '] }, 'app.com')).rejects.toThrow('Invalid P-label format')
+
+      expect(underlying.listActions).not.toHaveBeenCalled()
+    })
+
     it('should throw if P-label scheme is unsupported', async () => {
       const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {})
 
-      await expect(
-        manager.listActions({ labels: ['p unknown scheme', 'regular-label'] }, 'app.com')
-      ).rejects.toThrow('Unsupported P-label scheme: p unknown')
+      await expect(manager.listActions({ labels: ['p unknown scheme', 'regular-label'] }, 'app.com')).rejects.toThrow(
+        'Unsupported P-label scheme: p unknown'
+      )
 
       expect(underlying.listActions).not.toHaveBeenCalled()
     })
