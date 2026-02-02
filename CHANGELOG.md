@@ -4,6 +4,14 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 1.7.24
+
+- Add full P-label (permissioned label) support per BRC-111 specification.
+- Implement P-label format validation: p <moduleId> <payload> with strict parsing rules.
+- Updated createAction, internalizeAction, and listActions to handle P-labels with permission module delegation.
+- Add comprehensive test coverage for P-label delegation, multi-module chaining, and format validation.
+- Added small fix to reject pending promises on grantGroupedPermission error.
+
 ## wallet-toolbox 1.7.17
 
 - Fix push.yaml to sync versions, correct root package contents (no mobile), and publish client and mobile
