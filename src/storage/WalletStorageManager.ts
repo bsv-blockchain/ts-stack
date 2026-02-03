@@ -753,12 +753,14 @@ export class WalletStorageManager implements sdk.WalletStorage {
       const readerSettings = reader.getSettings()
 
       log += progLog(`syncToWriter from ${readerSettings.storageName} to ${writerSettings.storageName}\n`)
+      console.log(`[syncToWriter] reader.storageIdentityKey=${readerSettings.storageIdentityKey} writer.storageIdentityKey=${writerSettings.storageIdentityKey}`)
 
       let i = -1
       for (;;) {
         i++
         const ss = await EntitySyncState.fromStorage(writer, identityKey, readerSettings)
         const args = ss.makeRequestSyncChunkArgs(identityKey, writerSettings.storageIdentityKey)
+        console.log(`[syncToWriter] chunk ${i}: args.from=${args.fromStorageIdentityKey} args.to=${args.toStorageIdentityKey} ss.storageIdentityKey=${ss.storageIdentityKey}`)
         const chunk = await reader.getSyncChunk(args)
         log += EntitySyncState.syncChunkSummary(chunk)
         const r = await writer.processSyncChunk(args, chunk)
@@ -835,6 +837,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
         // Merge state from conflicting actives into `newActive`.
         for (const conflict of this._conflictingActives) {
+          console.log(`[setActive] merge: newActive.storageIdentityKey=${newActive.settings!.storageIdentityKey} conflict.storageIdentityKey=${conflict.settings!.storageIdentityKey}`)
           log += progLog('MERGING STATE FROM CONFLICTING ACTIVES:\n')
           const sfr = await this.syncToWriter(
             { identityKey, userId: newActive.user!.userId, isActive: false },

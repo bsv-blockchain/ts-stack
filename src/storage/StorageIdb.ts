@@ -357,7 +357,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     excludeSending: boolean,
     transactionId: number
   ): Promise<TableOutput | undefined> {
-    const dbTrx = this.toDbTrx(['outputs', 'transactions'], 'readwrite')
+    const dbTrx = this.toDbTrx(['outputs', 'transactions', 'proven_txs', 'proven_tx_reqs'], 'readwrite')
     try {
       const txStatus: TransactionStatus[] = ['completed', 'unproven']
       if (!excludeSending) txStatus.push('sending')
@@ -522,7 +522,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
-    const dbTrx = this.toDbTrx(['output_tags_map'], 'readonly', args.trx)
+    const dbTrx = this.toDbTrx(['output_tags_map', 'output_tags'], 'readonly', args.trx)
     let cursor:
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', unknown, 'readwrite' | 'readonly'>
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', 'outputTagId', 'readwrite' | 'readonly'>
@@ -551,7 +551,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
       if (userId !== undefined && r.txid) {
-        const count = await this.countOutputTags({ partial: { userId, outputTagId: r.outputTagId }, trx: args.trx })
+        const count = await this.countOutputTags({ partial: { userId, outputTagId: r.outputTagId }, trx: dbTrx })
         if (count === 0) continue
       }
       if (skipped < offset) {
@@ -588,7 +588,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
-    const dbTrx = this.toDbTrx(['proven_tx_reqs'], 'readonly', args.trx)
+    const dbTrx = this.toDbTrx(['proven_tx_reqs', 'transactions'], 'readonly', args.trx)
+    const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     let cursor:
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', unknown, 'readwrite' | 'readonly'>
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'provenTxId', 'readwrite' | 'readonly'>
@@ -597,17 +598,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'batch', 'readwrite' | 'readonly'>
       | null
     if (args.partial?.provenTxReqId) {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor(args.partial.provenTxReqId)
+      cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor(args.partial.provenTxReqId, direction)
     } else if (args.partial?.provenTxId !== undefined) {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').index('provenTxId').openCursor(args.partial.provenTxId)
+      cursor = await dbTrx.objectStore('proven_tx_reqs').index('provenTxId').openCursor(args.partial.provenTxId, direction)
     } else if (args.partial?.txid !== undefined) {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').index('txid').openCursor(args.partial.txid)
+      cursor = await dbTrx.objectStore('proven_tx_reqs').index('txid').openCursor(args.partial.txid, direction)
     } else if (args.partial?.status !== undefined) {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').index('status').openCursor(args.partial.status)
+      cursor = await dbTrx.objectStore('proven_tx_reqs').index('status').openCursor(args.partial.status, direction)
     } else if (args.partial?.batch !== undefined) {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').index('batch').openCursor(args.partial.batch)
+      cursor = await dbTrx.objectStore('proven_tx_reqs').index('batch').openCursor(args.partial.batch, direction)
     } else {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor()
+      cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor(null, direction)
     }
     let firstTime = true
     while (cursor) {
@@ -629,8 +630,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (args.partial.history && r.history !== args.partial.history) continue
         if (args.partial.notify && r.notify !== args.partial.notify) continue
       }
+      if (args.status && args.status.length > 0 && !args.status.includes(r.status)) continue
+      if (args.txids && args.txids.length > 0 && !args.txids.includes(r.txid)) continue
       if (userId !== undefined && r.txid) {
-        const count = await this.countTransactions({ partial: { userId, txid: r.txid }, trx: args.trx })
+        const count = await this.countTransactions({ partial: { userId, txid: r.txid }, trx: dbTrx })
         if (count === 0) continue
       }
       if (skipped < offset) {
@@ -663,17 +666,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
-    const dbTrx = this.toDbTrx(['proven_txs'], 'readonly', args.trx)
+    const dbTrx = this.toDbTrx(['proven_txs', 'transactions'], 'readonly', args.trx)
+    const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     let cursor:
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_txs', unknown, 'readwrite' | 'readonly'>
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_txs', 'txid', 'readwrite' | 'readonly'>
       | null
     if (args.partial?.provenTxId) {
-      cursor = await dbTrx.objectStore('proven_txs').openCursor(args.partial.provenTxId)
+      cursor = await dbTrx.objectStore('proven_txs').openCursor(args.partial.provenTxId, direction)
     } else if (args.partial?.txid !== undefined) {
-      cursor = await dbTrx.objectStore('proven_txs').index('txid').openCursor(args.partial.txid)
+      cursor = await dbTrx.objectStore('proven_txs').index('txid').openCursor(args.partial.txid, direction)
     } else {
-      cursor = await dbTrx.objectStore('proven_txs').openCursor()
+      cursor = await dbTrx.objectStore('proven_txs').openCursor(null, direction)
     }
     let firstTime = true
     while (cursor) {
@@ -693,7 +697,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (args.partial.merkleRoot && r.merkleRoot !== args.partial.merkleRoot) continue
       }
       if (userId !== undefined) {
-        const count = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: args.trx })
+        const count = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: dbTrx })
         if (count === 0) continue
       }
       if (skipped < offset) {
@@ -723,7 +727,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
-    const dbTrx = this.toDbTrx(['tx_labels_map'], 'readonly', args.trx)
+    const dbTrx = this.toDbTrx(['tx_labels_map', 'tx_labels'], 'readonly', args.trx)
     let cursor:
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', unknown, 'readwrite' | 'readonly'>
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', 'transactionId', 'readwrite' | 'readonly'>
@@ -751,7 +755,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
       if (userId !== undefined) {
-        const count = await this.countTxLabels({ partial: { userId, txLabelId: r.txLabelId }, trx: args.trx })
+        const count = await this.countTxLabels({ partial: { userId, txLabelId: r.txLabelId }, trx: dbTrx })
         if (count === 0) continue
       }
       if (skipped < offset) {
@@ -1649,7 +1653,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     )
     for (const o of results) {
       if (!args.noScript) {
-        await this.validateOutputScript(o)
+        await this.validateOutputScript(o, args.trx)
       } else {
         o.lockingScript = undefined
       }
@@ -1804,6 +1808,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       stores.push('tx_labels_map')
     }
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
+    const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     let cursor:
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', unknown, 'readwrite' | 'readonly'>
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'userId', 'readwrite' | 'readonly'>
@@ -1813,24 +1818,24 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'reference', 'readwrite' | 'readonly'>
       | null
     if (args.partial?.transactionId) {
-      cursor = await dbTrx.objectStore('transactions').openCursor(args.partial.transactionId)
+      cursor = await dbTrx.objectStore('transactions').openCursor(args.partial.transactionId, direction)
     } else if (args.partial?.userId !== undefined) {
       if (args.partial?.status !== undefined) {
         cursor = await dbTrx
           .objectStore('transactions')
           .index('status_userId')
-          .openCursor([args.partial.status, args.partial.userId])
+          .openCursor([args.partial.status, args.partial.userId], direction)
       } else {
-        cursor = await dbTrx.objectStore('transactions').index('userId').openCursor(args.partial.userId)
+        cursor = await dbTrx.objectStore('transactions').index('userId').openCursor(args.partial.userId, direction)
       }
     } else if (args.partial?.status !== undefined) {
-      cursor = await dbTrx.objectStore('transactions').index('status').openCursor(args.partial.status)
+      cursor = await dbTrx.objectStore('transactions').index('status').openCursor(args.partial.status, direction)
     } else if (args.partial?.provenTxId !== undefined) {
-      cursor = await dbTrx.objectStore('transactions').index('provenTxId').openCursor(args.partial.provenTxId)
+      cursor = await dbTrx.objectStore('transactions').index('provenTxId').openCursor(args.partial.provenTxId, direction)
     } else if (args.partial?.reference !== undefined) {
-      cursor = await dbTrx.objectStore('transactions').index('reference').openCursor(args.partial.reference)
+      cursor = await dbTrx.objectStore('transactions').index('reference').openCursor(args.partial.reference, direction)
     } else {
-      cursor = await dbTrx.objectStore('transactions').openCursor()
+      cursor = await dbTrx.objectStore('transactions').openCursor(null, direction)
     }
     let firstTime = true
     while (cursor) {
