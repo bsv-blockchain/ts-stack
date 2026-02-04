@@ -4008,6 +4008,9 @@ export interface PermissionsManagerConfig {
     seekSpendingPermissions?: boolean;
     seekGroupedPermission?: boolean;
     differentiatePrivilegedOperations?: boolean;
+    whitelistedCounterparties?: {
+        [counterparty: PubKeyHex]: string[];
+    };
 }
 ```
 
@@ -4202,6 +4205,16 @@ do we seek spending authorization?
 
 ```ts
 seekSpendingPermissions?: boolean
+```
+
+###### Property whitelistedCounterparties
+
+If a counterparty and protocol name is in this list, it is automatically granted permission without prompting the user.
+
+```ts
+whitelistedCounterparties?: {
+    [counterparty: PubKeyHex]: string[];
+}
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
