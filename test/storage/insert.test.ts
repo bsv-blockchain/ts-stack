@@ -43,13 +43,20 @@ describe('insert tests', () => {
   })
 
   // Re-enable foreign keys before each test to ensure constraint checking works
-  // This is needed because the connection pool or migrations might reset the pragma
+  // This is needed because the connection pool might reset the pragma
   beforeEach(async () => {
     for (const storage of storages) {
-      if (storage instanceof StorageKnex) {
-        const client = storage.knex.client.config.client
-        if (client === 'better-sqlite3') {
-          await storage.knex.raw('PRAGMA foreign_keys = ON')
+      // Cast to StorageKnex to access knex property
+      const sk = storage as StorageKnex
+      if (sk.knex) {
+        try {
+          await sk.knex.raw('PRAGMA foreign_keys = ON')
+          const fkStatus = await sk.knex.raw('PRAGMA foreign_keys')
+          if (fkStatus[0]?.foreign_keys !== 1) {
+            console.error('WARNING: Foreign keys not enabled after PRAGMA:', fkStatus)
+          }
+        } catch (e) {
+          // Ignore errors for non-SQLite databases
         }
       }
     }
