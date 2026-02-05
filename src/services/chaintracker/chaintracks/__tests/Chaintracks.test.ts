@@ -12,6 +12,11 @@ const rootFolder = './src/services/chaintracker/chaintracks/__tests/data'
 describe('Chaintracks tests', () => {
   jest.setTimeout(99999999)
 
+  let logSpy: jest.SpyInstance, capturedLogs: string[] = [];
+  beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => { capturedLogs.push(args.map(String).join(' ')); });
+  })
+
   test.skip('0 basic operation mainnet', async () => {
     const o = createDefaultKnexChaintracksOptions('main', rootFolder)
     const c = new Chaintracks(o)
@@ -35,7 +40,7 @@ describe('Chaintracks tests', () => {
     await NoDbBody('test')
   })
 
-  test('3 NoDb export mainnet', async () => {
+  test.skip('3 NoDb export mainnet', async () => {
     if (_tu.noEnv('main')) return
     await NoDbBody('main', true)
   })

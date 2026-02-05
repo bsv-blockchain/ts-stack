@@ -5,6 +5,11 @@ import { LiveIngestorWhatsOnChainPoll } from '../LiveIngestorWhatsOnChainPoll'
 describe('LiveIngestorWhatsOnChainPoll tests', () => {
   jest.setTimeout(99999999)
 
+  let logSpy: jest.SpyInstance, capturedLogs: string[] = [];
+  beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => { capturedLogs.push(args.map(String).join(' ')); });
+  })
+
   test('0 listen for first new header', async () => {
     const liveHeaders: BlockHeader[] = []
     const options = LiveIngestorWhatsOnChainPoll.createLiveIngestorWhatsOnChainOptions('main')

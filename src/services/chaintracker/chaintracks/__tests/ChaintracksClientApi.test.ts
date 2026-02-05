@@ -35,7 +35,10 @@ describe(`ChaintracksClientApi tests`, () => {
   let localServiceClient: ChaintracksClientApi
   let firstTip: BlockHeader
 
+  let logSpy: jest.SpyInstance, capturedLogs: string[] = [];
   beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => { capturedLogs.push(args.map(String).join(' ')); });
+
     if (includeLocalServiceChaintracks || includeLocalServiceClient) {
       localService = new ChaintracksService(ChaintracksService.createChaintracksServiceOptions(chain))
       localServiceStorage = localService.chaintracks['storageEngine'] as ChaintracksStorageApi

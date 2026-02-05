@@ -4,6 +4,11 @@ import { Bitails, BitailsMerkleProof } from '../providers/Bitails'
 describe('bitrails tests', () => {
   jest.setTimeout(99999999)
 
+  let logSpy: jest.SpyInstance, capturedLogs: string[] = [];
+  beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => { capturedLogs.push(args.map(String).join(' ')); });
+  })
+  
   test('0 verify merkle proof to merkle path', async () => {
     const mp = convertProofToMerklePath('068f2ce0d01b5f1e7c7a07c209c3c67d583aeae83e11e92801b51c36f81d6b67', proof2)
     const root = mp.computeRoot('068f2ce0d01b5f1e7c7a07c209c3c67d583aeae83e11e92801b51c36f81d6b67')

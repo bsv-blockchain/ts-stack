@@ -16,6 +16,11 @@ describe('createAction test', () => {
 
   let ctxs: TestWalletNoSetup[]
 
+  let logSpy: jest.SpyInstance, capturedLogs: string[] = [];
+  beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => { capturedLogs.push(args.map(String).join(' ')); });
+  })
+
   beforeEach(async () => {
     ctxs = []
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('createActionTests'))

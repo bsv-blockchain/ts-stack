@@ -16,6 +16,11 @@ describe('WhatsOnChainServices tests', () => {
   const options = WhatsOnChainServices.createWhatsOnChainServicesOptions(chain)
   const woc = new WhatsOnChainServices(options)
 
+  let logSpy: jest.SpyInstance, capturedLogs: string[] = [];
+  beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => { capturedLogs.push(args.map(String).join(' ')); });
+  })
+
   test('getHeaderByHash', async () => {
     const header = await woc.getHeaderByHash('000000000000000001b3e99847d57ff3e0bfc4222cea5c29f10bf24387a250a2')
     expect(header?.height === 781348).toBe(true)
