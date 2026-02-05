@@ -39,7 +39,7 @@ describe('update2 tests', () => {
   const chain: sdk.Chain = 'test'
 
   const createDB = async (databaseName: string): Promise<void> => {
-    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, true)
+    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
 
     // Use the standard utility to create SQLite connections with proper foreign key support
     const knexSQLite: Knex = _tu.createLocalSQLite(localSQLiteFile)

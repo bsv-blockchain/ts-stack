@@ -11,7 +11,7 @@ describe('count tests', () => {
   const env = _tu.getEnv(chain)
 
   beforeAll(async () => {
-    const localSQLiteFile = await _tu.newTmpFile('storagecounttest.sqlite', false, false, true)
+    const localSQLiteFile = await _tu.newTmpFile('storagecounttest.sqlite', false, false, false)
     const knexSQLite = _tu.createLocalSQLite(localSQLiteFile)
     storages.push(
       new StorageKnex({

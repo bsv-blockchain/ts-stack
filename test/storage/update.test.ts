@@ -36,7 +36,7 @@ describe('update tests', () => {
     storages = []
     const databaseName = testName()
 
-    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, true)
+    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const knexSQLite = _tu.createLocalSQLite(localSQLiteFile)
     storages.push(
       new StorageKnex({

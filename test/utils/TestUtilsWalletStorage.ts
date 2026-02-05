@@ -727,7 +727,7 @@ export abstract class TestUtilsWalletStorage {
     dropAll?: boolean
     privKeyHex?: string
   }): Promise<TestWalletNoSetup> {
-    const localSQLiteFile = args.filePath || (await _tu.newTmpFile(`${args.databaseName}.sqlite`, false, false, true))
+    const localSQLiteFile = args.filePath || (await _tu.newTmpFile(`${args.databaseName}.sqlite`, false, false, false))
     return await this.createKnexTestWallet({
       ...args,
       knex: _tu.createLocalSQLite(localSQLiteFile)
@@ -739,7 +739,7 @@ export abstract class TestUtilsWalletStorage {
     chain?: Chain
     rootKeyHex?: string
   }): Promise<TestWallet<TestSetup1>> {
-    const localSQLiteFile = await _tu.newTmpFile(`${args.databaseName}.sqlite`, false, false, true)
+    const localSQLiteFile = await _tu.newTmpFile(`${args.databaseName}.sqlite`, false, false, false)
     return await this.createKnexTestSetup1Wallet({
       ...args,
       dropAll: true,
@@ -753,7 +753,7 @@ export abstract class TestUtilsWalletStorage {
     chain?: Chain
     rootKeyHex?: string
   }): Promise<TestWallet<TestSetup2>> {
-    const localSQLiteFile = await _tu.newTmpFile(`${args.databaseName}.sqlite`, false, false, true)
+    const localSQLiteFile = await _tu.newTmpFile(`${args.databaseName}.sqlite`, false, false, false)
     return await this.createKnexTestSetup2Wallet({
       ...args,
       dropAll: true,
@@ -816,7 +816,7 @@ export abstract class TestUtilsWalletStorage {
 
   //if (await _tu.fileExists(walletFile))
   static async createLegacyWalletSQLiteCopy(databaseName: string): Promise<TestWalletNoSetup> {
-    const walletFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, true)
+    const walletFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const walletKnex = _tu.createLocalSQLite(walletFile)
     return await _tu.createLegacyWalletCopy(databaseName, walletKnex, walletFile)
   }
