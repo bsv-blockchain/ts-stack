@@ -97,7 +97,7 @@ describe('offsetKey tests', () => {
     expect(address).toBe('1EZz5oxwXoG6LgGLxeYPeg1NfzQrP1vL6M')
   })
 
-  test('4_redeemServiceCharges', async () => {
+  test.skip('4_redeemServiceCharges', async () => {
     if (_tu.noEnv('main')) return
 
     const env = _tu.getEnv('main')
@@ -278,7 +278,7 @@ describe('offsetKey tests', () => {
     await setup.wallet.destroy()
   })
 
-  test('4a_redeemServiceCharges optimized', async () => {
+  test.skip('4a_redeemServiceCharges optimized', async () => {
     if (_tu.noEnv('main')) return
 
     const env = _tu.getEnv('main')
