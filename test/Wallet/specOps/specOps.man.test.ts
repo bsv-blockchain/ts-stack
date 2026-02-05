@@ -94,8 +94,12 @@ describe('specOps tests', () => {
       const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
 
       const sum2 = await setup.wallet.balance(tc)
-
       expect(sum2).toBe(sum)
+
+      if (tc !== undefined) {
+        const sum3 = (await setup.wallet.listOutputs({ ...tc, basket: 'balance ' + tc.basket })).totalOutputs
+        expect(sum3).toBe(sum)
+      }
     }
     await setup.wallet.destroy()
   })
