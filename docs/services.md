@@ -5222,7 +5222,7 @@ Deserialize a BaseBlockHeader from an 80 byte buffer
 
 ```ts
 export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset = 0): BaseBlockHeader {
-    const reader = ReaderUint8Array.makeReader(buffer, offset);
+    const reader = Utils.ReaderUint8Array.makeReader(buffer, offset);
     const header: BaseBlockHeader = {
         version: reader.readUInt32LE(),
         previousHash: asString(reader.read(32).reverse()),
@@ -5235,7 +5235,7 @@ export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset
 }
 ```
 
-See also: [BaseBlockHeader](./client.md#interface-baseblockheader), [ReaderUint8Array](./client.md#class-readeruint8array), [asString](./client.md#function-asstring), [readUInt32LE](./services.md#function-readuint32le)
+See also: [BaseBlockHeader](./client.md#interface-baseblockheader), [asString](./client.md#function-asstring), [readUInt32LE](./services.md#function-readuint32le)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

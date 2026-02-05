@@ -334,6 +334,7 @@ export interface ListOutputsSpecOp {
     ignoreLimit?: boolean;
     includeOutputScripts?: boolean;
     includeSpent?: boolean;
+    totalOutputsIsSumOfSatoshis?: boolean;
     resultFromTags?: (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListOutputsArgs, specOpTags: string[]) => Promise<ListOutputsResult>;
     resultFromOutputs?: (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListOutputsArgs, specOpTags: string[], outputs: TableOutput[]) => Promise<ListOutputsResult>;
     filterOutputs?: (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListOutputsArgs, specOpTags: string[], outputs: TableOutput[]) => Promise<TableOutput[]>;
@@ -360,6 +361,14 @@ or an explicit array of tags to intercept.
 
 ```ts
 tagsToIntercept?: string[]
+```
+
+###### Property totalOutputsIsSumOfSatoshis
+
+If true, and supported by storage, maximum performance optimization, computing balance done in the query itself.
+
+```ts
+totalOutputsIsSumOfSatoshis?: boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -4595,18 +4604,18 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [listActionsIdb](#function-listactionsidb) | [reviewStatusIdb](#function-reviewstatusidb) |
-| [createAction](#function-createaction) | [listCertificates](#function-listcertificates) | [setDisableDoubleSpendCheckForTest](#function-setdisabledoublespendcheckfortest) |
-| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [listOutputs](#function-listoutputs) | [shareReqsWithWorld](#function-sharereqswithworld) |
-| [createSyncMap](#function-createsyncmap) | [listOutputsIdb](#function-listoutputsidb) | [transactionInputSize](#function-transactioninputsize) |
-| [determineDBType](#function-determinedbtype) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [transactionOutputSize](#function-transactionoutputsize) |
-| [generateChangeSdk](#function-generatechangesdk) | [offsetPrivKey](#function-offsetprivkey) | [transactionSize](#function-transactionsize) |
-| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [offsetPubKey](#function-offsetpubkey) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
-| [getBeefForTransaction](#function-getbeeffortransaction) | [processAction](#function-processaction) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
+| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [listActions](#function-listactions) | [reviewStatus](#function-reviewstatus) |
+| [createAction](#function-createaction) | [listActionsIdb](#function-listactionsidb) | [reviewStatusIdb](#function-reviewstatusidb) |
+| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [listCertificates](#function-listcertificates) | [setDisableDoubleSpendCheckForTest](#function-setdisabledoublespendcheckfortest) |
+| [createSyncMap](#function-createsyncmap) | [listOutputs](#function-listoutputs) | [shareReqsWithWorld](#function-sharereqswithworld) |
+| [determineDBType](#function-determinedbtype) | [listOutputsIdb](#function-listoutputsidb) | [transactionInputSize](#function-transactioninputsize) |
+| [generateChangeSdk](#function-generatechangesdk) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [transactionOutputSize](#function-transactionoutputsize) |
+| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [offsetPrivKey](#function-offsetprivkey) | [transactionSize](#function-transactionsize) |
+| [getBeefForTransaction](#function-getbeeffortransaction) | [offsetPubKey](#function-offsetpubkey) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
+| [getListOutputsSpecOp](#function-getlistoutputsspecop) | [processAction](#function-processaction) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
 | [getSyncChunk](#function-getsyncchunk) | [purgeData](#function-purgedata) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
 | [internalizeAction](#function-internalizeaction) | [purgeDataIdb](#function-purgedataidb) | [varUintSize](#function-varuintsize) |
 | [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [redeemServiceCharges](#function-redeemservicecharges) |  |
-| [listActions](#function-listactions) | [reviewStatus](#function-reviewstatus) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4734,6 +4743,23 @@ Argument Details
   + the chain on which txid exists.
 + **txid**
   + the transaction hash for which an envelope is requested.
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: getListOutputsSpecOp
+
+Check basket and tags arguments passed to listOutputs to determine if they trigger a special operation execution mode.
+
+```ts
+export function getListOutputsSpecOp(basket: string, tags: string[]): {
+    specOp: ListOutputsSpecOp | undefined;
+    basket?: string;
+    tags: string[];
+} 
+```
+
+See also: [ListOutputsSpecOp](./storage.md#interface-listoutputsspecop)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5179,7 +5205,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | |
 | --- |
-| [getBasketToSpecOp](#variable-getbaskettospecop) |
 | [getLabelToSpecOp](#variable-getlabeltospecop) |
 | [maxPossibleSatoshis](#variable-maxpossiblesatoshis) |
 | [outputColumnsWithoutLockingScript](#variable-outputcolumnswithoutlockingscript) |
@@ -5189,83 +5214,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 
-##### Variable: getBasketToSpecOp
-
-```ts
-getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
-    return {
-        [specOpWalletBalance]: {
-            name: "totalOutputsIsWalletBalance",
-            useBasket: "default",
-            ignoreLimit: true,
-            resultFromOutputs: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListOutputsArgs, specOpTags: string[], outputs: TableOutput[]): Promise<ListOutputsResult> => {
-                let totalOutputs = 0;
-                for (const o of outputs)
-                    totalOutputs += o.satoshis;
-                return { totalOutputs, outputs: [] };
-            }
-        },
-        [specOpInvalidChange]: {
-            name: "invalidChangeOutputs",
-            useBasket: "default",
-            ignoreLimit: true,
-            includeOutputScripts: true,
-            includeSpent: false,
-            tagsToIntercept: ["release", "all"],
-            filterOutputs: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListOutputsArgs, specOpTags: string[], outputs: TableOutput[]): Promise<TableOutput[]> => {
-                const filteredOutputs: TableOutput[] = [];
-                const services = s.getServices();
-                for (const o of outputs) {
-                    if (!o.basketId)
-                        continue;
-                    await s.validateOutputScript(o);
-                    let ok: boolean | undefined = false;
-                    if (o.lockingScript && o.lockingScript.length > 0) {
-                        ok = await services.isUtxo(o);
-                    }
-                    else {
-                        ok = undefined;
-                    }
-                    if (ok === false) {
-                        filteredOutputs.push(o);
-                    }
-                }
-                if (specOpTags.indexOf("release") >= 0) {
-                    for (const o of filteredOutputs) {
-                        await s.updateOutput(o.outputId, { spendable: false });
-                        o.spendable = false;
-                    }
-                }
-                return filteredOutputs;
-            }
-        },
-        [specOpSetWalletChangeParams]: {
-            name: "setWalletChangeParams",
-            tagsParamsCount: 2,
-            resultFromTags: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListOutputsArgs, specOpTags: string[]): Promise<ListOutputsResult> => {
-                if (specOpTags.length !== 2)
-                    throw new WERR_INVALID_PARAMETER("numberOfDesiredUTXOs and minimumDesiredUTXOValue", "valid");
-                const numberOfDesiredUTXOs: number = verifyInteger(Number(specOpTags[0]));
-                const minimumDesiredUTXOValue: number = verifyInteger(Number(specOpTags[1]));
-                const basket = verifyOne(await s.findOutputBaskets({
-                    partial: { userId: verifyId(auth.userId), name: "default" }
-                }));
-                await s.updateOutputBasket(basket.basketId, {
-                    numberOfDesiredUTXOs,
-                    minimumDesiredUTXOValue
-                });
-                return { totalOutputs: 0, outputs: [] };
-            }
-        }
-    };
-}
-```
-
-See also: [AuthId](./client.md#interface-authid), [ListOutputsSpecOp](./storage.md#interface-listoutputsspecop), [StorageProvider](./storage.md#class-storageprovider), [TableOutput](./storage.md#interface-tableoutput), [WERR_INVALID_PARAMETER](./client.md#class-werr_invalid_parameter), [specOpInvalidChange](./client.md#variable-specopinvalidchange), [specOpSetWalletChangeParams](./client.md#variable-specopsetwalletchangeparams), [specOpWalletBalance](./client.md#variable-specopwalletbalance), [verifyId](./client.md#function-verifyid), [verifyInteger](./client.md#function-verifyinteger), [verifyOne](./client.md#function-verifyone)
-
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
-
----
 ##### Variable: getLabelToSpecOp
 
 ```ts
