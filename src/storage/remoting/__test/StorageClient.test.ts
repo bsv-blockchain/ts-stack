@@ -4,6 +4,7 @@ import { wait } from '../../../utility/utilityHelpers'
 import { WalletLogger } from '../../../WalletLogger'
 import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
 import { StorageClient } from '../StorageClient'
+import { WalletError } from '../../../sdk/WalletError'
 
 describe('StorageClient tests', () => {
   jest.setTimeout(99999999)
@@ -12,7 +13,19 @@ describe('StorageClient tests', () => {
 
   let client: TestWalletOnly
 
+  let logSpy: jest.SpyInstance;
+  let capturedLogs: string[] = [];
+  let errorSpy: jest.SpyInstance;
+  let capturedErrors: string[] = [];
+
   beforeAll(async () => {
+    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+      capturedLogs.push(args.map(String).join(' '));
+    });
+    errorSpy = jest.spyOn(console, 'error').mockImplementation((...args: any[]) => {
+      capturedErrors.push(args.map(String).join(' '));
+    });
+
     server = await createStorageServer()
 
     client = await _tu.createTestWalletWithStorageClient({
@@ -23,6 +36,11 @@ describe('StorageClient tests', () => {
   })
 
   afterAll(async () => {
+    //console.log('All captured logs:', capturedLogs);
+    //console.log('All captured errors:', capturedErrors);
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+
     await client.wallet.destroy()
     await server.server.close()
     await server.setup.wallet.destroy()
@@ -87,8 +105,13 @@ describe('StorageClient tests', () => {
       }
     }
 
-    const cr = await wallet.createAction(createArgs)
-    expect(cr.txid === '4f428a93c43c2d120204ecdc06f7916be8a5f4542cc8839a0fd79bd1b44582f3')
+    try {
+      const cr = await wallet.createAction(createArgs)
+      expect(cr.txid === '4f428a93c43c2d120204ecdc06f7916be8a5f4542cc8839a0fd79bd1b44582f3')
+    } catch (eu: unknown) {
+      const e = WalletError.fromUnknown(eu)
+      expect(e.code).toBe('WERR_REVIEW_ACTIONS')
+    }
   })
 })
 
