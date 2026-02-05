@@ -49,18 +49,16 @@ describe('whatsonchain tests', () => {
         '7e5b797b86abd31a654bf296900d6cb14d04ef0811568ff4675494af2d92166b',
         services
       )
-      const s = JSON.stringify(r)
-      expect(s).toBe(
+      const s = JSON.parse(
         '{"name":"WoCTsc","notes":[{"what":"getMerklePathSuccess","name":"WoCTsc","status":200,"statusText":"OK"}],"merklePath":{"blockHeight":1661398,"path":[[{"offset":6,"hash":"7e5b797b86abd31a654bf296900d6cb14d04ef0811568ff4675494af2d92166b","txid":true},{"offset":7,"hash":"97dd9d9080394d52338588732d9f84e1debca93f171f674ac3beac1e75495568"}],[{"offset":2,"hash":"81beedcd219d9e03255bde2ee479db34b9fed04d30373ba8bc264a64af2515b9"}],[{"offset":0,"hash":"9965f9aaeea33f6878335e6f7e6bdb544c3a8550c84e2f0daca54e9cd912111c"}]]},"header":{"version":536870912,"previousHash":"000000000688340a14b77e49bb0fca5ac7b624f7f79a5517583d1aae61c4e658","merkleRoot":"edbc07082ca0a31d5ec89d1f503a9cd41112c0d8f3221a96acfb8a9d16f8e82b","time":1739624725,"bits":486604799,"nonce":1437884974,"height":1661398,"hash":"00000000d8a73bf9a37272a71886ea92a25376bed1c1916f2b5cfbec4d6f6a25"}}'
       )
+      expect(r).toEqual(s)
     }
 
     {
       const r = await wocTest.getMerklePath('1'.repeat(64), services)
-      const s = JSON.stringify(r)
-      expect(s).toBe(
-        '{"name":"WoCTsc","notes":[{"what":"getMerklePathNoData","name":"WoCTsc","status":200,"statusText":"OK"}]}'
-      )
+      const s = JSON.parse('{"name":"WoCTsc","notes":[{"what":"getMerklePathNoData","name":"WoCTsc","status":200,"statusText":"OK"}]}')
+      expect(r).toEqual(s)
     }
   })
 
@@ -71,18 +69,14 @@ describe('whatsonchain tests', () => {
         'd9978ffc6676523208f7b33bebf1b176388bbeace2c7ef67ce35c2eababa1805',
         services
       )
-      const s = JSON.stringify(r)
-      expect(s).toBe(
-        '{"name":"WoCTsc","notes":[{"what":"getMerklePathSuccess","name":"WoCTsc","status":200,"statusText":"OK"}],"merklePath":{"blockHeight":883637,"path":[[{"offset":46,"hash":"d9978ffc6676523208f7b33bebf1b176388bbeace2c7ef67ce35c2eababa1805","txid":true},{"offset":47,"hash":"066f6fa6fa988f2e3a9d6fe35fa0d3666c652dac35cabaeebff3738a4e67f68f"}],[{"offset":22,"hash":"232089a6f77c566151bc4701fda394b5cc5bf17073140d46a73c4c3ed0a7b911"}],[{"offset":10,"hash":"c639b3a6ce127f67dbd01c7331a6fca62a4b429830387bd68ac6ac05e162116d"}],[{"offset":4,"hash":"730cec44be97881530947d782bb328d25f1122fdae206296937fffb03e936d48"}],[{"offset":3,"hash":"28b681f8ab8db0fa4d5d20cb1532b95184a155346b0b8447bde580b2406d51e6"}],[{"offset":0,"hash":"c49a18028e230dd1439b26794c08c339506f24a450f067c4facd4e0d5a346490"}],[{"offset":1,"hash":"0ba57d1b1fad6874de3640c01088e3dedad3507e5b3a3102b9a8a8055f3df88b"}],[{"offset":1,"hash":"c830edebe5565c19ba584ec73d49129344d17539f322509b7c314ae641c2fcdb"}],[{"offset":1,"hash":"ff62d5ed2a94eb93a2b7d084b8f15b12083573896b6a58cf871507e3352c75f5"}]]},"header":{"version":1040187392,"previousHash":"00000000000000000d9f6889dd6743500adee204ea25d8a57225ecd48b111769","merkleRoot":"59c1efd79fae0d9c29dd8da63f8eeec0aadde048f4491c6bfa324fcfd537156d","time":1739329877,"bits":403818359,"nonce":596827153,"height":883637,"hash":"0000000000000000060ac8d63b78d41f58c9aba0b09f81db7d51fa4905a47263"}}'
-      )
+      const s = JSON.parse('{"name":"WoCTsc","notes":[{"what":"getMerklePathSuccess","name":"WoCTsc","status":200,"statusText":"OK"}],"merklePath":{"blockHeight":883637,"path":[[{"offset":46,"hash":"d9978ffc6676523208f7b33bebf1b176388bbeace2c7ef67ce35c2eababa1805","txid":true},{"offset":47,"hash":"066f6fa6fa988f2e3a9d6fe35fa0d3666c652dac35cabaeebff3738a4e67f68f"}],[{"offset":22,"hash":"232089a6f77c566151bc4701fda394b5cc5bf17073140d46a73c4c3ed0a7b911"}],[{"offset":10,"hash":"c639b3a6ce127f67dbd01c7331a6fca62a4b429830387bd68ac6ac05e162116d"}],[{"offset":4,"hash":"730cec44be97881530947d782bb328d25f1122fdae206296937fffb03e936d48"}],[{"offset":3,"hash":"28b681f8ab8db0fa4d5d20cb1532b95184a155346b0b8447bde580b2406d51e6"}],[{"offset":0,"hash":"c49a18028e230dd1439b26794c08c339506f24a450f067c4facd4e0d5a346490"}],[{"offset":1,"hash":"0ba57d1b1fad6874de3640c01088e3dedad3507e5b3a3102b9a8a8055f3df88b"}],[{"offset":1,"hash":"c830edebe5565c19ba584ec73d49129344d17539f322509b7c314ae641c2fcdb"}],[{"offset":1,"hash":"ff62d5ed2a94eb93a2b7d084b8f15b12083573896b6a58cf871507e3352c75f5"}]]},"header":{"version":1040187392,"previousHash":"00000000000000000d9f6889dd6743500adee204ea25d8a57225ecd48b111769","merkleRoot":"59c1efd79fae0d9c29dd8da63f8eeec0aadde048f4491c6bfa324fcfd537156d","time":1739329877,"bits":403818359,"nonce":596827153,"height":883637,"hash":"0000000000000000060ac8d63b78d41f58c9aba0b09f81db7d51fa4905a47263"}}')
+      expect(r).toEqual(s)
     }
 
     {
       const r = await wocMain.getMerklePath('1'.repeat(64), services)
-      const s = JSON.stringify(r)
-      expect(s).toBe(
-        '{"name":"WoCTsc","notes":[{"what":"getMerklePathNoData","name":"WoCTsc","status":200,"statusText":"OK"}]}'
-      )
+      const s = JSON.parse('{"name":"WoCTsc","notes":[{"what":"getMerklePathNoData","name":"WoCTsc","status":200,"statusText":"OK"}]}')
+      expect(r).toEqual(s)
     }
   })
 
