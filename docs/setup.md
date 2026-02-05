@@ -742,7 +742,7 @@ DEV_KEYS = '{
     static async createStorageKnex(args: SetupWalletKnexArgs): Promise<StorageKnex> 
     static createSQLiteKnex(filename: string): Knex {
         const config: Knex.Config = {
-            client: "better-sqlite3",
+            client: "sqlite3",
             connection: { filename },
             useNullAsDefault: true
         };

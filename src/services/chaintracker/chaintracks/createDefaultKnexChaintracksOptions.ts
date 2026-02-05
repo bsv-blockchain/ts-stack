@@ -46,7 +46,7 @@ export function createDefaultKnexChaintracksOptions(
 
   if (!knexConfig) {
     knexConfig = {
-      client: 'better-sqlite3',
+      client: 'sqlite3',
       connection: { filename: ChaintracksFs.pathJoin(rootFolder, `${chain}Net_chaintracks.sqlite`) },
       useNullAsDefault: true
     }

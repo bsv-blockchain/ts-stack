@@ -12,7 +12,7 @@ describe('ChaintracksStorageKnex tests', () => {
     const fs = ChaintracksFs
     const rootFolder = './src/services/chaintracker/chaintracks/__tests/data'
     const localSqlite: Knex.Config = {
-      client: 'better-sqlite3',
+      client: 'sqlite3',
       connection: { filename: fs.pathJoin(rootFolder, `${chain}Net_chaintracks.sqlite`) },
       useNullAsDefault: true
     }

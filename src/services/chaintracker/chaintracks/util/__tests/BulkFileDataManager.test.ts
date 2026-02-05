@@ -264,7 +264,7 @@ describe('BulkFileDataManager tests', () => {
   ): Promise<ChaintracksStorageKnex> {
     const path = fs.pathJoin(rootFolder, `${filename}.sqlite`)
     const localSqlite: Knex.Config = {
-      client: 'better-sqlite3',
+      client: 'sqlite3',
       connection: { filename: path },
       useNullAsDefault: true
     }

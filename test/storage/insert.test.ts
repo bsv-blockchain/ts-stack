@@ -10,12 +10,8 @@ describe('insert tests', () => {
   const env = _tu.getEnv(chain)
 
   beforeAll(async () => {
-    // Use in-memory SQLite to avoid file-based race conditions in parallel tests
-    // memory db seems to work in simple test execution modes but fails when running full test suite...
-    //const knexSQLite = _tu.createMemorySQLite()
     const localSQLiteFile = await _tu.newTmpFile('inserttest.sqlite', false, false, true)
     const knexSQLite = _tu.createLocalSQLite(localSQLiteFile)
-
     storages.push(
       new StorageKnex({
         ...StorageKnex.defaultOptions(),
@@ -38,30 +34,6 @@ describe('insert tests', () => {
     for (const storage of storages) {
       await storage.dropAllData()
       await storage.migrate('insert tests', '1'.repeat(64))
-    }
-
-    // Explicitly enable foreign keys AFTER all setup operations, since dropAllData/migrate
-    // might reset the connection state. This is a belt and suspenders approach.
-    await knexSQLite.raw('PRAGMA foreign_keys = ON')
-  })
-
-  // Re-enable foreign keys before each test to ensure constraint checking works
-  // This is needed because the connection pool might reset the pragma
-  beforeEach(async () => {
-    for (const storage of storages) {
-      // Cast to StorageKnex to access knex property
-      const sk = storage as StorageKnex
-      if (sk.knex) {
-        try {
-          await sk.knex.raw('PRAGMA foreign_keys = ON')
-          const fkStatus = await sk.knex.raw('PRAGMA foreign_keys')
-          if (fkStatus[0]?.foreign_keys !== 1) {
-            console.error('WARNING: Foreign keys not enabled after PRAGMA:', fkStatus)
-          }
-        } catch (e) {
-          // Ignore errors for non-SQLite databases
-        }
-      }
     }
   })
 
