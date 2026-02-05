@@ -397,6 +397,12 @@ export class Wallet implements WalletInterface, ProtoWallet {
     Validation.validateOriginator(originator)
     const { vargs } = this.validateAuthAndArgs(args, Validation.validateListActionsArgs)
     const r = await this.storage.listActions(vargs)
+    // Implement security policy to block customInstructions from output results.
+    for (const action of r.actions) {
+      if (action.outputs) for (const output of action.outputs) {
+        output.customInstructions = undefined
+      }
+    }
     return r
   }
 
