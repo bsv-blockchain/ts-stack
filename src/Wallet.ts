@@ -399,9 +399,10 @@ export class Wallet implements WalletInterface, ProtoWallet {
     const r = await this.storage.listActions(vargs)
     // Implement security policy to block customInstructions from output results.
     for (const action of r.actions) {
-      if (action.outputs) for (const output of action.outputs) {
-        output.customInstructions = undefined
-      }
+      if (action.outputs)
+        for (const output of action.outputs) {
+          output.customInstructions = undefined
+        }
     }
     return r
   }
