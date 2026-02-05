@@ -128,6 +128,30 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     expect(finalCb).toHaveBeenCalledTimes(1)
   })
 
+  it('should not trigger onProtocolPermissionRequested when counterparty protocol is whitelisted', async () => {
+    const requestedCb = jest.fn(() => {})
+    manager = new WalletPermissionsManager(underlying, 'admin.domain.com', {
+      whitelistedCounterparties: {
+        '028155878063d691f01cfc0eeb626404ebe9303ec50f9542c234c5c85100a98ca1': ['Authentication']
+      }
+    } as any)
+    manager.bindCallback('onProtocolPermissionRequested', requestedCb)
+
+    const signPromise = manager.createSignature(
+      {
+        protocolID: [2, 'Authentication'] as WalletProtocol,
+        keyID: '1',
+        data: [0x01, 0x02],
+        privileged: false,
+        counterparty: '028155878063d691f01cfc0eeb626404ebe9303ec50f9542c234c5c85100a98ca1'
+      } as any,
+      'non-admin.example.com'
+    )
+
+    await expect(signPromise).resolves.toBeDefined()
+    expect(requestedCb).toHaveBeenCalledTimes(0)
+  })
+
   // -------------------------------------------------------------------------
   // 2) Integration Tests: Real permission request flow
   // -------------------------------------------------------------------------

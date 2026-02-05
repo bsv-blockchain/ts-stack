@@ -423,6 +423,13 @@ export interface PermissionsManagerConfig {
    * with privileged=false, regardless of the actual value.
    */
   differentiatePrivilegedOperations?: boolean
+
+  /**
+   * An allowlist mapping counterparty identity public keys (hex)
+   * to protocol names that are automatically permitted
+   * without prompting the user.
+   */
+  whitelistedCounterparties?: { [counterparty: PubKeyHex]: string[] }
 }
 
 /**
@@ -565,6 +572,7 @@ export class WalletPermissionsManager implements WalletInterface {
       seekSpendingPermissions: true,
       seekGroupedPermission: true,
       differentiatePrivilegedOperations: true,
+      whitelistedCounterparties: {},
       ...config // override with user-specified config
     }
   }
@@ -1209,6 +1217,10 @@ export class WalletPermissionsManager implements WalletInterface {
     }
     if (!this.config.differentiatePrivilegedOperations) {
       privileged = false
+    }
+
+    if (!privileged && this.isWhitelistedCounterpartyProtocol(counterparty, protocolID)) {
+      return true
     }
 
     const cacheKey = this.buildRequestKey({
@@ -4639,6 +4651,20 @@ export class WalletPermissionsManager implements WalletInterface {
       // Fall back to a conservative lowercase trim if URL parsing fails.
       return trimmed.toLowerCase()
     }
+  }
+
+  private isWhitelistedCounterpartyProtocol(counterparty: string, protocolID: WalletProtocol): boolean {
+    const whitelist = this.config.whitelistedCounterparties
+    if (!whitelist) return false
+    if (!counterparty || counterparty === 'self' || counterparty === 'anyone') return false
+
+    const protocols =
+      whitelist[counterparty] || whitelist[counterparty.toLowerCase()] || whitelist[counterparty.toUpperCase()]
+    if (!protocols || protocols.length === 0) return false
+
+    const protoName = (protocolID?.[1] ?? '').toString().toLowerCase()
+    if (!protoName) return false
+    return protocols.some(p => (p ?? '').toString().toLowerCase() === protoName)
   }
 
   /**
