@@ -674,7 +674,10 @@ describe('update2 tests', () => {
       expect(r9[0].identityKey).not.toBe('mockValidIdentityKey')
       expect(r9[1].identityKey).not.toBe('mockValidIdentityKey')
       expect(r9[2].identityKey).toBe('mockValidIdentityKey')
-      await expectToThrow(() => storage.updateUser(2, { identityKey: 'mockValidIdentityKey' }), /UNIQUE constraint failed/)
+      await expectToThrow(
+        () => storage.updateUser(2, { identityKey: 'mockValidIdentityKey' }),
+        /UNIQUE constraint failed/
+      )
       const r10 = await storage.findUsers({ partial: {} })
       expect(r10[0].identityKey).not.toBe('mockValidIdentityKey')
       expect(r10[1].identityKey).not.toBe('mockValidIdentityKey')

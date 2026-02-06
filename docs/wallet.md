@@ -19591,19 +19591,6 @@ validBulkHeaderFiles: BulkHeaderFileInfo[] = [
     },
     {
         chain: "test",
-        count: 95262,
-        fileHash: "BvNO9eeMwCaN1Xsx8PQLMJ+YiqF9FrNe+9WnnEo9B44=",
-        fileName: "testNet_16.headers",
-        firstHeight: 1600000,
-        lastChainWork: "00000000000000000000000000000000000000000000015814b84c3f9834ef93",
-        lastHash: "000000000ca922c841cb7fedd8f012ebc27b17991c9b00a8fb7ca4b1b2b648d3",
-        prevChainWork: "000000000000000000000000000000000000000000000156c3b84396da4e60b9",
-        prevHash: "00000000000005504bfd1a3ce4688c30c86740390102b6cd464a2fb5e0e3fed1",
-        sourceUrl: "https://cdn.projectbabbage.com/blockheaders",
-        validated: true
-    },
-    {
-        chain: "test",
         count: 100000,
         fileHash: "qPjPA41mUU0ieEqud/JO95Agqq8XgzbzS5FLnHIRyPA=",
         fileName: "testNet_16.headers",
@@ -19612,7 +19599,8 @@ validBulkHeaderFiles: BulkHeaderFileInfo[] = [
         lastHash: "000000000001561e0532f48401f822f5c0d8797e364b1d612a317eca6983ca36",
         prevChainWork: "000000000000000000000000000000000000000000000156c3b84396da4e60b9",
         prevHash: "00000000000005504bfd1a3ce4688c30c86740390102b6cd464a2fb5e0e3fed1",
-        sourceUrl: "https://cdn.projectbabbage.com/blockheaders"
+        sourceUrl: "https://cdn.projectbabbage.com/blockheaders",
+        validated: true
     },
     {
         chain: "test",
@@ -19624,7 +19612,8 @@ validBulkHeaderFiles: BulkHeaderFileInfo[] = [
         lastHash: "00000000086ca64c1f351b76c63f944b7b6b553e0c66fce3d9c1e91cddf9d067",
         prevChainWork: "00000000000000000000000000000000000000000000015814b9c82dabd4ea74",
         prevHash: "000000000001561e0532f48401f822f5c0d8797e364b1d612a317eca6983ca36",
-        sourceUrl: "https://cdn.projectbabbage.com/blockheaders"
+        sourceUrl: "https://cdn.projectbabbage.com/blockheaders",
+        validated: true
     },
     {
         sourceUrl: "https://cdn.projectbabbage.com/blockheaders",
