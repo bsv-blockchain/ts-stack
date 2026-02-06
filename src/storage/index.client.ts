@@ -1,6 +1,5 @@
 export * from './WalletStorageManager'
 export * from './StorageIdb'
-export * from './StorageSqlite'
 export * from './StorageProvider'
 export * from './StorageSyncReader'
 export * from './schema/tables/index'
