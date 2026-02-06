@@ -179,11 +179,7 @@ async function deleteTransactions(
       outputIds,
       `${reason} output_tags_map deleted`
     )
-    await runExec(
-      `DELETE FROM outputs WHERE outputId IN (${outPlaceholders})`,
-      outputIds,
-      `${reason} outputs deleted`
-    )
+    await runExec(`DELETE FROM outputs WHERE outputId IN (${outPlaceholders})`, outputIds, `${reason} outputs deleted`)
   }
 
   await runExec(

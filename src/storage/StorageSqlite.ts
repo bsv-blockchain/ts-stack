@@ -93,7 +93,8 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
   // ─── Low-level SQL helpers ───────────────────────────────────────────
 
   ensureDb(): { sqlite3: any; db: number } {
-    if (!this.sqlite3 || this.db === undefined) throw new WERR_INTERNAL('Database not initialized. Call migrate() first.')
+    if (!this.sqlite3 || this.db === undefined)
+      throw new WERR_INTERNAL('Database not initialized. Call migrate() first.')
     return { sqlite3: this.sqlite3, db: this.db }
   }
 
@@ -109,10 +110,7 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
   }
 
   /** Execute a query and return all result rows as objects. */
-  async getAll<T = Record<string, unknown>>(
-    sql: string,
-    params?: SqliteParam[]
-  ): Promise<T[]> {
+  async getAll<T = Record<string, unknown>>(sql: string, params?: SqliteParam[]): Promise<T[]> {
     const { sqlite3, db } = this.ensureDb()
     const result = await sqlite3.execWithParams(db, sql, params || [])
     if (!result || !result.rows || result.rows.length === 0) return []
@@ -127,10 +125,7 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
   }
 
   /** Execute a query and return exactly one row as object, or undefined. */
-  async getOne<T = Record<string, unknown>>(
-    sql: string,
-    params?: SqliteParam[]
-  ): Promise<T | undefined> {
+  async getOne<T = Record<string, unknown>>(sql: string, params?: SqliteParam[]): Promise<T | undefined> {
     const rows = await this.getAll<T>(sql, params)
     return rows.length > 0 ? rows[0] : undefined
   }
@@ -179,7 +174,9 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
       await this.exec(stmt)
     }
 
-    const existing = await this.getOne<{ storageIdentityKey: string }>('SELECT storageIdentityKey FROM settings LIMIT 1')
+    const existing = await this.getOne<{ storageIdentityKey: string }>(
+      'SELECT storageIdentityKey FROM settings LIMIT 1'
+    )
     if (!existing) {
       const insert = migrations.getInsertSettingsStatement()
       await this.exec(insert.sql, insert.params)
@@ -431,19 +428,32 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
 
   private getSortColumn(table: string): string {
     switch (table) {
-      case 'certificates': return 'certificateId'
-      case 'commissions': return 'commissionId'
-      case 'output_baskets': return 'basketId'
-      case 'outputs': return 'outputId'
-      case 'output_tags': return 'outputTagId'
-      case 'proven_tx_reqs': return 'provenTxReqId'
-      case 'proven_txs': return 'provenTxId'
-      case 'sync_states': return 'syncStateId'
-      case 'transactions': return 'transactionId'
-      case 'tx_labels': return 'txLabelId'
-      case 'users': return 'userId'
-      case 'monitor_events': return 'id'
-      default: return ''
+      case 'certificates':
+        return 'certificateId'
+      case 'commissions':
+        return 'commissionId'
+      case 'output_baskets':
+        return 'basketId'
+      case 'outputs':
+        return 'outputId'
+      case 'output_tags':
+        return 'outputTagId'
+      case 'proven_tx_reqs':
+        return 'provenTxReqId'
+      case 'proven_txs':
+        return 'provenTxId'
+      case 'sync_states':
+        return 'syncStateId'
+      case 'transactions':
+        return 'transactionId'
+      case 'tx_labels':
+        return 'txLabelId'
+      case 'users':
+        return 'userId'
+      case 'monitor_events':
+        return 'id'
+      default:
+        return ''
     }
   }
 
@@ -660,7 +670,10 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
 
   override async findCommissions(args: FindCommissionsArgs): Promise<TableCommission[]> {
     if (args.partial.lockingScript)
-      throw new WERR_INVALID_PARAMETER('partial.lockingScript', `undefined. Commissions may not be found by lockingScript value.`)
+      throw new WERR_INVALID_PARAMETER(
+        'partial.lockingScript',
+        `undefined. Commissions may not be found by lockingScript value.`
+      )
     return this.validateEntities(await this.findRows('commissions', args), undefined, ['isRedeemed'])
   }
 
@@ -670,7 +683,10 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
 
   override async findOutputs(args: FindOutputsArgs): Promise<TableOutput[]> {
     if (args.partial.lockingScript)
-      throw new WERR_INVALID_PARAMETER('args.partial.lockingScript', `undefined. Outputs may not be found by lockingScript value.`)
+      throw new WERR_INVALID_PARAMETER(
+        'args.partial.lockingScript',
+        `undefined. Outputs may not be found by lockingScript value.`
+      )
     const rows: TableOutput[] = await this.findRows('outputs', args, {
       txStatus: args.txStatus,
       noScript: args.noScript
@@ -684,7 +700,9 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
   }
 
   override async findOutputTagMaps(args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
-    return this.validateEntities(await this.findRows('output_tags_map', args, { tagIds: args.tagIds }), undefined, ['isDeleted'])
+    return this.validateEntities(await this.findRows('output_tags_map', args, { tagIds: args.tagIds }), undefined, [
+      'isDeleted'
+    ])
   }
 
   override async findOutputTags(args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
@@ -695,7 +713,10 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
     if (args.partial.rawTx)
       throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. ProvenTxReqs may not be found by rawTx value.`)
     if (args.partial.inputBEEF)
-      throw new WERR_INVALID_PARAMETER('args.partial.inputBEEF', `undefined. ProvenTxReqs may not be found by inputBEEF value.`)
+      throw new WERR_INVALID_PARAMETER(
+        'args.partial.inputBEEF',
+        `undefined. ProvenTxReqs may not be found by inputBEEF value.`
+      )
     return this.validateEntities(
       await this.findRows('proven_tx_reqs', args, { status: args.status, txids: args.txids }),
       undefined,
@@ -707,7 +728,10 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
     if (args.partial.rawTx)
       throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. ProvenTxs may not be found by rawTx value.`)
     if (args.partial.merklePath)
-      throw new WERR_INVALID_PARAMETER('args.partial.merklePath', `undefined. ProvenTxs may not be found by merklePath value.`)
+      throw new WERR_INVALID_PARAMETER(
+        'args.partial.merklePath',
+        `undefined. ProvenTxs may not be found by merklePath value.`
+      )
     return this.validateEntities(await this.findRows('proven_txs', args))
   }
 
@@ -719,7 +743,10 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
     if (args.partial.rawTx)
       throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. Transactions may not be found by rawTx value.`)
     if (args.partial.inputBEEF)
-      throw new WERR_INVALID_PARAMETER('args.partial.inputBEEF', `undefined. Transactions may not be found by inputBEEF value.`)
+      throw new WERR_INVALID_PARAMETER(
+        'args.partial.inputBEEF',
+        `undefined. Transactions may not be found by inputBEEF value.`
+      )
     const rows: TableTransaction[] = await this.findRows('transactions', args, {
       status: args.status,
       noRawTx: args.noRawTx
@@ -733,7 +760,9 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
   }
 
   override async findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
-    return this.validateEntities(await this.findRows('tx_labels_map', args, { labelIds: args.labelIds }), undefined, ['isDeleted'])
+    return this.validateEntities(await this.findRows('tx_labels_map', args, { labelIds: args.labelIds }), undefined, [
+      'isDeleted'
+    ])
   }
 
   override async findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
@@ -1012,7 +1041,11 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
     return this.changes()
   }
 
-  override async updateProvenTxReq(id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
+  override async updateProvenTxReq(
+    id: number | number[],
+    update: Partial<TableProvenTxReq>,
+    trx?: TrxToken
+  ): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     const validated = this.validatePartialForUpdate(update)
     if (Array.isArray(id)) {
@@ -1043,7 +1076,11 @@ export class StorageSqlite extends StorageProvider implements WalletStorageProvi
     return this.changes()
   }
 
-  override async updateTransaction(id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> {
+  override async updateTransaction(
+    id: number | number[],
+    update: Partial<TableTransaction>,
+    trx?: TrxToken
+  ): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
     const validated = this.validatePartialForUpdate(update)
     if (Array.isArray(id)) {

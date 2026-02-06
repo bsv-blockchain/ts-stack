@@ -1,6 +1,6 @@
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
 import { StorageSqlite } from '../StorageSqlite'
-import { getBasketToSpecOp, ListOutputsSpecOp } from './ListOutputsSpecOp'
+import { getListOutputsSpecOp } from './ListOutputsSpecOp'
 import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { verifyId } from '../../utility/utilityHelpers'
 import { TableOutput } from '../schema/tables/TableOutput'
@@ -27,21 +27,15 @@ export async function listOutputsSqlite(
     outputs: []
   }
 
-  let specOp: ListOutputsSpecOp | undefined = undefined
+  let { specOp, basket, tags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
+
   let basketId: number | undefined = undefined
-  if (vargs.basket) {
-    let b = vargs.basket
-    specOp = getBasketToSpecOp()[b]
-    b = specOp ? (specOp.useBasket ? specOp.useBasket : '') : b
-    if (b) {
-      const baskets = await storage.findOutputBaskets({ partial: { userId, name: b }, trx })
-      if (baskets.length !== 1) return r
-      basketId = baskets[0].basketId!
-    }
+  if (basket) {
+    const baskets = await storage.findOutputBaskets({ partial: { userId, name: basket }, trx })
+    if (baskets.length !== 1) return r
+    basketId = baskets[0].basketId!
   }
 
-  let tagIds: number[] = []
-  let tags = [...vargs.tags]
   const specOpTags: string[] = []
   if (specOp && specOp.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
@@ -63,6 +57,7 @@ export async function listOutputsSqlite(
     return await specOp.resultFromTags(storage as any, auth, vargs, specOpTags)
   }
 
+  let tagIds: number[] = []
   if (tags.length > 0) {
     const placeholders = tags.map(() => '?').join(',')
     const rows = await storage.getAll<{ outputTagId: number }>(
@@ -77,9 +72,19 @@ export async function listOutputsSqlite(
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0) return r
 
   const columns = [
-    'outputId', 'transactionId', 'basketId', 'spendable', 'txid', 'vout', 'satoshis',
-    'lockingScript', 'customInstructions', 'outputDescription', 'spendingDescription',
-    'scriptLength', 'scriptOffset'
+    'outputId',
+    'transactionId',
+    'basketId',
+    'spendable',
+    'txid',
+    'vout',
+    'satoshis',
+    'lockingScript',
+    'customInstructions',
+    'outputDescription',
+    'spendingDescription',
+    'scriptLength',
+    'scriptOffset'
   ]
 
   const noTags = tagIds.length === 0
@@ -105,15 +110,13 @@ export async function listOutputsSqlite(
     const baseSql = `FROM outputs WHERE ${whereClause}`
 
     if (!specOp || !specOp.ignoreLimit) {
-      outputs = await storage.getAll<TableOutput>(
-        `SELECT * ${baseSql} ORDER BY outputId ${orderBy} LIMIT ? OFFSET ?`,
-        [...whereParams, limit, offset]
-      )
+      outputs = await storage.getAll<TableOutput>(`SELECT * ${baseSql} ORDER BY outputId ${orderBy} LIMIT ? OFFSET ?`, [
+        ...whereParams,
+        limit,
+        offset
+      ])
     } else {
-      outputs = await storage.getAll<TableOutput>(
-        `SELECT * ${baseSql} ORDER BY outputId ${orderBy}`,
-        whereParams
-      )
+      outputs = await storage.getAll<TableOutput>(`SELECT * ${baseSql} ORDER BY outputId ${orderBy}`, whereParams)
     }
 
     if (!limit || outputs.length < limit) {

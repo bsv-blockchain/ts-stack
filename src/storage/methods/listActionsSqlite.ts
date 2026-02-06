@@ -70,7 +70,15 @@ export async function listActionsSqlite(
   if (!isQueryModeAll && labelIds.length === 0 && labels.length > 0) return r
 
   const columns = [
-    'transactionId', 'reference', 'txid', 'satoshis', 'status', 'isOutgoing', 'description', 'version', 'lockTime'
+    'transactionId',
+    'reference',
+    'txid',
+    'satoshis',
+    'status',
+    'isOutgoing',
+    'description',
+    'version',
+    'lockTime'
   ]
   const colsSql = columns.join(', ')
 

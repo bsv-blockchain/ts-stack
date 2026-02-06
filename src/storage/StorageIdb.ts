@@ -600,7 +600,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (args.partial?.provenTxReqId) {
       cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor(args.partial.provenTxReqId, direction)
     } else if (args.partial?.provenTxId !== undefined) {
-      cursor = await dbTrx.objectStore('proven_tx_reqs').index('provenTxId').openCursor(args.partial.provenTxId, direction)
+      cursor = await dbTrx
+        .objectStore('proven_tx_reqs')
+        .index('provenTxId')
+        .openCursor(args.partial.provenTxId, direction)
     } else if (args.partial?.txid !== undefined) {
       cursor = await dbTrx.objectStore('proven_tx_reqs').index('txid').openCursor(args.partial.txid, direction)
     } else if (args.partial?.status !== undefined) {
@@ -1831,7 +1834,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else if (args.partial?.status !== undefined) {
       cursor = await dbTrx.objectStore('transactions').index('status').openCursor(args.partial.status, direction)
     } else if (args.partial?.provenTxId !== undefined) {
-      cursor = await dbTrx.objectStore('transactions').index('provenTxId').openCursor(args.partial.provenTxId, direction)
+      cursor = await dbTrx
+        .objectStore('transactions')
+        .index('provenTxId')
+        .openCursor(args.partial.provenTxId, direction)
     } else if (args.partial?.reference !== undefined) {
       cursor = await dbTrx.objectStore('transactions').index('reference').openCursor(args.partial.reference, direction)
     } else {
