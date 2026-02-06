@@ -9,7 +9,7 @@ describe('KnexMigrations tests', () => {
   const env = _tu.getEnvFlags('test')
 
   beforeAll(async () => {
-    const localSQLiteFile = await _tu.newTmpFile('migratetest.sqlite', true, false, true)
+    const localSQLiteFile = await _tu.newTmpFile('migratetest.sqlite', true, false, false)
     const knexSQLite = _tu.createLocalSQLite(localSQLiteFile)
     knexs.push(knexSQLite)
 

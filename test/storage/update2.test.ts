@@ -31,7 +31,24 @@ import {
 
 setLogging(false)
 
-import knex, { Knex } from 'knex'
+import { Knex } from 'knex'
+
+/**
+ * Helper to verify that an async operation throws an error, optionally matching a pattern.
+ * More reliable than `expect(fn()).rejects.toThrow()` with better-sqlite3 + Jest workers.
+ * See: https://github.com/JoshuaWise/better-sqlite3/issues/162
+ */
+async function expectToThrow(fn: () => Promise<any>, pattern?: RegExp): Promise<void> {
+  try {
+    await fn()
+  } catch (e: any) {
+    if (pattern && !pattern.test(e.message || '')) {
+      throw new Error(`Expected error matching ${pattern} but got: ${e.message}`)
+    }
+    return
+  }
+  throw new Error(`Expected function to throw${pattern ? ` matching ${pattern}` : ''} but it did not`)
+}
 
 describe('update2 tests', () => {
   const storages: StorageKnex[] = []
@@ -39,20 +56,10 @@ describe('update2 tests', () => {
   const chain: sdk.Chain = 'test'
 
   const createDB = async (databaseName: string): Promise<void> => {
-    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, true)
+    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
 
-    // Need to pool connections
-    const knexSQLite: Knex = knex({
-      client: 'sqlite3',
-      connection: {
-        filename: localSQLiteFile
-      },
-      useNullAsDefault: true,
-      pool: {
-        min: 1,
-        max: 5
-      }
-    })
+    // Use the standard utility to create SQLite connections with proper foreign key support
+    const knexSQLite: Knex = _tu.createLocalSQLite(localSQLiteFile)
 
     const storage = new StorageKnex({
       ...StorageKnex.defaultOptions(),
@@ -65,6 +72,11 @@ describe('update2 tests', () => {
     await storage.dropAllData()
     await storage.migrate('test setup', '1'.repeat(64))
     await storage.makeAvailable()
+
+    // Explicitly enable foreign keys AFTER all setup operations, since dropAllData/migrate
+    // might reset the connection state. This is a belt and suspenders approach.
+    await knexSQLite.raw('PRAGMA foreign_keys = ON')
+
     const setup = await _tu.createTestSetup1(storage)
 
     setups.push({ setup, storage })
@@ -272,7 +284,9 @@ describe('update2 tests', () => {
         console.error('Error inserting initial record:', (error as Error).message)
         return
       }
-      await expect(storage.updateProvenTx(1, { provenTxId: 0 })).rejects.toThrow(/FOREIGN KEY constraint failed/)
+      // Ensure foreign keys are enabled right before the constraint check
+      await storage.knex.raw('PRAGMA foreign_keys = ON')
+      await expectToThrow(() => storage.updateProvenTx(1, { provenTxId: 0 }), /FOREIGN KEY constraint failed/)
       const r1 = await storage.updateProvenTx(3, { provenTxId: 0 })
       await expect(Promise.resolve(r1)).resolves.toBe(1)
       const r2 = await storage.findProvenTxs({ partial: {} })
@@ -456,7 +470,9 @@ describe('update2 tests', () => {
       }
       const r5 = await storage.updateProvenTxReq(3, { txid: 'newValidTxid' })
       await expect(Promise.resolve(r5)).resolves.toBe(1)
-      await expect(storage.updateProvenTxReq(4, { txid: 'newValidTxid' })).rejects.toThrow(/UNIQUE constraint failed/)
+      // Ensure foreign keys are enabled for constraint check
+      await storage.knex.raw('PRAGMA foreign_keys = ON')
+      await expectToThrow(() => storage.updateProvenTxReq(4, { txid: 'newValidTxid' }), /UNIQUE constraint failed/)
       const finalRecords = await storage.findProvenTxReqs({ partial: {} })
       expect(finalRecords.find(r => r.provenTxReqId === 4)?.txid).toBe('mockTxid2')
       await storage.updateProvenTxReq(3, { batch: 'batch', txid: 'mockTxid1' })
@@ -613,8 +629,20 @@ describe('update2 tests', () => {
         console.error('Error inserting initial record:', error.message)
         return
       }
-      await expect(storage.updateUser(1, { userId: 0 })).rejects.toThrow(/FOREIGN KEY constraint failed/)
-      await expect(storage.updateUser(2, { userId: 0 })).rejects.toThrow(/FOREIGN KEY constraint failed/)
+      // Ensure foreign keys are enabled for constraint check
+      await storage.knex.raw('PRAGMA foreign_keys = ON')
+      const fkStatus = await storage.knex.raw('PRAGMA foreign_keys')
+      console.log('Foreign keys status:', JSON.stringify(fkStatus))
+      // Check what data exists
+      const users = await storage.findUsers({ partial: {} })
+      console.log(
+        'Users:',
+        users.map(u => u.userId)
+      )
+      const txs = await storage.findTransactions({ partial: { userId: 1 } })
+      console.log('Transactions for userId=1:', txs.length)
+      await expectToThrow(() => storage.updateUser(1, { userId: 0 }), /FOREIGN KEY constraint failed/)
+      await expectToThrow(() => storage.updateUser(2, { userId: 0 }), /FOREIGN KEY constraint failed/)
       const r1 = await storage.updateUser(3, { userId: 0 })
       await expect(Promise.resolve(r1)).resolves.toBe(1)
       const r2 = await storage.findUsers({ partial: {} })
@@ -633,7 +661,7 @@ describe('update2 tests', () => {
       expect(r6[0].userId).toBe(1)
       expect(r6[1].userId).toBe(2)
       expect(r6[2].userId).toBe(9999)
-      await expect(storage.updateUser(1, { userId: 9999 })).rejects.toThrow(/UNIQUE constraint failed/)
+      await expectToThrow(() => storage.updateUser(1, { userId: 9999 }), /UNIQUE constraint failed/)
       const r7 = await storage.findUsers({ partial: {} })
       expect(r7[0].userId).toBe(1)
       expect(r7[1].userId).toBe(2)
@@ -646,9 +674,7 @@ describe('update2 tests', () => {
       expect(r9[0].identityKey).not.toBe('mockValidIdentityKey')
       expect(r9[1].identityKey).not.toBe('mockValidIdentityKey')
       expect(r9[2].identityKey).toBe('mockValidIdentityKey')
-      await expect(storage.updateUser(2, { identityKey: 'mockValidIdentityKey' })).rejects.toThrow(
-        /UNIQUE constraint failed/
-      )
+      await expectToThrow(() => storage.updateUser(2, { identityKey: 'mockValidIdentityKey' }), /UNIQUE constraint failed/)
       const r10 = await storage.findUsers({ partial: {} })
       expect(r10[0].identityKey).not.toBe('mockValidIdentityKey')
       expect(r10[1].identityKey).not.toBe('mockValidIdentityKey')
