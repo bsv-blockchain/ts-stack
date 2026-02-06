@@ -2,6 +2,24 @@ import { _tu } from '../utils/TestUtilsWalletStorage'
 import { randomBytesBase64, randomBytesHex, sdk, StorageProvider, TableCommission } from '../../src/index.client'
 import { StorageKnex } from '../../src/storage/StorageKnex'
 
+/**
+ * Helper to verify that an async operation throws an error.
+ * This is more reliable than `expect(fn()).rejects.toThrow()` when using
+ * better-sqlite3 with Jest workers, due to V8 context isolation issues.
+ * See: https://github.com/JoshuaWise/better-sqlite3/issues/162
+ */
+async function expectToThrow(fn: () => Promise<any>): Promise<void> {
+  let didThrow = false
+  try {
+    await fn()
+  } catch (e) {
+    didThrow = true
+  }
+  if (!didThrow) {
+    throw new Error('Expected function to throw but it did not')
+  }
+}
+
 describe('insert tests', () => {
   jest.setTimeout(99999999)
 
@@ -10,7 +28,9 @@ describe('insert tests', () => {
   const env = _tu.getEnv(chain)
 
   beforeAll(async () => {
-    const localSQLiteFile = await _tu.newTmpFile('inserttest.sqlite', false, false, true)
+    // Use a unique filename with random suffix to avoid race conditions in parallel tests.
+    // Setting reuseExisting=false (4th param) ensures each test run gets a fresh database.
+    const localSQLiteFile = await _tu.newTmpFile('inserttest.sqlite', false, false, false)
     const knexSQLite = _tu.createLocalSQLite(localSQLiteFile)
 
     storages.push(
@@ -74,7 +94,7 @@ describe('insert tests', () => {
       expect(ptx.provenTxId).toBe(1)
       ptx.provenTxId = 0
       // duplicate must throw
-      await expect(storage.insertProvenTx(ptx)).rejects.toThrow()
+      await expectToThrow(() => storage.insertProvenTx(ptx))
       ptx.provenTxId = 0
       ptx.txid = '4'.repeat(64)
       ptx.provenTxId = await storage.insertProvenTx(ptx)
@@ -89,14 +109,14 @@ describe('insert tests', () => {
       expect(ptxreq.provenTxReqId).toBe(1)
       ptxreq.provenTxReqId = 0
       // duplicate must throw
-      await expect(storage.insertProvenTxReq(ptxreq)).rejects.toThrow()
+      await expectToThrow(() => storage.insertProvenTxReq(ptxreq))
       ptxreq.provenTxReqId = 0
       ptxreq.txid = '4'.repeat(64)
       await storage.insertProvenTxReq(ptxreq)
       // MySQL counts the failed insertion as a used id, SQLite does not.
       expect(ptxreq.provenTxReqId).toBeGreaterThan(1)
       ptxreq.provenTxId = 9999 // non-existent
-      await expect(storage.insertProvenTxReq(ptxreq)).rejects.toThrow()
+      await expectToThrow(() => storage.insertProvenTxReq(ptxreq))
     }
   })
 
@@ -107,7 +127,7 @@ describe('insert tests', () => {
       expect(id).toBeGreaterThan(0)
       e.userId = 0
       // duplicate must throw
-      await expect(storage.insertUser(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertUser(e))
       e.userId = 0
       e.identityKey = randomBytesHex(33)
       await storage.insertUser(e)
@@ -123,7 +143,7 @@ describe('insert tests', () => {
       expect(id).toBeGreaterThan(0)
       e.certificateId = 0
       // duplicate must throw
-      await expect(storage.insertCertificate(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertCertificate(e))
       e.certificateId = 0
       e.serialNumber = randomBytesBase64(33)
       await storage.insertCertificate(e)
@@ -140,7 +160,7 @@ describe('insert tests', () => {
       expect(e.userId).toBe(c.userId)
       expect(e.fieldName).toBe('prize')
       // duplicate must throw
-      await expect(storage.insertCertificateField(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertCertificateField(e))
       e.fieldName = 'address'
       await storage.insertCertificateField(e)
       // MySQL counts the failed insertion as a used id, SQLite does not.
@@ -155,7 +175,7 @@ describe('insert tests', () => {
       expect(id).toBeGreaterThan(0)
       e.basketId = 0
       // duplicate must throw
-      await expect(storage.insertOutputBasket(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertOutputBasket(e))
       e.basketId = 0
       e.name = randomBytesHex(10)
       await storage.insertOutputBasket(e)
@@ -171,7 +191,7 @@ describe('insert tests', () => {
       expect(id).toBeGreaterThan(0)
       e.transactionId = 0
       // duplicate must throw
-      await expect(storage.insertTransaction(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertTransaction(e))
       e.transactionId = 0
       e.reference = randomBytesBase64(10)
       await storage.insertTransaction(e)
@@ -188,7 +208,7 @@ describe('insert tests', () => {
       expect(id).toBeGreaterThan(0)
       e.commissionId = 0
       // duplicate must throw
-      await expect(storage.insertCommission(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertCommission(e))
       e.commissionId = 0
       const { tx: t2 } = await _tu.insertTestTransaction(storage)
       e.transactionId = t2.transactionId
@@ -211,7 +231,7 @@ describe('insert tests', () => {
       expect(e.satoshis).toBe(101)
       // duplicate must throw
       e.outputId = 0
-      await expect(storage.insertOutput(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertOutput(e))
       e.vout = 1
       await storage.insertOutput(e)
       // MySQL counts the failed insertion as a used id, SQLite does not.
@@ -229,7 +249,7 @@ describe('insert tests', () => {
       expect(e.tag).toBeTruthy()
       // duplicate must throw
       e.outputTagId = 0
-      await expect(storage.insertOutputTag(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertOutputTag(e))
       e.tag = randomBytesHex(6)
       await storage.insertOutputTag(e)
       // MySQL counts the failed insertion as a used id, SQLite does not.
@@ -246,7 +266,7 @@ describe('insert tests', () => {
       expect(e.outputId).toBe(o.outputId)
       expect(e.outputTagId).toBe(tag.outputTagId)
       // duplicate must throw
-      await expect(storage.insertOutputTagMap(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertOutputTagMap(e))
       const tag2 = await _tu.insertTestOutputTag(storage, user)
       const e2 = await _tu.insertTestOutputTagMap(storage, o, tag2)
     }
@@ -262,7 +282,7 @@ describe('insert tests', () => {
       expect(e.label).toBeTruthy()
       // duplicate must throw
       e.txLabelId = 0
-      await expect(storage.insertTxLabel(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertTxLabel(e))
       e.label = randomBytesHex(6)
       await storage.insertTxLabel(e)
       // MySQL counts the failed insertion as a used id, SQLite does not.
@@ -278,7 +298,7 @@ describe('insert tests', () => {
       expect(e.transactionId).toBe(tx.transactionId)
       expect(e.txLabelId).toBe(label.txLabelId)
       // duplicate must throw
-      await expect(storage.insertTxLabelMap(e)).rejects.toThrow()
+      await expectToThrow(() => storage.insertTxLabelMap(e))
       const label2 = await _tu.insertTestTxLabel(storage, user)
       const e2 = await _tu.insertTestTxLabelMap(storage, tx, label2)
     }
