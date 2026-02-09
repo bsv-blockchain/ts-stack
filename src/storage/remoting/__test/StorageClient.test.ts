@@ -1,4 +1,4 @@
-import { CreateActionArgs, WalletLoggerInterface } from '@bsv/sdk'
+import { Beef, CreateActionArgs, P2PKH, PublicKey, SignActionArgs, WalletLoggerInterface } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup, TestWalletOnly } from '../../../../test/utils/TestUtilsWalletStorage'
 import { wait } from '../../../utility/utilityHelpers'
 import { WalletLogger } from '../../../WalletLogger'
@@ -134,3 +134,101 @@ async function createStorageServer(): Promise<{ setup: TestWalletNoSetup; server
 
   return { setup, server }
 }
+
+describe('StorageClient to tagged revision tests', () => {
+  jest.setTimeout(99999999)
+
+  test('0 repeatable createAction xyzzy42', async () => {
+    if (_tu.noEnv('main')) return
+    const env = _tu.getEnv('main')
+    const tag = 'v1-0-144'
+    const endpointUrl = `https://${tag}---prod-storage-921101068003.us-west1.run.app`
+    const s = await _tu.createTestWalletWithStorageClient({
+      rootKeyHex: env.devKeys[env.identityKey],
+      endpointUrl,
+      chain: 'main'
+    })
+
+    const testCode = 'xyzzy42'
+    const k = s.wallet.keyDeriver.derivePrivateKey([0, testCode], '1', 'self')
+    const address = k.toPublicKey().toAddress()
+    const p2pkh = new P2PKH()
+    const lock = p2pkh.lock(address)
+
+    for (let i = 0; i < 30; i++) {
+      const balance = await s.wallet.balance()
+      expect(balance).toBeGreaterThan(10000)
+      const outputs = await s.wallet.listOutputs({ basket: 'xyzzy42', include: 'entire transactions' })
+      if (outputs.totalOutputs === 0) {
+        // Create an output in the xyzzy42 basket if it doesn't exist
+        const car = await s.wallet.createAction({
+          labels: [testCode],
+          description: `create ${testCode}`,
+          outputs: [
+            {
+              basket: testCode,
+              lockingScript: lock.toHex(),
+              satoshis: 1,
+              outputDescription: testCode,
+              tags: [testCode]
+            }
+          ],
+          options: {
+            randomizeOutputs: false,
+            acceptDelayedBroadcast: false
+          },
+        })
+        expect(car.txid).toBeTruthy()
+        console.log(`Created outpoint: ${car.txid}:0`)
+      } else {
+        const o = outputs.outputs[0]
+        if (o && o.outpoint && outputs.BEEF) {
+          // Consume the first output found...
+          const unlock = _tu.getUnlockP2PKH(k, o.satoshis)
+          const unlockingScriptLength = await unlock.estimateLength()
+          // Create an output in the xyzzy42 basket if it doesn't exist
+          const cas = await s.wallet.createAction({
+            labels: [testCode],
+            description: `consume ${testCode}`,
+            inputBEEF: outputs.BEEF,
+            inputs: [
+              {
+                unlockingScriptLength,
+                outpoint: outputs.outputs[0].outpoint,
+                inputDescription: `consume ${testCode}`,
+              }
+            ],
+            options: {
+              randomizeOutputs: false,
+              acceptDelayedBroadcast: false
+            },
+          })
+          expect(cas.signableTransaction).toBeTruthy()
+          if (cas.signableTransaction) {
+            const st = cas.signableTransaction!
+            expect(st.reference).toBeTruthy()
+            const atomicBeef = Beef.fromBinary(st.tx)
+            const tx = atomicBeef.txs[atomicBeef.txs.length - 1].tx!
+            tx.inputs[0].unlockingScriptTemplate = unlock
+            await tx.sign()
+            const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
+            const signArgs: SignActionArgs = {
+              reference: st.reference,
+              spends: { 0: { unlockingScript } },
+              options: {
+                returnTXIDOnly: true,
+                noSend: false,
+                acceptDelayedBroadcast: false
+              }
+            }
+            const sr = await s.wallet.signAction(signArgs)
+            expect(sr.txid).toBeTruthy()
+            console.log(`Consumed outpoint: ${o.outpoint} in ${sr.txid}`)
+          }
+        }
+      }
+    }
+
+    await s.wallet.destroy()
+  })
+})

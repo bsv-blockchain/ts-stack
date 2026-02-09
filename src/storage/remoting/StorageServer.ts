@@ -98,6 +98,8 @@ export class StorageServer {
         return res.status(400).json({ error: { code: -32600, message: 'Invalid Request' } })
       }
 
+      console.log(`StorageServer POST: method=${method} user=${req.auth.identityKey} id=${id} params=${JSON.stringify(params || '').slice(0, 256)}`)
+
       try {
         // Dispatch the method call:
         if (typeof (this as any)[method] === 'function') {
@@ -225,7 +227,7 @@ export class StorageServer {
     }
     if (params[0]['identityKey'] && params[0]['identityKey'] !== req.auth.identityKey)
       throw new WERR_UNAUTHORIZED('identityKey does not match authentiation')
-    console.log('looking up user with identityKey:', req.auth.identityKey)
+    // console.log('looking up user with identityKey:', req.auth.identityKey)
     const { user, isNew } = await this.storage.findOrInsertUser(req.auth.identityKey)
     params[0].reqAuthUserId = user.userId
     if (params[0]['identityKey']) params[0].userId = user.userId
