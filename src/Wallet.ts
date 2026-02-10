@@ -97,7 +97,7 @@ import {
 } from './sdk/types'
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
@@ -845,6 +845,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (!vargs.isDelayed) throwIfAnyUnsuccessfulSignActions(r)
 
     const prior = this.pendingSignActions[args.reference]
+    if (!prior)
+      throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.')
     if (r.tx) r.tx = this.verifyReturnedTxidOnlyAtomicBEEF(r.tx, prior.args.options?.knownTxids)
 
     return r

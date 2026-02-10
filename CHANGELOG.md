@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.0.8
+
+Add check for cross session signAction errors.
+
 ## wallet-toolbox 2.0.7
 
 Add StorageClient.man.test.ts to stress test storage.babbage.systems
