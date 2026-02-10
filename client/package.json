@@ -1,6 +1,6 @@
 {
   "name": "@bopen-io/wallet-toolbox-client",
-  "version": "2.0.4-idb-fix.1",
+  "version": "2.0.5-idb-fix.2",
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.client.js",
   "types": "./out/src/index.client.d.ts",
