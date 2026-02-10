@@ -40,6 +40,11 @@ export function createDefaultWalletServicesOptions(
         USD: 1,
         GBP: 0.7528,
         EUR: 0.8558
+      },
+      rateTimestamps: {
+        USD: new Date('2025-08-31'),
+        GBP: new Date('2025-08-31'),
+        EUR: new Date('2025-08-31')
       }
     },
     fiatUpdateMsecs: 1000 * 60 * 60 * 24, // 24 hours

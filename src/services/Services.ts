@@ -2,7 +2,7 @@ import { Transaction as BsvTransaction, Beef, ChainTracker, Utils, WalletLoggerI
 import { ServiceCollection, ServiceToCall } from './ServiceCollection'
 import { createDefaultWalletServicesOptions } from './createDefaultWalletServicesOptions'
 import { WhatsOnChain } from './providers/WhatsOnChain'
-import { updateChaintracksFiatExchangeRates, updateExchangeratesapi } from './providers/exchangeRates'
+import { updateExchangeratesapi } from './providers/exchangeRates'
 import { ARC } from './providers/ARC'
 import { Bitails } from './providers/Bitails'
 import { getBeefForTxid } from './providers/getBeefForTxid'
@@ -28,6 +28,7 @@ import {
   WalletServices,
   WalletServicesOptions
 } from '../sdk/WalletServices.interfaces'
+import type { FiatCurrencyCode } from '../sdk/WalletServices.interfaces'
 import { Chain } from '../sdk/types'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { ChaintracksChainTracker } from './chaintracker/ChaintracksChainTracker'
@@ -106,7 +107,6 @@ export class Services implements WalletServices {
 
     //prettier-ignore
     this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate')
-      .add({ name: 'ChaintracksService', service: updateChaintracksFiatExchangeRates })
       .add({ name: 'exchangeratesapi', service: updateExchangeratesapi })
   }
 
@@ -137,15 +137,43 @@ export class Services implements WalletServices {
     return this.options.bsvExchangeRate.rate
   }
 
-  async getFiatExchangeRate(currency: 'USD' | 'GBP' | 'EUR', base?: 'USD' | 'GBP' | 'EUR'): Promise<number> {
-    const rates = await this.updateFiatExchangeRates(this.options.fiatExchangeRates, this.options.fiatUpdateMsecs)
-
-    this.options.fiatExchangeRates = rates
-
+  async getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> {
     base ||= 'USD'
-    const rate = rates.rates[currency] / rates.rates[base]
+    if (currency === base) return 1
 
-    return rate
+    const required: FiatCurrencyCode[] = base === 'USD' ? [currency] : [currency, base]
+    await this.updateFiatExchangeRates(required, this.options.fiatUpdateMsecs)
+
+    const rates = this.options.fiatExchangeRates
+    const c = rates.rates?.[currency]
+    const b = rates.rates?.[base]
+    if (typeof c !== 'number') {
+      throw new WERR_INVALID_PARAMETER('currency', `valid fiat currency '${currency}' with an exchange rate.`)
+    }
+    if (typeof b !== 'number') {
+      throw new WERR_INVALID_PARAMETER('base', `valid fiat currency '${base}' with an exchange rate.`)
+    }
+    return c / b
+  }
+
+  async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {
+    await this.updateFiatExchangeRates(targetCurrencies, this.options.fiatUpdateMsecs)
+
+    const stored = this.options.fiatExchangeRates
+    const rates: Record<string, number> = {}
+    for (const c of targetCurrencies) {
+      const v = stored.rates?.[c]
+      if (typeof v === 'number') {
+        rates[c] = v
+      }
+    }
+
+    return {
+      timestamp: stored.timestamp,
+      base: 'USD',
+      rates,
+      rateTimestamps: stored.rateTimestamps
+    }
   }
 
   get getProofsCount() {
@@ -479,29 +507,53 @@ export class Services implements WalletServices {
     return r0
   }
 
-  targetCurrencies = ['USD', 'GBP', 'EUR']
-
-  async updateFiatExchangeRates(rates?: FiatExchangeRates, updateMsecs?: number): Promise<FiatExchangeRates> {
-    updateMsecs ||= 1000 * 60 * 15
+  async updateFiatExchangeRates(
+    targetCurrencies: FiatCurrencyCode[],
+    updateMsecs?: number
+  ): Promise<FiatExchangeRates> {
+    updateMsecs ||= 1000 * 60 * 60 * 24
     const freshnessDate = new Date(Date.now() - updateMsecs)
-    if (rates) {
-      // Check if the rate we know is stale enough to update.
-      updateMsecs ||= 1000 * 60 * 15
-      if (rates.timestamp > freshnessDate) return rates
+
+    const stored = this.options.fiatExchangeRates
+    const storedRates = stored.rates ?? {}
+
+    const toFetch: FiatCurrencyCode[] = []
+    for (const c of targetCurrencies) {
+      if (c === 'USD') {
+        if (typeof storedRates.USD !== 'number') {
+          storedRates.USD = 1
+        }
+        continue
+      }
+
+      const v = storedRates[c]
+      const ts = stored.rateTimestamps?.[c] ?? stored.timestamp
+      const fresh = typeof v === 'number' && ts instanceof Date && ts > freshnessDate
+      if (!fresh) {
+        toFetch.push(c)
+      }
     }
 
-    // Make sure we always start with the first service listed (chaintracks aggregator)
-    const services = this.updateFiatExchangeRateServices.clone()
+    if (toFetch.length === 0) {
+      this.options.fiatExchangeRates = {
+        timestamp: stored.timestamp,
+        base: stored.base,
+        rates: storedRates,
+        rateTimestamps: stored.rateTimestamps
+      }
+      return this.options.fiatExchangeRates
+    }
 
-    let r0: FiatExchangeRates | undefined
+    const services = this.updateFiatExchangeRateServices.clone()
+    let fetched: FiatExchangeRates | undefined
 
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
-        const r = await stc.service(this.targetCurrencies, this.options)
-        if (this.targetCurrencies.every(c => typeof r.rates[c] === 'number')) {
+        const r = await stc.service(toFetch as string[], this.options)
+        if (toFetch.every(c => c === 'USD' || typeof r.rates?.[c] === 'number')) {
           services.addServiceCallSuccess(stc)
-          r0 = r
+          fetched = r
           break
         } else {
           services.addServiceCallFailure(stc)
@@ -513,13 +565,39 @@ export class Services implements WalletServices {
       services.next()
     }
 
-    if (!r0) {
-      console.error('Failed to update fiat exchange rates.')
-      if (!rates) throw new WERR_INTERNAL()
-      return rates
+    if (!fetched) {
+      if (stored && Object.keys(storedRates).length > 0) {
+        return stored
+      }
+      throw new WERR_INTERNAL()
     }
 
-    return r0
+    const nextRates: Record<string, number> = { ...storedRates }
+    const nextTimestamps: Record<string, Date> = { ...(stored.rateTimestamps ?? {}) }
+
+    for (const c of toFetch) {
+      const v = fetched.rates?.[c]
+      if (typeof v === 'number') {
+        nextRates[c] = v
+        nextTimestamps[c] = fetched.timestamp
+      }
+    }
+
+    const nextTimestamp = new Date(
+      Math.max(
+        stored.timestamp instanceof Date ? stored.timestamp.getTime() : new Date(stored.timestamp).getTime(),
+        fetched.timestamp.getTime()
+      )
+    )
+
+    this.options.fiatExchangeRates = {
+      timestamp: nextTimestamp,
+      base: stored.base,
+      rates: nextRates,
+      rateTimestamps: nextTimestamps
+    }
+
+    return this.options.fiatExchangeRates
   }
 
   async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean> {
