@@ -2486,10 +2486,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export interface FiatExchangeRates {
     timestamp: Date;
-    base: "USD";
+    base: FiatCurrencyCode;
     rates: Record<string, number>;
+    rateTimestamps?: Record<string, Date>;
 }
 ```
+
+See also: [FiatCurrencyCode](./client.md#type-fiatcurrencycode)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -7300,7 +7303,7 @@ export interface WalletServices {
     getHeaderForHeight(height: number): Promise<number[]>;
     getHeight(): Promise<number>;
     getBsvExchangeRate(): Promise<number>;
-    getFiatExchangeRate(currency: "USD" | "GBP" | "EUR", base?: "USD" | "GBP" | "EUR"): Promise<number>;
+    getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number>;
     getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult>;
     getMerklePath(txid: string, useNext?: boolean): Promise<GetMerklePathResult>;
     postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]>;
@@ -7316,7 +7319,7 @@ export interface WalletServices {
 }
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [PostBeefResult](./client.md#interface-postbeefresult), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatCurrencyCode](./client.md#type-fiatcurrencycode), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [PostBeefResult](./client.md#interface-postbeefresult), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
 
 ###### Property chain
 
@@ -7368,8 +7371,9 @@ standard `ChainTracker` service which requires `options.chaintracks` be valid.
 Approximate exchange rate currency per base.
 
 ```ts
-getFiatExchangeRate(currency: "USD" | "GBP" | "EUR", base?: "USD" | "GBP" | "EUR"): Promise<number>
+getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number>
 ```
+See also: [FiatCurrencyCode](./client.md#type-fiatcurrencycode)
 
 ###### Method getHeaderForHeight
 
@@ -11714,7 +11718,8 @@ export class Services implements WalletServices {
     getServicesCallHistory(reset?: boolean): ServicesCallHistory 
     async getChainTracker(): Promise<ChainTracker> 
     async getBsvExchangeRate(): Promise<number> 
-    async getFiatExchangeRate(currency: "USD" | "GBP" | "EUR", base?: "USD" | "GBP" | "EUR"): Promise<number> 
+    async getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> 
+    async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> 
     get getProofsCount() 
     get getRawTxsCount() 
     get postBeefServicesCount() 
@@ -11732,14 +11737,13 @@ export class Services implements WalletServices {
     async getHeight(): Promise<number> 
     async hashToHeader(hash: string): Promise<BlockHeader> 
     async getMerklePath(txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> 
-    targetCurrencies = ["USD", "GBP", "EUR"];
-    async updateFiatExchangeRates(rates?: FiatExchangeRates, updateMsecs?: number): Promise<FiatExchangeRates> 
+    async updateFiatExchangeRates(targetCurrencies: FiatCurrencyCode[], updateMsecs?: number): Promise<FiatExchangeRates> 
     async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean> 
     async getBeefForTxid(txid: string): Promise<Beef> 
 }
 ```
 
-See also: [ARC](./services.md#class-arc), [Bitails](./services.md#class-bitails), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatExchangeRates](./client.md#interface-fiatexchangerates), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetMerklePathService](./client.md#type-getmerklepathservice), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetRawTxService](./client.md#type-getrawtxservice), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetScriptHashHistoryService](./client.md#type-getscripthashhistoryservice), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetStatusForTxidsService](./client.md#type-getstatusfortxidsservice), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [GetUtxoStatusService](./client.md#type-getutxostatusservice), [PostBeefResult](./client.md#interface-postbeefresult), [PostBeefService](./client.md#type-postbeefservice), [ServiceCollection](./services.md#class-servicecollection), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [UpdateFiatExchangeRateService](./client.md#type-updatefiatexchangerateservice), [WalletServices](./client.md#interface-walletservices), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WhatsOnChain](./services.md#class-whatsonchain), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
+See also: [ARC](./services.md#class-arc), [Bitails](./services.md#class-bitails), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatCurrencyCode](./client.md#type-fiatcurrencycode), [FiatExchangeRates](./client.md#interface-fiatexchangerates), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetMerklePathService](./client.md#type-getmerklepathservice), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetRawTxService](./client.md#type-getrawtxservice), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetScriptHashHistoryService](./client.md#type-getscripthashhistoryservice), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetStatusForTxidsService](./client.md#type-getstatusfortxidsservice), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [GetUtxoStatusService](./client.md#type-getutxostatusservice), [PostBeefResult](./client.md#interface-postbeefresult), [PostBeefService](./client.md#type-postbeefservice), [ServiceCollection](./services.md#class-servicecollection), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [UpdateFiatExchangeRateService](./client.md#type-updatefiatexchangerateservice), [WalletServices](./client.md#interface-walletservices), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WhatsOnChain](./services.md#class-whatsonchain), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
 
 ###### Method hashOutputScript
 
@@ -17030,7 +17034,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: getExchangeRatesIo
 
 ```ts
-export async function getExchangeRatesIo(key: string): Promise<ExchangeRatesIoApi> 
+export async function getExchangeRatesIo(key: string, symbols?: string[]): Promise<ExchangeRatesIoApi> 
 ```
 
 See also: [ExchangeRatesIoApi](./services.md#interface-exchangeratesioapi)
@@ -18450,17 +18454,18 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [Chain](#type-chain) | [GetUtxoStatusService](#type-getutxostatusservice) | [ReqHistoryNote](#type-reqhistorynote) |
-| [CounterpartyPermissionEventHandler](#type-counterpartypermissioneventhandler) | [GroupedPermissionEventHandler](#type-groupedpermissioneventhandler) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
-| [DBType](#type-dbtype) | [HeaderListener](#type-headerlistener) | [ScriptHashFormat](#type-scripthashformat) |
-| [EnqueueHandler](#type-enqueuehandler) | [InsertHeaderResult](#type-insertheaderresult) | [ServicesCallHistory](#type-servicescallhistory) |
-| [EntityStorage](#type-entitystorage) | [MonitorStorage](#type-monitorstorage) | [StopListenerToken](#type-stoplistenertoken) |
-| [ErrorHandler](#type-errorhandler) | [PermissionEventHandler](#type-permissioneventhandler) | [StorageProvidedBy](#type-storageprovidedby) |
-| [GetMerklePathService](#type-getmerklepathservice) | [PostBeefService](#type-postbeefservice) | [SyncProtocolVersion](#type-syncprotocolversion) |
-| [GetRawTxService](#type-getrawtxservice) | [PostReqsToNetworkDetailsStatus](#type-postreqstonetworkdetailsstatus) | [SyncStatus](#type-syncstatus) |
-| [GetScriptHashHistoryService](#type-getscripthashhistoryservice) | [PostTxsService](#type-posttxsservice) | [TransactionStatus](#type-transactionstatus) |
-| [GetStatusForTxidsService](#type-getstatusfortxidsservice) | [ProvenTxReqStatus](#type-proventxreqstatus) | [UpdateFiatExchangeRateService](#type-updatefiatexchangerateservice) |
-| [GetUtxoStatusOutputFormat](#type-getutxostatusoutputformat) | [ReorgListener](#type-reorglistener) | [WalletLoggerLevel](#type-walletloggerlevel) |
+| [Chain](#type-chain) | [GetUtxoStatusService](#type-getutxostatusservice) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
+| [CounterpartyPermissionEventHandler](#type-counterpartypermissioneventhandler) | [GroupedPermissionEventHandler](#type-groupedpermissioneventhandler) | [ScriptHashFormat](#type-scripthashformat) |
+| [DBType](#type-dbtype) | [HeaderListener](#type-headerlistener) | [ServicesCallHistory](#type-servicescallhistory) |
+| [EnqueueHandler](#type-enqueuehandler) | [InsertHeaderResult](#type-insertheaderresult) | [StopListenerToken](#type-stoplistenertoken) |
+| [EntityStorage](#type-entitystorage) | [MonitorStorage](#type-monitorstorage) | [StorageProvidedBy](#type-storageprovidedby) |
+| [ErrorHandler](#type-errorhandler) | [PermissionEventHandler](#type-permissioneventhandler) | [SyncProtocolVersion](#type-syncprotocolversion) |
+| [FiatCurrencyCode](#type-fiatcurrencycode) | [PostBeefService](#type-postbeefservice) | [SyncStatus](#type-syncstatus) |
+| [GetMerklePathService](#type-getmerklepathservice) | [PostReqsToNetworkDetailsStatus](#type-postreqstonetworkdetailsstatus) | [TransactionStatus](#type-transactionstatus) |
+| [GetRawTxService](#type-getrawtxservice) | [PostTxsService](#type-posttxsservice) | [UpdateFiatExchangeRateService](#type-updatefiatexchangerateservice) |
+| [GetScriptHashHistoryService](#type-getscripthashhistoryservice) | [ProvenTxReqStatus](#type-proventxreqstatus) | [WalletLoggerLevel](#type-walletloggerlevel) |
+| [GetStatusForTxidsService](#type-getstatusfortxidsservice) | [ReorgListener](#type-reorglistener) |  |
+| [GetUtxoStatusOutputFormat](#type-getutxostatusoutputformat) | [ReqHistoryNote](#type-reqhistorynote) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -18523,6 +18528,15 @@ return true to ignore error, false to close service connection
 
 ```ts
 export type ErrorHandler = (code: number, message: string) => boolean
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Type: FiatCurrencyCode
+
+```ts
+export type FiatCurrencyCode = "USD" | "EUR" | "GBP" | "JPY" | "CNY" | "INR" | "AUD" | "CAD" | "CHF" | "HKD" | "SGD" | "NZD" | "SEK" | "NOK" | "MXN"
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

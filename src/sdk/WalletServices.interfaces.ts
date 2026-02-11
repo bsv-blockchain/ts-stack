@@ -45,7 +45,7 @@ export interface WalletServices {
   /**
    * Approximate exchange rate currency per base.
    */
-  getFiatExchangeRate(currency: 'USD' | 'GBP' | 'EUR', base?: 'USD' | 'GBP' | 'EUR'): Promise<number>
+  getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number>
 
   /**
    * Attempts to obtain the raw transaction bytes associated with a 32 byte transaction hash (txid).
@@ -198,9 +198,27 @@ export interface BsvExchangeRate {
 
 export interface FiatExchangeRates {
   timestamp: Date
-  base: 'USD'
+  base: FiatCurrencyCode
   rates: Record<string, number>
+  rateTimestamps?: Record<string, Date>
 }
+
+export type FiatCurrencyCode =
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'JPY'
+  | 'CNY'
+  | 'INR'
+  | 'AUD'
+  | 'CAD'
+  | 'CHF'
+  | 'HKD'
+  | 'SGD'
+  | 'NZD'
+  | 'SEK'
+  | 'NOK'
+  | 'MXN'
 
 export interface WalletServicesOptions {
   /**

@@ -4586,7 +4586,8 @@ export class Services implements WalletServices {
     getServicesCallHistory(reset?: boolean): ServicesCallHistory 
     async getChainTracker(): Promise<ChainTracker> 
     async getBsvExchangeRate(): Promise<number> 
-    async getFiatExchangeRate(currency: "USD" | "GBP" | "EUR", base?: "USD" | "GBP" | "EUR"): Promise<number> 
+    async getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> 
+    async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> 
     get getProofsCount() 
     get getRawTxsCount() 
     get postBeefServicesCount() 
@@ -4604,14 +4605,13 @@ export class Services implements WalletServices {
     async getHeight(): Promise<number> 
     async hashToHeader(hash: string): Promise<BlockHeader> 
     async getMerklePath(txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> 
-    targetCurrencies = ["USD", "GBP", "EUR"];
-    async updateFiatExchangeRates(rates?: FiatExchangeRates, updateMsecs?: number): Promise<FiatExchangeRates> 
+    async updateFiatExchangeRates(targetCurrencies: FiatCurrencyCode[], updateMsecs?: number): Promise<FiatExchangeRates> 
     async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean> 
     async getBeefForTxid(txid: string): Promise<Beef> 
 }
 ```
 
-See also: [ARC](./services.md#class-arc), [Bitails](./services.md#class-bitails), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatExchangeRates](./client.md#interface-fiatexchangerates), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetMerklePathService](./client.md#type-getmerklepathservice), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetRawTxService](./client.md#type-getrawtxservice), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetScriptHashHistoryService](./client.md#type-getscripthashhistoryservice), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetStatusForTxidsService](./client.md#type-getstatusfortxidsservice), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [GetUtxoStatusService](./client.md#type-getutxostatusservice), [PostBeefResult](./client.md#interface-postbeefresult), [PostBeefService](./client.md#type-postbeefservice), [ServiceCollection](./services.md#class-servicecollection), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [UpdateFiatExchangeRateService](./client.md#type-updatefiatexchangerateservice), [WalletServices](./client.md#interface-walletservices), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WhatsOnChain](./services.md#class-whatsonchain), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
+See also: [ARC](./services.md#class-arc), [Bitails](./services.md#class-bitails), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatCurrencyCode](./client.md#type-fiatcurrencycode), [FiatExchangeRates](./client.md#interface-fiatexchangerates), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetMerklePathService](./client.md#type-getmerklepathservice), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetRawTxService](./client.md#type-getrawtxservice), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetScriptHashHistoryService](./client.md#type-getscripthashhistoryservice), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetStatusForTxidsService](./client.md#type-getstatusfortxidsservice), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [GetUtxoStatusService](./client.md#type-getutxostatusservice), [PostBeefResult](./client.md#interface-postbeefresult), [PostBeefService](./client.md#type-postbeefservice), [ServiceCollection](./services.md#class-servicecollection), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [UpdateFiatExchangeRateService](./client.md#type-updatefiatexchangerateservice), [WalletServices](./client.md#interface-walletservices), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WhatsOnChain](./services.md#class-whatsonchain), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
 
 ###### Method hashOutputScript
 
@@ -5337,7 +5337,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: getExchangeRatesIo
 
 ```ts
-export async function getExchangeRatesIo(key: string): Promise<ExchangeRatesIoApi> 
+export async function getExchangeRatesIo(key: string, symbols?: string[]): Promise<ExchangeRatesIoApi> 
 ```
 
 See also: [ExchangeRatesIoApi](./services.md#interface-exchangeratesioapi)
