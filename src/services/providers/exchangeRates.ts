@@ -74,7 +74,7 @@ export interface ExchangeRatesIoApi {
 export async function getExchangeRatesIo(key: string, symbols?: string[]): Promise<ExchangeRatesIoApi> {
   const list = symbols && symbols.length ? symbols.join(',') : ''
   const symbolsParam = list ? `&symbols=${encodeURIComponent(list)}` : ''
-  const url = `http://api.exchangeratesapi.io/v1/latest?access_key=${key}${symbolsParam}`
+  const url = `https://api.exchangeratesapi.io/v1/latest?access_key=${key}${symbolsParam}`
 
   const response = await fetch(url)
   const data = await response.json()
