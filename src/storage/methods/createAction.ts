@@ -229,19 +229,15 @@ async function createNewInputs(
     const o = i.output
     newInputs.push({ i, o })
     if (o) {
+      // Collect double-spend info inside transaction, then handle outside
+      let doubleSpendTxid: string | undefined
       await storage.transaction(async trx => {
         const o2 = verifyOne(await storage.findOutputs({ partial: { outputId: o.outputId }, trx }))
         if (o2.spentBy !== undefined) {
           const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
-          if (spendingTx && spendingTx.txid) {
-            const beef = await storage.getBeefForTransaction(spendingTx.txid, {})
-            const rar: ReviewActionResult = {
-              txid: '',
-              status: 'doubleSpend',
-              competingTxs: [spendingTx.txid!],
-              competingBeef: beef.toBinary()
-            }
-            throw new WERR_REVIEW_ACTIONS([rar], [])
+          if (spendingTx?.txid) {
+            doubleSpendTxid = spendingTx.txid
+            return // Exit transaction cleanly
           }
         }
         if (o2.spendable != true) {
@@ -260,6 +256,17 @@ async function createNewInputs(
           trx
         )
       })
+      // Network call and throw outside transaction
+      if (doubleSpendTxid) {
+        const beef = await storage.getBeefForTransaction(doubleSpendTxid, {})
+        const rar: ReviewActionResult = {
+          txid: '',
+          status: 'doubleSpend',
+          competingTxs: [doubleSpendTxid],
+          competingBeef: beef.toBinary()
+        }
+        throw new WERR_REVIEW_ACTIONS([rar], [])
+      }
     }
   }
 
