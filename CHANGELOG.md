@@ -4,6 +4,18 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.0.9
+
+Added support for more currency types.
+
+## wallet-toolbox 2.0.8
+
+Add check for cross session signAction errors.
+
+## wallet-toolbox 2.0.7
+
+Add StorageClient.man.test.ts to stress test storage.babbage.systems
+
 ## wallet-toolbox 2.0.5
 
 Change sqlite support to better-sqlite3, all tests resolved. Support for existing databases confirmed.

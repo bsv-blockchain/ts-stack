@@ -1,4 +1,4 @@
-import { CreateActionArgs, WalletLoggerInterface } from '@bsv/sdk'
+import { Beef, CreateActionArgs, P2PKH, PublicKey, SignActionArgs, WalletLoggerInterface } from '@bsv/sdk'
 import { _tu, TestWalletNoSetup, TestWalletOnly } from '../../../../test/utils/TestUtilsWalletStorage'
 import { wait } from '../../../utility/utilityHelpers'
 import { WalletLogger } from '../../../WalletLogger'
