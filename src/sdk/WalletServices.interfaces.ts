@@ -442,7 +442,7 @@ export interface PostTxResultForTxidError {
   more?: object
 }
 
-export interface PostBeefResult extends PostTxsResult { }
+export interface PostBeefResult extends PostTxsResult {}
 
 /**
  * Properties on array items of result returned from `WalletServices` function `postBeef`.
