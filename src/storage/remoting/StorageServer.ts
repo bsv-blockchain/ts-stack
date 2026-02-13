@@ -104,7 +104,7 @@ export class StorageServer {
         user: req.auth.identityKey,
         params: JSON.stringify(params || '').slice(0, 256)
       }
-      const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context']).split('/')[0]
+      const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
       if (traceContext) logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
 
       console.log(JSON.stringify(logObj))
