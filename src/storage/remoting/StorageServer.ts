@@ -92,15 +92,22 @@ export class StorageServer {
     // A single POST endpoint for JSON-RPC:
     this.app.post('/', async (req: Request, res: Response) => {
       let { jsonrpc, method, params, id } = req.body
-
       // Basic JSON-RPC protocol checks:
       if (jsonrpc !== '2.0' || !method || typeof method !== 'string') {
         return res.status(400).json({ error: { code: -32600, message: 'Invalid Request' } })
       }
 
-      console.log(
-        `StorageServer POST: method=${method} user=${req.auth.identityKey} id=${id} params=${JSON.stringify(params || '').slice(0, 256)}`
-      )
+      const logObj = {
+        source: `StorageServer POST handler`,
+        method,
+        id,
+        user: req.auth.identityKey,
+        params: JSON.stringify(params || '').slice(0, 256)
+      }
+      const traceContext = req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context']
+      if (traceContext) logObj['logging.googleapis.com/trace'] = traceContext
+
+      console.log(JSON.stringify(logObj))
 
       try {
         // Dispatch the method call:
@@ -113,7 +120,9 @@ export class StorageServer {
           // Find user
           switch (method) {
             case 'destroy': {
-              console.log(`StorageServer: method=${method} IGNORED`)
+              logObj['result'] = undefined
+              logObj['comment'] = 'IGNORED'
+              console.log(JSON.stringify(logObj))
               return res.json({ jsonrpc: '2.0', result: undefined, id })
             }
             case 'getSettings':
