@@ -45,7 +45,50 @@ export class StorageServer {
     this.adminIdentityKeys = options.adminIdentityKeys
     this.makeLogger = options.makeLogger
 
+    if (options['logShortReqs']) {
+      this.setupShortReqLogging()
+    }
+
     this.setupRoutes()
+  }
+
+  private setupShortReqLogging(): void {
+    this.app.use((req: Request, res: Response, next: express.NextFunction) => {
+      const contentLength = Number(req.headers['content-length'] || 0);
+
+      if (contentLength > 0 && contentLength < 1000 &&
+        (req.method === 'POST')) {
+
+        const logObj: any = {
+          source: 'StorageServer short-request-log',
+          ts: new Date().toISOString(),
+          url: req.originalUrl,
+          ip: req.ip || req.socket.remoteAddress,
+          ua: req.headers['user-agent'] || '-',
+          contentType: req.headers['content-type'] || '-',
+          contentLength,
+          headers: { ...req.headers },  // shallow copy
+        };
+
+        const chunks: Buffer[] = [];
+        req.on('data', chunk => chunks.push(Buffer.from(chunk)));
+
+        req.on('end', () => {
+          const bodyBuffer = Buffer.concat(chunks);
+
+          try {
+            logObj.body = bodyBuffer.toString('utf8');
+          } catch {
+            logObj.body = bodyBuffer.toString('hex');
+            logObj.bodyEncoding = 'hex';
+          }
+
+          console.log(JSON.stringify(logObj, null, 2));
+        });
+      }
+
+      next();
+    });
   }
 
   private setupRoutes(): void {
