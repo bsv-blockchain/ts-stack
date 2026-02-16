@@ -123,7 +123,7 @@ describe('StorageClient to tagged revision manual tests', () => {
 
     let reps = 0
 
-    for (; ;) {
+    for (;;) {
       reps++
       console.log(`Async createAction/signAction iteration ${reps}`)
       let outputs = await s.wallet.listOutputs({ basket: testCode, include: 'entire transactions', limit: count })
@@ -245,7 +245,6 @@ describe('StorageClient to tagged revision manual tests', () => {
       }
 
       await wait(15000)
-
     }
     await s.wallet.destroy()
   })

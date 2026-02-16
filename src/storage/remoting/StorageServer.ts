@@ -54,11 +54,9 @@ export class StorageServer {
 
   private setupShortReqLogging(): void {
     this.app.use((req: Request, res: Response, next: express.NextFunction) => {
-      const contentLength = Number(req.headers['content-length'] || 0);
+      const contentLength = Number(req.headers['content-length'] || 0)
 
-      if (contentLength > 0 && contentLength < 1000 &&
-        (req.method === 'POST')) {
-
+      if (contentLength > 0 && contentLength < 1000 && req.method === 'POST') {
         const logObj: any = {
           source: 'StorageServer short-request-log',
           ts: new Date().toISOString(),
@@ -67,28 +65,28 @@ export class StorageServer {
           ua: req.headers['user-agent'] || '-',
           contentType: req.headers['content-type'] || '-',
           contentLength,
-          headers: { ...req.headers },  // shallow copy
-        };
+          headers: { ...req.headers } // shallow copy
+        }
 
-        const chunks: Buffer[] = [];
-        req.on('data', chunk => chunks.push(Buffer.from(chunk)));
+        const chunks: Buffer[] = []
+        req.on('data', chunk => chunks.push(Buffer.from(chunk)))
 
         req.on('end', () => {
-          const bodyBuffer = Buffer.concat(chunks);
+          const bodyBuffer = Buffer.concat(chunks)
 
           try {
-            logObj.body = bodyBuffer.toString('utf8');
+            logObj.body = bodyBuffer.toString('utf8')
           } catch {
-            logObj.body = bodyBuffer.toString('hex');
-            logObj.bodyEncoding = 'hex';
+            logObj.body = bodyBuffer.toString('hex')
+            logObj.bodyEncoding = 'hex'
           }
 
-          console.log(JSON.stringify(logObj, null, 2));
-        });
+          console.log(JSON.stringify(logObj, null, 2))
+        })
       }
 
-      next();
-    });
+      next()
+    })
   }
 
   private setupRoutes(): void {
@@ -148,7 +146,8 @@ export class StorageServer {
         params: JSON.stringify(params || '').slice(0, 256)
       }
       const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
-      if (traceContext) logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
+      if (traceContext)
+        logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
 
       console.log(JSON.stringify(logObj))
 
