@@ -1,6 +1,13 @@
-import { Beef, CreateActionResult, P2PKH, SignActionArgs, SignActionResult, Validation } from '@bsv/sdk'
+import { Beef, CachedKeyDeriver, CreateActionResult, P2PKH, PrivateKey, SignActionArgs, SignActionResult, Validation } from '@bsv/sdk'
 import { _tu } from '../../../../test/utils/TestUtilsWalletStorage'
 import { wait } from '../../../utility/utilityHelpers'
+import { Services } from '../../../services/Services'
+import { Wallet } from '../../../Wallet'
+import { Setup } from '../../../Setup'
+import { StorageKnex } from '../../StorageKnex'
+import { WalletStorageManager } from '../../WalletStorageManager'
+import { AuthMiddlewareOptions, createAuthMiddleware } from '@bsv/auth-express-middleware'
+import { get } from 'http'
 
 describe('StorageClient to tagged revision manual tests', () => {
   jest.setTimeout(99999999)
@@ -252,7 +259,7 @@ describe('StorageClient to tagged revision manual tests', () => {
   test('2 makeAvailable', async () => {
     if (_tu.noEnv('main')) return
     const env = _tu.getEnv('main')
-    const tag = 'v1-0-153---' // revision tags must be followed by '---' as a GCR service URL prefix.
+    const tag = 'v1-0-154---' // revision tags must be followed by '---' as a GCR service URL prefix.
     const endpointUrl = `https://${tag}prod-storage-921101068003.us-west1.run.app`
     // const endpointUrl = `https://storage.babbage.systems`
     const s = await _tu.createTestWalletWithStorageClient({
@@ -265,4 +272,120 @@ describe('StorageClient to tagged revision manual tests', () => {
 
     await s.wallet.destroy()
   })
+
+  test('3 well-known auth', async () => {
+    if (_tu.noEnv('main')) return
+    const env = _tu.getEnv('main')
+    const services = new Services('main')
+    const rootKey = PrivateKey.fromHex(env.devKeys['02c3bee1dd15c89937899897578b420e253c21d81de76b6365c2f5ad7ca743cf14'])
+    const keyDeriver = new CachedKeyDeriver(rootKey)
+    const knex = Setup.createMySQLKnex(process.env.MAIN_CLOUD_MYSQL_CONNECTION!)
+    const activeStorage = new StorageKnex({
+      chain: env.chain,
+      knex: knex,
+      commissionSatoshis: 0,
+      commissionPubKeyHex: undefined,
+      feeModel: { model: 'sat/kb', value: 1 }
+    })
+    const settings = await activeStorage.makeAvailable()
+    const storage = new WalletStorageManager(settings.storageIdentityKey, activeStorage)
+    const wallet = new Wallet({ chain: env.chain, keyDeriver, storage, services })
+
+    const options: AuthMiddlewareOptions = { wallet }
+    const auth = createAuthMiddleware(options)
+
+    const req = {
+      path: '/.well-known/auth',
+      headers: wellKnownAuth1.headers,
+      body: JSON.parse(wellKnownAuth1.body),
+      method: 'POST',}
+    const res = {
+      status: (code: number) => {
+        console.log(`Response status: ${code}`)
+        return res
+      },
+      json: (obj: any) => {
+        console.log(`Response body: ${JSON.stringify(obj)}`)
+        return res
+      }
+    }
+    await auth(req as any, res as any, () => {})
+    const req2 = {
+      path: '/',
+      headers: makeAvailable1.headers,
+      body: JSON.parse(makeAvailable1.body),
+      method: 'POST',
+      protocol: 'https',
+      get: (headerName: string) => {
+        const headerValue = makeAvailable1.headers[headerName.toLowerCase()]
+        console.log(`Request header ${headerName}: ${headerValue}`)
+        return headerValue
+      }
+    }
+    await auth(req2 as any, res as any, () => {})
+
+    await wallet.destroy()
+  })
 })
+
+/**
+ * 2026-02-16 13:30:50.573 https://storage.babbage.systems/.well-known/auth
+ */
+const wellKnownAuth1 = {
+  body: "{\"version\":\"0.1\",\"messageType\":\"initialRequest\",\"identityKey\":\"02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132\",\"initialNonce\":\"lGlQHqNqFSxKhBBtNBPMYqXDJQADlBCbGPapoq+Yuyx7q8in7QRGHbB5s1Gt8tYU\",\"requestedCertificates\":{\"certifiers\":[],\"types\":{}}}",
+  bodyJson: {
+    version: '0.1',
+    messageType: 'initialRequest',
+    identityKey: '02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132',
+    initialNonce: 'lGlQHqNqFSxKhBBtNBPMYqXDJQADlBCbGPapoq+Yuyx7q8in7QRGHbB5s1Gt8tYU',
+    requestedCertificates: { certifiers: [], types: {} }
+  },
+  headers: {
+    "connection": "close",
+    "accept": "*/*",
+    "accept-encoding": "br, gzip, deflate",
+    "x-forwarded-proto": "https",
+    "x-nginx-proxy": "true",
+    "x-cloud-trace-context": "e27cb77d84eb5d2b4c143bdde70bb701/10653802713185402825;o=1",
+    "accept-language": "*",
+    "forwarded": "for=\"139.60.24.151\";proto=https",
+    "content-length": "266",
+    "sec-fetch-mode": "cors",
+    "x-forwarded-for": "139.60.24.151, 169.254.169.126",
+    "x-real-ip": "169.254.169.126",
+    "user-agent": "node",
+    "traceparent": "00-e27cb77d84eb5d2b4c143bdde70bb701-93d9e91f12823fc9-01",
+    "host": "storage.babbage.systems",
+    "content-type": "application/json"
+  }
+}
+/**
+ * 2026-02-16 13:30:50.762 https://storage.babbage.systems/
+ */
+const makeAvailable1 = {
+  "headers": {
+    "x-bsv-auth-request-id": "xhhmPf62T0XUpFVMIx4cDHqL67Ira7Emch29/EU9AJo=",
+    "x-real-ip": "169.254.169.126",
+    "sec-fetch-mode": "cors",
+    "x-forwarded-for": "139.60.24.151, 169.254.169.126",
+    "x-forwarded-proto": "https",
+    "forwarded": "for=\"139.60.24.151\";proto=https",
+    "x-bsv-auth-your-nonce": "zzEWA7yPnnD1dcy689jdQlV6lQD1pu9XhtrzTJw+ndw/6/d6VFOXJbmF4HouaJOA",
+    "accept": "*/*",
+    "x-bsv-auth-version": "0.1",
+    "content-type": "application/json",
+    "content-length": "61",
+    "x-bsv-auth-nonce": "OJgzWjyWhdBbUC/1Wf0inA0LXi3EEY26NOvn/NFW1u4=",
+    "x-bsv-auth-signature": "304402203b868ad7aed3f18086bce5574c7f4a4224186e952c64811481cb8ae6b80758410220769cf00d0d6e2e892353620f28d1061b26a2dfc5053362fcd022908f2f6d35c6",
+    "x-nginx-proxy": "true",
+    "host": "storage.babbage.systems",
+    "accept-encoding": "br, gzip, deflate",
+    "x-bsv-auth-identity-key": "02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132",
+    "x-cloud-trace-context": "1bc7b37f69050532c10da101d45e0f2e/5770707259178939058",
+    "accept-language": "*",
+    "connection": "close",
+    "traceparent": "00-1bc7b37f69050532c10da101d45e0f2e-5015abad7e20f2b2-00",
+    "user-agent": "node"
+  },
+  "body": "{\"jsonrpc\":\"2.0\",\"method\":\"makeAvailable\",\"params\":[],\"id\":1}",
+}
