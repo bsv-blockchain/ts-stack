@@ -19,7 +19,7 @@ export class MockChainMigrations implements MigrationSource<string> {
   }
 
   async getMigrations(): Promise<string[]> {
-    return Object.keys(this.migrations).sort()
+    return Object.keys(this.migrations).sort((a, b) => a.localeCompare(b))
   }
   getMigrationName(migration: string) {
     return migration
