@@ -294,44 +294,104 @@ describe('StorageClient to tagged revision manual tests', () => {
     const options: AuthMiddlewareOptions = { wallet }
     const auth = createAuthMiddleware(options)
 
-    const req = {
-      path: '/.well-known/auth',
-      headers: wellKnownAuth1.headers,
-      body: JSON.parse(wellKnownAuth1.body),
-      method: 'POST',}
-    const res = {
-      status: (code: number) => {
-        console.log(`Response status: ${code}`)
-        return res
-      },
-      json: (obj: any) => {
-        console.log(`Response body: ${JSON.stringify(obj)}`)
-        return res
+    for (const [wellKnownAuth, makeAvailable, nonce] of [
+//      [wellKnownAuth0, makeAvailable0, "/RrUGlYwjOkxaQEOClkuEZUCQCWAXA9lUKOzxuJvVhfox6AFXeE/jkXUu9AnqHc/"],
+      [wellKnownAuth1, makeAvailable1, 'zzEWA7yPnnD1dcy689jdQlV6lQD1pu9XhtrzTJw+ndw/6/d6VFOXJbmF4HouaJOA']
+    ]) {
+      const req = {
+        path: '/.well-known/auth',
+        headers: wellKnownAuth.headers,
+        body: JSON.parse(wellKnownAuth.body),
+        method: 'POST',
       }
-    }
-    await auth(req as any, res as any, () => {})
-    const req2 = {
-      path: '/',
-      headers: makeAvailable1.headers,
-      body: JSON.parse(makeAvailable1.body),
-      method: 'POST',
-      protocol: 'https',
-      get: (headerName: string) => {
-        const headerValue = makeAvailable1.headers[headerName.toLowerCase()]
-        console.log(`Request header ${headerName}: ${headerValue}`)
-        return headerValue
+      const res = {
+        status: (code: number) => {
+          console.log(`Response status: ${code}`)
+          return res
+        },
+        json: (obj: any) => {
+          console.log(`Response body: ${JSON.stringify(obj)}`)
+          return res
+        }
       }
+      auth(req as any, res as any, () => {})
+      await wait(1000) // auth is not async, chains via next methods
+      const req2 = {
+        path: '/',
+        headers: makeAvailable.headers,
+        body: JSON.parse(makeAvailable.body),
+        method: 'POST',
+        protocol: 'https',
+        get: (headerName: string) => {
+          const headerValue = makeAvailable.headers[headerName.toLowerCase()]
+          console.log(`Request header ${headerName}: ${headerValue}`)
+          return headerValue
+        }
+      }
+      auth(req2 as any, res as any, () => {})
+      await wait(1000) // auth is not async, chains via next methods
+
+      expect((req2 as any).auth.identityKey).toBe(req.body.identityKey)
     }
-    await auth(req2 as any, res as any, () => {})
 
     await wallet.destroy()
   })
 })
 
+const wellKnownAuth0: any = {
+  "body": "{\"version\":\"0.1\",\"messageType\":\"initialRequest\",\"identityKey\":\"030edf8ae22d7e55fe3de7f9edbeb8b1e59d9a5adae8916fa39dc8142f491bc40d\",\"initialNonce\":\"0GZ7LeI3HrbeWRLvTYiSp8Z3zpLCY0W/eROUo3x7TY3QRswJYRpwMvmT9OiDIyMD\",\"requestedCertificates\":{\"certifiers\":[],\"types\":{}}}",
+  bodyJson: "{\"version\":\"0.1\",\"messageType\":\"initialRequest\",\"identityKey\":\"030edf8ae22d7e55fe3de7f9edbeb8b1e59d9a5adae8916fa39dc8142f491bc40d\",\"initialNonce\":\"0GZ7LeI3HrbeWRLvTYiSp8Z3zpLCY0W/eROUo3x7TY3QRswJYRpwMvmT9OiDIyMD\",\"requestedCertificates\":{\"certifiers\":[],\"types\":{}}}",
+  "headers": {
+    "accept-encoding": "br, gzip, deflate",
+    "accept-language": "*",
+    "accept": "*/*",
+    "connection": "close",
+    "content-length": "266",
+    "content-type": "application/json",
+    "forwarded": "for=\"73.114.228.4\";proto=https",
+    "host": "v1-0-154---prod-storage-921101068003.us-west1.run.app",
+    "sec-fetch-mode": "cors",
+    "traceparent": "00-2f8ddd90c1ed5fc87abc205c94c6939c-04929980c02bf805-01",
+    "user-agent": "node",
+    "x-cloud-trace-context": "2f8ddd90c1ed5fc87abc205c94c6939c/329494501010438149;o=1",
+    "x-forwarded-for": "73.114.228.4, 169.254.169.126",
+    "x-forwarded-proto": "https",
+    "x-nginx-proxy": "true",
+    "x-real-ip": "169.254.169.126",
+  },
+}
+const makeAvailable0: any = {
+  "headers": {
+    "accept-encoding": "br, gzip, deflate",
+    "accept-language": "*",
+    "accept": "*/*",
+    "connection": "close",
+    "content-length": "61",
+    "content-type": "application/json",
+    "forwarded": "for=\"73.114.228.4\";proto=https",
+    "host": "v1-0-154---prod-storage-921101068003.us-west1.run.app",
+    "sec-fetch-mode": "cors",
+    "traceparent": "00-c663bca2e170f0dffb2d4eeeb42e7e06-81a9008de05f0045-00",
+    "user-agent": "node",
+    "x-bsv-auth-identity-key": "030edf8ae22d7e55fe3de7f9edbeb8b1e59d9a5adae8916fa39dc8142f491bc40d",
+    "x-bsv-auth-nonce": "+ZoZVHfFkK/s9/15We7+WEcrYC+BZeea8VIQa88NQkE=",
+    "x-bsv-auth-request-id": "7aUXjqq7wUKNlb4IyX+BAww4xXReG/F9AH5+us5EJ08=",
+    "x-bsv-auth-signature": "304502210087248dbca9270453ba480d7f32f0e0534e58ffddfb72b5f47465c4868c54e05a02203cdf6db286957959b6e3945c2fc51f0239a1056dc6d9709bf44371eeae8ca5aa",
+    "x-bsv-auth-version": "0.1",
+    "x-bsv-auth-your-nonce": "/RrUGlYwjOkxaQEOClkuEZUCQCWAXA9lUKOzxuJvVhfox6AFXeE/jkXUu9AnqHc/",
+    "x-cloud-trace-context": "c663bca2e170f0dffb2d4eeeb42e7e06/9342999511311515717",
+    "x-forwarded-for": "73.114.228.4, 169.254.169.126",
+    "x-forwarded-proto": "https",
+    "x-nginx-proxy": "true",
+    "x-real-ip": "169.254.169.126",
+  },
+  "body": "{\"jsonrpc\":\"2.0\",\"method\":\"makeAvailable\",\"params\":[],\"id\":1}",
+} 
+
 /**
  * 2026-02-16 13:30:50.573 https://storage.babbage.systems/.well-known/auth
  */
-const wellKnownAuth1 = {
+const wellKnownAuth1: any = {
   body: "{\"version\":\"0.1\",\"messageType\":\"initialRequest\",\"identityKey\":\"02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132\",\"initialNonce\":\"lGlQHqNqFSxKhBBtNBPMYqXDJQADlBCbGPapoq+Yuyx7q8in7QRGHbB5s1Gt8tYU\",\"requestedCertificates\":{\"certifiers\":[],\"types\":{}}}",
   bodyJson: {
     version: '0.1',
@@ -341,51 +401,51 @@ const wellKnownAuth1 = {
     requestedCertificates: { certifiers: [], types: {} }
   },
   headers: {
-    "connection": "close",
-    "accept": "*/*",
     "accept-encoding": "br, gzip, deflate",
+    "accept-language": "*",
+    "accept": "*/*",
+    "connection": "close",
+    "content-length": "266",
+    "content-type": "application/json",
+    "forwarded": "for=\"139.60.24.151\";proto=https",
+    "host": "storage.babbage.systems",
+    "sec-fetch-mode": "cors",
+    "traceparent": "00-e27cb77d84eb5d2b4c143bdde70bb701-93d9e91f12823fc9-01",
+    "user-agent": "node",
+    "x-cloud-trace-context": "e27cb77d84eb5d2b4c143bdde70bb701/10653802713185402825;o=1",
+    "x-forwarded-for": "139.60.24.151, 169.254.169.126",
     "x-forwarded-proto": "https",
     "x-nginx-proxy": "true",
-    "x-cloud-trace-context": "e27cb77d84eb5d2b4c143bdde70bb701/10653802713185402825;o=1",
-    "accept-language": "*",
-    "forwarded": "for=\"139.60.24.151\";proto=https",
-    "content-length": "266",
-    "sec-fetch-mode": "cors",
-    "x-forwarded-for": "139.60.24.151, 169.254.169.126",
     "x-real-ip": "169.254.169.126",
-    "user-agent": "node",
-    "traceparent": "00-e27cb77d84eb5d2b4c143bdde70bb701-93d9e91f12823fc9-01",
-    "host": "storage.babbage.systems",
-    "content-type": "application/json"
   }
 }
 /**
  * 2026-02-16 13:30:50.762 https://storage.babbage.systems/
  */
-const makeAvailable1 = {
+const makeAvailable1: any = {
   "headers": {
-    "x-bsv-auth-request-id": "xhhmPf62T0XUpFVMIx4cDHqL67Ira7Emch29/EU9AJo=",
-    "x-real-ip": "169.254.169.126",
+    "accept-encoding": "br, gzip, deflate",
+    "accept-language": "*",
+    "accept": "*/*",
+    "connection": "close",
+    "content-length": "61",
+    "content-type": "application/json",
+    "forwarded": "for=\"139.60.24.151\";proto=https",
+    "host": "storage.babbage.systems",
     "sec-fetch-mode": "cors",
+    "traceparent": "00-1bc7b37f69050532c10da101d45e0f2e-5015abad7e20f2b2-00",
+    "user-agent": "node",
+    "x-bsv-auth-identity-key": "02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132",
+    "x-bsv-auth-nonce": "OJgzWjyWhdBbUC/1Wf0inA0LXi3EEY26NOvn/NFW1u4=",
+    "x-bsv-auth-request-id": "xhhmPf62T0XUpFVMIx4cDHqL67Ira7Emch29/EU9AJo=",
+    "x-bsv-auth-signature": "304402203b868ad7aed3f18086bce5574c7f4a4224186e952c64811481cb8ae6b80758410220769cf00d0d6e2e892353620f28d1061b26a2dfc5053362fcd022908f2f6d35c6",
+    "x-bsv-auth-version": "0.1",
+    "x-bsv-auth-your-nonce": "zzEWA7yPnnD1dcy689jdQlV6lQD1pu9XhtrzTJw+ndw/6/d6VFOXJbmF4HouaJOA",
+    "x-cloud-trace-context": "1bc7b37f69050532c10da101d45e0f2e/5770707259178939058",
     "x-forwarded-for": "139.60.24.151, 169.254.169.126",
     "x-forwarded-proto": "https",
-    "forwarded": "for=\"139.60.24.151\";proto=https",
-    "x-bsv-auth-your-nonce": "zzEWA7yPnnD1dcy689jdQlV6lQD1pu9XhtrzTJw+ndw/6/d6VFOXJbmF4HouaJOA",
-    "accept": "*/*",
-    "x-bsv-auth-version": "0.1",
-    "content-type": "application/json",
-    "content-length": "61",
-    "x-bsv-auth-nonce": "OJgzWjyWhdBbUC/1Wf0inA0LXi3EEY26NOvn/NFW1u4=",
-    "x-bsv-auth-signature": "304402203b868ad7aed3f18086bce5574c7f4a4224186e952c64811481cb8ae6b80758410220769cf00d0d6e2e892353620f28d1061b26a2dfc5053362fcd022908f2f6d35c6",
     "x-nginx-proxy": "true",
-    "host": "storage.babbage.systems",
-    "accept-encoding": "br, gzip, deflate",
-    "x-bsv-auth-identity-key": "02e2ae292b4ff4ed51aacc69dc66a235693bbd417d89853f1f8a7bc36fa7fe4132",
-    "x-cloud-trace-context": "1bc7b37f69050532c10da101d45e0f2e/5770707259178939058",
-    "accept-language": "*",
-    "connection": "close",
-    "traceparent": "00-1bc7b37f69050532c10da101d45e0f2e-5015abad7e20f2b2-00",
-    "user-agent": "node"
+    "x-real-ip": "169.254.169.126",
   },
   "body": "{\"jsonrpc\":\"2.0\",\"method\":\"makeAvailable\",\"params\":[],\"id\":1}",
 }
