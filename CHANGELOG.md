@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.0.18
+
+Update bsv/auth-express-middleware 2.0.4
+
 ## wallet-toolbox 2.0.17
 
 Update @bsv/sdk to 2.0.4 to fix StorageServer failing from stale AuthFetch sessions.
