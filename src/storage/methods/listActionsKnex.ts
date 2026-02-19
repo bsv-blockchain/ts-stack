@@ -16,6 +16,7 @@ import { TableTransaction } from '../schema/tables/TableTransaction'
 import { verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 
 export async function listActions(
   storage: StorageKnex,
@@ -32,10 +33,16 @@ export async function listActions(
     actions: []
   }
 
+  const { from: actionTimeFrom, to: actionTimeTo, timeFilterRequested, remainingLabels: ordinaryLabelsPreSpecOp } =
+    parseBrc114ActionTimeLabels(vargs.labels)
+
+  const createdAtFrom = actionTimeFrom !== undefined ? new Date(actionTimeFrom) : undefined
+  const createdAtTo = actionTimeTo !== undefined ? new Date(actionTimeTo) : undefined
+
   let specOp: ListActionsSpecOp | undefined = undefined
   let specOpLabels: string[] = []
   let labels: string[] = []
-  for (const label of vargs.labels) {
+  for (const label of ordinaryLabelsPreSpecOp) {
     if (isListActionsSpecOp(label)) {
       specOp = getLabelToSpecOp()[label]
     } else {
@@ -82,6 +89,7 @@ export async function listActions(
     return r
 
   const columns: string[] = [
+    'created_at',
     'transactionId',
     'reference',
     'txid',
@@ -99,6 +107,13 @@ export async function listActions(
 
   const noLabels = labelIds.length === 0
 
+  const applyTimestampFilters = (q: any) => {
+    if (!timeFilterRequested) return
+    q.whereNotNull('created_at')
+    if (createdAtFrom) q.where('created_at', '>=', storage.validateDateForWhere(createdAtFrom))
+    if (createdAtTo) q.where('created_at', '<', storage.validateDateForWhere(createdAtTo))
+  }
+
   const makeWithLabelsQueries = () => {
     const cteq = k.raw(`
             SELECT ${columns.map(c => 't.' + c).join(',')}, 
@@ -114,6 +129,7 @@ export async function listActions(
 
     const q = k.with('tlc', cteq)
     q.from('tlc')
+    applyTimestampFilters(q)
     if (isQueryModeAll) q.where('lc', labelIds.length)
     else q.where('lc', '>', 0)
     const qcount = q.clone()
@@ -124,6 +140,7 @@ export async function listActions(
 
   const makeWithoutLabelsQueries = () => {
     const q = k('transactions').where('userId', auth.userId).whereIn('status', stati)
+    applyTimestampFilters(q)
     const qcount = q.clone().count('transactionId as total')
     return { q, qcount }
   }
@@ -138,7 +155,8 @@ export async function listActions(
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs)
   }
 
-  if (!limit || txs.length < limit) r.totalActions = txs.length
+  if (!limit) r.totalActions = txs.length
+  else if (txs.length < limit) r.totalActions = (offset || 0) + txs.length
   else {
     const total = verifyOne(await qcount)['total']
     r.totalActions = Number(total)
@@ -166,6 +184,13 @@ export async function listActions(
         const action = r.actions[i]
         if (vargs.includeLabels) {
           action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
+          if (timeFilterRequested) {
+            const ts = tx.created_at ? new Date(tx.created_at as any).getTime() : NaN
+            if (!Number.isNaN(ts)) {
+              const timeLabel = makeBrc114ActionTimeLabel(ts)
+              if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
+            }
+          }
         }
         if (vargs.includeOutputs) {
           const outputs: TableOutputX[] = await storage.findOutputs({

@@ -1850,6 +1850,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       firstTime = false
       const r = cursor.value
       if (args.since && args.since > r.updated_at) continue
+      if (args.from && r.created_at.getTime() < args.from.getTime()) continue
+      if (args.to && r.created_at.getTime() >= args.to.getTime()) continue
       if (args.status && !args.status.includes(r.status)) continue
       if (args.partial) {
         if (args.partial.transactionId && r.transactionId !== args.partial.transactionId) continue

@@ -13,6 +13,7 @@ import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { isListActionsSpecOp, TransactionStatus } from '../../sdk/types'
 import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 
 export async function listActionsIdb(
   storage: StorageIdb,
@@ -27,10 +28,16 @@ export async function listActionsIdb(
     actions: []
   }
 
+  const { from: actionTimeFrom, to: actionTimeTo, timeFilterRequested, remainingLabels: ordinaryLabelsPreSpecOp } =
+    parseBrc114ActionTimeLabels(vargs.labels)
+
+  const createdAtFrom = actionTimeFrom !== undefined ? new Date(actionTimeFrom) : undefined
+  const createdAtTo = actionTimeTo !== undefined ? new Date(actionTimeTo) : undefined
+
   let specOp: ListActionsSpecOp | undefined = undefined
   let specOpLabels: string[] = []
   let labels: string[] = []
-  for (const label of vargs.labels) {
+  for (const label of ordinaryLabelsPreSpecOp) {
     if (isListActionsSpecOp(label)) {
       specOp = getLabelToSpecOp()[label]
     } else {
@@ -81,6 +88,8 @@ export async function listActionsIdb(
     {
       partial: { userId: auth.userId },
       status: stati,
+      from: createdAtFrom,
+      to: createdAtTo,
       paged: { limit: vargs.limit, offset: vargs.offset },
       noRawTx: true
     },
@@ -89,12 +98,12 @@ export async function listActionsIdb(
   )
   if (txs.length === vargs.limit) {
     r.totalActions = await storage.countTransactions(
-      { partial: { userId: auth.userId }, status: stati },
+      { partial: { userId: auth.userId }, status: stati, from: createdAtFrom, to: createdAtTo },
       labelIds,
       isQueryModeAll
     )
   } else {
-    r.totalActions = txs.length
+    r.totalActions = (offset || 0) + txs.length
   }
 
   if (specOp?.postProcess) {
@@ -123,6 +132,13 @@ export async function listActionsIdb(
         const action = r.actions[i]
         if (vargs.includeLabels) {
           action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
+          if (timeFilterRequested) {
+            const ts = tx.created_at ? new Date(tx.created_at as any).getTime() : NaN
+            if (!Number.isNaN(ts)) {
+              const timeLabel = makeBrc114ActionTimeLabel(ts)
+              if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
+            }
+          }
         }
         if (vargs.includeOutputs) {
           const outputs: TableOutputX[] = await storage.findOutputs({
