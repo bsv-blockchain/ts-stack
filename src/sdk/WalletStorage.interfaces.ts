@@ -422,6 +422,8 @@ export interface FindSyncStatesArgs extends FindSincePagedArgs {
 export interface FindTransactionsArgs extends FindSincePagedArgs {
   partial: Partial<TableTransaction>
   status?: TransactionStatus[]
+  from?: Date
+  to?: Date
   noRawTx?: boolean
 }
 export interface FindTxLabelMapsArgs extends FindSincePagedArgs {

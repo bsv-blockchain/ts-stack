@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.0.19
+
+Add BRC-114 action time labels for filtering actions by creation time.
+
 ## wallet-toolbox 2.0.18
 
 Update bsv/auth-express-middleware 2.0.4

@@ -25,6 +25,8 @@ import {
   ListActionsResult
 } from '@bsv/sdk'
 
+import { parseBrc114ActionTimeLabels } from './utility/brc114ActionTimeLabels'
+
 ////// TODO: ADD SUPPORT FOR ADMIN COUNTERPARTIES BASED ON WALLET STORAGE
 //////       PROHIBITION OF SPECIAL OPERATIONS IS ALSO CRITICAL.
 ////// !!!!!!!! SECURITY-CRITICAL ADDITION — DO NOT USE UNTIL IMPLEMENTED.
@@ -4153,10 +4155,11 @@ export class WalletPermissionsManager implements WalletInterface {
     ...args: Parameters<WalletInterface['listActions']>
   ): ReturnType<WalletInterface['listActions']> {
     const [requestArgs, originator] = args
+    const { remainingLabels: labelsForPermissionChecks } = parseBrc114ActionTimeLabels(requestArgs.labels)
 
     // 1) Identify unique P-modules involved (one per schemeID, preserving label order)
     const pModulesByScheme = new Map<string, PermissionsModule>()
-    const nonPLabels = this.splitLabelsByPermissionModule(requestArgs.labels, pModulesByScheme)
+    const nonPLabels = this.splitLabelsByPermissionModule(labelsForPermissionChecks, pModulesByScheme)
 
     // 2) Check permissions for non-P labels
     for (const lbl of nonPLabels) {

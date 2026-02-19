@@ -651,6 +651,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     const q = this.setupQuery('transactions', args)
     if (args.status && args.status.length > 0) q.whereIn('status', args.status)
+    if (args.from) q.where('created_at', '>=', this.validateDateForWhere(args.from))
+    if (args.to) q.where('created_at', '<', this.validateDateForWhere(args.to))
     if (args.noRawTx && !count) {
       const columns = transactionColumnsWithoutRawTx.map(c => `transactions.${c}`)
       q.select(columns)
