@@ -1579,6 +1579,48 @@ export class WalletPermissionsManager implements WalletInterface {
     })
   }
 
+  private mergeCounterpartyPermissions(
+    a: CounterpartyPermissions | null,
+    b: CounterpartyPermissions | null
+  ): CounterpartyPermissions | null {
+    if (!a && !b) return null
+    const protocols: CounterpartyPermissions['protocols'] = []
+    for (const src of [a, b]) {
+      for (const p of src?.protocols || []) {
+        if (!protocols.find(x => deepEqual(x.protocolID, p.protocolID))) {
+          protocols.push(p)
+        }
+      }
+    }
+    if (protocols.length === 0) return null
+    return {
+      description: a?.description ?? b?.description,
+      protocols
+    }
+  }
+
+  private deriveLegacyCounterpartyPermissions(groupPermissions: GroupedPermissions | null): CounterpartyPermissions | null {
+    const protocols = (groupPermissions?.protocolPermissions || [])
+      .filter(p => p?.counterparty === '')
+      .filter(p => Array.isArray(p?.protocolID) && p.protocolID[0] === 2)
+      .map(p => ({
+        protocolID: p.protocolID,
+        description: p.description
+      }))
+
+    if (!protocols.length) return null
+    return {
+      protocols
+    }
+  }
+
+  private isProtocolInCounterpartyPermissions(
+    protocolID: WalletProtocol,
+    counterpartyPermissions: CounterpartyPermissions
+  ): boolean {
+    return !!counterpartyPermissions.protocols.find(p => deepEqual(p.protocolID, protocolID))
+  }
+
   private validateCounterpartyPermissions(raw: any): CounterpartyPermissions | null {
     if (!raw || !Array.isArray(raw.protocols) || raw.protocols.length === 0) return null
 
@@ -1625,9 +1667,17 @@ export class WalletPermissionsManager implements WalletInterface {
         const response = await fetch(`${proto}://${originator}/manifest.json`)
         if (response.ok) {
           const manifest = await response.json()
-          const groupPermissions: GroupedPermissions | null = manifest?.babbage?.groupPermissions || null
-          const counterpartyPermissions: CounterpartyPermissions | null = this.validateCounterpartyPermissions(
-            manifest?.babbage?.counterpartyPermissions
+          const namespace = manifest?.metanet || manifest?.babbage
+          const groupPermissions: GroupedPermissions | null = namespace?.groupPermissions || null
+          const counterpartyPermissionsDeclared: CounterpartyPermissions | null = this.validateCounterpartyPermissions(
+            namespace?.counterpartyPermissions
+          )
+          const counterpartyPermissionsLegacy: CounterpartyPermissions | null = this.deriveLegacyCounterpartyPermissions(
+            groupPermissions
+          )
+          const counterpartyPermissions: CounterpartyPermissions | null = this.mergeCounterpartyPermissions(
+            counterpartyPermissionsDeclared,
+            counterpartyPermissionsLegacy
           )
           this.manifestCache.set(originator, { groupPermissions, counterpartyPermissions, fetchedAt: Date.now() })
           return { groupPermissions, counterpartyPermissions }
@@ -1675,11 +1725,16 @@ export class WalletPermissionsManager implements WalletInterface {
       (async () => {
         const protocolChecks = await Promise.all(
           (groupPermissions.protocolPermissions || []).map(async p => {
+            if (p.counterparty === '') return null
+            const [level] = p.protocolID || [0]
+            if (level === 2 && (p.counterparty === undefined || p.counterparty === null)) {
+              return null
+            }
             const hasPerm = await this.hasProtocolPermission({
               originator,
               privileged: false,
               protocolID: p.protocolID,
-              counterparty: p.counterparty || 'self'
+              counterparty: p.counterparty ?? 'self'
             })
             return hasPerm ? null : p
           })
@@ -1807,12 +1862,16 @@ export class WalletPermissionsManager implements WalletInterface {
       return null
     }
 
-    if (await this.hasPactEstablished(originator, counterparty)) {
+    const { counterpartyPermissions } = await this.fetchManifestPermissions(originator)
+    if (!counterpartyPermissions?.protocols?.length) {
       return null
     }
 
-    const { counterpartyPermissions } = await this.fetchManifestPermissions(originator)
-    if (!counterpartyPermissions?.protocols?.length) {
+    if (!this.isProtocolInCounterpartyPermissions(currentRequest.protocolID!, counterpartyPermissions)) {
+      return null
+    }
+
+    if (await this.hasPactEstablished(originator, counterparty)) {
       return null
     }
 
@@ -1915,8 +1974,9 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const normalizeManifestCounterparty = (cp: string | undefined): string => {
-      if (cp === '') return counterparty
-      return cp ?? 'self'
+      if (cp === '') return ''
+      if (cp === undefined || cp === null) return counterparty
+      return cp
     }
 
     const manifestLevel2ForThisPeer = (groupPermissions.protocolPermissions || [])
@@ -1926,6 +1986,7 @@ export class WalletPermissionsManager implements WalletInterface {
         counterparty: normalizeManifestCounterparty(p.counterparty),
         description: p.description
       }))
+      .filter(p => p.counterparty !== '')
       .filter(p => p.counterparty === counterparty)
 
     const isCurrentRequestInManifest = manifestLevel2ForThisPeer.some(p =>
@@ -2074,7 +2135,12 @@ export class WalletPermissionsManager implements WalletInterface {
         if (!pid) return false
         const cp = request.counterparty ?? 'self'
         return !!groupPermissions.protocolPermissions?.some(p => {
-          const manifestCp = p.counterparty === '' ? cp : (p.counterparty ?? 'self')
+          if (p.counterparty === '') return false
+          const [level] = p.protocolID || [0]
+          if (level === 2 && (p.counterparty === undefined || p.counterparty === null)) {
+            return false
+          }
+          const manifestCp = p.counterparty ?? 'self'
           return deepEqual(p.protocolID, pid) && manifestCp === cp
         })
       }

@@ -42,7 +42,6 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         protocolPermissions: [
           {
             protocolID: [2, 'l2-proto-A'],
-            counterparty: '',
             description: 'A'
           },
           {
@@ -110,6 +109,124 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       await expect(callB).rejects.toThrow(/denied/i)
 
       expect(activeRequests.size).toBe(0)
+    })
+
+    it('should trigger a PACT prompt when a level-2 protocol is declared under counterpartyPermissions', async () => {
+      mockNoTokensFound(manager)
+
+      jest.spyOn(manager as any, 'fetchManifestPermissions').mockResolvedValue({
+        groupPermissions: null,
+        counterpartyPermissions: {
+          description: 'Trust required to trade with a peer',
+          protocols: [
+            { protocolID: [2, 'escrow-negotiation'], description: 'Negotiate escrow terms' },
+            { protocolID: [2, 'trade-messaging'], description: 'Exchange messages' }
+          ]
+        }
+      })
+
+      const pactRequestCallback = jest.fn(() => {})
+      manager.bindCallback('onCounterpartyPermissionRequested', pactRequestCallback)
+
+      const call = manager.ensureProtocolPermission({
+        originator: 'example.com',
+        privileged: false,
+        protocolID: [2, 'escrow-negotiation'],
+        counterparty: '02'.padEnd(66, 'a'),
+        reason: 'UnitTest - pact',
+        seekPermission: true,
+        usageType: 'signing'
+      })
+
+      await new Promise(res => setTimeout(res, 5))
+
+      expect(pactRequestCallback).toHaveBeenCalledTimes(1)
+      const callbackArg = (pactRequestCallback.mock as any).calls[0][0]
+      expect(callbackArg.requestID).toMatch(/^pact:/)
+      expect(callbackArg.permissions.protocols).toHaveLength(2)
+
+      await manager.denyCounterpartyPermission(callbackArg.requestID)
+      await expect(call).rejects.toThrow(/denied/i)
+    })
+
+    it('should support legacy PACT declarations via groupPermissions.protocolPermissions with counterparty set to empty string', async () => {
+      mockNoTokensFound(manager)
+
+      // Simulate legacy manifest parsing result (the manager merges these in fetchManifestPermissions)
+      jest.spyOn(manager as any, 'fetchManifestPermissions').mockResolvedValue({
+        groupPermissions: {
+          protocolPermissions: [
+            { protocolID: [2, 'legacy-a'], counterparty: '', description: 'legacy A' },
+            { protocolID: [2, 'legacy-b'], counterparty: '', description: 'legacy B' }
+          ]
+        },
+        counterpartyPermissions: {
+          protocols: [
+            { protocolID: [2, 'legacy-a'], description: 'legacy A' },
+            { protocolID: [2, 'legacy-b'], description: 'legacy B' }
+          ]
+        }
+      })
+
+      const pactRequestCallback = jest.fn(() => {})
+      manager.bindCallback('onCounterpartyPermissionRequested', pactRequestCallback)
+
+      const call = manager.ensureProtocolPermission({
+        originator: 'example.com',
+        privileged: false,
+        protocolID: [2, 'legacy-b'],
+        counterparty: '03'.padEnd(66, 'b'),
+        reason: 'UnitTest - legacy pact',
+        seekPermission: true,
+        usageType: 'signing'
+      })
+
+      await new Promise(res => setTimeout(res, 5))
+      expect(pactRequestCallback).toHaveBeenCalledTimes(1)
+
+      const { requestID } = (pactRequestCallback.mock as any).calls[0][0]
+      await manager.denyCounterpartyPermission(requestID)
+      await expect(call).rejects.toThrow(/denied/i)
+    })
+
+    it('should parse counterpartyPermissions from metanet namespace with babbage fallback', async () => {
+      const fetchMock = globalThis.fetch as any
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          metanet: {
+            groupPermissions: { protocolPermissions: [] },
+            counterpartyPermissions: {
+              description: 'desc',
+              protocols: [{ protocolID: [2, 'p'], description: 'd' }]
+            }
+          }
+        })
+      })
+
+      const res1 = await (manager as any).fetchManifestPermissions('example.com')
+      expect(res1.counterpartyPermissions.protocols).toEqual(
+        expect.arrayContaining([expect.objectContaining({ protocolID: [2, 'p'] })])
+      )
+
+      ;(manager as any).manifestCache = new Map()
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          babbage: {
+            groupPermissions: { protocolPermissions: [] },
+            counterpartyPermissions: {
+              description: 'desc',
+              protocols: [{ protocolID: [2, 'p2'], description: 'd2' }]
+            }
+          }
+        })
+      })
+
+      const res2 = await (manager as any).fetchManifestPermissions('example.com')
+      expect(res2.counterpartyPermissions.protocols).toEqual(
+        expect.arrayContaining([expect.objectContaining({ protocolID: [2, 'p2'] })])
+      )
     })
 
     it('should create separate grouped permission requests for different peers (no cross-peer grouping)', async () => {
