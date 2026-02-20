@@ -2,11 +2,22 @@ import { PeerPayClient } from '@bsv/message-box-client'
 import { WalletCore } from '../core/WalletCore'
 import { ReinternalizeResult } from '../core/types'
 
-export function createMessageBoxMethods(core: WalletCore) {
+export function createMessageBoxMethods (core: WalletCore): {
+  certifyForMessageBox: (handle: string, registryUrl?: string, host?: string) => Promise<{ txid: string, handle: string }>
+  getMessageBoxHandle: (registryUrl?: string) => Promise<string | null>
+  revokeMessageBoxCertification: (registryUrl?: string) => Promise<void>
+  sendMessageBoxPayment: (to: string, satoshis: number, changeBasket?: string) => Promise<any>
+  listIncomingPayments: () => Promise<any[]>
+  acceptIncomingPayment: (payment: any, basket?: string) => Promise<any>
+  registerIdentityTag: (tag: string, registryUrl?: string) => Promise<{ tag: string }>
+  lookupIdentityByTag: (query: string, registryUrl?: string) => Promise<Array<{ tag: string, identityKey: string }>>
+  listMyTags: (registryUrl?: string) => Promise<Array<{ tag: string, createdAt: string }>>
+  revokeIdentityTag: (tag: string, registryUrl?: string) => Promise<void>
+} {
   let peerPay: PeerPayClient | null = null
 
-  function getPeerPay(): PeerPayClient {
-    if (!peerPay) {
+  function getPeerPay (): PeerPayClient {
+    if (peerPay == null) {
       peerPay = new PeerPayClient({
         walletClient: core.getClient() as any,
         messageBoxHost: core.defaults.messageBoxHost,
@@ -17,14 +28,14 @@ export function createMessageBoxMethods(core: WalletCore) {
   }
 
   return {
-    async certifyForMessageBox(handle: string, registryUrl?: string, host?: string): Promise<{ txid: string; handle: string }> {
+    async certifyForMessageBox (handle: string, registryUrl?: string, host?: string): Promise<{ txid: string, handle: string }> {
       try {
         const client = getPeerPay()
-        const targetHost = host || core.defaults.messageBoxHost
+        const targetHost = host ?? core.defaults.messageBoxHost
         const result = await client.anointHost(targetHost)
 
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) throw new Error('registryUrl is required')
+        if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
         // Register handle in identity registry
         const res = await fetch(`${effectiveRegistry}?action=register`, {
@@ -32,8 +43,8 @@ export function createMessageBoxMethods(core: WalletCore) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag: handle, identityKey: core.getIdentityKey() })
         })
-        const data = await res.json() as { success: boolean; error?: string }
-        if (!data.success) throw new Error(data.error || 'Registration failed')
+        const data = await res.json() as { success: boolean, error?: string }
+        if (!data.success) throw new Error(data.error ?? 'Registration failed')
 
         return { txid: result.txid, handle }
       } catch (error) {
@@ -41,28 +52,28 @@ export function createMessageBoxMethods(core: WalletCore) {
       }
     },
 
-    async getMessageBoxHandle(registryUrl?: string): Promise<string | null> {
+    async getMessageBoxHandle (registryUrl?: string): Promise<string | null> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) return null
+        if (effectiveRegistry == null) return null
 
         const res = await fetch(`${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`)
-        const data = await res.json() as { success: boolean; tags?: { tag: string }[] }
-        if (!data.success || !data.tags || data.tags.length === 0) return null
+        const data = await res.json() as { success: boolean, tags?: Array<{ tag: string }> }
+        if (!data.success || (data.tags == null) || data.tags.length === 0) return null
         return data.tags[0].tag
       } catch {
         return null
       }
     },
 
-    async revokeMessageBoxCertification(registryUrl?: string): Promise<void> {
+    async revokeMessageBoxCertification (registryUrl?: string): Promise<void> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) throw new Error('registryUrl is required')
+        if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
         const listRes = await fetch(`${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`)
-        const listData = await listRes.json() as { success: boolean; tags?: { tag: string }[] }
-        if (listData.success && listData.tags) {
+        const listData = await listRes.json() as { success: boolean, tags?: Array<{ tag: string }> }
+        if (listData.success && (listData.tags != null)) {
           for (const t of listData.tags) {
             const res = await fetch(`${effectiveRegistry}?action=revoke`, {
               method: 'POST',
@@ -78,7 +89,7 @@ export function createMessageBoxMethods(core: WalletCore) {
       }
     },
 
-    async sendMessageBoxPayment(to: string, satoshis: number, changeBasket?: string): Promise<any> {
+    async sendMessageBoxPayment (to: string, satoshis: number, changeBasket?: string): Promise<any> {
       try {
         const client = getPeerPay()
 
@@ -92,16 +103,16 @@ export function createMessageBoxMethods(core: WalletCore) {
 
         let reinternalized: ReinternalizeResult | undefined
         const effectiveChangeBasket = changeBasket ?? core.defaults.changeBasket
-        if (effectiveChangeBasket) {
-          if (paymentToken?.transaction) {
-            reinternalized = await core.reinternalizeChange(paymentToken.transaction, effectiveChangeBasket, [0])
+        if (effectiveChangeBasket != null) {
+          if (paymentToken?.transaction != null) {
+            reinternalized = await core.reinternalizeChange(paymentToken.transaction as number[], effectiveChangeBasket, [0])
           } else {
             reinternalized = { count: 0, errors: ['paymentToken.transaction is missing'] }
           }
         }
 
         return {
-          txid: paymentToken?.transaction ? 'sent' : '',
+          txid: paymentToken?.transaction != null ? 'sent' : '',
           amount: satoshis,
           recipient: to,
           reinternalized
@@ -111,7 +122,7 @@ export function createMessageBoxMethods(core: WalletCore) {
       }
     },
 
-    async listIncomingPayments(): Promise<any[]> {
+    async listIncomingPayments (): Promise<any[]> {
       try {
         const client = getPeerPay()
         return await client.listIncomingPayments()
@@ -120,11 +131,11 @@ export function createMessageBoxMethods(core: WalletCore) {
       }
     },
 
-    async acceptIncomingPayment(payment: any, basket?: string): Promise<any> {
+    async acceptIncomingPayment (payment: any, basket?: string): Promise<any> {
       try {
         const pp = getPeerPay()
 
-        if (basket) {
+        if (basket != null) {
           const walletClient = core.getClient()
           await walletClient.internalizeAction({
             tx: payment.token.transaction,
@@ -157,64 +168,64 @@ export function createMessageBoxMethods(core: WalletCore) {
       }
     },
 
-    async registerIdentityTag(tag: string, registryUrl?: string): Promise<{ tag: string }> {
+    async registerIdentityTag (tag: string, registryUrl?: string): Promise<{ tag: string }> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) throw new Error('registryUrl is required')
+        if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
         const res = await fetch(`${effectiveRegistry}?action=register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag, identityKey: core.getIdentityKey() })
         })
-        const data = await res.json() as { success: boolean; error?: string; tag?: string }
-        if (!data.success) throw new Error(data.error || 'Registration failed')
-        return { tag: data.tag || tag }
+        const data = await res.json() as { success: boolean, error?: string, tag?: string }
+        if (!data.success) throw new Error(data.error ?? 'Registration failed')
+        return { tag: data.tag ?? tag }
       } catch (error) {
         throw new Error(`Tag registration failed: ${(error as Error).message}`)
       }
     },
 
-    async lookupIdentityByTag(query: string, registryUrl?: string): Promise<{ tag: string; identityKey: string }[]> {
+    async lookupIdentityByTag (query: string, registryUrl?: string): Promise<Array<{ tag: string, identityKey: string }>> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) throw new Error('registryUrl is required')
+        if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
         const res = await fetch(`${effectiveRegistry}?action=lookup&query=${encodeURIComponent(query)}`)
-        const data = await res.json() as { success: boolean; error?: string; results?: { tag: string; identityKey: string }[] }
-        if (!data.success) throw new Error(data.error || 'Lookup failed')
-        return data.results || []
+        const data = await res.json() as { success: boolean, error?: string, results?: Array<{ tag: string, identityKey: string }> }
+        if (!data.success) throw new Error(data.error ?? 'Lookup failed')
+        return data.results ?? []
       } catch (error) {
         throw new Error(`Tag lookup failed: ${(error as Error).message}`)
       }
     },
 
-    async listMyTags(registryUrl?: string): Promise<{ tag: string; createdAt: string }[]> {
+    async listMyTags (registryUrl?: string): Promise<Array<{ tag: string, createdAt: string }>> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) throw new Error('registryUrl is required')
+        if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
         const res = await fetch(`${effectiveRegistry}?action=list&identityKey=${encodeURIComponent(core.getIdentityKey())}`)
-        const data = await res.json() as { success: boolean; error?: string; tags?: { tag: string; createdAt: string }[] }
-        if (!data.success) throw new Error(data.error || 'List failed')
-        return data.tags || []
+        const data = await res.json() as { success: boolean, error?: string, tags?: Array<{ tag: string, createdAt: string }> }
+        if (!data.success) throw new Error(data.error ?? 'List failed')
+        return data.tags ?? []
       } catch (error) {
         throw new Error(`Failed to list tags: ${(error as Error).message}`)
       }
     },
 
-    async revokeIdentityTag(tag: string, registryUrl?: string): Promise<void> {
+    async revokeIdentityTag (tag: string, registryUrl?: string): Promise<void> {
       try {
         const effectiveRegistry = registryUrl ?? core.defaults.registryUrl
-        if (!effectiveRegistry) throw new Error('registryUrl is required')
+        if (effectiveRegistry == null) throw new Error('registryUrl is required')
 
         const res = await fetch(`${effectiveRegistry}?action=revoke`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tag, identityKey: core.getIdentityKey() })
         })
-        const data = await res.json() as { success: boolean; error?: string }
-        if (!data.success) throw new Error(data.error || 'Revoke failed')
+        const data = await res.json() as { success: boolean, error?: string }
+        if (!data.success) throw new Error(data.error ?? 'Revoke failed')
       } catch (error) {
         throw new Error(`Tag revocation failed: ${(error as Error).message}`)
       }

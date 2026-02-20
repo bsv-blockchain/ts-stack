@@ -1,9 +1,13 @@
 {
   "name": "@bsv/simple",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Simplified, modular helper library for BSV blockchain development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/simple.git"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -22,7 +26,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest",
-    "lint": "eslint src --ext .ts",
+    "lint": "ts-standard --fix src/**/*.ts",
+    "lint:ci": "ts-standard src/**/*.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -38,17 +43,23 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@bsv/sdk": "^1.10.1",
-    "@bsv/wallet-toolbox": "^1.8.2",
-    "@bsv/message-box-client": "^1.4.5",
-    "dotenv": "^16.4.7"
+    "@bsv/message-box-client": "^2.0.2",
+    "@bsv/sdk": "^2.0.4",
+    "@bsv/wallet-toolbox": "^2.0.19"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1"
+  },
+  "ts-standard": {
+    "project": "tsconfig.eslint.json",
+    "ignore": [
+      "dist"
+    ]
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
-    "jest": "^29.0.0",
+    "jest": "^30.2.0",
+    "ts-standard": "^12.0.2",
     "typescript": "^5.3.0"
   },
   "files": [

@@ -20,9 +20,17 @@ import {
 
 const TOKEN_MESSAGE_BOX = 'simple_token_inbox'
 
-export function createTokenMethods(core: WalletCore) {
+export function createTokenMethods (core: WalletCore): {
+  createToken: (options: TokenOptions) => Promise<TokenResult>
+  listTokenDetails: (basket?: string) => Promise<TokenDetail[]>
+  sendToken: (options: SendTokenOptions) => Promise<TransactionResult>
+  redeemToken: (options: RedeemTokenOptions) => Promise<TransactionResult>
+  sendTokenViaMessageBox: (options: SendTokenOptions) => Promise<TransactionResult>
+  listIncomingTokens: () => Promise<any[]>
+  acceptIncomingToken: (token: any, basket?: string) => Promise<any>
+} {
   return {
-    async createToken(options: TokenOptions): Promise<TokenResult> {
+    async createToken (options: TokenOptions): Promise<TokenResult> {
       try {
         const client = core.getClient()
         const basket = options.basket ?? core.defaults.tokenBasket
@@ -68,7 +76,7 @@ export function createTokenMethods(core: WalletCore) {
         })
 
         return {
-          txid: result.txid || '',
+          txid: result.txid ?? '',
           tx: result.tx,
           basket,
           encrypted: true,
@@ -79,7 +87,7 @@ export function createTokenMethods(core: WalletCore) {
       }
     },
 
-    async listTokenDetails(basket?: string): Promise<TokenDetail[]> {
+    async listTokenDetails (basket?: string): Promise<TokenDetail[]> {
       const effectiveBasket = basket ?? core.defaults.tokenBasket
       const client = core.getClient()
       const result = await client.listOutputs({
@@ -101,15 +109,15 @@ export function createTokenMethods(core: WalletCore) {
           const decoded = PushDrop.decode(lockScript)
 
           let ci: any = {}
-          if ((output as any).customInstructions) {
-            try { ci = JSON.parse((output as any).customInstructions) } catch {}
+          if ((output as any).customInstructions != null) {
+            try { ci = JSON.parse((output as any).customInstructions as string) } catch {}
           }
-          const protocolID = ci.protocolID || defaultProtocolID
-          const keyID = ci.keyID || defaultKeyID
-          const counterparty = ci.counterparty || defaultCounterparty
+          const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+          const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
+          const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
           let data: any = null
-          if (decoded.fields[0]) {
+          if (decoded.fields[0] != null) {
             try {
               const { plaintext } = await client.decrypt({
                 ciphertext: Array.from(decoded.fields[0]),
@@ -142,7 +150,7 @@ export function createTokenMethods(core: WalletCore) {
 
           details.push({
             outpoint: output.outpoint,
-            satoshis: output.satoshis || 0,
+            satoshis: output.satoshis ?? 0,
             data,
             protocolID,
             keyID,
@@ -156,7 +164,7 @@ export function createTokenMethods(core: WalletCore) {
       return details
     },
 
-    async sendToken(options: SendTokenOptions): Promise<TransactionResult> {
+    async sendToken (options: SendTokenOptions): Promise<TransactionResult> {
       try {
         const client = core.getClient()
         const { basket, outpoint, to } = options
@@ -173,15 +181,15 @@ export function createTokenMethods(core: WalletCore) {
 
         const outputs = result?.outputs ?? []
         const targetOutput = outputs.find((o: any) => o.outpoint === outpoint)
-        if (!targetOutput) throw new Error(`Token not found: ${outpoint}`)
+        if (targetOutput == null) throw new Error(`Token not found: ${outpoint}`)
 
         let ci: any = {}
-        if ((targetOutput as any).customInstructions) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions) } catch {}
+        if ((targetOutput as any).customInstructions != null) {
+          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
-        const protocolID = ci.protocolID || defaultProtocolID
-        const keyID = ci.keyID || defaultKeyID
-        const counterparty = ci.counterparty || defaultCounterparty
+        const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+        const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
+        const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -189,7 +197,7 @@ export function createTokenMethods(core: WalletCore) {
         const [txid, voutStr] = outpoint.split('.')
         const vout = Number(voutStr)
         const sourceTx = beef.findAtomicTransaction(txid) as Transaction
-        const sourceScript = sourceTx.outputs[vout].lockingScript as LockingScript
+        const sourceScript = sourceTx.outputs[vout].lockingScript
         const decoded = PushDrop.decode(sourceScript)
 
         const newKeyID = Utils.toBase64(Random(8))
@@ -226,7 +234,7 @@ export function createTokenMethods(core: WalletCore) {
           options: { randomizeOutputs: false }
         } as any)
 
-        if (!(response as any)?.signableTransaction) {
+        if ((response as any)?.signableTransaction == null) {
           throw new Error('Expected signableTransaction')
         }
 
@@ -240,15 +248,15 @@ export function createTokenMethods(core: WalletCore) {
         await txToSign.sign()
 
         const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-        if (!unlockingScript) throw new Error('Failed to generate unlocking script')
+        if (unlockingScript == null || unlockingScript === '') throw new Error('Failed to generate unlocking script')
 
         const finalResult = await client.signAction({
           reference: signable.reference,
-          spends: { '0': { unlockingScript } }
+          spends: { 0: { unlockingScript } }
         })
 
         return {
-          txid: (finalResult as any).txid || '',
+          txid: (finalResult as any).txid ?? '',
           tx: (finalResult as any).tx
         }
       } catch (error) {
@@ -256,7 +264,7 @@ export function createTokenMethods(core: WalletCore) {
       }
     },
 
-    async redeemToken(options: RedeemTokenOptions): Promise<TransactionResult> {
+    async redeemToken (options: RedeemTokenOptions): Promise<TransactionResult> {
       try {
         const client = core.getClient()
         const { basket, outpoint } = options
@@ -273,15 +281,15 @@ export function createTokenMethods(core: WalletCore) {
 
         const outputs = result?.outputs ?? []
         const targetOutput = outputs.find((o: any) => o.outpoint === outpoint)
-        if (!targetOutput) throw new Error(`Token not found: ${outpoint}`)
+        if (targetOutput == null) throw new Error(`Token not found: ${outpoint}`)
 
         let ci: any = {}
-        if ((targetOutput as any).customInstructions) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions) } catch {}
+        if ((targetOutput as any).customInstructions != null) {
+          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
-        const protocolID = ci.protocolID || defaultProtocolID
-        const keyID = ci.keyID || defaultKeyID
-        const counterparty = ci.counterparty || defaultCounterparty
+        const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+        const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
+        const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -299,7 +307,7 @@ export function createTokenMethods(core: WalletCore) {
           options: { randomizeOutputs: false }
         } as any)
 
-        if (!(response as any)?.signableTransaction) {
+        if ((response as any)?.signableTransaction == null) {
           throw new Error('Expected signableTransaction')
         }
 
@@ -313,15 +321,15 @@ export function createTokenMethods(core: WalletCore) {
         await txToSign.sign()
 
         const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-        if (!unlockingScript) throw new Error('Failed to generate unlocking script')
+        if (unlockingScript == null || unlockingScript === '') throw new Error('Failed to generate unlocking script')
 
         const finalResult = await client.signAction({
           reference: signable.reference,
-          spends: { '0': { unlockingScript } }
+          spends: { 0: { unlockingScript } }
         })
 
         return {
-          txid: (finalResult as any).txid || '',
+          txid: (finalResult as any).txid ?? '',
           tx: (finalResult as any).tx
         }
       } catch (error) {
@@ -329,7 +337,7 @@ export function createTokenMethods(core: WalletCore) {
       }
     },
 
-    async sendTokenViaMessageBox(options: SendTokenOptions): Promise<TransactionResult> {
+    async sendTokenViaMessageBox (options: SendTokenOptions): Promise<TransactionResult> {
       try {
         const client = core.getClient()
         const { basket, outpoint, to } = options
@@ -346,15 +354,15 @@ export function createTokenMethods(core: WalletCore) {
 
         const outputs = result?.outputs ?? []
         const targetOutput = outputs.find((o: any) => o.outpoint === outpoint)
-        if (!targetOutput) throw new Error(`Token not found: ${outpoint}`)
+        if (targetOutput == null) throw new Error(`Token not found: ${outpoint}`)
 
         let ci: any = {}
-        if ((targetOutput as any).customInstructions) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions) } catch {}
+        if ((targetOutput as any).customInstructions != null) {
+          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
-        const protocolID = ci.protocolID || defaultProtocolID
-        const keyID = ci.keyID || defaultKeyID
-        const counterparty = ci.counterparty || defaultCounterparty
+        const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+        const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
+        const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -362,7 +370,7 @@ export function createTokenMethods(core: WalletCore) {
         const [txid, voutStr] = outpoint.split('.')
         const vout = Number(voutStr)
         const sourceTx = beef.findAtomicTransaction(txid) as Transaction
-        const sourceScript = sourceTx.outputs[vout].lockingScript as LockingScript
+        const sourceScript = sourceTx.outputs[vout].lockingScript
         const decoded = PushDrop.decode(sourceScript)
 
         const newKeyID = Utils.toBase64(Random(8))
@@ -378,7 +386,7 @@ export function createTokenMethods(core: WalletCore) {
 
         const inputBEEF = beef.toBinary()
         const response = await client.createAction({
-          description: `Send token via MessageBox`,
+          description: 'Send token via MessageBox',
           inputBEEF,
           inputs: [{
             outpoint,
@@ -393,7 +401,7 @@ export function createTokenMethods(core: WalletCore) {
           options: { randomizeOutputs: false }
         } as any)
 
-        if (!(response as any)?.signableTransaction) {
+        if ((response as any)?.signableTransaction == null) {
           throw new Error('Expected signableTransaction')
         }
 
@@ -407,11 +415,11 @@ export function createTokenMethods(core: WalletCore) {
         await txToSign.sign()
 
         const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-        if (!unlockingScript) throw new Error('Failed to generate unlocking script')
+        if (unlockingScript == null || unlockingScript === '') throw new Error('Failed to generate unlocking script')
 
         const finalResult = await client.signAction({
           reference: signable.reference,
-          spends: { '0': { unlockingScript } }
+          spends: { 0: { unlockingScript } }
         })
 
         // Send via MessageBox
@@ -433,7 +441,7 @@ export function createTokenMethods(core: WalletCore) {
         })
 
         return {
-          txid: (finalResult as any).txid || '',
+          txid: (finalResult as any).txid ?? '',
           tx: (finalResult as any).tx
         }
       } catch (error) {
@@ -441,7 +449,7 @@ export function createTokenMethods(core: WalletCore) {
       }
     },
 
-    async listIncomingTokens(): Promise<any[]> {
+    async listIncomingTokens (): Promise<any[]> {
       try {
         const client = core.getClient()
         const peerPay = new PeerPayClient({
@@ -460,7 +468,7 @@ export function createTokenMethods(core: WalletCore) {
           }
           return {
             messageId: msg.messageId,
-            sender: body?.sender || msg.sender,
+            sender: (body?.sender != null ? body.sender : msg.sender) as string,
             transaction: body?.transaction,
             protocolID: body?.protocolID,
             keyID: body?.keyID,
@@ -473,7 +481,7 @@ export function createTokenMethods(core: WalletCore) {
       }
     },
 
-    async acceptIncomingToken(token: any, basket?: string): Promise<any> {
+    async acceptIncomingToken (token: any, basket?: string): Promise<any> {
       try {
         const client = core.getClient()
         const effectiveBasket = basket ?? core.defaults.tokenBasket
@@ -493,7 +501,7 @@ export function createTokenMethods(core: WalletCore) {
               tags: ['token', 'received']
             }
           }],
-          description: `Receive token from ${token.sender?.substring(0, 20)}...`
+          description: `Receive token from ${String(token.sender).substring(0, 20)}...`
         } as any)
 
         const peerPay = new PeerPayClient({
