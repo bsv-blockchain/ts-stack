@@ -9,7 +9,7 @@
  */
 
 import { join } from 'path'
-import { CredentialIssuerHandlerConfig, CredentialSchemaConfig } from '../core/types'
+import { CredentialIssuerHandlerConfig } from '../core/types'
 import { JsonFileStore } from './json-file-store'
 import { ServerWalletManager } from './server-wallet-manager'
 import {
@@ -24,28 +24,30 @@ import {
 // Lazy issuer singleton
 // ============================================================================
 
-function createIssuerFactory(config: CredentialIssuerHandlerConfig) {
+function createIssuerFactory (
+  config: CredentialIssuerHandlerConfig
+): () => Promise<any> {
   let issuerInstance: any = null
   let issuerInitPromise: Promise<any> | null = null
 
-  const envVar = config.envVar || 'CREDENTIAL_ISSUER_KEY'
-  const keyFile = config.keyFile || join(process.cwd(), '.credential-issuer-key.json')
-  const keyStore = new JsonFileStore<{ privateKey: string; publicKey: string }>(keyFile)
+  const envVar = config.envVar ?? 'CREDENTIAL_ISSUER_KEY'
+  const keyFile = config.keyFile ?? join(process.cwd(), '.credential-issuer-key.json')
+  const keyStore = new JsonFileStore<{ privateKey: string, publicKey: string }>(keyFile)
 
   return async () => {
-    if (issuerInstance) return issuerInstance
-    if (issuerInitPromise) return issuerInitPromise
+    if (issuerInstance != null) return issuerInstance
+    if (issuerInitPromise != null) return await issuerInitPromise
 
     issuerInitPromise = (async () => {
-      const { CredentialIssuer, CredentialSchema } = await import('../modules/credentials')
+      const { CredentialIssuer } = await import('../modules/credentials')
       const { generatePrivateKey } = await import('../server')
 
       const savedData = keyStore.load()
-      const privateKey = process.env[envVar] || savedData?.privateKey || generatePrivateKey()
+      const privateKey = process.env[envVar] ?? savedData?.privateKey ?? generatePrivateKey()
 
       // Prepare revocation config
       let revocationConfig: any = { enabled: false }
-      if (config.serverWalletManager) {
+      if (config.serverWalletManager != null) {
         try {
           const swm = config.serverWalletManager as ServerWalletManager
           const wallet = await swm.getWallet()
@@ -54,7 +56,7 @@ function createIssuerFactory(config: CredentialIssuerHandlerConfig) {
             enabled: true,
             wallet: wallet.getClient(),
             store: new FileRevocationStore(
-              config.revocationStorePath || join(process.cwd(), '.revocation-secrets.json')
+              config.revocationStorePath ?? join(process.cwd(), '.revocation-secrets.json')
             )
           }
         } catch {
@@ -68,14 +70,14 @@ function createIssuerFactory(config: CredentialIssuerHandlerConfig) {
         revocation: revocationConfig
       })
 
-      if (!process.env[envVar]) {
+      if (process.env[envVar] == null) {
         keyStore.save({ privateKey, publicKey: issuerInstance.getInfo().publicKey })
       }
 
       return issuerInstance
     })()
 
-    return issuerInitPromise
+    return await issuerInitPromise
   }
 }
 
@@ -83,12 +85,12 @@ function createIssuerFactory(config: CredentialIssuerHandlerConfig) {
 // Helper: detect legacy path-based requests
 // ============================================================================
 
-function getLegacySubPath(url: string): string | null {
+function getLegacySubPath (url: string): string | null {
   try {
     const pathname = new URL(url).pathname
     // Match patterns like /api/credential-issuer/api/info or /api/credential-issuer/api/certify
     const match = pathname.match(/\/api\/([a-z]+)$/)
-    if (match) {
+    if (match != null) {
       const segment = match[1]
       if (segment === 'info' || segment === 'certify') return segment
     }
@@ -102,11 +104,11 @@ function getLegacySubPath(url: string): string | null {
 // Next.js handler factory
 // ============================================================================
 
-export function createCredentialIssuerHandler(config: CredentialIssuerHandlerConfig) {
+export function createCredentialIssuerHandler (config: CredentialIssuerHandlerConfig): ReturnType<typeof toNextHandlers> {
   const getIssuer = createIssuerFactory(config)
 
   const coreHandlers = {
-    async GET(req: HandlerRequest): Promise<HandlerResponse> {
+    async GET (req: HandlerRequest): Promise<HandlerResponse> {
       try {
         const legacyPath = getLegacySubPath(req.url)
         const params = getSearchParams(req.url)
@@ -120,7 +122,7 @@ export function createCredentialIssuerHandler(config: CredentialIssuerHandlerCon
           return jsonResponse({ certifierPublicKey: info.publicKey, certificateType })
         }
 
-        const action = params.get('action') || 'info'
+        const action = params.get('action') ?? 'info'
 
         if (action === 'info') {
           const issuer = await getIssuer()
@@ -144,17 +146,17 @@ export function createCredentialIssuerHandler(config: CredentialIssuerHandlerCon
 
         if (action === 'schema') {
           const issuer = await getIssuer()
-          const id = params.get('id') || config.schemas[0]?.id
+          const id = params.get('id') ?? config.schemas[0]?.id
           const info = issuer.getInfo()
           const schema = info.schemas?.find((s: any) => s.id === id)
-          if (!schema) return jsonResponse({ success: false, error: `Schema "${id}" not found` }, 404)
+          if (schema == null) return jsonResponse({ success: false, error: `Schema "${String(id)}" not found` }, 404)
           return jsonResponse({ success: true, schema })
         }
 
         if (action === 'status') {
           const issuer = await getIssuer()
           const sn = params.get('serialNumber')
-          if (!sn) return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
+          if (sn == null || sn === '') return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
           const revoked = await issuer.isRevoked(sn)
           return jsonResponse({ success: true, serialNumber: sn, revoked })
         }
@@ -171,7 +173,7 @@ export function createCredentialIssuerHandler(config: CredentialIssuerHandlerCon
       }
     },
 
-    async POST(req: HandlerRequest): Promise<HandlerResponse> {
+    async POST (req: HandlerRequest): Promise<HandlerResponse> {
       try {
         const body = await req.json()
         const legacyPath = getLegacySubPath(req.url)
@@ -180,11 +182,11 @@ export function createCredentialIssuerHandler(config: CredentialIssuerHandlerCon
         // Legacy path: POST .../api/certify
         if (legacyPath === 'certify') {
           const { identityKey, schemaId, fields } = body
-          if (!identityKey || !fields) {
+          if ((identityKey == null) || (fields == null)) {
             return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
           }
           const issuer = await getIssuer()
-          const vc = await issuer.issue(identityKey, schemaId || config.schemas[0]?.id, fields)
+          const vc = await issuer.issue(identityKey, schemaId ?? config.schemas[0]?.id, fields)
           return jsonResponse(vc._bsv.certificate)
         }
 
@@ -193,27 +195,27 @@ export function createCredentialIssuerHandler(config: CredentialIssuerHandlerCon
         // New query-param based certify — also used by acquireCredential()
         if (action === 'certify') {
           const { identityKey, schemaId, fields } = body
-          if (!identityKey || !fields) {
+          if ((identityKey == null) || (fields == null)) {
             return jsonResponse({ error: 'Missing identityKey or fields' }, 400)
           }
           const issuer = await getIssuer()
-          const vc = await issuer.issue(identityKey, schemaId || config.schemas[0]?.id, fields)
+          const vc = await issuer.issue(identityKey, schemaId ?? config.schemas[0]?.id, fields)
           return jsonResponse(vc._bsv.certificate)
         }
 
         if (action === 'issue') {
           const { subjectKey, schemaId, fields } = body
-          if (!subjectKey || !fields) {
+          if ((subjectKey == null) || (fields == null)) {
             return jsonResponse({ success: false, error: 'Missing subjectKey or fields' }, 400)
           }
           const issuer = await getIssuer()
-          const vc = await issuer.issue(subjectKey, schemaId || config.schemas[0]?.id, fields)
+          const vc = await issuer.issue(subjectKey, schemaId ?? config.schemas[0]?.id, fields)
           return jsonResponse({ success: true, credential: vc })
         }
 
         if (action === 'verify') {
           const { credential } = body
-          if (!credential) return jsonResponse({ success: false, error: 'Missing credential' }, 400)
+          if (credential == null) return jsonResponse({ success: false, error: 'Missing credential' }, 400)
           const issuer = await getIssuer()
           const result = await issuer.verify(credential)
           return jsonResponse({ success: true, verification: result })
@@ -221,13 +223,13 @@ export function createCredentialIssuerHandler(config: CredentialIssuerHandlerCon
 
         if (action === 'revoke') {
           const { serialNumber } = body
-          if (!serialNumber) return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
+          if (serialNumber == null || serialNumber === '') return jsonResponse({ success: false, error: 'Missing serialNumber' }, 400)
           const issuer = await getIssuer()
           const result = await issuer.revoke(serialNumber)
           return jsonResponse({ success: true, ...result })
         }
 
-        return jsonResponse({ success: false, error: `Unknown action: ${action}` }, 400)
+        return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
         return jsonResponse({ success: false, error: `Failed: ${(error as Error).message}` }, 500)
       }

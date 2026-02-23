@@ -6,7 +6,7 @@
 export interface HandlerRequest {
   url: string
   method: string
-  json(): Promise<any>
+  json: () => Promise<any>
 }
 
 export interface HandlerResponse {
@@ -20,7 +20,7 @@ export interface RouteHandler {
 }
 
 /** Extract search params from a URL string. */
-export function getSearchParams(url: string): URLSearchParams {
+export function getSearchParams (url: string): URLSearchParams {
   try {
     return new URL(url).searchParams
   } catch {
@@ -31,7 +31,7 @@ export function getSearchParams(url: string): URLSearchParams {
 }
 
 /** Create a JSON response object. */
-export function jsonResponse(data: any, status = 200): HandlerResponse {
+export function jsonResponse (data: any, status = 200): HandlerResponse {
   return { status, body: data }
 }
 
@@ -40,14 +40,14 @@ export function jsonResponse(data: any, status = 200): HandlerResponse {
  * Uses the Web-standard Response API (available in Next.js, Deno, Bun, etc.)
  * — no 'next/server' import needed.
  */
-export function toNextHandlers(handler: RouteHandler): { GET?: (req: any) => Promise<any>; POST?: (req: any) => Promise<any> } {
-  const wrapHandler = (method: 'GET' | 'POST') => {
+export function toNextHandlers (handler: RouteHandler): { GET?: (req: any) => Promise<any>, POST?: (req: any) => Promise<any> } {
+  const wrapHandler = (method: 'GET' | 'POST'): ((req: any) => Promise<any>) | undefined => {
     const coreFn = handler[method]
-    if (!coreFn) return undefined
+    if (coreFn == null) return undefined
 
     return async (req: any): Promise<any> => {
       const result = await coreFn({
-        url: req.url || req.nextUrl?.toString() || '',
+        url: (req.url as string | undefined) ?? req.nextUrl?.toString() ?? '',
         method,
         json: () => req.json()
       })
@@ -61,7 +61,7 @@ export function toNextHandlers(handler: RouteHandler): { GET?: (req: any) => Pro
   }
 
   return {
-    ...(handler.GET ? { GET: wrapHandler('GET') } : {}),
-    ...(handler.POST ? { POST: wrapHandler('POST') } : {})
+    ...((handler.GET != null) ? { GET: wrapHandler('GET') } : {}),
+    ...((handler.POST != null) ? { POST: wrapHandler('POST') } : {})
   }
 }

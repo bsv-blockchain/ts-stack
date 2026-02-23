@@ -13,9 +13,9 @@ export const DEFAULT_CONFIG: WalletDefaults = {
   registryUrl: undefined,
   didBasket: 'did-chain',
   didResolverUrl: 'https://bsvdid-universal-resolver.nchain.systems',
-  didProtocolID: [0 as SecurityLevel, 'bsvdid'],
+  didProtocolID: [0 as SecurityLevel, 'bsvdid']
 }
 
-export function mergeDefaults(partial: Partial<WalletDefaults>): WalletDefaults {
+export function mergeDefaults (partial: Partial<WalletDefaults>): WalletDefaults {
   return { ...DEFAULT_CONFIG, ...partial }
 }

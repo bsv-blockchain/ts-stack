@@ -25,19 +25,19 @@ import {
 // ============================================================================
 
 class FileIdentityRegistryStore implements IdentityRegistryStore {
-  private store: JsonFileStore<RegistryEntry[]>
+  private readonly store: JsonFileStore<RegistryEntry[]>
 
-  constructor(filePath?: string) {
+  constructor (filePath?: string) {
     this.store = new JsonFileStore<RegistryEntry[]>(
-      filePath || join(process.cwd(), '.identity-registry.json')
+      filePath ?? join(process.cwd(), '.identity-registry.json')
     )
   }
 
-  load(): RegistryEntry[] {
-    return this.store.load() || []
+  load (): RegistryEntry[] {
+    return this.store.load() ?? []
   }
 
-  save(entries: RegistryEntry[]): void {
+  save (entries: RegistryEntry[]): void {
     this.store.save(entries)
   }
 }
@@ -54,42 +54,42 @@ export interface RegistryResult {
 }
 
 export class IdentityRegistry {
-  private store: IdentityRegistryStore
-  private validateTag?: (tag: string, identityKey: string) => string | null
-  private maxTagsPerIdentity: number
+  private readonly store: IdentityRegistryStore
+  private readonly validateTag?: (tag: string, identityKey: string) => string | null
+  private readonly maxTagsPerIdentity: number
 
-  constructor(config?: IdentityRegistryConfig) {
-    this.store = config?.store || new FileIdentityRegistryStore()
+  constructor (config?: IdentityRegistryConfig) {
+    this.store = config?.store ?? new FileIdentityRegistryStore()
     this.validateTag = config?.validateTag
     this.maxTagsPerIdentity = config?.maxTagsPerIdentity ?? Infinity
   }
 
-  lookup(query: string): { tag: string; identityKey: string }[] {
+  lookup (query: string): Array<{ tag: string, identityKey: string }> {
     const q = query.trim().toLowerCase()
-    if (!q) return []
+    if (q === '') return []
     const entries = this.store.load()
     return entries
       .filter(e => e.tag.toLowerCase().includes(q))
       .map(e => ({ tag: e.tag, identityKey: e.identityKey }))
   }
 
-  list(identityKey: string): { tag: string; createdAt: string }[] {
+  list (identityKey: string): Array<{ tag: string, createdAt: string }> {
     const entries = this.store.load()
     return entries
       .filter(e => e.identityKey === identityKey)
       .map(e => ({ tag: e.tag, createdAt: e.createdAt }))
   }
 
-  register(tag: string, identityKey: string): RegistryResult {
+  register (tag: string, identityKey: string): RegistryResult {
     const normalizedTag = tag.trim()
-    if (!normalizedTag) {
+    if (normalizedTag === '') {
       return { success: false, message: 'Tag cannot be empty', tag: normalizedTag, error: 'Tag cannot be empty' }
     }
 
     // Custom validation
-    if (this.validateTag) {
+    if (this.validateTag != null) {
       const err = this.validateTag(normalizedTag, identityKey)
-      if (err) {
+      if (err != null) {
         return { success: false, message: err, tag: normalizedTag, error: err }
       }
     }
@@ -98,10 +98,10 @@ export class IdentityRegistry {
 
     // Check tag ownership
     const existing = entries.find(e => e.tag.toLowerCase() === normalizedTag.toLowerCase())
-    if (existing && existing.identityKey !== identityKey) {
+    if ((existing != null) && existing.identityKey !== identityKey) {
       return { success: false, message: `Tag "${normalizedTag}" is already registered to another identity`, tag: normalizedTag, error: `Tag "${normalizedTag}" is already registered to another identity` }
     }
-    if (existing && existing.identityKey === identityKey) {
+    if ((existing != null) && existing.identityKey === identityKey) {
       return { success: true, message: 'Tag already registered', tag: normalizedTag }
     }
 
@@ -118,7 +118,7 @@ export class IdentityRegistry {
     return { success: true, message: 'Tag registered', tag: normalizedTag }
   }
 
-  revoke(tag: string, identityKey: string): RegistryResult {
+  revoke (tag: string, identityKey: string): RegistryResult {
     const normalizedTag = tag.trim()
     const entries = this.store.load()
     const idx = entries.findIndex(
@@ -137,61 +137,61 @@ export class IdentityRegistry {
 // Next.js handler factory
 // ============================================================================
 
-export function createIdentityRegistryHandler(config?: IdentityRegistryConfig) {
+export function createIdentityRegistryHandler (config?: IdentityRegistryConfig): ReturnType<typeof toNextHandlers> {
   const registry = new IdentityRegistry(config)
 
   const coreHandlers = {
-    async GET(req: HandlerRequest): Promise<HandlerResponse> {
+    async GET (req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const action = params.get('action')
 
       try {
         if (action === 'lookup') {
-          const query = (params.get('query') || '').trim()
-          if (!query) return jsonResponse({ success: false, error: 'Missing query parameter' }, 400)
+          const query = (params.get('query') ?? '').trim()
+          if (query === '') return jsonResponse({ success: false, error: 'Missing query parameter' }, 400)
           const results = registry.lookup(query)
           return jsonResponse({ success: true, query, results })
         }
         if (action === 'list') {
           const identityKey = params.get('identityKey')
-          if (!identityKey) return jsonResponse({ success: false, error: 'Missing identityKey parameter' }, 400)
+          if (identityKey == null || identityKey === '') return jsonResponse({ success: false, error: 'Missing identityKey parameter' }, 400)
           const tags = registry.list(identityKey)
           return jsonResponse({ success: true, tags })
         }
-        return jsonResponse({ success: false, error: `Unknown action: ${action}` }, 400)
+        return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
-        return jsonResponse({ success: false, error: `${action} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
       }
     },
 
-    async POST(req: HandlerRequest): Promise<HandlerResponse> {
+    async POST (req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const action = params.get('action')
 
       try {
         const body = await req.json()
-        const { tag, identityKey } = body as { tag?: string; identityKey?: string }
-        if (!tag || !identityKey) {
+        const { tag, identityKey } = body as { tag?: string, identityKey?: string }
+        if ((tag == null || tag === '') || (identityKey == null || identityKey === '')) {
           return jsonResponse({ success: false, error: 'Missing required fields: tag, identityKey' }, 400)
         }
 
         if (action === 'register') {
           const result = registry.register(tag, identityKey)
           return jsonResponse(
-            result.error ? { success: false, error: result.error } : { success: true, message: result.message, tag: result.tag },
+            (result.error != null) ? { success: false, error: result.error } : { success: true, message: result.message, tag: result.tag },
             result.success ? 200 : 409
           )
         }
         if (action === 'revoke') {
           const result = registry.revoke(tag, identityKey)
           return jsonResponse(
-            result.error ? { success: false, error: result.error } : { success: true, message: result.message, tag: result.tag },
+            (result.error != null) ? { success: false, error: result.error } : { success: true, message: result.message, tag: result.tag },
             result.success ? 200 : 404
           )
         }
-        return jsonResponse({ success: false, error: `Unknown action: ${action}` }, 400)
+        return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
-        return jsonResponse({ success: false, error: `${action} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
       }
     }
   }

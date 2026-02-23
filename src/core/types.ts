@@ -312,8 +312,8 @@ export interface DIDDocumentV2 {
   id: string
   controller?: string
   verificationMethod: DIDVerificationMethodV2[]
-  authentication: (string | DIDVerificationMethodV2)[]
-  assertionMethod?: (string | DIDVerificationMethodV2)[]
+  authentication: Array<string | DIDVerificationMethodV2>
+  assertionMethod?: Array<string | DIDVerificationMethodV2>
   service?: DIDService[]
 }
 
@@ -321,7 +321,7 @@ export interface DIDVerificationMethodV2 {
   id: string
   type: string
   controller: string
-  publicKeyJwk: { kty: string; crv: string; x: string; y: string }
+  publicKeyJwk: { kty: string, crv: string, x: string, y: string }
 }
 
 export interface DIDService {
@@ -500,8 +500,8 @@ export interface RegistryEntry {
 }
 
 export interface IdentityRegistryStore {
-  load(): RegistryEntry[]
-  save(entries: RegistryEntry[]): void
+  load: () => RegistryEntry[]
+  save: (entries: RegistryEntry[]) => void
 }
 
 export interface IdentityRegistryConfig {
