@@ -10,7 +10,7 @@ A high-level TypeScript library that makes BSV blockchain development simple. Bu
 
 | Feature | Description |
 |---------|-------------|
-| **Payments** | Send BSV to any identity key with optional memos and change recovery |
+| **Payments** | Send BSV to any identity key via BRC-29 peer-to-peer payments |
 | **Multi-Output Transactions** | Combine P2PKH payments, OP_RETURN data, and PushDrop tokens in a single transaction |
 | **Encrypted Tokens** | Create, transfer, and redeem PushDrop tokens with encrypted payloads |
 | **Inscriptions** | Write text, JSON, or file hashes permanently to the blockchain |
@@ -25,8 +25,8 @@ A high-level TypeScript library that makes BSV blockchain development simple. Bu
 
 The library has two entry points:
 
-- **`@bsv/simple`** — Uses `WalletClient` from `@bsv/sdk` to connect to the user's wallet on the client side.
-- **`@bsv/simple/server`** — Uses `@bsv/wallet-toolbox` to run a server side wallet from a private key. Used for agents, or servers receiving payments.
+- **`@bsv/simple`** (default) — Browser-safe. Uses `WalletClient` from `@bsv/sdk` to connect to the user's wallet on the client side. Will not pull in any server-only dependencies.
+- **`@bsv/simple/server`** — Uses `@bsv/wallet-toolbox` to run a server-side wallet from a private key. Used for agents, or servers receiving payments.
 
 Both entry points provide the same API surface — the only difference is how they connect to the underlying wallet.
 

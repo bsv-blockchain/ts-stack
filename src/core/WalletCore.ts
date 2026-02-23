@@ -283,5 +283,4 @@ export abstract class WalletCore {
       throw new Error(`Server wallet funding failed: ${(error as Error).message}`)
     }
   }
-
 }

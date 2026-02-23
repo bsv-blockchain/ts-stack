@@ -1,6 +1,6 @@
 # WalletCore
 
-`WalletCore` is the abstract base class that both `BrowserWallet` and `ServerWallet` extend. It provides wallet info, key derivation, payments, multi-output sends, server wallet funding, and change reinternalization.
+`WalletCore` is the abstract base class that both `BrowserWallet` and `ServerWallet` extend. It provides wallet info, key derivation, payments, multi-output sends, and server wallet funding.
 
 **Source:** `src/core/WalletCore.ts`
 
@@ -123,25 +123,16 @@ Derive a BRC-29 payment key. Uses protocol ID `[2, '3241645161d8']`.
 async pay(options: PaymentOptions): Promise<TransactionResult>
 ```
 
-Send a P2PKH payment with optional OP_RETURN memo, BRC-29 derivation, and change recovery.
+Send a BRC-29 payment to a counterparty via `PeerPayClient.sendPayment()`. The payment is constructed and delivered to the recipient in a single call.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `options.to` | `string` | Yes | Recipient's public key |
+| `options.to` | `string` | Yes | Recipient's identity key |
 | `options.satoshis` | `number` | Yes | Amount to send |
-| `options.memo` | `string` | No | OP_RETURN memo (creates second output) |
+| `options.memo` | `string` | No | Optional memo |
 | `options.description` | `string` | No | Transaction description |
-| `options.basket` | `string` | No | Track payment output in a basket |
-| `options.changeBasket` | `string` | No | Reinternalize change into this basket |
-| `options.derivationPrefix` | `string` | No | BRC-29 derivation prefix |
-| `options.derivationSuffix` | `string` | No | BRC-29 derivation suffix |
 
 **Returns:** [`TransactionResult`](types.md#transactionresult)
-
-**Behavior:**
-- If `derivationPrefix` or `derivationSuffix` is provided, derives a payment key using BRC-29 protocol
-- If `memo` is provided, adds an `OP_FALSE OP_RETURN <memo>` output
-- If `changeBasket` is provided, calls `reinternalizeChange()` after the transaction
 
 ### send()
 
@@ -155,7 +146,6 @@ Create a transaction with multiple outputs of different types in a single transa
 |-----------|------|----------|-------------|
 | `options.outputs` | `SendOutputSpec[]` | Yes | Array of output specifications |
 | `options.description` | `string` | No | Transaction description |
-| `options.changeBasket` | `string` | No | Reinternalize change into this basket |
 
 **Returns:** [`SendResult`](types.md#sendresult) (extends `TransactionResult` with `outputDetails`)
 
@@ -185,8 +175,7 @@ Create a transaction with multiple outputs of different types in a single transa
 ```typescript
 async fundServerWallet(
   request: PaymentRequest,
-  basket?: string,
-  changeBasket?: string
+  basket?: string
 ): Promise<TransactionResult>
 ```
 
@@ -196,39 +185,5 @@ Fund a `ServerWallet` using a BRC-29 derived payment.
 |-----------|------|----------|-------------|
 | `request` | `PaymentRequest` | Yes | Payment request from `ServerWallet.createPaymentRequest()` |
 | `basket` | `string` | No | Track the funding output in a basket |
-| `changeBasket` | `string` | No | Reinternalize change |
 
 **Returns:** [`TransactionResult`](types.md#transactionresult)
-
-### reinternalizeChange()
-
-```typescript
-async reinternalizeChange(
-  tx: number[],
-  basket: string,
-  skipOutputIndexes?: number[]
-): Promise<ReinternalizeResult>
-```
-
-Recover orphaned change outputs from a transaction into a named basket.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `tx` | `number[]` | *required* | AtomicBEEF transaction bytes |
-| `basket` | `string` | *required* | Target basket for change outputs |
-| `skipOutputIndexes` | `number[]` | `[0]` | Output indexes to skip (your payment outputs) |
-
-**Returns:**
-
-```typescript
-{
-  count: number    // Number of outputs recovered
-  errors: string[] // Any errors during recovery
-}
-```
-
-**Behavior:**
-1. Parses the transaction and finds change outputs (non-zero satoshis, not in `skipOutputIndexes`)
-2. **Skips the largest change output** — the wallet automatically tracks it
-3. Waits for broadcast confirmation with exponential backoff (2s initial, up to 30s timeout)
-4. Internalizes each remaining output using `basket insertion` protocol

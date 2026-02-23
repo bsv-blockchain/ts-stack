@@ -17,7 +17,6 @@ This prompts the user to approve the connection. Once approved, the wallet is re
 ```typescript
 const wallet = await createWallet({
   network: 'main',
-  changeBasket: 'my-change',       // auto-recover change outputs
   tokenBasket: 'my-tokens',        // default basket for tokens
   messageBoxHost: 'https://messagebox.babbage.systems',
   registryUrl: '/api/identity-registry'
@@ -93,7 +92,6 @@ await client.listOutputs({ basket: 'my-basket', include: 'locking scripts' })
 | `network` | `'main'` | Network to operate on |
 | `description` | `'BSV-Simplify transaction'` | Default transaction description |
 | `outputDescription` | `'BSV-Simplify output'` | Default output description |
-| `changeBasket` | `undefined` | If set, auto-recover change outputs |
 | `tokenBasket` | `'tokens'` | Default basket for token operations |
 | `tokenProtocolID` | `[0, 'token']` | Default PushDrop protocol ID |
 | `tokenKeyID` | `'1'` | Default PushDrop key ID |

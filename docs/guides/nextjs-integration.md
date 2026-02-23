@@ -62,9 +62,7 @@ export default function Page() {
     if (!wallet) return
     const result = await wallet.pay({
       to: recipientKey,
-      satoshis: 1000,
-      basket: 'payments',
-      changeBasket: 'change'
+      satoshis: 1000
     })
     setStatus(`Sent! TXID: ${result.txid}`)
   }
@@ -249,7 +247,7 @@ const fundServer = async () => {
   const { paymentRequest } = await res.json()
 
   // 2. Fund server wallet
-  const result = await wallet.fundServerWallet(paymentRequest, 'server-funding', 'change')
+  const result = await wallet.fundServerWallet(paymentRequest, 'server-funding')
 
   // 3. Send tx to server
   await fetch('/api/server-wallet?action=receive', {
@@ -291,4 +289,3 @@ SERVER_PRIVATE_KEY=a1b2c3d4e5f6...
 | Build fails with "Can't resolve 'fs'" | Add `serverExternalPackages` to `next.config.ts` |
 | Server wallet re-initializes every request | Cache at module scope with promise pattern |
 | Import error for `@bsv/simple/server` | Use dynamic `await import()` in API routes |
-| Change outputs disappear | Pass `changeBasket` to payment methods |

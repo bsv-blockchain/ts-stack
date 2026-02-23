@@ -43,7 +43,6 @@ The same process happens for `ServerWallet.create()`, but with `ToolboxWallet` f
 - **Wallet info**: `getIdentityKey()`, `getAddress()`, `getStatus()`, `getWalletInfo()`
 - **Key derivation**: `derivePublicKey()`, `derivePaymentKey()`
 - **Core transaction methods**: `pay()`, `send()`, `fundServerWallet()`
-- **Change recovery**: `reinternalizeChange()`
 
 Subclasses must implement `getClient(): WalletInterface` to provide the underlying wallet.
 
@@ -94,7 +93,7 @@ json/                 → JSON inscriptions
 revocation-utxos/     → Credential revocation locks
 ```
 
-Many methods accept a `basket` parameter to specify where outputs should be stored. The `changeBasket` parameter enables automatic recovery of change outputs into a named basket.
+Many methods accept a `basket` parameter to specify where outputs should be stored.
 
 ## Dependencies
 
@@ -102,4 +101,5 @@ Many methods accept a `basket` parameter to specify where outputs should be stor
 |---------|------|-------------|
 | `@bsv/sdk` | Core blockchain primitives, cryptography, WalletClient | Browser + Server |
 | `@bsv/wallet-toolbox` | ToolboxWallet, WalletSigner, StorageClient | Server only |
+| `@bsv/wallet-toolbox-client` | Client-only wallet storage (browser-safe alternative) | Browser |
 | `@bsv/message-box-client` | PeerPayClient for P2P messaging | Browser + Server |

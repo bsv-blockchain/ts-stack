@@ -13,49 +13,7 @@ const result = await wallet.pay({
 console.log('TXID:', result.txid)
 ```
 
-### With a Memo
-
-Attach an OP_RETURN memo to the transaction:
-
-```typescript
-const result = await wallet.pay({
-  to: recipientKey,
-  satoshis: 1000,
-  memo: 'Coffee payment'
-})
-```
-
-This creates two outputs: the P2PKH payment and an OP_RETURN output containing the memo text.
-
-### With Change Recovery
-
-By default, change outputs from transactions are not tracked in any basket. Pass `changeBasket` to automatically recover them:
-
-```typescript
-const result = await wallet.pay({
-  to: recipientKey,
-  satoshis: 1000,
-  basket: 'my-payments',
-  changeBasket: 'my-change'
-})
-
-console.log('Change recovered:', result.reinternalized?.count)
-```
-
-### With BRC-29 Derivation
-
-For payment protocols that require key derivation:
-
-```typescript
-const result = await wallet.pay({
-  to: recipientKey,
-  satoshis: 5000,
-  derivationPrefix: 'cGF5bWVudA==',   // base64('payment')
-  derivationSuffix: 'invoice-123'
-})
-```
-
-When derivation parameters are provided, the library derives a payment-specific key using the BRC-29 protocol (`[2, '3241645161d8']`), so the payment is locked to a unique derived address rather than the recipient's main address.
+The `pay()` method uses `PeerPayClient.sendPayment()` from `@bsv/message-box-client` under the hood, which constructs and delivers a BRC-29 payment to the counterparty in a single call.
 
 ## Multi-Output Send
 
@@ -88,8 +46,7 @@ const result = await wallet.send({
       basket: 'receipts'
     }
   ],
-  description: 'Payment with receipt',
-  changeBasket: 'change'
+  description: 'Payment with receipt'
 })
 
 // Check what was created
@@ -112,44 +69,6 @@ The `data` array in output specs accepts multiple types:
 { data: ['field1', { field2: true }, [0x00]] }   // Mixed types
 ```
 
-## Change Recovery
-
-When `createAction` produces change outputs, they exist in the wallet but aren't in any named basket. This means you can't query them via `listOutputs`. Change recovery puts them into a basket you can track.
-
-### Automatic (Recommended)
-
-Pass `changeBasket` to any payment method:
-
-```typescript
-await wallet.pay({ to: key, satoshis: 1000, changeBasket: 'my-change' })
-await wallet.send({ outputs: [...], changeBasket: 'my-change' })
-```
-
-### Manual
-
-If you have raw transaction bytes:
-
-```typescript
-const result = await wallet.reinternalizeChange(
-  txBytes,        // number[] from createAction result
-  'my-change',    // target basket
-  [0, 1]          // output indexes to skip (your actual outputs)
-)
-
-console.log(`${result.count} change outputs recovered`)
-if (result.errors.length) {
-  console.warn('Errors:', result.errors)
-}
-```
-
-### How It Works
-
-1. Parse the transaction to find all outputs
-2. Skip outputs at the specified indexes (your payment/token outputs)
-3. Skip the largest remaining output (the wallet auto-tracks one change output)
-4. For each remaining output, call `internalizeAction` with `basket insertion` protocol
-5. Wait for broadcast with exponential backoff (up to 30 seconds)
-
 ## Funding a Server Wallet
 
 See the [Server Wallet Guide](server-wallet.md) for the complete funding flow.
@@ -162,8 +81,7 @@ const { paymentRequest } = await res.json()
 // Fund using browser wallet
 const result = await wallet.fundServerWallet(
   paymentRequest,
-  'server-funding',
-  'change'
+  'server-funding'
 )
 ```
 
@@ -173,12 +91,8 @@ const result = await wallet.fundServerWallet(
 interface PaymentOptions {
   to: string              // Recipient identity key (required)
   satoshis: number        // Amount in satoshis (required)
-  memo?: string           // OP_RETURN memo text
+  memo?: string           // Optional memo
   description?: string    // Transaction description
-  basket?: string         // Track payment in this basket
-  changeBasket?: string   // Recover change to this basket
-  derivationPrefix?: string  // BRC-29 derivation prefix
-  derivationSuffix?: string  // BRC-29 derivation suffix
 }
 ```
 
@@ -187,11 +101,7 @@ interface PaymentOptions {
 ```typescript
 interface TransactionResult {
   txid: string            // Transaction ID
-  tx: number[]            // Raw transaction bytes (AtomicBEEF)
+  tx: any                 // Raw transaction bytes (AtomicBEEF)
   outputs?: OutputInfo[]  // Output details
-  reinternalized?: {      // Change recovery results
-    count: number         // Number of change outputs recovered
-    errors: string[]      // Any errors during recovery
-  }
 }
 ```

@@ -45,7 +45,8 @@
   "dependencies": {
     "@bsv/message-box-client": "^2.0.2",
     "@bsv/sdk": "^2.0.4",
-    "@bsv/wallet-toolbox": "^2.0.19"
+    "@bsv/wallet-toolbox": "^2.0.19",
+    "@bsv/wallet-toolbox-client": "^2.0.19"
   },
   "overrides": {
     "minimatch": "^10.2.1"

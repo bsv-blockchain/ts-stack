@@ -38,7 +38,6 @@ export type {
   WalletDefaults,
   TransactionResult,
   OutputInfo,
-  ReinternalizeResult,
   WalletStatus,
   WalletInfo,
   PaymentOptions,

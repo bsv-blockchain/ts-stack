@@ -1,8 +1,10 @@
-// Browser-compatible exports
+// Browser-safe default entrypoint
+// Server-only exports are available via '@bsv/simple/server'
+
 export { createWallet, Wallet, Overlay, Certifier, WalletCore } from './browser'
 export type { BrowserWallet } from './browser'
 
-// DID & Credentials
+// DID & Credentials (browser-safe)
 export { DID } from './modules/did'
 export {
   CredentialSchema,
@@ -12,34 +14,12 @@ export {
   toVerifiablePresentation
 } from './modules/credentials'
 
-// Server-only exports
-export {
-  ServerWallet,
-  generatePrivateKey,
-  // Handler utilities
-  JsonFileStore,
-  toNextHandlers,
-  // Identity Registry
-  IdentityRegistry,
-  createIdentityRegistryHandler,
-  // DID Resolver
-  DIDResolverService,
-  createDIDResolverHandler,
-  // Server Wallet Manager
-  ServerWalletManager,
-  createServerWalletHandler,
-  // Credential Issuer Handler
-  createCredentialIssuerHandler
-} from './server'
-export { FileRevocationStore } from './modules/file-revocation-store'
-
 // Types
 export type {
   Network,
   WalletDefaults,
   TransactionResult,
   OutputInfo,
-  ReinternalizeResult,
   WalletStatus,
   WalletInfo,
   PaymentOptions,

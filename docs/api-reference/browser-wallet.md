@@ -49,7 +49,6 @@ console.log(wallet.getIdentityKey()) // '02abc...'
 
 // With custom defaults
 const wallet = await createWallet({
-  changeBasket: 'my-change',
   network: 'main',
   registryUrl: '/api/identity-registry'
 })
@@ -61,7 +60,7 @@ const wallet = await createWallet({
 
 | Source | Methods |
 |--------|---------|
-| [WalletCore](wallet-core.md) | `getIdentityKey()`, `getAddress()`, `getStatus()`, `getWalletInfo()`, `getClient()`, `derivePublicKey()`, `derivePaymentKey()`, `pay()`, `send()`, `fundServerWallet()`, `reinternalizeChange()` |
+| [WalletCore](wallet-core.md) | `getIdentityKey()`, `getAddress()`, `getStatus()`, `getWalletInfo()`, `getClient()`, `derivePublicKey()`, `derivePaymentKey()`, `pay()`, `send()`, `fundServerWallet()` |
 | [Tokens](tokens.md) | `createToken()`, `listTokenDetails()`, `sendToken()`, `redeemToken()`, `sendTokenViaMessageBox()`, `listIncomingTokens()`, `acceptIncomingToken()` |
 | [Inscriptions](inscriptions.md) | `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()` |
 | [MessageBox](messagebox.md) | `certifyForMessageBox()`, `getMessageBoxHandle()`, `revokeMessageBoxCertification()`, `sendMessageBoxPayment()`, `listIncomingPayments()`, `acceptIncomingPayment()`, `registerIdentityTag()`, `lookupIdentityByTag()`, `listMyTags()`, `revokeIdentityTag()` |

@@ -14,9 +14,9 @@ The library provides three entry points:
 
 | Import Path | Environment | Use Case |
 |-------------|-------------|----------|
+| `@bsv/simple` | Browser | Default browser-safe entrypoint (same as `@bsv/simple/browser`) |
 | `@bsv/simple/browser` | Browser | Connect to user's wallet extension |
-| `@bsv/simple/server` | Node.js | Server wallet with private key |
-| `@bsv/simple` | Both | All exports (use with care — includes server-only code) |
+| `@bsv/simple/server` | Node.js | Server wallet with private key (includes server-only deps) |
 
 ### Browser
 
