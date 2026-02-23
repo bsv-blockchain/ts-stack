@@ -1130,14 +1130,7 @@ export class WalletPermissionsManager implements WalletInterface {
         throw new Error('Invalid counterparty permission protocol entry: missing protocolName/protocolID.')
       }
       const protocolID: WalletProtocol = [2, protocolName]
-      const token = await this.findProtocolToken(
-        originator,
-        false,
-        protocolID,
-        counterparty,
-        true,
-        originLookupValues
-      )
+      const token = await this.findProtocolToken(originator, false, protocolID, counterparty, true, originLookupValues)
       return { p, token, protocolID }
     })
 
@@ -1639,10 +1632,7 @@ export class WalletPermissionsManager implements WalletInterface {
           }
         }
 
-        const protocolIdRaw =
-          getCI(p, 'protocolID') ??
-          getCI(p, 'protocolId') ??
-          getCI(p, 'protocolid')
+        const protocolIdRaw = getCI(p, 'protocolID') ?? getCI(p, 'protocolId') ?? getCI(p, 'protocolid')
 
         const parsed = parseProtocolId(protocolIdRaw)
         if (!parsed) return null

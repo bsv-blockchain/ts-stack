@@ -197,7 +197,6 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       expect(res1.counterpartyPermissions.protocols).toEqual(
         expect.arrayContaining([expect.objectContaining({ protocolName: 'p' })])
       )
-
       ;(manager as any).manifestCache = new Map()
       fetchMock.mockResolvedValueOnce({
         ok: true,
@@ -213,7 +212,9 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       const res2 = await (manager as any).fetchManifestPermissions('example.com')
-      expect(res2.counterpartyPermissions.protocols).toEqual(expect.arrayContaining([expect.objectContaining({ protocolName: 'p2' })]))
+      expect(res2.counterpartyPermissions.protocols).toEqual(
+        expect.arrayContaining([expect.objectContaining({ protocolName: 'p2' })])
+      )
     })
 
     it('should ignore counterparty for level-1 protocol permission prompts (counterparty passed as undefined to callback)', async () => {
