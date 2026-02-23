@@ -8,7 +8,8 @@ import {
   SecurityLevel,
   Random,
   Transaction,
-  WalletInterface
+  WalletInterface,
+  AtomicBEEF
 } from '@bsv/sdk'
 import { mergeDefaults } from './defaults'
 import {
@@ -357,7 +358,7 @@ export abstract class WalletCore {
   // ============================================================================
 
   async reinternalizeChange (
-    tx: number[],
+    tx: AtomicBEEF,
     basket: string,
     skipOutputIndexes: number[] = [0]
   ): Promise<ReinternalizeResult> {
