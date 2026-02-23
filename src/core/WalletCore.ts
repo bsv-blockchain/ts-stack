@@ -7,10 +7,9 @@ import {
   PushDrop,
   SecurityLevel,
   Random,
-  Transaction,
-  WalletInterface,
-  AtomicBEEF
+  WalletInterface
 } from '@bsv/sdk'
+import { PeerPayClient } from '@bsv/message-box-client'
 import { mergeDefaults } from './defaults'
 import {
   WalletDefaults,
@@ -21,7 +20,6 @@ import {
   SendResult,
   SendOutputDetail,
   TransactionResult,
-  ReinternalizeResult,
   PaymentRequest
 } from './types'
 
@@ -190,20 +188,9 @@ export abstract class WalletCore {
         options: { randomizeOutputs: false }
       })
 
-      let reinternalized: ReinternalizeResult | undefined
-      if (options.changeBasket != null && options.changeBasket !== '') {
-        if (result.tx != null) {
-          const skipIndexes = actionOutputs.map((_: any, i: number) => i)
-          reinternalized = await this.reinternalizeChange(result.tx, options.changeBasket, skipIndexes)
-        } else {
-          reinternalized = { count: 0, errors: ['result.tx is missing from createAction response'] }
-        }
-      }
-
       return {
         txid: result.txid ?? '',
         tx: result.tx,
-        reinternalized,
         outputDetails
       }
     } catch (error) {
@@ -217,65 +204,20 @@ export abstract class WalletCore {
 
   async pay (options: PaymentOptions): Promise<TransactionResult> {
     try {
-      const client = this.getClient()
-      const outputs: any[] = []
-
-      let recipientKey = options.to
-      if ((options.derivationPrefix != null && options.derivationPrefix !== '') || (options.derivationSuffix != null && options.derivationSuffix !== '')) {
-        const invoiceNumber = (options.derivationPrefix != null && options.derivationPrefix !== '') && (options.derivationSuffix != null && options.derivationSuffix !== '')
-          ? `${options.derivationPrefix}-${options.derivationSuffix}`
-          : options.derivationPrefix ?? options.derivationSuffix ?? undefined
-        recipientKey = await this.derivePaymentKey(options.to, invoiceNumber)
-      }
-
-      const lockingScript = new P2PKH()
-        .lock(PublicKey.fromString(recipientKey).toAddress())
-        .toHex()
-
-      outputs.push({
-        lockingScript,
-        satoshis: options.satoshis,
-        outputDescription: this.defaults.outputDescription,
-        ...(options.basket != null ? { basket: options.basket } : {})
+      const peerPay = new PeerPayClient({
+        walletClient: this.getClient() as any,
+        messageBoxHost: this.defaults.messageBoxHost,
+        enableLogging: false
       })
 
-      if (options.memo != null && options.memo !== '') {
-        const memoScript = new Script()
-          .writeOpCode(OP.OP_FALSE)
-          .writeOpCode(OP.OP_RETURN)
-          .writeBin(Array.from(Utils.toArray(options.memo, 'utf8')))
-        outputs.push({
-          lockingScript: memoScript.toHex(),
-          satoshis: 0,
-          outputDescription: 'Payment memo'
-        })
-      }
-
-      const result = await client.createAction({
-        description: options.description ?? this.defaults.description,
-        outputs,
-        options: { randomizeOutputs: false }
+      const result = await peerPay.sendPayment({
+        recipient: options.to,
+        amount: options.satoshis
       })
-
-      let reinternalized: ReinternalizeResult | undefined
-      if (options.changeBasket != null && options.changeBasket !== '') {
-        if (result.tx != null) {
-          const skipIndexes = outputs.map((_: any, i: number) => i)
-          reinternalized = await this.reinternalizeChange(result.tx, options.changeBasket, skipIndexes)
-        } else {
-          reinternalized = { count: 0, errors: ['result.tx is missing from createAction response'] }
-        }
-      }
 
       return {
-        txid: result.txid ?? '',
-        tx: result.tx,
-        reinternalized,
-        outputs: outputs.map((out, index) => ({
-          index,
-          satoshis: out.satoshis,
-          lockingScript: out.lockingScript
-        }))
+        txid: result?.txid ?? '',
+        tx: result?.tx
       }
     } catch (error) {
       throw new Error(`Payment failed: ${(error as Error).message}`)
@@ -286,7 +228,7 @@ export abstract class WalletCore {
   // Fund Server Wallet
   // ============================================================================
 
-  async fundServerWallet (request: PaymentRequest, basket?: string, changeBasket?: string): Promise<TransactionResult> {
+  async fundServerWallet (request: PaymentRequest, basket?: string): Promise<TransactionResult> {
     try {
       const client = this.getClient()
       const protocolID: [SecurityLevel, string] = [2 as SecurityLevel, '3241645161d8']
@@ -328,20 +270,9 @@ export abstract class WalletCore {
         options: { randomizeOutputs: false }
       })
 
-      let reinternalized: ReinternalizeResult | undefined
-      if (changeBasket != null && changeBasket !== '') {
-        if (result.tx != null) {
-          const skipIndexes = outputs.map((_: any, i: number) => i)
-          reinternalized = await this.reinternalizeChange(result.tx, changeBasket, skipIndexes)
-        } else {
-          reinternalized = { count: 0, errors: ['result.tx is missing from createAction response'] }
-        }
-      }
-
       return {
         txid: result.txid ?? '',
         tx: result.tx,
-        reinternalized,
         outputs: outputs.map((out, index) => ({
           index,
           satoshis: out.satoshis,
@@ -353,122 +284,4 @@ export abstract class WalletCore {
     }
   }
 
-  // ============================================================================
-  // Change Output Re-internalization
-  // ============================================================================
-
-  async reinternalizeChange (
-    tx: AtomicBEEF,
-    basket: string,
-    skipOutputIndexes: number[] = [0]
-  ): Promise<ReinternalizeResult> {
-    if (tx.length === 0) {
-      return { count: 0, errors: ['No tx bytes available for reinternalization'] }
-    }
-
-    interface ChangeOutput { index: number, satoshis: number }
-    const changeOutputs: ChangeOutput[] = []
-
-    try {
-      const transaction = Transaction.fromAtomicBEEF(tx)
-      const totalOutputs = transaction.outputs.length
-
-      for (let i = 0; i < totalOutputs; i++) {
-        if (skipOutputIndexes.includes(i)) continue
-        const output = transaction.outputs[i]
-        const sats = output.satoshis ?? 0
-        if (sats === 0) continue
-        changeOutputs.push({ index: i, satoshis: sats })
-      }
-    } catch (parseError) {
-      return { count: 0, errors: ['Failed to parse transaction'] }
-    }
-
-    if (changeOutputs.length === 0) {
-      return { count: 0, errors: [] }
-    }
-
-    // Skip the largest change output — the wallet tracks it automatically
-    if (changeOutputs.length > 1) {
-      const largestIdx = changeOutputs.reduce((maxI, cur, i, arr) =>
-        cur.satoshis > arr[maxI].satoshis ? i : maxI, 0)
-      changeOutputs.splice(largestIdx, 1)
-    } else {
-      return { count: 0, errors: [] }
-    }
-
-    if (changeOutputs.length === 0) {
-      return { count: 0, errors: [] }
-    }
-
-    // Wait for broadcast with exponential backoff
-    const client = this.getClient()
-    const MAX_WAIT_MS = 30000
-    let delay = 2000
-    const startTime = Date.now()
-    let broadcastReady = false
-    let probeError = ''
-
-    while (Date.now() - startTime < MAX_WAIT_MS) {
-      try {
-        await client.internalizeAction({
-          tx,
-          outputs: [{
-            outputIndex: changeOutputs[0].index,
-            protocol: 'basket insertion',
-            insertionRemittance: {
-              basket,
-              customInstructions: 'change',
-              tags: ['change']
-            }
-          }],
-          description: `Recover orphaned change output #${changeOutputs[0].index}`
-        } as any)
-        broadcastReady = true
-        break
-      } catch (error) {
-        const msg = (error as Error).message !== '' ? (error as Error).message : String(error)
-        if (!msg.includes('sending')) {
-          probeError = msg
-          break
-        }
-        await new Promise(resolve => setTimeout(resolve, delay))
-        delay = Math.min(delay * 2, 16000)
-      }
-    }
-
-    if (!broadcastReady) {
-      const reason = probeError !== '' ? probeError : 'Transaction broadcast did not complete within 30s timeout'
-      return { count: 0, errors: [reason] }
-    }
-
-    // First output already recovered by probe — process remaining
-    let count = 1
-    const errors: string[] = []
-
-    for (let i = 1; i < changeOutputs.length; i++) {
-      const { index: idx } = changeOutputs[i]
-      try {
-        await client.internalizeAction({
-          tx,
-          outputs: [{
-            outputIndex: idx,
-            protocol: 'basket insertion',
-            insertionRemittance: {
-              basket,
-              customInstructions: 'change',
-              tags: ['change']
-            }
-          }],
-          description: `Recover orphaned change output #${idx}`
-        } as any)
-        count++
-      } catch (error) {
-        const msg = (error as Error).message !== '' ? (error as Error).message : String(error)
-        errors.push(`output #${idx}: ${msg}`)
-      }
-    }
-
-    return { count, errors }
-  }
 }

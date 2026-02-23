@@ -1,12 +1,11 @@
 import { PeerPayClient } from '@bsv/message-box-client'
 import { WalletCore } from '../core/WalletCore'
-import { ReinternalizeResult } from '../core/types'
 
 export function createMessageBoxMethods (core: WalletCore): {
   certifyForMessageBox: (handle: string, registryUrl?: string, host?: string) => Promise<{ txid: string, handle: string }>
   getMessageBoxHandle: (registryUrl?: string) => Promise<string | null>
   revokeMessageBoxCertification: (registryUrl?: string) => Promise<void>
-  sendMessageBoxPayment: (to: string, satoshis: number, changeBasket?: string) => Promise<any>
+  sendMessageBoxPayment: (to: string, satoshis: number) => Promise<any>
   listIncomingPayments: () => Promise<any[]>
   acceptIncomingPayment: (payment: any, basket?: string) => Promise<any>
   registerIdentityTag: (tag: string, registryUrl?: string) => Promise<{ tag: string }>
@@ -89,7 +88,7 @@ export function createMessageBoxMethods (core: WalletCore): {
       }
     },
 
-    async sendMessageBoxPayment (to: string, satoshis: number, changeBasket?: string): Promise<any> {
+    async sendMessageBoxPayment (to: string, satoshis: number): Promise<any> {
       try {
         const client = getPeerPay()
 
@@ -101,21 +100,10 @@ export function createMessageBoxMethods (core: WalletCore): {
           body: JSON.stringify(paymentToken)
         })
 
-        let reinternalized: ReinternalizeResult | undefined
-        const effectiveChangeBasket = changeBasket ?? core.defaults.changeBasket
-        if (effectiveChangeBasket != null) {
-          if (paymentToken?.transaction != null) {
-            reinternalized = await core.reinternalizeChange(paymentToken.transaction as number[], effectiveChangeBasket, [0])
-          } else {
-            reinternalized = { count: 0, errors: ['paymentToken.transaction is missing'] }
-          }
-        }
-
         return {
           txid: paymentToken?.transaction != null ? 'sent' : '',
           amount: satoshis,
-          recipient: to,
-          reinternalized
+          recipient: to
         }
       } catch (error) {
         throw new Error(`MessageBox payment failed: ${(error as Error).message}`)

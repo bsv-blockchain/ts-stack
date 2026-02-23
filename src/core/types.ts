@@ -14,7 +14,6 @@ export interface WalletDefaults {
   network: Network
   description: string
   outputDescription: string
-  changeBasket?: string
   tokenBasket: string
   tokenProtocolID: [SecurityLevel, string]
   tokenKeyID: string
@@ -34,7 +33,6 @@ export interface TransactionResult {
   txid: string
   tx: any
   outputs?: OutputInfo[]
-  reinternalized?: ReinternalizeResult
 }
 
 export interface OutputInfo {
@@ -42,11 +40,6 @@ export interface OutputInfo {
   satoshis: number
   lockingScript: string
   description?: string
-}
-
-export interface ReinternalizeResult {
-  count: number
-  errors: string[]
 }
 
 // ============================================================================
@@ -75,10 +68,6 @@ export interface PaymentOptions {
   satoshis: number
   memo?: string
   description?: string
-  basket?: string
-  changeBasket?: string
-  derivationPrefix?: string
-  derivationSuffix?: string
 }
 
 // ============================================================================
@@ -105,7 +94,6 @@ export interface SendOutputDetail {
 export interface SendOptions {
   outputs: SendOutputSpec[]
   description?: string
-  changeBasket?: string
 }
 
 export interface SendResult extends TransactionResult {
