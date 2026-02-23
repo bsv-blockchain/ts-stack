@@ -44,7 +44,7 @@ export type BrowserWallet = _BrowserWallet
 // ============================================================================
 
 export async function createWallet(defaults?: Partial<WalletDefaults>): Promise<BrowserWallet> {
-  const client = new WalletClient()
+  const client = new WalletClient('auto', 'simple')
   const { publicKey } = await client.getPublicKey({ identityKey: true })
   const wallet = new _BrowserWallet(client, publicKey, defaults)
 
