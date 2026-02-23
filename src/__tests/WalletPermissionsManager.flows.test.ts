@@ -149,6 +149,44 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       await expect(call).rejects.toThrow(/denied/i)
     })
 
+    it('should trigger a PACT prompt when a level-1 protocol is declared under counterpartyPermissions', async () => {
+      mockNoTokensFound(manager)
+
+      jest.spyOn(manager as any, 'fetchManifestPermissions').mockResolvedValue({
+        groupPermissions: null,
+        counterpartyPermissions: {
+          description: 'Trust required to use certain level-1 protocols with a peer',
+          protocols: [
+            { protocolID: [1, 'l1-proto-A'], description: 'A' },
+            { protocolID: [2, 'l2-proto-B'], description: 'B' }
+          ]
+        }
+      })
+
+      const pactRequestCallback = jest.fn(() => {})
+      manager.bindCallback('onCounterpartyPermissionRequested', pactRequestCallback)
+
+      const call = manager.ensureProtocolPermission({
+        originator: 'example.com',
+        privileged: false,
+        protocolID: [1, 'l1-proto-A'],
+        counterparty: '02'.padEnd(66, 'c'),
+        reason: 'UnitTest - pact l1',
+        seekPermission: true,
+        usageType: 'signing'
+      })
+
+      await new Promise(res => setTimeout(res, 5))
+
+      expect(pactRequestCallback).toHaveBeenCalledTimes(1)
+      const callbackArg = (pactRequestCallback.mock as any).calls[0][0]
+      expect(callbackArg.requestID).toMatch(/^pact:/)
+      expect(callbackArg.permissions.protocols).toHaveLength(2)
+
+      await manager.denyCounterpartyPermission(callbackArg.requestID)
+      await expect(call).rejects.toThrow(/denied/i)
+    })
+
     it('should support legacy PACT declarations via groupPermissions.protocolPermissions with counterparty set to empty string', async () => {
       mockNoTokensFound(manager)
 
@@ -208,7 +246,6 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       expect(res1.counterpartyPermissions.protocols).toEqual(
         expect.arrayContaining([expect.objectContaining({ protocolID: [2, 'p'] })])
       )
-
       ;(manager as any).manifestCache = new Map()
       fetchMock.mockResolvedValueOnce({
         ok: true,

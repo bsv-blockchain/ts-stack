@@ -1599,10 +1599,12 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
-  private deriveLegacyCounterpartyPermissions(groupPermissions: GroupedPermissions | null): CounterpartyPermissions | null {
+  private deriveLegacyCounterpartyPermissions(
+    groupPermissions: GroupedPermissions | null
+  ): CounterpartyPermissions | null {
     const protocols = (groupPermissions?.protocolPermissions || [])
       .filter(p => p?.counterparty === '')
-      .filter(p => Array.isArray(p?.protocolID) && p.protocolID[0] === 2)
+      .filter(p => Array.isArray(p?.protocolID) && (p.protocolID[0] === 1 || p.protocolID[0] === 2))
       .map(p => ({
         protocolID: p.protocolID,
         description: p.description
@@ -1627,7 +1629,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const validProtocols = raw.protocols.filter((p: any) => {
       return (
         Array.isArray(p?.protocolID) &&
-        p.protocolID[0] === 2 &&
+        (p.protocolID[0] === 1 || p.protocolID[0] === 2) &&
         typeof p.protocolID[1] === 'string' &&
         typeof p?.description === 'string'
       )
@@ -1672,9 +1674,8 @@ export class WalletPermissionsManager implements WalletInterface {
           const counterpartyPermissionsDeclared: CounterpartyPermissions | null = this.validateCounterpartyPermissions(
             namespace?.counterpartyPermissions
           )
-          const counterpartyPermissionsLegacy: CounterpartyPermissions | null = this.deriveLegacyCounterpartyPermissions(
-            groupPermissions
-          )
+          const counterpartyPermissionsLegacy: CounterpartyPermissions | null =
+            this.deriveLegacyCounterpartyPermissions(groupPermissions)
           const counterpartyPermissions: CounterpartyPermissions | null = this.mergeCounterpartyPermissions(
             counterpartyPermissionsDeclared,
             counterpartyPermissionsLegacy
@@ -1849,7 +1850,7 @@ export class WalletPermissionsManager implements WalletInterface {
       return null
     }
     const [level] = currentRequest.protocolID!
-    if (level !== 2) {
+    if (level !== 1 && level !== 2) {
       return null
     }
 
