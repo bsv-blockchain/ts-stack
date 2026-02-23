@@ -2331,8 +2331,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export interface CounterpartyPermissions {
     description?: string;
     protocols: Array<{
-        protocolID: WalletProtocol;
-        description: string;
+        protocolName: string;
+        protocolID?: WalletProtocol;
+        description?: string;
     }>;
 }
 ```
