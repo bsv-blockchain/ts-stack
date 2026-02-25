@@ -634,7 +634,9 @@ async function validateRequiredInputs(
     if (!btx && trustSelf) {
       if (await storage.verifyKnownValidTransaction(txid)) btx = beef.mergeTxidOnly(txid)
     }
-    if (!btx) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for possibly known ${txid}`)
+    if (!btx) {
+      throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for possibly known ${txid}, beef ${beef.toLogString()}`)
+    }
   }
 
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
