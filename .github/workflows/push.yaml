@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - 'v*.*.*'
   pull_request:
 
 permissions:
@@ -28,8 +30,9 @@ jobs:
     - run: npm run test:coverage --if-present
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
+      continue-on-error: true
       with:
-        token: ${{ secrets.CODECOV_TOKEN }}
+        use_oidc: true
         files: ./coverage/lcov.info
         flags: unittests
         name: codecov-umbrella
