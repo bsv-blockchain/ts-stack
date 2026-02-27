@@ -86,6 +86,33 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-02-27-001 add listOutputs path indexes'] = {
+      async up(knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.index(['userId', 'spendable', 'outputId'], 'idx_outputs_user_spendable_outputid')
+          table.index(['userId', 'basketId', 'spendable', 'outputId'], 'idx_outputs_user_basket_spendable_outputid')
+        })
+        await knex.schema.alterTable('output_tags_map', table => {
+          table.index(['outputId', 'isDeleted', 'outputTagId'], 'idx_output_tags_map_output_deleted_tag')
+        })
+        await knex.schema.alterTable('tx_labels_map', table => {
+          table.index(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
+        })
+      },
+      async down(knex) {
+        await knex.schema.alterTable('tx_labels_map', table => {
+          table.dropIndex(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
+        })
+        await knex.schema.alterTable('output_tags_map', table => {
+          table.dropIndex(['outputId', 'isDeleted', 'outputTagId'], 'idx_output_tags_map_output_deleted_tag')
+        })
+        await knex.schema.alterTable('outputs', table => {
+          table.dropIndex(['userId', 'basketId', 'spendable', 'outputId'], 'idx_outputs_user_basket_spendable_outputid')
+          table.dropIndex(['userId', 'spendable', 'outputId'], 'idx_outputs_user_spendable_outputid')
+        })
+      }
+    }
+
     migrations['2025-10-18-002 add proven_tx_reqs txid index'] = {
       async up(knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {
