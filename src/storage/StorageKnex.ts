@@ -1150,6 +1150,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         trx
       )
 
+      // Keep behavior identical to the pre-optimization path: ensure lockingScript
+      // is present even when it was offloaded from outputs into rawTx storage.
+      await this.validateOutputScript(output, trx)
+
       output.spendable = false
       output.spentBy = transactionId
       return output
