@@ -3,7 +3,7 @@ name: Build and Test
 on:
   push:
     branches:
-      - master
+      - main
     tags:
       - 'v*.*.*'
   pull_request:
@@ -41,7 +41,7 @@ jobs:
     name: Publish
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
