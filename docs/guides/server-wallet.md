@@ -90,31 +90,26 @@ This uses the `wallet payment` protocol to internalize the output with proper de
 
 ## Private Key Persistence
 
-In development, you often want the server wallet key to persist across restarts without setting an environment variable. A common pattern:
+Key persistence is handled automatically by handler factories. If you need lower-level access, use `generatePrivateKey()` instead of importing `@bsv/sdk`:
 
 ```typescript
-import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { PrivateKey } from '@bsv/sdk'
-
-const WALLET_FILE = '.server-wallet.json'
-
-function getPrivateKey(): string {
-  // 1. Environment variable (production)
-  if (process.env.SERVER_PRIVATE_KEY) {
-    return process.env.SERVER_PRIVATE_KEY
-  }
-
-  // 2. Saved file (development)
-  if (existsSync(WALLET_FILE)) {
-    return JSON.parse(readFileSync(WALLET_FILE, 'utf-8')).privateKey
-  }
-
-  // 3. Generate new key (first run)
-  const key = PrivateKey.fromRandom().toHex()
-  writeFileSync(WALLET_FILE, JSON.stringify({ privateKey: key }, null, 2))
-  return key
-}
+import { generatePrivateKey } from '@bsv/simple/server'
+const key = process.env.SERVER_PRIVATE_KEY || generatePrivateKey()
 ```
+
+For Next.js API routes, use the handler factory which manages key persistence automatically:
+
+```typescript
+// app/api/server-wallet/route.ts
+import { createServerWalletHandler } from '@bsv/simple/server'
+const handler = createServerWalletHandler()
+export const GET = handler.GET, POST = handler.POST
+```
+
+Key persistence order (automatic):
+1. `process.env.SERVER_PRIVATE_KEY` — Environment variable (production)
+2. `.server-wallet.json` file — Persisted from previous run (development)
+3. Auto-generated via `generatePrivateKey()` — Fresh key (first run)
 
 > **Important:** Add `.server-wallet.json` to your `.gitignore`. Never commit private keys.
 
