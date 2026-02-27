@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.0.22
+
+Add output table indices to speed up listOutputs and createAction
+
 ## wallet-toolbox 2.0.20
 
 Add BRC-115 new manifest specs to support group and counterparty permissions.
