@@ -1083,9 +1083,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
-    const statusText = status.map(s => `'${s}'`).join(',')
-    const txStatusCondition = `(SELECT status FROM transactions WHERE outputs.transactionId = transactions.transactionId) in (${statusText})`
-    let q = this.knex<TableOutput>('outputs').where({ userId, spendable: true, basketId }).whereRaw(txStatusCondition)
+    const q = this.knex<TableOutput>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
+      .whereIn('t.status', status)
     const count = await this.getCount(q)
     return count
   }
@@ -1105,82 +1106,46 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   ): Promise<TableOutput | undefined> {
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
-    const statusText = status.map(s => `'${s}'`).join(',')
 
     const r: TableOutput | undefined = await this.knex.transaction(async trx => {
-      const txStatusCondition = `AND (SELECT status FROM transactions WHERE outputs.transactionId = transactions.transactionId) in (${statusText})`
+      const baseQuery = () =>
+        trx<TableOutput>('outputs as o')
+          .join('transactions as t', 'o.transactionId', 't.transactionId')
+          .where('o.userId', userId)
+          .where('o.spendable', true)
+          .where('o.basketId', basketId)
+          .whereIn('t.status', status)
+          .select('o.*')
 
-      let outputId: number | undefined
-      const setOutputId = async (rawQuery: string): Promise<void> => {
-        let oidr = await trx.raw(rawQuery)
-        outputId = undefined
-        if (!oidr['outputId'] && oidr.length > 0) oidr = oidr[0]
-        if (!oidr['outputId'] && oidr.length > 0) oidr = oidr[0]
-        if (oidr['outputId']) outputId = Number(oidr['outputId'])
-      }
+      let output: TableOutput | undefined
 
       if (exactSatoshis !== undefined) {
-        // Find outputId of output that with exactSatoshis
-        await setOutputId(`
-                SELECT outputId 
-                FROM outputs
-                WHERE userId = ${userId} 
-                    AND spendable = 1 
-                    AND basketId = ${basketId}
-                    ${txStatusCondition}
-                    AND satoshis = ${exactSatoshis}
-                LIMIT 1;
-                `)
+        output = await baseQuery()
+          .where('o.satoshis', exactSatoshis)
+          .orderBy('o.outputId', 'asc')
+          .first()
       }
 
-      if (outputId === undefined) {
-        // Find outputId of output that would at least fund targetSatoshis
-        await setOutputId(`
-                    SELECT outputId 
-                    FROM outputs
-                    WHERE userId = ${userId} 
-                        AND spendable = 1 
-                        AND basketId = ${basketId}
-                        ${txStatusCondition}
-                        AND satoshis - ${targetSatoshis} = (
-                            SELECT MIN(satoshis - ${targetSatoshis}) 
-                            FROM outputs 
-                            WHERE userId = ${userId} 
-                            AND spendable = 1 
-                            AND basketId = ${basketId}
-                            ${txStatusCondition}
-                            AND satoshis - ${targetSatoshis} >= 0
-                        )
-                    LIMIT 1;
-                    `)
+      if (!output) {
+        output = await baseQuery()
+          .where('o.satoshis', '>=', targetSatoshis)
+          .orderBy('o.satoshis', 'asc')
+          .orderBy('o.outputId', 'asc')
+          .first()
       }
 
-      if (outputId === undefined) {
-        // Find outputId of output that would add the most fund targetSatoshis
-        await setOutputId(`
-                    SELECT outputId 
-                    FROM outputs
-                    WHERE userId = ${userId} 
-                        AND spendable = 1 
-                        AND basketId = ${basketId}
-                        ${txStatusCondition}
-                        AND satoshis - ${targetSatoshis} = (
-                            SELECT MAX(satoshis - ${targetSatoshis}) 
-                            FROM outputs 
-                            WHERE userId = ${userId} 
-                            AND spendable = 1 
-                            AND basketId = ${basketId}
-                            ${txStatusCondition}
-                            AND satoshis - ${targetSatoshis} < 0
-                        )
-                    LIMIT 1;
-                    `)
+      if (!output) {
+        output = await baseQuery()
+          .where('o.satoshis', '<', targetSatoshis)
+          .orderBy('o.satoshis', 'desc')
+          .orderBy('o.outputId', 'desc')
+          .first()
       }
 
-      if (outputId === undefined) return undefined
+      if (!output) return undefined
 
       await this.updateOutput(
-        outputId,
+        output.outputId,
         {
           spendable: false,
           spentBy: transactionId
@@ -1188,8 +1153,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         trx
       )
 
-      const r = verifyTruthy(await this.findOutputById(outputId, trx))
-      return r
+      output.spendable = false
+      output.spentBy = transactionId
+      return output
     })
 
     return r

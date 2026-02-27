@@ -113,6 +113,21 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-02-27-002 add createAction path indexes'] = {
+      async up(knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.index(['userId', 'basketId', 'spendable', 'satoshis'], 'idx_outputs_user_basket_spendable_satoshis')
+          table.index(['spentBy'], 'idx_outputs_spentby')
+        })
+      },
+      async down(knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.dropIndex(['spentBy'], 'idx_outputs_spentby')
+          table.dropIndex(['userId', 'basketId', 'spendable', 'satoshis'], 'idx_outputs_user_basket_spendable_satoshis')
+        })
+      }
+    }
+
     migrations['2025-10-18-002 add proven_tx_reqs txid index'] = {
       async up(knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {
