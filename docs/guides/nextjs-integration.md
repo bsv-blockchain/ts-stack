@@ -5,8 +5,10 @@ This guide covers setting up `@bsv/simple` in a Next.js application with both br
 ## 1. Install Dependencies
 
 ```bash
-npm install @bsv/simple @bsv/sdk
+npm install @bsv/simple
 ```
+
+> **Note:** `@bsv/sdk` is NOT needed as a direct dependency — `@bsv/simple` wraps it entirely.
 
 ## 2. Configure next.config.ts
 
@@ -97,145 +99,82 @@ const connect = async () => {
 }
 ```
 
-## 4. Server Wallet (API Routes)
+## 4. Server API Routes (Handler Factories)
 
-### Server Wallet Route
+All server routes use pre-built handler factories — no boilerplate needed. Each factory handles lazy initialization, key persistence, error handling, and all API actions automatically.
+
+### Server Wallet
 
 ```typescript
 // app/api/server-wallet/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
-import { join } from 'path'
-
-const WALLET_FILE = join(process.cwd(), '.server-wallet.json')
-
-let serverWallet: any = null
-let initPromise: Promise<any> | null = null
-
-function loadSavedKey(): string | null {
-  try {
-    if (existsSync(WALLET_FILE)) {
-      return JSON.parse(readFileSync(WALLET_FILE, 'utf-8')).privateKey || null
-    }
-  } catch {}
-  return null
-}
-
-async function getServerWallet() {
-  if (serverWallet) return serverWallet
-  if (initPromise) return initPromise
-
-  initPromise = (async () => {
-    const { ServerWallet } = await import('@bsv/simple/server')
-    const { PrivateKey } = await import('@bsv/sdk')
-
-    const savedKey = loadSavedKey()
-    const privateKey = process.env.SERVER_PRIVATE_KEY
-      || savedKey
-      || PrivateKey.fromRandom().toHex()
-
-    serverWallet = await ServerWallet.create({
-      privateKey,
-      network: 'main',
-      storageUrl: 'https://storage.babbage.systems'
-    })
-
-    // Persist key for dev restarts
-    if (!process.env.SERVER_PRIVATE_KEY) {
-      writeFileSync(WALLET_FILE, JSON.stringify({
-        privateKey,
-        identityKey: serverWallet.getIdentityKey()
-      }, null, 2))
-    }
-
-    return serverWallet
-  })()
-
-  return initPromise
-}
+import { createServerWalletHandler } from '@bsv/simple/server'
+const handler = createServerWalletHandler()
+export const GET = handler.GET, POST = handler.POST
 ```
 
-### Key Points
+**API endpoints:**
+- `GET ?action=create` — Server identity key + status
+- `GET ?action=request&satoshis=1000` — BRC-29 payment request
+- `GET ?action=balance` — Output count + total satoshis
+- `GET ?action=status` — Key persistence status
+- `GET ?action=outputs` — List outputs
+- `GET ?action=reset` — Reset wallet
+- `POST ?action=receive` body: `{ tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex }`
 
-- **Dynamic imports**: Always use `await import('@bsv/simple/server')` instead of static imports at the top of the file. Static imports cause bundler issues.
-- **Module-level caching**: Store the wallet instance and init promise at module scope so the wallet isn't re-initialized on every request.
-- **Error recovery**: If initialization fails, reset the promise so the next request can retry.
+**Custom config:**
+```typescript
+createServerWalletHandler({
+  envVar: 'SERVER_PRIVATE_KEY',       // env var name (default)
+  keyFile: '.server-wallet.json',     // file persistence (default)
+  network: 'main',
+  defaultRequestSatoshis: 1000,
+  requestMemo: 'Payment to server'
+})
+```
 
-### GET Handlers
+### Identity Registry
 
 ```typescript
-export async function GET(req: NextRequest) {
-  const action = req.nextUrl.searchParams.get('action') || 'create'
-
-  try {
-    if (action === 'create') {
-      const wallet = await getServerWallet()
-      return NextResponse.json({
-        success: true,
-        serverIdentityKey: wallet.getIdentityKey(),
-        status: wallet.getStatus()
-      })
-    }
-
-    if (action === 'request') {
-      const wallet = await getServerWallet()
-      const request = wallet.createPaymentRequest({
-        satoshis: Number(req.nextUrl.searchParams.get('satoshis')) || 1000
-      })
-      return NextResponse.json({ success: true, paymentRequest: request })
-    }
-
-    if (action === 'balance') {
-      const wallet = await getServerWallet()
-      const client = wallet.getClient()
-      const raw = await client.listOutputs({
-        basket: 'default',
-        include: 'locking scripts'
-      })
-      const outputs = raw?.outputs ?? (Array.isArray(raw) ? raw : [])
-      const totalSatoshis = outputs.reduce((sum: number, o: any) => sum + (o.satoshis || 0), 0)
-      return NextResponse.json({ success: true, totalOutputs: outputs.length, totalSatoshis })
-    }
-
-    return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
-  } catch (error) {
-    if (action === 'create') { initPromise = null; serverWallet = null }
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 })
-  }
-}
+// app/api/identity-registry/route.ts
+import { createIdentityRegistryHandler } from '@bsv/simple/server'
+const handler = createIdentityRegistryHandler()
+export const GET = handler.GET, POST = handler.POST
 ```
 
-### POST Handler (Receive Payment)
+### DID Resolver
 
 ```typescript
-export async function POST(req: NextRequest) {
-  const action = req.nextUrl.searchParams.get('action') || 'receive'
-
-  try {
-    if (action === 'receive') {
-      const wallet = await getServerWallet()
-      const { tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex } = await req.json()
-
-      if (!tx || !senderIdentityKey || !derivationPrefix || !derivationSuffix) {
-        return NextResponse.json({
-          error: 'Missing required fields: tx, senderIdentityKey, derivationPrefix, derivationSuffix'
-        }, { status: 400 })
-      }
-
-      await wallet.receivePayment({
-        tx, senderIdentityKey, derivationPrefix, derivationSuffix,
-        outputIndex: outputIndex ?? 0
-      })
-
-      return NextResponse.json({ success: true })
-    }
-
-    return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
-  } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 })
-  }
-}
+// app/api/resolve-did/route.ts
+import { createDIDResolverHandler } from '@bsv/simple/server'
+const handler = createDIDResolverHandler()
+export const GET = handler.GET
 ```
+
+### Credential Issuer
+
+```typescript
+// app/api/credential-issuer/route.ts  (no [[...path]] catch-all needed!)
+import { createCredentialIssuerHandler } from '@bsv/simple/server'
+const handler = createCredentialIssuerHandler({
+  schemas: [{
+    id: 'my-credential',
+    name: 'MyCredential',
+    fields: [
+      { key: 'name', label: 'Full Name', type: 'text', required: true },
+    ]
+  }]
+})
+export const GET = handler.GET, POST = handler.POST
+```
+
+### Key Persistence
+
+Server wallet private keys persist automatically:
+1. `process.env.SERVER_PRIVATE_KEY` — Environment variable (production)
+2. `.server-wallet.json` file — Persisted from previous run (development)
+3. Auto-generated via `generatePrivateKey()` — Fresh key (first run)
+
+No `@bsv/sdk` import needed.
 
 ## 5. Client-Side Funding Flow
 
@@ -287,5 +226,4 @@ SERVER_PRIVATE_KEY=a1b2c3d4e5f6...
 | Problem | Solution |
 |---------|----------|
 | Build fails with "Can't resolve 'fs'" | Add `serverExternalPackages` to `next.config.ts` |
-| Server wallet re-initializes every request | Cache at module scope with promise pattern |
-| Import error for `@bsv/simple/server` | Use dynamic `await import()` in API routes |
+| Import error for `@bsv/simple/server` | Use handler factories (static imports work) or dynamic `await import()` for lower-level access |

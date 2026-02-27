@@ -89,39 +89,40 @@ import { MemoryRevocationStore } from '@bsv/simple/browser'
 const { FileRevocationStore } = await import('@bsv/simple/server')
 ```
 
-## 6. Static Imports Break Next.js API Routes
+## 6. Use Handler Factories for API Routes
 
-Using static imports for server-only code at the top of a Next.js API route can cause Turbopack bundling issues.
+Don't write manual server wallet boilerplate — use the pre-built handler factories. They handle lazy initialization, key persistence, caching, and error recovery automatically.
 
 ```typescript
-// WRONG — may cause bundler errors
-import { ServerWallet } from '@bsv/simple/server'
+// WRONG — manual boilerplate (100+ lines of code)
+import { NextRequest, NextResponse } from 'next/server'
+let serverWallet: any = null
+// ... 100 lines of init, caching, GET/POST handlers ...
 
-// CORRECT — dynamic import inside the handler
-const { ServerWallet } = await import('@bsv/simple/server')
+// CORRECT — 3 lines with handler factory
+import { createServerWalletHandler } from '@bsv/simple/server'
+const handler = createServerWalletHandler()
+export const GET = handler.GET, POST = handler.POST
 ```
 
-## 7. Server Wallet Re-initializes on Every Request
+Available handler factories:
+- `createServerWalletHandler()` — Server wallet with key persistence
+- `createIdentityRegistryHandler()` — MessageBox identity registry
+- `createDIDResolverHandler()` — DID resolution proxy (nChain + WoC fallback)
+- `createCredentialIssuerHandler()` — W3C Verifiable Credential issuer
 
-If you create the wallet inside a request handler without caching, it re-initializes on every request (slow and creates duplicate storage connections).
+## 7. No Need to Import @bsv/sdk
+
+Never import `@bsv/sdk` in consumer code. Use `generatePrivateKey()` from `@bsv/simple/server`:
 
 ```typescript
-// WRONG — reinitializes every request
-export async function GET() {
-  const wallet = await ServerWallet.create({ ... })
-  // ...
-}
+// WRONG
+import { PrivateKey } from '@bsv/sdk'
+const key = PrivateKey.fromRandom().toHex()
 
-// CORRECT — cache at module scope
-let wallet: any = null
-let initPromise: Promise<any> | null = null
-
-async function getWallet() {
-  if (wallet) return wallet
-  if (initPromise) return initPromise
-  initPromise = (async () => { /* ... */ })()
-  return initPromise
-}
+// CORRECT
+import { generatePrivateKey } from '@bsv/simple/server'
+const key = generatePrivateKey()
 ```
 
 ## 8. Token Send/Redeem Requires Two-Step Signing

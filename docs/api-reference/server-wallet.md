@@ -131,23 +131,20 @@ In production, set the private key via environment variable:
 SERVER_PRIVATE_KEY=a1b2c3d4e5f6...
 ```
 
-For development, persist to a file so the wallet identity survives server restarts:
+For development, use the handler factory which manages key persistence automatically:
 
 ```typescript
-import { readFileSync, writeFileSync, existsSync } from 'fs'
-import { PrivateKey } from '@bsv/sdk'
+// app/api/server-wallet/route.ts
+import { createServerWalletHandler } from '@bsv/simple/server'
+const handler = createServerWalletHandler()
+export const GET = handler.GET, POST = handler.POST
+```
 
-const WALLET_FILE = '.server-wallet.json'
+Or for lower-level access, use `generatePrivateKey()` (no `@bsv/sdk` import needed):
 
-function getPrivateKey(): string {
-  if (process.env.SERVER_PRIVATE_KEY) return process.env.SERVER_PRIVATE_KEY
-  if (existsSync(WALLET_FILE)) {
-    return JSON.parse(readFileSync(WALLET_FILE, 'utf-8')).privateKey
-  }
-  const key = PrivateKey.fromRandom().toHex()
-  writeFileSync(WALLET_FILE, JSON.stringify({ privateKey: key }, null, 2))
-  return key
-}
+```typescript
+import { generatePrivateKey } from '@bsv/simple/server'
+const key = process.env.SERVER_PRIVATE_KEY || generatePrivateKey()
 ```
 
 > Add `.server-wallet.json` to `.gitignore`.
