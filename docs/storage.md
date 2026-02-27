@@ -3570,87 +3570,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         log: string;
     }> 
     async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> 
-    async allocateChangeInput(userId: number, basketId: number, targetSatoshis: number, exactSatoshis: number | undefined, excludeSending: boolean, transactionId: number): Promise<TableOutput | undefined> {
-        const status: TransactionStatus[] = ["completed", "unproven"];
-        if (!excludeSending)
-            status.push("sending");
-        const statusText = status.map(s => `'${s}'`).join(",");
-        const r: TableOutput | undefined = await this.knex.transaction(async (trx) => {
-            const txStatusCondition = `AND (SELECT status FROM transactions WHERE outputs.transactionId = transactions.transactionId) in (${statusText})`;
-            let outputId: number | undefined;
-            const setOutputId = async (rawQuery: string): Promise<void> => {
-                let oidr = await trx.raw(rawQuery);
-                outputId = undefined;
-                if (!oidr["outputId"] && oidr.length > 0)
-                    oidr = oidr[0];
-                if (!oidr["outputId"] && oidr.length > 0)
-                    oidr = oidr[0];
-                if (oidr["outputId"])
-                    outputId = Number(oidr["outputId"]);
-            };
-            if (exactSatoshis !== undefined) {
-                await setOutputId(`
-                SELECT outputId 
-                FROM outputs
-                WHERE userId = ${userId} 
-                    AND spendable = 1 
-                    AND basketId = ${basketId}
-                    ${txStatusCondition}
-                    AND satoshis = ${exactSatoshis}
-                LIMIT 1;
-                `);
-            }
-            if (outputId === undefined) {
-                await setOutputId(`
-                    SELECT outputId 
-                    FROM outputs
-                    WHERE userId = ${userId} 
-                        AND spendable = 1 
-                        AND basketId = ${basketId}
-                        ${txStatusCondition}
-                        AND satoshis - ${targetSatoshis} = (
-                            SELECT MIN(satoshis - ${targetSatoshis}) 
-                            FROM outputs 
-                            WHERE userId = ${userId} 
-                            AND spendable = 1 
-                            AND basketId = ${basketId}
-                            ${txStatusCondition}
-                            AND satoshis - ${targetSatoshis} >= 0
-                        )
-                    LIMIT 1;
-                    `);
-            }
-            if (outputId === undefined) {
-                await setOutputId(`
-                    SELECT outputId 
-                    FROM outputs
-                    WHERE userId = ${userId} 
-                        AND spendable = 1 
-                        AND basketId = ${basketId}
-                        ${txStatusCondition}
-                        AND satoshis - ${targetSatoshis} = (
-                            SELECT MAX(satoshis - ${targetSatoshis}) 
-                            FROM outputs 
-                            WHERE userId = ${userId} 
-                            AND spendable = 1 
-                            AND basketId = ${basketId}
-                            ${txStatusCondition}
-                            AND satoshis - ${targetSatoshis} < 0
-                        )
-                    LIMIT 1;
-                    `);
-            }
-            if (outputId === undefined)
-                return undefined;
-            await this.updateOutput(outputId, {
-                spendable: false,
-                spentBy: transactionId
-            }, trx);
-            const r = verifyTruthy(await this.findOutputById(outputId, trx));
-            return r;
-        });
-        return r;
-    }
+    async allocateChangeInput(userId: number, basketId: number, targetSatoshis: number, exactSatoshis: number | undefined, excludeSending: boolean, transactionId: number): Promise<TableOutput | undefined> 
     validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[], booleanFields?: string[]): T 
     validateEntities<T extends EntityTimeStamp>(entities: T[], dateFields?: string[], booleanFields?: string[]): T[] 
     async adminStats(adminIdentityKey: string): Promise<AdminStatsResult> {
@@ -3815,7 +3735,7 @@ select
 }
 ```
 
-See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [DBType](./storage.md#type-dbtype), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindPartialSincePagedArgs](./client.md#interface-findpartialsincepagedargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [ServicesCallHistory](./client.md#type-servicescallhistory), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [WERR_NOT_IMPLEMENTED](./client.md#class-werr_not_implemented), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [listActions](./storage.md#function-listactions), [listOutputs](./storage.md#function-listoutputs), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus), [verifyOneOrNone](./client.md#function-verifyoneornone), [verifyTruthy](./client.md#function-verifytruthy)
+See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [DBType](./storage.md#type-dbtype), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindPartialSincePagedArgs](./client.md#interface-findpartialsincepagedargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [ServicesCallHistory](./client.md#type-servicescallhistory), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken), [WERR_NOT_IMPLEMENTED](./client.md#class-werr_not_implemented), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [listActions](./storage.md#function-listactions), [listOutputs](./storage.md#function-listoutputs), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus), [verifyOneOrNone](./client.md#function-verifyoneornone)
 
 ###### Method allocateChangeInput
 

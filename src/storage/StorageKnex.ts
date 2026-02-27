@@ -1120,10 +1120,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       let output: TableOutput | undefined
 
       if (exactSatoshis !== undefined) {
-        output = await baseQuery()
-          .where('o.satoshis', exactSatoshis)
-          .orderBy('o.outputId', 'asc')
-          .first()
+        output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
       }
 
       if (!output) {
