@@ -40,14 +40,14 @@ const LEGACY_KEY_TYPE = 'EcdsaSecp256k1VerificationKey2019'
 // Utility Functions
 // ============================================================================
 
-function base64url(bytes: number[]): string {
+function base64url (bytes: number[]): string {
   return Utils.toBase64(bytes)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '')
 }
 
-function pubKeyToJwk(compressedHex: string): { kty: string; crv: string; x: string; y: string } {
+function pubKeyToJwk (compressedHex: string): { kty: string, crv: string, x: string, y: string } {
   const pubKey = PublicKey.fromString(compressedHex)
   const xBytes = pubKey.getX().toArray('be', 32)
   const yBytes = pubKey.getY().toArray('be', 32)
@@ -59,7 +59,7 @@ function pubKeyToJwk(compressedHex: string): { kty: string; crv: string; x: stri
   }
 }
 
-function buildOpReturn(identityCode: string, payload: string): Script {
+function buildOpReturn (identityCode: string, payload: string): Script {
   return new Script()
     .writeOpCode(OP.OP_FALSE)
     .writeOpCode(OP.OP_RETURN)
@@ -68,11 +68,11 @@ function buildOpReturn(identityCode: string, payload: string): Script {
     .writeBin(Utils.toArray(payload, 'utf8'))
 }
 
-function generateIdentityCode(): string {
+function generateIdentityCode (): string {
   return Utils.toHex(Random(16))
 }
 
-function parseOpReturnSegments(scriptHex: string): string[] {
+function parseOpReturnSegments (scriptHex: string): string[] {
   try {
     const script = Script.fromHex(scriptHex)
     const chunks = script.chunks
@@ -88,8 +88,8 @@ function parseOpReturnSegments(scriptHex: string): string[] {
 
     const segments: string[] = []
     for (let i = startIdx; i < chunks.length; i++) {
-      if (chunks[i].data) {
-        segments.push(new TextDecoder().decode(new Uint8Array(chunks[i].data!)))
+      if (chunks[i].data != null) {
+        segments.push(new TextDecoder().decode(new Uint8Array(chunks[i].data ?? [])))
       }
     }
     return segments
@@ -102,12 +102,12 @@ function parseOpReturnSegments(scriptHex: string): string[] {
 // DID Utility Class (standalone — no wallet dependency)
 // ============================================================================
 
-export class DID {
+export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
   /**
    * Parse a did:bsv: string and extract the identifier (txid).
    */
-  static parse(didString: string): DIDParseResult {
-    if (!didString || !didString.startsWith(DID_PREFIX)) {
+  static parse (didString: string): DIDParseResult {
+    if (didString === '' || !didString.startsWith(DID_PREFIX)) {
       throw new DIDError(`Invalid DID: must start with "${DID_PREFIX}"`)
     }
 
@@ -126,7 +126,7 @@ export class DID {
   /**
    * Validate a did:bsv: string format.
    */
-  static isValid(didString: string): boolean {
+  static isValid (didString: string): boolean {
     try {
       DID.parse(didString)
       return true
@@ -138,7 +138,7 @@ export class DID {
   /**
    * Create a DID string from a transaction ID.
    */
-  static fromTxid(txid: string): string {
+  static fromTxid (txid: string): string {
     if (!/^[0-9a-f]{64}$/.test(txid)) {
       throw new DIDError('Invalid txid: must be 64 lowercase hex characters')
     }
@@ -148,7 +148,7 @@ export class DID {
   /**
    * Build a W3C DID Document (V2 spec-compliant, JsonWebKey2020).
    */
-  static buildDocument(
+  static buildDocument (
     txid: string,
     subjectPubKeyHex: string,
     controllerDID?: string,
@@ -171,11 +171,11 @@ export class DID {
       authentication: [`${did}#subject-key`]
     }
 
-    if (controllerDID) {
+    if (controllerDID != null && controllerDID !== '') {
       doc.controller = controllerDID
     }
 
-    if (services && services.length > 0) {
+    if ((services != null) && services.length > 0) {
       doc.service = services
     }
 
@@ -186,8 +186,8 @@ export class DID {
    * @deprecated Use DID.buildDocument() for spec-compliant documents.
    * Generate a legacy DID Document from an identity key (compressed public key hex).
    */
-  static fromIdentityKey(identityKey: string): DIDDocument {
-    if (!identityKey || !/^[0-9a-fA-F]{66}$/.test(identityKey)) {
+  static fromIdentityKey (identityKey: string): DIDDocument {
+    if (identityKey === '' || !/^[0-9a-fA-F]{66}$/.test(identityKey)) {
       throw new DIDError('Invalid identity key: must be a 66-character hex compressed public key')
     }
 
@@ -214,7 +214,7 @@ export class DID {
   /**
    * Get the certificate type used for DID persistence.
    */
-  static getCertificateType(): string {
+  static getCertificateType (): string {
     return Utils.toBase64(Utils.toArray('did:bsv', 'utf8'))
   }
 }
@@ -223,13 +223,26 @@ export class DID {
 // Wallet-integrated DID methods
 // ============================================================================
 
-export function createDIDMethods(core: WalletCore) {
+export function createDIDMethods (core: WalletCore): ReturnType<typeof _buildDIDMethods> {
+  return _buildDIDMethods(core)
+}
 
+function _buildDIDMethods (core: WalletCore): {
+  createDID: (options?: DIDCreateOptions) => Promise<DIDCreateResult>
+  resolveDID: (didString: string) => Promise<DIDResolutionResult>
+  _resolveFromBasket: (didString: string) => Promise<DIDResolutionResult | null>
+  _resolveViaWhatsOnChain: (txid: string) => Promise<DIDResolutionResult>
+  updateDID: (options: DIDUpdateOptions) => Promise<DIDCreateResult>
+  deactivateDID: (didString: string) => Promise<{ txid: string }>
+  listDIDs: () => Promise<DIDChainState[]>
+  getDID: () => DIDDocument
+  registerDID: (options: { persist?: boolean }) => Promise<DIDDocument>
+} {
   /**
    * Build a P2PKH locking script for a tracking output (goes into basket).
    * Locked to the wallet's own identity key so it's recognized as spendable.
    */
-  function buildTrackingScript(): string {
+  function buildTrackingScript (): string {
     const identityKey = core.getIdentityKey()
     const address = PublicKey.fromString(identityKey).toAddress()
     return new P2PKH().lock(address).toHex()
@@ -239,7 +252,7 @@ export function createDIDMethods(core: WalletCore) {
    * Spend a chain UTXO using the signableTransaction flow.
    * Follows the same pattern as sendToken in tokens.ts.
    */
-  async function spendChainOutput(params: {
+  async function spendChainOutput (params: {
     client: any
     basket: string
     currentOutpoint: string
@@ -253,7 +266,7 @@ export function createDIDMethods(core: WalletCore) {
       customInstructions?: string
       tags?: string[]
     }>
-  }): Promise<{ txid: string; tx: any }> {
+  }): Promise<{ txid: string, tx: any }> {
     const { client, basket, currentOutpoint, chainKeyHex, description, newOutputs } = params
     const chainKey = PrivateKey.fromHex(chainKeyHex)
 
@@ -265,7 +278,7 @@ export function createDIDMethods(core: WalletCore) {
     } as any)
 
     const beef = new Beef()
-    beef.mergeBeef((result as any).BEEF as number[])
+    beef.mergeBeef((result).BEEF as number[])
     const inputBEEF = beef.toBinary()
 
     // Create action with custom input (chain UTXO to spend)
@@ -281,26 +294,26 @@ export function createDIDMethods(core: WalletCore) {
       options: { randomizeOutputs: false }
     } as any)
 
-    if (!(response as any)?.signableTransaction) {
+    if ((response)?.signableTransaction == null) {
       throw new DIDError('Expected signableTransaction for chain spend')
     }
 
-    const signable = (response as any).signableTransaction
+    const signable = (response).signableTransaction
     const txToSign = Transaction.fromBEEF(signable.tx)
     txToSign.inputs[0].unlockingScriptTemplate = new P2PKH().unlock(chainKey, 'all', false)
     await txToSign.sign()
 
     const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-    if (!unlockingScript) throw new DIDError('Failed to generate unlocking script')
+    if (unlockingScript == null || unlockingScript === '') throw new DIDError('Failed to generate unlocking script')
 
     const finalResult = await client.signAction({
       reference: signable.reference,
-      spends: { '0': { unlockingScript } }
+      spends: { 0: { unlockingScript } }
     })
 
     return {
-      txid: (finalResult as any).txid || '',
-      tx: (finalResult as any).tx
+      txid: (finalResult).txid ?? '',
+      tx: (finalResult).tx
     }
   }
 
@@ -316,7 +329,7 @@ export function createDIDMethods(core: WalletCore) {
      * This produces a followable output-0-spend chain that external resolvers
      * (WhatsOnChain, Teranode Universal Resolver) can discover.
      */
-    async createDID(options?: DIDCreateOptions): Promise<DIDCreateResult> {
+    async createDID (options?: DIDCreateOptions): Promise<DIDCreateResult> {
       try {
         const client = core.getClient()
         const basket = options?.basket ?? core.defaults.didBasket
@@ -365,8 +378,8 @@ export function createDIDMethods(core: WalletCore) {
           options: { randomizeOutputs: false }
         })
 
-        const issuanceTxid = issuanceResult.txid || ''
-        if (!issuanceTxid) {
+        const issuanceTxid = issuanceResult.txid ?? ''
+        if (issuanceTxid === '') {
           throw new DIDError('Issuance transaction did not return a txid')
         }
 
@@ -394,10 +407,10 @@ export function createDIDMethods(core: WalletCore) {
           const outputs = listResult?.outputs ?? []
           found = outputs.some((o: any) => o.outpoint === issuanceOutpoint)
           if (found) break
-          await new Promise(r => setTimeout(r, 500))
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
 
-        if (!found) {
+        if (!found) { // eslint-disable-line @typescript-eslint/strict-boolean-expressions
           throw new DIDError('Issuance output not found in basket after retries')
         }
 
@@ -451,7 +464,7 @@ export function createDIDMethods(core: WalletCore) {
      * Resolve a did:bsv DID to its DID Document.
      * Tries Teranode Universal Resolver first, falls back to WhatsOnChain.
      */
-    async resolveDID(didString: string): Promise<DIDResolutionResult> {
+    async resolveDID (didString: string): Promise<DIDResolutionResult> {
       const parsed = DID.parse(didString)
 
       // Legacy pubkey-based DID — return legacy document
@@ -478,7 +491,7 @@ export function createDIDMethods(core: WalletCore) {
       // Check local basket first — fastest resolution for our own DIDs
       try {
         const localResult = await this._resolveFromBasket(didString)
-        if (localResult) return localResult
+        if (localResult != null) return localResult
       } catch {
         // Fall through to external resolvers
       }
@@ -486,12 +499,12 @@ export function createDIDMethods(core: WalletCore) {
       // Try server-side proxy (bypasses CORS for browser clients)
       // The proxy handles nChain → WoC fallback internally, so one call is enough.
       const proxyUrl = core.defaults.didProxyUrl
-      if (proxyUrl) {
+      if (proxyUrl != null && proxyUrl !== '') {
         try {
           const response = await fetch(`${proxyUrl}?did=${encodeURIComponent(didString)}`)
           if (response.ok) {
             const data: any = await response.json()
-            if (data.didDocument || data.didDocumentMetadata?.deactivated) {
+            if ((data.didDocument != null) || (data.didDocumentMetadata?.deactivated === true)) {
               return data as DIDResolutionResult
             }
           }
@@ -502,28 +515,28 @@ export function createDIDMethods(core: WalletCore) {
 
       // No proxy configured (server-side SDK usage) — try resolvers directly
       const resolverUrl = core.defaults.didResolverUrl
-      if (resolverUrl) {
+      if (resolverUrl != null && resolverUrl !== '') {
         try {
           const response = await fetch(`${resolverUrl}/1.0/identifiers/${didString}`)
           if (response.ok) {
             const data: any = await response.json()
             return {
-              didDocument: data.didDocument || data,
-              didDocumentMetadata: data.didDocumentMetadata || {},
+              didDocument: data.didDocument ?? data,
+              didDocumentMetadata: data.didDocumentMetadata ?? {},
               didResolutionMetadata: {
                 contentType: 'application/did+ld+json',
-                ...(data.didResolutionMetadata || {})
+                ...(data.didResolutionMetadata ?? {})
               }
             }
           }
           if (response.status === 410) {
             const data: any = await response.json().catch(() => ({}))
             return {
-              didDocument: data.didDocument || null,
-              didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata || {}) },
+              didDocument: data.didDocument ?? null,
+              didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata ?? {}) },
               didResolutionMetadata: {
                 contentType: 'application/did+ld+json',
-                ...(data.didResolutionMetadata || {})
+                ...(data.didResolutionMetadata ?? {})
               }
             }
           }
@@ -533,14 +546,14 @@ export function createDIDMethods(core: WalletCore) {
       }
 
       // WhatsOnChain direct fallback (server-side only — CORS-blocked in browsers)
-      return this._resolveViaWhatsOnChain(parsed.identifier)
+      return await this._resolveViaWhatsOnChain(parsed.identifier)
     },
 
     /**
      * Resolve a DID from the local basket (for DIDs we own).
      * @internal
      */
-    async _resolveFromBasket(didString: string): Promise<DIDResolutionResult | null> {
+    async _resolveFromBasket (didString: string): Promise<DIDResolutionResult | null> {
       const client = core.getClient()
       const basket = core.defaults.didBasket
 
@@ -555,7 +568,7 @@ export function createDIDMethods(core: WalletCore) {
       // Find the latest state for this DID (may have multiple outputs: doc, update, deactivate)
       let latestCI: any = null
       for (const output of outputs) {
-        if (!(output as any).customInstructions) continue
+        if ((output as any).customInstructions == null) continue
         try {
           const ci = JSON.parse((output as any).customInstructions)
           if (ci.did !== didString) continue
@@ -564,11 +577,11 @@ export function createDIDMethods(core: WalletCore) {
         } catch {}
       }
 
-      if (!latestCI) return null
+      if (latestCI == null) return null
 
       if (latestCI.status === 'deactivated') {
         // Try to reconstruct last known document
-        const doc = latestCI.subjectKey
+        const doc = (latestCI.subjectKey != null)
           ? DID.buildDocument(latestCI.issuanceTxid, latestCI.subjectKey, didString)
           : null
         return {
@@ -579,12 +592,12 @@ export function createDIDMethods(core: WalletCore) {
       }
 
       // Build document from stored metadata
-      if (latestCI.subjectKey && latestCI.issuanceTxid) {
-        const services = latestCI.services || undefined
+      if ((latestCI.subjectKey != null) && (latestCI.issuanceTxid != null)) {
+        const services = latestCI.services ?? undefined
         const document = DID.buildDocument(latestCI.issuanceTxid, latestCI.subjectKey, didString, services)
 
         // If additional keys stored, add them
-        if (latestCI.additionalKeys) {
+        if (latestCI.additionalKeys != null) {
           for (let i = 0; i < latestCI.additionalKeys.length; i++) {
             const jwk = pubKeyToJwk(latestCI.additionalKeys[i])
             document.verificationMethod.push({
@@ -610,7 +623,7 @@ export function createDIDMethods(core: WalletCore) {
      * Resolve a DID by following the UTXO chain on WhatsOnChain.
      * @internal
      */
-    async _resolveViaWhatsOnChain(txid: string): Promise<DIDResolutionResult> {
+    async _resolveViaWhatsOnChain (txid: string): Promise<DIDResolutionResult> {
       const notFound: DIDResolutionResult = {
         didDocument: null,
         didDocumentMetadata: {},
@@ -632,10 +645,10 @@ export function createDIDMethods(core: WalletCore) {
         const wocFetch = async (url: string): Promise<Response> => {
           const elapsed = Date.now() - lastWocCall
           if (lastWocCall > 0 && elapsed < 350) {
-            await new Promise(r => setTimeout(r, 350 - elapsed))
+            await new Promise(resolve => setTimeout(resolve, 350 - elapsed))
           }
           lastWocCall = Date.now()
-          return fetch(url)
+          return await fetch(url)
         }
 
         for (let hop = 0; hop < maxHops; hop++) {
@@ -646,15 +659,15 @@ export function createDIDMethods(core: WalletCore) {
           if (!txResp.ok) return notFound
           const txData: any = await txResp.json()
 
-          if (!created) {
-            created = txData.time ? new Date(txData.time * 1000).toISOString() : undefined
+          if (created == null) {
+            created = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
           }
 
           // Parse OP_RETURN outputs to find BSVDID segments
           let segments: string[] = []
-          for (const vout of txData.vout || []) {
-            const hex = vout?.scriptPubKey?.hex
-            if (!hex) continue
+          for (const vout of (txData.vout as any[] | null) ?? []) {
+            const hex = vout?.scriptPubKey?.hex as string | undefined
+            if (hex == null || hex === '') continue
             const s = parseOpReturnSegments(hex)
             if (s.length >= 3 && s[0] === BSVDID_MARKER) {
               segments = s
@@ -690,7 +703,7 @@ export function createDIDMethods(core: WalletCore) {
               try {
                 lastDocument = JSON.parse(payload) as DIDDocumentV2
                 lastDocTxid = currentTxid
-                updated = txData.time ? new Date(txData.time * 1000).toISOString() : undefined
+                updated = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
               } catch {
                 // Not valid JSON — skip
               }
@@ -707,28 +720,28 @@ export function createDIDMethods(core: WalletCore) {
             )
             if (spendResp.ok && spendResp.status !== 404) {
               const spendData: any = await spendResp.json()
-              nextTxid = spendData?.txid || null
+              nextTxid = spendData?.txid ?? null
             }
           } catch { /* fall through to address history */ }
 
           // Strategy 2: address history fallback (WoC spend index is unreliable)
           // The chain key address is random and unique to this DID, so any
           // other TX at that address is a chain TX — no per-TX verification needed.
-          if (!nextTxid) {
+          if (nextTxid == null) {
             const out0Addr = txData.vout?.[0]?.scriptPubKey?.addresses?.[0]
-            if (out0Addr) {
+            if (out0Addr != null) {
               try {
                 const histResp = await wocFetch(
-                  `https://api.whatsonchain.com/v1/bsv/main/address/${out0Addr}/history`
+                  `https://api.whatsonchain.com/v1/bsv/main/address/${String(out0Addr)}/history`
                 )
                 if (histResp.ok) {
-                  const history = await histResp.json() as Array<{ tx_hash: string; height: number }>
+                  const history = await histResp.json() as Array<{ tx_hash: string, height: number }>
                   // Sort descending by height — most recent TX first.
                   // Pick the latest chain TX to skip intermediate hops
                   // (the main loop will parse its BSVDID markers).
                   const candidates = history
                     .filter(e => !visited.has(e.tx_hash))
-                    .sort((a, b) => (b.height || 0) - (a.height || 0))
+                    .sort((a, b) => (b.height !== 0 ? b.height : 0) - (a.height !== 0 ? a.height : 0))
                   if (candidates.length > 0) {
                     nextTxid = candidates[0].tx_hash
                   }
@@ -737,12 +750,12 @@ export function createDIDMethods(core: WalletCore) {
             }
           }
 
-          if (!nextTxid) break
+          if (nextTxid == null) break
 
           currentTxid = nextTxid
         }
 
-        if (lastDocument) {
+        if (lastDocument != null) {
           return {
             didDocument: lastDocument,
             didDocumentMetadata: {
@@ -783,7 +796,7 @@ export function createDIDMethods(core: WalletCore) {
      * Update a DID document by spending the current chain UTXO.
      * Creates a new chain UTXO (out 0) + OP_RETURN with updated document (out 1).
      */
-    async updateDID(options: DIDUpdateOptions): Promise<DIDCreateResult> {
+    async updateDID (options: DIDUpdateOptions): Promise<DIDCreateResult> {
       try {
         const client = core.getClient()
         DID.parse(options.did)
@@ -801,7 +814,7 @@ export function createDIDMethods(core: WalletCore) {
         let chainOutpoint: string = ''
 
         for (const output of outputs) {
-          if (!(output as any).customInstructions) continue
+          if ((output as any).customInstructions == null) continue
           try {
             const ci = JSON.parse((output as any).customInstructions)
             if (ci.did === options.did && ci.status === 'active') {
@@ -811,12 +824,12 @@ export function createDIDMethods(core: WalletCore) {
           } catch {}
         }
 
-        if (!chainCI) {
+        if (chainCI == null) {
           throw new DIDError(`No active chain state found for ${options.did}`)
         }
 
         const { identityCode, subjectKey, issuanceTxid, chainKeyHex } = chainCI
-        if (!chainKeyHex) {
+        if (chainKeyHex == null || chainKeyHex === '') {
           throw new DIDError('Chain key not found in output metadata — cannot spend chain UTXO')
         }
 
@@ -832,7 +845,7 @@ export function createDIDMethods(core: WalletCore) {
         )
 
         // If additional verification keys requested, add them
-        if (options.additionalKeys) {
+        if (options.additionalKeys != null) {
           for (let i = 0; i < options.additionalKeys.length; i++) {
             const jwk = pubKeyToJwk(options.additionalKeys[i])
             document.verificationMethod.push({
@@ -898,7 +911,7 @@ export function createDIDMethods(core: WalletCore) {
      * Out 0: OP_RETURN revocation marker (chain terminates).
      * Out 1: P2PKH to wallet identity key (local bookkeeping).
      */
-    async deactivateDID(didString: string): Promise<{ txid: string }> {
+    async deactivateDID (didString: string): Promise<{ txid: string }> {
       try {
         const client = core.getClient()
         DID.parse(didString)
@@ -916,7 +929,7 @@ export function createDIDMethods(core: WalletCore) {
         let chainOutpoint: string = ''
 
         for (const output of outputs) {
-          if (!(output as any).customInstructions) continue
+          if ((output as any).customInstructions == null) continue
           try {
             const ci = JSON.parse((output as any).customInstructions)
             if (ci.did === didString && ci.status === 'active') {
@@ -926,12 +939,12 @@ export function createDIDMethods(core: WalletCore) {
           } catch {}
         }
 
-        if (!chainCI) {
+        if (chainCI == null) {
           throw new DIDError(`No active chain state found for ${didString}`)
         }
 
         const { identityCode, chainKeyHex } = chainCI
-        if (!chainKeyHex) {
+        if (chainKeyHex == null || chainKeyHex === '') {
           throw new DIDError('Chain key not found in output metadata — cannot spend chain UTXO')
         }
 
@@ -980,7 +993,7 @@ export function createDIDMethods(core: WalletCore) {
     /**
      * List all DIDs owned by this wallet.
      */
-    async listDIDs(): Promise<DIDChainState[]> {
+    async listDIDs (): Promise<DIDChainState[]> {
       try {
         const client = core.getClient()
         const basket = core.defaults.didBasket
@@ -995,10 +1008,10 @@ export function createDIDMethods(core: WalletCore) {
         const didMap = new Map<string, DIDChainState>()
 
         for (const output of outputs) {
-          if (!(output as any).customInstructions) continue
+          if ((output as any).customInstructions == null) continue
           try {
             const ci = JSON.parse((output as any).customInstructions)
-            if (!ci.did || !ci.identityCode) continue
+            if ((ci.did == null) || (ci.identityCode == null)) continue
 
             // Skip pending issuance outputs (consumed by document TX)
             if (ci.status === 'pending') continue
@@ -1007,11 +1020,11 @@ export function createDIDMethods(core: WalletCore) {
             didMap.set(ci.did, {
               did: ci.did,
               identityCode: ci.identityCode,
-              issuanceTxid: ci.issuanceTxid || ci.did?.replace('did:bsv:', ''),
+              issuanceTxid: ci.issuanceTxid ?? ci.did?.replace('did:bsv:', ''),
               currentOutpoint: output.outpoint,
               status: ci.status === 'deactivated' ? 'deactivated' : 'active',
-              created: ci.created || new Date().toISOString(),
-              updated: ci.updated || new Date().toISOString()
+              created: ci.created ?? new Date().toISOString(),
+              updated: ci.updated ?? new Date().toISOString()
             })
           } catch {}
         }
@@ -1026,7 +1039,7 @@ export function createDIDMethods(core: WalletCore) {
      * @deprecated Use createDID() for spec-compliant DIDs.
      * Get this wallet's legacy DID Document (identity-key based).
      */
-    getDID(): DIDDocument {
+    getDID (): DIDDocument {
       return DID.fromIdentityKey(core.getIdentityKey())
     },
 
@@ -1034,7 +1047,7 @@ export function createDIDMethods(core: WalletCore) {
      * @deprecated Use createDID() for spec-compliant DIDs.
      * Register a legacy DID as a BSV certificate.
      */
-    async registerDID(options?: { persist?: boolean }): Promise<DIDDocument> {
+    async registerDID (options?: { persist?: boolean }): Promise<DIDDocument> {
       const { Certifier } = await import('./certification')
       const identityKey = core.getIdentityKey()
       const didDoc = DID.fromIdentityKey(identityKey)

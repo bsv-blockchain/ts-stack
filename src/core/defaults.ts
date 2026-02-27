@@ -5,7 +5,6 @@ export const DEFAULT_CONFIG: WalletDefaults = {
   network: 'main',
   description: 'BSV-Simplify transaction',
   outputDescription: 'BSV-Simplify output',
-  changeBasket: undefined,
   tokenBasket: 'tokens',
   tokenProtocolID: [0 as SecurityLevel, 'token'],
   tokenKeyID: '1',
@@ -13,9 +12,9 @@ export const DEFAULT_CONFIG: WalletDefaults = {
   registryUrl: undefined,
   didBasket: 'did-chain',
   didResolverUrl: 'https://bsvdid-universal-resolver.nchain.systems',
-  didProtocolID: [0 as SecurityLevel, 'bsvdid'],
+  didProtocolID: [0 as SecurityLevel, 'bsvdid']
 }
 
-export function mergeDefaults(partial: Partial<WalletDefaults>): WalletDefaults {
+export function mergeDefaults (partial: Partial<WalletDefaults>): WalletDefaults {
   return { ...DEFAULT_CONFIG, ...partial }
 }

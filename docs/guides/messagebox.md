@@ -47,20 +47,17 @@ Send BSV to another wallet via MessageBox P2P:
 ```typescript
 const result = await wallet.sendMessageBoxPayment(
   recipientIdentityKey,
-  1000,                 // satoshis
-  'messagebox-change'   // optional: basket for change recovery
+  1000  // satoshis
 )
 
 console.log('Amount:', result.amount)
 console.log('Recipient:', result.recipient)
-console.log('Change recovered:', result.reinternalized?.count)
 ```
 
 ### How It Works
 
 1. Creates a payment token using `PeerPayClient.createPaymentToken()`
 2. Sends the token to the recipient's `payment_inbox` via MessageBox
-3. Optionally reinternalizes change outputs into the specified basket
 
 ## Receiving Payments
 
@@ -169,7 +166,7 @@ const results = await wallet.lookupIdentityByTag('bob', REGISTRY)
 const bob = results[0]
 
 // Send payment
-await wallet.sendMessageBoxPayment(bob.identityKey, 5000, 'change')
+await wallet.sendMessageBoxPayment(bob.identityKey, 5000)
 
 // Check inbox
 const incoming = await wallet.listIncomingPayments()

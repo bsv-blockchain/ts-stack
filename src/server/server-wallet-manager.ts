@@ -24,36 +24,36 @@ import {
 // ============================================================================
 
 export class ServerWalletManager {
-  private envVar: string
-  private keyFile: string
-  private network: 'main' | 'testnet'
-  private storageUrl: string
-  private defaultRequestSatoshis: number
-  private requestMemo: string
-  private store: JsonFileStore<{ privateKey: string; identityKey: string }>
+  private readonly envVar: string
+  private readonly keyFile: string
+  private readonly network: 'main' | 'testnet'
+  private readonly storageUrl: string
+  private readonly defaultRequestSatoshis: number
+  private readonly requestMemo: string
+  private readonly store: JsonFileStore<{ privateKey: string, identityKey: string }>
   private wallet: any = null
   private initPromise: Promise<any> | null = null
 
-  constructor(config?: ServerWalletManagerConfig) {
-    this.envVar = config?.envVar || 'SERVER_PRIVATE_KEY'
-    this.keyFile = config?.keyFile || join(process.cwd(), '.server-wallet.json')
-    this.network = config?.network || 'main'
-    this.storageUrl = config?.storageUrl || 'https://storage.babbage.systems'
-    this.defaultRequestSatoshis = config?.defaultRequestSatoshis || 1000
-    this.requestMemo = config?.requestMemo || 'Server wallet funding'
+  constructor (config?: ServerWalletManagerConfig) {
+    this.envVar = config?.envVar ?? 'SERVER_PRIVATE_KEY'
+    this.keyFile = config?.keyFile ?? join(process.cwd(), '.server-wallet.json')
+    this.network = config?.network ?? 'main'
+    this.storageUrl = config?.storageUrl ?? 'https://storage.babbage.systems'
+    this.defaultRequestSatoshis = config?.defaultRequestSatoshis ?? 1000
+    this.requestMemo = config?.requestMemo ?? 'Server wallet funding'
     this.store = new JsonFileStore(this.keyFile)
   }
 
-  async getWallet(): Promise<any> {
-    if (this.wallet) return this.wallet
-    if (this.initPromise) return this.initPromise
+  async getWallet (): Promise<any> {
+    if (this.wallet != null) return this.wallet
+    if (this.initPromise != null) return await this.initPromise
 
     this.initPromise = (async () => {
       const { ServerWallet } = await import('../server')
       const { generatePrivateKey } = await import('../server')
 
       const savedData = this.store.load()
-      const privateKey = process.env[this.envVar] || savedData?.privateKey || generatePrivateKey()
+      const privateKey = process.env[this.envVar] ?? savedData?.privateKey ?? generatePrivateKey()
 
       this.wallet = await ServerWallet.create({
         privateKey,
@@ -62,25 +62,25 @@ export class ServerWalletManager {
       })
 
       // Persist key if not from env
-      if (!process.env[this.envVar]) {
+      if (process.env[this.envVar] == null) {
         this.store.save({ privateKey, identityKey: this.wallet.getIdentityKey() })
       }
 
       return this.wallet
     })()
 
-    return this.initPromise
+    return await this.initPromise
   }
 
-  getStatus(): { saved: boolean; identityKey: string | null } {
+  getStatus (): { saved: boolean, identityKey: string | null } {
     const data = this.store.load()
     return {
       saved: data !== null,
-      identityKey: data?.identityKey || null
+      identityKey: data?.identityKey ?? null
     }
   }
 
-  reset(): void {
+  reset (): void {
     this.wallet = null
     this.initPromise = null
     this.store.delete()
@@ -91,13 +91,13 @@ export class ServerWalletManager {
 // Next.js handler factory
 // ============================================================================
 
-export function createServerWalletHandler(config?: ServerWalletManagerConfig) {
+export function createServerWalletHandler (config?: ServerWalletManagerConfig): ReturnType<typeof toNextHandlers> {
   const manager = new ServerWalletManager(config)
 
   const coreHandlers = {
-    async GET(req: HandlerRequest): Promise<HandlerResponse> {
+    async GET (req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
-      const action = params.get('action') || 'create'
+      const action = params.get('action') ?? 'create'
 
       try {
         if (action === 'status') {
@@ -121,10 +121,11 @@ export function createServerWalletHandler(config?: ServerWalletManagerConfig) {
 
         if (action === 'request') {
           const wallet = await manager.getWallet()
-          const satoshis = parseInt(params.get('satoshis') || '') || (config?.defaultRequestSatoshis ?? 1000)
+          const satoshisStr = params.get('satoshis')
+          const satoshis = (satoshisStr != null && satoshisStr !== '') ? parseInt(satoshisStr, 10) : (config?.defaultRequestSatoshis ?? 1000)
           const request = wallet.createPaymentRequest({
             satoshis,
-            memo: config?.requestMemo || 'Server wallet funding'
+            memo: config?.requestMemo ?? 'Server wallet funding'
           })
           return jsonResponse({
             success: true,
@@ -136,12 +137,12 @@ export function createServerWalletHandler(config?: ServerWalletManagerConfig) {
         if (action === 'balance') {
           const wallet = await manager.getWallet()
           const client = wallet.getClient()
-          const basket = params.get('basket') || 'default'
+          const basket = params.get('basket') ?? 'default'
           const result = await client.listOutputs({ basket })
           const outputList = result?.outputs ?? []
-          const totalSatoshis = outputList.reduce((sum: number, o: any) => sum + (o.satoshis || 0), 0)
+          const totalSatoshis = outputList.reduce((sum: number, o: any) => sum + (o.satoshis != null ? (o.satoshis as number) : 0), 0)
           const spendable = outputList.filter((o: any) => o.spendable !== false)
-          const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + (o.satoshis || 0), 0)
+          const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + (o.satoshis != null ? (o.satoshis as number) : 0), 0)
           return jsonResponse({
             success: true,
             basket,
@@ -155,7 +156,7 @@ export function createServerWalletHandler(config?: ServerWalletManagerConfig) {
         if (action === 'outputs') {
           const wallet = await manager.getWallet()
           const client = wallet.getClient()
-          const basket = params.get('basket') || 'default'
+          const basket = params.get('basket') ?? 'default'
           const result = await client.listOutputs({ basket, include: 'locking scripts' })
           const outputList = result?.outputs ?? []
           return jsonResponse({
@@ -170,25 +171,25 @@ export function createServerWalletHandler(config?: ServerWalletManagerConfig) {
           })
         }
 
-        return jsonResponse({ success: false, error: `Unknown action: ${action}` }, 400)
+        return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
         if (action === 'create') {
           manager.reset()
         }
-        return jsonResponse({ success: false, error: `${action} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
       }
     },
 
-    async POST(req: HandlerRequest): Promise<HandlerResponse> {
+    async POST (req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
-      const action = params.get('action') || 'receive'
+      const action = params.get('action') ?? 'receive'
 
       try {
         if (action === 'receive') {
           const wallet = await manager.getWallet()
           const body = await req.json()
           const { tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex } = body
-          if (!tx || !senderIdentityKey || !derivationPrefix || !derivationSuffix) {
+          if ((tx == null) || (senderIdentityKey == null) || (derivationPrefix == null) || (derivationSuffix == null)) {
             return jsonResponse({
               success: false,
               error: 'Missing required fields: tx, senderIdentityKey, derivationPrefix, derivationSuffix'
@@ -208,9 +209,9 @@ export function createServerWalletHandler(config?: ServerWalletManagerConfig) {
             serverIdentityKey: wallet.getIdentityKey()
           })
         }
-        return jsonResponse({ success: false, error: `Unknown action: ${action}` }, 400)
+        return jsonResponse({ success: false, error: `Unknown action: ${String(action)}` }, 400)
       } catch (error) {
-        return jsonResponse({ success: false, error: `${action} failed: ${(error as Error).message}` }, 500)
+        return jsonResponse({ success: false, error: `${String(action)} failed: ${(error as Error).message}` }, 500)
       }
     }
   }

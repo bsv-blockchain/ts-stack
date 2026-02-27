@@ -79,8 +79,7 @@ Remove all registered handles for this wallet from the identity registry.
 ```typescript
 async sendMessageBoxPayment(
   to: string,
-  satoshis: number,
-  changeBasket?: string
+  satoshis: number
 ): Promise<any>
 ```
 
@@ -90,7 +89,6 @@ Send a payment via MessageBox P2P messaging.
 |-----------|------|---------|-------------|
 | `to` | `string` | *required* | Recipient's identity key |
 | `satoshis` | `number` | *required* | Amount to send |
-| `changeBasket` | `string` | `defaults.changeBasket` | Reinternalize change |
 
 **Returns:**
 
@@ -99,14 +97,12 @@ Send a payment via MessageBox P2P messaging.
   txid: string
   amount: number
   recipient: string
-  reinternalized?: ReinternalizeResult
 }
 ```
 
 **What happens:**
 1. Creates a payment token via `PeerPayClient.createPaymentToken()`
 2. Sends the token to `payment_inbox` message box
-3. If `changeBasket` is provided, reinternalizes change from the payment transaction
 
 ### listIncomingPayments()
 

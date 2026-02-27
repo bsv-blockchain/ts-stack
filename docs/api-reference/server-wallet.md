@@ -116,7 +116,7 @@ The typical server wallet funding flow:
 ```
 1. Server: wallet.createPaymentRequest({ satoshis: 50000 })
        ↓ (send PaymentRequest to client via API)
-2. Client: wallet.fundServerWallet(request, 'funding', 'change')
+2. Client: wallet.fundServerWallet(request, 'funding')
        ↓ (send tx bytes back to server via API)
 3. Server: wallet.receivePayment({ tx, senderIdentityKey, ... })
 ```

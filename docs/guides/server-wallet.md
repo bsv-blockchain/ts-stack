@@ -54,8 +54,7 @@ This generates a random BRC-29 derivation suffix so the server can later prove o
 // On the client (browser):
 const result = await browserWallet.fundServerWallet(
   paymentRequest,
-  'server-funding',      // basket for tracking
-  'change'               // basket for change recovery
+  'server-funding'       // basket for tracking
 )
 ```
 
@@ -123,7 +122,7 @@ function getPrivateKey(): string {
 
 The server wallet has all the same methods as the browser wallet:
 
-- `pay()`, `send()`, `reinternalizeChange()`
+- `pay()`, `send()`
 - `createToken()`, `listTokenDetails()`, `sendToken()`, `redeemToken()`
 - `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()`
 - `certifyForMessageBox()`, `sendMessageBoxPayment()`, `listIncomingPayments()`, `acceptIncomingPayment()`

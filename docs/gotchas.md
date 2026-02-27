@@ -38,20 +38,7 @@ if (typeof result === 'string') throw new Error(result)
 
 `@bsv/simple` handles this check internally, but be aware if you ever use `@bsv/message-box-client` directly.
 
-## 3. Change Outputs Are Orphaned by Default
-
-When `createAction` produces change, the change output exists in the wallet but isn't in any named basket. It won't appear in `listOutputs()` queries.
-
-**Fix:** Always pass `changeBasket` to recover change:
-
-```typescript
-// Change is recovered automatically
-await wallet.pay({ to: key, satoshis: 1000, changeBasket: 'my-change' })
-```
-
-Without this, the change is still spendable by the wallet for future transactions, but you can't track or query it by basket.
-
-## 4. result.tx May Be Undefined
+## 3. result.tx May Be Undefined
 
 `createAction()` doesn't always return transaction bytes.
 
@@ -68,7 +55,7 @@ if (!result.tx) {
 }
 ```
 
-## 5. Overlay Prefix Requirements
+## 4. Overlay Prefix Requirements
 
 Topics must start with `tm_`, lookup services must start with `ls_`. The library throws immediately if these prefixes are missing.
 
@@ -90,7 +77,7 @@ await wallet.advertiseSLAP('domain.com', 'payments')
 await wallet.advertiseSLAP('domain.com', 'ls_payments')
 ```
 
-## 6. FileRevocationStore Crashes in Browser
+## 5. FileRevocationStore Crashes in Browser
 
 `FileRevocationStore` uses Node.js `fs` and `path` modules. Importing it in browser code causes a crash.
 
@@ -102,7 +89,7 @@ import { MemoryRevocationStore } from '@bsv/simple/browser'
 const { FileRevocationStore } = await import('@bsv/simple/server')
 ```
 
-## 7. Static Imports Break Next.js API Routes
+## 6. Static Imports Break Next.js API Routes
 
 Using static imports for server-only code at the top of a Next.js API route can cause Turbopack bundling issues.
 
@@ -114,7 +101,7 @@ import { ServerWallet } from '@bsv/simple/server'
 const { ServerWallet } = await import('@bsv/simple/server')
 ```
 
-## 8. Server Wallet Re-initializes on Every Request
+## 7. Server Wallet Re-initializes on Every Request
 
 If you create the wallet inside a request handler without caching, it re-initializes on every request (slow and creates duplicate storage connections).
 
@@ -137,15 +124,11 @@ async function getWallet() {
 }
 ```
 
-## 9. reinternalizeChange Skips the Largest Output
-
-The wallet automatically tracks one change output. `reinternalizeChange()` only recovers the *additional* orphaned outputs. If a transaction has only one change output, the method returns `{ count: 0 }`.
-
-## 10. Token Send/Redeem Requires Two-Step Signing
+## 8. Token Send/Redeem Requires Two-Step Signing
 
 Token transfers use a `createAction` → `signAction` flow because PushDrop outputs need a custom unlocking script. Don't try to send tokens using `pay()` or raw `createAction()` — use `sendToken()` or `redeemToken()`.
 
-## 11. next.config.ts serverExternalPackages Is Required
+## 9. next.config.ts serverExternalPackages Is Required
 
 Without the `serverExternalPackages` configuration, Next.js Turbopack bundles `@bsv/wallet-toolbox`, `knex`, and database drivers for the browser, causing build failures:
 
@@ -158,7 +141,7 @@ const nextConfig: NextConfig = {
 }
 ```
 
-## 12. BRC-29 Protocol ID
+## 10. BRC-29 Protocol ID
 
 The payment derivation protocol ID is `[2, '3241645161d8']`. This is a `SecurityLevel` 2 protocol. Don't confuse it with other protocol IDs.
 

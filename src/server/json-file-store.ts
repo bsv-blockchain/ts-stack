@@ -6,9 +6,9 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
 
 export class JsonFileStore<T> {
-  constructor(private filePath: string) {}
+  constructor (private readonly filePath: string) {}
 
-  load(): T | null {
+  load (): T | null {
     try {
       if (existsSync(this.filePath)) {
         return JSON.parse(readFileSync(this.filePath, 'utf-8'))
@@ -19,11 +19,11 @@ export class JsonFileStore<T> {
     return null
   }
 
-  save(data: T): void {
+  save (data: T): void {
     writeFileSync(this.filePath, JSON.stringify(data, null, 2))
   }
 
-  delete(): void {
+  delete (): void {
     try {
       if (existsSync(this.filePath)) unlinkSync(this.filePath)
     } catch {
@@ -31,7 +31,7 @@ export class JsonFileStore<T> {
     }
   }
 
-  exists(): boolean {
+  exists (): boolean {
     return existsSync(this.filePath)
   }
 }

@@ -103,7 +103,7 @@ Or for local development:
 Once connected, you can ask your AI assistant things like:
 
 - "Set up @bsv/simple in my Next.js project"
-- "Generate a payment handler with change recovery"
+- "Generate a payment handler"
 - "Create a token system with MessageBox transfer"
 - "Add verifiable credential issuance to my server"
 

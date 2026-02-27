@@ -28,6 +28,71 @@ import { createOverlayMethods } from './modules/overlay'
 import { createDIDMethods } from './modules/did'
 import { createCredentialMethods } from './modules/credentials'
 
+// Re-export everything from the browser entry
+export * from './browser'
+export type { BrowserWallet } from './browser'
+
+// Re-export all types (including server-only types)
+export type {
+  Network,
+  WalletDefaults,
+  TransactionResult,
+  OutputInfo,
+  WalletStatus,
+  WalletInfo,
+  PaymentOptions,
+  SendOutputSpec,
+  SendOutputDetail,
+  SendOptions,
+  SendResult,
+  DerivationInfo,
+  PaymentDerivation,
+  TokenOptions,
+  TokenResult,
+  TokenDetail,
+  SendTokenOptions,
+  RedeemTokenOptions,
+  InscriptionType,
+  InscriptionOptions,
+  InscriptionResult,
+  MessageBoxConfig,
+  CertifierConfig,
+  CertificateData,
+  OverlayConfig,
+  OverlayInfo,
+  OverlayBroadcastResult,
+  OverlayOutput,
+  ServerWalletConfig,
+  PaymentRequest,
+  IncomingPayment,
+  DIDDocument,
+  DIDVerificationMethod,
+  DIDParseResult,
+  CredentialFieldType,
+  CredentialFieldSchema,
+  CredentialSchemaConfig,
+  VerifiableCredential,
+  VerifiablePresentation,
+  VerificationResult,
+  CredentialIssuerConfig,
+  RevocationRecord,
+  RevocationStore
+} from './core/types'
+
+// Re-export errors
+export {
+  SimpleError,
+  WalletError,
+  TransactionError,
+  MessageBoxError,
+  CertificationError,
+  DIDError,
+  CredentialError
+} from './core/errors'
+
+// Server-specific exports
+export { FileRevocationStore } from './modules/file-revocation-store'
+
 // ============================================================================
 // Utility: generate a random private key hex without exposing @bsv/sdk
 // ============================================================================

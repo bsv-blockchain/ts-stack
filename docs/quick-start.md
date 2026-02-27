@@ -72,7 +72,7 @@ console.log('Inscribed:', inscription.txid)
 | Guide | What you'll learn |
 |-------|-------------------|
 | [Browser Wallet](guides/browser-wallet.md) | Full wallet setup, wallet info, key derivation |
-| [Payments](guides/payments.md) | Simple payments, multi-output sends, BRC-29 derivation, change recovery |
+| [Payments](guides/payments.md) | Simple payments, multi-output sends, BRC-29 payments |
 | [Tokens](guides/tokens.md) | Create, list, send, redeem, and transfer tokens via MessageBox |
 | [Server Wallet](guides/server-wallet.md) | Run a backend wallet, accept funding from browser wallets |
 | [Next.js Integration](guides/nextjs-integration.md) | Set up a full-stack BSV app with Next.js |

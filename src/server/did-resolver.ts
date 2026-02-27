@@ -25,7 +25,7 @@ const BSVDID_MARKER = 'BSVDID'
 // OP_RETURN parser
 // ============================================================================
 
-function hexToBytes(hex: string): number[] {
+function hexToBytes (hex: string): number[] {
   const bytes: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
     bytes.push(parseInt(hex.substring(i, i + 2), 16))
@@ -33,7 +33,7 @@ function hexToBytes(hex: string): number[] {
   return bytes
 }
 
-function parseOpReturnSegments(hexScript: string): string[] {
+function parseOpReturnSegments (hexScript: string): string[] {
   try {
     const bytes = hexToBytes(hexScript)
     const segments: string[] = []
@@ -84,19 +84,19 @@ function parseOpReturnSegments(hexScript: string): string[] {
 // ============================================================================
 
 export class DIDResolverService {
-  private resolverUrl: string
-  private wocBaseUrl: string
-  private resolverTimeout: number
-  private maxHops: number
+  private readonly resolverUrl: string
+  private readonly wocBaseUrl: string
+  private readonly resolverTimeout: number
+  private readonly maxHops: number
 
-  constructor(config?: DIDResolverConfig) {
-    this.resolverUrl = config?.resolverUrl || DEFAULT_RESOLVER_URL
-    this.wocBaseUrl = config?.wocBaseUrl || DEFAULT_WOC_BASE
-    this.resolverTimeout = config?.resolverTimeout || 10_000
-    this.maxHops = config?.maxHops || 100
+  constructor (config?: DIDResolverConfig) {
+    this.resolverUrl = config?.resolverUrl ?? DEFAULT_RESOLVER_URL
+    this.wocBaseUrl = config?.wocBaseUrl ?? DEFAULT_WOC_BASE
+    this.resolverTimeout = config?.resolverTimeout ?? 10_000
+    this.maxHops = config?.maxHops ?? 100
   }
 
-  async resolve(did: string): Promise<DIDResolutionResult> {
+  async resolve (did: string): Promise<DIDResolutionResult> {
     const txidMatch = did.match(/^did:bsv:([0-9a-f]{64})$/i)
 
     // Try nChain Universal Resolver
@@ -104,7 +104,7 @@ export class DIDResolverService {
       const response = await fetch(
         `${this.resolverUrl}/1.0/identifiers/${encodeURIComponent(did)}`,
         {
-          headers: { 'Accept': 'application/did+ld+json' },
+          headers: { Accept: 'application/did+ld+json' },
           signal: AbortSignal.timeout(this.resolverTimeout)
         }
       )
@@ -112,11 +112,11 @@ export class DIDResolverService {
       if (response.ok) {
         const data: any = await response.json()
         return {
-          didDocument: data.didDocument || data,
-          didDocumentMetadata: data.didDocumentMetadata || {},
+          didDocument: data.didDocument ?? data,
+          didDocumentMetadata: data.didDocumentMetadata ?? {},
           didResolutionMetadata: {
             contentType: 'application/did+ld+json',
-            ...(data.didResolutionMetadata || {})
+            ...(data.didResolutionMetadata ?? {})
           }
         }
       }
@@ -124,11 +124,11 @@ export class DIDResolverService {
       if (response.status === 410) {
         const data: any = await response.json().catch(() => ({}))
         return {
-          didDocument: data.didDocument || null,
-          didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata || {}) },
+          didDocument: data.didDocument ?? null,
+          didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata ?? {}) },
           didResolutionMetadata: {
             contentType: 'application/did+ld+json',
-            ...(data.didResolutionMetadata || {})
+            ...(data.didResolutionMetadata ?? {})
           }
         }
       }
@@ -137,8 +137,8 @@ export class DIDResolverService {
     }
 
     // WoC chain-following fallback
-    if (txidMatch) {
-      return this.resolveViaWoC(txidMatch[1].toLowerCase())
+    if (txidMatch != null) {
+      return await this.resolveViaWoC(txidMatch[1].toLowerCase())
     }
 
     return {
@@ -148,7 +148,7 @@ export class DIDResolverService {
     }
   }
 
-  private async resolveViaWoC(txid: string): Promise<DIDResolutionResult> {
+  private async resolveViaWoC (txid: string): Promise<DIDResolutionResult> {
     const notFound: DIDResolutionResult = {
       didDocument: null,
       didDocumentMetadata: {},
@@ -171,15 +171,15 @@ export class DIDResolverService {
       if (!txResp.ok) return notFound
       const txData: any = await txResp.json()
 
-      if (!created) {
-        created = txData.time ? new Date(txData.time * 1000).toISOString() : undefined
+      if (created == null) {
+        created = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
       }
 
       // Parse OP_RETURN outputs
       let segments: string[] = []
-      for (const vout of txData.vout || []) {
-        const hex = vout?.scriptPubKey?.hex
-        if (!hex) continue
+      for (const vout of (txData.vout as any[] | null) ?? []) {
+        const hex = vout?.scriptPubKey?.hex as string | undefined
+        if (hex == null || hex === '') continue
         const s = parseOpReturnSegments(hex)
         if (s.length >= 3 && s[0] === BSVDID_MARKER) {
           segments = s
@@ -204,7 +204,7 @@ export class DIDResolverService {
           try {
             lastDocument = JSON.parse(payload)
             lastDocTxid = currentTxid
-            updated = txData.time ? new Date(txData.time * 1000).toISOString() : undefined
+            updated = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
           } catch {
             // Not valid JSON
           }
@@ -219,21 +219,21 @@ export class DIDResolverService {
         const spendResp = await fetch(`${this.wocBaseUrl}/tx/${currentTxid}/out/0/spend`)
         if (spendResp.ok && spendResp.status !== 404) {
           const spendData: any = await spendResp.json()
-          nextTxid = spendData?.txid || null
+          nextTxid = spendData?.txid ?? null
         }
       } catch { /* fall through */ }
 
       // Strategy 2: address history fallback
-      if (!nextTxid) {
+      if (nextTxid == null) {
         const out0Addr = txData.vout?.[0]?.scriptPubKey?.addresses?.[0]
-        if (out0Addr) {
+        if (out0Addr != null) {
           try {
-            const histResp = await fetch(`${this.wocBaseUrl}/address/${out0Addr}/history`)
+            const histResp = await fetch(`${this.wocBaseUrl}/address/${String(out0Addr)}/history`)
             if (histResp.ok) {
-              const history = (await histResp.json()) as Array<{ tx_hash: string; height: number }>
+              const history = (await histResp.json()) as Array<{ tx_hash: string, height: number }>
               const candidates = history
                 .filter(e => !visited.has(e.tx_hash))
-                .sort((a, b) => (b.height || 0) - (a.height || 0))
+                .sort((a, b) => (b.height !== 0 ? b.height : 0) - (a.height !== 0 ? a.height : 0))
               if (candidates.length > 0) {
                 nextTxid = candidates[0].tx_hash
               }
@@ -242,11 +242,11 @@ export class DIDResolverService {
         }
       }
 
-      if (!nextTxid) break
+      if (nextTxid == null) break
       currentTxid = nextTxid
     }
 
-    if (lastDocument) {
+    if (lastDocument != null) {
       return {
         didDocument: lastDocument,
         didDocumentMetadata: { created, updated, versionId: lastDocTxid },
@@ -273,23 +273,25 @@ export class DIDResolverService {
 // Next.js handler factory
 // ============================================================================
 
-export function createDIDResolverHandler(config?: DIDResolverConfig) {
+export function createDIDResolverHandler (config?: DIDResolverConfig): ReturnType<typeof toNextHandlers> {
   const resolver = new DIDResolverService(config)
 
   const coreHandlers = {
-    async GET(req: HandlerRequest): Promise<HandlerResponse> {
+    async GET (req: HandlerRequest): Promise<HandlerResponse> {
       const params = getSearchParams(req.url)
       const did = params.get('did')
 
-      if (!did) {
+      if (did == null || did === '') {
         return jsonResponse({ error: 'Missing "did" query parameter' }, 400)
       }
 
       try {
         const result = await resolver.resolve(did)
-        const status = result.didResolutionMetadata.error === 'notFound' ? 404
-          : result.didResolutionMetadata.error === 'internalError' ? 502
-          : 200
+        const status = result.didResolutionMetadata.error === 'notFound'
+          ? 404
+          : (result.didResolutionMetadata.error === 'internalError'
+              ? 502
+              : 200)
         return jsonResponse(result, status)
       } catch (error) {
         return jsonResponse({

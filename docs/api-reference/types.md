@@ -21,7 +21,6 @@ interface WalletDefaults {
   network: Network
   description: string
   outputDescription: string
-  changeBasket?: string
   tokenBasket: string
   tokenProtocolID: [SecurityLevel, string]
   tokenKeyID: string
@@ -37,7 +36,6 @@ interface WalletDefaults {
 | `network` | `'main'` |
 | `description` | `'BSV-Simplify transaction'` |
 | `outputDescription` | `'BSV-Simplify output'` |
-| `changeBasket` | `undefined` |
 | `tokenBasket` | `'tokens'` |
 | `tokenProtocolID` | `[0, 'token']` |
 | `tokenKeyID` | `'1'` |
@@ -76,7 +74,6 @@ interface TransactionResult {
   txid: string
   tx: any                              // AtomicBEEF bytes (number[])
   outputs?: OutputInfo[]
-  reinternalized?: ReinternalizeResult
 }
 ```
 
@@ -88,15 +85,6 @@ interface OutputInfo {
   satoshis: number
   lockingScript: string
   description?: string
-}
-```
-
-### ReinternalizeResult
-
-```typescript
-interface ReinternalizeResult {
-  count: number      // Number of change outputs recovered
-  errors: string[]   // Any errors encountered
 }
 ```
 
@@ -125,14 +113,10 @@ interface SendOutputDetail {
 
 ```typescript
 interface PaymentOptions {
-  to: string                    // Recipient public key
+  to: string                    // Recipient identity key
   satoshis: number              // Amount
-  memo?: string                 // OP_RETURN memo
+  memo?: string                 // Optional memo
   description?: string          // Transaction description
-  basket?: string               // Track output in basket
-  changeBasket?: string         // Reinternalize change
-  derivationPrefix?: string     // BRC-29 derivation prefix
-  derivationSuffix?: string     // BRC-29 derivation suffix
 }
 ```
 
@@ -142,7 +126,6 @@ interface PaymentOptions {
 interface SendOptions {
   outputs: SendOutputSpec[]
   description?: string
-  changeBasket?: string
 }
 ```
 
