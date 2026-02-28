@@ -12,6 +12,7 @@ import { TaskClock } from './tasks/TaskClock'
 import { TaskNewHeader } from './tasks/TaskNewHeader'
 import { TaskMonitorCallHistory } from './tasks/TaskMonitorCallHistory'
 import { TaskReorg } from './tasks/TaskReorg'
+import { TaskArcSSE } from './tasks/TaskArcSSE'
 
 import { TaskSendWaiting } from './tasks/TaskSendWaiting'
 import { TaskCheckNoSends } from './tasks/TaskCheckNoSends'
@@ -52,10 +53,19 @@ export interface MonitorOptions {
   unprovenAttemptsLimitMain: number
 
   /**
+   * Stable callback token for ARC SSE event streaming.
+   * When set, TaskArcSSE will open an SSE connection to Arcade's
+   * /events endpoint and receive real-time transaction status updates.
+   * Must match the X-CallbackToken header sent during broadcast.
+   */
+  callbackToken?: string
+
+  /**
    * These are hooks for a wallet-toolbox client to get transaction updates.
    */
   onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
+  onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>
 }
 
 /**
@@ -96,6 +106,7 @@ export class Monitor {
   headersSubscriptionPromise?: Promise<string>
   onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
+  onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>
 
   constructor(options: MonitorOptions) {
     this.options = { ...options }
@@ -106,6 +117,7 @@ export class Monitor {
     this.chaintracksWithEvents = options.chaintracksWithEvents
     this.onTransactionProven = options.onTransactionProven
     this.onTransactionBroadcasted = options.onTransactionBroadcasted
+    this.onTransactionStatusChanged = options.onTransactionStatusChanged
 
     if (this.chaintracksWithEvents) {
       const c = this.chaintracksWithEvents
@@ -180,6 +192,7 @@ export class Monitor {
     //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
+    this._tasks.push(new TaskArcSSE(this))
   }
 
   /**
@@ -356,6 +369,33 @@ export class Monitor {
     if (this.onTransactionProven) {
       this.onTransactionProven(txStatus)
     }
+  }
+
+  /**
+   * Called by TaskArcSSE when an SSE status event is received from Arcade.
+   */
+  callOnTransactionStatusChanged(txid: string, newStatus: string): void {
+    if (this.onTransactionStatusChanged) {
+      this.onTransactionStatusChanged(txid, newStatus)
+    }
+  }
+
+  /**
+   * Pause the SSE connection (e.g. when mobile app goes to background).
+   * The lastEventId is preserved for catchup on resume.
+   */
+  pauseSSE(): void {
+    const sseTask = this._tasks.find(t => t.name === TaskArcSSE.taskName) as TaskArcSSE | undefined
+    sseTask?.pause()
+  }
+
+  /**
+   * Resume the SSE connection (e.g. when mobile app returns to foreground).
+   * Missed events are replayed by the server via Last-Event-ID.
+   */
+  resumeSSE(): void {
+    const sseTask = this._tasks.find(t => t.name === TaskArcSSE.taskName) as TaskArcSSE | undefined
+    sseTask?.resume()
   }
 
   deactivatedHeaders: DeactivedHeader[] = []
