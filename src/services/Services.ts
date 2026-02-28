@@ -324,6 +324,11 @@ export class Services implements WalletServices {
   }
 
   postBeefMode: 'PromiseAll' | 'UntilSuccess' = 'UntilSuccess'
+  /**
+   * Soft timeout used for each provider call in `UntilSuccess` mode.
+   * This bounds request latency when a provider hangs before failover.
+   */
+  postBeefUntilSuccessSoftTimeoutMs = 5000
 
   /**
    *
@@ -340,7 +345,7 @@ export class Services implements WalletServices {
       case 'UntilSuccess':
         {
           for (const stc of stcs) {
-            const r = await callService(stc)
+            const r = await callService(stc, this.postBeefUntilSuccessSoftTimeoutMs)
             logger?.log(`${stc.providerName} status ${r.status}`)
             rs.push(r)
             if (r.status === 'success') break
@@ -365,8 +370,25 @@ export class Services implements WalletServices {
     logger?.groupEnd()
     return rs
 
-    async function callService(stc: ServiceToCall<PostBeefService>) {
-      const r = await stc.service(beef, txids)
+    async function callService(stc: ServiceToCall<PostBeefService>, timeoutMs?: number) {
+      const callPromise = stc.service(beef, txids)
+      let r: PostBeefResult
+      if (!timeoutMs || timeoutMs <= 0) {
+        r = await callPromise
+      } else {
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+        const timeoutPromise = new Promise<PostBeefResult>(resolve => {
+          timeoutHandle = setTimeout(
+            () => resolve(makeServiceTimeoutResult(stc.providerName, txids, timeoutMs)),
+            timeoutMs
+          )
+        })
+        r = await Promise.race([callPromise, timeoutPromise])
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+        // Avoid unhandled rejection after timeout race wins.
+        void callPromise.catch(() => undefined)
+      }
+
       if (r.status === 'success') {
         services.addServiceCallSuccess(stc)
       } else {
@@ -377,6 +399,20 @@ export class Services implements WalletServices {
         }
       }
       return r
+    }
+
+    function makeServiceTimeoutResult(providerName: string, txids: string[], timeoutMs: number): PostBeefResult {
+      return {
+        name: providerName,
+        status: 'error',
+        txidResults: txids.map(txid => ({
+          txid,
+          status: 'error',
+          serviceError: true,
+          data: { detail: `timeout after ${timeoutMs}ms` }
+        })),
+        notes: [{ when: new Date().toISOString(), what: 'postBeefServiceTimeout', providerName, timeoutMs }]
+      }
     }
   }
 
