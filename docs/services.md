@@ -23,24 +23,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [ArcConfig](#interface-arcconfig) | [ChaintracksClientApi](#interface-chaintracksclientapi) | [ChaintracksStorageNoDbOptions](#interface-chaintracksstoragenodboptions) |
-| [ArcMinerGetTxData](#interface-arcminergettxdata) | [ChaintracksFetchApi](#interface-chaintracksfetchapi) | [ChaintracksStorageQueryApi](#interface-chaintracksstoragequeryapi) |
-| [BitailsConfig](#interface-bitailsconfig) | [ChaintracksFsApi](#interface-chaintracksfsapi) | [ChaintracksWritableFileApi](#interface-chaintrackswritablefileapi) |
-| [BitailsMerkleProof](#interface-bitailsmerkleproof) | [ChaintracksInfoApi](#interface-chaintracksinfoapi) | [ExchangeRatesIoApi](#interface-exchangeratesioapi) |
-| [BulkFileDataManagerMergeResult](#interface-bulkfiledatamanagermergeresult) | [ChaintracksManagementApi](#interface-chaintracksmanagementapi) | [GetHeaderByteFileLinksResult](#interface-getheaderbytefilelinksresult) |
-| [BulkFileDataManagerOptions](#interface-bulkfiledatamanageroptions) | [ChaintracksOptions](#interface-chaintracksoptions) | [HeightRangeApi](#interface-heightrangeapi) |
-| [BulkHeaderFileInfo](#interface-bulkheaderfileinfo) | [ChaintracksPackageInfoApi](#interface-chaintrackspackageinfoapi) | [HeightRanges](#interface-heightranges) |
-| [BulkHeaderFilesInfo](#interface-bulkheaderfilesinfo) | [ChaintracksReadableFileApi](#interface-chaintracksreadablefileapi) | [LiveBlockHeader](#interface-liveblockheader) |
-| [BulkIngestorApi](#interface-bulkingestorapi) | [ChaintracksServiceClientOptions](#interface-chaintracksserviceclientoptions) | [LiveIngestorApi](#interface-liveingestorapi) |
-| [BulkIngestorBaseOptions](#interface-bulkingestorbaseoptions) | [ChaintracksServiceOptions](#interface-chaintracksserviceoptions) | [LiveIngestorBaseOptions](#interface-liveingestorbaseoptions) |
-| [BulkIngestorCDNOptions](#interface-bulkingestorcdnoptions) | [ChaintracksStorageApi](#interface-chaintracksstorageapi) | [LiveIngestorWhatsOnChainOptions](#interface-liveingestorwhatsonchainoptions) |
-| [BulkIngestorWhatsOnChainOptions](#interface-bulkingestorwhatsonchainoptions) | [ChaintracksStorageBaseOptions](#interface-chaintracksstoragebaseoptions) | [ServiceCall](#interface-servicecall) |
-| [BulkStorageApi](#interface-bulkstorageapi) | [ChaintracksStorageBulkFileApi](#interface-chaintracksstoragebulkfileapi) | [ServiceToCall](#interface-servicetocall) |
-| [BulkStorageBaseOptions](#interface-bulkstoragebaseoptions) | [ChaintracksStorageIdbOptions](#interface-chaintracksstorageidboptions) | [WhatsOnChainServicesOptions](#interface-whatsonchainservicesoptions) |
-| [BulkSyncResult](#interface-bulksyncresult) | [ChaintracksStorageIdbSchema](#interface-chaintracksstorageidbschema) | [WocChainInfo](#interface-wocchaininfo) |
-| [ChaintracksApi](#interface-chaintracksapi) | [ChaintracksStorageIngestApi](#interface-chaintracksstorageingestapi) | [WocGetHeaderByteFileLinks](#interface-wocgetheaderbytefilelinks) |
-| [ChaintracksAppendableFileApi](#interface-chaintracksappendablefileapi) | [ChaintracksStorageKnexOptions](#interface-chaintracksstorageknexoptions) | [WocGetHeadersHeader](#interface-wocgetheadersheader) |
-| [ChaintracksChainTrackerOptions](#interface-chaintrackschaintrackeroptions) | [ChaintracksStorageMemoryOptions](#interface-chaintracksstoragememoryoptions) | [WocHeader](#interface-wocheader) |
+| [ArcConfig](#interface-arcconfig) | [ChaintracksChainTrackerOptions](#interface-chaintrackschaintrackeroptions) | [ChaintracksStorageNoDbOptions](#interface-chaintracksstoragenodboptions) |
+| [ArcMinerGetTxData](#interface-arcminergettxdata) | [ChaintracksClientApi](#interface-chaintracksclientapi) | [ChaintracksStorageQueryApi](#interface-chaintracksstoragequeryapi) |
+| [ArcSSEClientOptions](#interface-arcsseclientoptions) | [ChaintracksFetchApi](#interface-chaintracksfetchapi) | [ChaintracksWritableFileApi](#interface-chaintrackswritablefileapi) |
+| [ArcSSEEvent](#interface-arcsseevent) | [ChaintracksFsApi](#interface-chaintracksfsapi) | [ExchangeRatesIoApi](#interface-exchangeratesioapi) |
+| [BitailsConfig](#interface-bitailsconfig) | [ChaintracksInfoApi](#interface-chaintracksinfoapi) | [GetHeaderByteFileLinksResult](#interface-getheaderbytefilelinksresult) |
+| [BitailsMerkleProof](#interface-bitailsmerkleproof) | [ChaintracksManagementApi](#interface-chaintracksmanagementapi) | [HeightRangeApi](#interface-heightrangeapi) |
+| [BulkFileDataManagerMergeResult](#interface-bulkfiledatamanagermergeresult) | [ChaintracksOptions](#interface-chaintracksoptions) | [HeightRanges](#interface-heightranges) |
+| [BulkFileDataManagerOptions](#interface-bulkfiledatamanageroptions) | [ChaintracksPackageInfoApi](#interface-chaintrackspackageinfoapi) | [LiveBlockHeader](#interface-liveblockheader) |
+| [BulkHeaderFileInfo](#interface-bulkheaderfileinfo) | [ChaintracksReadableFileApi](#interface-chaintracksreadablefileapi) | [LiveIngestorApi](#interface-liveingestorapi) |
+| [BulkHeaderFilesInfo](#interface-bulkheaderfilesinfo) | [ChaintracksServiceClientOptions](#interface-chaintracksserviceclientoptions) | [LiveIngestorBaseOptions](#interface-liveingestorbaseoptions) |
+| [BulkIngestorApi](#interface-bulkingestorapi) | [ChaintracksServiceOptions](#interface-chaintracksserviceoptions) | [LiveIngestorWhatsOnChainOptions](#interface-liveingestorwhatsonchainoptions) |
+| [BulkIngestorBaseOptions](#interface-bulkingestorbaseoptions) | [ChaintracksStorageApi](#interface-chaintracksstorageapi) | [ServiceCall](#interface-servicecall) |
+| [BulkIngestorCDNOptions](#interface-bulkingestorcdnoptions) | [ChaintracksStorageBaseOptions](#interface-chaintracksstoragebaseoptions) | [ServiceToCall](#interface-servicetocall) |
+| [BulkIngestorWhatsOnChainOptions](#interface-bulkingestorwhatsonchainoptions) | [ChaintracksStorageBulkFileApi](#interface-chaintracksstoragebulkfileapi) | [WhatsOnChainServicesOptions](#interface-whatsonchainservicesoptions) |
+| [BulkStorageApi](#interface-bulkstorageapi) | [ChaintracksStorageIdbOptions](#interface-chaintracksstorageidboptions) | [WocChainInfo](#interface-wocchaininfo) |
+| [BulkStorageBaseOptions](#interface-bulkstoragebaseoptions) | [ChaintracksStorageIdbSchema](#interface-chaintracksstorageidbschema) | [WocGetHeaderByteFileLinks](#interface-wocgetheaderbytefilelinks) |
+| [BulkSyncResult](#interface-bulksyncresult) | [ChaintracksStorageIngestApi](#interface-chaintracksstorageingestapi) | [WocGetHeadersHeader](#interface-wocgetheadersheader) |
+| [ChaintracksApi](#interface-chaintracksapi) | [ChaintracksStorageKnexOptions](#interface-chaintracksstorageknexoptions) | [WocHeader](#interface-wocheader) |
+| [ChaintracksAppendableFileApi](#interface-chaintracksappendablefileapi) | [ChaintracksStorageMemoryOptions](#interface-chaintracksstoragememoryoptions) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -130,6 +131,104 @@ export interface ArcMinerGetTxData {
 ```
 
 See also: [blockHash](./services.md#function-blockhash)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: ArcSSEClientOptions
+
+```ts
+export interface ArcSSEClientOptions {
+    baseUrl: string;
+    callbackToken: string;
+    onEvent: (event: ArcSSEEvent) => void;
+    onError?: (error: Event) => void;
+    onConnected?: () => void;
+    onDisconnected?: () => void;
+    lastEventId?: string;
+}
+```
+
+See also: [ArcSSEEvent](./services.md#interface-arcsseevent)
+
+###### Property baseUrl
+
+Base URL of the Arcade instance (e.g. "https://arcade-us-1.bsvb.tech")
+
+```ts
+baseUrl: string
+```
+
+###### Property callbackToken
+
+Stable per-wallet token matching the X-CallbackToken sent on broadcast
+
+```ts
+callbackToken: string
+```
+
+###### Property lastEventId
+
+Initial lastEventId for catchup on first connect
+
+```ts
+lastEventId?: string
+```
+
+###### Property onConnected
+
+Called when connection is established
+
+```ts
+onConnected?: () => void
+```
+
+###### Property onDisconnected
+
+Called when connection is lost
+
+```ts
+onDisconnected?: () => void
+```
+
+###### Property onError
+
+Called when a connection error occurs
+
+```ts
+onError?: (error: Event) => void
+```
+
+###### Property onEvent
+
+Called for each status event received
+
+```ts
+onEvent: (event: ArcSSEEvent) => void
+```
+See also: [ArcSSEEvent](./services.md#interface-arcsseevent)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: ArcSSEEvent
+
+SSE (Server-Sent Events) client for Arcade transaction status updates.
+
+Connects to Arcade's `GET /events?callbackToken=<token>` endpoint
+and receives real-time status updates for transactions submitted
+with the matching `X-CallbackToken` header.
+
+Supports pause/resume for mobile app lifecycle (background/foreground)
+with automatic catchup via the `Last-Event-ID` mechanism.
+
+```ts
+export interface ArcSSEEvent {
+    txid: string;
+    txStatus: string;
+    timestamp: string;
+}
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -2613,7 +2712,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [ARC](#class-arc) | [BulkIngestorWhatsOnChainCdn](#class-bulkingestorwhatsonchaincdn) | [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) |
+| [ARC](#class-arc) | [BulkIngestorCDNBabbage](#class-bulkingestorcdnbabbage) | [ChaintracksStorageKnex](#class-chaintracksstorageknex) |
+| [ArcSSEClient](#class-arcsseclient) | [BulkIngestorWhatsOnChainCdn](#class-bulkingestorwhatsonchaincdn) | [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) |
 | [BHServiceClient](#class-bhserviceclient) | [BulkIngestorWhatsOnChainWs](#class-bulkingestorwhatsonchainws) | [ChaintracksWritableFile](#class-chaintrackswritablefile) |
 | [Bitails](#class-bitails) | [BulkStorageBase](#class-bulkstoragebase) | [HeightRange](#class-heightrange) |
 | [BulkFileDataManager](#class-bulkfiledatamanager) | [Chaintracks](#class-chaintracks) | [LiveIngestorBase](#class-liveingestorbase) |
@@ -2627,7 +2727,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [BulkHeaderFiles](#class-bulkheaderfiles) | [ChaintracksServiceClient](#class-chaintracksserviceclient) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
 | [BulkIngestorBase](#class-bulkingestorbase) | [ChaintracksStorageBase](#class-chaintracksstoragebase) | [WhatsOnChainServices](#class-whatsonchainservices) |
 | [BulkIngestorCDN](#class-bulkingestorcdn) | [ChaintracksStorageIdb](#class-chaintracksstorageidb) |  |
-| [BulkIngestorCDNBabbage](#class-bulkingestorcdnbabbage) | [ChaintracksStorageKnex](#class-chaintracksstorageknex) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -2723,6 +2822,41 @@ The ARC '/v1/tx' endpoint, as of 2025-02-17 DOES NOT support the following hex s
 async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> 
 ```
 See also: [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: ArcSSEClient
+
+```ts
+export class ArcSSEClient {
+    constructor(private readonly options: ArcSSEClientOptions) 
+    get lastEventId(): string | undefined 
+    get connected(): boolean 
+    connect(): void 
+    disconnect(): void 
+    pause(): void 
+    resume(): void 
+}
+```
+
+See also: [ArcSSEClientOptions](./services.md#interface-arcsseclientoptions)
+
+###### Method pause
+
+Close the SSE connection but preserve lastEventId for later catchup
+
+```ts
+pause(): void 
+```
+
+###### Method resume
+
+Reopen the SSE connection; server replays missed events via Last-Event-ID
+
+```ts
+resume(): void 
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4598,6 +4732,9 @@ export class Services implements WalletServices {
     async getUtxoStatus(output: string, outputFormat?: GetUtxoStatusOutputFormat, outpoint?: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetUtxoStatusResult> 
     async getScriptHashHistory(hash: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetScriptHashHistoryResult> 
     postBeefMode: "PromiseAll" | "UntilSuccess" = "UntilSuccess";
+    postBeefUntilSuccessSoftTimeoutMs = 5000;
+    postBeefUntilSuccessSoftTimeoutPerKbMs = 50;
+    postBeefUntilSuccessSoftTimeoutMaxMs = 30000;
     async postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]> 
     async getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult> 
     async invokeChaintracksWithRetry<R>(method: () => Promise<R>): Promise<R> 
@@ -4612,6 +4749,32 @@ export class Services implements WalletServices {
 ```
 
 See also: [ARC](./services.md#class-arc), [Bitails](./services.md#class-bitails), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatCurrencyCode](./client.md#type-fiatcurrencycode), [FiatExchangeRates](./client.md#interface-fiatexchangerates), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetMerklePathService](./client.md#type-getmerklepathservice), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetRawTxService](./client.md#type-getrawtxservice), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetScriptHashHistoryService](./client.md#type-getscripthashhistoryservice), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetStatusForTxidsService](./client.md#type-getstatusfortxidsservice), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [GetUtxoStatusService](./client.md#type-getutxostatusservice), [PostBeefResult](./client.md#interface-postbeefresult), [PostBeefService](./client.md#type-postbeefservice), [ServiceCollection](./services.md#class-servicecollection), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [UpdateFiatExchangeRateService](./client.md#type-updatefiatexchangerateservice), [WalletServices](./client.md#interface-walletservices), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WhatsOnChain](./services.md#class-whatsonchain), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
+
+###### Property postBeefUntilSuccessSoftTimeoutMaxMs
+
+Upper bound for adaptive soft-timeout in `UntilSuccess` mode.
+
+```ts
+postBeefUntilSuccessSoftTimeoutMaxMs = 30000
+```
+
+###### Property postBeefUntilSuccessSoftTimeoutMs
+
+Soft timeout used for each provider call in `UntilSuccess` mode.
+This bounds request latency when a provider hangs before failover.
+
+```ts
+postBeefUntilSuccessSoftTimeoutMs = 5000
+```
+
+###### Property postBeefUntilSuccessSoftTimeoutPerKbMs
+
+Additional soft-timeout budget (ms) per KiB of serialized Beef payload.
+Helps avoid false timeout failover on legitimately large submissions.
+
+```ts
+postBeefUntilSuccessSoftTimeoutPerKbMs = 50
+```
 
 ###### Method hashOutputScript
 

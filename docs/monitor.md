@@ -109,12 +109,25 @@ export interface MonitorOptions {
     abandonedMsecs: number;
     unprovenAttemptsLimitTest: number;
     unprovenAttemptsLimitMain: number;
+    callbackToken?: string;
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
+    onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
 }
 ```
 
 See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services)
+
+###### Property callbackToken
+
+Stable callback token for ARC SSE event streaming.
+When set, TaskArcSSE will open an SSE connection to Arcade's
+/events endpoint and receive real-time transaction status updates.
+Must match the X-CallbackToken header sent during broadcast.
+
+```ts
+callbackToken?: string
+```
 
 ###### Property msecsWaitPerMerkleProofServiceReq
 
@@ -176,14 +189,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | |
 | --- | --- |
-| [Monitor](#class-monitor) | [TaskPurge](#class-taskpurge) |
-| [MonitorDaemon](#class-monitordaemon) | [TaskReorg](#class-taskreorg) |
+| [Monitor](#class-monitor) | [TaskNewHeader](#class-tasknewheader) |
+| [MonitorDaemon](#class-monitordaemon) | [TaskPurge](#class-taskpurge) |
+| [TaskArcSSE](#class-taskarcsse) | [TaskReorg](#class-taskreorg) |
 | [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReviewStatus](#class-taskreviewstatus) |
 | [TaskCheckNoSends](#class-taskchecknosends) | [TaskSendWaiting](#class-tasksendwaiting) |
 | [TaskClock](#class-taskclock) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
 | [TaskFailAbandoned](#class-taskfailabandoned) | [TaskUnFail](#class-taskunfail) |
 | [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [WalletMonitorTask](#class-walletmonitortask) |
-| [TaskNewHeader](#class-tasknewheader) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -207,6 +220,7 @@ export class Monitor {
     headersSubscriptionPromise?: Promise<string>;
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
+    onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
     constructor(options: MonitorOptions) 
     async destroy(): Promise<void> 
     static readonly oneSecond = 1000;
@@ -243,6 +257,9 @@ export class Monitor {
     processNewBlockHeader(header: BlockHeader): void 
     callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void 
     callOnProvenTransaction(txStatus: ProvenTransactionStatus): void 
+    callOnTransactionStatusChanged(txid: string, newStatus: string): void 
+    pauseSSE(): void 
+    resumeSSE(): void 
     deactivatedHeaders: DeactivedHeader[] = [];
     processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void 
     processHeader(header: BlockHeader): void 
@@ -309,6 +326,23 @@ callOnProvenTransaction(txStatus: ProvenTransactionStatus): void
 ```
 See also: [ProvenTransactionStatus](./client.md#interface-proventransactionstatus)
 
+###### Method callOnTransactionStatusChanged
+
+Called by TaskArcSSE when an SSE status event is received from Arcade.
+
+```ts
+callOnTransactionStatusChanged(txid: string, newStatus: string): void 
+```
+
+###### Method pauseSSE
+
+Pause the SSE connection (e.g. when mobile app goes to background).
+The lastEventId is preserved for catchup on resume.
+
+```ts
+pauseSSE(): void 
+```
+
 ###### Method processHeader
 
 Handler for new header events from Chaintracks.
@@ -348,6 +382,15 @@ processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivate
 ```
 See also: [BlockHeader](./client.md#interface-blockheader)
 
+###### Method resumeSSE
+
+Resume the SSE connection (e.g. when mobile app returns to foreground).
+Missed events are replayed by the server via Last-Event-ID.
+
+```ts
+resumeSSE(): void 
+```
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
@@ -369,6 +412,33 @@ export class MonitorDaemon {
 ```
 
 See also: [MonitorDaemonSetup](./monitor.md#interface-monitordaemonsetup)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: TaskArcSSE
+
+Monitor task that manages an SSE connection to Arcade for real-time
+transaction status updates.
+
+Events are queued by the SSE callback and processed on each monitor cycle.
+On MINED events, triggers TaskCheckForProofs to fetch merkle proofs.
+
+```ts
+export class TaskArcSSE extends WalletMonitorTask {
+    static taskName = "ArcSSE";
+    constructor(monitor: Monitor) 
+    override async asyncSetup(): Promise<void> 
+    trigger(_nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async runTask(): Promise<string> 
+    pause(): void 
+    resume(): void 
+}
+```
+
+See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

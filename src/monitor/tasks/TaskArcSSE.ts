@@ -32,7 +32,7 @@ export class TaskArcSSE extends WalletMonitorTask {
     this.sseClient = new ArcSSEClient({
       baseUrl: arcUrl,
       callbackToken,
-      onEvent: (event) => {
+      onEvent: event => {
         this.pendingEvents.push(event)
       },
       onConnected: () => {

@@ -127,10 +127,7 @@ export class ArcSSEClient {
 
   private scheduleReconnect(): void {
     if (this._closed) return
-    const delay = Math.min(
-      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-      this.maxReconnectDelay
-    )
+    const delay = Math.min(this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts), this.maxReconnectDelay)
     this.reconnectAttempts++
     this.reconnectTimer = setTimeout(() => {
       this.connect()
