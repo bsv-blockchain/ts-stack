@@ -1095,7 +1095,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const byId: Record<number, TableOutput> = {}
     if (outputIds.length < 1) return byId
     const rows = await this.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).select('*')
-    for (const row of rows) {
+    for (const o of rows) {
+      await this.validateOutputScript(o, trx)
+    }
+    const vrows = this.validateEntities(rows, undefined, ['spendable', 'change'])
+    for (const row of vrows) {
       if (row.outputId !== undefined) byId[row.outputId] = row
     }
     return byId
@@ -1108,6 +1112,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   ): Promise<Record<string, TableOutput>> {
     const byOutpoint: Record<string, TableOutput> = {}
     if (outpoints.length < 1) return byOutpoint
+    const outpointSet = new Set(outpoints.map(o => `${o.txid}.${o.vout}`))
     const txids = [...new Set(outpoints.map(o => o.txid))]
     const vouts = [...new Set(outpoints.map(o => o.vout))]
     const rows = await this.toDb(trx)<TableOutput>('outputs')
@@ -1115,7 +1120,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereIn('txid', txids)
       .whereIn('vout', vouts)
       .select('*')
-    for (const row of rows) {
+    // Only return requested outpoints, vouts of one txid may end up matching another txid that was not requested.
+    const filteredRows = rows.filter(r => outpointSet.has(`${r.txid}.${r.vout}`))
+    const vrows = this.validateEntities(filteredRows, undefined, ['spendable', 'change'])
+    for (const row of vrows) {
       await this.validateOutputScript(row, trx)
       byOutpoint[`${row.txid}.${row.vout}`] = row
     }
@@ -1166,7 +1174,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return byTag
   }
 
-  override async sumChangeInputsSatoshis(
+  override async sumSpendableSatoshisInBasket(
     userId: number,
     basketId: number,
     excludeSending: boolean,

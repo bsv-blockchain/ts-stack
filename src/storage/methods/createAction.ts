@@ -239,7 +239,9 @@ async function createNewInputs(
     newInputs.push({ i, o })
   }
 
-  const knownInputRows = newInputs.filter((ni): ni is { i: XValidCreateActionInput; o: TableOutput } => !!ni.i && !!ni.o)
+  const knownInputRows = newInputs.filter(
+    (ni): ni is { i: XValidCreateActionInput; o: TableOutput } => !!ni.i && !!ni.o
+  )
   if (knownInputRows.length > 0) {
     let doubleSpendTxid: string | undefined
     await storage.transaction(async trx => {

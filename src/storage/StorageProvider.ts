@@ -171,7 +171,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return byTag
   }
 
-  async sumChangeInputsSatoshis(
+  async sumSpendableSatoshisInBasket(
     userId: number,
     basketId: number,
     excludeSending: boolean,
