@@ -243,19 +243,12 @@ async function createNewInputs(
   if (knownInputRows.length > 0) {
     let doubleSpendTxid: string | undefined
     await storage.transaction(async trx => {
-      let knownOutputsById: Record<number, TableOutput> = {}
-      if (isStorageKnexLike(storage)) {
-        const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
-        const rows = (await storage.toDb(trx)('outputs').whereIn('outputId', outputIds).select('*')) as TableOutput[]
-        for (const row of rows) knownOutputsById[verifyId(row.outputId)] = row
-      }
+      const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
+      const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
 
       for (const ni of knownInputRows) {
         const { i, o } = ni
-        const o2 =
-          isStorageKnexLike(storage)
-            ? knownOutputsById[verifyId(o.outputId)]
-            : verifyOneOrNone(await storage.findOutputs({ partial: { outputId: o.outputId }, trx }))
+        const o2 = knownOutputsById[verifyId(o.outputId)]
         if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
 
         if (o2.spentBy !== undefined) {
@@ -366,53 +359,13 @@ async function createNewOutputs(
 
   // Lookup output baskets
   const txBaskets: Record<string, TableOutputBasket> = {}
-  if (isStorageKnexLike(storage)) {
-    const basketNames = [...new Set(ctx.xoutputs.map(x => x.basket).filter((v): v is string => !!v))]
-    if (basketNames.length > 0) {
-      const existingBaskets = (await storage
-        .toDb(undefined)('output_baskets')
-        .where('userId', userId)
-        .whereIn('name', basketNames)) as TableOutputBasket[]
-      for (const b of existingBaskets) {
-        if (b.isDeleted) await storage.updateOutputBasket(verifyId(b.basketId), { isDeleted: false })
-        txBaskets[b.name] = b
-      }
-      for (const name of basketNames) {
-        if (!txBaskets[name]) txBaskets[name] = await storage.findOrInsertOutputBasket(userId, name)
-      }
-    }
-  } else {
-    for (const xo of ctx.xoutputs) {
-      if (xo.basket !== undefined && !txBaskets[xo.basket]) {
-        txBaskets[xo.basket] = await storage.findOrInsertOutputBasket(userId, xo.basket!)
-      }
-    }
-  }
+  const basketNames = [...new Set(ctx.xoutputs.map(x => x.basket).filter((v): v is string => !!v))]
+  Object.assign(txBaskets, await storage.findOrInsertOutputBasketsBulk(userId, basketNames))
 
   // Lookup output tags
   const txTags: Record<string, TableOutputTag> = {}
-  if (isStorageKnexLike(storage)) {
-    const tagNames = [...new Set(ctx.xoutputs.flatMap(x => x.tags))]
-    if (tagNames.length > 0) {
-      const existingTags = (await storage
-        .toDb(undefined)('output_tags')
-        .where('userId', userId)
-        .whereIn('tag', tagNames)) as TableOutputTag[]
-      for (const t of existingTags) {
-        if (t.isDeleted) await storage.updateOutputTag(verifyId(t.outputTagId), { isDeleted: false })
-        txTags[t.tag] = t
-      }
-      for (const name of tagNames) {
-        if (!txTags[name]) txTags[name] = await storage.findOrInsertOutputTag(userId, name)
-      }
-    }
-  } else {
-    for (const xo of ctx.xoutputs) {
-      for (const tag of xo.tags) {
-        if (!txTags[tag]) txTags[tag] = await storage.findOrInsertOutputTag(userId, tag)
-      }
-    }
-  }
+  const tagNames = [...new Set(ctx.xoutputs.flatMap(x => x.tags))]
+  Object.assign(txTags, await storage.findOrInsertOutputTagsBulk(userId, tagNames))
 
   const newOutputs: { o: TableOutput; tags: string[] }[] = []
 
@@ -724,26 +677,16 @@ async function validateRequiredInputs(
 
   const storageBeef = beef.clone()
 
-  const preloadedOutputsByOutpoint: Record<string, TableOutput> = {}
-  if (isStorageKnexLike(storage)) {
-    const txids = [...new Set(xinputs.map(i => i.outpoint.txid))]
-    const vouts = [...new Set(xinputs.map(i => i.outpoint.vout))]
-    if (txids.length > 0 && vouts.length > 0) {
-      const rows = (await storage
-        .toDb(undefined)('outputs')
-        .where('userId', userId)
-        .whereIn('txid', txids)
-        .whereIn('vout', vouts)) as TableOutput[]
-      for (const row of rows) preloadedOutputsByOutpoint[`${row.txid}.${row.vout}`] = row
-    }
-  }
+  const preloadedOutputsByOutpoint = await storage.findOutputsByOutpoints(
+    userId,
+    xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout }))
+  )
 
   for (const input of xinputs) {
     const { txid, vout } = input.outpoint
     let output: TableOutput | undefined = preloadedOutputsByOutpoint[`${txid}.${vout}`]
     if (!output) output = verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
     if (output) {
-      if (isStorageKnexLike(storage)) await storage.validateOutputScript(output)
       if (output.change) {
         throw new WERR_INVALID_PARAMETER(
           `inputs[${input.vin}]`,
@@ -848,23 +791,13 @@ async function preflightInsufficientFundsFastPath(
   changeBasket: TableOutputBasket,
   feeModel: StorageFeeModel
 ): Promise<void> {
-  if (!isStorageKnexLike(storage)) return
   if (feeModel.model !== 'sat/kb' || !feeModel.value) return
 
-  const status: ('completed' | 'unproven' | 'sending')[] = ['completed', 'unproven']
-  if (!vargs.isDelayed) status.push('sending')
-
-  const row = await storage
-    .toDb(undefined)('outputs as o')
-    .join('transactions as t', 'o.transactionId', 't.transactionId')
-    .where('o.userId', userId)
-    .where('o.spendable', true)
-    .where('o.basketId', verifyId(changeBasket.basketId))
-    .whereIn('t.status', status)
-    .sum({ totalSatoshis: 'o.satoshis' })
-    .first()
-
-  const availableChangeSatoshis = Number((row && row['totalSatoshis']) || 0)
+  const availableChangeSatoshis = await storage.sumChangeInputsSatoshis(
+    userId,
+    verifyId(changeBasket.basketId),
+    !vargs.isDelayed
+  )
   const fixedInputSatoshis = xinputs.reduce((a, e) => a + e.satoshis, 0)
   const noSendSatoshis = noSendChangeIn.reduce((a, e) => a + Number(e.satoshis || 0), 0)
   const totalAvailable = fixedInputSatoshis + noSendSatoshis + availableChangeSatoshis
@@ -880,10 +813,6 @@ async function preflightInsufficientFundsFastPath(
   if (totalAvailable < minRequired) {
     throw new WERR_INSUFFICIENT_FUNDS(minRequired, minRequired - totalAvailable)
   }
-}
-
-function isStorageKnexLike(storage: StorageProvider): storage is StorageProvider & { toDb: (trx?: unknown) => any } {
-  return typeof (storage as { toDb?: unknown }).toDb === 'function'
 }
 
 async function fundNewTransactionSdk(

@@ -129,6 +129,65 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   abstract countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number>
 
+  async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
+    const byId: Record<number, TableOutput> = {}
+    for (const outputId of outputIds) {
+      const o = verifyOneOrNone(await this.findOutputs({ partial: { outputId }, trx }))
+      if (o?.outputId !== undefined) byId[o.outputId] = o
+    }
+    return byId
+  }
+
+  async findOutputsByOutpoints(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    const byOutpoint: Record<string, TableOutput> = {}
+    for (const { txid, vout } of outpoints) {
+      const o = verifyOneOrNone(await this.findOutputs({ partial: { userId, txid, vout }, trx }))
+      if (o?.txid !== undefined && o.vout !== undefined) byOutpoint[`${o.txid}.${o.vout}`] = o
+    }
+    return byOutpoint
+  }
+
+  async findOrInsertOutputBasketsBulk(
+    userId: number,
+    names: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutputBasket>> {
+    const byName: Record<string, TableOutputBasket> = {}
+    for (const name of names) byName[name] = await this.findOrInsertOutputBasket(userId, name, trx)
+    return byName
+  }
+
+  async findOrInsertOutputTagsBulk(
+    userId: number,
+    tags: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutputTag>> {
+    const byTag: Record<string, TableOutputTag> = {}
+    for (const tag of tags) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
+    return byTag
+  }
+
+  async sumChangeInputsSatoshis(
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<number> {
+    const status: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) status.push('sending')
+    const rows = await this.findOutputs({
+      partial: { userId, spendable: true, basketId },
+      txStatus: status,
+      noScript: true,
+      trx
+    })
+    return rows.reduce((a, r) => a + Number(r.satoshis || 0), 0)
+  }
+
   abstract findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]>
   abstract findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]>
   abstract findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]>
