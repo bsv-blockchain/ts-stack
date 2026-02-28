@@ -1,48 +1,70 @@
+import { MerklePath } from '@bsv/sdk'
 import { ProvenTxReqTerminalStatus } from '../../sdk/types'
 import { EntityProvenTxReq } from '../../storage/schema/entities/EntityProvenTxReq'
+import { EntityProvenTx } from '../../storage/schema/entities/EntityProvenTx'
 import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
-import { TaskCheckForProofs } from './TaskCheckForProofs'
 
 /**
- * Monitor task that manages an SSE connection to Arcade for real-time
- * transaction status updates.
- *
- * Events are queued by the SSE callback and processed on each monitor cycle.
- * On MINED events, triggers TaskCheckForProofs to fetch merkle proofs.
+ * Monitor task that receives transaction status updates from Arcade via SSE
+ * and processes them — including fetching merkle proofs directly from Arcade
+ * when transactions are MINED.
  */
-export class TaskArcSSE extends WalletMonitorTask {
-  static taskName = 'ArcSSE'
+export class TaskArcadeSSE extends WalletMonitorTask {
+  static taskName = 'ArcadeSSE'
 
-  private sseClient: ArcSSEClient | null = null
+  sseClient: ArcSSEClient | null = null
   private pendingEvents: ArcSSEEvent[] = []
 
   constructor(monitor: Monitor) {
-    super(monitor, TaskArcSSE.taskName)
+    super(monitor, TaskArcadeSSE.taskName)
   }
 
   override async asyncSetup(): Promise<void> {
     const callbackToken = this.monitor.options.callbackToken
-    if (!callbackToken) return
+    if (!callbackToken) {
+      console.log('[TaskArcadeSSE] no callbackToken configured — SSE disabled')
+      return
+    }
 
     const arcUrl = this.monitor.services.options.arcUrl
-    if (!arcUrl) return
+    if (!arcUrl) {
+      console.log('[TaskArcadeSSE] no arcUrl configured — SSE disabled')
+      return
+    }
+
+    const EventSourceClass = this.monitor.options.EventSourceClass
+    if (!EventSourceClass) {
+      console.log('[TaskArcadeSSE] no EventSourceClass provided — SSE disabled')
+      return
+    }
+
+    let lastEventId: string | undefined
+    try {
+      lastEventId = await this.monitor.options.loadLastSSEEventId?.()
+      console.log(`[TaskArcadeSSE] loaded persisted lastEventId: ${lastEventId ?? '(none)'}`)
+    } catch (e) {
+      console.log(`[TaskArcadeSSE] failed to load lastEventId: ${e}`)
+    }
+
+    console.log(`[TaskArcadeSSE] setting up — arcUrl=${arcUrl} token=${callbackToken.substring(0, 8)}...`)
 
     this.sseClient = new ArcSSEClient({
       baseUrl: arcUrl,
       callbackToken,
+      lastEventId,
+      EventSourceClass,
       onEvent: event => {
         this.pendingEvents.push(event)
       },
-      onConnected: () => {
-        console.log(`[TaskArcSSE] SSE connected to ${arcUrl}`)
+      onError: (err) => {
+        console.log(`[TaskArcadeSSE] error: ${err.message}`)
       },
-      onDisconnected: () => {
-        console.log(`[TaskArcSSE] SSE disconnected`)
-      },
-      onError: () => {
-        // Reconnection is handled by ArcSSEClient internally
+      onLastEventIdChanged: (id: string) => {
+        this.monitor.options.saveLastSSEEventId?.(id).catch(e => {
+          console.log(`[TaskArcadeSSE] failed to persist lastEventId: ${e}`)
+        })
       }
     })
 
@@ -64,12 +86,9 @@ export class TaskArcSSE extends WalletMonitorTask {
     return log
   }
 
-  pause(): void {
-    this.sseClient?.pause()
-  }
-
-  resume(): void {
-    this.sseClient?.resume()
+  async fetchNow(): Promise<number> {
+    if (!this.sseClient) return 0
+    return await this.sseClient.fetchEvents()
   }
 
   private async processStatusEvent(event: ArcSSEEvent): Promise<string> {
@@ -87,7 +106,6 @@ export class TaskArcSSE extends WalletMonitorTask {
     for (const reqApi of reqs) {
       const req = new EntityProvenTxReq(reqApi)
 
-      // Don't downgrade terminal statuses
       if (ProvenTxReqTerminalStatus.includes(req.status)) {
         log += `  req ${req.id} already terminal: ${req.status}\n`
         continue
@@ -107,7 +125,6 @@ export class TaskArcSSE extends WalletMonitorTask {
             req.status = 'unmined'
             req.addHistoryNote(note)
             await req.updateStorageDynamicProperties(this.storage)
-            // Update associated transaction records
             const ids = req.notify.transactionIds
             if (ids) {
               await this.storage.runAsStorageProvider(async sp => {
@@ -120,12 +137,10 @@ export class TaskArcSSE extends WalletMonitorTask {
         }
 
         case 'MINED': {
-          // Trigger proof fetching — TaskCheckForProofs handles creating
-          // ProvenTx records and advancing to 'completed' properly.
-          TaskCheckForProofs.checkNow = true
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
-          log += `  req ${req.id} MINED — triggered proof check\n`
+          // Fetch proof directly from Arcade and complete the transaction
+          log += await this.fetchProofFromArcade(req)
           break
         }
 
@@ -163,8 +178,102 @@ export class TaskArcSSE extends WalletMonitorTask {
       }
     }
 
-    // Notify listener of status change
     this.monitor.callOnTransactionStatusChanged(event.txid, event.txStatus)
+
+    return log
+  }
+
+  /**
+   * Fetch the merklePath from Arcade's GET /tx/{txid} endpoint and
+   * create a ProvenTx record, completing the transaction.
+   */
+  private async fetchProofFromArcade(req: EntityProvenTxReq): Promise<string> {
+    const arcUrl = this.monitor.services.options.arcUrl
+    const txid = req.txid
+    let log = `  req ${req.id} MINED — fetching proof from Arcade\n`
+
+    try {
+      const response = await fetch(`${arcUrl}/tx/${txid}`)
+      if (!response.ok) {
+        log += `    Arcade GET /tx/${txid} returned ${response.status}\n`
+        return log
+      }
+
+      const data = await response.json()
+      console.log(`[TaskArcadeSSE] GET /tx/${txid}:`, JSON.stringify(data))
+
+      if (!data.merklePath) {
+        log += `    No merklePath in response (status=${data.txStatus})\n`
+        return log
+      }
+
+      // Parse the merklePath hex from Arcade
+      const merklePath = MerklePath.fromHex(data.merklePath)
+      const merkleRoot = merklePath.computeRoot(txid)
+
+      // Find the leaf to get the tx index
+      const leaf = merklePath.path[0].find(l => l.txid === true && l.hash === txid)
+      if (!leaf) {
+        log += `    merklePath does not contain leaf for txid\n`
+        return log
+      }
+
+      const blockHash = data.blockHash || ''
+      const height = data.blockHeight || merklePath.blockHeight
+
+      // Create ProvenTx entity
+      const now = new Date()
+      const ptx = new EntityProvenTx({
+        created_at: now,
+        updated_at: now,
+        provenTxId: 0,
+        txid,
+        height,
+        index: leaf.offset,
+        merklePath: merklePath.toBinary(),
+        rawTx: req.rawTx!,
+        merkleRoot,
+        blockHash
+      })
+
+      // Persist via the same path as TaskCheckForProofs
+      await req.refreshFromStorage(this.storage)
+      const { provenTxReqId, status, attempts, history } = req.toApi()
+      const r = await this.storage.runAsStorageProvider(async sp => {
+        return await sp.updateProvenTxReqWithNewProvenTx({
+          provenTxReqId,
+          status,
+          txid,
+          attempts,
+          history,
+          index: leaf.offset,
+          height,
+          blockHash,
+          merklePath: merklePath.toBinary(),
+          merkleRoot
+        })
+      })
+      req.status = r.status
+      req.apiHistory = r.history
+      req.provenTxId = r.provenTxId
+      req.notified = true
+
+      this.monitor.callOnProvenTransaction({
+        txid,
+        txIndex: leaf.offset,
+        blockHeight: height,
+        blockHash,
+        merklePath: merklePath.toBinary(),
+        merkleRoot
+      })
+
+      log += `    proved at height ${height}, index ${leaf.offset} => ${r.status}\n`
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      log += `    error fetching proof: ${msg}\n`
+      req.addHistoryNote({ when: new Date().toISOString(), what: 'arcProofError', error: msg })
+      await req.updateStorageDynamicProperties(this.storage)
+    }
 
     return log
   }

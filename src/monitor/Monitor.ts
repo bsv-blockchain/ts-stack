@@ -12,7 +12,7 @@ import { TaskClock } from './tasks/TaskClock'
 import { TaskNewHeader } from './tasks/TaskNewHeader'
 import { TaskMonitorCallHistory } from './tasks/TaskMonitorCallHistory'
 import { TaskReorg } from './tasks/TaskReorg'
-import { TaskArcSSE } from './tasks/TaskArcSSE'
+import { TaskArcadeSSE } from './tasks/TaskArcSSE'
 
 import { TaskSendWaiting } from './tasks/TaskSendWaiting'
 import { TaskCheckNoSends } from './tasks/TaskCheckNoSends'
@@ -54,11 +54,18 @@ export interface MonitorOptions {
 
   /**
    * Stable callback token for ARC SSE event streaming.
-   * When set, TaskArcSSE will open an SSE connection to Arcade's
+   * When set, TaskArcadeSSE will open an SSE connection to Arcade's
    * /events endpoint and receive real-time transaction status updates.
    * Must match the X-CallbackToken header sent during broadcast.
    */
   callbackToken?: string
+
+  /** Load persisted SSE lastEventId (e.g. from SQLite) for catchup on startup */
+  loadLastSSEEventId?: () => Promise<string | undefined>
+  /** Save SSE lastEventId to persistent storage */
+  saveLastSSEEventId?: (lastEventId: string) => Promise<void>
+  /** The react-native-sse EventSource class for SSE support in React Native */
+  EventSourceClass?: any
 
   /**
    * These are hooks for a wallet-toolbox client to get transaction updates.
@@ -192,7 +199,7 @@ export class Monitor {
     //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
-    this._tasks.push(new TaskArcSSE(this))
+    this._tasks.push(new TaskArcadeSSE(this))
   }
 
   /**
@@ -372,7 +379,7 @@ export class Monitor {
   }
 
   /**
-   * Called by TaskArcSSE when an SSE status event is received from Arcade.
+   * Called by TaskArcadeSSE when an SSE status event is received from Arcade.
    */
   callOnTransactionStatusChanged(txid: string, newStatus: string): void {
     if (this.onTransactionStatusChanged) {
@@ -381,21 +388,12 @@ export class Monitor {
   }
 
   /**
-   * Pause the SSE connection (e.g. when mobile app goes to background).
-   * The lastEventId is preserved for catchup on resume.
+   * Fetch pending transaction status events from Arcade on demand.
+   * Call this on app open, balance refresh, transaction list view, etc.
    */
-  pauseSSE(): void {
-    const sseTask = this._tasks.find(t => t.name === TaskArcSSE.taskName) as TaskArcSSE | undefined
-    sseTask?.pause()
-  }
-
-  /**
-   * Resume the SSE connection (e.g. when mobile app returns to foreground).
-   * Missed events are replayed by the server via Last-Event-ID.
-   */
-  resumeSSE(): void {
-    const sseTask = this._tasks.find(t => t.name === TaskArcSSE.taskName) as TaskArcSSE | undefined
-    sseTask?.resume()
+  async fetchSSEEvents(): Promise<number> {
+    const sseTask = this._tasks.find(t => t.name === TaskArcadeSSE.taskName) as TaskArcadeSSE | undefined
+    return (await sseTask?.fetchNow()) ?? 0
   }
 
   deactivatedHeaders: DeactivedHeader[] = []
