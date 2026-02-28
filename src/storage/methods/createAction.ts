@@ -109,7 +109,7 @@ export async function createAction(
   const feeModel = validateStorageFeeModel(storage.feeModel)
   logger?.log(`validated fee model ${JSON.stringify(feeModel)}`)
 
-  await preflightInsufficientFundsFastPath(storage, userId, vargs, xinputs, xoutputs, noSendChangeIn, changeBasket, feeModel)
+  await preflightInsufficientFundsFastPath(vargs, xinputs, xoutputs, noSendChangeIn, availableChangeCount, feeModel)
   logger?.log('passed insufficient-funds preflight')
 
   const newTx = await createNewTxRecord(storage, userId, vargs, storageBeef)
@@ -782,25 +782,17 @@ async function validateNoSendChange(
 }
 
 async function preflightInsufficientFundsFastPath(
-  storage: StorageProvider,
-  userId: number,
   vargs: Validation.ValidCreateActionArgs,
   xinputs: XValidCreateActionInput[],
   xoutputs: XValidCreateActionOutput[],
   noSendChangeIn: TableOutput[],
-  changeBasket: TableOutputBasket,
+  availableChangeCount: number,
   feeModel: StorageFeeModel
 ): Promise<void> {
   if (feeModel.model !== 'sat/kb' || !feeModel.value) return
 
-  const availableChangeSatoshis = await storage.sumChangeInputsSatoshis(
-    userId,
-    verifyId(changeBasket.basketId),
-    !vargs.isDelayed
-  )
   const fixedInputSatoshis = xinputs.reduce((a, e) => a + e.satoshis, 0)
   const noSendSatoshis = noSendChangeIn.reduce((a, e) => a + Number(e.satoshis || 0), 0)
-  const totalAvailable = fixedInputSatoshis + noSendSatoshis + availableChangeSatoshis
 
   const spending = xoutputs.reduce((a, e) => a + e.satoshis, 0)
   const minSize = transactionSize(
@@ -810,8 +802,15 @@ async function preflightInsufficientFundsFastPath(
   const minFee = Math.ceil((minSize / 1000) * feeModel.value)
   const minRequired = spending + minFee
 
-  if (totalAvailable < minRequired) {
-    throw new WERR_INSUFFICIENT_FUNDS(minRequired, minRequired - totalAvailable)
+  const fixedAvailable = fixedInputSatoshis + noSendSatoshis
+  if (fixedAvailable >= minRequired) return
+
+  // Keep common successful path cheap:
+  // - If there are zero change candidates, failure is certain.
+  // Otherwise, defer to the main funding allocator.
+  const deficit = minRequired - fixedAvailable
+  if (availableChangeCount <= 0) {
+    throw new WERR_INSUFFICIENT_FUNDS(minRequired, deficit)
   }
 }
 
