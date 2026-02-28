@@ -55,7 +55,7 @@ import {
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
-import { verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
+import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
@@ -1089,6 +1089,98 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .whereIn('t.status', status)
     const count = await this.getCount(q)
     return count
+  }
+
+  override async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
+    const byId: Record<number, TableOutput> = {}
+    if (outputIds.length < 1) return byId
+    const rows = await this.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).select('*')
+    for (const row of rows) {
+      if (row.outputId !== undefined) byId[row.outputId] = row
+    }
+    return byId
+  }
+
+  override async findOutputsByOutpoints(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    const byOutpoint: Record<string, TableOutput> = {}
+    if (outpoints.length < 1) return byOutpoint
+    const txids = [...new Set(outpoints.map(o => o.txid))]
+    const vouts = [...new Set(outpoints.map(o => o.vout))]
+    const rows = await this.toDb(trx)<TableOutput>('outputs')
+      .where('userId', userId)
+      .whereIn('txid', txids)
+      .whereIn('vout', vouts)
+      .select('*')
+    for (const row of rows) {
+      await this.validateOutputScript(row, trx)
+      byOutpoint[`${row.txid}.${row.vout}`] = row
+    }
+    return byOutpoint
+  }
+
+  override async findOrInsertOutputBasketsBulk(
+    userId: number,
+    names: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutputBasket>> {
+    const byName: Record<string, TableOutputBasket> = {}
+    if (names.length < 1) return byName
+    const uniqueNames = [...new Set(names)]
+    const existing = await this.toDb(trx)<TableOutputBasket>('output_baskets')
+      .where('userId', userId)
+      .whereIn('name', uniqueNames)
+      .select('*')
+    for (const basket of existing) {
+      if (basket.isDeleted) await this.updateOutputBasket(verifyId(basket.basketId), { isDeleted: false }, trx)
+      byName[basket.name] = basket
+    }
+    for (const name of uniqueNames) {
+      if (!byName[name]) byName[name] = await this.findOrInsertOutputBasket(userId, name, trx)
+    }
+    return byName
+  }
+
+  override async findOrInsertOutputTagsBulk(
+    userId: number,
+    tags: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutputTag>> {
+    const byTag: Record<string, TableOutputTag> = {}
+    if (tags.length < 1) return byTag
+    const uniqueTags = [...new Set(tags)]
+    const existing = await this.toDb(trx)<TableOutputTag>('output_tags')
+      .where('userId', userId)
+      .whereIn('tag', uniqueTags)
+      .select('*')
+    for (const outputTag of existing) {
+      if (outputTag.isDeleted) await this.updateOutputTag(verifyId(outputTag.outputTagId), { isDeleted: false }, trx)
+      byTag[outputTag.tag] = outputTag
+    }
+    for (const tag of uniqueTags) {
+      if (!byTag[tag]) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
+    }
+    return byTag
+  }
+
+  override async sumChangeInputsSatoshis(
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<number> {
+    const status: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) status.push('sending')
+    const row = await this.toDb(trx)<TableOutput>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
+      .whereIn('t.status', status)
+      .sum({ totalSatoshis: 'o.satoshis' })
+      .first()
+    return Number((row && (row as Record<string, unknown>)['totalSatoshis']) || 0)
   }
 
   /**
