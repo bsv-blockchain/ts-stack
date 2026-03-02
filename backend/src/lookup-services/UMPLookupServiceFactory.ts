@@ -34,17 +34,48 @@ class UMPLookupService implements LookupService {
     // Decode the UMP fields from the Bitcoin outputScript
     const result = PushDrop.decode(lockingScript)
 
-    // UMP Account Fields to store (from the UMP protocol's PushDrop field order)
-    const presentationHash = Utils.toHex(result.fields[6])
-    const recoveryHash = Utils.toHex(result.fields[7])
+    // Parse protocol fields (excluding trailing signature)
+    const protocolFields = result.fields
 
-    // Store UMP fields in db
-    await this.records.insertOne({
+    // UMP Account Fields to store (from the UMP protocol's PushDrop field order)
+    const presentationHash = Utils.toHex(protocolFields[6])
+    const recoveryHash = Utils.toHex(protocolFields[7])
+
+    // Detect v3 token: umpVersion is a single byte at field[11] (no profiles)
+    // or field[12] (with profiles). Multi-byte fields[11] means profiles present.
+    const hasV3AtIndex11 = protocolFields.length >= 12 && protocolFields[11]?.length === 1
+    const hasV3AtIndex12 = !hasV3AtIndex11 && protocolFields.length >= 13 && protocolFields[12]?.length === 1
+    const hasV3Candidate = hasV3AtIndex11 || hasV3AtIndex12
+    const v3VersionIndex = hasV3AtIndex12 ? 12 : 11
+
+    const record: UMPRecord = {
       txid,
       outputIndex,
       presentationHash,
       recoveryHash
-    })
+    }
+
+    // Add v3 metadata if present
+    if (hasV3Candidate) {
+      record.umpVersion = protocolFields[v3VersionIndex][0]
+
+      const kdfAlgIndex = v3VersionIndex + 1
+      const kdfParamsIndex = v3VersionIndex + 2
+
+      const kdfAlgorithm = new TextDecoder().decode(new Uint8Array(protocolFields[kdfAlgIndex]))
+      record.kdfAlgorithm = kdfAlgorithm
+
+      const kdfParamsJson = new TextDecoder().decode(new Uint8Array(protocolFields[kdfParamsIndex]))
+      try {
+        const kdfParams = JSON.parse(kdfParamsJson)
+        record.kdfIterations = kdfParams.iterations
+      } catch (e) {
+        console.warn('Failed to parse kdfParams during storage:', e)
+      }
+    }
+
+    // Store UMP fields in db
+    await this.records.insertOne(record)
   }
 
   async outputSpent(payload: OutputSpent) {
