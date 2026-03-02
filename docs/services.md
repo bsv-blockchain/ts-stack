@@ -4465,7 +4465,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     readonly apiKey: string;
     protected readonly URL: string;
     protected readonly httpClient: HttpClient;
-    constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {}) 
+    constructor(network: "main" | "test" | "stn" | "teratest" = "main", config: WhatsOnChainConfig = {}) 
     async isValidRootForHeight(root: string, height: number): Promise<boolean> 
     async currentHeight(): Promise<number> 
     protected getHttpHeaders(): Record<string, string> 
@@ -4477,7 +4477,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
 Constructs an instance of the WhatsOnChain ChainTracker.
 
 ```ts
-constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {}) 
+constructor(network: "main" | "test" | "stn" | "teratest" = "main", config: WhatsOnChainConfig = {}) 
 ```
 
 Argument Details
@@ -4598,6 +4598,9 @@ export class Services implements WalletServices {
     async getUtxoStatus(output: string, outputFormat?: GetUtxoStatusOutputFormat, outpoint?: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetUtxoStatusResult> 
     async getScriptHashHistory(hash: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetScriptHashHistoryResult> 
     postBeefMode: "PromiseAll" | "UntilSuccess" = "UntilSuccess";
+    postBeefUntilSuccessSoftTimeoutMs = 5000;
+    postBeefUntilSuccessSoftTimeoutPerKbMs = 50;
+    postBeefUntilSuccessSoftTimeoutMaxMs = 30000;
     async postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]> 
     async getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult> 
     async invokeChaintracksWithRetry<R>(method: () => Promise<R>): Promise<R> 
@@ -4612,6 +4615,32 @@ export class Services implements WalletServices {
 ```
 
 See also: [ARC](./services.md#class-arc), [Bitails](./services.md#class-bitails), [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [FiatCurrencyCode](./client.md#type-fiatcurrencycode), [FiatExchangeRates](./client.md#interface-fiatexchangerates), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [GetMerklePathService](./client.md#type-getmerklepathservice), [GetRawTxResult](./client.md#interface-getrawtxresult), [GetRawTxService](./client.md#type-getrawtxservice), [GetScriptHashHistoryResult](./client.md#interface-getscripthashhistoryresult), [GetScriptHashHistoryService](./client.md#type-getscripthashhistoryservice), [GetStatusForTxidsResult](./client.md#interface-getstatusfortxidsresult), [GetStatusForTxidsService](./client.md#type-getstatusfortxidsservice), [GetUtxoStatusOutputFormat](./client.md#type-getutxostatusoutputformat), [GetUtxoStatusResult](./client.md#interface-getutxostatusresult), [GetUtxoStatusService](./client.md#type-getutxostatusservice), [PostBeefResult](./client.md#interface-postbeefresult), [PostBeefService](./client.md#type-postbeefservice), [ServiceCollection](./services.md#class-servicecollection), [ServicesCallHistory](./client.md#type-servicescallhistory), [TableOutput](./storage.md#interface-tableoutput), [UpdateFiatExchangeRateService](./client.md#type-updatefiatexchangerateservice), [WalletServices](./client.md#interface-walletservices), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WhatsOnChain](./services.md#class-whatsonchain), [getBeefForTxid](./services.md#function-getbeeffortxid), [logger](./client.md#variable-logger)
+
+###### Property postBeefUntilSuccessSoftTimeoutMaxMs
+
+Upper bound for adaptive soft-timeout in `UntilSuccess` mode.
+
+```ts
+postBeefUntilSuccessSoftTimeoutMaxMs = 30000
+```
+
+###### Property postBeefUntilSuccessSoftTimeoutMs
+
+Soft timeout used for each provider call in `UntilSuccess` mode.
+This bounds request latency when a provider hangs before failover.
+
+```ts
+postBeefUntilSuccessSoftTimeoutMs = 5000
+```
+
+###### Property postBeefUntilSuccessSoftTimeoutPerKbMs
+
+Additional soft-timeout budget (ms) per KiB of serialized Beef payload.
+Helps avoid false timeout failover on legitimately large submissions.
+
+```ts
+postBeefUntilSuccessSoftTimeoutPerKbMs = 50
+```
 
 ###### Method hashOutputScript
 
@@ -5294,27 +5323,33 @@ Returns the genesis block for the specified chain.
 
 ```ts
 export function genesisHeader(chain: Chain): BlockHeader {
-    return chain === "main"
-        ? {
-            version: 1,
-            previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
-            merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            time: 1231006505,
-            bits: 486604799,
-            nonce: 2083236893,
-            height: 0,
-            hash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
-        }
-        : {
-            version: 1,
-            previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
-            merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            time: 1296688602,
-            bits: 486604799,
-            nonce: 414098458,
-            height: 0,
-            hash: "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
-        };
+    switch (chain) {
+        case "main":
+            return {
+                version: 1,
+                previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
+                merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+                time: 1231006505,
+                bits: 486604799,
+                nonce: 2083236893,
+                height: 0,
+                hash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+            };
+        case "test":
+        case "teratest":
+            return {
+                version: 1,
+                previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
+                merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+                time: 1296688602,
+                bits: 486604799,
+                nonce: 414098458,
+                height: 0,
+                hash: "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
+            };
+        case "mock":
+            throw new Error(`genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.`);
+    }
 }
 ```
 
