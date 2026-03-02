@@ -689,66 +689,47 @@ describe('CWIStyleWalletManager Tests', () => {
     let manager: CWIStyleWalletManager
     let mockInteractor: UMPTokenInteractor
 
-    beforeEach(() => {
-      jest.clearAllMocks()
-      mockInteractor = {
-        findByPresentationKeyHash: jest.fn(async () => undefined),
-        findByRecoveryKeyHash: jest.fn(async () => undefined),
-        buildAndSend: jest.fn(async () => 'txid.0')
-      }
-    })
+    function makeManager(interactor: UMPTokenInteractor = mockInteractor): CWIStyleWalletManager {
+      return new CWIStyleWalletManager(
+        'test.admin',
+        mockWalletBuilder as any,
+        interactor,
+        mockRecoveryKeySaver as any,
+        mockPasswordRetriever as any
+      )
+    }
 
-    test('Legacy token login still uses PBKDF2 fixed rounds', async () => {
-      // Create a legacy token (no KDF metadata)
-      const legacyToken: UMPToken = {
+    function makeLegacyToken(rootPrimary: number[], outpoint = 'legacy.0'): UMPToken {
+      return {
         passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(Random(32)) as number[],
-        passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, passwordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
-        passwordPrimaryPrivileged: new SymmetricKey(XOR(Random(32), passwordKey)).encrypt(Random(32)) as number[],
+        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(rootPrimary) as number[],
+        passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, passwordKey)).encrypt(rootPrimary) as number[],
+        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimary) as number[],
+        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimary, passwordKey)).encrypt(Random(32)) as number[],
         presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
         presentationHash: Hash.sha256(presentationKey),
         recoveryHash: Hash.sha256(recoveryKey),
         presentationKeyEncrypted: Random(48),
         passwordKeyEncrypted: Random(48),
         recoveryKeyEncrypted: Random(48),
-        currentOutpoint: 'legacy.0'
-        // No umpVersion or passwordKdf fields
+        currentOutpoint: outpoint
       }
+    }
 
-      mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
-
-      manager = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-      )
-
-      await manager.providePresentationKey(presentationKey)
-      await manager.providePassword('test-password')
-
-      expect(manager.authenticated).toBe(true)
-      // Verify PBKDF2 was used (indirectly via successful auth with legacy token)
-    })
-
-    test('V3 token login uses Argon2id and respects iterations', async () => {
-      // Derive password key using Argon2id with the same params as the token
-      const argon2Password = await argon2id({
+    async function deriveArgon2Key(iterations: number, memorySize: number): Promise<number[]> {
+      return Array.from(await argon2id({
         password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
         salt: new Uint8Array(passwordSalt),
-        iterations: 3,
-        memorySize: 65536,
+        iterations,
+        memorySize,
         parallelism: 1,
         hashLength: 32,
         outputType: 'binary'
-      })
-      const argon2PasswordKey = Array.from(argon2Password)
-      const rootPrimary = Random(32)
+      }))
+    }
 
-      // Create a v3 token with Argon2id metadata
-      const v3Token: UMPToken = {
+    function makeV3Token(argon2PasswordKey: number[], rootPrimary: number[], outpoint: string, kdfParams: { iterations: number; memoryKiB: number }): UMPToken {
+      return {
         passwordSalt,
         passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
         passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
@@ -760,26 +741,38 @@ describe('CWIStyleWalletManager Tests', () => {
         presentationKeyEncrypted: Random(48),
         passwordKeyEncrypted: Random(48),
         recoveryKeyEncrypted: Random(48),
-        currentOutpoint: 'v3.0',
+        currentOutpoint: outpoint,
         umpVersion: 3,
-        passwordKdf: {
-          algorithm: 'argon2id',
-          iterations: 3,
-          memoryKiB: 65536,
-          parallelism: 1,
-          hashLength: 32
-        }
+        passwordKdf: { algorithm: 'argon2id', parallelism: 1, hashLength: 32, ...kdfParams }
       }
+    }
 
+    beforeEach(() => {
+      jest.clearAllMocks()
+      mockInteractor = {
+        findByPresentationKeyHash: jest.fn(async () => undefined),
+        findByRecoveryKeyHash: jest.fn(async () => undefined),
+        buildAndSend: jest.fn(async () => 'txid.0')
+      }
+    })
+
+    test('Legacy token login still uses PBKDF2 fixed rounds', async () => {
+      const legacyToken = makeLegacyToken(Random(32))
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
+      manager = makeManager()
+
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      expect(manager.authenticated).toBe(true)
+      // Verify PBKDF2 was used (indirectly via successful auth with legacy token)
+    })
+
+    test('V3 token login uses Argon2id and respects iterations', async () => {
+      const argon2PasswordKey = await deriveArgon2Key(3, 65536)
+      const v3Token = makeV3Token(argon2PasswordKey, Random(32), 'v3.0', { iterations: 3, memoryKiB: 65536 })
       mockInteractor.findByPresentationKeyHash = jest.fn(async () => v3Token)
-
-      manager = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-      )
+      manager = makeManager()
 
       await manager.providePresentationKey(presentationKey)
       // Note: This test verifies the KDF config is used during password derivation
@@ -790,17 +783,8 @@ describe('CWIStyleWalletManager Tests', () => {
     })
 
     test('Argon2 default params used for new v3 tokens', async () => {
-      mockInteractor.findByPresentationKeyHash = jest.fn(async () => undefined)
-
-      // Create manager with default Argon2id config
-      manager = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-        // No kdfConfig param, should use Argon2id defaults
-      )
+      // Create manager with default Argon2id config (no kdfConfig param)
+      manager = makeManager()
 
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
@@ -817,55 +801,14 @@ describe('CWIStyleWalletManager Tests', () => {
 
     test('Round-trip serialization/deserialization for token with KDF metadata', async () => {
       // Use lighter Argon2id params for faster test execution
-      const argon2Password = await argon2id({
-        password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
-        salt: new Uint8Array(passwordSalt),
-        iterations: 3,
-        memorySize: 65536,
-        parallelism: 1,
-        hashLength: 32,
-        outputType: 'binary'
-      })
-      const argon2PasswordKey = Array.from(argon2Password)
-      const rootPrimary = Random(32)
-
-      const v3Token: UMPToken = {
-        passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
-        passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimary) as number[],
-        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimary, argon2PasswordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
-        presentationHash: Hash.sha256(presentationKey),
-        recoveryHash: Hash.sha256(recoveryKey),
-        presentationKeyEncrypted: Random(48),
-        passwordKeyEncrypted: Random(48),
-        recoveryKeyEncrypted: Random(48),
-        currentOutpoint: 'round-trip.0',
-        umpVersion: 3,
-        passwordKdf: {
-          algorithm: 'argon2id',
-          iterations: 3,
-          memoryKiB: 65536,
-          parallelism: 1,
-          hashLength: 32
-        }
-      }
-
+      const argon2PasswordKey = await deriveArgon2Key(3, 65536)
+      const v3Token = makeV3Token(argon2PasswordKey, Random(32), 'round-trip.0', { iterations: 3, memoryKiB: 65536 })
       mockInteractor.findByPresentationKeyHash = jest.fn(async () => v3Token)
-
-      manager = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-      )
+      manager = makeManager()
 
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
 
-      // Get snapshot
       const snapshot = manager.saveSnapshot()
       expect(snapshot).toBeTruthy()
 
@@ -891,86 +834,22 @@ describe('CWIStyleWalletManager Tests', () => {
 
     test('Mixed compatibility: load legacy snapshot then load v3 snapshot', async () => {
       // Load legacy token (uses PBKDF2)
-      const rootPrimaryLegacy = Random(32)
-      const legacyToken: UMPToken = {
-        passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(rootPrimaryLegacy) as number[],
-        passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, passwordKey)).encrypt(rootPrimaryLegacy) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimaryLegacy) as number[],
-        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimaryLegacy, passwordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
-        presentationHash: Hash.sha256(presentationKey),
-        recoveryHash: Hash.sha256(recoveryKey),
-        presentationKeyEncrypted: Random(48),
-        passwordKeyEncrypted: Random(48),
-        recoveryKeyEncrypted: Random(48),
-        currentOutpoint: 'legacy.0'
-      }
-
+      const legacyToken = makeLegacyToken(Random(32))
       mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
-
-      manager = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-      )
+      manager = makeManager()
 
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
-
       const legacySnapshot = manager.saveSnapshot()
 
       // Now create v3 token with Argon2id
-      const argon2Password = await argon2id({
-        password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
-        salt: new Uint8Array(passwordSalt),
-        iterations: 7,
-        memorySize: 131072,
-        parallelism: 1,
-        hashLength: 32,
-        outputType: 'binary'
-      })
-      const argon2PasswordKey = Array.from(argon2Password)
-      const rootPrimaryV3 = Random(32)
-
-      const v3Token: UMPToken = {
-        passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, argon2PasswordKey)).encrypt(rootPrimaryV3) as number[],
-        passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, argon2PasswordKey)).encrypt(rootPrimaryV3) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimaryV3) as number[],
-        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimaryV3, argon2PasswordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
-        presentationHash: Hash.sha256(presentationKey),
-        recoveryHash: Hash.sha256(recoveryKey),
-        presentationKeyEncrypted: Random(48),
-        passwordKeyEncrypted: Random(48),
-        recoveryKeyEncrypted: Random(48),
-        currentOutpoint: 'v3.0',
-        umpVersion: 3,
-        passwordKdf: {
-          algorithm: 'argon2id',
-          iterations: 7,
-          memoryKiB: 131072,
-          parallelism: 1,
-          hashLength: 32
-        }
-      }
-
+      const argon2PasswordKey = await deriveArgon2Key(7, 131072)
+      const v3Token = makeV3Token(argon2PasswordKey, Random(32), 'v3.0', { iterations: 7, memoryKiB: 131072 })
       mockInteractor.findByPresentationKeyHash = jest.fn(async () => v3Token)
-
-      const manager2 = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-      )
+      const manager2 = makeManager()
 
       await manager2.providePresentationKey(presentationKey)
       await manager2.providePassword('test-password')
-
       const v3Snapshot = manager2.saveSnapshot()
 
       // Both snapshots should be loadable
@@ -980,51 +859,10 @@ describe('CWIStyleWalletManager Tests', () => {
     })
 
     test('Change-password on v3 token preserves Argon2 metadata', async () => {
-      // Derive password key using Argon2id
-      const argon2Password = await argon2id({
-        password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
-        salt: new Uint8Array(passwordSalt),
-        iterations: 7,
-        memorySize: 131072,
-        parallelism: 1,
-        hashLength: 32,
-        outputType: 'binary'
-      })
-      const argon2PasswordKey = Array.from(argon2Password)
-      const rootPrimary = Random(32)
-
-      const v3Token: UMPToken = {
-        passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
-        passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimary) as number[],
-        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimary, argon2PasswordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
-        presentationHash: Hash.sha256(presentationKey),
-        recoveryHash: Hash.sha256(recoveryKey),
-        presentationKeyEncrypted: Random(48),
-        passwordKeyEncrypted: Random(48),
-        recoveryKeyEncrypted: Random(48),
-        currentOutpoint: 'change-pwd.0',
-        umpVersion: 3,
-        passwordKdf: {
-          algorithm: 'argon2id',
-          iterations: 7,
-          memoryKiB: 131072,
-          parallelism: 1,
-          hashLength: 32
-        }
-      }
-
+      const argon2PasswordKey = await deriveArgon2Key(7, 131072)
+      const v3Token = makeV3Token(argon2PasswordKey, Random(32), 'change-pwd.0', { iterations: 7, memoryKiB: 131072 })
       mockInteractor.findByPresentationKeyHash = jest.fn(async () => v3Token)
-
-      manager = new CWIStyleWalletManager(
-        'test.admin',
-        mockWalletBuilder as any,
-        mockInteractor,
-        mockRecoveryKeySaver as any,
-        mockPasswordRetriever as any
-      )
+      manager = makeManager()
 
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
@@ -1038,7 +876,6 @@ describe('CWIStyleWalletManager Tests', () => {
         return Random(32)
       })
 
-      // Change password
       await manager.changePassword('new-test-password')
 
       expect(mockInteractor.buildAndSend).toHaveBeenCalled()
