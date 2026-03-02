@@ -55,7 +55,7 @@ import {
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
-import { verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
+import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
@@ -1083,11 +1083,112 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
-    const statusText = status.map(s => `'${s}'`).join(',')
-    const txStatusCondition = `(SELECT status FROM transactions WHERE outputs.transactionId = transactions.transactionId) in (${statusText})`
-    let q = this.knex<TableOutput>('outputs').where({ userId, spendable: true, basketId }).whereRaw(txStatusCondition)
+    const q = this.knex<TableOutput>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
+      .whereIn('t.status', status)
     const count = await this.getCount(q)
     return count
+  }
+
+  override async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
+    const byId: Record<number, TableOutput> = {}
+    if (outputIds.length < 1) return byId
+    const rows = await this.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).select('*')
+    for (const o of rows) {
+      await this.validateOutputScript(o, trx)
+    }
+    const vrows = this.validateEntities(rows, undefined, ['spendable', 'change'])
+    for (const row of vrows) {
+      if (row.outputId !== undefined) byId[row.outputId] = row
+    }
+    return byId
+  }
+
+  override async findOutputsByOutpoints(
+    userId: number,
+    outpoints: Array<{ txid: string; vout: number }>,
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutput>> {
+    const byOutpoint: Record<string, TableOutput> = {}
+    if (outpoints.length < 1) return byOutpoint
+    const outpointSet = new Set(outpoints.map(o => `${o.txid}.${o.vout}`))
+    const txids = [...new Set(outpoints.map(o => o.txid))]
+    const vouts = [...new Set(outpoints.map(o => o.vout))]
+    const rows = await this.toDb(trx)<TableOutput>('outputs')
+      .where('userId', userId)
+      .whereIn('txid', txids)
+      .whereIn('vout', vouts)
+      .select('*')
+    // Only return requested outpoints, vouts of one txid may end up matching another txid that was not requested.
+    const filteredRows = rows.filter(r => outpointSet.has(`${r.txid}.${r.vout}`))
+    const vrows = this.validateEntities(filteredRows, undefined, ['spendable', 'change'])
+    for (const row of vrows) {
+      await this.validateOutputScript(row, trx)
+      byOutpoint[`${row.txid}.${row.vout}`] = row
+    }
+    return byOutpoint
+  }
+
+  override async findOrInsertOutputBasketsBulk(
+    userId: number,
+    names: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutputBasket>> {
+    const byName: Record<string, TableOutputBasket> = {}
+    if (names.length < 1) return byName
+    const uniqueNames = [...new Set(names)]
+    const existing = await this.toDb(trx)<TableOutputBasket>('output_baskets')
+      .where('userId', userId)
+      .whereIn('name', uniqueNames)
+      .select('*')
+    for (const basket of existing) {
+      if (basket.isDeleted) await this.updateOutputBasket(verifyId(basket.basketId), { isDeleted: false }, trx)
+      byName[basket.name] = basket
+    }
+    for (const name of uniqueNames) {
+      if (!byName[name]) byName[name] = await this.findOrInsertOutputBasket(userId, name, trx)
+    }
+    return byName
+  }
+
+  override async findOrInsertOutputTagsBulk(
+    userId: number,
+    tags: string[],
+    trx?: TrxToken
+  ): Promise<Record<string, TableOutputTag>> {
+    const byTag: Record<string, TableOutputTag> = {}
+    if (tags.length < 1) return byTag
+    const uniqueTags = [...new Set(tags)]
+    const existing = await this.toDb(trx)<TableOutputTag>('output_tags')
+      .where('userId', userId)
+      .whereIn('tag', uniqueTags)
+      .select('*')
+    for (const outputTag of existing) {
+      if (outputTag.isDeleted) await this.updateOutputTag(verifyId(outputTag.outputTagId), { isDeleted: false }, trx)
+      byTag[outputTag.tag] = outputTag
+    }
+    for (const tag of uniqueTags) {
+      if (!byTag[tag]) byTag[tag] = await this.findOrInsertOutputTag(userId, tag, trx)
+    }
+    return byTag
+  }
+
+  override async sumSpendableSatoshisInBasket(
+    userId: number,
+    basketId: number,
+    excludeSending: boolean,
+    trx?: TrxToken
+  ): Promise<number> {
+    const status: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) status.push('sending')
+    const row = await this.toDb(trx)<TableOutput>('outputs as o')
+      .join('transactions as t', 'o.transactionId', 't.transactionId')
+      .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
+      .whereIn('t.status', status)
+      .sum({ totalSatoshis: 'o.satoshis' })
+      .first()
+    return Number((row && (row as Record<string, unknown>)['totalSatoshis']) || 0)
   }
 
   /**
@@ -1105,82 +1206,43 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   ): Promise<TableOutput | undefined> {
     const status: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) status.push('sending')
-    const statusText = status.map(s => `'${s}'`).join(',')
 
     const r: TableOutput | undefined = await this.knex.transaction(async trx => {
-      const txStatusCondition = `AND (SELECT status FROM transactions WHERE outputs.transactionId = transactions.transactionId) in (${statusText})`
+      const baseQuery = () =>
+        trx<TableOutput>('outputs as o')
+          .join('transactions as t', 'o.transactionId', 't.transactionId')
+          .where('o.userId', userId)
+          .where('o.spendable', true)
+          .where('o.basketId', basketId)
+          .whereIn('t.status', status)
+          .select('o.*')
 
-      let outputId: number | undefined
-      const setOutputId = async (rawQuery: string): Promise<void> => {
-        let oidr = await trx.raw(rawQuery)
-        outputId = undefined
-        if (!oidr['outputId'] && oidr.length > 0) oidr = oidr[0]
-        if (!oidr['outputId'] && oidr.length > 0) oidr = oidr[0]
-        if (oidr['outputId']) outputId = Number(oidr['outputId'])
-      }
+      let output: TableOutput | undefined
 
       if (exactSatoshis !== undefined) {
-        // Find outputId of output that with exactSatoshis
-        await setOutputId(`
-                SELECT outputId 
-                FROM outputs
-                WHERE userId = ${userId} 
-                    AND spendable = 1 
-                    AND basketId = ${basketId}
-                    ${txStatusCondition}
-                    AND satoshis = ${exactSatoshis}
-                LIMIT 1;
-                `)
+        output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
       }
 
-      if (outputId === undefined) {
-        // Find outputId of output that would at least fund targetSatoshis
-        await setOutputId(`
-                    SELECT outputId 
-                    FROM outputs
-                    WHERE userId = ${userId} 
-                        AND spendable = 1 
-                        AND basketId = ${basketId}
-                        ${txStatusCondition}
-                        AND satoshis - ${targetSatoshis} = (
-                            SELECT MIN(satoshis - ${targetSatoshis}) 
-                            FROM outputs 
-                            WHERE userId = ${userId} 
-                            AND spendable = 1 
-                            AND basketId = ${basketId}
-                            ${txStatusCondition}
-                            AND satoshis - ${targetSatoshis} >= 0
-                        )
-                    LIMIT 1;
-                    `)
+      if (!output) {
+        output = await baseQuery()
+          .where('o.satoshis', '>=', targetSatoshis)
+          .orderBy('o.satoshis', 'asc')
+          .orderBy('o.outputId', 'asc')
+          .first()
       }
 
-      if (outputId === undefined) {
-        // Find outputId of output that would add the most fund targetSatoshis
-        await setOutputId(`
-                    SELECT outputId 
-                    FROM outputs
-                    WHERE userId = ${userId} 
-                        AND spendable = 1 
-                        AND basketId = ${basketId}
-                        ${txStatusCondition}
-                        AND satoshis - ${targetSatoshis} = (
-                            SELECT MAX(satoshis - ${targetSatoshis}) 
-                            FROM outputs 
-                            WHERE userId = ${userId} 
-                            AND spendable = 1 
-                            AND basketId = ${basketId}
-                            ${txStatusCondition}
-                            AND satoshis - ${targetSatoshis} < 0
-                        )
-                    LIMIT 1;
-                    `)
+      if (!output) {
+        output = await baseQuery()
+          .where('o.satoshis', '<', targetSatoshis)
+          .orderBy('o.satoshis', 'desc')
+          .orderBy('o.outputId', 'desc')
+          .first()
       }
 
-      if (outputId === undefined) return undefined
+      if (!output) return undefined
 
       await this.updateOutput(
-        outputId,
+        output.outputId,
         {
           spendable: false,
           spentBy: transactionId
@@ -1188,8 +1250,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         trx
       )
 
-      const r = verifyTruthy(await this.findOutputById(outputId, trx))
-      return r
+      // Keep behavior identical to the pre-optimization path: ensure lockingScript
+      // is present even when it was offloaded from outputs into rawTx storage.
+      await this.validateOutputScript(output, trx)
+
+      output.spendable = false
+      output.spentBy = transactionId
+      return output
     })
 
     return r

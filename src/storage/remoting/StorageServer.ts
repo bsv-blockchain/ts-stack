@@ -302,7 +302,7 @@ export class StorageServer {
   public async close(): Promise<void> {
     if (this.server) {
       await this.server.close(() => {
-        console.log('WalletStorageServer closed')
+        // console.log('WalletStorageServer closed')
       })
     }
   }

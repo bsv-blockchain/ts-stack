@@ -324,6 +324,20 @@ export class Services implements WalletServices {
   }
 
   postBeefMode: 'PromiseAll' | 'UntilSuccess' = 'UntilSuccess'
+  /**
+   * Soft timeout used for each provider call in `UntilSuccess` mode.
+   * This bounds request latency when a provider hangs before failover.
+   */
+  postBeefUntilSuccessSoftTimeoutMs = 5000
+  /**
+   * Additional soft-timeout budget (ms) per KiB of serialized Beef payload.
+   * Helps avoid false timeout failover on legitimately large submissions.
+   */
+  postBeefUntilSuccessSoftTimeoutPerKbMs = 50
+  /**
+   * Upper bound for adaptive soft-timeout in `UntilSuccess` mode.
+   */
+  postBeefUntilSuccessSoftTimeoutMaxMs = 30000
 
   /**
    *
@@ -335,16 +349,18 @@ export class Services implements WalletServices {
     let rs: PostBeefResult[] = []
     const services = this.postBeefServices
     const stcs = services.allServicesToCall
+    const softTimeoutMs = this.getPostBeefSoftTimeoutMs(beef)
     logger?.group(`services postBeef`)
     switch (this.postBeefMode) {
       case 'UntilSuccess':
         {
           for (const stc of stcs) {
-            const r = await callService(stc)
+            const r = await callService(stc, softTimeoutMs)
             logger?.log(`${stc.providerName} status ${r.status}`)
             rs.push(r)
             if (r.status === 'success') break
-            if (r.txidResults && r.txidResults.every(txr => txr.serviceError)) {
+            const softTimedOut = r.notes?.some(n => n.what === 'postBeefServiceTimeout') === true
+            if (!softTimedOut && r.txidResults && r.txidResults.every(txr => txr.serviceError)) {
               // move this service to the end of the list
               this.postBeefServices.moveServiceToLast(stc)
             }
@@ -365,8 +381,25 @@ export class Services implements WalletServices {
     logger?.groupEnd()
     return rs
 
-    async function callService(stc: ServiceToCall<PostBeefService>) {
-      const r = await stc.service(beef, txids)
+    async function callService(stc: ServiceToCall<PostBeefService>, timeoutMs?: number) {
+      const callPromise = stc.service(beef, txids)
+      let r: PostBeefResult
+      if (!timeoutMs || timeoutMs <= 0) {
+        r = await callPromise
+      } else {
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+        const timeoutPromise = new Promise<PostBeefResult>(resolve => {
+          timeoutHandle = setTimeout(
+            () => resolve(makeServiceTimeoutResult(stc.providerName, txids, timeoutMs)),
+            timeoutMs
+          )
+        })
+        r = await Promise.race([callPromise, timeoutPromise])
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+        // Avoid unhandled rejection after timeout race wins.
+        void callPromise.catch(() => undefined)
+      }
+
       if (r.status === 'success') {
         services.addServiceCallSuccess(stc)
       } else {
@@ -378,6 +411,31 @@ export class Services implements WalletServices {
       }
       return r
     }
+
+    function makeServiceTimeoutResult(providerName: string, txids: string[], timeoutMs: number): PostBeefResult {
+      return {
+        name: providerName,
+        status: 'error',
+        txidResults: txids.map(txid => ({
+          txid,
+          status: 'error',
+          serviceError: true,
+          data: { detail: `timeout after ${timeoutMs}ms` }
+        })),
+        notes: [{ when: new Date().toISOString(), what: 'postBeefServiceTimeout', providerName, timeoutMs }]
+      }
+    }
+  }
+
+  private getPostBeefSoftTimeoutMs(beef: Beef): number {
+    const baseMs = Math.max(0, this.postBeefUntilSuccessSoftTimeoutMs)
+    const perKbMs = Math.max(0, this.postBeefUntilSuccessSoftTimeoutPerKbMs)
+    const maxMs = Math.max(baseMs, this.postBeefUntilSuccessSoftTimeoutMaxMs)
+    if (perKbMs <= 0) return Math.min(baseMs, maxMs)
+
+    const beefBytes = beef.toBinary().length
+    const extraMs = Math.ceil((beefBytes / 1024) * perKbMs)
+    return Math.min(maxMs, baseMs + extraMs)
   }
 
   async getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult> {

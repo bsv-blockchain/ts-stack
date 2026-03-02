@@ -1,5 +1,6 @@
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
 import { StorageKnex } from '../StorageKnex'
+import { Knex } from 'knex'
 import { getListOutputsSpecOp } from './ListOutputsSpecOp'
 import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
@@ -127,63 +128,71 @@ export async function listOutputs(
   const noTags = tagIds.length === 0
   const includeSpent = specOp && specOp.includeSpent ? specOp.includeSpent : false
 
-  const txStatusOk = `(select status as tstatus from transactions where transactions.transactionId = outputs.transactionId) in ('completed', 'unproven', 'nosend', 'sending')`
-  const txStatusOkCteq = `(select status as tstatus from transactions where transactions.transactionId = o.transactionId) in ('completed', 'unproven', 'nosend', 'sending')`
+  const txStatusAllowed = ['completed', 'unproven', 'nosend', 'sending']
+  const outputColumns = columns.map(c => `o.${c} as ${c}`)
+
+  const applyBaseFilters = (q: Knex.QueryBuilder) => {
+    q.join('transactions as t', 't.transactionId', 'o.transactionId')
+    q.where('o.userId', userId)
+    q.whereIn('t.status', txStatusAllowed)
+    if (basketId) q.where('o.basketId', basketId)
+    if (!includeSpent) q.where('o.spendable', true)
+  }
 
   const makeWithTagsQuery = () => {
-    let cteqOptions = ''
-    if (basketId) cteqOptions += ` AND o.basketId = ${basketId}`
-    if (!includeSpent) cteqOptions += ` AND o.spendable`
-    const cteq = k.raw(`
-            SELECT ${columns.map(c => 'o.' + c).join(',')}, 
-                    (SELECT COUNT(*) 
-                    FROM output_tags_map AS m 
-                    WHERE m.OutputId = o.OutputId 
-                    AND m.outputTagId IN (${tagIds.join(',')}) 
-                    ) AS tc
-            FROM outputs AS o
-            WHERE o.userId = ${userId} ${cteqOptions} AND ${txStatusOkCteq}
-            `)
+    const q = k('outputs as o')
+    applyBaseFilters(q)
 
-    const q = k.with('otc', cteq)
-    q.from('otc')
-    if (isQueryModeAll) q.where('tc', tagIds.length)
-    else q.where('tc', '>', 0)
+    if (isQueryModeAll) {
+      for (const tagId of tagIds) {
+        q.whereExists(function () {
+          this.select(k.raw('1'))
+            .from('output_tags_map as m')
+            .whereRaw('m.outputId = o.outputId')
+            .where('m.outputTagId', tagId)
+            .whereNot('m.isDeleted', true)
+        })
+      }
+    } else {
+      q.whereExists(function () {
+        this.select(k.raw('1'))
+          .from('output_tags_map as m')
+          .whereRaw('m.outputId = o.outputId')
+          .whereIn('m.outputTagId', tagIds)
+          .whereNot('m.isDeleted', true)
+      })
+    }
+
     return q
   }
   const makeWithTagsQueries = () => {
     const q = makeWithTagsQuery()
     const qcount = q.clone()
-    q.select(columns)
-    qcount.count('outputId as total')
+    q.select(outputColumns)
+    qcount.clearSelect().clearOrder().count('o.outputId as total')
     return { q, qcount }
   }
 
-  const makeWhere = () => {
-    const where: Partial<TableOutput> = { userId }
-    if (basketId) where.basketId = basketId
-    if (!includeSpent) where.spendable = true
-    return where
-  }
   const makeWithoutTagsQueries = () => {
-    const where = makeWhere()
-    const q = k('outputs').where(where).whereRaw(txStatusOk)
-    const qcount = q.clone().count('outputId as total')
-    q.columns(columns)
+    const q = k('outputs as o')
+    applyBaseFilters(q)
+    const qcount = q.clone().clearSelect().clearOrder().count('o.outputId as total')
+    q.select(outputColumns)
     return { q, qcount }
   }
 
   if (specOp?.totalOutputsIsSumOfSatoshis) {
     if (noTags) {
-      const where = makeWhere()
-      const q = k('outputs').sum('satoshis as totalSatoshis').where(where).whereRaw(txStatusOk)
+      const q = k('outputs as o')
+      applyBaseFilters(q)
+      q.sum('o.satoshis as totalSatoshis')
       const rsum = await q.first()
       r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
       return r
     } else {
       columns = ['outputId', 'basketId', 'spendable', 'satoshis']
       const q = makeWithTagsQuery()
-      q.sum('satoshis as totalSatoshis')
+      q.sum('o.satoshis as totalSatoshis')
       const rsum = await q.first()
       r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
       return r
@@ -195,7 +204,7 @@ export async function listOutputs(
   // Sort order when limit and offset are possible must be ascending for determinism.
   if (!specOp || !specOp.ignoreLimit) q.limit(limit).offset(offset)
 
-  q.orderBy('outputId', orderBy)
+  q.orderBy('o.outputId', orderBy)
 
   let outputs: TableOutput[] = await q
 
@@ -239,7 +248,44 @@ export async function listOutputs(
         }
     */
 
-  const labelsByTxid: Record<string, string[]> = {}
+  const labelsByTransactionId: Record<number, string[]> = {}
+  const tagsByOutputId: Record<number, string[]> = {}
+
+  if (vargs.includeLabels) {
+    const txIds = [...new Set(outputs.map(o => o.transactionId).filter((id): id is number => id !== undefined))]
+    if (txIds.length > 0) {
+      const labels = await k('tx_labels as l')
+        .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
+        .whereIn('lm.transactionId', txIds)
+        .whereNot('lm.isDeleted', true)
+        .whereNot('l.isDeleted', true)
+        .select('lm.transactionId', 'l.label')
+
+      for (const row of labels) {
+        const txid = Number(row.transactionId)
+        if (!labelsByTransactionId[txid]) labelsByTransactionId[txid] = []
+        labelsByTransactionId[txid].push(String(row.label))
+      }
+    }
+  }
+
+  if (vargs.includeTags) {
+    const outputIds = [...new Set(outputs.map(o => o.outputId).filter((id): id is number => id !== undefined))]
+    if (outputIds.length > 0) {
+      const tags = await k('output_tags as ot')
+        .join('output_tags_map as om', 'om.outputTagId', 'ot.outputTagId')
+        .whereIn('om.outputId', outputIds)
+        .whereNot('om.isDeleted', true)
+        .whereNot('ot.isDeleted', true)
+        .select('om.outputId', 'ot.tag')
+
+      for (const row of tags) {
+        const outputId = Number(row.outputId)
+        if (!tagsByOutputId[outputId]) tagsByOutputId[outputId] = []
+        tagsByOutputId[outputId].push(String(row.tag))
+      }
+    }
+  }
 
   const beef = new Beef()
 
@@ -257,15 +303,8 @@ export async function listOutputs(
     //    wo.basket = basketsById[o.basketId].name
     //}
     if (vargs.includeCustomInstructions && o.customInstructions) wo.customInstructions = o.customInstructions
-    if (vargs.includeLabels && o.txid) {
-      if (labelsByTxid[o.txid] === undefined) {
-        labelsByTxid[o.txid] = (await dsk.getLabelsForTransactionId(o.transactionId, trx)).map(l => l.label)
-      }
-      wo.labels = labelsByTxid[o.txid]
-    }
-    if (vargs.includeTags) {
-      wo.tags = (await dsk.getTagsForOutputId(o.outputId, trx)).map(t => t.tag)
-    }
+    if (vargs.includeLabels && o.transactionId !== undefined) wo.labels = labelsByTransactionId[o.transactionId] || []
+    if (vargs.includeTags && o.outputId !== undefined) wo.tags = tagsByOutputId[o.outputId] || []
     if (vargs.includeLockingScripts) {
       await dsk.validateOutputScript(o, trx)
       if (o.lockingScript) wo.lockingScript = asString(o.lockingScript)

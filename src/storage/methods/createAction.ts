@@ -23,7 +23,12 @@ import {
   StorageGetBeefOptions,
   StorageProvidedBy
 } from '../../sdk/WalletStorage.interfaces'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_REVIEW_ACTIONS } from '../../sdk/WERR_errors'
+import {
+  WERR_INSUFFICIENT_FUNDS,
+  WERR_INTERNAL,
+  WERR_INVALID_PARAMETER,
+  WERR_REVIEW_ACTIONS
+} from '../../sdk/WERR_errors'
 import {
   randomBytesBase64,
   verifyId,
@@ -41,6 +46,7 @@ import { TableTransaction } from '../schema/tables/TableTransaction'
 import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 import { throwDummyReviewActions } from '../../Wallet'
 import { createStorageServiceChargeScript } from './offsetKey'
+import { transactionSize } from './utils'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -102,6 +108,9 @@ export async function createAction(
 
   const feeModel = validateStorageFeeModel(storage.feeModel)
   logger?.log(`validated fee model ${JSON.stringify(feeModel)}`)
+
+  await preflightInsufficientFundsFastPath(vargs, xinputs, xoutputs, noSendChangeIn, availableChangeCount, feeModel)
+  logger?.log('passed insufficient-funds preflight')
 
   const newTx = await createNewTxRecord(storage, userId, vargs, storageBeef)
   logger?.log(`created new transaction record`)
@@ -228,16 +237,27 @@ async function createNewInputs(
   for (const i of ctx.xinputs) {
     const o = i.output
     newInputs.push({ i, o })
-    if (o) {
-      // Collect double-spend info inside transaction, then handle outside
-      let doubleSpendTxid: string | undefined
-      await storage.transaction(async trx => {
-        const o2 = verifyOne(await storage.findOutputs({ partial: { outputId: o.outputId }, trx }))
+  }
+
+  const knownInputRows = newInputs.filter(
+    (ni): ni is { i: XValidCreateActionInput; o: TableOutput } => !!ni.i && !!ni.o
+  )
+  if (knownInputRows.length > 0) {
+    let doubleSpendTxid: string | undefined
+    await storage.transaction(async trx => {
+      const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
+      const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
+
+      for (const ni of knownInputRows) {
+        const { i, o } = ni
+        const o2 = knownOutputsById[verifyId(o.outputId)]
+        if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
+
         if (o2.spentBy !== undefined) {
           const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
           if (spendingTx?.txid) {
             doubleSpendTxid = spendingTx.txid
-            return // Exit transaction cleanly
+            return
           }
         }
         if (o2.spendable != true) {
@@ -246,8 +266,9 @@ async function createNewInputs(
             `spendable output. output ${o.txid}:${o.vout} appears to have been spent (spendable=${o2.spendable}).`
           )
         }
+
         await storage.updateOutput(
-          o.outputId!,
+          verifyId(o.outputId),
           {
             spendable: false,
             spentBy: ctx.transactionId,
@@ -255,18 +276,22 @@ async function createNewInputs(
           },
           trx
         )
-      })
-      // Network call and throw outside transaction
-      if (doubleSpendTxid) {
-        const beef = await storage.getBeefForTransaction(doubleSpendTxid, {})
-        const rar: ReviewActionResult = {
-          txid: '',
-          status: 'doubleSpend',
-          competingTxs: [doubleSpendTxid],
-          competingBeef: beef.toBinary()
-        }
-        throw new WERR_REVIEW_ACTIONS([rar], [])
+
+        o.spendable = false
+        o.spentBy = ctx.transactionId
+        o.spendingDescription = i.inputDescription
       }
+    })
+
+    if (doubleSpendTxid) {
+      const beef = await storage.getBeefForTransaction(doubleSpendTxid, {})
+      const rar: ReviewActionResult = {
+        txid: '',
+        status: 'doubleSpend',
+        competingTxs: [doubleSpendTxid],
+        competingBeef: beef.toBinary()
+      }
+      throw new WERR_REVIEW_ACTIONS([rar], [])
     }
   }
 
@@ -336,17 +361,13 @@ async function createNewOutputs(
 
   // Lookup output baskets
   const txBaskets: Record<string, TableOutputBasket> = {}
-  for (const xo of ctx.xoutputs) {
-    if (xo.basket !== undefined && !txBaskets[xo.basket])
-      txBaskets[xo.basket] = await storage.findOrInsertOutputBasket(userId, xo.basket!)
-  }
+  const basketNames = [...new Set(ctx.xoutputs.map(x => x.basket).filter((v): v is string => !!v))]
+  Object.assign(txBaskets, await storage.findOrInsertOutputBasketsBulk(userId, basketNames))
+
   // Lookup output tags
   const txTags: Record<string, TableOutputTag> = {}
-  for (const xo of ctx.xoutputs) {
-    for (const tag of xo.tags) {
-      txTags[tag] = await storage.findOrInsertOutputTag(userId, tag)
-    }
-  }
+  const tagNames = [...new Set(ctx.xoutputs.flatMap(x => x.tags))]
+  Object.assign(txTags, await storage.findOrInsertOutputTagsBulk(userId, tagNames))
 
   const newOutputs: { o: TableOutput; tags: string[] }[] = []
 
@@ -443,9 +464,15 @@ async function createNewOutputs(
     if (o.change && o.purpose === 'change' && o.providedBy === 'storage') changeVouts.push(o.vout!)
 
     // Add tags to the output
-    for (const tagName of tags) {
+    for (const tagName of [...new Set(tags)]) {
       const tag = txTags[tagName]!
-      await storage.findOrInsertOutputTagMap(verifyId(o.outputId), verifyId(tag.outputTagId))
+      await storage.insertOutputTagMap({
+        outputId: verifyId(o.outputId),
+        outputTagId: verifyId(tag.outputTagId),
+        created_at: new Date(),
+        updated_at: new Date(),
+        isDeleted: false
+      })
     }
 
     const ro: StorageCreateTransactionSdkOutput = {
@@ -634,7 +661,12 @@ async function validateRequiredInputs(
     if (!btx && trustSelf) {
       if (await storage.verifyKnownValidTransaction(txid)) btx = beef.mergeTxidOnly(txid)
     }
-    if (!btx) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for possibly known ${txid}`)
+    if (!btx) {
+      throw new WERR_INVALID_PARAMETER(
+        'inputBEEF',
+        `valid and contain proof data for possibly known ${txid}, beef ${beef.toLogString()}`
+      )
+    }
   }
 
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
@@ -647,9 +679,15 @@ async function validateRequiredInputs(
 
   const storageBeef = beef.clone()
 
+  const preloadedOutputsByOutpoint = await storage.findOutputsByOutpoints(
+    userId,
+    xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout }))
+  )
+
   for (const input of xinputs) {
     const { txid, vout } = input.outpoint
-    const output = verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
+    let output: TableOutput | undefined = preloadedOutputsByOutpoint[`${txid}.${vout}`]
+    if (!output) output = verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
     if (output) {
       if (output.change) {
         throw new WERR_INVALID_PARAMETER(
@@ -743,6 +781,39 @@ async function validateNoSendChange(
   }
 
   return r
+}
+
+async function preflightInsufficientFundsFastPath(
+  vargs: Validation.ValidCreateActionArgs,
+  xinputs: XValidCreateActionInput[],
+  xoutputs: XValidCreateActionOutput[],
+  noSendChangeIn: TableOutput[],
+  availableChangeCount: number,
+  feeModel: StorageFeeModel
+): Promise<void> {
+  if (feeModel.model !== 'sat/kb' || !feeModel.value) return
+
+  const fixedInputSatoshis = xinputs.reduce((a, e) => a + e.satoshis, 0)
+  const noSendSatoshis = noSendChangeIn.reduce((a, e) => a + Number(e.satoshis || 0), 0)
+
+  const spending = xoutputs.reduce((a, e) => a + e.satoshis, 0)
+  const minSize = transactionSize(
+    xinputs.map(i => i.unlockingScriptLength || 0),
+    xoutputs.map(o => Math.floor(o.lockingScript.length / 2))
+  )
+  const minFee = Math.ceil((minSize / 1000) * feeModel.value)
+  const minRequired = spending + minFee
+
+  const fixedAvailable = fixedInputSatoshis + noSendSatoshis
+  if (fixedAvailable >= minRequired) return
+
+  // Keep common successful path cheap:
+  // - If there are zero change candidates, failure is certain.
+  // Otherwise, defer to the main funding allocator.
+  const deficit = minRequired - fixedAvailable
+  if (availableChangeCount <= 0) {
+    throw new WERR_INSUFFICIENT_FUNDS(minRequired, deficit)
+  }
 }
 
 async function fundNewTransactionSdk(
