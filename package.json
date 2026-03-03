@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did-client",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Discover DID records with ease",
   "publishConfig": {
     "access": "public"
