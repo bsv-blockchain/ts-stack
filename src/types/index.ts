@@ -1,4 +1,4 @@
-import { Base64String } from "@bsv/sdk"
+import { Base64String } from '@bsv/sdk'
 
 export interface DIDRecord {
   txid: string
@@ -7,6 +7,6 @@ export interface DIDRecord {
 }
 
 export interface DIDQuery {
-  serialNumber?: Base64String,
+  serialNumber?: Base64String
   outpoint?: string
 }
