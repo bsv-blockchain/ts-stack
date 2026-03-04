@@ -5,6 +5,7 @@ import { EntityProvenTx } from '../../storage/schema/entities/EntityProvenTx'
 import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
+import { Services } from '../../services/Services'
 
 /**
  * Monitor task that receives transaction status updates from Arcade via SSE
@@ -28,7 +29,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       return
     }
 
-    const arcUrl = this.monitor.services.options.arcUrl
+    const arcUrl = (this.monitor.services as Services).options?.arcUrl
     if (!arcUrl) {
       console.log('[TaskArcadeSSE] no arcUrl configured — SSE disabled')
       return
@@ -188,7 +189,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
    * create a ProvenTx record, completing the transaction.
    */
   private async fetchProofFromArcade(req: EntityProvenTxReq): Promise<string> {
-    const arcUrl = this.monitor.services.options.arcUrl
+    const arcUrl = (this.monitor.services as Services).options?.arcUrl
     const txid = req.txid
     let log = `  req ${req.id} MINED — fetching proof from Arcade\n`
 
