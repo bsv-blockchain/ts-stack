@@ -43,7 +43,10 @@ export class ArcSSEClient {
 
   constructor(private readonly options: ArcSSEClientOptions) {
     this._lastEventId = options.lastEventId
-    const base = options.baseUrl.replace(/\/+$/, '')
+    let base = options.baseUrl
+    while (base.endsWith('/')) {
+      base = base.slice(0, -1)
+    }
     this.url = `${base}/events?callbackToken=${encodeURIComponent(options.callbackToken)}`
   }
 
