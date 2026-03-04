@@ -23,6 +23,8 @@ export interface ArcSSEClientOptions {
   baseUrl: string
   /** Stable per-wallet token matching the X-CallbackToken sent on broadcast */
   callbackToken: string
+  /** Server-level API key for Authorization header (from ArcConfig.apiKey) */
+  arcApiKey?: string
   /** Called for each status event received */
   onEvent: (event: ArcSSEEvent) => void
   /** Called when a connection error occurs */
@@ -40,6 +42,7 @@ export class ArcSSEClient {
   private es: any | null = null
   private readonly url: string
   private connected = false
+  private connecting = false
 
   constructor(private readonly options: ArcSSEClientOptions) {
     this._lastEventId = options.lastEventId
@@ -63,9 +66,13 @@ export class ArcSSEClient {
       return
     }
 
+    this.connecting = true
     const ESClass = this.options.EventSourceClass
     const headers: Record<string, string> = {
       'Last-Event-ID': this._lastEventId || '0'
+    }
+    if (this.options.arcApiKey) {
+      headers['Authorization'] = `Bearer ${this.options.arcApiKey}`
     }
 
     console.log(`${TAG} connecting to ${this.url} (Last-Event-ID: ${headers['Last-Event-ID']})`)
@@ -78,6 +85,7 @@ export class ArcSSEClient {
 
     this.es.addEventListener('open', () => {
       this.connected = true
+      this.connecting = false
       console.log(`${TAG} connected`)
     })
 
@@ -100,6 +108,7 @@ export class ArcSSEClient {
     this.es.addEventListener('error', (event: any) => {
       console.log(`${TAG} error:`, JSON.stringify(event))
       this.connected = false
+      this.connecting = false
       this.options.onError?.(new Error(event.message || 'SSE error'))
     })
   }
@@ -111,6 +120,7 @@ export class ArcSSEClient {
       this.es.close()
       this.es = null
       this.connected = false
+      this.connecting = false
     }
   }
 
@@ -120,8 +130,11 @@ export class ArcSSEClient {
    * Returns immediately — events arrive asynchronously via onEvent callback.
    */
   async fetchEvents(): Promise<number> {
-    if (!this.es || !this.connected) {
-      this.close() // Clean up any stale connection
+    if (!this.es && !this.connecting) {
+      this.connect()
+    } else if (this.es && !this.connected && !this.connecting) {
+      // Connection exists but failed — reconnect
+      this.close()
       this.connect()
     }
     // Events arrive asynchronously — return 0 since we can't know the count synchronously

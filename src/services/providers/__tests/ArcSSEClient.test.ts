@@ -248,12 +248,23 @@ describe('ArcSSEClient', () => {
       expect(FakeEventSource.instances.length).toBe(1)
     })
 
-    test('reconnects with stale (non-open) EventSource by closing first', async () => {
+    test('does not reconnect while connecting (open not yet fired)', async () => {
       const { client } = makeClient()
       client.connect()
-      // es exists but connected=false (open never fired)
+      // es exists, connected=false but connecting=true (open never fired yet)
       await client.fetchEvents()
-      // stale es should be closed, new one opened
+      // should NOT tear down — still in connecting state
+      expect(FakeEventSource.instances[0].closed).toBeFalsy()
+      expect(FakeEventSource.instances.length).toBe(1)
+    })
+
+    test('reconnects with stale (errored) EventSource by closing first', async () => {
+      const { client } = makeClient()
+      client.connect()
+      // Simulate error which clears connecting flag
+      FakeEventSource.instances[0].emit('error', { message: 'fail' })
+      // Now es exists, connected=false, connecting=false — should reconnect
+      await client.fetchEvents()
       expect(FakeEventSource.instances[0].closed).toBe(true)
       expect(FakeEventSource.instances.length).toBe(2)
     })

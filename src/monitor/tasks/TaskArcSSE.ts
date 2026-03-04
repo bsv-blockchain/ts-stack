@@ -49,11 +49,14 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       console.log(`[TaskArcadeSSE] failed to load lastEventId: ${e}`)
     }
 
+    const arcApiKey = (this.monitor.services as Services).options?.arcConfig?.apiKey
+
     console.log(`[TaskArcadeSSE] setting up — arcUrl=${arcUrl} token=${callbackToken.substring(0, 8)}...`)
 
     this.sseClient = new ArcSSEClient({
       baseUrl: arcUrl,
       callbackToken,
+      arcApiKey,
       lastEventId,
       EventSourceClass,
       onEvent: event => {
@@ -137,7 +140,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
           break
         }
 
-        case 'MINED': {
+        case 'MINED':
+        case 'IMMUTABLE': {
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
           // Fetch proof directly from Arcade and complete the transaction
@@ -191,10 +195,15 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   private async fetchProofFromArcade(req: EntityProvenTxReq): Promise<string> {
     const arcUrl = (this.monitor.services as Services).options?.arcUrl
     const txid = req.txid
-    let log = `  req ${req.id} MINED — fetching proof from Arcade\n`
+    let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from Arcade\n`
 
     try {
-      const response = await fetch(`${arcUrl}/tx/${txid}`)
+      const fetchHeaders: Record<string, string> = {}
+      const apiKey = (this.monitor.services as Services).options?.arcConfig?.apiKey
+      if (apiKey) {
+        fetchHeaders['Authorization'] = `Bearer ${apiKey}`
+      }
+      const response = await fetch(`${arcUrl}/tx/${txid}`, { headers: fetchHeaders })
       if (!response.ok) {
         log += `    Arcade GET /tx/${txid} returned ${response.status}\n`
         return log

@@ -195,6 +195,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export interface ArcSSEClientOptions {
     baseUrl: string;
     callbackToken: string;
+    arcApiKey?: string;
     onEvent: (event: ArcSSEEvent) => void;
     onError?: (error: Error) => void;
     lastEventId?: string;
@@ -211,6 +212,14 @@ The react-native-sse EventSource class — passed in to avoid import from wallet
 
 ```ts
 EventSourceClass: any
+```
+
+###### Property arcApiKey
+
+Server-level API key for Authorization header (from ArcConfig.apiKey)
+
+```ts
+arcApiKey?: string
 ```
 
 ###### Property baseUrl
@@ -12130,7 +12139,7 @@ export class Services implements WalletServices {
     whatsonchain: WhatsOnChain;
     arcTaal: ARC;
     arcGorillaPool?: ARC;
-    bitails: Bitails;
+    bitails?: Bitails;
     getMerklePathServices: ServiceCollection<GetMerklePathService>;
     getRawTxServices: ServiceCollection<GetRawTxService>;
     postBeefServices: ServiceCollection<PostBeefService>;
