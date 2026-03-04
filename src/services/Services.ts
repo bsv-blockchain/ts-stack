@@ -46,7 +46,7 @@ export class Services implements WalletServices {
   whatsonchain: WhatsOnChain
   arcTaal: ARC
   arcGorillaPool?: ARC
-  bitails: Bitails
+  bitails?: Bitails
 
   getMerklePathServices: ServiceCollection<GetMerklePathService>
   getRawTxServices: ServiceCollection<GetRawTxService>
@@ -74,14 +74,16 @@ export class Services implements WalletServices {
       this.arcGorillaPool = new ARC(this.options.arcGorillaPoolUrl, this.options.arcGorillaPoolConfig, 'arcGorillaPool')
     }
 
-    this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
-
     const hasBitails = this.chain === 'main' || this.chain === 'test'
+
+    if (hasBitails) {
+      this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
+    }
 
     //prettier-ignore
     this.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath')
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getMerklePath.bind(this.whatsonchain) })
-    if (hasBitails) {
+    if (hasBitails && this.bitails) {
       this.getMerklePathServices.add({ name: 'Bitails', service: this.bitails.getMerklePath.bind(this.bitails) })
     }
 
@@ -97,7 +99,7 @@ export class Services implements WalletServices {
     //prettier-ignore
     this.postBeefServices
       .add({ name: 'TaalArcBeef', service: this.arcTaal.postBeef.bind(this.arcTaal) })
-    if (hasBitails) {
+    if (hasBitails && this.bitails) {
       this.postBeefServices.add({ name: 'Bitails', service: this.bitails.postBeef.bind(this.bitails) })
     }
     //prettier-ignore
