@@ -148,7 +148,9 @@ export class ARC {
     }
 
     const url = `${this.URL}/v1/tx`
-    console.log(`[ARC] ${this.name} postRawTx to ${url} (callbackToken=${this.callbackToken ? this.callbackToken.substring(0, 8) + '...' : 'NONE'})`)
+    console.log(
+      `[ARC] ${this.name} postRawTx to ${url} (callbackToken=${this.callbackToken ? this.callbackToken.substring(0, 8) + '...' : 'NONE'})`
+    )
     const nn = () => ({ name: this.name, when: new Date().toISOString() })
     const nne = () => ({ ...nn(), rawTx, txids: txids.join(','), url })
 

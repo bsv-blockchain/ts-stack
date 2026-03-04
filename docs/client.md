@@ -195,14 +195,22 @@ export interface ArcSSEClientOptions {
     baseUrl: string;
     callbackToken: string;
     onEvent: (event: ArcSSEEvent) => void;
-    onError?: (error: Event) => void;
-    onConnected?: () => void;
-    onDisconnected?: () => void;
+    onError?: (error: Error) => void;
     lastEventId?: string;
+    onLastEventIdChanged?: (lastEventId: string) => void;
+    EventSourceClass: any;
 }
 ```
 
 See also: [ArcSSEEvent](./services.md#interface-arcsseevent)
+
+###### Property EventSourceClass
+
+The react-native-sse EventSource class — passed in to avoid import from wallet-toolbox
+
+```ts
+EventSourceClass: any
+```
 
 ###### Property baseUrl
 
@@ -222,26 +230,10 @@ callbackToken: string
 
 ###### Property lastEventId
 
-Initial lastEventId for catchup on first connect
+Initial lastEventId for catchup
 
 ```ts
 lastEventId?: string
-```
-
-###### Property onConnected
-
-Called when connection is established
-
-```ts
-onConnected?: () => void
-```
-
-###### Property onDisconnected
-
-Called when connection is lost
-
-```ts
-onDisconnected?: () => void
 ```
 
 ###### Property onError
@@ -249,7 +241,7 @@ onDisconnected?: () => void
 Called when a connection error occurs
 
 ```ts
-onError?: (error: Event) => void
+onError?: (error: Error) => void
 ```
 
 ###### Property onEvent
@@ -261,19 +253,18 @@ onEvent: (event: ArcSSEEvent) => void
 ```
 See also: [ArcSSEEvent](./services.md#interface-arcsseevent)
 
+###### Property onLastEventIdChanged
+
+Called whenever lastEventId changes, for persistence to storage
+
+```ts
+onLastEventIdChanged?: (lastEventId: string) => void
+```
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ##### Interface: ArcSSEEvent
-
-SSE (Server-Sent Events) client for Arcade transaction status updates.
-
-Connects to Arcade's `GET /events?callbackToken=<token>` endpoint
-and receives real-time status updates for transactions submitted
-with the matching `X-CallbackToken` header.
-
-Supports pause/resume for mobile app lifecycle (background/foreground)
-with automatic catchup via the `Last-Event-ID` mechanism.
 
 ```ts
 export interface ArcSSEEvent {
@@ -3759,6 +3750,9 @@ export interface MonitorOptions {
     unprovenAttemptsLimitTest: number;
     unprovenAttemptsLimitMain: number;
     callbackToken?: string;
+    loadLastSSEEventId?: () => Promise<string | undefined>;
+    saveLastSSEEventId?: (lastEventId: string) => Promise<void>;
+    EventSourceClass?: any;
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
     onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
@@ -3767,15 +3761,31 @@ export interface MonitorOptions {
 
 See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services)
 
+###### Property EventSourceClass
+
+The react-native-sse EventSource class for SSE support in React Native
+
+```ts
+EventSourceClass?: any
+```
+
 ###### Property callbackToken
 
 Stable callback token for ARC SSE event streaming.
-When set, TaskArcSSE will open an SSE connection to Arcade's
+When set, TaskArcadeSSE will open an SSE connection to Arcade's
 /events endpoint and receive real-time transaction status updates.
 Must match the X-CallbackToken header sent during broadcast.
 
 ```ts
 callbackToken?: string
+```
+
+###### Property loadLastSSEEventId
+
+Load persisted SSE lastEventId (e.g. from SQLite) for catchup on startup
+
+```ts
+loadLastSSEEventId?: () => Promise<string | undefined>
 ```
 
 ###### Property msecsWaitPerMerkleProofServiceReq
@@ -3794,6 +3804,14 @@ These are hooks for a wallet-toolbox client to get transaction updates.
 onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
 ```
 See also: [ReviewActionResult](./client.md#interface-reviewactionresult)
+
+###### Property saveLastSSEEventId
+
+Save SSE lastEventId to persistent storage
+
+```ts
+saveLastSSEEventId?: (lastEventId: string) => Promise<void>
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -8344,7 +8362,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [StorageReader](#class-storagereader) | [WalletLogger](#class-walletlogger) |
 | [DevConsoleInteractor](#class-devconsoleinteractor) | [StorageReaderWriter](#class-storagereaderwriter) | [WalletMonitorTask](#class-walletmonitortask) |
 | [EntityBase](#class-entitybase) | [StorageSyncReader](#class-storagesyncreader) | [WalletPermissionsManager](#class-walletpermissionsmanager) |
-| [EntityCertificate](#class-entitycertificate) | [TaskArcSSE](#class-taskarcsse) | [WalletSettingsManager](#class-walletsettingsmanager) |
+| [EntityCertificate](#class-entitycertificate) | [TaskArcadeSSE](#class-taskarcadesse) | [WalletSettingsManager](#class-walletsettingsmanager) |
 | [EntityCertificateField](#class-entitycertificatefield) | [TaskCheckForProofs](#class-taskcheckforproofs) | [WalletSigner](#class-walletsigner) |
 | [EntityCommission](#class-entitycommission) | [TaskCheckNoSends](#class-taskchecknosends) | [WalletStorageManager](#class-walletstoragemanager) |
 | [EntityOutput](#class-entityoutput) | [TaskClock](#class-taskclock) | [WhatsOnChain](#class-whatsonchain) |
@@ -8455,30 +8473,38 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export class ArcSSEClient {
     constructor(private readonly options: ArcSSEClientOptions) 
     get lastEventId(): string | undefined 
-    get connected(): boolean 
     connect(): void 
-    disconnect(): void 
-    pause(): void 
-    resume(): void 
+    close(): void 
+    async fetchEvents(): Promise<number> 
 }
 ```
 
 See also: [ArcSSEClientOptions](./services.md#interface-arcsseclientoptions)
 
-###### Method pause
+###### Method close
 
-Close the SSE connection but preserve lastEventId for later catchup
+Close the connection and clean up
 
 ```ts
-pause(): void 
+close(): void 
 ```
 
-###### Method resume
+###### Method connect
 
-Reopen the SSE connection; server replays missed events via Last-Event-ID
+Open the SSE connection. Events will be dispatched via onEvent as they arrive.
 
 ```ts
-resume(): void 
+connect(): void 
+```
+
+###### Method fetchEvents
+
+Ensure connection is open. If already connected, this is a no-op.
+If not connected, opens a new connection with catchup from lastEventId.
+Returns immediately — events arrive asynchronously via onEvent callback.
+
+```ts
+async fetchEvents(): Promise<number> 
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -9494,19 +9520,28 @@ export class Chaintracks implements ChaintracksManagementApi {
     async startListening(): Promise<void> 
     private async syncBulkStorageNoLock(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
         let newLiveHeaders: BlockHeader[] = [];
-        let bulkDone = false;
         let before = initialRanges;
         let after = before;
         let added = HeightRange.empty;
+        const maxSyncRounds = Math.max(1, this.bulkIngestors.length * 2);
         let done = false;
-        for (; !done;) {
+        for (let round = 1; !done && round <= maxSyncRounds; round++) {
             let bulkSyncError: WalletError | undefined;
+            let roundMadeProgress = false;
+            let roundHadSuccess = false;
             for (const bulk of this.bulkIngestors) {
                 try {
+                    const beforeBulkMax = before.bulk.maxHeight;
+                    const beforeLiveRange = HeightRange.from(newLiveHeaders);
                     const r = await bulk.synchronize(presentHeight, before, newLiveHeaders);
+                    roundHadSuccess = true;
                     newLiveHeaders = r.liveHeaders;
                     after = await this.storage.getAvailableHeightRanges();
                     added = after.bulk.above(before.bulk);
+                    const afterLiveRange = HeightRange.from(newLiveHeaders);
+                    if (after.bulk.maxHeight > beforeBulkMax || afterLiveRange.maxHeight > beforeLiveRange.maxHeight) {
+                        roundMadeProgress = true;
+                    }
                     before = after;
                     this.log(`Bulk Ingestor: ${added.length} added with ${newLiveHeaders.length} live headers from ${bulk.constructor.name}`);
                     if (r.done) {
@@ -9521,12 +9556,19 @@ export class Chaintracks implements ChaintracksManagementApi {
                         break;
                 }
             }
-            if (!bulkDone && !this.available && bulkSyncError) {
+            if (!this.available && bulkSyncError && !roundHadSuccess) {
                 this.startupError = bulkSyncError;
                 break;
             }
-            if (bulkDone)
+            if (done)
                 break;
+            if (!roundMadeProgress) {
+                this.log(`Bulk sync stalled after round ${round}. Deferring further bulk sync attempts to continue live header processing.`);
+                break;
+            }
+            if (round === maxSyncRounds) {
+                this.log(`Bulk sync paused after ${maxSyncRounds} rounds to avoid runaway retries. Will retry in a later sync cycle.`);
+            }
         }
         if (!this.startupError) {
             this.liveHeaders.unshift(...newLiveHeaders);
@@ -11433,8 +11475,7 @@ export class Monitor {
     callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void 
     callOnProvenTransaction(txStatus: ProvenTransactionStatus): void 
     callOnTransactionStatusChanged(txid: string, newStatus: string): void 
-    pauseSSE(): void 
-    resumeSSE(): void 
+    async fetchSSEEvents(): Promise<number> 
     deactivatedHeaders: DeactivedHeader[] = [];
     processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void 
     processHeader(header: BlockHeader): void 
@@ -11503,19 +11544,19 @@ See also: [ProvenTransactionStatus](./client.md#interface-proventransactionstatu
 
 ###### Method callOnTransactionStatusChanged
 
-Called by TaskArcSSE when an SSE status event is received from Arcade.
+Called by TaskArcadeSSE when an SSE status event is received from Arcade.
 
 ```ts
 callOnTransactionStatusChanged(txid: string, newStatus: string): void 
 ```
 
-###### Method pauseSSE
+###### Method fetchSSEEvents
 
-Pause the SSE connection (e.g. when mobile app goes to background).
-The lastEventId is preserved for catchup on resume.
+Fetch pending transaction status events from Arcade on demand.
+Call this on app open, balance refresh, transaction list view, etc.
 
 ```ts
-pauseSSE(): void 
+async fetchSSEEvents(): Promise<number> 
 ```
 
 ###### Method processHeader
@@ -11556,15 +11597,6 @@ Coinbase transactions always become invalid.
 processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void 
 ```
 See also: [BlockHeader](./client.md#interface-blockheader)
-
-###### Method resumeSSE
-
-Resume the SSE connection (e.g. when mobile app returns to foreground).
-Missed events are replayed by the server via Last-Event-ID.
-
-```ts
-resumeSSE(): void 
-```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -11777,7 +11809,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     readonly apiKey: string;
     protected readonly URL: string;
     protected readonly httpClient: HttpClient;
-    constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {}) 
+    constructor(network: "main" | "test" | "stn" | "teratest" = "main", config: WhatsOnChainConfig = {}) 
     async isValidRootForHeight(root: string, height: number): Promise<boolean> 
     async currentHeight(): Promise<number> 
     protected getHttpHeaders(): Record<string, string> 
@@ -11789,7 +11821,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
 Constructs an instance of the WhatsOnChain ChainTracker.
 
 ```ts
-constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {}) 
+constructor(network: "main" | "test" | "stn" | "teratest" = "main", config: WhatsOnChainConfig = {}) 
 ```
 
 Argument Details
@@ -13727,29 +13759,27 @@ See also: [AuthId](./client.md#interface-authid), [RequestSyncChunkArgs](./clien
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-##### Class: TaskArcSSE
+##### Class: TaskArcadeSSE
 
-Monitor task that manages an SSE connection to Arcade for real-time
-transaction status updates.
-
-Events are queued by the SSE callback and processed on each monitor cycle.
-On MINED events, triggers TaskCheckForProofs to fetch merkle proofs.
+Monitor task that receives transaction status updates from Arcade via SSE
+and processes them — including fetching merkle proofs directly from Arcade
+when transactions are MINED.
 
 ```ts
-export class TaskArcSSE extends WalletMonitorTask {
-    static taskName = "ArcSSE";
+export class TaskArcadeSSE extends WalletMonitorTask {
+    static taskName = "ArcadeSSE";
+    sseClient: ArcSSEClient | null = null;
     constructor(monitor: Monitor) 
     override async asyncSetup(): Promise<void> 
     trigger(_nowMsecsSinceEpoch: number): {
         run: boolean;
     } 
     async runTask(): Promise<string> 
-    pause(): void 
-    resume(): void 
+    async fetchNow(): Promise<number> 
 }
 ```
 
-See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+See also: [ArcSSEClient](./services.md#class-arcsseclient), [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -16364,40 +16394,40 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [arraysEqual](#function-arraysequal) | [isBaseBlockHeader](#function-isbaseblockheader) | [swapByteOrder](#function-swapbyteorder) |
 | [asArray](#function-asarray) | [isBlockHeader](#function-isblockheader) | [throwDummyReviewActions](#function-throwdummyreviewactions) |
 | [asBsvSdkPrivateKey](#function-asbsvsdkprivatekey) | [isCreateActionSpecOp](#function-iscreateactionspecop) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
-| [asBsvSdkPublickKey](#function-asbsvsdkpublickkey) | [isKnownValidBulkHeaderFile](#function-isknownvalidbulkheaderfile) | [toWalletNetwork](#function-towalletnetwork) |
-| [asBsvSdkScript](#function-asbsvsdkscript) | [isListActionsSpecOp](#function-islistactionsspecop) | [transactionInputSize](#function-transactioninputsize) |
-| [asBsvSdkTx](#function-asbsvsdktx) | [isListOutputsSpecOp](#function-islistoutputsspecop) | [transactionOutputSize](#function-transactionoutputsize) |
-| [asString](#function-asstring) | [isLive](#function-islive) | [transactionSize](#function-transactionsize) |
-| [asUint8Array](#function-asuint8array) | [isLiveBlockHeader](#function-isliveblockheader) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
-| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [isMoreWork](#function-ismorework) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
-| [blockHash](#function-blockhash) | [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
-| [buildSignableTransaction](#function-buildsignabletransaction) | [listActionsIdb](#function-listactionsidb) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
-| [completeSignedTransaction](#function-completesignedtransaction) | [listCertificates](#function-listcertificates) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
-| [convertBitsToTarget](#function-convertbitstotarget) | [listOutputsIdb](#function-listoutputsidb) | [validateBulkFileData](#function-validatebulkfiledata) |
-| [convertBitsToWork](#function-convertbitstowork) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
-| [convertBufferToUint32](#function-convertbuffertouint32) | [logCreateActionArgs](#function-logcreateactionargs) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
-| [convertProofToMerklePath](#function-convertprooftomerklepath) | [logWalletError](#function-logwalleterror) | [validateGenesisHeader](#function-validategenesisheader) |
-| [convertUint32ToBuffer](#function-convertuint32tobuffer) | [makeAtomicBeef](#function-makeatomicbeef) | [validateHeaderDifficulty](#function-validateheaderdifficulty) |
-| [convertWocToBlockHeaderHex](#function-convertwoctoblockheaderhex) | [makeBrc114ActionTimeLabel](#function-makebrc114actiontimelabel) | [validateHeaderFormat](#function-validateheaderformat) |
-| [createAction](#function-createaction) | [makeChangeLock](#function-makechangelock) | [validateScriptHash](#function-validatescripthash) |
-| [createAction](#function-createaction) | [maxDate](#function-maxdate) | [validateSecondsSinceEpoch](#function-validatesecondssinceepoch) |
-| [createDefaultIdbChaintracksOptions](#function-createdefaultidbchaintracksoptions) | [offsetPrivKey](#function-offsetprivkey) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
-| [createDefaultNoDbChaintracksOptions](#function-createdefaultnodbchaintracksoptions) | [offsetPubKey](#function-offsetpubkey) | [varUintSize](#function-varuintsize) |
-| [createDefaultWalletServicesOptions](#function-createdefaultwalletservicesoptions) | [optionalArraysEqual](#function-optionalarraysequal) | [verifyHexString](#function-verifyhexstring) |
-| [createIdbChaintracks](#function-createidbchaintracks) | [parseBrc114ActionTimeLabels](#function-parsebrc114actiontimelabels) | [verifyId](#function-verifyid) |
-| [createNoDbChaintracks](#function-createnodbchaintracks) | [parseTxScriptOffsets](#function-parsetxscriptoffsets) | [verifyInteger](#function-verifyinteger) |
-| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [processAction](#function-processaction) | [verifyNumber](#function-verifynumber) |
-| [createSyncMap](#function-createsyncmap) | [processAction](#function-processaction) | [verifyOne](#function-verifyone) |
-| [deserializeBaseBlockHeader](#function-deserializebaseblockheader) | [proveCertificate](#function-provecertificate) | [verifyOneOrNone](#function-verifyoneornone) |
-| [deserializeBaseBlockHeaders](#function-deserializebaseblockheaders) | [purgeDataIdb](#function-purgedataidb) | [verifyOptionalHexString](#function-verifyoptionalhexstring) |
-| [deserializeBlockHeader](#function-deserializeblockheader) | [randomBytes](#function-randombytes) | [verifyTruthy](#function-verifytruthy) |
-| [deserializeBlockHeaders](#function-deserializeblockheaders) | [randomBytesBase64](#function-randombytesbase64) | [verifyUnlockScripts](#function-verifyunlockscripts) |
-| [doubleSha256BE](#function-doublesha256be) | [randomBytesHex](#function-randombyteshex) | [wait](#function-wait) |
-| [doubleSha256LE](#function-doublesha256le) | [readUInt32BE](#function-readuint32be) | [wocGetHeadersHeaderToBlockHeader](#function-wocgetheadersheadertoblockheader) |
-| [generateChangeSdk](#function-generatechangesdk) | [readUInt32LE](#function-readuint32le) | [workBNtoBuffer](#function-workbntobuffer) |
-| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [redeemServiceCharges](#function-redeemservicecharges) | [writeUInt32BE](#function-writeuint32be) |
-| [genesisBuffer](#function-genesisbuffer) | [reviewStatusIdb](#function-reviewstatusidb) | [writeUInt32LE](#function-writeuint32le) |
-| [genesisHeader](#function-genesisheader) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) |  |
+| [asBsvSdkPublickKey](#function-asbsvsdkpublickkey) | [isKnownValidBulkHeaderFile](#function-isknownvalidbulkheaderfile) | [toLookupNetworkPreset](#function-tolookupnetworkpreset) |
+| [asBsvSdkScript](#function-asbsvsdkscript) | [isListActionsSpecOp](#function-islistactionsspecop) | [toWalletNetwork](#function-towalletnetwork) |
+| [asBsvSdkTx](#function-asbsvsdktx) | [isListOutputsSpecOp](#function-islistoutputsspecop) | [transactionInputSize](#function-transactioninputsize) |
+| [asString](#function-asstring) | [isLive](#function-islive) | [transactionOutputSize](#function-transactionoutputsize) |
+| [asUint8Array](#function-asuint8array) | [isLiveBlockHeader](#function-isliveblockheader) | [transactionSize](#function-transactionsize) |
+| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [isMoreWork](#function-ismorework) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
+| [blockHash](#function-blockhash) | [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
+| [buildSignableTransaction](#function-buildsignabletransaction) | [listActionsIdb](#function-listactionsidb) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
+| [completeSignedTransaction](#function-completesignedtransaction) | [listCertificates](#function-listcertificates) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
+| [convertBitsToTarget](#function-convertbitstotarget) | [listOutputsIdb](#function-listoutputsidb) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
+| [convertBitsToWork](#function-convertbitstowork) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [validateBulkFileData](#function-validatebulkfiledata) |
+| [convertBufferToUint32](#function-convertbuffertouint32) | [logCreateActionArgs](#function-logcreateactionargs) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
+| [convertProofToMerklePath](#function-convertprooftomerklepath) | [logWalletError](#function-logwalleterror) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
+| [convertUint32ToBuffer](#function-convertuint32tobuffer) | [makeAtomicBeef](#function-makeatomicbeef) | [validateGenesisHeader](#function-validategenesisheader) |
+| [convertWocToBlockHeaderHex](#function-convertwoctoblockheaderhex) | [makeBrc114ActionTimeLabel](#function-makebrc114actiontimelabel) | [validateHeaderDifficulty](#function-validateheaderdifficulty) |
+| [createAction](#function-createaction) | [makeChangeLock](#function-makechangelock) | [validateHeaderFormat](#function-validateheaderformat) |
+| [createAction](#function-createaction) | [maxDate](#function-maxdate) | [validateScriptHash](#function-validatescripthash) |
+| [createDefaultIdbChaintracksOptions](#function-createdefaultidbchaintracksoptions) | [offsetPrivKey](#function-offsetprivkey) | [validateSecondsSinceEpoch](#function-validatesecondssinceepoch) |
+| [createDefaultNoDbChaintracksOptions](#function-createdefaultnodbchaintracksoptions) | [offsetPubKey](#function-offsetpubkey) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
+| [createDefaultWalletServicesOptions](#function-createdefaultwalletservicesoptions) | [optionalArraysEqual](#function-optionalarraysequal) | [varUintSize](#function-varuintsize) |
+| [createIdbChaintracks](#function-createidbchaintracks) | [parseBrc114ActionTimeLabels](#function-parsebrc114actiontimelabels) | [verifyHexString](#function-verifyhexstring) |
+| [createNoDbChaintracks](#function-createnodbchaintracks) | [parseTxScriptOffsets](#function-parsetxscriptoffsets) | [verifyId](#function-verifyid) |
+| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [processAction](#function-processaction) | [verifyInteger](#function-verifyinteger) |
+| [createSyncMap](#function-createsyncmap) | [processAction](#function-processaction) | [verifyNumber](#function-verifynumber) |
+| [deserializeBaseBlockHeader](#function-deserializebaseblockheader) | [proveCertificate](#function-provecertificate) | [verifyOne](#function-verifyone) |
+| [deserializeBaseBlockHeaders](#function-deserializebaseblockheaders) | [purgeDataIdb](#function-purgedataidb) | [verifyOneOrNone](#function-verifyoneornone) |
+| [deserializeBlockHeader](#function-deserializeblockheader) | [randomBytes](#function-randombytes) | [verifyOptionalHexString](#function-verifyoptionalhexstring) |
+| [deserializeBlockHeaders](#function-deserializeblockheaders) | [randomBytesBase64](#function-randombytesbase64) | [verifyTruthy](#function-verifytruthy) |
+| [doubleSha256BE](#function-doublesha256be) | [randomBytesHex](#function-randombyteshex) | [verifyUnlockScripts](#function-verifyunlockscripts) |
+| [doubleSha256LE](#function-doublesha256le) | [readUInt32BE](#function-readuint32be) | [wait](#function-wait) |
+| [generateChangeSdk](#function-generatechangesdk) | [readUInt32LE](#function-readuint32le) | [wocGetHeadersHeaderToBlockHeader](#function-wocgetheadersheadertoblockheader) |
+| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [redeemServiceCharges](#function-redeemservicecharges) | [workBNtoBuffer](#function-workbntobuffer) |
+| [genesisBuffer](#function-genesisbuffer) | [reviewStatusIdb](#function-reviewstatusidb) | [writeUInt32BE](#function-writeuint32be) |
+| [genesisHeader](#function-genesisheader) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) | [writeUInt32LE](#function-writeuint32le) |
 | [getBeefForTransaction](#function-getbeeffortransaction) | [serializeBaseBlockHeader](#function-serializebaseblockheader) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -17205,27 +17235,33 @@ Returns the genesis block for the specified chain.
 
 ```ts
 export function genesisHeader(chain: Chain): BlockHeader {
-    return chain === "main"
-        ? {
-            version: 1,
-            previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
-            merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            time: 1231006505,
-            bits: 486604799,
-            nonce: 2083236893,
-            height: 0,
-            hash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
-        }
-        : {
-            version: 1,
-            previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
-            merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-            time: 1296688602,
-            bits: 486604799,
-            nonce: 414098458,
-            height: 0,
-            hash: "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
-        };
+    switch (chain) {
+        case "main":
+            return {
+                version: 1,
+                previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
+                merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+                time: 1231006505,
+                bits: 486604799,
+                nonce: 2083236893,
+                height: 0,
+                hash: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+            };
+        case "test":
+        case "teratest":
+            return {
+                version: 1,
+                previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
+                merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+                time: 1296688602,
+                bits: 486604799,
+                nonce: 414098458,
+                height: 0,
+                hash: "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"
+            };
+        case "mock":
+            throw new Error(`genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.`);
+    }
 }
 ```
 
@@ -18193,6 +18229,20 @@ Returns
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: toLookupNetworkPreset
+
+Maps a Chain to a network preset suitable for LookupResolver / SHIPBroadcaster.
+Unlike `toWalletNetwork`, this returns `'local'` for `mock` chain.
+
+```ts
+export function toLookupNetworkPreset(chain: Chain): "mainnet" | "testnet" | "local" 
+```
+
+See also: [Chain](./client.md#type-chain)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: toWalletNetwork
 
 ```ts
@@ -18739,7 +18789,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Type: Chain
 
 ```ts
-export type Chain = "main" | "test"
+export type Chain = "main" | "test" | "teratest" | "mock"
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

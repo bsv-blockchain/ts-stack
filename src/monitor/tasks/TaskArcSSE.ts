@@ -58,7 +58,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       onEvent: event => {
         this.pendingEvents.push(event)
       },
-      onError: (err) => {
+      onError: err => {
         console.log(`[TaskArcadeSSE] error: ${err.message}`)
       },
       onLastEventIdChanged: (id: string) => {

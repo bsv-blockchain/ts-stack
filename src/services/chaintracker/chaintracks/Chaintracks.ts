@@ -322,21 +322,30 @@ export class Chaintracks implements ChaintracksManagementApi {
   private async syncBulkStorageNoLock(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
     let newLiveHeaders: BlockHeader[] = []
 
-    let bulkDone = false
     let before = initialRanges
     let after = before
     let added = HeightRange.empty
+    const maxSyncRounds = Math.max(1, this.bulkIngestors.length * 2)
 
     let done = false
-    for (; !done; ) {
+    for (let round = 1; !done && round <= maxSyncRounds; round++) {
       let bulkSyncError: WalletError | undefined
+      let roundMadeProgress = false
+      let roundHadSuccess = false
       for (const bulk of this.bulkIngestors) {
         try {
+          const beforeBulkMax = before.bulk.maxHeight
+          const beforeLiveRange = HeightRange.from(newLiveHeaders)
           const r = await bulk.synchronize(presentHeight, before, newLiveHeaders)
+          roundHadSuccess = true
 
           newLiveHeaders = r.liveHeaders
           after = await this.storage.getAvailableHeightRanges()
           added = after.bulk.above(before.bulk)
+          const afterLiveRange = HeightRange.from(newLiveHeaders)
+          if (after.bulk.maxHeight > beforeBulkMax || afterLiveRange.maxHeight > beforeLiveRange.maxHeight) {
+            roundMadeProgress = true
+          }
           before = after
           this.log(
             `Bulk Ingestor: ${added.length} added with ${newLiveHeaders.length} live headers from ${bulk.constructor.name}`
@@ -354,11 +363,22 @@ export class Chaintracks implements ChaintracksManagementApi {
             break
         }
       }
-      if (!bulkDone && !this.available && bulkSyncError) {
+      if (!this.available && bulkSyncError && !roundHadSuccess) {
         this.startupError = bulkSyncError
         break
       }
-      if (bulkDone) break
+      if (done) break
+      if (!roundMadeProgress) {
+        this.log(
+          `Bulk sync stalled after round ${round}. Deferring further bulk sync attempts to continue live header processing.`
+        )
+        break
+      }
+      if (round === maxSyncRounds) {
+        this.log(
+          `Bulk sync paused after ${maxSyncRounds} rounds to avoid runaway retries. Will retry in a later sync cycle.`
+        )
+      }
     }
 
     if (!this.startupError) {
