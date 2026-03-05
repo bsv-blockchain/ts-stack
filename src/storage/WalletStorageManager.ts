@@ -574,12 +574,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
    * This results in proven_txs with invalid proofs being updated with new valid proofs where possible.
    *
    * @param beef
-   * @param allowTxidOnly
-   * @returns VerifyAndRepairBeefResult, in particular `verifiedBeef` is valid only verify and repair succeeded fully.
+  * @param allowTxidOnly
+  * @returns VerifyAndRepairBeefResult, in particular `verifiedBeef` is valid only verify and repair succeeded fully.
    */
   async verifyAndRepairBeef(beef: Beef, allowTxidOnly?: boolean): Promise<VerifyAndRepairBeefResult> {
-    throw new sdk.WERR_NOT_IMPLEMENTED()
-
     const r: VerifyAndRepairBeefResult = {
       isStructurallyValid: false,
       originalRoots: {},
@@ -592,34 +590,107 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
     if (!r.isStructurallyValid) return r
 
+    const invalidRootKeys = new Set<string>()
+    const toInvalidRootKey = (height: number, root: string) => `${height}:${root}`
     for (const [heightStr, root] of Object.entries(r.originalRoots)) {
       const height = Number(heightStr)
       const isValid = await chaintracker.isValidRootForHeight(root, height)
       if (!isValid) {
-        // root is not currently the valid hash for this height according to the chaintracker.
-        // What beef txids depended on this root:
-        const txids = beef.txs
-          .filter(tx => tx.bumpIndex !== undefined && beef.bumps[tx.bumpIndex].blockHeight === height)
-          .map(tx => tx.txid)
         const reproveResults = await this.reproveHeader(root)
         r.invalidRoots[height] = { root, reproveResults }
+        invalidRootKeys.add(toInvalidRootKey(height, root))
       }
     }
 
     if (Object.keys(r.invalidRoots).length === 0) {
       // There are no invalid merkle roots and the beef is structurally valid.
       // The beef is fully verified.
+      r.verifiedBeef = beef
       return r
     }
 
-    // beef is structurally valid but has invalid merkle roots.
-    // Attempt to repair the invalid roots by reproving all txids in this beef that relied on them.
+    const txidsToRepair = new Set<string>()
+    for (const tx of beef.txs) {
+      if (tx.bumpIndex === undefined) continue
+      const bump = beef.bumps[tx.bumpIndex]
+      if (!bump) continue
+      let bumpRoot: string | undefined
+      try {
+        bumpRoot = bump.computeRoot()
+      } catch {
+        bumpRoot = undefined
+      }
+      if (bumpRoot && invalidRootKeys.has(toInvalidRootKey(bump.blockHeight, bumpRoot))) {
+        txidsToRepair.add(tx.txid)
+      }
+    }
 
-    // All invalid BUMPs must be removed from the beef
-    // and all txid's that were proven by those BUMPs need
-    // new beefs merged into the beef.
-    // In most cases, this will be a replacement BUMP,
-    // but it may also require a deeper proof.
+    const replacementByTxid: Record<string, { rawTx: number[]; bump?: any }> = {}
+    for (const txid of txidsToRepair) {
+      try {
+        const repairBeef = await services.getBeefForTxid(txid)
+        const repairTx = repairBeef.findTxid(txid)
+        if (!repairTx?.rawTx) continue
+        const replacement: { rawTx: number[]; bump?: any } = { rawTx: repairTx.rawTx }
+        if (repairTx.bumpIndex !== undefined) {
+          const bump = repairBeef.bumps[repairTx.bumpIndex]
+          if (bump) {
+            const root = bump.computeRoot()
+            if (await chaintracker.isValidRootForHeight(root, bump.blockHeight)) {
+              replacement.bump = bump
+            }
+          }
+        }
+        replacementByTxid[txid] = replacement
+      } catch {
+        // Not all txids can necessarily be refreshed from services.
+      }
+    }
+
+    // Rebuild into a fresh BEEF so any stale invalid bumps are dropped.
+    const repairedBeef = new Beef()
+    const preservedBumpIndexMap = new Map<number, number>()
+    for (const tx of beef.txs) {
+      if (tx.isTxidOnly) {
+        repairedBeef.mergeTxidOnly(tx.txid)
+        continue
+      }
+      const replacement = replacementByTxid[tx.txid]
+      if (replacement) {
+        const bumpIndex = replacement.bump ? repairedBeef.mergeBump(replacement.bump) : undefined
+        repairedBeef.mergeRawTx(replacement.rawTx, bumpIndex)
+        continue
+      }
+      if (!tx.rawTx) {
+        repairedBeef.mergeTxidOnly(tx.txid)
+        continue
+      }
+      let bumpIndex: number | undefined
+      if (tx.bumpIndex !== undefined) {
+        const oldBump = beef.bumps[tx.bumpIndex]
+        let shouldKeepOldBump = false
+        if (oldBump) {
+          try {
+            const oldRoot = oldBump.computeRoot()
+            shouldKeepOldBump = !invalidRootKeys.has(toInvalidRootKey(oldBump.blockHeight, oldRoot))
+          } catch {
+            shouldKeepOldBump = true
+          }
+        }
+        if (oldBump && shouldKeepOldBump) {
+          bumpIndex = preservedBumpIndexMap.get(tx.bumpIndex)
+          if (bumpIndex === undefined) {
+            bumpIndex = repairedBeef.mergeBump(oldBump)
+            preservedBumpIndexMap.set(tx.bumpIndex, bumpIndex)
+          }
+        }
+      }
+      repairedBeef.mergeRawTx(tx.rawTx, bumpIndex)
+    }
+
+    if (await repairedBeef.verify(chaintracker, allowTxidOnly)) {
+      r.verifiedBeef = repairedBeef
+    }
 
     return r
   }
@@ -940,4 +1011,5 @@ export interface VerifyAndRepairBeefResult {
   isStructurallyValid: boolean
   originalRoots: Record<number, string>
   invalidRoots: Record<number, { root: string; reproveResults: sdk.ReproveHeaderResult }>
+  verifiedBeef?: Beef
 }
