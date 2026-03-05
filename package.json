@@ -1,6 +1,6 @@
 {
   "name": "@bsv/paymail",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "BSV Paymail library",
   "publishConfig": {
     "access": "public"
