@@ -185,7 +185,7 @@ export abstract class WalletCore {
       const result = await client.createAction({
         description: options.description ?? this.defaults.description,
         outputs: actionOutputs,
-        options: { randomizeOutputs: false }
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
 
       return {
@@ -267,7 +267,7 @@ export abstract class WalletCore {
       const result = await client.createAction({
         description: request.memo ?? `Fund server wallet (${request.satoshis} sats)`,
         outputs,
-        options: { randomizeOutputs: false }
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
 
       return {

@@ -207,7 +207,7 @@ export function createOverlayMethods (core: WalletCore): {
           outputDescription: 'SHIP token',
           ...(basket != null ? { basket } : {})
         }],
-        options: { randomizeOutputs: false }
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       return {
         txid: result.txid ?? '',
@@ -230,7 +230,7 @@ export function createOverlayMethods (core: WalletCore): {
           outputDescription: 'SLAP token',
           ...(basket != null ? { basket } : {})
         }],
-        options: { randomizeOutputs: false }
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       return {
         txid: result.txid ?? '',
@@ -247,7 +247,7 @@ export function createOverlayMethods (core: WalletCore): {
       const result = await core.getClient().createAction({
         description: actionOptions.description ?? 'Overlay broadcast',
         outputs: actionOptions.outputs,
-        options: { randomizeOutputs: false }
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       if (result.tx == null) throw new Error('No tx from createAction')
       const tx = Transaction.fromAtomicBEEF(result.tx)
