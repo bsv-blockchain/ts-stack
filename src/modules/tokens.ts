@@ -72,7 +72,7 @@ export function createTokenMethods (core: WalletCore): {
             tags: ['token'],
             outputDescription: `Token (${basket})`
           }],
-          options: { randomizeOutputs: false }
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         })
 
         return {
@@ -231,7 +231,7 @@ export function createTokenMethods (core: WalletCore): {
             customInstructions: JSON.stringify({ protocolID, keyID: newKeyID, counterparty: newCounterparty }),
             tags: ['token', 'sent']
           }],
-          options: { randomizeOutputs: false }
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         } as any)
 
         if ((response as any)?.signableTransaction == null) {
@@ -304,7 +304,7 @@ export function createTokenMethods (core: WalletCore): {
             unlockingScriptLength: 73
           }],
           outputs: [],
-          options: { randomizeOutputs: false }
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         } as any)
 
         if ((response as any)?.signableTransaction == null) {
@@ -398,7 +398,7 @@ export function createTokenMethods (core: WalletCore): {
             lockingScript: newLockingScript.toHex(),
             outputDescription: 'Token for recipient'
           }],
-          options: { randomizeOutputs: false }
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         } as any)
 
         if ((response as any)?.signableTransaction == null) {

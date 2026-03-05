@@ -231,7 +231,7 @@ export class CredentialIssuer {
           basket: 'revocation-utxos',
           tags: ['revocation']
         }],
-        options: { randomizeOutputs: false }
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
 
       if (result.txid == null || result.txid === '') {
@@ -355,7 +355,7 @@ export class CredentialIssuer {
         inputDescription: 'Spend revocation UTXO'
       }],
       outputs: [],
-      options: { randomizeOutputs: false }
+      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
     })
 
     if (result.txid == null || result.txid === '') {

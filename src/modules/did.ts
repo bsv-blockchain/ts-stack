@@ -291,7 +291,7 @@ function _buildDIDMethods (core: WalletCore): {
         inputDescription: 'DID chain UTXO'
       }],
       outputs: newOutputs,
-      options: { randomizeOutputs: false }
+      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
     } as any)
 
     if ((response)?.signableTransaction == null) {
@@ -375,7 +375,7 @@ function _buildDIDMethods (core: WalletCore): {
               outputDescription: 'DID issuance marker'
             }
           ],
-          options: { randomizeOutputs: false }
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
         })
 
         const issuanceTxid = issuanceResult.txid ?? ''
