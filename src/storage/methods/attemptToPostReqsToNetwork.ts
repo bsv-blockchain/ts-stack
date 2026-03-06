@@ -73,7 +73,7 @@ async function validateReqsAndMergeBeefs(
       const { code, message } = sdk.WalletError.fromUnknown(eu)
       req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqError', txid: req.txid, code, message })
       req.attempts++
-      if (req.attempts > 6) {
+      if (req.attempts > 6 || message.startsWith('The txid parameter must be known to storage')) {
         req.status = 'invalid'
         r.details.push({ txid: req.txid, req, status: 'invalid' })
       }
@@ -316,14 +316,19 @@ async function confirmDoubleSpend(
     const competingTxids = new Set(ar.competingTxs)
     for (const input of tx.inputs) {
       const sourceTx = beef.findTxid(input.sourceTXID!)?.tx
-      if (!sourceTx) throw new sdk.WERR_INTERNAL(`beef lacks tx for ${input.sourceTXID}`)
-      const lockingScript = sourceTx.outputs[input.sourceOutputIndex].lockingScript.toHex()
-      const hash = services.hashOutputScript(lockingScript)
-      const shhrs = await services.getScriptHashHistory(hash, undefined, logger)
-      if (shhrs.status === 'success') {
-        for (const h of shhrs.history) {
-          // Neither the source of the input nor the current transaction are competition.
-          if (h.txid !== input.sourceTXID && h.txid !== ar.txid) competingTxids.add(h.txid)
+      if (!sourceTx) {
+        let s = note['missingSourceTx'] || ''
+        s += input.sourceTXID! + ' '
+        note['missingSourceTx'] = s
+      } else {
+        const lockingScript = sourceTx.outputs[input.sourceOutputIndex].lockingScript.toHex()
+        const hash = services.hashOutputScript(lockingScript)
+        const shhrs = await services.getScriptHashHistory(hash, undefined, logger)
+        if (shhrs.status === 'success') {
+          for (const h of shhrs.history) {
+            // Neither the source of the input nor the current transaction are competition.
+            if (h.txid !== input.sourceTXID && h.txid !== ar.txid) competingTxids.add(h.txid)
+          }
         }
       }
     }
