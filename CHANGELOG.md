@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.3
+
+- Change `Monitor`: no retry for invalid beefs in TaskSendWaiting. Cleanup logging.
+
 ## wallet-toolbox 2.1.2
 
 - Fix Chaintracks no longer hangs if bulk ingestor fails to reach chain tip.
