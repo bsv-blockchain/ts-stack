@@ -1,4 +1,4 @@
-import { Beef, Utils } from '@bsv/sdk'
+import { Beef, Transaction, Utils } from '@bsv/sdk'
 import { Services } from '../Services'
 import { _tu, logger } from '../../../test/utils/TestUtilsWalletStorage'
 import { verifyTruthy } from '../../utility/utilityHelpers'
