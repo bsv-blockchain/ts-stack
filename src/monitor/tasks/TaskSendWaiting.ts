@@ -78,7 +78,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     const logs: Record<string, string> = {}
     for (let i = 0; i < reqApis.length; i++) {
       const reqApi = reqApis[i]
-      logs[reqApi.txid] =  `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}:`
+      logs[reqApi.txid] = `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}:`
     }
     for (let i = 0; i < reqApis.length; i++) {
       const reqApi = reqApis[i]
@@ -123,7 +123,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
         this.monitor.callOnBroadcastedTransaction(rar[0])
       }
     }
-    
+
     let log = ''
     for (const txid of txids) {
       log += `${' '.repeat(indent)}${logs[txid]}\n`
