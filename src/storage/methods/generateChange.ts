@@ -238,6 +238,17 @@ export async function generateChangeSdk(
     const fundTransaction = async (): Promise<void> => {
       let removingOutputs = false
 
+      const maybeAddChangeOutput = (ao: number): void => {
+        if (removingOutputs || feeExcess() <= 0) return
+        const canAdd = (ao === 1 || r.changeOutputs.length === 0) && r.changeOutputs.length < maxChangeOutputs
+        if (!canAdd) return
+        const cap = r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
+        const satoshis = Math.min(feeExcess(), Math.max(dustFloor, cap))
+        if (satoshis >= dustFloor) {
+          r.changeOutputs.push({ satoshis, lockingScriptLength: params.changeLockingScriptLength })
+        }
+      }
+
       const attemptToFundTransaction = async (): Promise<boolean> => {
         if (feeExcess() > 0) return true
 
@@ -256,20 +267,7 @@ export async function generateChangeSdk(
         }
 
         r.allocatedChangeInputs.push(allocatedChangeInput)
-
-        if (!removingOutputs && feeExcess() > 0) {
-          if ((ao == 1 || r.changeOutputs.length === 0) && r.changeOutputs.length < maxChangeOutputs) {
-            const cap = r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
-            const satoshis = Math.min(feeExcess(), Math.max(dustFloor, cap))
-            // Only add the output if it can meet the dust floor.
-            if (satoshis >= dustFloor) {
-              r.changeOutputs.push({
-                satoshis,
-                lockingScriptLength: params.changeLockingScriptLength
-              })
-            }
-          }
-        }
+        maybeAddChangeOutput(ao)
         return true
       }
 
