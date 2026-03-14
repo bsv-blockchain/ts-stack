@@ -1926,7 +1926,7 @@ export class WalletPermissionsManager implements WalletInterface {
         existing.pending.push({ resolve, reject })
       })
     } else {
-      await new Promise<boolean>(async (resolve, reject) => {
+      const counterpartyPromise = new Promise<boolean>((resolve, reject) => {
         this.activeRequests.set(key, {
           request: {
             originator,
@@ -1936,14 +1936,16 @@ export class WalletPermissionsManager implements WalletInterface {
           },
           pending: [{ resolve, reject }]
         })
-
-        await this.callEvent('onCounterpartyPermissionRequested', {
-          requestID: key,
-          originator,
-          counterparty,
-          permissions: permissionsToRequest
-        })
       })
+
+      await this.callEvent('onCounterpartyPermissionRequested', {
+        requestID: key,
+        originator,
+        counterparty,
+        permissions: permissionsToRequest
+      })
+
+      await counterpartyPromise
     }
 
     this.markPactEstablished(originator, counterparty)
@@ -2052,9 +2054,9 @@ export class WalletPermissionsManager implements WalletInterface {
         existing.pending.push({ resolve, reject })
       })
     } else {
-      await new Promise<boolean>(async (resolve, reject) => {
-        const permissions: GroupedPermissions = permissionsToRequest
+      const permissions: GroupedPermissions = permissionsToRequest
 
+      const groupedPromise = new Promise<boolean>((resolve, reject) => {
         this.activeRequests.set(key, {
           request: {
             originator,
@@ -2063,13 +2065,15 @@ export class WalletPermissionsManager implements WalletInterface {
           },
           pending: [{ resolve, reject }]
         })
-
-        await this.callEvent('onGroupedPermissionRequested', {
-          requestID: key,
-          originator,
-          permissions
-        })
       })
+
+      await this.callEvent('onGroupedPermissionRequested', {
+        requestID: key,
+        originator,
+        permissions
+      })
+
+      await groupedPromise
     }
 
     const satisfied = await this.checkSpecificPermissionAfterGroupFlow(currentRequest)
@@ -2204,7 +2208,7 @@ export class WalletPermissionsManager implements WalletInterface {
         this.activeRequests.get(key)!.pending.push({ resolve, reject })
       })
     } else {
-      await new Promise<boolean>(async (resolve, reject) => {
+      const permPromise = new Promise<boolean>((resolve, reject) => {
         this.activeRequests.set(key, {
           request: {
             originator,
@@ -2213,13 +2217,15 @@ export class WalletPermissionsManager implements WalletInterface {
           },
           pending: [{ resolve, reject }]
         })
-
-        await this.callEvent('onGroupedPermissionRequested', {
-          requestID: key,
-          originator,
-          permissions: permissionsToRequest
-        })
       })
+
+      await this.callEvent('onGroupedPermissionRequested', {
+        requestID: key,
+        originator,
+        permissions: permissionsToRequest
+      })
+
+      await permPromise
     }
 
     const satisfied = await this.checkSpecificPermissionAfterGroupFlow(currentRequest)
