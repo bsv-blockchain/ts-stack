@@ -1,4 +1,4 @@
-import { Transaction, Script, Utils } from '@bsv/sdk'
+import { Random, Transaction, Script, Utils } from '@bsv/sdk'
 import { MockChainStorage, MockChainBlockHeaderRow } from './MockChainStorage'
 import { computeMerkleRoot } from './merkleTree'
 import { toBinaryBaseBlockHeader } from '../services/Services'
@@ -69,7 +69,8 @@ export class MockMiner {
 
     const time = Math.floor(Date.now() / 1000)
     const bits = 0x207fffff
-    const nonce = Math.floor(Math.random() * 0xffffffff)
+    const nonceBytes = Random(4)
+    const nonce = ((nonceBytes[0] << 24) | (nonceBytes[1] << 16) | (nonceBytes[2] << 8) | nonceBytes[3]) >>> 0
 
     const headerObj = {
       version: 1,

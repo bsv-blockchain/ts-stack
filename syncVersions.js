@@ -39,10 +39,11 @@ function syncVersions() {
         if (fs.existsSync(fullDirPath)) {
           console.log(`Running npm install in ${dir}...`);
           try {
-            execSync('npm install', { 
-              cwd: fullDirPath, 
+            execSync('npm install', {
+              cwd: fullDirPath,
               stdio: 'inherit',
-              timeout: 60000 // 60 second timeout
+              timeout: 60000, // 60 second timeout
+              env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' }
             });
             console.log(`✓ npm install completed in ${dir}`);
           } catch (installError) {

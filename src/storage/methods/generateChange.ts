@@ -1,4 +1,4 @@
-import { Validation, WalletLoggerInterface } from '@bsv/sdk'
+import { Random, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -102,7 +102,8 @@ export async function generateChangeSdk(
     const nextRandomVal = (): number => {
       let val = 0
       if (!randomVals || randomVals.length === 0) {
-        val = Math.random()
+        const bytes = Random(4)
+        val = (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
       } else {
         val = randomVals.shift() || 0
         randomVals.push(val)

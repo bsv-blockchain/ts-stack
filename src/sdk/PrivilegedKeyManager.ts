@@ -240,7 +240,9 @@ export class PrivilegedKeyManager implements ProtoWallet {
   private generateRandomPropName(): string {
     // E.g., 8 random hex characters for the property name
     const randomHex = Utils.toHex(Random(4))
-    return `_${randomHex}_${Math.floor(Math.random() * 1e6)}`
+    const extraBytes = Random(3)
+    const extraNum = ((extraBytes[0] << 16) | (extraBytes[1] << 8) | extraBytes[2]) % 1000000
+    return `_${randomHex}_${extraNum}`
   }
 
   /**
