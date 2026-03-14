@@ -1,5 +1,18 @@
 # BSV WALLET TOOLBOX
 
+[![Build Status](https://img.shields.io/github/actions/workflow/status/bsv-blockchain/wallet-toolbox/push.yaml?branch=master&label=build)](https://github.com/bsv-blockchain/wallet-toolbox/actions)
+[![npm version](https://img.shields.io/npm/v/@bsv/wallet-toolbox)](https://www.npmjs.com/package/@bsv/wallet-toolbox)
+[![npm downloads](https://img.shields.io/npm/dm/@bsv/wallet-toolbox)](https://www.npmjs.com/package/@bsv/wallet-toolbox)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=bugs)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![CodeQL](https://github.com/bsv-blockchain/wallet-toolbox/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bsv-blockchain/wallet-toolbox/actions/workflows/github-code-scanning/codeql)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_wallet-toolbox&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_wallet-toolbox)
+[![License](https://img.shields.io/github/license/bsv-blockchain/wallet-toolbox)](./LICENSE.txt)
+
 BSV BLOCKCHAIN | BRC100 Conforming Wallet, Wallet Storage and Wallet Signer Components
 
 ## Objective
