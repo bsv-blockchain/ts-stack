@@ -4,6 +4,35 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.6
+
+### Improve change-making algorithm: per-transaction output cap and dust floor
+
+**Problem:** When a user imported a single large UTXO and made their first
+`createAction`, the wallet attempted to create all `numberOfDesiredUTXOs`
+(up to 144) change outputs in one transaction. This produced a very large
+transaction (~5 KB for 144 P2PKH outputs) whose raw bytes are embedded in
+the BEEF of every subsequent child transaction, bloating those BEEFs and
+slowing down external processors.
+
+**Changes to `generateChangeSdk` in `storage/methods/generateChange.ts`:**
+
+- Add `maxChangeOutputsPerTransaction = 8` constant: caps the net number of
+  new change outputs created per transaction so the UTXO pool grows gradually
+  (~18 transactions to reach 144 UTXOs) rather than all at once. Callers can
+  override via the new optional `GenerateChangeSdkParams.maxChangeOutputs`
+  field.
+- Add dynamic dust floor: computes the minimum viable change output value as
+  `max(1, ceil(minSpendTxSize / 1000 * satsPerKb) * 2)` — at least 2× the
+  fee required to spend the output in a future transaction. Change outputs
+  below this floor are raised before creation and any that remain below it
+  after excess-fee distribution are consolidated into the largest remaining
+  output, preventing economically pointless dust outputs.
+
+**Result:** First transaction after a large UTXO import shrinks from ~5 KB
+(145 outputs) to ~440 bytes (9 outputs). Every subsequent child BEEF is
+correspondingly smaller.
+
 ## wallet-toolbox 2.1.5
 
 - Update deps, docs, lint
@@ -20,7 +49,7 @@ attention to changes that materially alter behavior or extend functionality.
 ## wallet-toolbox 2.1.2
 
 - Fix Chaintracks no longer hangs if bulk ingestor fails to reach chain tip.
-  
+
 ## wallet-toolbox 2.1.1
 
 ### Add `teratest` and `mock` chain types
@@ -28,12 +57,14 @@ attention to changes that materially alter behavior or extend functionality.
 - Change `Chain` type from `'main' | 'test'` to `'main' | 'test' | 'teratest' | 'mock'`.
 
 **`teratest` chain:**
+
 - Add ARC URL `https://arc-teratest.taal.com` for the teratest network.
 - Chaintracks URL follows existing `${chain}net-chaintracks.babbage.systems` pattern.
 - WhatsOnChain URL follows existing `https://api.whatsonchain.com/v1/bsv/${network}` pattern.
 - Bitails is not available on teratest (only `main` and `test`).
 
 **`mock` chain — full self-contained mock blockchain:**
+
 - Add new `src/mockchain/` module with `MockServices`, `MockChainTracker`, `MockMiner`, `MockChainStorage`, and merkle tree utilities.
 - `MockServices` implements the `WalletServices` interface against a local SQLite database (3 tables: `mockchain_block_headers`, `mockchain_transactions`, `mockchain_utxos`).
 - Transactions are validated with full script execution via `@bsv/sdk` `Transaction.verify()`.
@@ -45,6 +76,7 @@ attention to changes that materially alter behavior or extend functionality.
 - `Services` class, `createDefaultWalletServicesOptions`, and external service providers (`WhatsOnChain`, `Bitails`) throw explicit errors if instantiated with `'mock'` chain.
 
 **Explicit chain handling across codebase:**
+
 - Convert chain-dependent ternaries to explicit switch statements in `toWalletNetwork`, `genesisHeader`, `Bitails` constructor, WoC WebSocket ingestors, and `ChaintracksStorageNoDb`.
 - Each chain value (`main`, `test`, `teratest`, `mock`) is handled explicitly rather than falling through a catch-all else branch.
 
@@ -52,7 +84,7 @@ attention to changes that materially alter behavior or extend functionality.
 
 Optimize createAction (fewer db transactions)
 Add postBeef services soft timeout failover
-PR 130 randomBytesHex in Setup 
+PR 130 randomBytesHex in Setup
 
 ## wallet-toolbox 2.0.23
 
@@ -358,7 +390,7 @@ Changes to improve computing balances (sum of satoshis) over various sets of wal
 ## wallet-toolbox 1.3.29
 
 - add verifyUnlockScripts to both createAction and signAction flows
-  
+
 ## wallet-toolbox 1.3.28
 
 - adminStats now includes monitorStats and servicesStats of type ServicesCallHistory (wallet-toolbox/src/sdk/WalletServices.interfaces.ts)
@@ -389,7 +421,7 @@ New outputs created by `createAction` / `signAction` that are NOT assigned to a 
 Implications:
 
 - Outputs transferred to a second party, either through internalizeAction or custom means, MUST NOT be assigned to a basket
-as this allows them to be spent without your wallet being notified that they are no longer spendable. This is a usage guideline, it is not enforced.
+  as this allows them to be spent without your wallet being notified that they are no longer spendable. This is a usage guideline, it is not enforced.
 - These outputs will NOT be returned by `listOutputs`, as it only returns spendable outputs.
 - These outputs WILL be returned by `listActions` with the includeOutputs option set to true.
 - Your wallet will mark any output you include as inputs in your own transactions as spent at the time of transaction creation.
