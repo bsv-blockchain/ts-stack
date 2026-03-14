@@ -6,32 +6,7 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.1.6
 
-### Improve change-making algorithm: per-transaction output cap and dust floor
-
-**Problem:** When a user imported a single large UTXO and made their first
-`createAction`, the wallet attempted to create all `numberOfDesiredUTXOs`
-(up to 144) change outputs in one transaction. This produced a very large
-transaction (~5 KB for 144 P2PKH outputs) whose raw bytes are embedded in
-the BEEF of every subsequent child transaction, bloating those BEEFs and
-slowing down external processors.
-
-**Changes to `generateChangeSdk` in `storage/methods/generateChange.ts`:**
-
-- Add `maxChangeOutputsPerTransaction = 8` constant: caps the net number of
-  new change outputs created per transaction so the UTXO pool grows gradually
-  (~18 transactions to reach 144 UTXOs) rather than all at once. Callers can
-  override via the new optional `GenerateChangeSdkParams.maxChangeOutputs`
-  field.
-- Add dynamic dust floor: computes the minimum viable change output value as
-  `max(1, ceil(minSpendTxSize / 1000 * satsPerKb) * 2)` — at least 2× the
-  fee required to spend the output in a future transaction. Change outputs
-  below this floor are raised before creation and any that remain below it
-  after excess-fee distribution are consolidated into the largest remaining
-  output, preventing economically pointless dust outputs.
-
-**Result:** First transaction after a large UTXO import shrinks from ~5 KB
-(145 outputs) to ~440 bytes (9 outputs). Every subsequent child BEEF is
-correspondingly smaller.
+- Improve change-making algorithm: cap change outputs per transaction to 8 (gradual UTXO pool build-up, smaller BEEFs). Enforce dynamic dust floor so no change output is worth less than 2× the fee to spend it.
 
 ## wallet-toolbox 2.1.5
 
