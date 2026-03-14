@@ -1,4 +1,4 @@
-import { Beef, ListActionsResult, ListOutputsResult, MerklePath, Transaction, Utils, Validation } from '@bsv/sdk'
+import { Beef, ListActionsResult, ListOutputsResult, MerklePath, Script, Transaction, Utils, Validation } from '@bsv/sdk'
 import { StorageAdminStats, StorageProvider } from '../StorageProvider'
 import { Chain } from '../../sdk/types'
 import { Services } from '../../services/Services'
@@ -60,12 +60,12 @@ describe('getBeefForTransaction tests', () => {
         sourceTransaction: undefined,
         sourceTXID: '00'.repeat(32),
         sourceOutputIndex: 0xffffffff,
-        unlockingScript: { toHex: () => '04ffff001d0104', toBinary: () => Utils.toArray('04ffff001d0104', 'hex') } as any,
+        unlockingScript: Script.fromHex('04ffff001d0104'),
         sequence: 0xffffffff
       })
       tx.addOutput({
         satoshis: 5000000000,
-        lockingScript: { toHex: () => '51', toBinary: () => [0x51] } as any
+        lockingScript: Script.fromHex('51')
       })
       return tx.toBinary()
     }
