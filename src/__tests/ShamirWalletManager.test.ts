@@ -61,7 +61,7 @@ describe('ShamirWalletManager', () => {
 
     it('should reject threshold less than 2', () => {
       expect(() => {
-        void new ShamirWalletManager({
+        const _ = new ShamirWalletManager({
           wabServerUrl: 'https://test.example.com',
           authMethodType: 'DevConsole',
           walletBuilder: mockWalletBuilder,
@@ -73,7 +73,7 @@ describe('ShamirWalletManager', () => {
 
     it('should reject totalShares less than 3', () => {
       expect(() => {
-        void new ShamirWalletManager({
+        const _ = new ShamirWalletManager({
           wabServerUrl: 'https://test.example.com',
           authMethodType: 'DevConsole',
           walletBuilder: mockWalletBuilder,
@@ -86,7 +86,7 @@ describe('ShamirWalletManager', () => {
     it('should reject configurations where user cannot recover independently (custodial)', () => {
       // 3-of-4 means user gets 3 shares (4-1), which equals threshold - OK
       expect(() => {
-        void new ShamirWalletManager({
+        const _ = new ShamirWalletManager({
           wabServerUrl: 'https://test.example.com',
           authMethodType: 'DevConsole',
           walletBuilder: mockWalletBuilder,
@@ -97,7 +97,7 @@ describe('ShamirWalletManager', () => {
 
       // 3-of-3 means user gets 2 shares (3-1), which is less than threshold 3 - NOT OK
       expect(() => {
-        void new ShamirWalletManager({
+        const _ = new ShamirWalletManager({
           wabServerUrl: 'https://test.example.com',
           authMethodType: 'DevConsole',
           walletBuilder: mockWalletBuilder,
