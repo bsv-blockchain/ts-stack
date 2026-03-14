@@ -374,7 +374,7 @@ export async function generateChangeSdk(
       if (r.changeOutputs[i].satoshis < dustFloor && r.changeOutputs.length > 1) {
         const [removed] = r.changeOutputs.splice(i, 1)
         // Add the removed sats to the largest remaining output so no sats are lost.
-        const largest = r.changeOutputs.reduce((best, o) => (o.satoshis > best.satoshis ? o : best))
+        const largest = r.changeOutputs.reduce((best, o) => (o.satoshis > best.satoshis ? o : best), r.changeOutputs[0])
         largest.satoshis += removed.satoshis
         // feeExcessNow does not need updating: total change satoshis are unchanged.
       }
