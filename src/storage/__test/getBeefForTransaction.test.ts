@@ -1,7 +1,8 @@
-import { Beef, ListActionsResult, ListOutputsResult, Utils, Validation } from '@bsv/sdk'
+import { Beef, ListActionsResult, ListOutputsResult, MerklePath, Transaction, Utils, Validation } from '@bsv/sdk'
 import { StorageAdminStats, StorageProvider } from '../StorageProvider'
 import { Chain } from '../../sdk/types'
 import { Services } from '../../services/Services'
+import { BlockHeader, GetMerklePathResult, GetRawTxResult } from '../../sdk/WalletServices.interfaces'
 import {
   TableCertificate,
   TableCertificateField,
@@ -51,11 +52,63 @@ describe('getBeefForTransaction tests', () => {
 
   test('0 ProtoStorage.getBeefForTxid', async () => {
     const ps = new ProtoStorage('main')
+
+    // Build a minimal valid raw transaction (coinbase-style) for mocking
+    const buildMockRawTx = (txid: string): number[] => {
+      const tx = new Transaction()
+      tx.addInput({
+        sourceTransaction: undefined,
+        sourceTXID: '00'.repeat(32),
+        sourceOutputIndex: 0xffffffff,
+        unlockingScript: { toHex: () => '04ffff001d0104', toBinary: () => Utils.toArray('04ffff001d0104', 'hex') } as any,
+        sequence: 0xffffffff
+      })
+      tx.addOutput({
+        satoshis: 5000000000,
+        lockingScript: { toHex: () => '51', toBinary: () => [0x51] } as any
+      })
+      return tx.toBinary()
+    }
+
+    // Build a mock merkle path where the txid is at offset 0 with a sibling
+    const buildMockMerklePath = (txid: string, blockHeight: number): MerklePath => {
+      return new MerklePath(blockHeight, [
+        [
+          { offset: 0, hash: txid, txid: true },
+          { offset: 1, hash: 'ab'.repeat(32) }
+        ]
+      ])
+    }
+
+    const mockHeader: BlockHeader = {
+      version: 1,
+      previousHash: '00'.repeat(32),
+      merkleRoot: '00'.repeat(32),
+      time: 1700000000,
+      bits: 0x1d00ffff,
+      nonce: 0,
+      height: 800000,
+      hash: 'ff'.repeat(32)
+    }
+
+    // Mock services to avoid live WhatsOnChain calls
+    const services = ps.getServices()
+    services.getRawTx = jest.fn().mockImplementation(async (txid: string): Promise<GetRawTxResult> => {
+      return { txid, rawTx: buildMockRawTx(txid), name: 'mock' }
+    })
+    services.getMerklePath = jest.fn().mockImplementation(async (txid: string): Promise<GetMerklePathResult> => {
+      return {
+        name: 'mock',
+        merklePath: buildMockMerklePath(txid, 800000),
+        header: { ...mockHeader, merkleRoot: buildMockMerklePath(txid, 800000).computeRoot() }
+      }
+    })
+
     const beef = await ps.getBeefForTxid('794f836052ad73732a550c38bea3697a722c6a1e54bcbe63735ba79e0d23f623')
-    expect(beef.bumps.length > 0)
+    expect(beef.bumps.length).toBeGreaterThan(0)
     {
       const beef = await ps.getBeefForTxid('53023657e79f446ca457040a0ab3b903000d7281a091397c7853f021726a560e')
-      expect(beef.bumps.length > 0)
+      expect(beef.bumps.length).toBeGreaterThan(0)
     }
   })
 
