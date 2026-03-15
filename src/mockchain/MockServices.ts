@@ -1,4 +1,12 @@
-import { Beef, ChainTracker, MerklePath, Random, Transaction as BsvTransaction, Utils, WalletLoggerInterface } from '@bsv/sdk'
+import {
+  Beef,
+  ChainTracker,
+  MerklePath,
+  Random,
+  Transaction as BsvTransaction,
+  Utils,
+  WalletLoggerInterface
+} from '@bsv/sdk'
 import { Knex } from 'knex'
 import { Chain } from '../sdk/types'
 import {

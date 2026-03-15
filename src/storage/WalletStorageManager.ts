@@ -580,7 +580,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
   async verifyAndRepairBeef(beef: Beef, allowTxidOnly?: boolean): Promise<VerifyAndRepairBeefResult> {
     throw new sdk.WERR_NOT_IMPLEMENTED()
 
-    const r: VerifyAndRepairBeefResult = { // NOSONAR — draft implementation kept for future completion
+    const r: VerifyAndRepairBeefResult = {
+      // NOSONAR — draft implementation kept for future completion
       isStructurallyValid: false,
       originalRoots: {},
       invalidRoots: {}
