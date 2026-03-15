@@ -44,3 +44,4 @@ src/services/chaintracker/chaintracks/__tests/data/export*
 
 *.tgz
 file:memdb_*
+walletLiveTestData.sqlite
