@@ -26,7 +26,7 @@ describe('createIdbChaintracks tests', () => {
     // Test runs over two minutes long...
     return
 
-    const env = _tu.getEnv(target)
+    const env = _tu.getEnv(target) // NOSONAR — manual test kept disabled for CI; enable locally to run
     const { chain, chaintracks, storage, available } = await createIdbChaintracks(env.chain, env.whatsonchainApiKey)
     await available
     const headerListener: HeaderListener = (header: BlockHeader) => {

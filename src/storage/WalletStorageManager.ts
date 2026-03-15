@@ -581,6 +581,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     throw new sdk.WERR_NOT_IMPLEMENTED()
 
     const r: VerifyAndRepairBeefResult = {
+      // NOSONAR — draft implementation kept for future completion
       isStructurallyValid: false,
       originalRoots: {},
       invalidRoots: {}

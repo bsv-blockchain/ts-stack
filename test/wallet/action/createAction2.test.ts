@@ -1019,8 +1019,8 @@ const formatTxInputs = (inputs: TransactionInput[], indent: number) =>
 
           if (input.sourceTransaction) {
             const { log: sourceTxLog, logColor: sourceTxLogColor } = txToLogString(input.sourceTransaction, indent + 6)
-            const sourceTxLogTrimed = sourceTxLog.replace(/\s+Transaction/, 'Transaction')
-            const sourceTxLogColorTrimed = sourceTxLogColor.replace(/\s+Transaction/, 'Transaction')
+            const sourceTxLogTrimed = sourceTxLog.replace(' Transaction', 'Transaction')
+            const sourceTxLogColorTrimed = sourceTxLogColor.replace(' Transaction', 'Transaction')
             line += `\n${formatIndentedLine(indent + 6, `sourceTx:`)}${sourceTxLogTrimed}`
             color += `\n${formatIndentedLine(indent + 6, `${chalk.gray('sourceTx:')}`)}${sourceTxLogColorTrimed}`
           } else {

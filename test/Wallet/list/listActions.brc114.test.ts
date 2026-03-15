@@ -110,7 +110,7 @@ describe('listActions BRC-114 action time label tests', () => {
   }
 
   function sortStrings(xs: string[]) {
-    return [...xs].sort()
+    return [...xs].sort((a, b) => a.localeCompare(b))
   }
 
   test('0_invalid_brc114_time_control_labels', async () => {

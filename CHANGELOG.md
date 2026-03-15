@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.7
+
+- Sonarqube recommended changes...
+
 ## wallet-toolbox 2.1.6
 
 - Improve change-making algorithm: cap change outputs per transaction to 8 (gradual UTXO pool build-up, smaller BEEFs). Enforce dynamic dust floor so no change output is worth less than 2× the fee to spend it.

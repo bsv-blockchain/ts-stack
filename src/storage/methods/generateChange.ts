@@ -1,4 +1,4 @@
-import { Validation, WalletLoggerInterface } from '@bsv/sdk'
+import { Random, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -102,7 +102,8 @@ export async function generateChangeSdk(
     const nextRandomVal = (): number => {
       let val = 0
       if (!randomVals || randomVals.length === 0) {
-        val = Math.random()
+        const bytes = Random(4)
+        val = (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
       } else {
         val = randomVals.shift() || 0
         randomVals.push(val)
@@ -237,6 +238,17 @@ export async function generateChangeSdk(
     const fundTransaction = async (): Promise<void> => {
       let removingOutputs = false
 
+      const maybeAddChangeOutput = (ao: number): void => {
+        if (removingOutputs || feeExcess() <= 0) return
+        const canAdd = (ao === 1 || r.changeOutputs.length === 0) && r.changeOutputs.length < maxChangeOutputs
+        if (!canAdd) return
+        const cap = r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
+        const satoshis = Math.min(feeExcess(), Math.max(dustFloor, cap))
+        if (satoshis >= dustFloor) {
+          r.changeOutputs.push({ satoshis, lockingScriptLength: params.changeLockingScriptLength })
+        }
+      }
+
       const attemptToFundTransaction = async (): Promise<boolean> => {
         if (feeExcess() > 0) return true
 
@@ -255,20 +267,7 @@ export async function generateChangeSdk(
         }
 
         r.allocatedChangeInputs.push(allocatedChangeInput)
-
-        if (!removingOutputs && feeExcess() > 0) {
-          if ((ao == 1 || r.changeOutputs.length === 0) && r.changeOutputs.length < maxChangeOutputs) {
-            const cap = r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
-            const satoshis = Math.min(feeExcess(), Math.max(dustFloor, cap))
-            // Only add the output if it can meet the dust floor.
-            if (satoshis >= dustFloor) {
-              r.changeOutputs.push({
-                satoshis,
-                lockingScriptLength: params.changeLockingScriptLength
-              })
-            }
-          }
-        }
+        maybeAddChangeOutput(ao)
         return true
       }
 

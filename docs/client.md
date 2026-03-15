@@ -2917,6 +2917,7 @@ export interface GenerateChangeSdkParams {
     changeFirstSatoshis: number;
     changeLockingScriptLength: number;
     changeUnlockingScriptLength: number;
+    maxChangeOutputs?: number;
     randomVals?: number[];
     noLogging?: boolean;
     log?: string;
@@ -2961,6 +2962,19 @@ For P2PKH template, 107 bytes
 
 ```ts
 changeUnlockingScriptLength: number
+```
+
+###### Property maxChangeOutputs
+
+Maximum number of change outputs to create in this transaction.
+Defaults to `maxChangeOutputsPerTransaction` (8).
+
+Callers may override this to allow more outputs in special cases (e.g.
+consolidation transactions) or fewer outputs when a compact transaction
+is preferred.
+
+```ts
+maxChangeOutputs?: number
 ```
 
 ###### Property targetNetCount
@@ -19528,20 +19542,17 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 #### Variables
 
-| | |
-| --- | --- |
-| [DEFAULT_PROFILE_ID](#variable-default_profile_id) | [outputColumnsWithoutLockingScript](#variable-outputcolumnswithoutlockingscript) |
-| [DEFAULT_SETTINGS](#variable-default_settings) | [parseResults](#variable-parseresults) |
-| [PBKDF2_NUM_ROUNDS](#variable-pbkdf2_num_rounds) | [queryOverlay](#variable-queryoverlay) |
-| [ProvenTxReqNonTerminalStatus](#variable-proventxreqnonterminalstatus) | [specOpFailedActions](#variable-specopfailedactions) |
-| [ProvenTxReqTerminalStatus](#variable-proventxreqterminalstatus) | [specOpInvalidChange](#variable-specopinvalidchange) |
-| [TESTNET_DEFAULT_SETTINGS](#variable-testnet_default_settings) | [specOpNoSendActions](#variable-specopnosendactions) |
-| [aggregateActionResults](#variable-aggregateactionresults) | [specOpSetWalletChangeParams](#variable-specopsetwalletchangeparams) |
-| [brc29ProtocolID](#variable-brc29protocolid) | [specOpThrowReviewActions](#variable-specopthrowreviewactions) |
-| [dirtyHashes](#variable-dirtyhashes) | [specOpWalletBalance](#variable-specopwalletbalance) |
-| [getLabelToSpecOp](#variable-getlabeltospecop) | [transactionColumnsWithoutRawTx](#variable-transactioncolumnswithoutrawtx) |
-| [logger](#variable-logger) | [transformVerifiableCertificatesWithTrust](#variable-transformverifiablecertificateswithtrust) |
-| [maxPossibleSatoshis](#variable-maxpossiblesatoshis) | [validBulkHeaderFiles](#variable-validbulkheaderfiles) |
+| | | |
+| --- | --- | --- |
+| [DEFAULT_PROFILE_ID](#variable-default_profile_id) | [getLabelToSpecOp](#variable-getlabeltospecop) | [specOpNoSendActions](#variable-specopnosendactions) |
+| [DEFAULT_SETTINGS](#variable-default_settings) | [logger](#variable-logger) | [specOpSetWalletChangeParams](#variable-specopsetwalletchangeparams) |
+| [PBKDF2_NUM_ROUNDS](#variable-pbkdf2_num_rounds) | [maxChangeOutputsPerTransaction](#variable-maxchangeoutputspertransaction) | [specOpThrowReviewActions](#variable-specopthrowreviewactions) |
+| [ProvenTxReqNonTerminalStatus](#variable-proventxreqnonterminalstatus) | [maxPossibleSatoshis](#variable-maxpossiblesatoshis) | [specOpWalletBalance](#variable-specopwalletbalance) |
+| [ProvenTxReqTerminalStatus](#variable-proventxreqterminalstatus) | [outputColumnsWithoutLockingScript](#variable-outputcolumnswithoutlockingscript) | [transactionColumnsWithoutRawTx](#variable-transactioncolumnswithoutrawtx) |
+| [TESTNET_DEFAULT_SETTINGS](#variable-testnet_default_settings) | [parseResults](#variable-parseresults) | [transformVerifiableCertificatesWithTrust](#variable-transformverifiablecertificateswithtrust) |
+| [aggregateActionResults](#variable-aggregateactionresults) | [queryOverlay](#variable-queryoverlay) | [validBulkHeaderFiles](#variable-validbulkheaderfiles) |
+| [brc29ProtocolID](#variable-brc29protocolid) | [specOpFailedActions](#variable-specopfailedactions) |  |
+| [dirtyHashes](#variable-dirtyhashes) | [specOpInvalidChange](#variable-specopinvalidchange) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -19773,6 +19784,15 @@ logger = (message: string, ...optionalParams: any[]): void => {
         console.log(message, ...optionalParams);
     }
 }
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Variable: maxChangeOutputsPerTransaction
+
+```ts
+maxChangeOutputsPerTransaction = 8
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

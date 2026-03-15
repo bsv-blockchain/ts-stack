@@ -176,6 +176,7 @@ export interface GenerateChangeSdkParams {
     changeFirstSatoshis: number;
     changeLockingScriptLength: number;
     changeUnlockingScriptLength: number;
+    maxChangeOutputs?: number;
     randomVals?: number[];
     noLogging?: boolean;
     log?: string;
@@ -220,6 +221,19 @@ For P2PKH template, 107 bytes
 
 ```ts
 changeUnlockingScriptLength: number
+```
+
+###### Property maxChangeOutputs
+
+Maximum number of change outputs to create in this transaction.
+Defaults to `maxChangeOutputsPerTransaction` (8).
+
+Callers may override this to allow more outputs in special cases (e.g.
+consolidation transactions) or fewer outputs when a compact transaction
+is preferred.
+
+```ts
+maxChangeOutputs?: number
 ```
 
 ###### Property targetNetCount
@@ -5142,6 +5156,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | |
 | --- |
 | [getLabelToSpecOp](#variable-getlabeltospecop) |
+| [maxChangeOutputsPerTransaction](#variable-maxchangeoutputspertransaction) |
 | [maxPossibleSatoshis](#variable-maxpossiblesatoshis) |
 | [outputColumnsWithoutLockingScript](#variable-outputcolumnswithoutlockingscript) |
 | [transactionColumnsWithoutRawTx](#variable-transactioncolumnswithoutrawtx) |
@@ -5189,6 +5204,15 @@ getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
 ```
 
 See also: [AuthId](./client.md#interface-authid), [ListActionsSpecOp](./storage.md#interface-listactionsspecop), [StorageProvider](./storage.md#class-storageprovider), [TableTransaction](./storage.md#interface-tabletransaction), [specOpFailedActions](./client.md#variable-specopfailedactions), [specOpNoSendActions](./client.md#variable-specopnosendactions)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Variable: maxChangeOutputsPerTransaction
+
+```ts
+maxChangeOutputsPerTransaction = 8
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
