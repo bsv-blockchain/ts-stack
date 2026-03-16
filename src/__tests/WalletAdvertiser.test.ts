@@ -59,7 +59,7 @@ describe('WalletAdvertiser', () => {
   describe('Constructor', () => {
     it('throws if provided a non-advertisable URI', () => {
       expect(() => {
-        new WalletAdvertiser('test', testPrivateKeyHex, 'https://fake-storage-url.com', 'ftp://bad-protocol.com')
+        new WalletAdvertiser('test', testPrivateKeyHex, 'https://fake-storage-url.com', 'xyz://bad-protocol.com')
       }).toThrow('Refusing to initialize with non-advertisable URI')
     })
 
