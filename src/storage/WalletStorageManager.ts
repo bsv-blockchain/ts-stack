@@ -574,8 +574,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
    * This results in proven_txs with invalid proofs being updated with new valid proofs where possible.
    *
    * @param beef
-  * @param allowTxidOnly
-  * @returns VerifyAndRepairBeefResult, in particular `verifiedBeef` is valid only verify and repair succeeded fully.
+   * @param allowTxidOnly
+   * @returns VerifyAndRepairBeefResult, in particular `verifiedBeef` is valid only verify and repair succeeded fully.
    */
   async verifyAndRepairBeef(beef: Beef, allowTxidOnly?: boolean): Promise<VerifyAndRepairBeefResult> {
     const r: VerifyAndRepairBeefResult = {
