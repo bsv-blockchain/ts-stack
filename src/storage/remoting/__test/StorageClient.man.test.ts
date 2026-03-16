@@ -262,7 +262,6 @@ describe('StorageClient to tagged revision manual tests', () => {
 
       await wait(15000)
     }
-    await s.wallet.destroy()
   })
 
   test('2 makeAvailable', async () => {

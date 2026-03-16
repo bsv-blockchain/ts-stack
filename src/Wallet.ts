@@ -656,7 +656,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
       this._trustSettingsCache = { trustSettings, expiresAt: now + TTL_MS }
     }
 
-    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort()
+    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
     // --- queryOverlay cache (2 minutes) ---
     const cacheKey = JSON.stringify({
@@ -701,13 +701,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
       this._trustSettingsCache = { trustSettings, expiresAt: now + TTL_MS }
     }
 
-    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort()
+    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
     // Normalize attributes for a stable cache key.
     // If attributes is an object, sort its top-level keys; if it's an array, sort a shallow copy.
     let attributesKey: unknown = args.attributes
     if (args.attributes && typeof args.attributes === 'object') {
-      const keys = Object.keys(args.attributes as Record<string, unknown>).sort()
+      const keys = Object.keys(args.attributes as Record<string, unknown>).sort((a, b) => a.localeCompare(b))
       attributesKey = JSON.stringify(args.attributes, keys)
     }
 

@@ -8,7 +8,8 @@ import {
   GenerateChangeSdkChangeInput,
   generateChangeSdkMakeStorage,
   GenerateChangeSdkParams,
-  GenerateChangeSdkResult
+  GenerateChangeSdkResult,
+  maxChangeOutputsPerTransaction
 } from '../../generateChange'
 
 describe('generateChange tests', () => {
@@ -917,7 +918,10 @@ describe('generateChange tests', () => {
     {
       n: 14,
       d: d14,
-      er: '{"allocatedChangeInputs":[{"satoshis":1000,"outputId":18495,"spendable":false}],"changeOutputs":[{"satoshis":996,"lockingScriptLength":25}],"size":342,"fee":1,"satsPerKb":2}'
+      // targetNetCount=22 is capped to maxChangeOutputsPerTransaction=8; algorithm now
+      // allocates 8 inputs and creates 8 change outputs rather than starvation-reducing
+      // to 1 input / 1 output.
+      er: '{"allocatedChangeInputs":[{"satoshis":1000,"outputId":18495,"spendable":false},{"satoshis":1000,"outputId":18494,"spendable":false},{"satoshis":1000,"outputId":18493,"spendable":false},{"satoshis":1000,"outputId":18492,"spendable":false},{"satoshis":1000,"outputId":18491,"spendable":false},{"satoshis":1000,"outputId":18490,"spendable":false},{"satoshis":1000,"outputId":18489,"spendable":false},{"satoshis":995,"outputId":16190,"spendable":false}],"changeOutputs":[{"satoshis":988,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25},{"satoshis":1000,"lockingScriptLength":25}],"size":1616,"fee":4,"satsPerKb":2}'
     },
     {
       n: 13,
@@ -977,6 +981,179 @@ describe('generateChange tests', () => {
       expect(JSON.stringify(r)).toBe(er)
       expectTransactionSize(params, r)
     }
+  })
+
+  // ── New tests for maxChangeOutputs cap and dust floor ───────────────────
+
+  test('9 maxChangeOutputs cap: large targetNetCount limited to maxChangeOutputsPerTransaction', async () => {
+    // targetNetCount of 50 should be capped to maxChangeOutputsPerTransaction (8)
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [],
+      fixedOutputs: [],
+      targetNetCount: 50
+    }
+    // Provide plenty of funding (one large UTXO simulating a fresh import)
+    const availableChange: GenerateChangeSdkChangeInput[] = [
+      { satoshis: 100000000, outputId: 1 } // 1 BSV
+    ]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    // Must not exceed the cap regardless of how large targetNetCount is
+    expect(r.changeOutputs.length).toBeLessThanOrEqual(maxChangeOutputsPerTransaction)
+    // Should be exactly the cap since we have plenty of funds
+    expect(r.changeOutputs.length).toBe(maxChangeOutputsPerTransaction)
+    // Sanity: transaction must balance
+    expectTransactionSize(params, r)
+  })
+
+  test('9a maxChangeOutputs cap: custom override via params', async () => {
+    // Caller can raise or lower the cap via the maxChangeOutputs param
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [],
+      fixedOutputs: [],
+      targetNetCount: 50,
+      maxChangeOutputs: 3 // override to a smaller value
+    }
+    const availableChange: GenerateChangeSdkChangeInput[] = [{ satoshis: 100000000, outputId: 1 }]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    expect(r.changeOutputs.length).toBeLessThanOrEqual(3)
+    expectTransactionSize(params, r)
+  })
+
+  test('9b maxChangeOutputs cap: gradual pool build-up over multiple transactions', async () => {
+    // Simulates a user importing one large UTXO and making sequential actions.
+    // Each action should add at most maxChangeOutputsPerTransaction net new outputs.
+    // After N rounds, the UTXO pool should equal N * maxChangeOutputsPerTransaction.
+
+    let nextId = 1
+    // Start with a single large imported UTXO
+    let utxoPool: GenerateChangeSdkChangeInput[] = [{ satoshis: 100000000, outputId: nextId++ }]
+
+    const rounds = 3
+    for (let round = 0; round < rounds; round++) {
+      const currentCount = utxoPool.length - 1 // one will be consumed as input
+      const params: GenerateChangeSdkParams = {
+        ...defParams,
+        fixedInputs: [],
+        fixedOutputs: [{ satoshis: 1000, lockingScriptLength: 25 }],
+        targetNetCount: 144 - currentCount, // always trying to reach 144
+        randomVals: undefined // use real random for this test
+      }
+
+      const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage([...utxoPool])
+      const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+      // Net new outputs per transaction must respect the cap
+      const netNew = r.changeOutputs.length - r.allocatedChangeInputs.length
+      expect(netNew).toBeLessThanOrEqual(maxChangeOutputsPerTransaction)
+
+      expectTransactionSize(params, r)
+
+      // Simulate the transaction confirming: remove spent inputs, add new outputs
+      const spentIds = new Set(r.allocatedChangeInputs.map(i => i.outputId))
+      utxoPool = utxoPool.filter(u => !spentIds.has(u.outputId))
+      // Add new change outputs to the pool (with fresh unique outputIds)
+      for (const o of r.changeOutputs) {
+        utxoPool.push({ satoshis: o.satoshis, outputId: nextId++ })
+      }
+    }
+
+    // After `rounds` transactions, we should have grown by at most
+    // rounds * maxChangeOutputsPerTransaction UTXOs net of the spent ones.
+    // (The initial large UTXO is consumed in round 0.)
+    expect(utxoPool.length).toBeLessThanOrEqual(rounds * maxChangeOutputsPerTransaction)
+  })
+
+  test('10 dust floor: no change output below economically viable minimum', async () => {
+    // At 110 sat/kb the dust floor is:
+    //   minSpendTxSize = transactionSize([107], [25]) = 4 + 1 + 148 + 1 + 34 + 4 = 192 bytes
+    //   dustFloor = max(1, ceil(192/1000 * 110) * 2) = max(1, ceil(21.12) * 2) = 44 sats
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [],
+      fixedOutputs: [{ satoshis: 1, lockingScriptLength: 25 }],
+      feeModel: { model: 'sat/kb', value: 110 },
+      changeInitialSatoshis: 1000,
+      changeFirstSatoshis: 285,
+      targetNetCount: 4
+    }
+    const availableChange: GenerateChangeSdkChangeInput[] = [
+      { satoshis: 268076, outputId: 16671 },
+      { satoshis: 2999799, outputId: 16677 },
+      { satoshis: 14030, outputId: 21194 },
+      { satoshis: 100925, outputId: 21224 }
+    ]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    // Every change output must be at or above the dust floor for 110 sat/kb
+    const expectedDustFloor = Math.max(1, Math.ceil((192 / 1000) * 110) * 2)
+    for (const o of r.changeOutputs) {
+      expect(o.satoshis).toBeGreaterThanOrEqual(expectedDustFloor)
+    }
+    expectTransactionSize(params, r)
+  })
+
+  test('10a dust floor: changeFirstSatoshis below floor is raised to floor', async () => {
+    // At 500 sat/kb:
+    //   dustFloor = max(1, ceil(192/1000 * 500) * 2) = max(1, ceil(96) * 2) = 192 sats
+    // changeFirstSatoshis=10 and changeInitialSatoshis=30 are both below the floor.
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [],
+      fixedOutputs: [{ satoshis: 100, lockingScriptLength: 25 }],
+      feeModel: { model: 'sat/kb', value: 500 },
+      changeInitialSatoshis: 30, // below dust floor at this fee rate
+      changeFirstSatoshis: 10, // below dust floor at this fee rate
+      targetNetCount: 3,
+      randomVals: undefined
+    }
+    const availableChange: GenerateChangeSdkChangeInput[] = [{ satoshis: 100000, outputId: 1 }]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    const expectedDustFloor = Math.max(1, Math.ceil((192 / 1000) * 500) * 2)
+    for (const o of r.changeOutputs) {
+      expect(o.satoshis).toBeGreaterThanOrEqual(expectedDustFloor)
+    }
+    expectTransactionSize(params, r)
+  })
+
+  test('10b dust floor: excess distribution sweep removes sub-floor outputs', async () => {
+    // Use a very low fee rate so a single change input is enough to fund the
+    // transaction, then use a high fee rate to make the changeFirstSatoshis
+    // dangerously small.  We want the sweep-after-distribution to kick in.
+    // At 200 sat/kb: dustFloor = max(1, ceil(192/1000 * 200) * 2) = max(1, ceil(38.4)*2) = 78 sats.
+    // With changeFirstSatoshis=50 (< 78) the first change output will be raised to 78.
+    const params: GenerateChangeSdkParams = {
+      ...defParams,
+      fixedInputs: [],
+      fixedOutputs: [{ satoshis: 500, lockingScriptLength: 25 }],
+      feeModel: { model: 'sat/kb', value: 200 },
+      changeInitialSatoshis: 1000,
+      changeFirstSatoshis: 50, // below dust floor for 200 sat/kb
+      targetNetCount: 2,
+      randomVals: undefined
+    }
+    const availableChange: GenerateChangeSdkChangeInput[] = [{ satoshis: 50000, outputId: 1 }]
+    const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
+
+    const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+
+    const expectedDustFloor = Math.max(1, Math.ceil((192 / 1000) * 200) * 2)
+    for (const o of r.changeOutputs) {
+      expect(o.satoshis).toBeGreaterThanOrEqual(expectedDustFloor)
+    }
+    expectTransactionSize(params, r)
   })
 })
 

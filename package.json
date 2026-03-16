@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox",
-  "version": "2.1.2",
+  "version": "2.1.7",
   "description": "BRC100 conforming wallet, wallet storage and wallet signer components",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
@@ -39,8 +39,8 @@
   "homepage": "https://github.com/bsv-blockchain/wallet-toolbox#readme",
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.0.4",
-    "@bsv/payment-express-middleware": "^2.0.0",
-    "@bsv/sdk": "^2.0.4",
+    "@bsv/payment-express-middleware": "^2.0.1",
+    "@bsv/sdk": "^2.0.6",
     "better-sqlite3": "^12.6.2",
     "express": "^4.21.2",
     "idb": "^8.0.2",

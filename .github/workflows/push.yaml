@@ -7,13 +7,11 @@ on:
       - main
   pull_request:
 
-permissions:
-  id-token: write  # Required for OIDC
-  contents: read
-
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         node-version: [20, 22, 24]
@@ -30,6 +28,9 @@ jobs:
 
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     needs: test
     # Only run on push to master/main, not on PRs
     if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')

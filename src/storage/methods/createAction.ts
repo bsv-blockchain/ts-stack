@@ -423,7 +423,8 @@ async function createNewOutputs(
     const nextRandomVal = (): number => {
       let val = 0
       if (!randomVals || randomVals.length === 0) {
-        val = Math.random()
+        const bytes = Random(4)
+        val = (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
       } else {
         val = randomVals.shift() || 0
         randomVals.push(val)
@@ -908,7 +909,8 @@ async function fundNewTransactionSdk(
   const nextRandomVal = (): number => {
     let val = 0
     if (!vargs.randomVals || vargs.randomVals.length === 0) {
-      val = Math.random()
+      const bytes = Random(4)
+      val = (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
     } else {
       val = vargs.randomVals.shift() || 0
       vargs.randomVals.push(val)

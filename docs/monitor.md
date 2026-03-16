@@ -109,12 +109,44 @@ export interface MonitorOptions {
     abandonedMsecs: number;
     unprovenAttemptsLimitTest: number;
     unprovenAttemptsLimitMain: number;
+    callbackToken?: string;
+    loadLastSSEEventId?: () => Promise<string | undefined>;
+    saveLastSSEEventId?: (lastEventId: string) => Promise<void>;
+    EventSourceClass?: any;
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
+    onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
 }
 ```
 
 See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [WalletServices](./client.md#interface-walletservices)
+
+###### Property EventSourceClass
+
+The react-native-sse EventSource class for SSE support in React Native
+
+```ts
+EventSourceClass?: any
+```
+
+###### Property callbackToken
+
+Stable callback token for ARC SSE event streaming.
+When set, TaskArcadeSSE will open an SSE connection to Arcade's
+/events endpoint and receive real-time transaction status updates.
+Must match the X-CallbackToken header sent during broadcast.
+
+```ts
+callbackToken?: string
+```
+
+###### Property loadLastSSEEventId
+
+Load persisted SSE lastEventId (e.g. from SQLite) for catchup on startup
+
+```ts
+loadLastSSEEventId?: () => Promise<string | undefined>
+```
 
 ###### Property msecsWaitPerMerkleProofServiceReq
 
@@ -132,6 +164,14 @@ These are hooks for a wallet-toolbox client to get transaction updates.
 onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
 ```
 See also: [ReviewActionResult](./client.md#interface-reviewactionresult)
+
+###### Property saveLastSSEEventId
+
+Save SSE lastEventId to persistent storage
+
+```ts
+saveLastSSEEventId?: (lastEventId: string) => Promise<void>
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -178,12 +218,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | --- | --- |
 | [Monitor](#class-monitor) | [TaskNewHeader](#class-tasknewheader) |
 | [MonitorDaemon](#class-monitordaemon) | [TaskPurge](#class-taskpurge) |
-| [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReorg](#class-taskreorg) |
-| [TaskCheckNoSends](#class-taskchecknosends) | [TaskReviewStatus](#class-taskreviewstatus) |
-| [TaskClock](#class-taskclock) | [TaskSendWaiting](#class-tasksendwaiting) |
-| [TaskFailAbandoned](#class-taskfailabandoned) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
-| [TaskMineBlock](#class-taskmineblock) | [TaskUnFail](#class-taskunfail) |
-| [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [WalletMonitorTask](#class-walletmonitortask) |
+| [TaskArcadeSSE](#class-taskarcadesse) | [TaskReorg](#class-taskreorg) |
+| [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReviewStatus](#class-taskreviewstatus) |
+| [TaskCheckNoSends](#class-taskchecknosends) | [TaskSendWaiting](#class-tasksendwaiting) |
+| [TaskClock](#class-taskclock) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
+| [TaskFailAbandoned](#class-taskfailabandoned) | [TaskUnFail](#class-taskunfail) |
+| [TaskMineBlock](#class-taskmineblock) | [WalletMonitorTask](#class-walletmonitortask) |
+| [TaskMonitorCallHistory](#class-taskmonitorcallhistory) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -207,6 +248,7 @@ export class Monitor {
     headersSubscriptionPromise?: Promise<string>;
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
+    onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
     constructor(options: MonitorOptions) 
     async destroy(): Promise<void> 
     static readonly oneSecond = 1000;
@@ -243,6 +285,8 @@ export class Monitor {
     processNewBlockHeader(header: BlockHeader): void 
     callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void 
     callOnProvenTransaction(txStatus: ProvenTransactionStatus): void 
+    callOnTransactionStatusChanged(txid: string, newStatus: string): void 
+    async fetchSSEEvents(): Promise<number> 
     deactivatedHeaders: DeactivedHeader[] = [];
     processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void 
     processHeader(header: BlockHeader): void 
@@ -309,6 +353,23 @@ callOnProvenTransaction(txStatus: ProvenTransactionStatus): void
 ```
 See also: [ProvenTransactionStatus](./client.md#interface-proventransactionstatus)
 
+###### Method callOnTransactionStatusChanged
+
+Called by TaskArcadeSSE when an SSE status event is received from Arcade.
+
+```ts
+callOnTransactionStatusChanged(txid: string, newStatus: string): void 
+```
+
+###### Method fetchSSEEvents
+
+Fetch pending transaction status events from Arcade on demand.
+Call this on app open, balance refresh, transaction list view, etc.
+
+```ts
+async fetchSSEEvents(): Promise<number> 
+```
+
 ###### Method processHeader
 
 Handler for new header events from Chaintracks.
@@ -369,6 +430,31 @@ export class MonitorDaemon {
 ```
 
 See also: [MonitorDaemonSetup](./monitor.md#interface-monitordaemonsetup)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: TaskArcadeSSE
+
+Monitor task that receives transaction status updates from Arcade via SSE
+and processes them — including fetching merkle proofs directly from Arcade
+when transactions are MINED.
+
+```ts
+export class TaskArcadeSSE extends WalletMonitorTask {
+    static taskName = "ArcadeSSE";
+    sseClient: ArcSSEClient | null = null;
+    constructor(monitor: Monitor) 
+    override async asyncSetup(): Promise<void> 
+    trigger(_nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async runTask(): Promise<string> 
+    async fetchNow(): Promise<number> 
+}
+```
+
+See also: [ArcSSEClient](./services.md#class-arcsseclient), [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

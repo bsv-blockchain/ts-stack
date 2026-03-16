@@ -1,4 +1,12 @@
-import { Beef, ChainTracker, MerklePath, Transaction as BsvTransaction, Utils, WalletLoggerInterface } from '@bsv/sdk'
+import {
+  Beef,
+  ChainTracker,
+  MerklePath,
+  Random,
+  Transaction as BsvTransaction,
+  Utils,
+  WalletLoggerInterface
+} from '@bsv/sdk'
 import { Knex } from 'knex'
 import { Chain } from '../sdk/types'
 import {
@@ -271,7 +279,8 @@ export class MockServices implements WalletServices {
 
         const time = Math.floor(Date.now() / 1000)
         const bits = 0x207fffff
-        const nonce = Math.floor(Math.random() * 0xffffffff)
+        const nonceBytes = Random(4)
+        const nonce = ((nonceBytes[0] << 24) | (nonceBytes[1] << 16) | (nonceBytes[2] << 8) | nonceBytes[3]) >>> 0
 
         const headerObj = { version: 1, previousHash: prevHash, merkleRoot, time, bits, nonce }
         const headerBinary = toBinaryBaseBlockHeader(headerObj)

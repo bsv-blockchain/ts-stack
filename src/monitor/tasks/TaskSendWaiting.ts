@@ -74,18 +74,22 @@ export class TaskSendWaiting extends WalletMonitorTask {
    * @param reqApis
    */
   async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
-    let log = ''
+    const txids = reqApis.map(r => r.txid)
+    const logs: Record<string, string> = {}
     for (let i = 0; i < reqApis.length; i++) {
       const reqApi = reqApis[i]
-      log += ' '.repeat(indent)
-      log += `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}: \n`
+      logs[reqApi.txid] = `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}:`
+    }
+    for (let i = 0; i < reqApis.length; i++) {
+      const reqApi = reqApis[i]
       if (reqApi.status !== 'unsent' && reqApi.status !== 'sending') {
-        log += `  status now ${reqApi.status}\n`
+        logs[reqApi.txid] += ` status now ${reqApi.status}`
         continue
       }
       const req = new EntityProvenTxReq(reqApi)
       const reqs: EntityProvenTxReq[] = []
       if (req.batch) {
+        logs[reqApi.txid] += ` batch ${req.batch}`
         // Make sure wew process entire batch together for efficient beef generation
         const batchReqApis = await this.storage.findProvenTxReqs({
           partial: { batch: req.batch, status: 'unsent' }
@@ -106,6 +110,10 @@ export class TaskSendWaiting extends WalletMonitorTask {
         return attemptToPostReqsToNetwork(sp, reqs)
       })
 
+      for (const rd of r.details) {
+        logs[rd.txid] += ` req.status ${rd.req.status} post.status ${rd.status}`
+      }
+
       if (this.monitor.onTransactionBroadcasted) {
         const rar = await this.storage.runAsStorageProvider(async sp => {
           const ars: SendWithResult[] = [{ txid: req.txid, status: 'sending' }]
@@ -114,8 +122,11 @@ export class TaskSendWaiting extends WalletMonitorTask {
         })
         this.monitor.callOnBroadcastedTransaction(rar[0])
       }
+    }
 
-      log += r.log
+    let log = ''
+    for (const txid of txids) {
+      log += `${' '.repeat(indent)}${logs[txid]}\n`
     }
     return log
   }
