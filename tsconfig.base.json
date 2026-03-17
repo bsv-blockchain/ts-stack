@@ -20,7 +20,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "files": ["mod.ts"],
+  "files": ["mod.ts", "mod.browser.ts"],
   "include": ["src"],
   "exclude": ["dist", "*/**/__tests"]
 }

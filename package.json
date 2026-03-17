@@ -1,6 +1,6 @@
 {
   "name": "@bsv/paymail",
-  "version": "2.2.5",
+  "version": "2.3.0",
   "description": "BSV Paymail library",
   "publishConfig": {
     "access": "public"
@@ -17,6 +17,7 @@
   "exports": {
     ".": {
       "types": "./dist/types/mod.d.ts",
+      "browser": "./dist/esm/mod.browser.js",
       "import": "./dist/esm/mod.js",
       "require": "./dist/cjs/mod.js"
     },
