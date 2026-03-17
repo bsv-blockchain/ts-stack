@@ -1,14 +1,12 @@
 import {
   Beef,
   BigNumber,
-  CreateActionArgs,
   CreateActionInput,
   CreateActionOptions,
   Curve,
   P2PKH,
   PositiveIntegerOrZero,
   PrivateKey,
-  SignActionArgs,
   SignActionSpend,
   Utils
 } from '@bsv/sdk'
