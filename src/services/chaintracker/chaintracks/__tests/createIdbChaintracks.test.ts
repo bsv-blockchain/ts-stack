@@ -20,13 +20,12 @@ describe('createIdbChaintracks tests', () => {
     })
   })
 
-  test('0', async () => {
+  // Long-running manual test — disabled for CI. Enable locally to run.
+  test.skip('0 - manual idb chaintracks', async () => {
     const target: Chain = 'main'
     if (_tu.noEnv(target)) return
-    // Test runs over two minutes long...
-    return
 
-    const env = _tu.getEnv(target) // NOSONAR — manual test kept disabled for CI; enable locally to run
+    const env = _tu.getEnv(target)
     const { chain, chaintracks, storage, available } = await createIdbChaintracks(env.chain, env.whatsonchainApiKey)
     await available
     const headerListener: HeaderListener = (header: BlockHeader) => {
@@ -54,11 +53,6 @@ describe('createIdbChaintracks tests', () => {
 
     const listening = await chaintracks.isListening()
     expect(listening).toBe(true)
-
-    //    console.log('validating...')
-    //    const validated = await chaintracks.validate()
-    //    expect(validated).toBe(true)
-    //    console.log('validated')
 
     for (;;) await wait(120000)
   })
