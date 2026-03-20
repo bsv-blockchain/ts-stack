@@ -47,6 +47,7 @@ export type {
   ServerWalletConfig,
   PaymentRequest,
   IncomingPayment,
+  DirectPaymentResult,
   DIDDocument,
   DIDVerificationMethod,
   DIDParseResult,

@@ -122,10 +122,11 @@ export function createMessageBoxMethods (core: WalletCore): {
     async acceptIncomingPayment (payment: any, basket?: string): Promise<any> {
       try {
         const pp = getPeerPay()
+        const walletClient = core.getClient()
 
         if (basket != null) {
-          const walletClient = core.getClient()
-          await walletClient.internalizeAction({
+          // Basket insertion: output goes into a named basket
+          await (walletClient as any).internalizeAction({
             tx: payment.token.transaction,
             outputs: [{
               outputIndex: payment.token.outputIndex ?? 0,
@@ -142,14 +143,29 @@ export function createMessageBoxMethods (core: WalletCore): {
             }],
             labels: ['peerpay'],
             description: 'MessageBox Payment'
-          } as any)
+          })
 
           await pp.acknowledgeMessage({ messageIds: [payment.messageId] })
           return { payment, paymentResult: 'accepted' }
         } else {
-          const result = await pp.acceptPayment(payment)
-          if (typeof result === 'string') throw new Error(result)
-          return result
+          // Wallet payment: output goes directly into wallet's spendable balance
+          await (walletClient as any).internalizeAction({
+            tx: payment.token.transaction,
+            outputs: [{
+              outputIndex: payment.token.outputIndex ?? 0,
+              protocol: 'wallet payment',
+              paymentRemittance: {
+                senderIdentityKey: payment.sender,
+                derivationPrefix: payment.token.customInstructions.derivationPrefix,
+                derivationSuffix: payment.token.customInstructions.derivationSuffix
+              }
+            }],
+            labels: ['peerpay'],
+            description: 'MessageBox Payment'
+          })
+
+          await pp.acknowledgeMessage({ messageIds: [payment.messageId] })
+          return { payment, paymentResult: 'accepted' }
         }
       } catch (error) {
         throw new Error(`Failed to accept payment: ${(error as Error).message}`)
