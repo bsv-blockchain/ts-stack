@@ -4831,23 +4831,21 @@ export class WalletPermissionsManager implements WalletInterface {
               })
             } else {
               // This is the first call, create a new request
-              try {
-                await new Promise<boolean>(async (resolve, reject) => {
-                  this.activeRequests.set(key, {
-                    request: { originator: normalized as string, permissions: permissionsToRequest },
-                    pending: [{ resolve, reject }]
-                  })
-
-                  await this.callEvent('onGroupedPermissionRequested', {
-                    requestID: key,
-                    originator: normalized,
-                    permissions: permissionsToRequest
-                  })
+              const promise = new Promise<boolean>((resolve, reject) => {
+                this.activeRequests.set(key, {
+                  request: { originator: normalized as string, permissions: permissionsToRequest },
+                  pending: [{ resolve, reject }]
                 })
-              } catch (e) {
-                // Permission was denied, re-throw to stop execution
-                throw e
-              }
+              })
+
+              // Fire the event outside the executor to avoid async executor (S6544)
+              await this.callEvent('onGroupedPermissionRequested', {
+                requestID: key,
+                originator: normalized,
+                permissions: permissionsToRequest
+              })
+
+              await promise
             }
           }
         }

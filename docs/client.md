@@ -7375,6 +7375,7 @@ export interface VerifyAndRepairBeefResult {
         root: string;
         reproveResults: sdk.ReproveHeaderResult;
     }>;
+    verifiedBeef?: Beef;
 }
 ```
 

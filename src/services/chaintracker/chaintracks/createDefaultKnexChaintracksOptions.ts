@@ -3,14 +3,10 @@ import { Chain } from '../../../sdk'
 import { ChaintracksOptions } from './Api/ChaintracksApi'
 import { ChaintracksFs } from './util/ChaintracksFs'
 import { ChaintracksStorageKnex, ChaintracksStorageKnexOptions } from './Storage/ChaintracksStorageKnex'
-import { BulkIngestorCDNBabbage } from './Ingest/BulkIngestorCDNBabbage'
 import { ChaintracksFetch } from './util/ChaintracksFetch'
-import { LiveIngestorWhatsOnChainOptions, LiveIngestorWhatsOnChainPoll } from './Ingest/LiveIngestorWhatsOnChainPoll'
-import { BulkIngestorWhatsOnChainCdn, BulkIngestorWhatsOnChainOptions } from './Ingest/BulkIngestorWhatsOnChainCdn'
 import { ChaintracksFetchApi } from './Api/ChaintracksFetchApi'
 import { BulkFileDataManager, BulkFileDataManagerOptions } from './util/BulkFileDataManager'
-import { BulkIngestorCDNOptions } from './Ingest/BulkIngestorCDN'
-import { WhatsOnChainServicesOptions } from './Ingest/WhatsOnChainServices'
+import { buildChaintracksOptionsWithIngestors } from './configureChaintracksIngestors'
 
 /**
  *
@@ -64,48 +60,8 @@ export function createDefaultKnexChaintracksOptions(
   }
   const storage = new ChaintracksStorageKnex(so)
 
-  const co: ChaintracksOptions = {
-    chain,
-    storage,
-    bulkIngestors: [],
-    liveIngestors: [],
-    addLiveRecursionLimit,
-    logging: (...args) => console.log(new Date().toISOString(), ...args),
-    readonly: false
-  }
-
-  const jsonResource = `${chain}NetBlockHeaders.json`
-
-  const bulkCdnOptions: BulkIngestorCDNOptions = {
-    chain,
-    jsonResource,
-    fetch,
-    cdnUrl,
-    maxPerFile
-  }
-  co.bulkIngestors.push(new BulkIngestorCDNBabbage(bulkCdnOptions))
-
-  const wocOptions: WhatsOnChainServicesOptions = {
-    chain,
-    apiKey: whatsonchainApiKey,
-    timeout: 30000,
-    userAgent: 'BabbageWhatsOnChainServices',
-    enableCache: true,
-    chainInfoMsecs: 5000
-  }
-
-  const bulkOptions: BulkIngestorWhatsOnChainOptions = {
-    ...wocOptions,
-    jsonResource,
-    idleWait: 5000
-  }
-  co.bulkIngestors.push(new BulkIngestorWhatsOnChainCdn(bulkOptions))
-
-  const liveOptions: LiveIngestorWhatsOnChainOptions = {
-    ...wocOptions,
-    idleWait: 100000
-  }
-  co.liveIngestors.push(new LiveIngestorWhatsOnChainPoll(liveOptions))
-
-  return co
+  return buildChaintracksOptionsWithIngestors(
+    { chain, whatsonchainApiKey, maxPerFile, fetch, cdnUrl, addLiveRecursionLimit },
+    storage
+  )
 }

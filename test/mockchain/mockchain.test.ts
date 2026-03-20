@@ -519,21 +519,21 @@ describe('MockServices reorg', () => {
     await knex.destroy()
   })
 
-  test('reorg replaces blocks and returns txs to mempool', async () => {
-    // Mine blocks 1-3
-    await services.mineBlock() // height 1
-    await services.mineBlock() // height 2
-    await services.mineBlock() // height 3
-
-    // Add a tx to mempool, mine it into block 4
-    // First mature a coinbase to have a spendable UTXO
-    // Actually we already have blocks 0-3. Let's mine more to mature block 0 coinbase
-    for (let i = 0; i < 97; i++) {
-      await services.mineBlock()
+  /**
+   * Shared helper: mature a coinbase, create a spend tx, post it, and mine it.
+   * Returns the spend txid for use in reorg assertions.
+   */
+  async function matureAndSpendCoinbase(
+    svc: MockServices,
+    extraBlocksBeforeMature: number = 0
+  ): Promise<string> {
+    // Mine enough blocks to mature the genesis coinbase (100 confirmations needed)
+    const blocksNeeded = 100 - extraBlocksBeforeMature
+    for (let i = 0; i < blocksNeeded; i++) {
+      await svc.mineBlock()
     }
-    // Now at height 100, block 0 coinbase is mature
 
-    const coinbaseUtxos = await services.storage
+    const coinbaseUtxos = await svc.storage
       .knex('mockchain_utxos')
       .where({ isCoinbase: true, blockHeight: 0, spentByTxid: null })
     const coinbaseUtxo = coinbaseUtxos[0]
@@ -551,19 +551,31 @@ describe('MockServices reorg', () => {
     })
 
     const beef = new Beef()
-    const coinbaseTxRow = await services.storage.getTransaction(coinbaseUtxo.txid)
+    const coinbaseTxRow = await svc.storage.getTransaction(coinbaseUtxo.txid)
     const coinbaseRawTx =
       coinbaseTxRow!.rawTx instanceof Buffer
         ? Array.from(coinbaseTxRow!.rawTx)
         : Array.from(coinbaseTxRow!.rawTx as Uint8Array)
-    const pathResult = await services.getMerklePath(coinbaseUtxo.txid)
+    const pathResult = await svc.getMerklePath(coinbaseUtxo.txid)
     addProvenTxToBeef(beef, coinbaseRawTx, pathResult.merklePath!)
     beef.mergeRawTx(Array.from(spendTx.toBinary()))
 
     const spendTxid = spendTx.id('hex')
-    const postResult = await services.postBeef(beef, [spendTxid])
+    const postResult = await svc.postBeef(beef, [spendTxid])
     expect(postResult[0].status).toBe('success')
-    await services.mineBlock() // height 101, includes spendTx
+    await svc.mineBlock()
+
+    return spendTxid
+  }
+
+  test('reorg replaces blocks and returns txs to mempool', async () => {
+    // Mine blocks 1-3 first
+    await services.mineBlock() // height 1
+    await services.mineBlock() // height 2
+    await services.mineBlock() // height 3
+
+    // Mature coinbase and spend, accounting for 3 blocks already mined
+    const spendTxid = await matureAndSpendCoinbase(services, 3)
 
     const txBefore = await services.storage.getTransaction(spendTxid)
     expect(txBefore!.blockHeight).toBe(101)
@@ -582,42 +594,7 @@ describe('MockServices reorg', () => {
   })
 
   test('reorg with txidMap places tx in specific block', async () => {
-    // Mine 100 blocks to have a mature coinbase
-    for (let i = 0; i < 100; i++) {
-      await services.mineBlock()
-    }
-
-    const coinbaseUtxos = await services.storage
-      .knex('mockchain_utxos')
-      .where({ isCoinbase: true, blockHeight: 0, spentByTxid: null })
-    const coinbaseUtxo = coinbaseUtxos[0]
-
-    const spendTx = new Transaction()
-    spendTx.addInput({
-      sourceTXID: coinbaseUtxo.txid,
-      sourceOutputIndex: 0,
-      unlockingScript: Script.fromHex(''),
-      sequence: 0xffffffff
-    })
-    spendTx.addOutput({
-      satoshis: 4_999_000_000,
-      lockingScript: Script.fromHex('51')
-    })
-
-    const beef = new Beef()
-    const coinbaseTxRow = await services.storage.getTransaction(coinbaseUtxo.txid)
-    const coinbaseRawTx =
-      coinbaseTxRow!.rawTx instanceof Buffer
-        ? Array.from(coinbaseTxRow!.rawTx)
-        : Array.from(coinbaseTxRow!.rawTx as Uint8Array)
-    const pathResult = await services.getMerklePath(coinbaseUtxo.txid)
-    addProvenTxToBeef(beef, coinbaseRawTx, pathResult.merklePath!)
-    beef.mergeRawTx(Array.from(spendTx.toBinary()))
-
-    const spendTxid = spendTx.id('hex')
-    const postResult = await services.postBeef(beef, [spendTxid])
-    expect(postResult[0].status).toBe('success')
-    await services.mineBlock() // height 101
+    const spendTxid = await matureAndSpendCoinbase(services)
 
     // Reorg from 101, create 2 new blocks, put tx in offset 1 (height 102)
     const result = await services.reorg(101, 2, { [spendTxid]: 1 })

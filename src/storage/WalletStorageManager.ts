@@ -564,68 +564,6 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   /**
-   * Extends the Beef `verify` function to handle BUMPs that have become invalid due to a chain reorg,
-   * and originated from proven_txs records tracked by this storage.
-   *
-   * This method is optimized for making sure outgoing beefs are valid before sharing them externally.
-   * In particular, it only "repairs" proofs previously tracked by this storage.
-   *
-   * Any merkle root that fails `isValidRootForHeight` triggers a reprove attempt for that block header.
-   * This results in proven_txs with invalid proofs being updated with new valid proofs where possible.
-   *
-   * @param beef
-   * @param allowTxidOnly
-   * @returns VerifyAndRepairBeefResult, in particular `verifiedBeef` is valid only verify and repair succeeded fully.
-   */
-  async verifyAndRepairBeef(beef: Beef, allowTxidOnly?: boolean): Promise<VerifyAndRepairBeefResult> {
-    throw new sdk.WERR_NOT_IMPLEMENTED()
-
-    const r: VerifyAndRepairBeefResult = {
-      // NOSONAR — draft implementation kept for future completion
-      isStructurallyValid: false,
-      originalRoots: {},
-      invalidRoots: {}
-    }
-    const services = this.getServices()
-    const chaintracker = await services.getChainTracker()
-
-    ;({ valid: r.isStructurallyValid, roots: r.originalRoots } = beef.verifyValid(allowTxidOnly))
-
-    if (!r.isStructurallyValid) return r
-
-    for (const [heightStr, root] of Object.entries(r.originalRoots)) {
-      const height = Number(heightStr)
-      const isValid = await chaintracker.isValidRootForHeight(root, height)
-      if (!isValid) {
-        // root is not currently the valid hash for this height according to the chaintracker.
-        // What beef txids depended on this root:
-        const txids = beef.txs
-          .filter(tx => tx.bumpIndex !== undefined && beef.bumps[tx.bumpIndex].blockHeight === height)
-          .map(tx => tx.txid)
-        const reproveResults = await this.reproveHeader(root)
-        r.invalidRoots[height] = { root, reproveResults }
-      }
-    }
-
-    if (Object.keys(r.invalidRoots).length === 0) {
-      // There are no invalid merkle roots and the beef is structurally valid.
-      // The beef is fully verified.
-      return r
-    }
-
-    // beef is structurally valid but has invalid merkle roots.
-    // Attempt to repair the invalid roots by reproving all txids in this beef that relied on them.
-
-    // All invalid BUMPs must be removed from the beef
-    // and all txid's that were proven by those BUMPs need
-    // new beefs merged into the beef.
-    // In most cases, this will be a replacement BUMP,
-    // but it may also require a deeper proof.
-
-    return r
-  }
-
-  /**
    * Attempt to reprove the transaction against the current chain,
    * If a new valid proof is found and noUpdate is not true,
    * update the proven_txs record with new block and merkle proof data.
@@ -941,4 +879,5 @@ export interface VerifyAndRepairBeefResult {
   isStructurallyValid: boolean
   originalRoots: Record<number, string>
   invalidRoots: Record<number, { root: string; reproveResults: sdk.ReproveHeaderResult }>
+  verifiedBeef?: Beef
 }
