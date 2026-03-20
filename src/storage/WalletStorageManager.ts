@@ -564,26 +564,6 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   /**
-   * Extends the Beef `verify` function to handle BUMPs that have become invalid due to a chain reorg,
-   * and originated from proven_txs records tracked by this storage.
-   *
-   * This method is optimized for making sure outgoing beefs are valid before sharing them externally.
-   * In particular, it only "repairs" proofs previously tracked by this storage.
-   *
-   * Any merkle root that fails `isValidRootForHeight` triggers a reprove attempt for that block header.
-   * This results in proven_txs with invalid proofs being updated with new valid proofs where possible.
-   *
-   * @param beef
-   * @param allowTxidOnly
-   * @returns VerifyAndRepairBeefResult, in particular `verifiedBeef` is valid only verify and repair succeeded fully.
-   */
-  async verifyAndRepairBeef(beef: Beef, allowTxidOnly?: boolean): Promise<VerifyAndRepairBeefResult> {
-    throw new sdk.WERR_NOT_IMPLEMENTED()
-    // Draft implementation removed to fix unreachable-code bug (S1763).
-    // See git history for the original draft logic.
-  }
-
-  /**
    * Attempt to reprove the transaction against the current chain,
    * If a new valid proof is found and noUpdate is not true,
    * update the proven_txs record with new block and merkle proof data.
@@ -899,4 +879,5 @@ export interface VerifyAndRepairBeefResult {
   isStructurallyValid: boolean
   originalRoots: Record<number, string>
   invalidRoots: Record<number, { root: string; reproveResults: sdk.ReproveHeaderResult }>
+  verifiedBeef?: Beef
 }
