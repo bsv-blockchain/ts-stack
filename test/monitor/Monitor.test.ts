@@ -121,6 +121,51 @@ describe('Monitor tests', () => {
     await runMockedSendWaiting('success', 'monitorTest3')
   })
 
+  test('3b TaskSendWaiting batches once without reposting members', async () => {
+    const ctxs: TestWallet<{}>[] = []
+    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest3b'))
+
+    const expectedTxids = [
+      'd9ec73b2e0f06e0f482d2d1db9ceccf2f212f0b24afbe10846ac907567be571f',
+      'b7634f08d8c7f3c6244050bebf73a79f40e672aba7d5232663609a58b123b816',
+      '3d2ea64ee584a1f6eb161dbedf3a8d299e3e4497ac7a203d23c044c998c6aa08',
+      'a3a8fe7f541c1383ff7b975af49b27284ae720af5f2705d8409baaf519190d26',
+      '6d68cc6fa7363e59aaccbaa65f0ca613a6ae8af718453ab5d3a2b022c59b5cc6'
+    ]
+    const batchTxids = expectedTxids.slice(0, 3)
+    const postCalls: string[][] = []
+
+    _tu.mockPostServicesAsCallback(ctxs, (beef, txids) => {
+      postCalls.push([...txids])
+      return 'success'
+    })
+
+    for (const { activeStorage: storage, monitor } of ctxs) {
+      if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
+
+      for (const txid of batchTxids) {
+        const req = verifyOne(await storage.findProvenTxReqs({ partial: { txid } }))
+        await storage.updateProvenTxReq(req.provenTxReqId, { batch: 'monitor-batch-1' })
+      }
+
+      const task = new TaskSendWaiting(monitor, 1, 1)
+      monitor._tasks.push(task)
+
+      await monitor.runTask('SendWaiting')
+
+      expect(postCalls).toEqual([batchTxids, [expectedTxids[3]], [expectedTxids[4]]])
+
+      for (const txid of expectedTxids) {
+        const req = verifyOne(await storage.findProvenTxReqs({ partial: { txid } }))
+        expect(req.status).toBe('unmined')
+      }
+    }
+
+    for (const ctx of ctxs) {
+      await ctx.storage.destroy()
+    }
+  })
+
   test.skip('4 TaskSendWaiting error', async () => {
     await runMockedSendWaiting('error', 'monitorTest4')
   })

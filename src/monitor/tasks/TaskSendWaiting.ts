@@ -76,12 +76,18 @@ export class TaskSendWaiting extends WalletMonitorTask {
   async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
     const txids = reqApis.map(r => r.txid)
     const logs: Record<string, string> = {}
+    const reqApiIds = new Set(reqApis.map(r => r.provenTxReqId))
+    const groupedReqIds = new Set<number>()
     for (let i = 0; i < reqApis.length; i++) {
       const reqApi = reqApis[i]
       logs[reqApi.txid] = `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}:`
     }
     for (let i = 0; i < reqApis.length; i++) {
       const reqApi = reqApis[i]
+      if (groupedReqIds.has(reqApi.provenTxReqId)) {
+        logs[reqApi.txid] += ` processed with batch`
+        continue
+      }
       if (reqApi.status !== 'unsent' && reqApi.status !== 'sending') {
         logs[reqApi.txid] += ` status now ${reqApi.status}`
         continue
@@ -95,10 +101,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
           partial: { batch: req.batch, status: 'unsent' }
         })
         for (const bra of batchReqApis) {
-          // Remove any matching batchReqApis from reqApis
-          const index = reqApis.findIndex(ra => ra.provenTxReqId === bra.provenTxReqId)
-          if (index > -1) reqApis.slice(index, index + 1)
-          // And add to reqs being processed now:
+          if (reqApiIds.has(bra.provenTxReqId)) groupedReqIds.add(bra.provenTxReqId)
           reqs.push(new EntityProvenTxReq(bra))
         }
       } else {
