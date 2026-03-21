@@ -66,7 +66,11 @@ export abstract class AuthMethodInteractor {
   /**
    * Complete the flow (e.g. confirm OTP).
    */
-  public async completeAuth(serverUrl: string, presentationKey: string, payload: AuthPayload): Promise<CompleteAuthResponse> {
+  public async completeAuth(
+    serverUrl: string,
+    presentationKey: string,
+    payload: AuthPayload
+  ): Promise<CompleteAuthResponse> {
     return this.postAuth<CompleteAuthResponse>(serverUrl, 'complete', presentationKey, payload)
   }
 }

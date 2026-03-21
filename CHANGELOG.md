@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.9
+
+- Fix batch sending bug in TaskSendWaiting 
+
 ## wallet-toolbox 2.1.8
 
 - Drop no longer required verifyAndRepairBeef method

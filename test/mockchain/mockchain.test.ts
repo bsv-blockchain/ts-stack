@@ -523,10 +523,7 @@ describe('MockServices reorg', () => {
    * Shared helper: mature a coinbase, create a spend tx, post it, and mine it.
    * Returns the spend txid for use in reorg assertions.
    */
-  async function matureAndSpendCoinbase(
-    svc: MockServices,
-    extraBlocksBeforeMature: number = 0
-  ): Promise<string> {
+  async function matureAndSpendCoinbase(svc: MockServices, extraBlocksBeforeMature: number = 0): Promise<string> {
     // Mine enough blocks to mature the genesis coinbase (100 confirmations needed)
     const blocksNeeded = 100 - extraBlocksBeforeMature
     for (let i = 0; i < blocksNeeded; i++) {

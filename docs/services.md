@@ -23,25 +23,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [ArcConfig](#interface-arcconfig) | [ChaintracksChainTrackerOptions](#interface-chaintrackschaintrackeroptions) | [ChaintracksStorageNoDbOptions](#interface-chaintracksstoragenodboptions) |
-| [ArcMinerGetTxData](#interface-arcminergettxdata) | [ChaintracksClientApi](#interface-chaintracksclientapi) | [ChaintracksStorageQueryApi](#interface-chaintracksstoragequeryapi) |
-| [ArcSSEClientOptions](#interface-arcsseclientoptions) | [ChaintracksFetchApi](#interface-chaintracksfetchapi) | [ChaintracksWritableFileApi](#interface-chaintrackswritablefileapi) |
-| [ArcSSEEvent](#interface-arcsseevent) | [ChaintracksFsApi](#interface-chaintracksfsapi) | [ExchangeRatesIoApi](#interface-exchangeratesioapi) |
-| [BitailsConfig](#interface-bitailsconfig) | [ChaintracksInfoApi](#interface-chaintracksinfoapi) | [GetHeaderByteFileLinksResult](#interface-getheaderbytefilelinksresult) |
-| [BitailsMerkleProof](#interface-bitailsmerkleproof) | [ChaintracksManagementApi](#interface-chaintracksmanagementapi) | [HeightRangeApi](#interface-heightrangeapi) |
-| [BulkFileDataManagerMergeResult](#interface-bulkfiledatamanagermergeresult) | [ChaintracksOptions](#interface-chaintracksoptions) | [HeightRanges](#interface-heightranges) |
-| [BulkFileDataManagerOptions](#interface-bulkfiledatamanageroptions) | [ChaintracksPackageInfoApi](#interface-chaintrackspackageinfoapi) | [LiveBlockHeader](#interface-liveblockheader) |
-| [BulkHeaderFileInfo](#interface-bulkheaderfileinfo) | [ChaintracksReadableFileApi](#interface-chaintracksreadablefileapi) | [LiveIngestorApi](#interface-liveingestorapi) |
-| [BulkHeaderFilesInfo](#interface-bulkheaderfilesinfo) | [ChaintracksServiceClientOptions](#interface-chaintracksserviceclientoptions) | [LiveIngestorBaseOptions](#interface-liveingestorbaseoptions) |
-| [BulkIngestorApi](#interface-bulkingestorapi) | [ChaintracksServiceOptions](#interface-chaintracksserviceoptions) | [LiveIngestorWhatsOnChainOptions](#interface-liveingestorwhatsonchainoptions) |
-| [BulkIngestorBaseOptions](#interface-bulkingestorbaseoptions) | [ChaintracksStorageApi](#interface-chaintracksstorageapi) | [ServiceCall](#interface-servicecall) |
-| [BulkIngestorCDNOptions](#interface-bulkingestorcdnoptions) | [ChaintracksStorageBaseOptions](#interface-chaintracksstoragebaseoptions) | [ServiceToCall](#interface-servicetocall) |
-| [BulkIngestorWhatsOnChainOptions](#interface-bulkingestorwhatsonchainoptions) | [ChaintracksStorageBulkFileApi](#interface-chaintracksstoragebulkfileapi) | [WhatsOnChainServicesOptions](#interface-whatsonchainservicesoptions) |
-| [BulkStorageApi](#interface-bulkstorageapi) | [ChaintracksStorageIdbOptions](#interface-chaintracksstorageidboptions) | [WocChainInfo](#interface-wocchaininfo) |
-| [BulkStorageBaseOptions](#interface-bulkstoragebaseoptions) | [ChaintracksStorageIdbSchema](#interface-chaintracksstorageidbschema) | [WocGetHeaderByteFileLinks](#interface-wocgetheaderbytefilelinks) |
-| [BulkSyncResult](#interface-bulksyncresult) | [ChaintracksStorageIngestApi](#interface-chaintracksstorageingestapi) | [WocGetHeadersHeader](#interface-wocgetheadersheader) |
-| [ChaintracksApi](#interface-chaintracksapi) | [ChaintracksStorageKnexOptions](#interface-chaintracksstorageknexoptions) | [WocHeader](#interface-wocheader) |
-| [ChaintracksAppendableFileApi](#interface-chaintracksappendablefileapi) | [ChaintracksStorageMemoryOptions](#interface-chaintracksstoragememoryoptions) |  |
+| [ArcConfig](#interface-arcconfig) | [ChaintracksChainTrackerOptions](#interface-chaintrackschaintrackeroptions) | [ChaintracksStorageMemoryOptions](#interface-chaintracksstoragememoryoptions) |
+| [ArcMinerGetTxData](#interface-arcminergettxdata) | [ChaintracksClientApi](#interface-chaintracksclientapi) | [ChaintracksStorageNoDbOptions](#interface-chaintracksstoragenodboptions) |
+| [ArcSSEClientOptions](#interface-arcsseclientoptions) | [ChaintracksFetchApi](#interface-chaintracksfetchapi) | [ChaintracksStorageQueryApi](#interface-chaintracksstoragequeryapi) |
+| [ArcSSEEvent](#interface-arcsseevent) | [ChaintracksFsApi](#interface-chaintracksfsapi) | [ChaintracksWritableFileApi](#interface-chaintrackswritablefileapi) |
+| [BitailsConfig](#interface-bitailsconfig) | [ChaintracksInfoApi](#interface-chaintracksinfoapi) | [ExchangeRatesIoApi](#interface-exchangeratesioapi) |
+| [BitailsMerkleProof](#interface-bitailsmerkleproof) | [ChaintracksIngestorParams](#interface-chaintracksingestorparams) | [GetHeaderByteFileLinksResult](#interface-getheaderbytefilelinksresult) |
+| [BulkFileDataManagerMergeResult](#interface-bulkfiledatamanagermergeresult) | [ChaintracksManagementApi](#interface-chaintracksmanagementapi) | [HeightRangeApi](#interface-heightrangeapi) |
+| [BulkFileDataManagerOptions](#interface-bulkfiledatamanageroptions) | [ChaintracksOptions](#interface-chaintracksoptions) | [HeightRanges](#interface-heightranges) |
+| [BulkHeaderFileInfo](#interface-bulkheaderfileinfo) | [ChaintracksPackageInfoApi](#interface-chaintrackspackageinfoapi) | [LiveBlockHeader](#interface-liveblockheader) |
+| [BulkHeaderFilesInfo](#interface-bulkheaderfilesinfo) | [ChaintracksReadableFileApi](#interface-chaintracksreadablefileapi) | [LiveIngestorApi](#interface-liveingestorapi) |
+| [BulkIngestorApi](#interface-bulkingestorapi) | [ChaintracksServiceClientOptions](#interface-chaintracksserviceclientoptions) | [LiveIngestorBaseOptions](#interface-liveingestorbaseoptions) |
+| [BulkIngestorBaseOptions](#interface-bulkingestorbaseoptions) | [ChaintracksServiceOptions](#interface-chaintracksserviceoptions) | [LiveIngestorWhatsOnChainOptions](#interface-liveingestorwhatsonchainoptions) |
+| [BulkIngestorCDNOptions](#interface-bulkingestorcdnoptions) | [ChaintracksStorageApi](#interface-chaintracksstorageapi) | [ServiceCall](#interface-servicecall) |
+| [BulkIngestorWhatsOnChainOptions](#interface-bulkingestorwhatsonchainoptions) | [ChaintracksStorageBaseOptions](#interface-chaintracksstoragebaseoptions) | [ServiceToCall](#interface-servicetocall) |
+| [BulkStorageApi](#interface-bulkstorageapi) | [ChaintracksStorageBulkFileApi](#interface-chaintracksstoragebulkfileapi) | [WhatsOnChainServicesOptions](#interface-whatsonchainservicesoptions) |
+| [BulkStorageBaseOptions](#interface-bulkstoragebaseoptions) | [ChaintracksStorageIdbOptions](#interface-chaintracksstorageidboptions) | [WocChainInfo](#interface-wocchaininfo) |
+| [BulkSyncResult](#interface-bulksyncresult) | [ChaintracksStorageIdbSchema](#interface-chaintracksstorageidbschema) | [WocGetHeaderByteFileLinks](#interface-wocgetheaderbytefilelinks) |
+| [ChaintracksApi](#interface-chaintracksapi) | [ChaintracksStorageIngestApi](#interface-chaintracksstorageingestapi) | [WocGetHeadersHeader](#interface-wocgetheadersheader) |
+| [ChaintracksAppendableFileApi](#interface-chaintracksappendablefileapi) | [ChaintracksStorageKnexOptions](#interface-chaintracksstorageknexoptions) | [WocHeader](#interface-wocheader) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -1291,6 +1291,26 @@ export interface ChaintracksInfoApi {
 ```
 
 See also: [Chain](./client.md#type-chain), [ChaintracksPackageInfoApi](./services.md#interface-chaintrackspackageinfoapi)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: ChaintracksIngestorParams
+
+Shared parameters for configuring Chaintracks ingestors.
+
+```ts
+export interface ChaintracksIngestorParams {
+    chain: Chain;
+    whatsonchainApiKey: string;
+    maxPerFile: number;
+    fetch: ChaintracksFetchApi;
+    cdnUrl: string;
+    addLiveRecursionLimit: number;
+}
+```
+
+See also: [Chain](./client.md#type-chain), [ChaintracksFetchApi](./services.md#interface-chaintracksfetchapi)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5015,14 +5035,15 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [WocHeadersBulkListener](#function-wocheadersbulklistener) | [deserializeBaseBlockHeader](#function-deserializebaseblockheader) | [sha256HashOfBinaryFile](#function-sha256hashofbinaryfile) |
-| [WocHeadersBulkListener_test](#function-wocheadersbulklistener_test) | [deserializeBaseBlockHeaders](#function-deserializebaseblockheaders) | [subWork](#function-subwork) |
-| [WocHeadersLiveListener](#function-wocheaderslivelistener) | [deserializeBlockHeader](#function-deserializeblockheader) | [swapByteOrder](#function-swapbyteorder) |
-| [WocHeadersLiveListener_test](#function-wocheaderslivelistener_test) | [deserializeBlockHeaders](#function-deserializeblockheaders) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
-| [addWork](#function-addwork) | [genesisBuffer](#function-genesisbuffer) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
-| [arcDefaultUrl](#function-arcdefaulturl) | [genesisHeader](#function-genesisheader) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
-| [arcGorillaPoolUrl](#function-arcgorillapoolurl) | [getBeefForTxid](#function-getbeeffortxid) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
-| [blockHash](#function-blockhash) | [getExchangeRatesIo](#function-getexchangeratesio) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
+| [WocHeadersBulkListener](#function-wocheadersbulklistener) | [createNoDbChaintracks](#function-createnodbchaintracks) | [serializeBaseBlockHeaders](#function-serializebaseblockheaders) |
+| [WocHeadersBulkListener_test](#function-wocheadersbulklistener_test) | [deserializeBaseBlockHeader](#function-deserializebaseblockheader) | [sha256HashOfBinaryFile](#function-sha256hashofbinaryfile) |
+| [WocHeadersLiveListener](#function-wocheaderslivelistener) | [deserializeBaseBlockHeaders](#function-deserializebaseblockheaders) | [subWork](#function-subwork) |
+| [WocHeadersLiveListener_test](#function-wocheaderslivelistener_test) | [deserializeBlockHeader](#function-deserializeblockheader) | [swapByteOrder](#function-swapbyteorder) |
+| [addWork](#function-addwork) | [deserializeBlockHeaders](#function-deserializeblockheaders) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
+| [arcDefaultUrl](#function-arcdefaulturl) | [genesisBuffer](#function-genesisbuffer) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
+| [arcGorillaPoolUrl](#function-arcgorillapoolurl) | [genesisHeader](#function-genesisheader) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
+| [blockHash](#function-blockhash) | [getBeefForTxid](#function-getbeeffortxid) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
+| [buildChaintracksOptionsWithIngestors](#function-buildchaintracksoptionswithingestors) | [getExchangeRatesIo](#function-getexchangeratesio) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
 | [convertBitsToTarget](#function-convertbitstotarget) | [getWhatsOnChainBlockHeaderByHash](#function-getwhatsonchainblockheaderbyhash) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
 | [convertBitsToWork](#function-convertbitstowork) | [isBaseBlockHeader](#function-isbaseblockheader) | [validateBulkFileData](#function-validatebulkfiledata) |
 | [convertBufferToUint32](#function-convertbuffertouint32) | [isBlockHeader](#function-isblockheader) | [validateGenesisHeader](#function-validategenesisheader) |
@@ -5034,7 +5055,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [createDefaultWalletServicesOptions](#function-createdefaultwalletservicesoptions) | [readUInt32LE](#function-readuint32le) | [writeUInt32BE](#function-writeuint32be) |
 | [createIdbChaintracks](#function-createidbchaintracks) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) | [writeUInt32LE](#function-writeuint32le) |
 | [createKnexChaintracks](#function-createknexchaintracks) | [serializeBaseBlockHeader](#function-serializebaseblockheader) |  |
-| [createNoDbChaintracks](#function-createnodbchaintracks) | [serializeBaseBlockHeaders](#function-serializebaseblockheaders) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5193,6 +5213,22 @@ See also: [BaseBlockHeader](./client.md#interface-baseblockheader), [asString](.
 Returns
 
 doule sha256 hash of header bytes reversed
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: buildChaintracksOptionsWithIngestors
+
+Builds the shared portion of ChaintracksOptions that all storage backends
+(Knex, Idb, NoDb) have in common: the options shell and bulk/live ingestors.
+
+The caller is responsible for providing the storage implementation.
+
+```ts
+export function buildChaintracksOptionsWithIngestors(params: ChaintracksIngestorParams, storage: ChaintracksOptions["storage"]): ChaintracksOptions 
+```
+
+See also: [ChaintracksIngestorParams](./services.md#interface-chaintracksingestorparams), [ChaintracksOptions](./services.md#interface-chaintracksoptions)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

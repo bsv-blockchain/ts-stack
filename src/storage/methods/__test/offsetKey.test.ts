@@ -128,7 +128,11 @@ async function signAndBroadcastRedemption(
 
   for (let vin = 0; vin < comms.length; vin++) {
     const { hashedSecret } = keyOffsetToHashedSecret(pub, comms[vin].keyOffset)
-    tx.inputs[vin].unlockingScriptTemplate = p2pkh.unlock(new PrivateKey(priv.add(hashedSecret).mod(curve.n)), 'all', false)
+    tx.inputs[vin].unlockingScriptTemplate = p2pkh.unlock(
+      new PrivateKey(priv.add(hashedSecret).mod(curve.n)),
+      'all',
+      false
+    )
   }
   await tx.sign()
 
