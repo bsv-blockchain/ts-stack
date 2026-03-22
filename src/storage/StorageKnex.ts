@@ -43,6 +43,7 @@ import {
   FindPartialSincePagedArgs,
   FindProvenTxReqsArgs,
   FindProvenTxsArgs,
+  FindStaleMerkleRootsArgs,
   FindSyncStatesArgs,
   FindTransactionsArgs,
   FindTxLabelMapsArgs,
@@ -638,6 +639,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     return this.setupQuery('proven_txs', args)
   }
+  findStaleMerkleRootsQuery(args: FindStaleMerkleRootsArgs): Knex.QueryBuilder {
+    let q = this.toDb(args.trx)('proven_txs')
+    q.where('height', '=', args.height)
+    q.where('merkleRoot', '!=', args.merkleRoot)
+    q.select('merkleRoot')
+    q.distinct('merkleRoot')
+    return q
+  }
   findSyncStatesQuery(args: FindSyncStatesArgs): Knex.QueryBuilder {
     return this.setupQuery('sync_states', args)
   }
@@ -748,6 +757,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const q = this.findProvenTxsQuery(args)
     const r = await q
     return this.validateEntities(r)
+  }
+  override async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> {
+    const q = this.findStaleMerkleRootsQuery(args)
+    const r = await q
+    return r.map((row: { merkleRoot: string }) => row.merkleRoot)
   }
   override async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const q = this.findSyncStatesQuery(args)

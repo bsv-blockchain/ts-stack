@@ -530,8 +530,6 @@ export class WalletStorageManager implements sdk.WalletStorage {
    */
   async reproveHeader(deactivatedHash: string): Promise<sdk.ReproveHeaderResult> {
     const r: sdk.ReproveHeaderResult = { log: '', updated: [], unchanged: [], unavailable: [] }
-    const services = this.getServices()
-    const chaintracker = await services.getChainTracker()
 
     // Lookup all the proven_txs records matching the deactivated headers
     let ptxs: TableProvenTx[] = []
@@ -543,6 +541,43 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
     for (const ptx of ptxs) {
       // Loop over proven_txs records matching the deactivated header
+      const rp = await this.reproveProven(ptx, true)
+
+      r.log += rp.log
+      if (rp.unavailable) r.unavailable.push(ptx)
+      if (rp.unchanged) r.unchanged.push(ptx)
+      if (rp.updated) r.updated.push({ was: ptx, update: rp.updated.update, logUpdate: rp.updated.logUpdate })
+    }
+
+    if (r.updated.length > 0) {
+      await this.runAsStorageProvider(async sp => {
+        for (const u of r.updated) {
+          await sp.updateProvenTx(u.was.provenTxId, u.update)
+          r.log += `    txid ${u.was.txid} proof data updated\n` + u.logUpdate
+        }
+      })
+    }
+
+    return r
+  }
+
+  /**
+   * For all proven_txs records at the given height currently tied to the given stale merkleRoot,
+   * attempt to reprove them against the current chain and update proof data if new valid proofs are found.
+   *
+   * This is intended for backup auditing of recent heights after the primary reorg event path has run.
+   */
+  async reproveHeightMerkleRoot(height: number, staleMerkleRoot: string): Promise<sdk.ReproveHeaderResult> {
+    const r: sdk.ReproveHeaderResult = { log: '', updated: [], unchanged: [], unavailable: [] }
+
+    let ptxs: TableProvenTx[] = []
+    await this.runAsStorageProvider(async sp => {
+      ptxs = await sp.findProvenTxs({ partial: { height, merkleRoot: staleMerkleRoot } })
+    })
+
+    r.log += `  height ${height} stale merkleRoot ${staleMerkleRoot} with ${ptxs.length} impacted transactions\n`
+
+    for (const ptx of ptxs) {
       const rp = await this.reproveProven(ptx, true)
 
       r.log += rp.log

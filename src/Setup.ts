@@ -155,9 +155,8 @@ DEV_KEYS = '{
     // serviceOptions.chaintracks = new BHServiceClient('main', 'https://headers.spv.money', 'fC42F069YJs30FaWBAgikfDFEfIW1j4q')
 
     const services = new Services(serviceOptions)
-    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services)
+    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, 'default')
     const monitor = new Monitor(monopts)
-    monitor.addDefaultTasks()
     const privilegedKeyManager = args.privilegedKeyGetter
       ? new PrivilegedKeyManager(args.privilegedKeyGetter)
       : undefined
