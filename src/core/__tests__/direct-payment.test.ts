@@ -725,6 +725,52 @@ describe('WalletCore Direct Payment', () => {
       const resultWithoutBasket = await methods.acceptIncomingPayment(payment)
       expect(resultWithoutBasket.paymentResult).toBe('accepted')
     })
+
+    it('should NOT acknowledge message if internalization fails (wallet payment)', async () => {
+      messageboxMockClient.internalizeAction.mockRejectedValue(new Error('Invalid tx format'))
+      const wallet = new TestWallet(messageboxMockClient)
+      const methods = createMessageBoxMethods(wallet)
+      const payment = createMockPayment(VALID_KEY_2)
+
+      await expect(methods.acceptIncomingPayment(payment))
+        .rejects.toThrow('Internalization failed (wallet payment), message preserved')
+
+      // Message must NOT be acknowledged — derivation data would be lost
+      expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
+    })
+
+    it('should NOT acknowledge message if internalization fails (basket insertion)', async () => {
+      messageboxMockClient.internalizeAction.mockRejectedValue(new Error('DB error'))
+      const wallet = new TestWallet(messageboxMockClient)
+      const methods = createMessageBoxMethods(wallet)
+      const payment = createMockPayment(VALID_KEY_2)
+
+      await expect(methods.acceptIncomingPayment(payment, 'my-basket'))
+        .rejects.toThrow('Internalization failed (basket insertion), message preserved')
+
+      expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
+    })
+
+    it('should still succeed if ack fails after successful internalization', async () => {
+      mockAcknowledgeMessage.mockRejectedValue(new Error('Network timeout'))
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
+      const wallet = new TestWallet(messageboxMockClient)
+      const methods = createMessageBoxMethods(wallet)
+      const payment = createMockPayment(VALID_KEY_2)
+
+      // Should NOT throw — payment is safe in wallet
+      const result = await methods.acceptIncomingPayment(payment)
+      expect(result.paymentResult).toBe('accepted')
+
+      // Internalization happened
+      expect(messageboxMockClient.internalizeAction).toHaveBeenCalled()
+
+      // Warning logged
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('message ack failed')
+      )
+      consoleSpy.mockRestore()
+    })
   })
 
   // ==========================================================================

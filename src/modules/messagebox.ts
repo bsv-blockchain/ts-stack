@@ -120,12 +120,16 @@ export function createMessageBoxMethods (core: WalletCore): {
     },
 
     async acceptIncomingPayment (payment: any, basket?: string): Promise<any> {
-      try {
-        const pp = getPeerPay()
-        const walletClient = core.getClient()
+      const pp = getPeerPay()
+      const walletClient = core.getClient()
 
-        if (basket != null) {
-          // Basket insertion: output goes into a named basket
+      // Step 1: Internalize the payment. If this fails, do NOT acknowledge the
+      // message — the sender's tx data and derivation info must be preserved so
+      // the caller can retry. Losing the message before successful internalization
+      // would permanently orphan the funds.
+      if (basket != null) {
+        // Basket insertion: output goes into a named basket
+        try {
           await (walletClient as any).internalizeAction({
             tx: payment.token.transaction,
             outputs: [{
@@ -144,11 +148,12 @@ export function createMessageBoxMethods (core: WalletCore): {
             labels: ['peerpay'],
             description: 'MessageBox Payment'
           })
-
-          await pp.acknowledgeMessage({ messageIds: [payment.messageId] })
-          return { payment, paymentResult: 'accepted' }
-        } else {
-          // Wallet payment: output goes directly into wallet's spendable balance
+        } catch (error) {
+          throw new Error(`Internalization failed (basket insertion), message preserved: ${(error as Error).message}`)
+        }
+      } else {
+        // Wallet payment: output goes directly into wallet's spendable balance
+        try {
           await (walletClient as any).internalizeAction({
             tx: payment.token.transaction,
             outputs: [{
@@ -163,13 +168,23 @@ export function createMessageBoxMethods (core: WalletCore): {
             labels: ['peerpay'],
             description: 'MessageBox Payment'
           })
-
-          await pp.acknowledgeMessage({ messageIds: [payment.messageId] })
-          return { payment, paymentResult: 'accepted' }
+        } catch (error) {
+          throw new Error(`Internalization failed (wallet payment), message preserved: ${(error as Error).message}`)
         }
-      } catch (error) {
-        throw new Error(`Failed to accept payment: ${(error as Error).message}`)
       }
+
+      // Step 2: Only acknowledge after confirmed internalization. If ack fails,
+      // the payment is already safe in the wallet — a duplicate internalization
+      // attempt on retry is harmless (the wallet will reject the already-spent tx).
+      try {
+        await pp.acknowledgeMessage({ messageIds: [payment.messageId] })
+      } catch (ackError) {
+        // Payment is safe; ack failure is non-fatal. The message may be re-delivered
+        // but the wallet will reject the duplicate internalization attempt.
+        console.warn(`Payment internalized but message ack failed (messageId: ${payment.messageId}): ${(ackError as Error).message}`)
+      }
+
+      return { payment, paymentResult: 'accepted' }
     },
 
     async registerIdentityTag (tag: string, registryUrl?: string): Promise<{ tag: string }> {
