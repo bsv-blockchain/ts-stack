@@ -181,7 +181,8 @@ export function createMessageBoxMethods (core: WalletCore): {
       } catch (ackError) {
         // Payment is safe; ack failure is non-fatal. The message may be re-delivered
         // but the wallet will reject the duplicate internalization attempt.
-        console.warn(`Payment internalized but message ack failed (messageId: ${payment.messageId}): ${(ackError as Error).message}`)
+        const msgId = String(payment.messageId)
+        console.warn(`Payment internalized but message ack failed (messageId: ${msgId}): ${(ackError as Error).message}`)
       }
 
       return { payment, paymentResult: 'accepted' }
