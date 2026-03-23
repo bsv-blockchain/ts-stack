@@ -110,7 +110,15 @@ const wallet = await createWallet({ network: 'main' })
 |--------|--------|---------|-------------|
 | `pay(options)` | `PaymentOptions` | `Promise<TransactionResult>` | Payment via MessageBox P2P (PeerPayClient) |
 | `send(options)` | `SendOptions` | `Promise<SendResult>` | Multi-output: P2PKH + OP_RETURN + PushDrop in one tx |
-| `fundServerWallet(request, basket?)` | `PaymentRequest, string?` | `Promise<TransactionResult>` | Fund a ServerWallet using BRC-29 derivation |
+| `fundServerWallet(request, basket?)` | `PaymentRequest, string?` | `Promise<TransactionResult>` | Fund a ServerWallet using BRC-29 derivation (legacy) |
+
+### Direct Payments — BRC-29 Wallet Payment Internalization (WalletCore)
+
+| Method | Params | Returns | Description |
+|--------|--------|---------|-------------|
+| `createPaymentRequest(options)` | `{ satoshis, memo? }` | `PaymentRequest` | Generate BRC-29 derivation data for someone to pay you |
+| `sendDirectPayment(request)` | `PaymentRequest` | `Promise<DirectPaymentResult>` | Create BRC-29 derived P2PKH tx + return remittance data |
+| `receiveDirectPayment(payment)` | `IncomingPayment` | `Promise<void>` | Internalize into wallet balance via `wallet payment` (NOT into a basket) |
 
 ### Tokens (tokens module)
 
@@ -193,12 +201,11 @@ const wallet = await ServerWallet.create({
 
 | Method | Params | Returns | Description |
 |--------|--------|---------|-------------|
-| `createPaymentRequest(options)` | `{ satoshis, memo? }` | `PaymentRequest` | Generate BRC-29 payment request for desktop client |
-| `receivePayment(payment)` | `IncomingPayment` | `Promise<void>` | Internalize payment from desktop using `wallet payment` protocol |
+| `receivePayment(payment)` | `IncomingPayment` | `Promise<void>` | **Deprecated.** Use `receiveDirectPayment()` (inherited from WalletCore). Kept for backward compat with `server_funding` label. |
 
 ### Shared Methods
 
-ServerWallet has all the same methods as BrowserWallet (pay, send, createToken, inscribeText, etc.) via the same module composition pattern.
+ServerWallet has all the same methods as BrowserWallet (pay, send, createToken, inscribeText, createPaymentRequest, sendDirectPayment, receiveDirectPayment, etc.) via the same module composition pattern.
 
 ---
 
@@ -714,32 +721,64 @@ const incoming = await wallet.listIncomingPayments()
 await wallet.acceptIncomingPayment(incoming[0], 'received-payments')
 ```
 
-### 7.8 Server Wallet: Create, Fund, Receive, Balance
+### 7.8 Direct Payments (BRC-29 Wallet Payment Internalization)
 
 ```typescript
-// Server side: create wallet
-const { ServerWallet } = await import('@bsv/simple/server')
-const server = await ServerWallet.create({ privateKey: 'hex', network: 'main' })
+// Direct payments work on BOTH browser and server wallets.
+// Funds go directly into the wallet's spendable balance (NOT into a basket).
+
+// --- Flow: Browser pays Server ---
 
 // Server: generate payment request
-const request = server.createPaymentRequest({ satoshis: 50000 })
+const request = serverWallet.createPaymentRequest({ satoshis: 2000 })
 
-// Client: fund server wallet
-const result = await wallet.fundServerWallet(request, 'server-funding')
+// Browser: create BRC-29 derived P2PKH transaction
+const payment = await browserWallet.sendDirectPayment(request)
 
-// Client: send tx to server
-await fetch('/api/server-wallet?action=receive', {
+// Browser: send tx + remittance to server (via API)
+await fetch('/api/receive-payment', {
   method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    tx: Array.from(result.tx),
-    senderIdentityKey: wallet.getIdentityKey(),
-    derivationPrefix: request.derivationPrefix,
-    derivationSuffix: request.derivationSuffix,
-    outputIndex: 0
+    tx: Array.from(payment.tx),
+    senderIdentityKey: payment.senderIdentityKey,
+    derivationPrefix: payment.derivationPrefix,
+    derivationSuffix: payment.derivationSuffix,
+    outputIndex: payment.outputIndex
   })
 })
 
-// Server: receive payment
+// Server: internalize
+await serverWallet.receiveDirectPayment({ tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex: 0 })
+
+// --- Flow: Server pays Browser ---
+
+// Browser: create payment request
+const request = browserWallet.createPaymentRequest({ satoshis: 100 })
+// ... send request to server via API ...
+
+// Server: create payment
+const payment = await serverWallet.sendDirectPayment(request)
+// ... return payment data to browser ...
+
+// Browser: internalize into wallet balance
+await browserWallet.receiveDirectPayment({
+  tx: paymentData.tx,
+  senderIdentityKey: paymentData.senderIdentityKey,
+  derivationPrefix: paymentData.derivationPrefix,
+  derivationSuffix: paymentData.derivationSuffix,
+  outputIndex: paymentData.outputIndex
+})
+```
+
+### 7.8b Server Wallet: Legacy Fund Flow
+
+```typescript
+// Legacy pattern — prefer sendDirectPayment/receiveDirectPayment instead
+const { ServerWallet } = await import('@bsv/simple/server')
+const server = await ServerWallet.create({ privateKey: 'hex', network: 'main' })
+const request = server.createPaymentRequest({ satoshis: 50000 })
+const result = await wallet.fundServerWallet(request, 'server-funding')
 await server.receivePayment({ tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex: 0 })
 ```
 
@@ -873,6 +912,7 @@ interface InscriptionResult extends TransactionResult { type: InscriptionType; d
 interface ServerWalletConfig { privateKey: string; network?: Network; storageUrl?: string }
 interface PaymentRequest { serverIdentityKey: string; derivationPrefix: string; derivationSuffix: string; satoshis: number; memo?: string }
 interface IncomingPayment { tx: number[] | Uint8Array; senderIdentityKey: string; derivationPrefix: string; derivationSuffix: string; outputIndex: number; description?: string }
+interface DirectPaymentResult extends TransactionResult { senderIdentityKey: string; derivationPrefix: string; derivationSuffix: string; outputIndex: number }
 ```
 
 ### DID Types

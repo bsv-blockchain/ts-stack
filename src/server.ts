@@ -1,8 +1,6 @@
 import {
   PrivateKey,
   KeyDeriver,
-  Utils,
-  Random,
   WalletInterface
 } from '@bsv/sdk'
 import {
@@ -17,7 +15,6 @@ import { WalletCore } from './core/WalletCore'
 import {
   WalletDefaults,
   ServerWalletConfig,
-  PaymentRequest,
   IncomingPayment
 } from './core/types'
 import { createTokenMethods } from './modules/tokens'
@@ -65,6 +62,7 @@ export type {
   ServerWalletConfig,
   PaymentRequest,
   IncomingPayment,
+  DirectPaymentResult,
   DIDDocument,
   DIDVerificationMethod,
   DIDParseResult,
@@ -145,18 +143,10 @@ class _ServerWallet extends WalletCore {
     return this.client as unknown as WalletInterface
   }
 
-  createPaymentRequest(options: { satoshis: number; memo?: string }): PaymentRequest {
-    const derivationPrefix = Utils.toBase64(Utils.toArray('payment', 'utf8'))
-    const derivationSuffix = Utils.toBase64(Random(8))
-    return {
-      serverIdentityKey: this.identityKey,
-      derivationPrefix,
-      derivationSuffix,
-      satoshis: options.satoshis,
-      memo: options.memo
-    }
-  }
-
+  /**
+   * @deprecated Use `receiveDirectPayment()` instead. Kept for backward compatibility.
+   * Internalizes a payment using the `wallet payment` protocol with `server_funding` label.
+   */
   async receivePayment(payment: IncomingPayment): Promise<void> {
     const tx = payment.tx instanceof Uint8Array
       ? Array.from(payment.tx)

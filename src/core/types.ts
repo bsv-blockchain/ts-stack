@@ -240,6 +240,17 @@ export interface OverlayOutput {
 }
 
 // ============================================================================
+// Direct Payment Types (BRC-29 wallet payment internalization)
+// ============================================================================
+
+export interface DirectPaymentResult extends TransactionResult {
+  senderIdentityKey: string
+  derivationPrefix: string
+  derivationSuffix: string
+  outputIndex: number
+}
+
+// ============================================================================
 // Server Wallet Types
 // ============================================================================
 

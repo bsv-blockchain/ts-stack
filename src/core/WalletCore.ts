@@ -20,7 +20,9 @@ import {
   SendResult,
   SendOutputDetail,
   TransactionResult,
-  PaymentRequest
+  PaymentRequest,
+  IncomingPayment,
+  DirectPaymentResult
 } from './types'
 
 export abstract class WalletCore {
@@ -221,6 +223,120 @@ export abstract class WalletCore {
       }
     } catch (error) {
       throw new Error(`Payment failed: ${(error as Error).message}`)
+    }
+  }
+
+  // ============================================================================
+  // Direct Payment (BRC-29 wallet payment internalization)
+  // ============================================================================
+
+  /**
+   * Generate a payment request containing BRC-29 derivation data.
+   * Share this with the sender so they can create a payment via `sendDirectPayment()`.
+   */
+  createPaymentRequest (options: { satoshis: number, memo?: string }): PaymentRequest {
+    const derivationPrefix = Utils.toBase64(Utils.toArray('payment', 'utf8'))
+    const derivationSuffix = Utils.toBase64(Random(8))
+    return {
+      serverIdentityKey: this.identityKey,
+      derivationPrefix,
+      derivationSuffix,
+      satoshis: options.satoshis,
+      memo: options.memo
+    }
+  }
+
+  /**
+   * Create a BRC-29 derived P2PKH transaction for the recipient described in the request.
+   * Returns the transaction plus remittance data the recipient needs to call `receiveDirectPayment()`.
+   */
+  async sendDirectPayment (request: PaymentRequest): Promise<DirectPaymentResult> {
+    try {
+      const client = this.getClient()
+      const protocolID: [SecurityLevel, string] = [2 as SecurityLevel, '3241645161d8']
+      const keyID = `${request.derivationPrefix} ${request.derivationSuffix}`
+
+      const { publicKey: derivedKey } = await client.getPublicKey({
+        protocolID,
+        keyID,
+        counterparty: request.serverIdentityKey,
+        forSelf: false
+      })
+
+      const lockingScript = new P2PKH()
+        .lock(PublicKey.fromString(derivedKey).toAddress())
+        .toHex()
+
+      const outputs: any[] = [{
+        lockingScript,
+        satoshis: request.satoshis,
+        outputDescription: `Direct payment: ${request.satoshis} sats`,
+        customInstructions: JSON.stringify({
+          derivationPrefix: request.derivationPrefix,
+          derivationSuffix: request.derivationSuffix,
+          payee: request.serverIdentityKey
+        })
+      }]
+
+      if (request.memo != null && request.memo !== '') {
+        const memoScript = new Script()
+          .writeOpCode(OP.OP_FALSE)
+          .writeOpCode(OP.OP_RETURN)
+          .writeBin(Array.from(Utils.toArray(request.memo, 'utf8')))
+        outputs.push({
+          lockingScript: memoScript.toHex(),
+          satoshis: 0,
+          outputDescription: 'Payment memo'
+        })
+      }
+
+      const result = await client.createAction({
+        description: request.memo ?? `Direct payment (${request.satoshis} sats)`,
+        outputs,
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      })
+
+      return {
+        txid: result.txid ?? '',
+        tx: result.tx,
+        senderIdentityKey: this.identityKey,
+        derivationPrefix: request.derivationPrefix,
+        derivationSuffix: request.derivationSuffix,
+        outputIndex: 0
+      }
+    } catch (error) {
+      throw new Error(`Direct payment failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Internalize a received payment directly into the wallet's spendable balance
+   * using the `wallet payment` protocol. This does NOT put the output into a basket —
+   * it becomes a regular spendable UTXO managed by the wallet.
+   */
+  async receiveDirectPayment (payment: IncomingPayment): Promise<void> {
+    try {
+      const client = this.getClient()
+      const tx = payment.tx instanceof Uint8Array
+        ? Array.from(payment.tx)
+        : payment.tx
+
+      await (client as any).internalizeAction({
+        tx,
+        outputs: [{
+          outputIndex: payment.outputIndex,
+          protocol: 'wallet payment',
+          paymentRemittance: {
+            senderIdentityKey: payment.senderIdentityKey,
+            derivationPrefix: payment.derivationPrefix,
+            derivationSuffix: payment.derivationSuffix
+          }
+        }],
+        description: payment.description ?? `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`,
+        labels: ['direct_payment']
+      })
+    } catch (error) {
+      throw new Error(`Failed to receive direct payment: ${(error as Error).message}`)
     }
   }
 
