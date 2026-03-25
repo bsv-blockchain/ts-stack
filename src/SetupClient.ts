@@ -14,6 +14,7 @@ import {
   PrivateKey,
   PublicKey,
   ScriptTemplateUnlock,
+  SignableTransaction,
   Transaction,
   WalletInterface
 } from '@bsv/sdk'
@@ -336,7 +337,7 @@ export abstract class SetupClient {
   }
 
   private static _resolveAutoSigned(
-    car: { txid?: string; tx?: number[] },
+    car: CreateActionResult,
     txid: string,
     vout: number
   ): string {
@@ -357,7 +358,7 @@ export abstract class SetupClient {
 
   private static async _signAndComplete(
     wallet: WalletInterface,
-    st: { tx: number[]; reference: string },
+    st: SignableTransaction,
     txid: string,
     vout: number,
     satoshis: number,
