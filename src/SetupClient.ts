@@ -54,11 +54,11 @@ function verifyP2PKHOwnership(lockingScript: LockingScript, publicKey: PublicKey
   if (chunks.length !== 5) throw new Error('UTXO is not standard P2PKH')
   if (chunks[0].op !== 118) throw new Error('UTXO is not P2PKH (missing OP_DUP)')
   if (chunks[1].op !== 169) throw new Error('UTXO is not P2PKH (missing OP_HASH160)')
-  if (!chunks[2].data || chunks[2].data.length !== 20) throw new Error('UTXO is not P2PKH (bad hash160)')
+  if (chunks[2].data?.length !== 20) throw new Error('UTXO is not P2PKH (bad hash160)')
   if (chunks[3].op !== 136) throw new Error('UTXO is not P2PKH (missing OP_EQUALVERIFY)')
   if (chunks[4].op !== 172) throw new Error('UTXO is not P2PKH (missing OP_CHECKSIG)')
 
-  const scriptHash = chunks[2].data
+  const scriptHash = chunks[2].data!
   const keyHash = publicKey.toHash() as number[]
   if (scriptHash.length !== keyHash.length) throw new Error('P2PKH hash160 length mismatch')
   for (let i = 0; i < scriptHash.length; i++) {
@@ -283,8 +283,6 @@ export abstract class SetupClient {
     p2pkhKey: KeyPairAddress,
     inputBEEF?: BEEF
   ): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
-
-    // Validate outpoints and check for duplicates (case-insensitive)
     const parsed = outpoints.map(o => parseOutpoint(o))
     const seen = new Set<string>()
     for (const p of parsed) {
@@ -292,117 +290,101 @@ export abstract class SetupClient {
       if (seen.has(key)) throw new Error(`Duplicate outpoint: ${key}`)
       seen.add(key)
     }
-
-    // Build BEEF if not provided (use local const, don't mutate param)
     const beefBin = inputBEEF ?? await SetupClient._buildBeefForOutpoints(outpoints)
-
-    // Parse BEEF once outside loop
     const beef = Beef.fromBinary(beefBin)
-
     const results: { outpoint: string; txid?: string; success: boolean; error?: string }[] = []
-
     for (let idx = 0; idx < parsed.length; idx++) {
       const { txid, vout } = parsed[idx]
       const outpoint = outpoints[idx]
-
       try {
-        // Look up tx and validate bounds
-        const btx = beef.findTxid(txid)
-        if (!btx || !btx.tx) throw new Error(`Transaction ${txid} not found in inputBEEF`)
-        if (vout < 0 || vout >= btx.tx.outputs.length) throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`)
-
-        const output = btx.tx.outputs[vout]
-        const satoshis = output.satoshis
-        if (!satoshis || satoshis <= 0) throw new Error(`Output ${outpoint} has no satoshis`)
-
-        // Verify P2PKH ownership
-        verifyP2PKHOwnership(output.lockingScript, p2pkhKey.publicKey)
-
-        // Step 1: createAction with the BEEF and outpoint
-        const car = await wallet.createAction({
-          inputBEEF: beefBin,
-          inputs: [{
-            outpoint,
-            unlockingScriptLength: 108,
-            inputDescription: 'fund wallet from P2PKH'
-          }],
-          labels: ['p2pkh-funding'],
-          description: `Import P2PKH UTXO ${txid.slice(0, 16)}...`,
-          options: { trustSelf: 'known' }
-        })
-
-        // Step 2: Handle auto-signed case
-        if (!car.signableTransaction) {
-          if (!car.txid || !/^[0-9a-f]{64}$/i.test(car.txid)) {
-            results.push({ outpoint, success: false, error: 'createAction returned no signableTransaction and no valid txid' })
-            continue
-          }
-          // Verify tx spends the requested outpoint if raw tx available
-          if (car.tx) {
-            const completedTx = Transaction.fromAtomicBEEF(car.tx)
-            if (completedTx.id('hex').toLowerCase() !== car.txid!.toLowerCase()) {
-              results.push({ outpoint, success: false, error: 'Auto-signed tx id mismatch with car.txid' })
-              continue
-            }
-            const spendsOutpoint = completedTx.inputs.some(inp =>
-              String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout
-            )
-            if (!spendsOutpoint) {
-              results.push({ outpoint, success: false, error: 'Auto-signed tx does not spend the requested outpoint' })
-              continue
-            }
-          }
-          results.push({ outpoint, txid: car.txid, success: true })
-          continue
-        }
-
-        // Step 3: Extract the unsigned transaction by matching outpoint in inputs
-        const st = car.signableTransaction
-        const stBeef = Beef.fromBinary(st.tx)
-        let unsignedTx: Transaction | undefined
-        let inputIndex = -1
-        for (const stbtx of stBeef.txs) {
-          if (!stbtx.tx) continue
-          for (let i = 0; i < stbtx.tx.inputs.length; i++) {
-            const inp = stbtx.tx.inputs[i]
-            if (String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout) {
-              unsignedTx = stbtx.tx
-              inputIndex = i
-              break
-            }
-          }
-          if (unsignedTx) break
-        }
-
-        if (!unsignedTx || inputIndex < 0) {
-          results.push({ outpoint, success: false, error: 'Could not find requested outpoint in signable transaction inputs' })
-          continue
-        }
-
-        // Step 4: Sign with P2PKH unlock template at correct input index
-        unsignedTx.inputs[inputIndex].unlockingScriptTemplate = SetupClient.getUnlockP2PKH(p2pkhKey.privateKey, satoshis)
-        await unsignedTx.sign()
-        const unlockingScript = unsignedTx.inputs[inputIndex].unlockingScript!.toHex()
-
-        // Step 5: Complete the import
-        const sar = await wallet.signAction({
-          reference: st.reference,
-          spends: { [inputIndex]: { unlockingScript } }
-        })
-
-        // Validate signAction result
-        if (!sar.txid || !/^[0-9a-f]{64}$/i.test(sar.txid)) {
-          results.push({ outpoint, success: false, error: 'signAction returned no valid txid' })
-          continue
-        }
-        results.push({ outpoint, txid: sar.txid, success: true })
+        const resultTxid = await SetupClient._importSingleOutpoint(wallet, beef, beefBin, outpoint, txid, vout, p2pkhKey)
+        results.push({ outpoint, txid: resultTxid, success: true })
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        results.push({ outpoint, success: false, error: msg })
+        results.push({ outpoint, success: false, error: err instanceof Error ? err.message : String(err) })
       }
     }
-
     return results
+  }
+
+  private static async _importSingleOutpoint(
+    wallet: WalletInterface,
+    beef: Beef,
+    beefBin: BEEF,
+    outpoint: string,
+    txid: string,
+    vout: number,
+    p2pkhKey: KeyPairAddress
+  ): Promise<string> {
+    const btx = beef.findTxid(txid)
+    if (!btx?.tx) throw new Error(`Transaction ${txid} not found in inputBEEF`)
+    if (vout < 0 || vout >= btx.tx.outputs.length) throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`)
+    const output = btx.tx.outputs[vout]
+    const satoshis = output.satoshis
+    if (!satoshis || satoshis <= 0) throw new Error(`Output ${outpoint} has no satoshis`)
+    verifyP2PKHOwnership(output.lockingScript, p2pkhKey.publicKey)
+    const car = await wallet.createAction({
+      inputBEEF: beefBin,
+      inputs: [{ outpoint, unlockingScriptLength: 108, inputDescription: 'fund wallet from P2PKH' }],
+      labels: ['p2pkh-funding'],
+      description: `Import P2PKH UTXO ${txid.slice(0, 16)}...`,
+      options: { trustSelf: 'known' }
+    })
+    if (!car.signableTransaction) {
+      return SetupClient._resolveAutoSigned(car, txid, vout)
+    }
+    return SetupClient._signAndComplete(wallet, car.signableTransaction, txid, vout, satoshis, p2pkhKey)
+  }
+
+  private static _resolveAutoSigned(
+    car: { txid?: string; tx?: number[] },
+    txid: string,
+    vout: number
+  ): string {
+    if (!car.txid || !/^[0-9a-f]{64}$/i.test(car.txid)) {
+      throw new Error('createAction returned no signableTransaction and no valid txid')
+    }
+    if (car.tx) {
+      const completedTx = Transaction.fromAtomicBEEF(car.tx)
+      if (completedTx.id('hex').toLowerCase() !== car.txid.toLowerCase()) {
+        throw new Error('Auto-signed tx id mismatch with car.txid')
+      }
+      if (!completedTx.inputs.some(inp => String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout)) {
+        throw new Error('Auto-signed tx does not spend the requested outpoint')
+      }
+    }
+    return car.txid
+  }
+
+  private static async _signAndComplete(
+    wallet: WalletInterface,
+    st: { tx: number[]; reference: string },
+    txid: string,
+    vout: number,
+    satoshis: number,
+    p2pkhKey: KeyPairAddress
+  ): Promise<string> {
+    const stBeef = Beef.fromBinary(st.tx)
+    let unsignedTx: Transaction | undefined
+    let inputIndex = -1
+    for (const stbtx of stBeef.txs) {
+      if (!stbtx.tx) continue
+      for (let i = 0; i < stbtx.tx.inputs.length; i++) {
+        const inp = stbtx.tx.inputs[i]
+        if (String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout) {
+          unsignedTx = stbtx.tx
+          inputIndex = i
+          break
+        }
+      }
+      if (unsignedTx) break
+    }
+    if (!unsignedTx || inputIndex < 0) throw new Error('Could not find requested outpoint in signable transaction inputs')
+    unsignedTx.inputs[inputIndex].unlockingScriptTemplate = SetupClient.getUnlockP2PKH(p2pkhKey.privateKey, satoshis)
+    await unsignedTx.sign()
+    const unlockingScript = unsignedTx.inputs[inputIndex].unlockingScript!.toHex()
+    const sar = await wallet.signAction({ reference: st.reference, spends: { [inputIndex]: { unlockingScript } } })
+    if (!sar.txid || !/^[0-9a-f]{64}$/i.test(sar.txid)) throw new Error('signAction returned no valid txid')
+    return sar.txid
   }
 
   /**
