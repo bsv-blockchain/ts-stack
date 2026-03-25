@@ -7,10 +7,13 @@ import {
   CreateActionArgs,
   CreateActionOptions,
   CreateActionOutput,
+  CreateActionResult,
   KeyDeriver,
   KeyDeriverApi,
+  LockingScript,
   P2PKH,
   PrivateKey,
+  PublicKey,
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
