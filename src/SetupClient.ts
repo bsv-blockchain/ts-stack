@@ -1,5 +1,4 @@
 import {
-  Beef,
   BEEF,
   CachedKeyDeriver,
   CreateActionArgs,
