@@ -17,11 +17,7 @@ import {
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
-import {
-  buildBeefForOutpoints,
-  importSingleOutpoint,
-  parseOutpoint
-} from './fundWalletP2PKH'
+import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { Chain } from './sdk/types'
 import { randomBytesHex, verifyTruthy } from './utility/utilityHelpers'
 import { WERR_INVALID_OPERATION } from './sdk/WERR_errors'
@@ -354,27 +350,7 @@ DEV_KEYS = '{
     p2pkhKey: KeyPairAddress,
     inputBEEF?: BEEF
   ): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
-    const parsed = outpoints.map(o => parseOutpoint(o))
-    const seen = new Set<string>()
-    for (const p of parsed) {
-      const key = `${p.txid}.${p.vout}`
-      if (seen.has(key)) throw new Error(`Duplicate outpoint: ${key}`)
-      seen.add(key)
-    }
-    const beefBin = inputBEEF ?? await buildBeefForOutpoints(outpoints)
-    const beef = Beef.fromBinary(beefBin)
-    const results: { outpoint: string; txid?: string; success: boolean; error?: string }[] = []
-    for (let idx = 0; idx < parsed.length; idx++) {
-      const { txid, vout } = parsed[idx]
-      const outpoint = outpoints[idx]
-      try {
-        const resultTxid = await importSingleOutpoint(wallet, beef, beefBin, outpoint, txid, vout, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup))
-        results.push({ outpoint, txid: resultTxid, success: true })
-      } catch (err: unknown) {
-        results.push({ outpoint, success: false, error: err instanceof Error ? err.message : String(err) })
-      }
-    }
-    return results
+    return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup), inputBEEF)
   }
   /**
    * Adds `Knex` based storage to a `Wallet` configured by `Setup.createWalletOnly`

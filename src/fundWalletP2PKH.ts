@@ -16,14 +16,20 @@ import {
 } from '@bsv/sdk'
 import { KeyPairAddress } from './SetupWallet'
 
+export interface ParsedOutpoint {
+  outpoint: string
+  txid: string
+  vout: number
+}
+
 /** Strictly parse an outpoint string into txid and vout components. */
-export function parseOutpoint(s: string): { txid: string; vout: number } {
+export function parseOutpoint(s: string): ParsedOutpoint {
   const m = /^([0-9a-fA-F]{64})\.(\d+)$/.exec(s)
   if (!m) throw new Error(`Invalid outpoint format: ${s}`)
   const txid = m[1].toLowerCase()
   const vout = Number(m[2])
   if (!Number.isSafeInteger(vout) || vout < 0) throw new Error(`Invalid vout in outpoint: ${s}`)
-  return { txid, vout }
+  return { outpoint: s, txid, vout }
 }
 
 /** Parse raw hex into a Transaction and assert its hash matches the expected txid. */
@@ -110,12 +116,11 @@ export async function importSingleOutpoint(
   wallet: WalletInterface,
   beef: Beef,
   beefBin: BEEF,
-  outpoint: string,
-  txid: string,
-  vout: number,
+  parsed: ParsedOutpoint,
   p2pkhKey: KeyPairAddress,
   getUnlockP2PKH: (priv: KeyPairAddress['privateKey'], satoshis: number) => ScriptTemplateUnlock
 ): Promise<string> {
+  const { outpoint, txid, vout } = parsed
   const btx = beef.findTxid(txid)
   if (!btx?.tx) throw new Error(`Transaction ${txid} not found in inputBEEF`)
   if (vout < 0 || vout >= btx.tx.outputs.length) throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`)
@@ -134,6 +139,40 @@ export async function importSingleOutpoint(
     return resolveAutoSigned(car, txid, vout)
   }
   return signAndComplete(wallet, car.signableTransaction, txid, vout, satoshis, p2pkhKey, getUnlockP2PKH)
+}
+
+/**
+ * Funds a BRC-100 wallet by importing P2PKH UTXOs.
+ *
+ * Accepts outpoints + a P2PKH key pair, optionally with a pre-built BEEF.
+ * If no BEEF is provided, one is built via buildBeefForOutpoints.
+ */
+export async function fundWalletFromP2PKHOutpoints(
+  wallet: WalletInterface,
+  outpoints: string[],
+  p2pkhKey: KeyPairAddress,
+  getUnlockP2PKH: (priv: KeyPairAddress['privateKey'], satoshis: number) => ScriptTemplateUnlock,
+  inputBEEF?: BEEF
+): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
+  const parsed = outpoints.map(o => parseOutpoint(o))
+  const seen = new Set<string>()
+  for (const p of parsed) {
+    const key = `${p.txid}.${p.vout}`
+    if (seen.has(key)) throw new Error(`Duplicate outpoint: ${key}`)
+    seen.add(key)
+  }
+  const beefBin = inputBEEF ?? await buildBeefForOutpoints(outpoints)
+  const beef = Beef.fromBinary(beefBin)
+  const results: { outpoint: string; txid?: string; success: boolean; error?: string }[] = []
+  for (const p of parsed) {
+    try {
+      const resultTxid = await importSingleOutpoint(wallet, beef, beefBin, p, p2pkhKey, getUnlockP2PKH)
+      results.push({ outpoint: p.outpoint, txid: resultTxid, success: true })
+    } catch (err: unknown) {
+      results.push({ outpoint: p.outpoint, success: false, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  return results
 }
 
 /**
