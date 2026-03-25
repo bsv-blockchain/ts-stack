@@ -2,7 +2,7 @@ import { Transaction as BsvTransaction, Beef, ChainTracker, Utils, WalletLoggerI
 import { ServiceCollection, ServiceToCall } from './ServiceCollection'
 import { createDefaultWalletServicesOptions } from './createDefaultWalletServicesOptions'
 import { WhatsOnChain } from './providers/WhatsOnChain'
-import { updateExchangeratesapi } from './providers/exchangeRates'
+import { updateChaintracksFiatExchangeRates, updateExchangeratesapi } from './providers/exchangeRates'
 import { ARC } from './providers/ARC'
 import { Bitails } from './providers/Bitails'
 import { getBeefForTxid } from './providers/getBeefForTxid'
@@ -120,8 +120,13 @@ export class Services implements WalletServices {
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getScriptHashHistory.bind(this.whatsonchain) })
 
     //prettier-ignore
-    this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate')
-      .add({ name: 'exchangeratesapi', service: updateExchangeratesapi })
+    this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate');
+    if (this.options.exchangeratesapiKey)
+      // If the api key for paid service is set, only use that sesrvice.
+      this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi });
+    else
+      // Otherwise use the chaintracks service
+      this.updateFiatExchangeRateServices.add({ name: 'ChaintracksFiatRates', service: updateChaintracksFiatExchangeRates });
   }
 
   getServicesCallHistory(reset?: boolean): ServicesCallHistory {
