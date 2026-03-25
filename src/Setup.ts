@@ -1,7 +1,6 @@
 import { Knex, knex as makeKnex } from 'knex'
 import { KeyPairAddress, SetupWallet, SetupWalletClient } from './SetupWallet'
 import {
-  Beef,
   BEEF,
   CachedKeyDeriver,
   CreateActionArgs,
