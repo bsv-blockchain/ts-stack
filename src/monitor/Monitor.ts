@@ -210,6 +210,7 @@ export class Monitor {
     this._otherTasks.push(new TaskReviewUtxos(this))
     this._otherTasks.push(new TaskReviewDoubleSpends(this))
     this._otherTasks.push(new TaskReviewProvenTxs(this))
+    this._tasks.push(new TaskReviewDoubleSpends(this))
 
     this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
     //this._otherTasks.push(new TaskSyncWhenIdle(this))

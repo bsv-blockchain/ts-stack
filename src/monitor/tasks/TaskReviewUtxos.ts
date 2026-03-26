@@ -5,8 +5,9 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
- * Review users incrementally for invalid change / invalid spendable outputs using
- * the existing specOpInvalidChange listOutputs behavior.
+ * Use the reviewByIdentityKey method to review the utxos of a specific user by their identityKey.
+ * 
+ * The task itself is disabled and will not run on a schedule; review must be triggered manually by calling reviewByIdentityKey.
  */
 export class TaskReviewUtxos extends WalletMonitorTask {
   static taskName = 'ReviewUtxos'
@@ -23,40 +24,22 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     super(monitor, TaskReviewUtxos.taskName)
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
     return {
-      run:
-        TaskReviewUtxos.checkNow ||
-        (this.triggerMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerMsecs)
+      run: false
     }
   }
 
   async runTask(): Promise<string> {
     TaskReviewUtxos.checkNow = false
+    return 'TaskReviewUtxos is disabled; use reviewByIdentityKey instead.\n'
+  }
 
-    const users = await this.storage.runAsStorageProvider(async sp => {
-      return await sp.findUsers({ partial: {}, paged: { limit: this.userLimit, offset: this.userOffset } })
-    })
-
-    if (users.length === 0) {
-      await this.monitor.logEvent(
-        TaskReviewUtxos.taskName,
-        JSON.stringify({
-          reviewedUsers: 0,
-          affectedUsers: 0,
-          userLimit: this.userLimit,
-          userOffset: this.userOffset,
-          tags: this.tags
-        })
-      )
-      return '0 users reviewed\n'
-    }
-
-    let log = ''
-    const findings: Array<{ userId: number; identityKey: string; outputs: number; total: number }> = []
+  async reviewByIdentityKey(identityKey: string, mode: 'all' | 'change' = 'all'): Promise<string> {
+    const tags = ['release', ...(mode === 'all' ? ['all'] : [])]
     const vargs: Validation.ValidListOutputsArgs = {
       basket: specOpInvalidChange,
-      tags: [...this.tags],
+      tags,
       tagQueryMode: 'all',
       includeLockingScripts: false,
       includeTransactions: false,
@@ -69,40 +52,26 @@ export class TaskReviewUtxos extends WalletMonitorTask {
       knownTxids: []
     }
 
-    await this.storage.runAsStorageProvider(async sp => {
-      for (const user of users) {
-        const auth = { userId: user.userId, identityKey: user.identityKey }
-        const result = await sp.listOutputs(auth, vargs)
-        if (result.totalOutputs > 0) {
-          const total = result.outputs.reduce((sum, output) => sum + output.satoshis, 0)
-          findings.push({ userId: user.userId, identityKey: user.identityKey, outputs: result.totalOutputs, total })
-          log += this.toUserLog(user, result.outputs, result.totalOutputs, total)
-        }
+    return await this.storage.runAsStorageProvider(async sp => {
+      const user = (await sp.findUsers({ partial: { identityKey } }))[0]
+      if (!user) {
+        return `identityKey ${identityKey} was not found\n`
       }
+
+      const auth = { userId: user.userId, identityKey: user.identityKey }
+      const result = await sp.listOutputs(auth, vargs)
+      if (result.totalOutputs === 0) {
+        return `userId ${user.userId}: no invalid utxos found, ${user.identityKey}\n`
+      }
+
+      const total = result.outputs.reduce((sum, output) => sum + output.satoshis, 0)
+      return this.toUserLog(user, result.outputs, result.totalOutputs, total, tags)
     })
-
-    await this.monitor.logEvent(
-      TaskReviewUtxos.taskName,
-      JSON.stringify({
-        reviewedUsers: users.length,
-        affectedUsers: findings.length,
-        userLimit: this.userLimit,
-        userOffset: this.userOffset,
-        tags: this.tags,
-        findings
-      })
-    )
-
-    if (!log) {
-      return `${users.length} users reviewed, no invalid utxos found\n`
-    }
-
-    return `${users.length} users reviewed\n${log}`
   }
 
-  private toUserLog(user: TableUser, outputs: WalletOutput[], totalOutputs: number, total: number): string {
-    const action = this.tags.includes('release') ? 'updated to unspendable' : 'found'
-    const target = this.tags.includes('all') ? 'spendable utxos' : 'spendable change utxos'
+  private toUserLog(user: TableUser, outputs: WalletOutput[], totalOutputs: number, total: number, tags: string[]): string {
+    const action = tags.includes('release') ? 'updated to unspendable' : 'found'
+    const target = tags.includes('all') ? 'spendable utxos' : 'spendable change utxos'
     let log = `userId ${user.userId}: ${totalOutputs} ${target} ${action}, total ${total}, ${user.identityKey}\n`
     for (const output of outputs) {
       log += `  ${output.outpoint} ${output.satoshis} now ${output.spendable ? 'spendable' : 'spent'}\n`

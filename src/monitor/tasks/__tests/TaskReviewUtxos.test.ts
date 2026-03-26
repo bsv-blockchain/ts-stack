@@ -41,7 +41,7 @@ function makeMonitor(users: any[], outputsByUserId: Record<number, any[]>) {
 }
 
 describe('TaskReviewUtxos', () => {
-  test('0 reviews paged users and logs findings for invalid utxos', async () => {
+  test('0 reviewByIdentityKey reviews all invalid utxos for the matching user', async () => {
     const users = [makeUser(1), makeUser(2)]
     const m = makeMonitor(
       users,
@@ -52,9 +52,9 @@ describe('TaskReviewUtxos', () => {
     )
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.runTask()
+    const log = await task.reviewByIdentityKey('key-1')
 
-    expect(m.findUsers).toHaveBeenCalledWith({ partial: {}, paged: { limit: 10, offset: 0 } })
+    expect(m.findUsers).toHaveBeenCalledWith({ partial: { identityKey: 'key-1' } })
     expect(m.listOutputs).toHaveBeenCalledWith(
       { userId: 1, identityKey: 'key-1' },
       expect.objectContaining({
@@ -65,31 +65,51 @@ describe('TaskReviewUtxos', () => {
         offset: 0
       })
     )
-    expect(m.logEvent).toHaveBeenCalledTimes(1)
-    expect(log).toContain('2 users reviewed')
+    expect(m.logEvent).not.toHaveBeenCalled()
     expect(log).toContain('userId 1: 1 spendable utxos updated to unspendable')
     expect(log).toContain('tx1.0 50 now spent')
   })
 
-  test('1 returns no-findings summary when users have no invalid utxos', async () => {
+  test('1 reviewByIdentityKey limits review to invalid change utxos when mode is change', async () => {
+    const users = [makeUser(1)]
+    const m = makeMonitor(users, { 1: [makeOutput('tx1.0', 50, false)] })
+    const task = new TaskReviewUtxos(m.monitor as any)
+
+    await task.reviewByIdentityKey('key-1', 'change')
+
+    expect(m.listOutputs).toHaveBeenCalledWith(
+      { userId: 1, identityKey: 'key-1' },
+      expect.objectContaining({
+        tags: ['release']
+      })
+    )
+  })
+
+  test('2 reviewByIdentityKey returns no-findings summary when the user has no invalid utxos', async () => {
     const users = [makeUser(1)]
     const m = makeMonitor(users, {})
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.runTask()
+    const log = await task.reviewByIdentityKey('key-1')
 
-    expect(m.logEvent).toHaveBeenCalledTimes(1)
-    expect(log).toBe('1 users reviewed, no invalid utxos found\n')
+    expect(log).toBe('userId 1: no invalid utxos found, key-1\n')
   })
 
-  test('2 returns zero-users summary when the page is empty', async () => {
+  test('3 reviewByIdentityKey reports when the identity key does not exist', async () => {
     const m = makeMonitor([], {})
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.runTask()
+    const log = await task.reviewByIdentityKey('missing-key')
 
     expect(m.listOutputs).not.toHaveBeenCalled()
-    expect(m.logEvent).toHaveBeenCalledTimes(1)
-    expect(log).toBe('0 users reviewed\n')
+    expect(log).toBe('identityKey missing-key was not found\n')
+  })
+
+  test('4 trigger and runTask are stubbed out', async () => {
+    const m = makeMonitor([], {})
+    const task = new TaskReviewUtxos(m.monitor as any)
+
+    expect(task.trigger(Date.now())).toEqual({ run: false })
+    await expect(task.runTask()).resolves.toBe('TaskReviewUtxos is disabled; use reviewByIdentityKey instead.\n')
   })
 })
