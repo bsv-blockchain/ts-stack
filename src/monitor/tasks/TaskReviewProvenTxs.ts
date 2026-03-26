@@ -35,21 +35,55 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
 
   static checkNow = false
 
+  triggerNextMsecs: number
+
   constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 10,
     public maxHeightsPerRun = 100,
-    public minBlockAge = 100
+    public minBlockAge = 100,
+    public triggerQuickMsecs = Monitor.oneMinute * 1
   ) {
     super(monitor, TaskReviewProvenTxs.taskName)
+    this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
   trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskReviewProvenTxs.checkNow ||
-        (this.triggerMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerMsecs)
+        (this.triggerNextMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerNextMsecs)
     }
+  }
+
+  async runTask(): Promise<string> {
+    TaskReviewProvenTxs.checkNow = false
+
+    const chaintracks = this.monitor.chaintracksWithEvents || this.monitor.chaintracks
+    const tipHeight = await chaintracks.currentHeight()
+    const maxEligibleHeight = tipHeight - this.minBlockAge
+    const lastReviewedHeight = await this.getLastReviewedHeight()
+    const startHeight = lastReviewedHeight === undefined ? 0 : lastReviewedHeight + 1
+    const endHeight = Math.min(startHeight + this.maxHeightsPerRun - 1, maxEligibleHeight)
+    const range = new HeightRange(startHeight, endHeight)
+    if (range.isEmpty) return ''
+
+    let log = `reviewing heights ${range.minHeight}..${range.maxHeight} tip=${tipHeight} minAge=${this.minBlockAge} maxPerRun=${this.maxHeightsPerRun}\n`
+    const review = await this.reviewHeightRange(range)
+    log += review.log
+
+    return JSON.stringify({
+      tipHeight,
+      minBlockAge: this.minBlockAge,
+      maxHeightsPerRun: this.maxHeightsPerRun,
+      startHeight,
+      reviewedThroughHeight: range.maxHeight,
+      reviewedHeights: review.reviewedHeights,
+      mismatchedHeights: review.mismatchedHeights,
+      affectedTransactions: review.affectedTransactions,
+      updatedTransactions: review.updatedTransactions,
+      reviewLog: log
+    } satisfies ReviewProvenTxsCheckpoint)
   }
 
   async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> {
@@ -61,7 +95,13 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       updatedTransactions: 0
     }
 
-    if (range.isEmpty) return result
+    if (range.isEmpty) {
+      this.triggerNextMsecs = this.triggerMsecs
+      return result
+    }
+
+    // If there is work to do, trigger a quick follow-up to continue processing the next range.
+    this.triggerNextMsecs = this.triggerQuickMsecs
 
     const chaintracks = this.monitor.chaintracksWithEvents || this.monitor.chaintracks
 
@@ -117,36 +157,15 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       }
     }
 
-    return undefined
-  }
+    let lastReviewedHeight: number | undefined = undefined;
+    await this.storage.runAsStorageProvider(async sp => {
+      // Start at height of first proven tx when it appears...
+      const ptxs = await sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false })
+      if (ptxs.length > 0) {
+        lastReviewedHeight = ptxs[0].height - 1;
+      }
+    })
 
-  async runTask(): Promise<string> {
-    TaskReviewProvenTxs.checkNow = false
-
-    const chaintracks = this.monitor.chaintracksWithEvents || this.monitor.chaintracks
-    const tipHeight = await chaintracks.currentHeight()
-    const maxEligibleHeight = tipHeight - this.minBlockAge
-    const lastReviewedHeight = await this.getLastReviewedHeight()
-    const startHeight = lastReviewedHeight === undefined ? 0 : lastReviewedHeight + 1
-    const endHeight = Math.min(startHeight + this.maxHeightsPerRun - 1, maxEligibleHeight)
-    const range = new HeightRange(startHeight, endHeight)
-    if (range.isEmpty) return ''
-
-    let log = `reviewing heights ${range.minHeight}..${range.maxHeight} tip=${tipHeight} minAge=${this.minBlockAge} maxPerRun=${this.maxHeightsPerRun}\n`
-    const review = await this.reviewHeightRange(range)
-    log += review.log
-
-    return JSON.stringify({
-      tipHeight,
-      minBlockAge: this.minBlockAge,
-      maxHeightsPerRun: this.maxHeightsPerRun,
-      startHeight,
-      reviewedThroughHeight: range.maxHeight,
-      reviewedHeights: review.reviewedHeights,
-      mismatchedHeights: review.mismatchedHeights,
-      affectedTransactions: review.affectedTransactions,
-      updatedTransactions: review.updatedTransactions,
-      reviewLog: log
-    } satisfies ReviewProvenTxsCheckpoint)
+    return lastReviewedHeight
   }
 }
