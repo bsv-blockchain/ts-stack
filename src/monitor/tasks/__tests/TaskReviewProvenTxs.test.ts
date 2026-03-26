@@ -131,9 +131,9 @@ describe('TaskReviewProvenTxs tests', () => {
       ]
     })
     const task = new TaskReviewProvenTxs(m.monitor as any)
-    jest.spyOn(task.storage, 'runAsStorageProvider').mockImplementation(async (fn: any) =>
-      await fn({ findMonitorEvents: m.findMonitorEvents })
-    )
+    jest
+      .spyOn(task.storage, 'runAsStorageProvider')
+      .mockImplementation(async (fn: any) => await fn({ findMonitorEvents: m.findMonitorEvents }))
 
     const lastReviewedHeight = await task.getLastReviewedHeight()
 

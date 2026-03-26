@@ -115,9 +115,9 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
       unfails: unfails.length,
       reviewLimit: this.reviewLimit,
       provenTxReqIds: unfails,
-      resumeOffset:
-        lastRetainedDoubleSpendIndex >= 0 ? reqs.sourceOffset! + retainedDoubleSpendCount - 1 : undefined,
-      expectedProvenTxReqId: lastRetainedDoubleSpendIndex >= 0 ? reviewed[lastRetainedDoubleSpendIndex].provenTxReqId : undefined,
+      resumeOffset: lastRetainedDoubleSpendIndex >= 0 ? reqs.sourceOffset! + retainedDoubleSpendCount - 1 : undefined,
+      expectedProvenTxReqId:
+        lastRetainedDoubleSpendIndex >= 0 ? reviewed[lastRetainedDoubleSpendIndex].provenTxReqId : undefined,
       reviewLog: `${reviewed.length} reqs with status 'doubleSpend'\n${log}`
     } satisfies ReviewDoubleSpendsCheckpoint)
   }

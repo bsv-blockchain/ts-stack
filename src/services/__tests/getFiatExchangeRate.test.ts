@@ -46,7 +46,9 @@ describe('getFiatExchangeRate service tests', () => {
     const services = new Services(options)
     expect(services.updateFiatExchangeRateServices.count).toBe(1)
     expect(services.updateFiatExchangeRateServices.name).toBe('exchangeratesapi')
-    expect(services.updateFiatExchangeRateServices.services.find(s => s.name === 'ChaintracksFiatRates')).toBeUndefined()
+    expect(
+      services.updateFiatExchangeRateServices.services.find(s => s.name === 'ChaintracksFiatRates')
+    ).toBeUndefined()
 
     const exchangeratesapiService = jest.fn(async () => makeFetchedRates({ EUR: 0.92 }))
     services.updateFiatExchangeRateServices.services[0].service = exchangeratesapiService
@@ -68,16 +70,18 @@ describe('getFiatExchangeRate service tests', () => {
     const options = Services.createDefaultOptions('main')
     const services = new Services(options)
 
-    jest.spyOn(services, 'updateFiatExchangeRates').mockImplementation(async (_targetCurrencies: FiatCurrencyCode[]) => {
-      services.options.fiatExchangeRates = {
-        ...services.options.fiatExchangeRates,
-        rates: {
-          USD: 1
+    jest
+      .spyOn(services, 'updateFiatExchangeRates')
+      .mockImplementation(async (_targetCurrencies: FiatCurrencyCode[]) => {
+        services.options.fiatExchangeRates = {
+          ...services.options.fiatExchangeRates,
+          rates: {
+            USD: 1
+          }
         }
-      }
 
-      return services.options.fiatExchangeRates
-    })
+        return services.options.fiatExchangeRates
+      })
 
     await expect(services.getFiatExchangeRate('EUR')).rejects.toThrow(WERR_INVALID_PARAMETER)
     await expect(services.getFiatExchangeRate('EUR')).rejects.toThrow(
@@ -89,16 +93,18 @@ describe('getFiatExchangeRate service tests', () => {
     const options = Services.createDefaultOptions('main')
     const services = new Services(options)
 
-    jest.spyOn(services, 'updateFiatExchangeRates').mockImplementation(async (_targetCurrencies: FiatCurrencyCode[]) => {
-      services.options.fiatExchangeRates = {
-        ...services.options.fiatExchangeRates,
-        rates: {
-          EUR: 0.8
+    jest
+      .spyOn(services, 'updateFiatExchangeRates')
+      .mockImplementation(async (_targetCurrencies: FiatCurrencyCode[]) => {
+        services.options.fiatExchangeRates = {
+          ...services.options.fiatExchangeRates,
+          rates: {
+            EUR: 0.8
+          }
         }
-      }
 
-      return services.options.fiatExchangeRates
-    })
+        return services.options.fiatExchangeRates
+      })
 
     await expect(services.getFiatExchangeRate('EUR', 'GBP')).rejects.toThrow(WERR_INVALID_PARAMETER)
     await expect(services.getFiatExchangeRate('EUR', 'GBP')).rejects.toThrow(

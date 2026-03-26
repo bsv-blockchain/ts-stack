@@ -6,7 +6,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
  * Use the reviewByIdentityKey method to review the utxos of a specific user by their identityKey.
- * 
+ *
  * The task itself is disabled and will not run on a schedule; review must be triggered manually by calling reviewByIdentityKey.
  */
 export class TaskReviewUtxos extends WalletMonitorTask {
@@ -69,7 +69,13 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     })
   }
 
-  private toUserLog(user: TableUser, outputs: WalletOutput[], totalOutputs: number, total: number, tags: string[]): string {
+  private toUserLog(
+    user: TableUser,
+    outputs: WalletOutput[],
+    totalOutputs: number,
+    total: number,
+    tags: string[]
+  ): string {
     const action = tags.includes('release') ? 'updated to unspendable' : 'found'
     const target = tags.includes('all') ? 'spendable utxos' : 'spendable change utxos'
     let log = `userId ${user.userId}: ${totalOutputs} ${target} ${action}, total ${total}, ${user.identityKey}\n`

@@ -43,13 +43,10 @@ function makeMonitor(users: any[], outputsByUserId: Record<number, any[]>) {
 describe('TaskReviewUtxos', () => {
   test('0 reviewByIdentityKey reviews all invalid utxos for the matching user', async () => {
     const users = [makeUser(1), makeUser(2)]
-    const m = makeMonitor(
-      users,
-      {
-        1: [makeOutput('tx1.0', 50, false)],
-        2: []
-      }
-    )
+    const m = makeMonitor(users, {
+      1: [makeOutput('tx1.0', 50, false)],
+      2: []
+    })
     const task = new TaskReviewUtxos(m.monitor as any)
 
     const log = await task.reviewByIdentityKey('key-1')

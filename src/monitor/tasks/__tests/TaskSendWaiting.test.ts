@@ -46,7 +46,10 @@ describe('TaskSendWaiting', () => {
   test('0 uses the normal cadence after a partial waiting chunk and preserves storage order', async () => {
     const now = new Date('2026-01-01T12:00:00.000Z')
     jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
-    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T11:59:40.000Z')), makeReq(2, 'tx2', new Date('2026-01-01T11:59:50.000Z'))]
+    const reqs = [
+      makeReq(1, 'tx1', new Date('2026-01-01T11:59:40.000Z')),
+      makeReq(2, 'tx2', new Date('2026-01-01T11:59:50.000Z'))
+    ]
     const m = makeMonitor(reqs)
     const task = new TaskSendWaiting(m.monitor as any, 80, 7_000, 300_000, 10, 5)
     jest.spyOn(task, 'processUnsent').mockResolvedValue('')
@@ -67,7 +70,10 @@ describe('TaskSendWaiting', () => {
   test('0a waits only until all fetched reqs reach the aged threshold when some are not ready yet', async () => {
     const now = new Date('2026-01-01T12:00:00.000Z')
     jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
-    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T11:59:40.000Z')), makeReq(2, 'tx2', new Date('2026-01-01T11:59:56.000Z'))]
+    const reqs = [
+      makeReq(1, 'tx1', new Date('2026-01-01T11:59:40.000Z')),
+      makeReq(2, 'tx2', new Date('2026-01-01T11:59:56.000Z'))
+    ]
     const m = makeMonitor(reqs)
     const task = new TaskSendWaiting(m.monitor as any, 80, 7_000, 300_000, 10, 5)
     jest.spyOn(task, 'processUnsent').mockResolvedValue('')

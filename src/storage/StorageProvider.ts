@@ -146,7 +146,6 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return roots
   }
 
-
   async findOutputsByOutpoints(
     userId: number,
     outpoints: Array<{ txid: string; vout: number }>,

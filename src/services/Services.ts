@@ -123,10 +123,13 @@ export class Services implements WalletServices {
     this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate');
     if (this.options.exchangeratesapiKey)
       // If the api key for paid service is set, only use that sesrvice.
-      this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi });
+      this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi })
     else
       // Otherwise use the chaintracks service
-      this.updateFiatExchangeRateServices.add({ name: 'ChaintracksFiatRates', service: updateChaintracksFiatExchangeRates });
+      this.updateFiatExchangeRateServices.add({
+        name: 'ChaintracksFiatRates',
+        service: updateChaintracksFiatExchangeRates
+      })
   }
 
   getServicesCallHistory(reset?: boolean): ServicesCallHistory {

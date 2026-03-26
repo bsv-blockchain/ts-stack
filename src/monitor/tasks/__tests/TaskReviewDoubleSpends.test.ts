@@ -15,7 +15,11 @@ function makeReq(provenTxReqId: number, txid: string, updatedAt: Date): any {
   }
 }
 
-function makeMonitor(statusByTxid: Record<string, string>, reqs: any[], monitorEvents: Array<{ details?: string }> = []) {
+function makeMonitor(
+  statusByTxid: Record<string, string>,
+  reqs: any[],
+  monitorEvents: Array<{ details?: string }> = []
+) {
   const updateProvenTxReq = jest.fn().mockResolvedValue(undefined)
   const findProvenTxReqs = jest.fn(async ({ paged }: any) => reqs.slice(paged.offset, paged.offset + paged.limit))
   const findMonitorEvents = jest.fn().mockResolvedValue(monitorEvents)
@@ -130,11 +134,9 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(2, 'tx2', new Date('2026-01-01T10:05:00.000Z')),
       makeReq(3, 'tx3', new Date('2026-01-01T10:10:00.000Z'))
     ]
-    const m = makeMonitor(
-      { tx2: 'unknown', tx3: 'success' },
-      reqs,
-      [{ details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 2 }) }]
-    )
+    const m = makeMonitor({ tx2: 'unknown', tx3: 'success' }, reqs, [
+      { details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 2 }) }
+    ])
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 2, 60)
 
     const log = await task.runTask()
@@ -160,11 +162,9 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(10, 'tx10', new Date('2026-01-01T10:00:00.000Z')),
       makeReq(11, 'tx11', new Date('2026-01-01T10:05:00.000Z'))
     ]
-    const m = makeMonitor(
-      { tx10: 'unknown', tx11: 'success' },
-      reqs,
-      [{ details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 99 }) }]
-    )
+    const m = makeMonitor({ tx10: 'unknown', tx11: 'success' }, reqs, [
+      { details: JSON.stringify({ resumeOffset: 1, expectedProvenTxReqId: 99 }) }
+    ])
     const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 2, 60)
 
     const log = await task.runTask()

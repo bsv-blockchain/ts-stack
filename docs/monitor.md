@@ -24,6 +24,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [DeactivedHeader](#interface-deactivedheader) |
 | [MonitorDaemonSetup](#interface-monitordaemonsetup) |
 | [MonitorOptions](#interface-monitoroptions) |
+| [ReviewHeightRangeResult](#interface-reviewheightrangeresult) |
 | [TaskPurgeParams](#interface-taskpurgeparams) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -87,10 +88,11 @@ export interface MonitorDaemonSetup {
     services?: Services;
     monitor?: Monitor;
     chaintracks?: Chaintracks;
+    startupTaskMode?: MonitorStartupTaskMode;
 }
 ```
 
-See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [Monitor](./monitor.md#class-monitor), [Services](./services.md#class-services), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WalletStorageManager](./storage.md#class-walletstoragemanager)
+See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [Monitor](./monitor.md#class-monitor), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [Services](./services.md#class-services), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [WalletServicesOptions](./client.md#interface-walletservicesoptions), [WalletStorageManager](./storage.md#class-walletstoragemanager)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -104,6 +106,7 @@ export interface MonitorOptions {
     storage: MonitorStorage;
     chaintracks: ChaintracksClientApi;
     chaintracksWithEvents?: Chaintracks;
+    startupTaskMode?: MonitorStartupTaskMode;
     msecsWaitPerMerkleProofServiceReq: number;
     taskRunWaitMsecs: number;
     abandonedMsecs: number;
@@ -119,7 +122,7 @@ export interface MonitorOptions {
 }
 ```
 
-See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [WalletServices](./client.md#interface-walletservices)
+See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [WalletServices](./client.md#interface-walletservices)
 
 ###### Property EventSourceClass
 
@@ -176,6 +179,21 @@ saveLastSSEEventId?: (lastEventId: string) => Promise<void>
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: ReviewHeightRangeResult
+
+```ts
+export interface ReviewHeightRangeResult {
+    log: string;
+    reviewedHeights: number;
+    mismatchedHeights: number;
+    affectedTransactions: number;
+    updatedTransactions: number;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: TaskPurgeParams
 
 The database stores a variety of data that may be considered transient.
@@ -216,15 +234,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | |
 | --- | --- |
-| [Monitor](#class-monitor) | [TaskNewHeader](#class-tasknewheader) |
-| [MonitorDaemon](#class-monitordaemon) | [TaskPurge](#class-taskpurge) |
-| [TaskArcadeSSE](#class-taskarcadesse) | [TaskReorg](#class-taskreorg) |
-| [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReviewStatus](#class-taskreviewstatus) |
-| [TaskCheckNoSends](#class-taskchecknosends) | [TaskSendWaiting](#class-tasksendwaiting) |
-| [TaskClock](#class-taskclock) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
-| [TaskFailAbandoned](#class-taskfailabandoned) | [TaskUnFail](#class-taskunfail) |
-| [TaskMineBlock](#class-taskmineblock) | [WalletMonitorTask](#class-walletmonitortask) |
-| [TaskMonitorCallHistory](#class-taskmonitorcallhistory) |  |
+| [Monitor](#class-monitor) | [TaskPurge](#class-taskpurge) |
+| [MonitorDaemon](#class-monitordaemon) | [TaskReorg](#class-taskreorg) |
+| [TaskArcadeSSE](#class-taskarcadesse) | [TaskReviewDoubleSpends](#class-taskreviewdoublespends) |
+| [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReviewProvenTxs](#class-taskreviewproventxs) |
+| [TaskCheckNoSends](#class-taskchecknosends) | [TaskReviewStatus](#class-taskreviewstatus) |
+| [TaskClock](#class-taskclock) | [TaskReviewUtxos](#class-taskreviewutxos) |
+| [TaskFailAbandoned](#class-taskfailabandoned) | [TaskSendWaiting](#class-tasksendwaiting) |
+| [TaskMineBlock](#class-taskmineblock) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
+| [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [TaskUnFail](#class-taskunfail) |
+| [TaskNewHeader](#class-tasknewheader) | [WalletMonitorTask](#class-walletmonitortask) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -237,7 +256,7 @@ and potentially that reorgs update proofs that were already received.
 
 ```ts
 export class Monitor {
-    static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: Chaintracks): MonitorOptions 
+    static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: Chaintracks, startupTaskMode: MonitorStartupTaskMode = "none"): MonitorOptions 
     options: MonitorOptions;
     services: Services | WalletServices;
     chain: Chain;
@@ -293,7 +312,7 @@ export class Monitor {
 }
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [DeactivedHeader](./monitor.md#interface-deactivedheader), [MonitorOptions](./monitor.md#interface-monitoroptions), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [TaskPurgeParams](./monitor.md#interface-taskpurgeparams), [WalletMonitorTask](./monitor.md#class-walletmonitortask), [WalletServices](./client.md#interface-walletservices)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [DeactivedHeader](./monitor.md#interface-deactivedheader), [MonitorOptions](./monitor.md#interface-monitoroptions), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [TaskPurgeParams](./monitor.md#interface-taskpurgeparams), [WalletMonitorTask](./monitor.md#class-walletmonitortask), [WalletServices](./client.md#interface-walletservices)
 
 ###### Property _otherTasks
 
@@ -316,7 +335,6 @@ See also: [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 ###### Method addDefaultTasks
 
 Default tasks with settings appropriate for a single user storage
-possibly with sync'ing enabled
 
 ```ts
 addDefaultTasks(): void 
@@ -325,7 +343,6 @@ addDefaultTasks(): void
 ###### Method addMultiUserTasks
 
 Tasks appropriate for multi-user storage
-without sync'ing enabled.
 
 ```ts
 addMultiUserTasks(): void 
@@ -799,6 +816,61 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Class: TaskReviewDoubleSpends
+
+Review recent reqs in terminal 'doubleSpend' state and move any false positives
+back to 'unfail' so existing recovery handling can re-process them.
+
+```ts
+export class TaskReviewDoubleSpends extends WalletMonitorTask {
+    static taskName = "ReviewDoubleSpends";
+    static checkNow = false;
+    triggerNextMsecs: number;
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute * 1) 
+    trigger(nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async getLastReviewedCheckpoint(): Promise<{
+        resumeOffset: number;
+        expectedProvenTxReqId?: number;
+    } | undefined> 
+    async runTask(): Promise<string> 
+}
+```
+
+See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: TaskReviewProvenTxs
+
+Backup verification task for recent proven_txs records.
+
+Reorg handling should normally be driven by TaskReorg via deactivated-header events.
+This task runs a lagged audit over recent heights and only reproves transactions when
+the currently canonical merkleRoot at a height no longer matches stored proven_txs roots.
+
+```ts
+export class TaskReviewProvenTxs extends WalletMonitorTask {
+    static taskName = "ReviewProvenTxs";
+    static checkNow = false;
+    triggerNextMsecs: number;
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10, public maxHeightsPerRun = 100, public minBlockAge = 100, public triggerQuickMsecs = Monitor.oneMinute * 1) 
+    trigger(nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async runTask(): Promise<string> 
+    async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> 
+    async getLastReviewedHeight(): Promise<number | undefined> 
+}
+```
+
+See also: [HeightRange](./services.md#class-heightrange), [Monitor](./monitor.md#class-monitor), [ReviewHeightRangeResult](./monitor.md#interface-reviewheightrangeresult), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Class: TaskReviewStatus
 
 Notify Transaction records of changes in ProvenTxReq records they may have missed.
@@ -834,6 +906,30 @@ static checkNow = false
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Class: TaskReviewUtxos
+
+Use the reviewByIdentityKey method to review the utxos of a specific user by their identityKey.
+
+The task itself is disabled and will not run on a schedule; review must be triggered manually by calling reviewByIdentityKey.
+
+```ts
+export class TaskReviewUtxos extends WalletMonitorTask {
+    static taskName = "ReviewUtxos";
+    static checkNow = false;
+    constructor(monitor: Monitor, public triggerMsecs = 0, public userLimit = 10, public userOffset = 0, public tags: string[] = ["release", "all"]) 
+    trigger(_nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async runTask(): Promise<string> 
+    async reviewByIdentityKey(identityKey: string, mode: "all" | "change" = "all"): Promise<string> 
+}
+```
+
+See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Class: TaskSendWaiting
 
 ```ts
@@ -841,7 +937,8 @@ export class TaskSendWaiting extends WalletMonitorTask {
     static taskName = "SendWaiting";
     lastSendingRunMsecsSinceEpoch: number | undefined;
     includeSending: boolean = true;
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5) 
+    triggerNextMsecs: number;
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
     } 
@@ -851,6 +948,28 @@ export class TaskSendWaiting extends WalletMonitorTask {
 ```
 
 See also: [Monitor](./monitor.md#class-monitor), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+###### Constructor
+
+```ts
+constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
+```
+See also: [Monitor](./monitor.md#class-monitor)
+
+Argument Details
+
++ **monitor**
+  + Wallet monitor owning this task.
++ **triggerMsecs**
+  + Normal interval between SendWaiting runs when no backlog remains.
++ **agedMsecs**
+  + Minimum age a request must reach before this task will attempt to send it.
++ **sendingMsecs**
+  + Minimum interval before stale `sending` requests are included again.
++ **triggerQuickMsecs**
+  + Follow-up interval used when a full chunk was consumed and more work may remain.
++ **chunkLimit**
+  + Maximum number of waiting requests to fetch and inspect in a single run.
 
 ###### Method processUnsent
 
@@ -1041,6 +1160,24 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 #### Types
 
+| |
+| --- |
+| [MonitorStartupTaskMode](#type-monitorstartuptaskmode) |
+| [MonitorStorage](#type-monitorstorage) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+
+##### Type: MonitorStartupTaskMode
+
+```ts
+export type MonitorStartupTaskMode = "none" | "default" | "multiuser" | "alltoother"
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Type: MonitorStorage
 
 ```ts

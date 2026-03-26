@@ -157,12 +157,12 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       }
     }
 
-    let lastReviewedHeight: number | undefined = undefined;
+    let lastReviewedHeight: number | undefined = undefined
     await this.storage.runAsStorageProvider(async sp => {
       // Start at height of first proven tx when it appears...
       const ptxs = await sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false })
       if (ptxs.length > 0) {
-        lastReviewedHeight = ptxs[0].height - 1;
+        lastReviewedHeight = ptxs[0].height - 1
       }
     })
 
