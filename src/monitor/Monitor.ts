@@ -5,7 +5,6 @@ import { WalletStorageManager } from '../storage/WalletStorageManager'
 
 import { TaskPurge, TaskPurgeParams } from './tasks/TaskPurge'
 import { TaskReviewStatus } from './tasks/TaskReviewStatus'
-import { TaskSyncWhenIdle } from './tasks/TaskSyncWhenIdle'
 import { TaskFailAbandoned } from './tasks/TaskFailAbandoned'
 import { TaskCheckForProofs } from './tasks/TaskCheckForProofs'
 import { TaskClock } from './tasks/TaskClock'
@@ -210,7 +209,6 @@ export class Monitor {
     this._otherTasks.push(new TaskReviewUtxos(this))
     this._otherTasks.push(new TaskReviewDoubleSpends(this))
     this._otherTasks.push(new TaskReviewProvenTxs(this))
-    this._tasks.push(new TaskReviewDoubleSpends(this))
 
     this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
     //this._otherTasks.push(new TaskSyncWhenIdle(this))
@@ -220,7 +218,6 @@ export class Monitor {
   }
   /**
    * Default tasks with settings appropriate for a single user storage
-   * possibly with sync'ing enabled
    */
   addDefaultTasks(): void {
     this._tasks.push(new TaskClock(this))
@@ -231,9 +228,14 @@ export class Monitor {
     this._tasks.push(new TaskCheckNoSends(this))
     this._tasks.push(new TaskFailAbandoned(this, 8 * Monitor.oneMinute))
     this._tasks.push(new TaskUnFail(this))
-    //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
+    this._tasks.push(new TaskReviewDoubleSpends(this))
+    this._tasks.push(new TaskReviewProvenTxs(this))
+
+    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
+    this._otherTasks.push(new TaskReviewUtxos(this))
+
     this._tasks.push(new TaskArcadeSSE(this))
     if (this.chain === 'mock') {
       this._tasks.push(new TaskMineBlock(this))
@@ -242,7 +244,6 @@ export class Monitor {
 
   /**
    * Tasks appropriate for multi-user storage
-   * without sync'ing enabled.
    */
   addMultiUserTasks(): void {
     this._tasks.push(new TaskClock(this))
@@ -255,12 +256,11 @@ export class Monitor {
     this._tasks.push(new TaskUnFail(this))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
-
-    this._otherTasks.push(new TaskReviewUtxos(this))
-    this._otherTasks.push(new TaskReviewDoubleSpends(this))
-    this._otherTasks.push(new TaskReviewProvenTxs(this))
+    this._tasks.push(new TaskReviewDoubleSpends(this))
+    this._tasks.push(new TaskReviewProvenTxs(this))
 
     this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
+    this._otherTasks.push(new TaskReviewUtxos(this))
 
     if (this.chain === 'mock') {
       this._tasks.push(new TaskMineBlock(this))

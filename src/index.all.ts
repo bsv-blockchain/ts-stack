@@ -5,13 +5,12 @@ export * from './storage/index.all'
 export * from './services/chaintracker/index.all'
 
 export * from './Setup'
-export * from './monitor/MonitorDaemon'
+export * from './monitor/index.all'
 
 export * from './SetupClient'
 export * from './SetupWallet'
 
 export * from './CWIStyleWalletManager'
-export * from './monitor/Monitor'
 export * from './sdk/PrivilegedKeyManager'
 export * from './services/Services'
 export * from './services/providers/ArcSSEClient'
