@@ -69,6 +69,7 @@ export class ChaintracksService {
     this.port = port
 
     const app = express()
+    app.disable('x-powered-by')
     app.use(bodyParser.json())
 
     // This allows the API to be used when CORS is enforced

@@ -81,7 +81,7 @@ import { maxPossibleSatoshis } from './storage/methods/generateChange'
 import { WalletStorageManager } from './storage/WalletStorageManager'
 import { Monitor } from './monitor/Monitor'
 import { WalletSigner } from './signer/WalletSigner'
-import { randomBytesBase64, toWalletNetwork } from './utility/utilityHelpers'
+import { randomBytesBase64, toLookupNetworkPreset, toWalletNetwork } from './utility/utilityHelpers'
 import { ScriptTemplateBRC29 } from './utility/ScriptTemplateBRC29'
 import {
   Chain,
@@ -211,7 +211,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     this.lookupResolver =
       args.lookupResolver ||
       new LookupResolver({
-        networkPreset: toWalletNetwork(this.chain)
+        networkPreset: toLookupNetworkPreset(this.chain)
       })
     this.keyDeriver = args.keyDeriver
     this.storage = args.storage
@@ -656,7 +656,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
       this._trustSettingsCache = { trustSettings, expiresAt: now + TTL_MS }
     }
 
-    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort()
+    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
     // --- queryOverlay cache (2 minutes) ---
     const cacheKey = JSON.stringify({
@@ -701,13 +701,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
       this._trustSettingsCache = { trustSettings, expiresAt: now + TTL_MS }
     }
 
-    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort()
+    const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
     // Normalize attributes for a stable cache key.
     // If attributes is an object, sort its top-level keys; if it's an array, sort a shallow copy.
     let attributesKey: unknown = args.attributes
     if (args.attributes && typeof args.attributes === 'object') {
-      const keys = Object.keys(args.attributes as Record<string, unknown>).sort()
+      const keys = Object.keys(args.attributes as Record<string, unknown>).sort((a, b) => a.localeCompare(b))
       attributesKey = JSON.stringify(args.attributes, keys)
     }
 

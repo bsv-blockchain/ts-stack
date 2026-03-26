@@ -1,4 +1,4 @@
-import { Validation, WalletLoggerInterface } from '@bsv/sdk'
+import { Random, Validation, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -10,6 +10,23 @@ import { Wallet, WalletLogger } from '../../index.client'
  * An output of this satoshis amount will be adjusted to the largest fundable amount.
  */
 export const maxPossibleSatoshis = 2099999999999999
+
+/**
+ * Maximum number of change outputs to create in a single transaction.
+ *
+ * Limits how aggressively the wallet builds up its UTXO pool in one shot.
+ * When a user first imports a large UTXO, without this cap the wallet would
+ * attempt to create `numberOfDesiredUTXOs` change outputs in a single
+ * transaction.  That produces a very large transaction whose raw bytes are
+ * embedded in the BEEF of every subsequent child transaction, bloating those
+ * BEEFs and slowing down external processors.
+ *
+ * With this cap the UTXO pool builds gradually — at most 8 net new change
+ * outputs per transaction — so no single transaction becomes unreasonably
+ * large.  A pool of 144 desired UTXOs fills over roughly 18 transactions
+ * rather than 1.
+ */
+export const maxChangeOutputsPerTransaction = 8
 
 export interface GenerateChangeSdkResult {
   allocatedChangeInputs: GenerateChangeSdkChangeInput[]
@@ -58,13 +75,35 @@ export async function generateChangeSdk(
 
     const satsPerKb = params.feeModel.value || 0
 
+    /**
+     * Minimum satoshi value for a change output to be economically viable.
+     *
+     * A change output is worthless if the fee required to spend it in a
+     * future transaction equals or exceeds its value.  We compute the size
+     * of the smallest possible spend transaction (1 change input, 1 change
+     * output) and require each change output to be worth at least 2× that
+     * fee so the output still has meaningful value after it is spent.
+     *
+     * The absolute floor of 1 prevents nonsensical behaviour at fee rate 0.
+     */
+    const minSpendTxSize = transactionSize([params.changeUnlockingScriptLength], [params.changeLockingScriptLength])
+    const dustFloor = Math.max(1, Math.ceil((minSpendTxSize / 1000) * satsPerKb) * 2)
+
+    /**
+     * Effective cap on change outputs created in this transaction.
+     * Applies the per-transaction limit so that the UTXO pool grows
+     * gradually rather than all at once.
+     */
+    const maxChangeOutputs = params.maxChangeOutputs ?? maxChangeOutputsPerTransaction
+
     const randomVals = [...(params.randomVals || [])]
     const randomValsUsed: number[] = []
 
     const nextRandomVal = (): number => {
       let val = 0
       if (!randomVals || randomVals.length === 0) {
-        val = Math.random()
+        const bytes = Random(4)
+        val = (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
       } else {
         val = randomVals.shift() || 0
         randomVals.push(val)
@@ -153,7 +192,9 @@ export async function generateChangeSdk(
     feeExcess()
 
     const hasTargetNetCount = params.targetNetCount !== undefined
-    const targetNetCount = params.targetNetCount || 0
+    // Cap targetNetCount to maxChangeOutputs so the UTXO pool grows gradually
+    // rather than trying to reach numberOfDesiredUTXOs in a single transaction.
+    const targetNetCount = Math.min(params.targetNetCount || 0, maxChangeOutputs)
 
     // current net change in count of change outputs
     const netChangeCount = (): number => {
@@ -162,6 +203,8 @@ export async function generateChangeSdk(
 
     const addOutputToBalanceNewInput = (): boolean => {
       if (!hasTargetNetCount) return false
+      // Also respect the absolute cap on change output count.
+      if (r.changeOutputs.length >= maxChangeOutputs) return false
       return netChangeCount() - 1 < targetNetCount
     }
 
@@ -177,18 +220,34 @@ export async function generateChangeSdk(
 
     // If we'd like to have more change outputs create them now.
     // They may be removed if it turns out we can't fund them.
+    // Respect the per-transaction cap and ensure each output meets the dust floor.
     while (
-      (hasTargetNetCount && targetNetCount > netChangeCount()) ||
-      (r.changeOutputs.length === 0 && feeExcess() > 0)
+      r.changeOutputs.length < maxChangeOutputs &&
+      ((hasTargetNetCount && targetNetCount > netChangeCount()) || (r.changeOutputs.length === 0 && feeExcess() > 0))
     ) {
+      const satoshis =
+        r.changeOutputs.length === 0
+          ? Math.max(dustFloor, params.changeFirstSatoshis)
+          : Math.max(dustFloor, params.changeInitialSatoshis)
       r.changeOutputs.push({
-        satoshis: r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis,
+        satoshis,
         lockingScriptLength: params.changeLockingScriptLength
       })
     }
 
     const fundTransaction = async (): Promise<void> => {
       let removingOutputs = false
+
+      const maybeAddChangeOutput = (ao: number): void => {
+        if (removingOutputs || feeExcess() <= 0) return
+        const canAdd = (ao === 1 || r.changeOutputs.length === 0) && r.changeOutputs.length < maxChangeOutputs
+        if (!canAdd) return
+        const cap = r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
+        const satoshis = Math.min(feeExcess(), Math.max(dustFloor, cap))
+        if (satoshis >= dustFloor) {
+          r.changeOutputs.push({ satoshis, lockingScriptLength: params.changeLockingScriptLength })
+        }
+      }
 
       const attemptToFundTransaction = async (): Promise<boolean> => {
         if (feeExcess() > 0) return true
@@ -208,18 +267,7 @@ export async function generateChangeSdk(
         }
 
         r.allocatedChangeInputs.push(allocatedChangeInput)
-
-        if (!removingOutputs && feeExcess() > 0) {
-          if (ao == 1 || r.changeOutputs.length === 0) {
-            r.changeOutputs.push({
-              satoshis: Math.min(
-                feeExcess(),
-                r.changeOutputs.length === 0 ? params.changeFirstSatoshis : params.changeInitialSatoshis
-              ),
-              lockingScriptLength: params.changeLockingScriptLength
-            })
-          }
-        }
+        maybeAddChangeOutput(ao)
         return true
       }
 
@@ -308,6 +356,26 @@ export async function generateChangeSdk(
         feeExcessNow -= sats
         const index = rand(0, r.changeOutputs.length - 1)
         r.changeOutputs[index].satoshis += sats
+      }
+    }
+
+    /**
+     * Remove any change outputs that ended up below the dust floor after
+     * distribution, consolidating their satoshis into the largest remaining
+     * output.  This can occur when the excess distribution leaves a small
+     * output that is uneconomical to spend in a future transaction.
+     *
+     * We iterate in reverse so that splicing does not disturb earlier indices.
+     * We always keep at least one change output — the loop guarantees at least
+     * one output remains because we only remove if `r.changeOutputs.length > 1`.
+     */
+    for (let i = r.changeOutputs.length - 1; i >= 0; i--) {
+      if (r.changeOutputs[i].satoshis < dustFloor && r.changeOutputs.length > 1) {
+        const [removed] = r.changeOutputs.splice(i, 1)
+        // Add the removed sats to the largest remaining output so no sats are lost.
+        const largest = r.changeOutputs.reduce((best, o) => (o.satoshis > best.satoshis ? o : best), r.changeOutputs[0])
+        largest.satoshis += removed.satoshis
+        // feeExcessNow does not need updating: total change satoshis are unchanged.
       }
     }
 
@@ -411,6 +479,16 @@ export interface GenerateChangeSdkParams {
    * For P2PKH template, 107 bytes
    */
   changeUnlockingScriptLength: number
+
+  /**
+   * Maximum number of change outputs to create in this transaction.
+   * Defaults to `maxChangeOutputsPerTransaction` (8).
+   *
+   * Callers may override this to allow more outputs in special cases (e.g.
+   * consolidation transactions) or fewer outputs when a compact transaction
+   * is preferred.
+   */
+  maxChangeOutputs?: number
 
   randomVals?: number[]
   noLogging?: boolean

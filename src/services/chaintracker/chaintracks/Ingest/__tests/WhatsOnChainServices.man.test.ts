@@ -86,7 +86,7 @@ describe('WhatsOnChainServices tests', () => {
     if (errorsNew.length > 0) console.log(JSON.stringify(errorsNew))
     expect(errorsNew.length).toBe(0)
     expect(okNew).toBe(true)
-    expect(headersNew.length >= 0).toBe(true)
+    expect(Array.isArray(headersNew)).toBe(true)
   })
 
   test('2 get latest header bytes', async () => {

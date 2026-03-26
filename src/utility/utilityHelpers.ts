@@ -10,7 +10,30 @@ export async function getIdentityKey(wallet: CertOpsWallet): Promise<PubKeyHex> 
 }
 
 export function toWalletNetwork(chain: Chain): WalletNetwork {
-  return chain === 'main' ? 'mainnet' : 'testnet'
+  switch (chain) {
+    case 'main':
+      return 'mainnet'
+    case 'test':
+    case 'teratest':
+    case 'mock':
+      return 'testnet'
+  }
+}
+
+/**
+ * Maps a Chain to a network preset suitable for LookupResolver / SHIPBroadcaster.
+ * Unlike `toWalletNetwork`, this returns `'local'` for `mock` chain.
+ */
+export function toLookupNetworkPreset(chain: Chain): 'mainnet' | 'testnet' | 'local' {
+  switch (chain) {
+    case 'main':
+      return 'mainnet'
+    case 'test':
+      return 'testnet'
+    case 'teratest':
+    case 'mock':
+      return 'local'
+  }
 }
 
 export function makeAtomicBeef(tx: Transaction, beef: number[] | Beef): number[] {

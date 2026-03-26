@@ -210,8 +210,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
             autoIncrement: true
           })
           transactionsStore.createIndex('userId', 'userId')
-          ;(transactionsStore.createIndex('status', 'status'),
-            transactionsStore.createIndex('status_userId', ['status', 'userId']))
+          transactionsStore.createIndex('status', 'status')
+          transactionsStore.createIndex('status_userId', ['status', 'userId'])
           transactionsStore.createIndex('provenTxId', 'provenTxId')
           transactionsStore.createIndex('reference', 'reference', { unique: true })
         }

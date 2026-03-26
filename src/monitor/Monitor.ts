@@ -12,6 +12,8 @@ import { TaskClock } from './tasks/TaskClock'
 import { TaskNewHeader } from './tasks/TaskNewHeader'
 import { TaskMonitorCallHistory } from './tasks/TaskMonitorCallHistory'
 import { TaskReorg } from './tasks/TaskReorg'
+import { TaskArcadeSSE } from './tasks/TaskArcSSE'
+import { TaskMineBlock } from './tasks/TaskMineBlock'
 
 import { TaskSendWaiting } from './tasks/TaskSendWaiting'
 import { TaskCheckNoSends } from './tasks/TaskCheckNoSends'
@@ -20,7 +22,7 @@ import { Chain, ProvenTransactionStatus } from '../sdk/types'
 import { ReviewActionResult } from '../sdk/WalletStorage.interfaces'
 import { WERR_BAD_REQUEST, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { WalletError } from '../sdk/WalletError'
-import { BlockHeader } from '../sdk/WalletServices.interfaces'
+import { BlockHeader, WalletServices } from '../sdk/WalletServices.interfaces'
 import { Services } from '../services/Services'
 import { ChaintracksClientApi, ReorgListener } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
 import { Chaintracks } from '../services/chaintracker/chaintracks/Chaintracks'
@@ -30,7 +32,7 @@ export type MonitorStorage = WalletStorageManager
 export interface MonitorOptions {
   chain: Chain
 
-  services: Services
+  services: Services | WalletServices
 
   storage: MonitorStorage
 
@@ -52,10 +54,26 @@ export interface MonitorOptions {
   unprovenAttemptsLimitMain: number
 
   /**
+   * Stable callback token for ARC SSE event streaming.
+   * When set, TaskArcadeSSE will open an SSE connection to Arcade's
+   * /events endpoint and receive real-time transaction status updates.
+   * Must match the X-CallbackToken header sent during broadcast.
+   */
+  callbackToken?: string
+
+  /** Load persisted SSE lastEventId (e.g. from SQLite) for catchup on startup */
+  loadLastSSEEventId?: () => Promise<string | undefined>
+  /** Save SSE lastEventId to persistent storage */
+  saveLastSSEEventId?: (lastEventId: string) => Promise<void>
+  /** The react-native-sse EventSource class for SSE support in React Native */
+  EventSourceClass?: any
+
+  /**
    * These are hooks for a wallet-toolbox client to get transaction updates.
    */
   onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
+  onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>
 }
 
 /**
@@ -87,7 +105,7 @@ export class Monitor {
   }
 
   options: MonitorOptions
-  services: Services
+  services: Services | WalletServices
   chain: Chain
   storage: MonitorStorage
   chaintracks: ChaintracksClientApi
@@ -96,6 +114,7 @@ export class Monitor {
   headersSubscriptionPromise?: Promise<string>
   onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
+  onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>
 
   constructor(options: MonitorOptions) {
     this.options = { ...options }
@@ -106,6 +125,7 @@ export class Monitor {
     this.chaintracksWithEvents = options.chaintracksWithEvents
     this.onTransactionProven = options.onTransactionProven
     this.onTransactionBroadcasted = options.onTransactionBroadcasted
+    this.onTransactionStatusChanged = options.onTransactionStatusChanged
 
     if (this.chaintracksWithEvents) {
       const c = this.chaintracksWithEvents
@@ -157,12 +177,12 @@ export class Monitor {
     this._otherTasks.push(new TaskCheckForProofs(this))
     this._otherTasks.push(new TaskCheckNoSends(this))
     this._otherTasks.push(new TaskUnFail(this))
-
     this._otherTasks.push(new TaskReorg(this))
-
     this._otherTasks.push(new TaskFailAbandoned(this))
-
     this._otherTasks.push(new TaskSyncWhenIdle(this))
+    if (this.chain === 'mock') {
+      this._otherTasks.push(new TaskMineBlock(this))
+    }
   }
   /**
    * Default tasks with settings appropriate for a single user storage
@@ -180,6 +200,10 @@ export class Monitor {
     //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
+    this._tasks.push(new TaskArcadeSSE(this))
+    if (this.chain === 'mock') {
+      this._tasks.push(new TaskMineBlock(this))
+    }
   }
 
   /**
@@ -198,6 +222,9 @@ export class Monitor {
     //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
+    if (this.chain === 'mock') {
+      this._tasks.push(new TaskMineBlock(this))
+    }
   }
 
   addTask(task: WalletMonitorTask): void {
@@ -256,7 +283,7 @@ export class Monitor {
           if (this.storage.getActive().isStorageProvider()) {
             const log = await ttr.runTask()
             if (log && log.length > 0) {
-              console.log(`Task${ttr.name} ${log.slice(0, 256)}`)
+              console.log(`Task${ttr.name} ${log.slice(0, 1024)}`)
               await this.logEvent(ttr.name, log)
             }
           }
@@ -356,6 +383,24 @@ export class Monitor {
     if (this.onTransactionProven) {
       this.onTransactionProven(txStatus)
     }
+  }
+
+  /**
+   * Called by TaskArcadeSSE when an SSE status event is received from Arcade.
+   */
+  callOnTransactionStatusChanged(txid: string, newStatus: string): void {
+    if (this.onTransactionStatusChanged) {
+      this.onTransactionStatusChanged(txid, newStatus)
+    }
+  }
+
+  /**
+   * Fetch pending transaction status events from Arcade on demand.
+   * Call this on app open, balance refresh, transaction list view, etc.
+   */
+  async fetchSSEEvents(): Promise<number> {
+    const sseTask = this._tasks.find(t => t.name === TaskArcadeSSE.taskName) as TaskArcadeSSE | undefined
+    return (await sseTask?.fetchNow()) ?? 0
   }
 
   deactivatedHeaders: DeactivedHeader[] = []

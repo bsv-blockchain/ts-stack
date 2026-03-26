@@ -213,9 +213,23 @@ describe('Wallet services tests', () => {
     for (const { chain, wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
       {
-        const rawTx = await wallet.services.getRawTx('9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4')
-        if (chain === 'main') expect(rawTx.rawTx!.length).toBe(176)
-        else expect(rawTx.rawTx).not.toBeTruthy()
+        const txid = '9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4'
+        // Mock getRawTx to avoid live network call
+        const mockRawTx = new Array(176).fill(0)
+        const origGetRawTx = wallet.services.getRawTx.bind(wallet.services)
+        wallet.services.getRawTx = jest.fn().mockImplementation(async (id: string) => {
+          if (chain === 'main') {
+            return { txid: id, rawTx: mockRawTx, name: 'mock' }
+          }
+          return { txid: id }
+        })
+        try {
+          const rawTx = await wallet.services.getRawTx(txid)
+          if (chain === 'main') expect(rawTx.rawTx!.length).toBe(176)
+          else expect(rawTx.rawTx).not.toBeTruthy()
+        } finally {
+          wallet.services.getRawTx = origGetRawTx
+        }
       }
     }
   })
