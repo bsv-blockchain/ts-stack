@@ -48,7 +48,7 @@ describe('TaskReviewDoubleSpends', () => {
     jest.restoreAllMocks()
   })
 
-  test('0 reviews eligible doubleSpend reqs and returns a checkpoint payload', async () => {
+  test('0 uses the normal cadence after a partial review chunk and stores checkpoint offset after unfails are removed', async () => {
     const now = new Date('2026-01-01T12:00:00.000Z')
     jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
     const reqs = [
@@ -56,7 +56,7 @@ describe('TaskReviewDoubleSpends', () => {
       makeReq(2, 'tx2', new Date('2026-01-01T10:40:00.000Z'))
     ]
     const m = makeMonitor({ tx1: 'success', tx2: 'unknown' }, reqs)
-    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60, 60)
 
     const log = await task.runTask()
 
@@ -68,9 +68,28 @@ describe('TaskReviewDoubleSpends', () => {
     expect(m.logEvent).not.toHaveBeenCalled()
     expect(log).toContain('"reviewed":2')
     expect(log).toContain('"unfails":1')
-    expect(log).toContain('"resumeOffset":1')
+    expect(log).toContain('"resumeOffset":0')
     expect(log).toContain('"expectedProvenTxReqId":2')
     expect(log).toContain('unfail 1 tx1 status:success')
+    expect(task.triggerNextMsecs).toBe(0)
+  })
+
+  test('0a stores the retained req offset in the post-unfail doubleSpend list', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = [
+      makeReq(1, 'tx1', new Date('2026-01-01T10:30:00.000Z')),
+      makeReq(2, 'tx2', new Date('2026-01-01T10:35:00.000Z')),
+      makeReq(3, 'tx3', new Date('2026-01-01T10:40:00.000Z'))
+    ]
+    const m = makeMonitor({ tx1: 'success', tx2: 'unknown', tx3: 'unknown' }, reqs)
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60, 60)
+
+    const log = await task.runTask()
+
+    expect(m.updateProvenTxReq).toHaveBeenCalledWith([1], { status: 'unfail' })
+    expect(log).toContain('"resumeOffset":1')
+    expect(log).toContain('"expectedProvenTxReqId":3')
   })
 
   test('1 skips reqs newer than the minAgeMinutes cutoff and returns empty when nothing is eligible', async () => {
@@ -78,13 +97,29 @@ describe('TaskReviewDoubleSpends', () => {
     jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
     const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T11:30:01.000Z'))]
     const m = makeMonitor({ tx1: 'unknown' }, reqs)
-    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60)
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60, 60)
 
     const log = await task.runTask()
 
     expect(m.updateProvenTxReq).not.toHaveBeenCalled()
     expect(m.logEvent).not.toHaveBeenCalled()
     expect(log).toBe('')
+    expect(task.triggerNextMsecs).toBe(0)
+  })
+
+  test('1b uses the quick cadence after consuming a full review chunk', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = [
+      makeReq(1, 'tx1', new Date('2026-01-01T10:30:00.000Z')),
+      makeReq(2, 'tx2', new Date('2026-01-01T10:40:00.000Z'))
+    ]
+    const m = makeMonitor({ tx1: 'success', tx2: 'unknown' }, reqs)
+    const task = new TaskReviewDoubleSpends(m.monitor as any, 0, 2, 60, 60)
+
+    await task.runTask()
+
+    expect(task.triggerNextMsecs).toBe(60)
   })
 
   test('2 resumes from the checkpoint offset and advances it', async () => {

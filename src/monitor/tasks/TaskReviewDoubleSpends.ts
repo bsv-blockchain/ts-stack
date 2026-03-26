@@ -22,20 +22,24 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
 
   static checkNow = false
 
+  triggerNextMsecs: number
+
   constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 12,
     public reviewLimit = 100,
-    public minAgeMinutes = 60
+    public minAgeMinutes = 60,
+    public triggerQuickMsecs = Monitor.oneMinute * 1
   ) {
     super(monitor, TaskReviewDoubleSpends.taskName)
+    this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
   trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskReviewDoubleSpends.checkNow ||
-        (this.triggerMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerMsecs)
+        (this.triggerNextMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerNextMsecs)
     }
   }
 
@@ -73,12 +77,18 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     const checkpoint = await this.getLastReviewedCheckpoint()
     const updatedBefore = new Date(Date.now() - this.minAgeMinutes * 60 * 1000)
     const reqs = await this.findReqsToReview(checkpoint, updatedBefore)
-    if (reqs.length === 0) return ''
+    if (reqs.length === 0) {
+      this.triggerNextMsecs = this.triggerMsecs
+      return ''
+    }
+
+    this.triggerNextMsecs = reqs.length >= this.reviewLimit ? this.triggerQuickMsecs : this.triggerMsecs
 
     const reviewed: TableProvenTxReq[] = []
     const unfails: number[] = []
     let log = ``
     let lastRetainedDoubleSpendIndex = -1
+    let retainedDoubleSpendCount = 0
 
     for (const req of reqs) {
       const gsr = await this.monitor.services.getStatusForTxids([req.txid])
@@ -89,6 +99,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
         log += `unfail ${req.provenTxReqId} ${req.txid} status:${status}\n`
       } else {
         lastRetainedDoubleSpendIndex = reviewed.length - 1
+        retainedDoubleSpendCount += 1
       }
     }
 
@@ -105,7 +116,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
       reviewLimit: this.reviewLimit,
       provenTxReqIds: unfails,
       resumeOffset:
-        lastRetainedDoubleSpendIndex >= 0 ? reqs.sourceOffset! + lastRetainedDoubleSpendIndex : undefined,
+        lastRetainedDoubleSpendIndex >= 0 ? reqs.sourceOffset! + retainedDoubleSpendCount - 1 : undefined,
       expectedProvenTxReqId: lastRetainedDoubleSpendIndex >= 0 ? reviewed[lastRetainedDoubleSpendIndex].provenTxReqId : undefined,
       reviewLog: `${reviewed.length} reqs with status 'doubleSpend'\n${log}`
     } satisfies ReviewDoubleSpendsCheckpoint)
