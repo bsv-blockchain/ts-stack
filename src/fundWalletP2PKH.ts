@@ -70,7 +70,9 @@ export function resolveAutoSigned(car: CreateActionResult, txid: string, vout: n
     if (completedTx.id('hex').toLowerCase() !== car.txid.toLowerCase()) {
       throw new Error('Auto-signed tx id mismatch with car.txid')
     }
-    if (!completedTx.inputs.some(inp => String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout)) {
+    if (
+      !completedTx.inputs.some(inp => String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout)
+    ) {
       throw new Error('Auto-signed tx does not spend the requested outpoint')
     }
   }
@@ -123,7 +125,8 @@ export async function importSingleOutpoint(
   const { outpoint, txid, vout } = parsed
   const btx = beef.findTxid(txid)
   if (!btx?.tx) throw new Error(`Transaction ${txid} not found in inputBEEF`)
-  if (vout < 0 || vout >= btx.tx.outputs.length) throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`)
+  if (vout < 0 || vout >= btx.tx.outputs.length)
+    throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`)
   const output = btx.tx.outputs[vout]
   const satoshis = output.satoshis
   if (!satoshis || satoshis <= 0) throw new Error(`Output ${outpoint} has no satoshis`)
@@ -161,7 +164,7 @@ export async function fundWalletFromP2PKHOutpoints(
     if (seen.has(key)) throw new Error(`Duplicate outpoint: ${key}`)
     seen.add(key)
   }
-  const beefBin = inputBEEF ?? await buildBeefForOutpoints(outpoints)
+  const beefBin = inputBEEF ?? (await buildBeefForOutpoints(outpoints))
   const beef = Beef.fromBinary(beefBin)
   const results: { outpoint: string; txid?: string; success: boolean; error?: string }[] = []
   for (const p of parsed) {
@@ -202,7 +205,9 @@ export async function buildBeefForOutpoints(outpoints: string[], maxDepth = 10):
         const res = await fetch(url, { signal: ctrl.signal })
         clearTimeout(t)
         if (res.ok) return (await res.text()).trim()
-      } catch { /* try next */ }
+      } catch {
+        /* try next */
+      }
     }
     return null
   }
@@ -211,15 +216,14 @@ export async function buildBeefForOutpoints(outpoints: string[], maxDepth = 10):
     try {
       const ctrl = new AbortController()
       const t = setTimeout(() => ctrl.abort(), 8000)
-      const res = await fetch(
-        `https://ordinals.gorillapool.io/api/tx/${txid}/proof`,
-        { signal: ctrl.signal }
-      )
+      const res = await fetch(`https://ordinals.gorillapool.io/api/tx/${txid}/proof`, { signal: ctrl.signal })
       clearTimeout(t)
       if (!res.ok) return null
       const buf = new Uint8Array(await res.arrayBuffer())
       return MerklePath.fromBinary(Array.from(buf))
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
 
   async function addTxToBeef(txid: string, depth: number): Promise<void> {

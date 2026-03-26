@@ -242,7 +242,13 @@ export abstract class SetupClient {
     p2pkhKey: KeyPairAddress,
     inputBEEF?: BEEF
   ): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
-    return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, SetupClient.getUnlockP2PKH.bind(SetupClient), inputBEEF)
+    return _fundWalletFromP2PKHOutpoints(
+      wallet,
+      outpoints,
+      p2pkhKey,
+      SetupClient.getUnlockP2PKH.bind(SetupClient),
+      inputBEEF
+    )
   }
 
   /**
