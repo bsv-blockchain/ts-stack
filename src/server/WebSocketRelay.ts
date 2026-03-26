@@ -21,6 +21,7 @@ type Role = 'desktop' | 'mobile'
 type MessageHandler    = (topic: string, envelope: WireEnvelope, role: Role) => void
 type TopicValidator    = (topic: string) => boolean
 type TokenValidator    = (topic: string, token: string | null) => boolean
+type ConnectHandler    = (topic: string) => void
 type DisconnectHandler = (topic: string, role: Role) => void
 
 /**
@@ -42,6 +43,7 @@ export class WebSocketRelay {
   private validateTopic: TopicValidator | null = null
   private validateDesktopToken: TokenValidator | null = null
   private onDisconnectCb: DisconnectHandler | null = null
+  private onMobileConnectCb: ConnectHandler | null = null
   private allowedOrigin: string | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
@@ -77,6 +79,20 @@ export class WebSocketRelay {
    */
   onDisconnect(handler: DisconnectHandler): void {
     this.onDisconnectCb = handler
+  }
+
+  /** Register a callback invoked when a mobile socket connects (before proof). */
+  onMobileConnect(handler: ConnectHandler): void {
+    this.onMobileConnectCb = handler
+  }
+
+  /** Forcibly close the mobile socket for a topic (e.g. auth timeout or proof failure). */
+  disconnectMobile(topic: string): void {
+    const entry = this.topics.get(topic)
+    if (entry?.mobile) {
+      entry.mobile.close(1008, 'Authentication failed')
+      entry.mobile = null
+    }
   }
 
   /** Remove a topic entry — call when its session is garbage-collected. */
@@ -145,6 +161,8 @@ export class WebSocketRelay {
 
     const entry = this.getOrCreateTopic(topic)
     entry[role] = ws
+
+    if (role === 'mobile') this.onMobileConnectCb?.(topic)
 
     // Flush any messages buffered while this side was disconnected
     const now = Date.now()

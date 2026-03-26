@@ -30,6 +30,7 @@ interface PendingRequest {
 }
 
 const REQUEST_TIMEOUT_MS = 30_000
+const MOBILE_AUTH_TIMEOUT_MS = 15_000
 
 /**
  * High-level facade that wires together the relay, session manager,
@@ -51,6 +52,7 @@ export class WalletRelayService {
   private relay: WebSocketRelay
   private handler = new WalletRequestHandler()
   private pending = new Map<string, PendingRequest>()
+  private mobileAuthTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   constructor(private opts: WalletRelayServiceOptions) {
     this.sessions = new QRSessionManager()
@@ -69,6 +71,17 @@ export class WalletRelayService {
     this.relay.onValidateDesktopToken((topic, token) => {
       const s = this.sessions.getSession(topic)
       return s !== null && token !== null && token === s.desktopToken
+    })
+
+    // Start auth timer when an unauthenticated mobile connects
+    this.relay.onMobileConnect(topic => {
+      const s = this.sessions.getSession(topic)
+      if (!s || s.mobileIdentityKey) return  // already authenticated — no timer needed
+      const timer = setTimeout(() => {
+        this.mobileAuthTimers.delete(topic)
+        this.relay.disconnectMobile(topic)
+      }, MOBILE_AUTH_TIMEOUT_MS)
+      this.mobileAuthTimers.set(topic, timer)
     })
 
     this.relay.onIncoming((topic, envelope, role) => {
@@ -136,6 +149,8 @@ export class WalletRelayService {
 
   /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
   stop(): void {
+    for (const timer of this.mobileAuthTimers.values()) clearTimeout(timer)
+    this.mobileAuthTimers.clear()
     this.rejectPendingForSession(null)
     this.sessions.stop()
     this.relay.close()
@@ -189,8 +204,11 @@ export class WalletRelayService {
 
     // pairing_approved — mobileIdentityKey in outer envelope (bootstrap)
     if (envelope.mobileIdentityKey && session.status !== 'expired') {
-      // B3: lock session to the first device that paired
-      if (session.mobileIdentityKey && session.mobileIdentityKey !== envelope.mobileIdentityKey) return
+      // B3: lock session to the first device that paired — disconnect impostor immediately
+      if (session.mobileIdentityKey && session.mobileIdentityKey !== envelope.mobileIdentityKey) {
+        this.relay.disconnectMobile(topic)
+        return
+      }
       await this.handlePairingApproved(topic, envelope)
       return
     }
@@ -221,7 +239,7 @@ export class WalletRelayService {
   private async handlePairingApproved(topic: string, envelope: WireEnvelope): Promise<void> {
     const mobileIdentityKey = envelope.mobileIdentityKey!
 
-    // Decrypt and verify inner payload
+    // Decrypt and verify inner payload — failure means the mobile can't prove ECDH ownership
     let plaintext: string
     try {
       plaintext = await decryptEnvelope(
@@ -229,10 +247,20 @@ export class WalletRelayService {
         { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
         envelope.ciphertext
       )
-    } catch { return }
+    } catch {
+      this.relay.disconnectMobile(topic)
+      return
+    }
 
     const msg = this.handler.parseMessage(plaintext) as { params?: { mobileIdentityKey?: string } }
-    if (msg.params?.mobileIdentityKey && msg.params.mobileIdentityKey !== mobileIdentityKey) return
+    if (msg.params?.mobileIdentityKey && msg.params.mobileIdentityKey !== mobileIdentityKey) {
+      this.relay.disconnectMobile(topic)
+      return
+    }
+
+    // Auth succeeded — cancel the proof timer
+    const timer = this.mobileAuthTimers.get(topic)
+    if (timer) { clearTimeout(timer); this.mobileAuthTimers.delete(topic) }
 
     this.sessions.setMobileIdentityKey(topic, mobileIdentityKey)
     this.sessions.setStatus(topic, 'connected')
