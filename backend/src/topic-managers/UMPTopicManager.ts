@@ -25,13 +25,8 @@ export default class UMPTopicManager implements TopicManager {
    */
   async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     try {
-      console.log('previous UTXOs', previousCoins.length)
       const outputs: number[] = []
       const parsedTransaction = Transaction.fromBEEF(beef)
-      const previousUTXOs = previousCoins.map(x => ({
-        txid: (parsedTransaction.inputs[x].sourceTXID || parsedTransaction.inputs[x].sourceTransaction?.id('hex')) as string,
-        outputIndex: parsedTransaction.inputs[x].sourceOutputIndex
-      }))
 
       // Try to decode and validate transaction outputs
       for (const [i, output] of parsedTransaction.outputs.entries()) {
