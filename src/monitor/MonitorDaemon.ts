@@ -7,7 +7,7 @@ import { StorageProvider } from '../storage/StorageProvider'
 import { WalletStorageManager } from '../storage/WalletStorageManager'
 import { WalletServicesOptions } from '../sdk/WalletServices.interfaces'
 import { Services } from '../services/Services'
-import { Monitor } from './Monitor'
+import { Monitor, MonitorStartupTaskMode } from './Monitor'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { wait } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
@@ -30,6 +30,7 @@ export interface MonitorDaemonSetup {
   services?: Services
   monitor?: Monitor
   chaintracks?: Chaintracks
+  startupTaskMode?: MonitorStartupTaskMode
 }
 
 export class MonitorDaemon {
@@ -115,13 +116,10 @@ export class MonitorDaemon {
         a.chain,
         a.storageManager,
         a.services,
-        a.chaintracks
+        a.chaintracks,
+        a.startupTaskMode || 'multiuser'
       )
       a.monitor = new Monitor(monitorOptions)
-    }
-
-    if (a.monitor._tasks.length === 0) {
-      a.monitor.addMultiUserTasks()
     }
   }
 

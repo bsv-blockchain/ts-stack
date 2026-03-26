@@ -77,7 +77,7 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
 
   override async getPresentHeight(): Promise<number | undefined> {
     const presentHeight = await this.woc.getChainTipHeight()
-    this.log(`presentHeight=${presentHeight}`)
+    // this.log(`presentHeight=${presentHeight}`)
     return presentHeight
   }
 

@@ -5,7 +5,6 @@ import { WalletStorageManager } from '../storage/WalletStorageManager'
 
 import { TaskPurge, TaskPurgeParams } from './tasks/TaskPurge'
 import { TaskReviewStatus } from './tasks/TaskReviewStatus'
-import { TaskSyncWhenIdle } from './tasks/TaskSyncWhenIdle'
 import { TaskFailAbandoned } from './tasks/TaskFailAbandoned'
 import { TaskCheckForProofs } from './tasks/TaskCheckForProofs'
 import { TaskClock } from './tasks/TaskClock'
@@ -18,6 +17,9 @@ import { TaskMineBlock } from './tasks/TaskMineBlock'
 import { TaskSendWaiting } from './tasks/TaskSendWaiting'
 import { TaskCheckNoSends } from './tasks/TaskCheckNoSends'
 import { TaskUnFail } from './tasks/TaskUnFail'
+import { TaskReviewUtxos } from './tasks/TaskReviewUtxos'
+import { TaskReviewDoubleSpends } from './tasks/TaskReviewDoubleSpends'
+import { TaskReviewProvenTxs } from './tasks/TaskReviewProvenTxs'
 import { Chain, ProvenTransactionStatus } from '../sdk/types'
 import { ReviewActionResult } from '../sdk/WalletStorage.interfaces'
 import { WERR_BAD_REQUEST, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
@@ -28,6 +30,7 @@ import { ChaintracksClientApi, ReorgListener } from '../services/chaintracker/ch
 import { Chaintracks } from '../services/chaintracker/chaintracks/Chaintracks'
 
 export type MonitorStorage = WalletStorageManager
+export type MonitorStartupTaskMode = 'none' | 'default' | 'multiuser' | 'alltoother'
 
 export interface MonitorOptions {
   chain: Chain
@@ -39,6 +42,8 @@ export interface MonitorOptions {
   chaintracks: ChaintracksClientApi
 
   chaintracksWithEvents?: Chaintracks
+
+  startupTaskMode?: MonitorStartupTaskMode
 
   /**
    * How many msecs to wait after each getMerkleProof service request.
@@ -85,7 +90,8 @@ export class Monitor {
     chain: Chain,
     storage: MonitorStorage,
     services?: Services,
-    chaintracks?: Chaintracks
+    chaintracks?: Chaintracks,
+    startupTaskMode: MonitorStartupTaskMode = 'none'
   ): MonitorOptions {
     services ||= new Services(chain)
     if (!services.options.chaintracks) throw new WERR_INVALID_PARAMETER('services.options.chaintracks', 'valid')
@@ -99,7 +105,8 @@ export class Monitor {
       unprovenAttemptsLimitTest: 10,
       unprovenAttemptsLimitMain: 144,
       chaintracks: services.options.chaintracks,
-      chaintracksWithEvents: chaintracks
+      chaintracksWithEvents: chaintracks,
+      startupTaskMode
     }
     return o
   }
@@ -131,6 +138,26 @@ export class Monitor {
       const c = this.chaintracksWithEvents
       this.reorgSubscriptionPromise = c.subscribeReorgs(this.processReorg.bind(this))
       this.headersSubscriptionPromise = c.subscribeHeaders(this.processHeader.bind(this))
+    }
+
+    this.applyStartupTaskMode(options.startupTaskMode || 'none')
+  }
+
+  private applyStartupTaskMode(mode: MonitorStartupTaskMode): void {
+    switch (mode) {
+      case 'default':
+        this.addDefaultTasks()
+        break
+      case 'multiuser':
+        this.addMultiUserTasks()
+        break
+      case 'alltoother':
+        this.addAllTasksToOther()
+        break
+      case 'none':
+        break
+      default:
+        throw new WERR_INVALID_PARAMETER('startupTaskMode', `'none', 'default', 'multiuser', or 'alltoother'`)
     }
   }
 
@@ -171,22 +198,26 @@ export class Monitor {
     this._otherTasks.push(new TaskClock(this))
     this._otherTasks.push(new TaskNewHeader(this))
     this._otherTasks.push(new TaskMonitorCallHistory(this))
-    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
-    this._otherTasks.push(new TaskReviewStatus(this))
     this._otherTasks.push(new TaskSendWaiting(this))
     this._otherTasks.push(new TaskCheckForProofs(this))
     this._otherTasks.push(new TaskCheckNoSends(this))
-    this._otherTasks.push(new TaskUnFail(this))
-    this._otherTasks.push(new TaskReorg(this))
     this._otherTasks.push(new TaskFailAbandoned(this))
-    this._otherTasks.push(new TaskSyncWhenIdle(this))
+    this._otherTasks.push(new TaskUnFail(this))
+    this._otherTasks.push(new TaskReviewStatus(this))
+    this._otherTasks.push(new TaskReorg(this))
+
+    this._otherTasks.push(new TaskReviewUtxos(this))
+    this._otherTasks.push(new TaskReviewDoubleSpends(this))
+    this._otherTasks.push(new TaskReviewProvenTxs(this))
+
+    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
+    //this._otherTasks.push(new TaskSyncWhenIdle(this))
     if (this.chain === 'mock') {
       this._otherTasks.push(new TaskMineBlock(this))
     }
   }
   /**
    * Default tasks with settings appropriate for a single user storage
-   * possibly with sync'ing enabled
    */
   addDefaultTasks(): void {
     this._tasks.push(new TaskClock(this))
@@ -197,9 +228,14 @@ export class Monitor {
     this._tasks.push(new TaskCheckNoSends(this))
     this._tasks.push(new TaskFailAbandoned(this, 8 * Monitor.oneMinute))
     this._tasks.push(new TaskUnFail(this))
-    //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
+    this._tasks.push(new TaskReviewDoubleSpends(this))
+    this._tasks.push(new TaskReviewProvenTxs(this))
+
+    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
+    this._otherTasks.push(new TaskReviewUtxos(this))
+
     this._tasks.push(new TaskArcadeSSE(this))
     if (this.chain === 'mock') {
       this._tasks.push(new TaskMineBlock(this))
@@ -208,7 +244,6 @@ export class Monitor {
 
   /**
    * Tasks appropriate for multi-user storage
-   * without sync'ing enabled.
    */
   addMultiUserTasks(): void {
     this._tasks.push(new TaskClock(this))
@@ -219,9 +254,14 @@ export class Monitor {
     this._tasks.push(new TaskCheckNoSends(this))
     this._tasks.push(new TaskFailAbandoned(this, 8 * Monitor.oneMinute))
     this._tasks.push(new TaskUnFail(this))
-    //this._tasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
     this._tasks.push(new TaskReviewStatus(this))
     this._tasks.push(new TaskReorg(this))
+    this._tasks.push(new TaskReviewDoubleSpends(this))
+    this._tasks.push(new TaskReviewProvenTxs(this))
+
+    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
+    this._otherTasks.push(new TaskReviewUtxos(this))
+
     if (this.chain === 'mock') {
       this._tasks.push(new TaskMineBlock(this))
     }

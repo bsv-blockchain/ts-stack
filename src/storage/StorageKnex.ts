@@ -43,6 +43,7 @@ import {
   FindPartialSincePagedArgs,
   FindProvenTxReqsArgs,
   FindProvenTxsArgs,
+  FindStaleMerkleRootsArgs,
   FindSyncStatesArgs,
   FindTransactionsArgs,
   FindTxLabelMapsArgs,
@@ -638,6 +639,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
     return this.setupQuery('proven_txs', args)
   }
+  findStaleMerkleRootsQuery(args: FindStaleMerkleRootsArgs): Knex.QueryBuilder {
+    let q = this.toDb(args.trx)('proven_txs')
+    q.where('height', '=', args.height)
+    q.where('merkleRoot', '!=', args.merkleRoot)
+    q.select('merkleRoot')
+    q.distinct('merkleRoot')
+    return q
+  }
   findSyncStatesQuery(args: FindSyncStatesArgs): Knex.QueryBuilder {
     return this.setupQuery('sync_states', args)
   }
@@ -748,6 +757,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const q = this.findProvenTxsQuery(args)
     const r = await q
     return this.validateEntities(r)
+  }
+  override async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> {
+    const q = this.findStaleMerkleRootsQuery(args)
+    const r = await q
+    return r.map((row: { merkleRoot: string }) => row.merkleRoot)
   }
   override async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const q = this.findSyncStatesQuery(args)
@@ -1345,6 +1359,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           txFailedMonth,
           txFailedWeek,
           txFailedTotal,
+          txAbandonedDay,
+          txAbandonedMonth,
+          txAbandonedWeek,
+          txAbandonedTotal,
           txUnprocessedDay,
           txUnprocessedMonth,
           txUnprocessedWeek,
@@ -1409,10 +1427,14 @@ select
     (select count(*) from transactions where status = 'completed' and created_at > '${one_week_ago}') as txCompletedWeek,
     (select count(*) from transactions where status = 'completed' and created_at > '${one_month_ago}') as txCompletedMonth,
 	  (select count(*) from transactions where status = 'completed') as txCompletedTotal,
-    (select count(*) from transactions where status = 'failed' and created_at > '${one_day_ago}') as txFailedDay,
-    (select count(*) from transactions where status = 'failed' and created_at > '${one_week_ago}') as txFailedWeek,
-    (select count(*) from transactions where status = 'failed' and created_at > '${one_month_ago}') as txFailedMonth,
-	  (select count(*) from transactions where status = 'failed') as txFailedTotal,
+    (select count(*) from transactions where status = 'failed' and not txid is null and created_at > '${one_day_ago}') as txFailedDay,
+    (select count(*) from transactions where status = 'failed' and not txid is null and created_at > '${one_week_ago}') as txFailedWeek,
+    (select count(*) from transactions where status = 'failed' and not txid is null and created_at > '${one_month_ago}') as txFailedMonth,
+	  (select count(*) from transactions where status = 'failed' and not txid is null) as txFailedTotal,
+    (select count(*) from transactions where status = 'failed' and txid is null and created_at > '${one_day_ago}') as txAbandonedDay,
+    (select count(*) from transactions where status = 'failed' and txid is null and created_at > '${one_week_ago}') as txAbandonedWeek,
+    (select count(*) from transactions where status = 'failed' and txid is null and created_at > '${one_month_ago}') as txAbandonedMonth,
+	  (select count(*) from transactions where status = 'failed' and txid is null) as txAbandonedTotal,
     (select count(*) from transactions where status = 'unprocessed' and created_at > '${one_day_ago}') as txUnprocessedDay,
     (select count(*) from transactions where status = 'unprocessed' and created_at > '${one_week_ago}') as txUnprocessedWeek,
     (select count(*) from transactions where status = 'unprocessed' and created_at > '${one_month_ago}') as txUnprocessedMonth,
@@ -1483,6 +1505,10 @@ select
       txFailedWeek,
       txFailedMonth,
       txFailedTotal,
+      txAbandonedDay,
+      txAbandonedWeek,
+      txAbandonedMonth,
+      txAbandonedTotal,
       txUnprocessedDay,
       txUnprocessedWeek,
       txUnprocessedMonth,

@@ -18,7 +18,7 @@ describe('operations.man tests', () => {
     const { env, storage } = await _tu.createMainReviewSetup()
     const limit = 10
     let offset = 0
-    const userIds = [2553]
+    const userIds = [202]
     //for (; ;) {
     let log = ``
     for (const userId of userIds) {

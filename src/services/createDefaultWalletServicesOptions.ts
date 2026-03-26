@@ -53,7 +53,7 @@ export function createDefaultWalletServicesOptions(
     },
     fiatUpdateMsecs: 1000 * 60 * 60 * 24, // 24 hours
     disableMapiCallback: true, // MAPI callback's are deprecated. Rely on WalletMonitor by default.
-    exchangeratesapiKey: 'bd539d2ff492bcb5619d5f27726a766f',
+    exchangeratesapiKey: undefined,
     chaintracksFiatExchangeRatesUrl,
     chaintracks,
     arcUrl: arcDefaultUrl(chain),

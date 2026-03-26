@@ -20,6 +20,7 @@ import {
   FindOutputTagMapsArgs,
   FindProvenTxReqsArgs,
   FindProvenTxsArgs,
+  FindStaleMerkleRootsArgs,
   FindTxLabelMapsArgs,
   ProcessSyncChunkResult,
   RequestSyncChunkArgs,
@@ -40,6 +41,8 @@ export abstract class StorageReaderWriter extends StorageReader {
   abstract findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]>
   abstract findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]>
   abstract findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]>
+
+  abstract findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]>
 
   abstract countOutputTagMaps(args: FindOutputTagMapsArgs): Promise<number>
   abstract countProvenTxReqs(args: FindProvenTxReqsArgs): Promise<number>

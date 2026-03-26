@@ -4,6 +4,17 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.10
+
+- TaskReviewUtxos added
+- TaskReviewProvenTxs added
+- TaskReviewDoubleSpends added
+- exchangeratesapi.io api key removed from Services. Defaults changed to rely on public chaintracks service which has private api key.
+- Fix bugs in TaskSendWaiting
+- Add Task namespace with all monitor tasks exports.
+- adminStats now splits out abandoned transactions from failed.
+- admin site support changes.
+
 ## wallet-toolbox 2.1.9
 
 - Fix batch sending bug in TaskSendWaiting 

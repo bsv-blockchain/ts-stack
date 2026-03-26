@@ -2806,6 +2806,30 @@ orderDescending?: boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: FindStaleMerkleRootsArgs
+
+```ts
+export interface FindStaleMerkleRootsArgs {
+    height: number;
+    merkleRoot: string;
+    trx?: TrxToken;
+}
+```
+
+See also: [TrxToken](./client.md#interface-trxtoken)
+
+###### Property merkleRoot
+
+The current valid merkle root for the given height.
+Any proven transaction with a different merkle root at this height is considered to have a stale proof.
+
+```ts
+merkleRoot: string
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: FindSyncStatesArgs
 
 ```ts
@@ -3899,6 +3923,7 @@ export interface MonitorOptions {
     storage: MonitorStorage;
     chaintracks: ChaintracksClientApi;
     chaintracksWithEvents?: Chaintracks;
+    startupTaskMode?: MonitorStartupTaskMode;
     msecsWaitPerMerkleProofServiceReq: number;
     taskRunWaitMsecs: number;
     abandonedMsecs: number;
@@ -3914,7 +3939,7 @@ export interface MonitorOptions {
 }
 ```
 
-See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [WalletServices](./client.md#interface-walletservices)
+See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [WalletServices](./client.md#interface-walletservices)
 
 ###### Property EventSourceClass
 
@@ -5330,6 +5355,21 @@ competingTxs?: string[]
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: ReviewHeightRangeResult
+
+```ts
+export interface ReviewHeightRangeResult {
+    log: string;
+    reviewedHeights: number;
+    mismatchedHeights: number;
+    affectedTransactions: number;
+    updatedTransactions: number;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: ScriptTemplateParamsBRC29
 
 ```ts
@@ -5886,6 +5926,10 @@ export interface StorageAdminStats {
     txFailedWeek: number;
     txFailedMonth: number;
     txFailedTotal: number;
+    txAbandonedDay: number;
+    txAbandonedWeek: number;
+    txAbandonedMonth: number;
+    txAbandonedTotal: number;
     txUnprocessedDay: number;
     txUnprocessedWeek: number;
     txUnprocessedMonth: number;
@@ -8535,43 +8579,44 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [ARC](#class-arc) | [EntityProvenTxReq](#class-entityproventxreq) | [TaskMineBlock](#class-taskmineblock) |
-| [ArcSSEClient](#class-arcsseclient) | [EntitySyncState](#class-entitysyncstate) | [TaskMonitorCallHistory](#class-taskmonitorcallhistory) |
-| [AuthMethodInteractor](#class-authmethodinteractor) | [EntityTransaction](#class-entitytransaction) | [TaskNewHeader](#class-tasknewheader) |
-| [BHServiceClient](#class-bhserviceclient) | [EntityTxLabel](#class-entitytxlabel) | [TaskPurge](#class-taskpurge) |
-| [Bitails](#class-bitails) | [EntityTxLabelMap](#class-entitytxlabelmap) | [TaskReorg](#class-taskreorg) |
-| [BulkFileDataManager](#class-bulkfiledatamanager) | [EntityUser](#class-entityuser) | [TaskReviewStatus](#class-taskreviewstatus) |
-| [BulkFileDataReader](#class-bulkfiledatareader) | [HeightRange](#class-heightrange) | [TaskSendWaiting](#class-tasksendwaiting) |
-| [BulkFilesReader](#class-bulkfilesreader) | [LiveIngestorBase](#class-liveingestorbase) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
-| [BulkFilesReaderFs](#class-bulkfilesreaderfs) | [LiveIngestorWhatsOnChainPoll](#class-liveingestorwhatsonchainpoll) | [TaskUnFail](#class-taskunfail) |
-| [BulkFilesReaderStorage](#class-bulkfilesreaderstorage) | [MergeEntity](#class-mergeentity) | [TwilioPhoneInteractor](#class-twiliophoneinteractor) |
-| [BulkHeaderFile](#class-bulkheaderfile) | [MockChainMigrations](#class-mockchainmigrations) | [WABClient](#class-wabclient) |
-| [BulkHeaderFileFs](#class-bulkheaderfilefs) | [MockChainStorage](#class-mockchainstorage) | [WERR_BAD_REQUEST](#class-werr_bad_request) |
-| [BulkHeaderFileStorage](#class-bulkheaderfilestorage) | [MockChainTracker](#class-mockchaintracker) | [WERR_BROADCAST_UNAVAILABLE](#class-werr_broadcast_unavailable) |
-| [BulkHeaderFiles](#class-bulkheaderfiles) | [MockMiner](#class-mockminer) | [WERR_INSUFFICIENT_FUNDS](#class-werr_insufficient_funds) |
-| [BulkIngestorBase](#class-bulkingestorbase) | [MockServices](#class-mockservices) | [WERR_INTERNAL](#class-werr_internal) |
-| [BulkIngestorCDN](#class-bulkingestorcdn) | [Monitor](#class-monitor) | [WERR_INVALID_MERKLE_ROOT](#class-werr_invalid_merkle_root) |
-| [BulkIngestorCDNBabbage](#class-bulkingestorcdnbabbage) | [OverlayUMPTokenInteractor](#class-overlayumptokeninteractor) | [WERR_INVALID_OPERATION](#class-werr_invalid_operation) |
-| [BulkIngestorWhatsOnChainCdn](#class-bulkingestorwhatsonchaincdn) | [PersonaIDInteractor](#class-personaidinteractor) | [WERR_INVALID_PARAMETER](#class-werr_invalid_parameter) |
-| [BulkStorageBase](#class-bulkstoragebase) | [PrivilegedKeyManager](#class-privilegedkeymanager) | [WERR_INVALID_PUBLIC_KEY](#class-werr_invalid_public_key) |
-| [CWIStyleWalletManager](#class-cwistylewalletmanager) | [ScriptTemplateBRC29](#class-scripttemplatebrc29) | [WERR_MISSING_PARAMETER](#class-werr_missing_parameter) |
-| [Chaintracks](#class-chaintracks) | [SdkWhatsOnChain](#class-sdkwhatsonchain) | [WERR_NETWORK_CHAIN](#class-werr_network_chain) |
-| [ChaintracksChainTracker](#class-chaintrackschaintracker) | [ServiceCollection](#class-servicecollection) | [WERR_NOT_ACTIVE](#class-werr_not_active) |
-| [ChaintracksFetch](#class-chaintracksfetch) | [Services](#class-services) | [WERR_NOT_IMPLEMENTED](#class-werr_not_implemented) |
-| [ChaintracksServiceClient](#class-chaintracksserviceclient) | [SetupClient](#class-setupclient) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
-| [ChaintracksStorageBase](#class-chaintracksstoragebase) | [SimpleWalletManager](#class-simplewalletmanager) | [WERR_UNAUTHORIZED](#class-werr_unauthorized) |
-| [ChaintracksStorageIdb](#class-chaintracksstorageidb) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) | [Wallet](#class-wallet) |
-| [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [StorageClient](#class-storageclient) | [WalletAuthenticationManager](#class-walletauthenticationmanager) |
-| [DevConsoleInteractor](#class-devconsoleinteractor) | [StorageIdb](#class-storageidb) | [WalletError](#class-walleterror) |
-| [EntityBase](#class-entitybase) | [StorageProvider](#class-storageprovider) | [WalletLogger](#class-walletlogger) |
-| [EntityCertificate](#class-entitycertificate) | [StorageReader](#class-storagereader) | [WalletMonitorTask](#class-walletmonitortask) |
-| [EntityCertificateField](#class-entitycertificatefield) | [StorageReaderWriter](#class-storagereaderwriter) | [WalletPermissionsManager](#class-walletpermissionsmanager) |
-| [EntityCommission](#class-entitycommission) | [StorageSyncReader](#class-storagesyncreader) | [WalletSettingsManager](#class-walletsettingsmanager) |
-| [EntityOutput](#class-entityoutput) | [TaskArcadeSSE](#class-taskarcadesse) | [WalletSigner](#class-walletsigner) |
-| [EntityOutputBasket](#class-entityoutputbasket) | [TaskCheckForProofs](#class-taskcheckforproofs) | [WalletStorageManager](#class-walletstoragemanager) |
-| [EntityOutputTag](#class-entityoutputtag) | [TaskCheckNoSends](#class-taskchecknosends) | [WhatsOnChain](#class-whatsonchain) |
-| [EntityOutputTagMap](#class-entityoutputtagmap) | [TaskClock](#class-taskclock) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
-| [EntityProvenTx](#class-entityproventx) | [TaskFailAbandoned](#class-taskfailabandoned) | [WhatsOnChainServices](#class-whatsonchainservices) |
+| [ARC](#class-arc) | [EntitySyncState](#class-entitysyncstate) | [TaskNewHeader](#class-tasknewheader) |
+| [ArcSSEClient](#class-arcsseclient) | [EntityTransaction](#class-entitytransaction) | [TaskPurge](#class-taskpurge) |
+| [AuthMethodInteractor](#class-authmethodinteractor) | [EntityTxLabel](#class-entitytxlabel) | [TaskReorg](#class-taskreorg) |
+| [BHServiceClient](#class-bhserviceclient) | [EntityTxLabelMap](#class-entitytxlabelmap) | [TaskReviewDoubleSpends](#class-taskreviewdoublespends) |
+| [Bitails](#class-bitails) | [EntityUser](#class-entityuser) | [TaskReviewProvenTxs](#class-taskreviewproventxs) |
+| [BulkFileDataManager](#class-bulkfiledatamanager) | [HeightRange](#class-heightrange) | [TaskReviewStatus](#class-taskreviewstatus) |
+| [BulkFileDataReader](#class-bulkfiledatareader) | [LiveIngestorBase](#class-liveingestorbase) | [TaskReviewUtxos](#class-taskreviewutxos) |
+| [BulkFilesReader](#class-bulkfilesreader) | [LiveIngestorWhatsOnChainPoll](#class-liveingestorwhatsonchainpoll) | [TaskSendWaiting](#class-tasksendwaiting) |
+| [BulkFilesReaderFs](#class-bulkfilesreaderfs) | [MergeEntity](#class-mergeentity) | [TaskUnFail](#class-taskunfail) |
+| [BulkFilesReaderStorage](#class-bulkfilesreaderstorage) | [MockChainMigrations](#class-mockchainmigrations) | [TwilioPhoneInteractor](#class-twiliophoneinteractor) |
+| [BulkHeaderFile](#class-bulkheaderfile) | [MockChainStorage](#class-mockchainstorage) | [WABClient](#class-wabclient) |
+| [BulkHeaderFileFs](#class-bulkheaderfilefs) | [MockChainTracker](#class-mockchaintracker) | [WERR_BAD_REQUEST](#class-werr_bad_request) |
+| [BulkHeaderFileStorage](#class-bulkheaderfilestorage) | [MockMiner](#class-mockminer) | [WERR_BROADCAST_UNAVAILABLE](#class-werr_broadcast_unavailable) |
+| [BulkHeaderFiles](#class-bulkheaderfiles) | [MockServices](#class-mockservices) | [WERR_INSUFFICIENT_FUNDS](#class-werr_insufficient_funds) |
+| [BulkIngestorBase](#class-bulkingestorbase) | [Monitor](#class-monitor) | [WERR_INTERNAL](#class-werr_internal) |
+| [BulkIngestorCDN](#class-bulkingestorcdn) | [OverlayUMPTokenInteractor](#class-overlayumptokeninteractor) | [WERR_INVALID_MERKLE_ROOT](#class-werr_invalid_merkle_root) |
+| [BulkIngestorCDNBabbage](#class-bulkingestorcdnbabbage) | [PersonaIDInteractor](#class-personaidinteractor) | [WERR_INVALID_OPERATION](#class-werr_invalid_operation) |
+| [BulkIngestorWhatsOnChainCdn](#class-bulkingestorwhatsonchaincdn) | [PrivilegedKeyManager](#class-privilegedkeymanager) | [WERR_INVALID_PARAMETER](#class-werr_invalid_parameter) |
+| [BulkStorageBase](#class-bulkstoragebase) | [ScriptTemplateBRC29](#class-scripttemplatebrc29) | [WERR_INVALID_PUBLIC_KEY](#class-werr_invalid_public_key) |
+| [CWIStyleWalletManager](#class-cwistylewalletmanager) | [SdkWhatsOnChain](#class-sdkwhatsonchain) | [WERR_MISSING_PARAMETER](#class-werr_missing_parameter) |
+| [Chaintracks](#class-chaintracks) | [ServiceCollection](#class-servicecollection) | [WERR_NETWORK_CHAIN](#class-werr_network_chain) |
+| [ChaintracksChainTracker](#class-chaintrackschaintracker) | [Services](#class-services) | [WERR_NOT_ACTIVE](#class-werr_not_active) |
+| [ChaintracksFetch](#class-chaintracksfetch) | [SetupClient](#class-setupclient) | [WERR_NOT_IMPLEMENTED](#class-werr_not_implemented) |
+| [ChaintracksServiceClient](#class-chaintracksserviceclient) | [SimpleWalletManager](#class-simplewalletmanager) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
+| [ChaintracksStorageBase](#class-chaintracksstoragebase) | [SingleWriterMultiReaderLock](#class-singlewritermultireaderlock) | [WERR_UNAUTHORIZED](#class-werr_unauthorized) |
+| [ChaintracksStorageIdb](#class-chaintracksstorageidb) | [StorageClient](#class-storageclient) | [Wallet](#class-wallet) |
+| [ChaintracksStorageNoDb](#class-chaintracksstoragenodb) | [StorageIdb](#class-storageidb) | [WalletAuthenticationManager](#class-walletauthenticationmanager) |
+| [DevConsoleInteractor](#class-devconsoleinteractor) | [StorageProvider](#class-storageprovider) | [WalletError](#class-walleterror) |
+| [EntityBase](#class-entitybase) | [StorageReader](#class-storagereader) | [WalletLogger](#class-walletlogger) |
+| [EntityCertificate](#class-entitycertificate) | [StorageReaderWriter](#class-storagereaderwriter) | [WalletMonitorTask](#class-walletmonitortask) |
+| [EntityCertificateField](#class-entitycertificatefield) | [StorageSyncReader](#class-storagesyncreader) | [WalletPermissionsManager](#class-walletpermissionsmanager) |
+| [EntityCommission](#class-entitycommission) | [TaskArcadeSSE](#class-taskarcadesse) | [WalletSettingsManager](#class-walletsettingsmanager) |
+| [EntityOutput](#class-entityoutput) | [TaskCheckForProofs](#class-taskcheckforproofs) | [WalletSigner](#class-walletsigner) |
+| [EntityOutputBasket](#class-entityoutputbasket) | [TaskCheckNoSends](#class-taskchecknosends) | [WalletStorageManager](#class-walletstoragemanager) |
+| [EntityOutputTag](#class-entityoutputtag) | [TaskClock](#class-taskclock) | [WhatsOnChain](#class-whatsonchain) |
+| [EntityOutputTagMap](#class-entityoutputtagmap) | [TaskFailAbandoned](#class-taskfailabandoned) | [WhatsOnChainNoServices](#class-whatsonchainnoservices) |
+| [EntityProvenTx](#class-entityproventx) | [TaskMineBlock](#class-taskmineblock) | [WhatsOnChainServices](#class-whatsonchainservices) |
+| [EntityProvenTxReq](#class-entityproventxreq) | [TaskMonitorCallHistory](#class-taskmonitorcallhistory) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -11727,7 +11772,7 @@ and potentially that reorgs update proofs that were already received.
 
 ```ts
 export class Monitor {
-    static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: Chaintracks): MonitorOptions 
+    static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: Chaintracks, startupTaskMode: MonitorStartupTaskMode = "none"): MonitorOptions 
     options: MonitorOptions;
     services: Services | WalletServices;
     chain: Chain;
@@ -11783,7 +11828,7 @@ export class Monitor {
 }
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [DeactivedHeader](./monitor.md#interface-deactivedheader), [MonitorOptions](./monitor.md#interface-monitoroptions), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [TaskPurgeParams](./monitor.md#interface-taskpurgeparams), [WalletMonitorTask](./monitor.md#class-walletmonitortask), [WalletServices](./client.md#interface-walletservices)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [DeactivedHeader](./monitor.md#interface-deactivedheader), [MonitorOptions](./monitor.md#interface-monitoroptions), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [TaskPurgeParams](./monitor.md#interface-taskpurgeparams), [WalletMonitorTask](./monitor.md#class-walletmonitortask), [WalletServices](./client.md#interface-walletservices)
 
 ###### Property _otherTasks
 
@@ -11806,7 +11851,6 @@ See also: [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 ###### Method addDefaultTasks
 
 Default tasks with settings appropriate for a single user storage
-possibly with sync'ing enabled
 
 ```ts
 addDefaultTasks(): void 
@@ -11815,7 +11859,6 @@ addDefaultTasks(): void
 ###### Method addMultiUserTasks
 
 Tasks appropriate for multi-user storage
-without sync'ing enabled.
 
 ```ts
 addMultiUserTasks(): void 
@@ -12323,9 +12366,8 @@ export abstract class SetupClient {
         const serviceOptions = Services.createDefaultOptions(chain);
         serviceOptions.taalApiKey = args.taalApiKey;
         const services = new Services(serviceOptions);
-        const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services);
+        const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
         const monitor = new Monitor(monopts);
-        monitor.addDefaultTasks();
         const privilegedKeyManager = args.privilegedKeyGetter
             ? new PrivilegedKeyManager(args.privilegedKeyGetter)
             : undefined;
@@ -12484,9 +12526,8 @@ static async createWallet(args: SetupClientWalletArgs): Promise<SetupWallet> {
     const serviceOptions = Services.createDefaultOptions(chain);
     serviceOptions.taalApiKey = args.taalApiKey;
     const services = new Services(serviceOptions);
-    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services);
+    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
     const monitor = new Monitor(monopts);
-    monitor.addDefaultTasks();
     const privilegedKeyManager = args.privilegedKeyGetter
         ? new PrivilegedKeyManager(args.privilegedKeyGetter)
         : undefined;
@@ -13724,6 +13765,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     abstract listOutputs(auth: AuthId, args: Validation.ValidListOutputsArgs): Promise<ListOutputsResult>;
     abstract countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number>;
     async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> 
+    async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> 
     async findOutputsByOutpoints(userId: number, outpoints: Array<{
         txid: string;
         vout: number;
@@ -13768,7 +13810,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 }
 ```
 
-See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [Chain](./client.md#type-chain), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageFeeModel](./client.md#interface-storagefeemodel), [StorageGetBeefOptions](./client.md#interface-storagegetbeefoptions), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [StorageProviderOptions](./storage.md#interface-storageprovideroptions), [StorageReaderWriter](./storage.md#class-storagereaderwriter), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputX](./storage.md#interface-tableoutputx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableProvenTxReqDynamics](./storage.md#interface-tableproventxreqdynamics), [TableTxLabel](./storage.md#interface-tabletxlabel), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [attemptToPostReqsToNetwork](./storage.md#function-attempttopostreqstonetwork), [createAction](./storage.md#function-createaction), [getBeefForTransaction](./storage.md#function-getbeeffortransaction), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [logger](./client.md#variable-logger), [processAction](./storage.md#function-processaction), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
+See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [Chain](./client.md#type-chain), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageFeeModel](./client.md#interface-storagefeemodel), [StorageGetBeefOptions](./client.md#interface-storagegetbeefoptions), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [StorageProviderOptions](./storage.md#interface-storageprovideroptions), [StorageReaderWriter](./storage.md#class-storagereaderwriter), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputX](./storage.md#interface-tableoutputx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableProvenTxReqDynamics](./storage.md#interface-tableproventxreqdynamics), [TableTxLabel](./storage.md#interface-tabletxlabel), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [attemptToPostReqsToNetwork](./storage.md#function-attempttopostreqstonetwork), [createAction](./storage.md#function-createaction), [getBeefForTransaction](./storage.md#function-getbeeffortransaction), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [logger](./client.md#variable-logger), [processAction](./storage.md#function-processaction), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
 
 ###### Method confirmSpendableOutputs
 
@@ -13956,6 +13998,7 @@ export abstract class StorageReaderWriter extends StorageReader {
     abstract findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]>;
     abstract findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]>;
     abstract findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]>;
+    abstract findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]>;
     abstract countOutputTagMaps(args: FindOutputTagMapsArgs): Promise<number>;
     abstract countProvenTxReqs(args: FindProvenTxReqsArgs): Promise<number>;
     abstract countProvenTxs(args: FindProvenTxsArgs): Promise<number>;
@@ -14032,7 +14075,7 @@ export abstract class StorageReaderWriter extends StorageReader {
 }
 ```
 
-See also: [AuthId](./client.md#interface-authid), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageReader](./storage.md#class-storagereader), [StorageReaderWriterOptions](./storage.md#interface-storagereaderwriteroptions), [SyncChunk](./client.md#interface-syncchunk), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken)
+See also: [AuthId](./client.md#interface-authid), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageReader](./storage.md#class-storagereader), [StorageReaderWriterOptions](./storage.md#interface-storagereaderwriteroptions), [SyncChunk](./client.md#interface-syncchunk), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -14423,6 +14466,61 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Class: TaskReviewDoubleSpends
+
+Review recent reqs in terminal 'doubleSpend' state and move any false positives
+back to 'unfail' so existing recovery handling can re-process them.
+
+```ts
+export class TaskReviewDoubleSpends extends WalletMonitorTask {
+    static taskName = "ReviewDoubleSpends";
+    static checkNow = false;
+    triggerNextMsecs: number;
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute * 1) 
+    trigger(nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async getLastReviewedCheckpoint(): Promise<{
+        resumeOffset: number;
+        expectedProvenTxReqId?: number;
+    } | undefined> 
+    async runTask(): Promise<string> 
+}
+```
+
+See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: TaskReviewProvenTxs
+
+Backup verification task for recent proven_txs records.
+
+Reorg handling should normally be driven by TaskReorg via deactivated-header events.
+This task runs a lagged audit over recent heights and only reproves transactions when
+the currently canonical merkleRoot at a height no longer matches stored proven_txs roots.
+
+```ts
+export class TaskReviewProvenTxs extends WalletMonitorTask {
+    static taskName = "ReviewProvenTxs";
+    static checkNow = false;
+    triggerNextMsecs: number;
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10, public maxHeightsPerRun = 100, public minBlockAge = 100, public triggerQuickMsecs = Monitor.oneMinute * 1) 
+    trigger(nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async runTask(): Promise<string> 
+    async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> 
+    async getLastReviewedHeight(): Promise<number | undefined> 
+}
+```
+
+See also: [HeightRange](./services.md#class-heightrange), [Monitor](./monitor.md#class-monitor), [ReviewHeightRangeResult](./monitor.md#interface-reviewheightrangeresult), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Class: TaskReviewStatus
 
 Notify Transaction records of changes in ProvenTxReq records they may have missed.
@@ -14458,6 +14556,30 @@ static checkNow = false
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Class: TaskReviewUtxos
+
+Use the reviewByIdentityKey method to review the utxos of a specific user by their identityKey.
+
+The task itself is disabled and will not run on a schedule; review must be triggered manually by calling reviewByIdentityKey.
+
+```ts
+export class TaskReviewUtxos extends WalletMonitorTask {
+    static taskName = "ReviewUtxos";
+    static checkNow = false;
+    constructor(monitor: Monitor, public triggerMsecs = 0, public userLimit = 10, public userOffset = 0, public tags: string[] = ["release", "all"]) 
+    trigger(_nowMsecsSinceEpoch: number): {
+        run: boolean;
+    } 
+    async runTask(): Promise<string> 
+    async reviewByIdentityKey(identityKey: string, mode: "all" | "change" = "all"): Promise<string> 
+}
+```
+
+See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Class: TaskSendWaiting
 
 ```ts
@@ -14465,7 +14587,8 @@ export class TaskSendWaiting extends WalletMonitorTask {
     static taskName = "SendWaiting";
     lastSendingRunMsecsSinceEpoch: number | undefined;
     includeSending: boolean = true;
-    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5) 
+    triggerNextMsecs: number;
+    constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
     } 
@@ -14475,6 +14598,28 @@ export class TaskSendWaiting extends WalletMonitorTask {
 ```
 
 See also: [Monitor](./monitor.md#class-monitor), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+###### Constructor
+
+```ts
+constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
+```
+See also: [Monitor](./monitor.md#class-monitor)
+
+Argument Details
+
++ **monitor**
+  + Wallet monitor owning this task.
++ **triggerMsecs**
+  + Normal interval between SendWaiting runs when no backlog remains.
++ **agedMsecs**
+  + Minimum age a request must reach before this task will attempt to send it.
++ **sendingMsecs**
+  + Minimum interval before stale `sending` requests are included again.
++ **triggerQuickMsecs**
+  + Follow-up interval used when a full chunk was consumed and more work may remain.
++ **chunkLimit**
+  + Maximum number of waiting requests to fetch and inspect in a single run.
 
 ###### Method processUnsent
 
@@ -14496,24 +14641,6 @@ Increments attempts if sending was attempted.
 async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> 
 ```
 See also: [TableProvenTxReq](./storage.md#interface-tableproventxreq)
-
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
-
----
-##### Class: TaskSyncWhenIdle
-
-```ts
-export class TaskSyncWhenIdle extends WalletMonitorTask {
-    static taskName = "SyncWhenIdle";
-    constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 1) 
-    trigger(nowMsecsSinceEpoch: number): {
-        run: boolean;
-    } 
-    async runTask(): Promise<string> 
-}
-```
-
-See also: [Monitor](./monitor.md#class-monitor), [WalletMonitorTask](./monitor.md#class-walletmonitortask)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -16248,6 +16375,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     async findOutputs(args: sdk.FindOutputsArgs): Promise<TableOutput[]> 
     async findProvenTxReqs(args: sdk.FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> 
     async reproveHeader(deactivatedHash: string): Promise<sdk.ReproveHeaderResult> 
+    async reproveHeightMerkleRoot(height: number, staleMerkleRoot: string): Promise<sdk.ReproveHeaderResult> 
     async reproveProven(ptx: TableProvenTx, noUpdate?: boolean): Promise<sdk.ReproveProvenResult> 
     async syncFromReader(identityKey: string, reader: sdk.WalletStorageSyncReader, activeSync?: sdk.WalletStorageSync, log: string = ""): Promise<{
         inserts: number;
@@ -16399,6 +16527,18 @@ Argument Details
 
 + **deactivatedHash**
   + An orphaned header than may have served as a proof source for proven_txs records.
+
+###### Method reproveHeightMerkleRoot
+
+For all proven_txs records at the given height currently tied to the given stale merkleRoot,
+attempt to reprove them against the current chain and update proof data if new valid proofs are found.
+
+This is intended for backup auditing of recent heights after the primary reorg event path has run.
+
+```ts
+async reproveHeightMerkleRoot(height: number, staleMerkleRoot: string): Promise<sdk.ReproveHeaderResult> 
+```
+See also: [ReproveHeaderResult](./client.md#interface-reproveheaderresult)
 
 ###### Method reproveProven
 
@@ -19072,18 +19212,18 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [Chain](#type-chain) | [GetUtxoStatusService](#type-getutxostatusservice) | [ReqHistoryNote](#type-reqhistorynote) |
-| [CounterpartyPermissionEventHandler](#type-counterpartypermissioneventhandler) | [GroupedPermissionEventHandler](#type-groupedpermissioneventhandler) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
-| [DBType](#type-dbtype) | [HeaderListener](#type-headerlistener) | [ScriptHashFormat](#type-scripthashformat) |
-| [EnqueueHandler](#type-enqueuehandler) | [InsertHeaderResult](#type-insertheaderresult) | [ServicesCallHistory](#type-servicescallhistory) |
-| [EntityStorage](#type-entitystorage) | [MonitorStorage](#type-monitorstorage) | [StopListenerToken](#type-stoplistenertoken) |
-| [ErrorHandler](#type-errorhandler) | [ParsedBrc114ActionTimeLabels](#type-parsedbrc114actiontimelabels) | [StorageProvidedBy](#type-storageprovidedby) |
-| [FiatCurrencyCode](#type-fiatcurrencycode) | [PermissionEventHandler](#type-permissioneventhandler) | [SyncProtocolVersion](#type-syncprotocolversion) |
-| [GetMerklePathService](#type-getmerklepathservice) | [PostBeefService](#type-postbeefservice) | [SyncStatus](#type-syncstatus) |
-| [GetRawTxService](#type-getrawtxservice) | [PostReqsToNetworkDetailsStatus](#type-postreqstonetworkdetailsstatus) | [TransactionStatus](#type-transactionstatus) |
-| [GetScriptHashHistoryService](#type-getscripthashhistoryservice) | [PostTxsService](#type-posttxsservice) | [UpdateFiatExchangeRateService](#type-updatefiatexchangerateservice) |
-| [GetStatusForTxidsService](#type-getstatusfortxidsservice) | [ProvenTxReqStatus](#type-proventxreqstatus) | [WalletLoggerLevel](#type-walletloggerlevel) |
-| [GetUtxoStatusOutputFormat](#type-getutxostatusoutputformat) | [ReorgListener](#type-reorglistener) |  |
+| [Chain](#type-chain) | [GetUtxoStatusService](#type-getutxostatusservice) | [ReorgListener](#type-reorglistener) |
+| [CounterpartyPermissionEventHandler](#type-counterpartypermissioneventhandler) | [GroupedPermissionEventHandler](#type-groupedpermissioneventhandler) | [ReqHistoryNote](#type-reqhistorynote) |
+| [DBType](#type-dbtype) | [HeaderListener](#type-headerlistener) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
+| [EnqueueHandler](#type-enqueuehandler) | [InsertHeaderResult](#type-insertheaderresult) | [ScriptHashFormat](#type-scripthashformat) |
+| [EntityStorage](#type-entitystorage) | [MonitorStartupTaskMode](#type-monitorstartuptaskmode) | [ServicesCallHistory](#type-servicescallhistory) |
+| [ErrorHandler](#type-errorhandler) | [MonitorStorage](#type-monitorstorage) | [StopListenerToken](#type-stoplistenertoken) |
+| [FiatCurrencyCode](#type-fiatcurrencycode) | [ParsedBrc114ActionTimeLabels](#type-parsedbrc114actiontimelabels) | [StorageProvidedBy](#type-storageprovidedby) |
+| [GetMerklePathService](#type-getmerklepathservice) | [PermissionEventHandler](#type-permissioneventhandler) | [SyncProtocolVersion](#type-syncprotocolversion) |
+| [GetRawTxService](#type-getrawtxservice) | [PostBeefService](#type-postbeefservice) | [SyncStatus](#type-syncstatus) |
+| [GetScriptHashHistoryService](#type-getscripthashhistoryservice) | [PostReqsToNetworkDetailsStatus](#type-postreqstonetworkdetailsstatus) | [TransactionStatus](#type-transactionstatus) |
+| [GetStatusForTxidsService](#type-getstatusfortxidsservice) | [PostTxsService](#type-posttxsservice) | [UpdateFiatExchangeRateService](#type-updatefiatexchangerateservice) |
+| [GetUtxoStatusOutputFormat](#type-getutxostatusoutputformat) | [ProvenTxReqStatus](#type-proventxreqstatus) | [WalletLoggerLevel](#type-walletloggerlevel) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -19266,6 +19406,15 @@ export type InsertHeaderResult = {
 ```
 
 See also: [LiveBlockHeader](./services.md#interface-liveblockheader)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Type: MonitorStartupTaskMode
+
+```ts
+export type MonitorStartupTaskMode = "none" | "default" | "multiuser" | "alltoother"
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
