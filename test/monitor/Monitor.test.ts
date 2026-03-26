@@ -150,6 +150,7 @@ describe('Monitor tests', () => {
 
       const task = new TaskSendWaiting(monitor, 1, 1)
       monitor._tasks.push(task)
+      await wait(5)
 
       await monitor.runTask('SendWaiting')
 

@@ -416,6 +416,15 @@ export interface FindProvenTxReqsArgs extends FindSincePagedArgs {
 export interface FindProvenTxsArgs extends FindSincePagedArgs {
   partial: Partial<TableProvenTx>
 }
+export interface FindStaleMerkleRootsArgs {
+  height: number
+  /**
+   * The current valid merkle root for the given height.
+   * Any proven transaction with a different merkle root at this height is considered to have a stale proof.
+   */
+  merkleRoot: string
+  trx?: TrxToken
+}
 export interface FindSyncStatesArgs extends FindSincePagedArgs {
   partial: Partial<TableSyncState>
 }

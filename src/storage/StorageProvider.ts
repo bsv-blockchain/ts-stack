@@ -29,6 +29,7 @@ import {
   FindCertificatesArgs,
   FindOutputBasketsArgs,
   FindOutputsArgs,
+  FindStaleMerkleRootsArgs,
   ProcessSyncChunkResult,
   ProvenOrRawTx,
   PurgeParams,
@@ -136,6 +137,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (o?.outputId !== undefined) byId[o.outputId] = o
     }
     return byId
+  }
+
+  async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> {
+    let provenTxs = await this.findProvenTxs({ partial: { height: args.height } })
+    provenTxs = provenTxs.filter(ptx => ptx.merkleRoot !== args.merkleRoot)
+    let roots = Array.from(new Set(provenTxs.map(ptx => ptx.merkleRoot)))
+    return roots
   }
 
   async findOutputsByOutpoints(
@@ -846,6 +854,10 @@ export interface StorageAdminStats {
   txFailedWeek: number
   txFailedMonth: number
   txFailedTotal: number
+  txAbandonedDay: number
+  txAbandonedWeek: number
+  txAbandonedMonth: number
+  txAbandonedTotal: number
   txUnprocessedDay: number
   txUnprocessedWeek: number
   txUnprocessedMonth: number

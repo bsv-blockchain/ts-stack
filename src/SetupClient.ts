@@ -50,9 +50,8 @@ export abstract class SetupClient {
     const serviceOptions = Services.createDefaultOptions(chain)
     serviceOptions.taalApiKey = args.taalApiKey
     const services = new Services(serviceOptions)
-    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services)
+    const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, 'default')
     const monitor = new Monitor(monopts)
-    monitor.addDefaultTasks()
     const privilegedKeyManager = args.privilegedKeyGetter
       ? new PrivilegedKeyManager(args.privilegedKeyGetter)
       : undefined
