@@ -4,6 +4,17 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.11
+
+- Add UMP v3 token support with Argon2id password key derivation.
+- Introduce `derivePasswordKey()` abstraction that dispatches to Argon2id for v3 tokens and PBKDF2-SHA512 (7777 rounds) for legacy tokens.
+- Use `hash-wasm` for password-key derivation support in browser/webview-compatible contexts.
+- Extend `UMPToken` with optional `umpVersion` and `passwordKdf` metadata fields.
+- Update `buildAndSend` to write v3 KDF metadata fields (`umpVersion`, `kdfAlgorithm`, `kdfParams`) to on-chain tokens.
+- Update `parseLookupAnswer`, `serializeUMPToken`, and `deserializeUMPToken` to parse and round-trip v3 KDF metadata.
+- Export `ARGON2ID_DEFAULT_*` constants (`iterations`, `memoryKiB`, `parallelism`, `hashLength`).
+- Keep legacy token behavior unchanged.
+
 ## wallet-toolbox 2.1.10
 
 - TaskReviewUtxos added

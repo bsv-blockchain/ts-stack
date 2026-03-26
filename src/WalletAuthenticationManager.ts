@@ -20,7 +20,10 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
     walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>,
     interactor: UMPTokenInteractor = new OverlayUMPTokenInteractor(),
     recoveryKeySaver: (key: number[]) => Promise<true>,
-    passwordRetriever: (reason: string, test: (passwordCandidate: string) => boolean) => Promise<string>,
+    passwordRetriever: (
+      reason: string,
+      test: (passwordCandidate: string) => boolean | Promise<boolean>
+    ) => Promise<string>,
     wabClient: WABClient,
     authMethod?: AuthMethodInteractor,
     stateSnapshot?: number[]
@@ -33,47 +36,62 @@ export class WalletAuthenticationManager extends CWIStyleWalletManager {
       passwordRetriever,
       // Here, we provide a custom new wallet funder that uses the Secret Server
       async (presentationKey: number[], wallet: WalletInterface, adminOriginator: string) => {
-        debugger
-        const { paymentData } = await this.wabClient.requestFaucet(Utils.toHex(presentationKey))
-        if (!paymentData.k || !paymentData.tx) {
-          throw new Error('Invalid')
+        const faucetResponse = await this.wabClient.requestFaucet(Utils.toHex(presentationKey))
+        const paymentData = faucetResponse?.paymentData
+
+        if (!faucetResponse?.success || !paymentData) {
+          throw new Error(`Faucet request failed: ${faucetResponse?.message || 'Missing paymentData from WAB'}`)
         }
-        const tx = Transaction.fromAtomicBEEF(paymentData.tx as number[])
-        console.log(paymentData)
-        const faucetRedeemTXCreationResult = await wallet.createAction(
-          {
-            inputBEEF: tx.toBEEF(),
-            inputs: [
-              {
-                outpoint: `${paymentData.txid}.0`,
-                unlockingScriptLength: 108,
-                inputDescription: 'Fund from faucet'
+
+        if (!paymentData.k || !paymentData.tx || !paymentData.txid) {
+          throw new Error('Faucet response missing required fields: k, tx, or txid')
+        }
+
+        try {
+          const tx = Transaction.fromAtomicBEEF(paymentData.tx as number[])
+          const faucetRedeemTXCreationResult = await wallet.createAction(
+            {
+              inputBEEF: tx.toBEEF(),
+              inputs: [
+                {
+                  outpoint: `${paymentData.txid}.0`,
+                  unlockingScriptLength: 108,
+                  inputDescription: 'Fund from faucet'
+                }
+              ],
+              description: 'Fund wallet',
+              options: {
+                acceptDelayedBroadcast: false
               }
-            ],
-            description: 'Fund wallet',
-            options: {
-              acceptDelayedBroadcast: false
-            }
-          },
-          adminOriginator
-        )
-        const faucetRedeemTX = Transaction.fromAtomicBEEF(faucetRedeemTXCreationResult.signableTransaction!.tx)
-        const faucetRedemptionPuzzle = new RPuzzle()
-        const randomRedemptionPrivateKey = PrivateKey.fromRandom()
-        const faucetRedeemUnlocker = faucetRedemptionPuzzle.unlock(
-          new BigNumber(paymentData.k, 16),
-          randomRedemptionPrivateKey
-        )
-        const faucetRedeemUnlockingScript = await faucetRedeemUnlocker.sign(faucetRedeemTX, 0)
-        const signActionResult = await wallet.signAction({
-          reference: faucetRedeemTXCreationResult.signableTransaction!.reference,
-          spends: {
-            0: {
-              unlockingScript: faucetRedeemUnlockingScript.toHex()
-            }
+            },
+            adminOriginator
+          )
+
+          if (!faucetRedeemTXCreationResult.signableTransaction) {
+            throw new Error('Faucet redemption did not return a signableTransaction')
           }
-        })
-        console.log('Sign action result:', signActionResult)
+
+          const faucetRedeemTX = Transaction.fromAtomicBEEF(faucetRedeemTXCreationResult.signableTransaction.tx)
+          const faucetRedemptionPuzzle = new RPuzzle()
+          const randomRedemptionPrivateKey = PrivateKey.fromRandom()
+          const faucetRedeemUnlocker = faucetRedemptionPuzzle.unlock(
+            new BigNumber(paymentData.k, 16),
+            randomRedemptionPrivateKey
+          )
+          const faucetRedeemUnlockingScript = await faucetRedeemUnlocker.sign(faucetRedeemTX, 0)
+
+          await wallet.signAction({
+            reference: faucetRedeemTXCreationResult.signableTransaction.reference,
+            spends: {
+              0: {
+                unlockingScript: faucetRedeemUnlockingScript.toHex()
+              }
+            }
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          throw new Error(`Faucet redemption failed: ${message}`)
+        }
       },
       stateSnapshot
     )

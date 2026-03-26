@@ -56,15 +56,15 @@ import {
   WalletInterface,
   OutpointString,
   PrivateKey,
+  Signature,
   LookupResolver,
   LookupAnswer,
   Transaction,
   PushDrop,
   CreateActionInput,
-  SHIPBroadcaster,
-  BigNumber,
-  Curve
+  SHIPBroadcaster
 } from '@bsv/sdk'
+import { argon2id, pbkdf2, createSHA256, createSHA512 } from 'hash-wasm'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 
 /**
@@ -73,8 +73,66 @@ import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 export const PBKDF2_NUM_ROUNDS = 7777
 
 /**
- * PBKDF-2 that prefers the browser / Node 20+ WebCrypto implementation and
- * silently falls back to the existing JS code.
+ * Default Argon2id parameters for password-key derivation (UMP v3).
+ */
+export const ARGON2ID_DEFAULT_ITERATIONS = 7
+export const ARGON2ID_DEFAULT_MEMORY_KIB = 131072
+export const ARGON2ID_DEFAULT_PARALLELISM = 1
+export const ARGON2ID_DEFAULT_HASH_LENGTH = 32
+
+function isLikelyDerSignatureField(field: number[]): boolean {
+  if (!field || field.length < 8 || field.length > 80) {
+    return false
+  }
+
+  if (field[0] !== 0x30) {
+    return false
+  }
+
+  const declaredLen = field[1]
+  return declaredLen === field.length - 2
+}
+
+function stripVerifiedPushDropSignature(fields: number[][], lockingPublicKey: any): number[][] {
+  if (fields.length <= 11) {
+    return fields
+  }
+
+  const protocolFieldCount = fields.length - 1
+  const trailingField = fields[protocolFieldCount]
+  if (!trailingField || !isLikelyDerSignatureField(trailingField)) {
+    return fields
+  }
+
+  try {
+    let dataLength = 0
+    for (let i = 0; i < protocolFieldCount; i++) {
+      dataLength += fields[i].length
+    }
+
+    const dataToVerify = new Array<number>(dataLength)
+    let writeOffset = 0
+    for (let i = 0; i < protocolFieldCount; i++) {
+      const field = fields[i]
+      for (let j = 0; j < field.length; j++) {
+        dataToVerify[writeOffset++] = field[j]
+      }
+    }
+
+    const signature = Signature.fromDER(trailingField)
+
+    if (signature.verify(dataToVerify, lockingPublicKey)) {
+      return fields.slice(0, protocolFieldCount)
+    }
+  } catch {
+    return fields
+  }
+
+  return fields
+}
+
+/**
+ * PBKDF-2 that prefers WebCrypto and falls back to hash-wasm.
  *
  * @param passwordBytes   Raw password bytes.
  * @param salt            Salt bytes.
@@ -83,7 +141,7 @@ export const PBKDF2_NUM_ROUNDS = 7777
  * @param hash            Digest algorithm (default "sha512").
  * @returns               Derived key bytes.
  */
-async function pbkdf2NativeOrJs(
+async function pbkdf2NativeOrWasm(
   passwordBytes: number[],
   salt: number[],
   iterations: number,
@@ -119,8 +177,68 @@ async function pbkdf2NativeOrJs(
     }
   }
 
-  // ----- slow-path: old JavaScript implementation
-  return Hash.pbkdf2(passwordBytes, salt, iterations, keyLen, hash)
+  const hashFunction = hash === 'sha256' ? createSHA256() : createSHA512()
+  const derived = await pbkdf2({
+    password: new Uint8Array(passwordBytes),
+    salt: new Uint8Array(salt),
+    iterations,
+    hashLength: keyLen,
+    hashFunction,
+    outputType: 'binary'
+  })
+
+  return Array.from(derived)
+}
+
+/**
+ * Derives the password key from a password using the KDF specified in the UMP token.
+ * For legacy tokens (no KDF metadata), uses PBKDF2 with fixed rounds (7777).
+ * For v3 tokens, uses the algorithm specified in passwordKdf metadata.
+ *
+ * @param token          The UMP token containing KDF metadata and salt.
+ * @param passwordBytes  Raw password bytes.
+ * @param overrideKdf    Optional KDF config to override token/default settings.
+ * @returns              Derived password key bytes.
+ */
+async function derivePasswordKey(
+  token: Pick<UMPToken, 'passwordSalt' | 'passwordKdf'>,
+  passwordBytes: number[],
+  overrideKdf?: {
+    algorithm?: 'pbkdf2-sha512' | 'argon2id'
+    iterations?: number
+    memoryKiB?: number
+    parallelism?: number
+    hashLength?: number
+  }
+): Promise<number[]> {
+  const kdf = overrideKdf || token.passwordKdf
+
+  // Legacy token or explicit PBKDF2 request
+  if (!kdf || kdf.algorithm === 'pbkdf2-sha512') {
+    return pbkdf2NativeOrWasm(passwordBytes, token.passwordSalt, kdf?.iterations ?? PBKDF2_NUM_ROUNDS, 32, 'sha512')
+  }
+
+  // Argon2id path (UMP v3)
+  if (kdf.algorithm === 'argon2id') {
+    const iterations = kdf.iterations ?? ARGON2ID_DEFAULT_ITERATIONS
+    const memorySize = kdf.memoryKiB ?? ARGON2ID_DEFAULT_MEMORY_KIB
+    const parallelism = kdf.parallelism ?? ARGON2ID_DEFAULT_PARALLELISM
+    const hashLength = kdf.hashLength ?? ARGON2ID_DEFAULT_HASH_LENGTH
+
+    const hash = await argon2id({
+      password: new Uint8Array(passwordBytes),
+      salt: new Uint8Array(token.passwordSalt),
+      iterations,
+      memorySize,
+      parallelism,
+      hashLength,
+      outputType: 'binary'
+    })
+
+    return Array.from(hash)
+  }
+
+  throw new Error(`Unsupported KDF algorithm: ${(kdf as any).algorithm}`)
 }
 
 /**
@@ -224,9 +342,56 @@ export interface UMPToken {
   profilesEncrypted?: number[]
 
   /**
+   * On-chain UMP protocol version (3 for tokens with KDF metadata).
+   */
+  umpVersion?: number
+
+  /**
+   * Password-based key derivation function metadata.
+   * Present for UMP v3 tokens; absent for legacy tokens.
+   */
+  passwordKdf?: {
+    algorithm: 'pbkdf2-sha512' | 'argon2id'
+    iterations: number
+    memoryKiB?: number
+    parallelism?: number
+    hashLength?: number
+  }
+
+  /**
    * Describes the token's location on-chain, if it's already been published.
    */
   currentOutpoint?: OutpointString
+}
+
+/**
+ * Configuration options for KDF (Key Derivation Function) used in UMP tokens.
+ */
+export interface KdfConfig {
+  /**
+   * Algorithm to use for new UMP tokens.
+   */
+  algorithm?: 'pbkdf2-sha512' | 'argon2id'
+
+  /**
+   * Number of iterations/rounds.
+   */
+  iterations?: number
+
+  /**
+   * Memory size in KiB (Argon2id only).
+   */
+  memoryKiB?: number
+
+  /**
+   * Degree of parallelism (Argon2id only).
+   */
+  parallelism?: number
+
+  /**
+   * Hash output length in bytes.
+   */
+  hashLength?: number
 }
 
 /**
@@ -359,7 +524,6 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   ): Promise<OutpointString> {
     // 1) Construct the data fields for the new UMP token.
     const fields: number[][] = []
-
     fields[0] = token.passwordSalt
     fields[1] = token.passwordPresentationPrimary
     fields[2] = token.passwordRecoveryPrimary
@@ -372,12 +536,36 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     fields[9] = token.passwordKeyEncrypted
     fields[10] = token.recoveryKeyEncrypted
 
-    // Optional field (11) for encrypted profiles
+    // Optional field for encrypted profiles
     if (token.profilesEncrypted) {
       fields[11] = token.profilesEncrypted
     }
 
+    // V3 fields: umpVersion, kdfAlgorithm, kdfParams
+    if (token.umpVersion === 3 && token.passwordKdf) {
+      const versionFieldIndex = token.profilesEncrypted ? 12 : 11
+
+      fields[versionFieldIndex] = [token.umpVersion] // Single byte
+      fields[versionFieldIndex + 1] = Utils.toArray(token.passwordKdf.algorithm, 'utf8')
+
+      // Construct kdfParams JSON
+      const kdfParams: Record<string, number> = {
+        iterations: token.passwordKdf.iterations
+      }
+      if (token.passwordKdf.memoryKiB !== undefined) {
+        kdfParams.memoryKiB = token.passwordKdf.memoryKiB
+      }
+      if (token.passwordKdf.parallelism !== undefined) {
+        kdfParams.parallelism = token.passwordKdf.parallelism
+      }
+      if (token.passwordKdf.hashLength !== undefined) {
+        kdfParams.hashLength = token.passwordKdf.hashLength
+      }
+      fields[versionFieldIndex + 2] = Utils.toArray(JSON.stringify(kdfParams), 'utf8')
+    }
+
     // 2) Create a PushDrop script referencing these fields, locked with the admin key.
+    // The signature will be added as trailing metadata by PushDrop (not part of protocol fields).
     const script = await new PushDrop(wallet, adminOriginator).lock(
       fields,
       [2, 'admin user management token'], // protocolID
@@ -542,23 +730,71 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         return undefined
       }
 
+      // Parse protocol fields, excluding the trailing PushDrop signature only when
+      // it is cryptographically valid for the preceding field payload.
+      let protocolFields = stripVerifiedPushDropSignature(decoded.fields, decoded.lockingPublicKey)
+
+      // Detect v3 token metadata in either layout:
+      // - with profilesEncrypted present: [0..10]=core, [11]=profiles, [12]=version, [13]=algorithm, [14]=params
+      // - without profilesEncrypted:      [0..10]=core, [11]=version, [12]=algorithm, [13]=params
+      const hasV3MetadataWithProfiles =
+        protocolFields.length >= 15 && protocolFields[12]?.length === 1 && protocolFields[12][0] === 3
+      const hasV3MetadataWithoutProfiles =
+        protocolFields.length >= 14 && protocolFields[11]?.length === 1 && protocolFields[11][0] === 3
+
+      const kdfVersionFieldIndex = hasV3MetadataWithProfiles ? 12 : hasV3MetadataWithoutProfiles ? 11 : -1
+
       // Build the UMP token from these fields, preserving outpoint
       const t: UMPToken = {
-        // Order matches buildAndSend and serialize/deserialize
-        passwordSalt: decoded.fields[0],
-        passwordPresentationPrimary: decoded.fields[1],
-        passwordRecoveryPrimary: decoded.fields[2],
-        presentationRecoveryPrimary: decoded.fields[3],
-        passwordPrimaryPrivileged: decoded.fields[4],
-        presentationRecoveryPrivileged: decoded.fields[5],
-        presentationHash: decoded.fields[6],
-        recoveryHash: decoded.fields[7],
-        presentationKeyEncrypted: decoded.fields[8],
-        passwordKeyEncrypted: decoded.fields[9],
-        recoveryKeyEncrypted: decoded.fields[10],
-        profilesEncrypted: decoded.fields[12] ? decoded.fields[11] : undefined, // If there's a signature in field 12, use field 11
+        // Core fields (unchanged for all versions)
+        passwordSalt: protocolFields[0],
+        passwordPresentationPrimary: protocolFields[1],
+        passwordRecoveryPrimary: protocolFields[2],
+        presentationRecoveryPrimary: protocolFields[3],
+        passwordPrimaryPrivileged: protocolFields[4],
+        presentationRecoveryPrivileged: protocolFields[5],
+        presentationHash: protocolFields[6],
+        recoveryHash: protocolFields[7],
+        presentationKeyEncrypted: protocolFields[8],
+        passwordKeyEncrypted: protocolFields[9],
+        recoveryKeyEncrypted: protocolFields[10],
         currentOutpoint: outpoint
       }
+
+      // Encrypted profiles (optional, all versions)
+      const hasProfilesField = hasV3MetadataWithProfiles || (!hasV3MetadataWithoutProfiles && !!protocolFields[11])
+      if (hasProfilesField && protocolFields[11] && protocolFields[11].length > 0) {
+        t.profilesEncrypted = protocolFields[11]
+      }
+
+      // V3 fields: umpVersion, kdfAlgorithm, kdfParams (fields 12, 13, 14)
+      if (kdfVersionFieldIndex !== -1) {
+        t.umpVersion = protocolFields[kdfVersionFieldIndex][0] // Single byte value 3
+
+        const kdfAlgorithmField = protocolFields[kdfVersionFieldIndex + 1]
+        const kdfParamsField = protocolFields[kdfVersionFieldIndex + 2]
+
+        if (!kdfAlgorithmField || !kdfParamsField) {
+          return t
+        }
+
+        const kdfAlgorithm = Utils.toUTF8(kdfAlgorithmField)
+        const kdfParamsJson = Utils.toUTF8(kdfParamsField)
+
+        try {
+          const kdfParams = JSON.parse(kdfParamsJson)
+          t.passwordKdf = {
+            algorithm: kdfAlgorithm as 'pbkdf2-sha512' | 'argon2id',
+            iterations: kdfParams.iterations,
+            memoryKiB: kdfParams.memoryKiB,
+            parallelism: kdfParams.parallelism,
+            hashLength: kdfParams.hashLength
+          }
+        } catch (e) {
+          console.warn('Failed to parse v3 KDF params:', e)
+        }
+      }
+
       return t
     } catch (e) {
       console.error('Failed to parse or decode UMP token:', e)
@@ -621,7 +857,10 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Only resolve with the correct password or reject with an error.
    * Resolving with an incorrect password will throw an error.
    */
-  private passwordRetriever: (reason: string, test: (passwordCandidate: string) => boolean) => Promise<string>
+  private passwordRetriever: (
+    reason: string,
+    test: (passwordCandidate: string) => boolean | Promise<boolean>
+  ) => Promise<string>
 
   /**
    * Optional function to fund a new Wallet after the new-user flow.
@@ -695,6 +934,11 @@ export class CWIStyleWalletManager implements WalletInterface {
   private rootPrivilegedKeyManager?: PrivilegedKeyManager
 
   /**
+   * KDF configuration for new UMP tokens. Defaults to Argon2id for v3 tokens.
+   */
+  private kdfConfig: Required<KdfConfig>
+
+  /**
    * Constructs a new CWIStyleWalletManager.
    *
    * @param adminOriginator   The domain name of the administrative originator.
@@ -704,6 +948,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param passwordRetriever A function to request the user's password.
    * @param newWalletFunder   Optional function to fund a new wallet.
    * @param stateSnapshot     Optional previously saved state snapshot.
+   * @param kdfConfig         Optional KDF configuration for new UMP tokens.
    */
   constructor(
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
@@ -714,13 +959,17 @@ export class CWIStyleWalletManager implements WalletInterface {
     ) => Promise<WalletInterface>,
     interactor: UMPTokenInteractor = new OverlayUMPTokenInteractor(),
     recoveryKeySaver: (key: number[]) => Promise<true>,
-    passwordRetriever: (reason: string, test: (passwordCandidate: string) => boolean) => Promise<string>,
+    passwordRetriever: (
+      reason: string,
+      test: (passwordCandidate: string) => boolean | Promise<boolean>
+    ) => Promise<string>,
     newWalletFunder?: (
       presentationKey: number[],
       wallet: WalletInterface, // Default profile wallet
       adminOriginator: OriginatorDomainNameStringUnder250Bytes
     ) => Promise<void>,
-    stateSnapshot?: number[]
+    stateSnapshot?: number[],
+    kdfConfig?: KdfConfig
   ) {
     this.adminOriginator = adminOriginator
     this.walletBuilder = walletBuilder
@@ -729,6 +978,15 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.passwordRetriever = passwordRetriever
     this.authenticated = false
     this.newWalletFunder = newWalletFunder
+
+    // Initialize KDF config with Argon2id defaults for v3 tokens
+    this.kdfConfig = {
+      algorithm: kdfConfig?.algorithm ?? 'argon2id',
+      iterations: kdfConfig?.iterations ?? ARGON2ID_DEFAULT_ITERATIONS,
+      memoryKiB: kdfConfig?.memoryKiB ?? ARGON2ID_DEFAULT_MEMORY_KIB,
+      parallelism: kdfConfig?.parallelism ?? ARGON2ID_DEFAULT_PARALLELISM,
+      hashLength: kdfConfig?.hashLength ?? ARGON2ID_DEFAULT_HASH_LENGTH
+    }
 
     // If a saved snapshot is provided, attempt to load it.
     // Note: loadSnapshot now returns a promise. We don't await it here,
@@ -787,13 +1045,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       if (!this.currentUMPToken) {
         throw new Error('Provide presentation or recovery key first.')
       }
-      const derivedPasswordKey = await pbkdf2NativeOrJs(
-        Utils.toArray(password, 'utf8'),
-        this.currentUMPToken.passwordSalt,
-        PBKDF2_NUM_ROUNDS,
-        32,
-        'sha512'
-      )
+      // Use token-driven KDF (legacy PBKDF2 or v3 Argon2id)
+      const derivedPasswordKey = await derivePasswordKey(this.currentUMPToken, Utils.toArray(password, 'utf8'))
 
       let rootPrimaryKey: number[]
       let rootPrivilegedKey: number[] | undefined // Only needed for recovery mode
@@ -830,13 +1083,13 @@ export class CWIStyleWalletManager implements WalletInterface {
       const recoveryKey = Random(32)
       await this.recoveryKeySaver(recoveryKey)
       const passwordSalt = Random(32)
-      const passwordKey = await pbkdf2NativeOrJs(
-        Utils.toArray(password, 'utf8'),
+
+      // Build temporary token with KDF config for password derivation
+      const tempTokenForKdf = {
         passwordSalt,
-        PBKDF2_NUM_ROUNDS,
-        32,
-        'sha512'
-      )
+        passwordKdf: this.kdfConfig
+      }
+      const passwordKey = await derivePasswordKey(tempTokenForKdf, Utils.toArray(password, 'utf8'))
       const rootPrimaryKey = Random(32)
       const rootPrivilegedKey = Random(32)
 
@@ -849,7 +1102,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       // Temp manager for encryption
       const tempPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
 
-      // Build new UMP token (no profiles initially)
+      // Build new UMP token (v3 with KDF metadata, no profiles initially)
       const newToken: UMPToken = {
         passwordSalt,
         passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
@@ -880,7 +1133,9 @@ export class CWIStyleWalletManager implements WalletInterface {
             keyID: '1'
           })
         ).ciphertext,
-        profilesEncrypted: undefined // No profiles yet
+        profilesEncrypted: undefined, // No profiles yet
+        umpVersion: 3, // UMP protocol version 3
+        passwordKdf: this.kdfConfig // KDF metadata for v3
       }
       this.currentUMPToken = newToken
 
@@ -894,7 +1149,8 @@ export class CWIStyleWalletManager implements WalletInterface {
           await this.newWalletFunder(this.presentationKey, this.underlying, this.adminOriginator)
         } catch (e) {
           console.error('Error funding new wallet:', e)
-          // Decide if this should halt the process or just log
+          const message = e instanceof Error ? e.message : String(e)
+          throw new Error(`Failed to fund new wallet before publishing UMP token: ${message}`)
         }
       }
 
@@ -1278,13 +1534,13 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     const passwordSalt = Random(32)
-    const newPasswordKey = await pbkdf2NativeOrJs(
-      Utils.toArray(newPassword, 'utf8'),
+    // Preserve current token's KDF metadata (or use manager's kdfConfig for legacy tokens)
+    const kdfToUse = this.currentUMPToken.passwordKdf ?? this.kdfConfig
+    const tempTokenForKdf = {
       passwordSalt,
-      PBKDF2_NUM_ROUNDS,
-      32,
-      'sha512'
-    )
+      passwordKdf: kdfToUse
+    }
+    const newPasswordKey = await derivePasswordKey(tempTokenForKdf, Utils.toArray(newPassword, 'utf8'))
 
     // Decrypt existing factors needed for re-encryption, using the *root* privileged key manager
     const recoveryKey = await this.getFactor('recoveryKey')
@@ -1486,7 +1742,8 @@ export class CWIStyleWalletManager implements WalletInterface {
       profilesEncrypted = new SymmetricKey(rootPrimaryKey).encrypt(profilesBytes) as number[]
     }
 
-    // Construct the new UMP token data
+    // Construct the new UMP token data (preserve or upgrade to v3 with KDF metadata)
+    const kdfMetadata = this.currentUMPToken.passwordKdf ?? this.kdfConfig
     const newTokenData: UMPToken = {
       passwordSalt,
       passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
@@ -1517,7 +1774,9 @@ export class CWIStyleWalletManager implements WalletInterface {
           keyID: '1'
         })
       ).ciphertext,
-      profilesEncrypted // Add encrypted profiles
+      profilesEncrypted, // Add encrypted profiles
+      umpVersion: 3, // UMP protocol version 3
+      passwordKdf: kdfMetadata // Preserve or upgrade KDF metadata
       // currentOutpoint will be set after publishing
     }
 
@@ -1557,8 +1816,8 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   /**
-   * Serializes a UMP token to binary format (Version 2 with optional profiles).
-   * Layout: [1 byte version=2] + [11 * (varint len + bytes) for standard fields] + [1 byte profile_flag] + [IF flag=1 THEN varint len + profile bytes] + [varint len + outpoint bytes]
+   * Serializes a UMP token to binary format (Version 3 with KDF metadata, Version 2 with profiles).
+   * V3 Layout: [1 byte version=3] + [11 * (varint len + bytes) for standard fields] + [1 byte profile_flag] + [IF flag=1 THEN varint len + profile bytes] + [1 byte kdf_flag] + [IF flag=1 THEN kdf metadata] + [varint len + outpoint bytes]
    */
   private serializeUMPToken(token: UMPToken): number[] {
     if (!token.currentOutpoint) {
@@ -1566,7 +1825,8 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
 
     const writer = new Utils.Writer()
-    writer.writeUInt8(2) // Version 2
+    const hasKdfMetadata = token.umpVersion === 3 && token.passwordKdf
+    writer.writeUInt8(hasKdfMetadata ? 3 : 2) // Version 3 for KDF, 2 for legacy
 
     const writeArray = (arr: number[]) => {
       writer.writeVarIntNum(arr.length)
@@ -1583,7 +1843,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     writeArray(token.presentationHash) // 6
     writeArray(token.recoveryHash) // 7
     writeArray(token.presentationKeyEncrypted) // 8
-    writeArray(token.passwordKeyEncrypted) // 9 - Swapped order vs original doc comment
+    writeArray(token.passwordKeyEncrypted) // 9
     writeArray(token.recoveryKeyEncrypted) // 10
 
     // Write optional profiles field
@@ -1592,6 +1852,33 @@ export class CWIStyleWalletManager implements WalletInterface {
       writeArray(token.profilesEncrypted)
     } else {
       writer.writeUInt8(0) // Flag indicating no profiles
+    }
+
+    // V3: Write KDF metadata
+    if (hasKdfMetadata) {
+      writer.writeUInt8(1) // Flag indicating KDF metadata present
+      writer.writeUInt8(token.umpVersion!) // On-chain UMP version
+      const algorithmBytes = Utils.toArray(token.passwordKdf!.algorithm, 'utf8')
+      writeArray(algorithmBytes)
+
+      // Serialize KDF params as JSON
+      const kdfParams: Record<string, number> = {
+        iterations: token.passwordKdf!.iterations
+      }
+      if (token.passwordKdf!.memoryKiB !== undefined) {
+        kdfParams.memoryKiB = token.passwordKdf!.memoryKiB
+      }
+      if (token.passwordKdf!.parallelism !== undefined) {
+        kdfParams.parallelism = token.passwordKdf!.parallelism
+      }
+      if (token.passwordKdf!.hashLength !== undefined) {
+        kdfParams.hashLength = token.passwordKdf!.hashLength
+      }
+      const kdfParamsBytes = Utils.toArray(JSON.stringify(kdfParams), 'utf8')
+      writeArray(kdfParamsBytes)
+    } else if (writer.toArray()[0] === 3) {
+      // Version 3 without KDF metadata (shouldn't happen, but handle gracefully)
+      writer.writeUInt8(0) // Flag indicating no KDF metadata
     }
 
     // Write outpoint string
@@ -1603,13 +1890,13 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   /**
-   * Deserializes a UMP token from binary format (Handles Version 1 and 2).
+   * Deserializes a UMP token from binary format (Handles Version 1, 2, and 3).
    */
   private deserializeUMPToken(bin: number[]): UMPToken {
     const reader = new Utils.Reader(bin)
     const version = reader.readUInt8()
 
-    if (version !== 1 && version !== 2) {
+    if (version !== 1 && version !== 2 && version !== 3) {
       throw new Error(`Unsupported UMP token serialization version: ${version}`)
     }
 
@@ -1618,7 +1905,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       return reader.read(length)
     }
 
-    // Read standard fields (order matches serialization V2)
+    // Read standard fields (order matches serialization)
     const passwordSalt = readArray() // 0
     const passwordPresentationPrimary = readArray() // 1
     const passwordRecoveryPrimary = readArray() // 2
@@ -1631,12 +1918,40 @@ export class CWIStyleWalletManager implements WalletInterface {
     const passwordKeyEncrypted = readArray() // 9
     const recoveryKeyEncrypted = readArray() // 10
 
-    // Read optional profiles (only in V2)
+    // Read optional profiles (V2 and V3)
     let profilesEncrypted: number[] | undefined
-    if (version === 2) {
+    if (version >= 2) {
       const profilesFlag = reader.readUInt8()
       if (profilesFlag === 1) {
         profilesEncrypted = readArray()
+      }
+    }
+
+    // Read KDF metadata (V3 only)
+    let umpVersion: number | undefined
+    let passwordKdf: UMPToken['passwordKdf']
+    if (version === 3) {
+      const kdfFlag = reader.readUInt8()
+      if (kdfFlag === 1) {
+        umpVersion = reader.readUInt8() // On-chain UMP version
+        const algorithmBytes = readArray()
+        const algorithm = Utils.toUTF8(algorithmBytes) as 'pbkdf2-sha512' | 'argon2id'
+
+        const kdfParamsBytes = readArray()
+        const kdfParamsJson = Utils.toUTF8(kdfParamsBytes)
+
+        try {
+          const kdfParams = JSON.parse(kdfParamsJson)
+          passwordKdf = {
+            algorithm,
+            iterations: kdfParams.iterations,
+            memoryKiB: kdfParams.memoryKiB,
+            parallelism: kdfParams.parallelism,
+            hashLength: kdfParams.hashLength
+          }
+        } catch (e) {
+          console.warn('Failed to parse KDF params during deserialization:', e)
+        }
       }
     }
 
@@ -1655,10 +1970,12 @@ export class CWIStyleWalletManager implements WalletInterface {
       presentationHash,
       recoveryHash,
       presentationKeyEncrypted,
-      passwordKeyEncrypted, // Corrected order
+      passwordKeyEncrypted,
       recoveryKeyEncrypted,
-      profilesEncrypted, // May be undefined
-      currentOutpoint
+      profilesEncrypted,
+      currentOutpoint,
+      umpVersion,
+      passwordKdf
     }
 
     return token
@@ -1696,14 +2013,11 @@ export class CWIStyleWalletManager implements WalletInterface {
       }
 
       // 2. Otherwise, derive from password
-      const password = await this.passwordRetriever(reason, (passwordCandidate: string) => {
+      const password = await this.passwordRetriever(reason, async (passwordCandidate: string) => {
         try {
-          const derivedPasswordKey = Hash.pbkdf2(
-            Utils.toArray(passwordCandidate, 'utf8'),
-            this.currentUMPToken!.passwordSalt,
-            PBKDF2_NUM_ROUNDS,
-            32,
-            'sha512'
+          const derivedPasswordKey = await derivePasswordKey(
+            this.currentUMPToken!,
+            Utils.toArray(passwordCandidate, 'utf8')
           )
           const privilegedDecryptor = this.XOR(this.rootPrimaryKey!, derivedPasswordKey)
           const decryptedPrivileged = new SymmetricKey(privilegedDecryptor).decrypt(
@@ -1715,14 +2029,8 @@ export class CWIStyleWalletManager implements WalletInterface {
         }
       })
 
-      // Decrypt the root privileged key using the confirmed password
-      const derivedPasswordKey = await pbkdf2NativeOrJs(
-        Utils.toArray(password, 'utf8'),
-        this.currentUMPToken!.passwordSalt,
-        PBKDF2_NUM_ROUNDS,
-        32,
-        'sha512'
-      )
+      // Decrypt the root privileged key using the confirmed password (with token-driven KDF)
+      const derivedPasswordKey = await derivePasswordKey(this.currentUMPToken!, Utils.toArray(password, 'utf8'))
       const privilegedDecryptor = this.XOR(this.rootPrimaryKey!, derivedPasswordKey)
       const rootPrivilegedBytes = new SymmetricKey(privilegedDecryptor).decrypt(
         this.currentUMPToken!.passwordPrimaryPrivileged
