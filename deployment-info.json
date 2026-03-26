@@ -30,7 +30,7 @@
       ]
     },
     {
-      "name": "New Babbage Mainnet",
+      "name": "Babbage Mainnet",
       "provider": "CARS",
       "CARSCloudURL": "https://cars.babbage.systems",
       "projectID": "c6a84fc53bb50c34e179dcd861eb3964",
