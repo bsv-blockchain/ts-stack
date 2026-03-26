@@ -20,6 +20,6 @@
   },
   "homepage": "https://github.com/bsv-blockchain/wallet-toolbox#readme",
   "dependencies": {
-    "@bsv/sdk": "^2.0.5"
+    "@bsv/sdk": "^2.0.13"
   }
 }
