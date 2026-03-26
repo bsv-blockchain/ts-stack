@@ -99,8 +99,8 @@ export class WalletRelayService {
     this.registerRoutes(opts.app)
   }
 
-  /** Create a session and return its QR data URL and desktop WebSocket token. */
-  async createSession(): Promise<{ sessionId: string; status: string; qrDataUrl: string; desktopToken: string }> {
+  /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
+  async createSession(): Promise<{ sessionId: string; status: string; qrDataUrl: string; pairingUri: string; desktopToken: string }> {
     const session = this.sessions.createSession()
     const { publicKey: backendIdentityKey } = await this.opts.wallet.getPublicKey({ identityKey: true })
     const uri = buildPairingUri({
@@ -111,7 +111,7 @@ export class WalletRelayService {
       origin: this.opts.origin,
     })
     const qrDataUrl = await this.sessions.generateQRCode(uri)
-    return { sessionId: session.id, status: session.status, qrDataUrl, desktopToken: session.desktopToken }
+    return { sessionId: session.id, status: session.status, qrDataUrl, pairingUri: uri, desktopToken: session.desktopToken }
   }
 
   /** Return session status, or null if not found. */

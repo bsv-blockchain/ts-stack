@@ -144,11 +144,12 @@ declare class WalletRelayService {
     private pending;
     private mobileAuthTimers;
     constructor(opts: WalletRelayServiceOptions);
-    /** Create a session and return its QR data URL and desktop WebSocket token. */
+    /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
     createSession(): Promise<{
         sessionId: string;
         status: string;
         qrDataUrl: string;
+        pairingUri: string;
         desktopToken: string;
     }>;
     /** Return session status, or null if not found. */

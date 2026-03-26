@@ -145,7 +145,22 @@ new WalletPairingSession(
 connect(): Promise<void>
 ```
 
-Opens the WebSocket connection to the relay and sends `pairing_approved`. Resolves once the connection is established. Does not wait for the `pairing_ack` — the session transitions to `connected` on the first successfully decrypted message.
+Opens the WebSocket connection to the relay and sends `pairing_approved`. Seq tracking starts from 0. Use for fresh pairings where no prior session state exists.
+
+---
+
+**`reconnect(lastSeq)`**
+
+```ts
+reconnect(lastSeq: number): Promise<void>
+```
+
+Re-opens the WebSocket connection using a stored seq baseline. Replay protection resumes from `lastSeq` — any inbound message with `seq ≤ lastSeq` is dropped. Use this after a network drop when the session is still valid on the backend.
+
+```ts
+const lastSeq = await SecureStore.getItemAsync(`lastseq_${topic}`)
+await session.reconnect(Number(lastSeq ?? 0))
+```
 
 ---
 

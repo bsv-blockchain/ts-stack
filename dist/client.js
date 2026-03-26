@@ -58,9 +58,29 @@ var WalletPairingSession = class {
     return this;
   }
   // ── Lifecycle ────────────────────────────────────────────────────────────────
-  /** Open the WS connection and send pairing_approved. */
+  /** Open the WS connection and start a fresh pairing handshake. */
   async connect() {
+    await this.openConnection(0);
+  }
+  /**
+   * Re-open the WS connection using a stored seq baseline.
+   * Replay protection resumes from `lastSeq` — messages with seq ≤ lastSeq are dropped.
+   * Use this after a network drop when the session is still valid on the backend.
+   *
+   * @param lastSeq - The highest seq received in the previous connection (from persistent storage).
+   */
+  async reconnect(lastSeq) {
+    await this.openConnection(lastSeq);
+  }
+  /** Close the WebSocket connection. */
+  disconnect() {
+    this.ws?.close();
+    this.ws = null;
+  }
+  async openConnection(initialSeq) {
     this._status = "connecting";
+    this.connected = false;
+    this.lastSeq = initialSeq;
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true });
     this.mobileIdentityKey = publicKey;
     const { topic, relay, backendIdentityKey, keyID } = this.params;
@@ -71,7 +91,7 @@ var WalletPairingSession = class {
       try {
         const payload = JSON.stringify({
           id: crypto.randomUUID(),
-          seq: 1,
+          seq: initialSeq + 1,
           method: "pairing_approved",
           params: {
             mobileIdentityKey: publicKey,
@@ -122,11 +142,6 @@ var WalletPairingSession = class {
         this.emitError("Could not reach the relay \u2014 check that the desktop tab is still open");
       }
     };
-  }
-  /** Close the WebSocket connection. */
-  disconnect() {
-    this.ws?.close();
-    this.ws = null;
   }
   // ── Private ──────────────────────────────────────────────────────────────────
   emitError(msg) {

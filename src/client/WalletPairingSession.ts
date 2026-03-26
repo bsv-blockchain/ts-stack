@@ -44,7 +44,7 @@ export interface WalletPairingSessionOptions {
  *   5. Dispatches RPC requests through the registered handler
  *   6. Handles `pairing_ack` (no-op — just confirms the session is live)
  *
- * Usage:
+ * Fresh pairing:
  * ```ts
  * const session = new WalletPairingSession(wallet, pairingParams, {
  *   implementedMethods: new Set(['getPublicKey', 'listOutputs']),
@@ -52,16 +52,15 @@ export interface WalletPairingSessionOptions {
  *   onApprovalRequired: async (method, params) => await showApprovalModal(method, params),
  * })
  *
- * session.onRequest(async (method, params) => {
- *   return await wallet[method](params)
- * })
- *
- * session
- *   .on('connected',    () => setStatus('connected'))
- *   .on('disconnected', () => setStatus('disconnected'))
- *   .on('error',        msg => setError(msg))
- *
+ * session.onRequest(async (method, params) => wallet[method](params))
+ * session.on('connected', () => ...).on('disconnected', () => ...).on('error', msg => ...)
  * await session.connect()
+ * ```
+ *
+ * Resuming a previous session (e.g. after network drop):
+ * ```ts
+ * const lastSeq = await SecureStore.getItemAsync(`lastseq_${topic}`)
+ * await session.reconnect(Number(lastSeq))
  * ```
  */
 export class WalletPairingSession {
@@ -108,9 +107,32 @@ export class WalletPairingSession {
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-  /** Open the WS connection and send pairing_approved. */
+  /** Open the WS connection and start a fresh pairing handshake. */
   async connect(): Promise<void> {
+    await this.openConnection(0)
+  }
+
+  /**
+   * Re-open the WS connection using a stored seq baseline.
+   * Replay protection resumes from `lastSeq` — messages with seq ≤ lastSeq are dropped.
+   * Use this after a network drop when the session is still valid on the backend.
+   *
+   * @param lastSeq - The highest seq received in the previous connection (from persistent storage).
+   */
+  async reconnect(lastSeq: number): Promise<void> {
+    await this.openConnection(lastSeq)
+  }
+
+  /** Close the WebSocket connection. */
+  disconnect(): void {
+    this.ws?.close()
+    this.ws = null
+  }
+
+  private async openConnection(initialSeq: number): Promise<void> {
     this._status = 'connecting'
+    this.connected = false
+    this.lastSeq = initialSeq
 
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true })
     this.mobileIdentityKey = publicKey
@@ -125,7 +147,7 @@ export class WalletPairingSession {
       try {
         const payload = JSON.stringify({
           id: crypto.randomUUID(),
-          seq: 1,
+          seq: initialSeq + 1,
           method: 'pairing_approved',
           params: {
             mobileIdentityKey: publicKey,
@@ -194,12 +216,6 @@ export class WalletPairingSession {
         this.emitError('Could not reach the relay — check that the desktop tab is still open')
       }
     }
-  }
-
-  /** Close the WebSocket connection. */
-  disconnect(): void {
-    this.ws?.close()
-    this.ws = null
   }
 
   // ── Private ──────────────────────────────────────────────────────────────────

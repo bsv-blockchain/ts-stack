@@ -38,7 +38,7 @@ interface WalletPairingSessionOptions {
  *   5. Dispatches RPC requests through the registered handler
  *   6. Handles `pairing_ack` (no-op — just confirms the session is live)
  *
- * Usage:
+ * Fresh pairing:
  * ```ts
  * const session = new WalletPairingSession(wallet, pairingParams, {
  *   implementedMethods: new Set(['getPublicKey', 'listOutputs']),
@@ -46,16 +46,15 @@ interface WalletPairingSessionOptions {
  *   onApprovalRequired: async (method, params) => await showApprovalModal(method, params),
  * })
  *
- * session.onRequest(async (method, params) => {
- *   return await wallet[method](params)
- * })
- *
- * session
- *   .on('connected',    () => setStatus('connected'))
- *   .on('disconnected', () => setStatus('disconnected'))
- *   .on('error',        msg => setError(msg))
- *
+ * session.onRequest(async (method, params) => wallet[method](params))
+ * session.on('connected', () => ...).on('disconnected', () => ...).on('error', msg => ...)
  * await session.connect()
+ * ```
+ *
+ * Resuming a previous session (e.g. after network drop):
+ * ```ts
+ * const lastSeq = await SecureStore.getItemAsync(`lastseq_${topic}`)
+ * await session.reconnect(Number(lastSeq))
  * ```
  */
 declare class WalletPairingSession {
@@ -77,10 +76,19 @@ declare class WalletPairingSession {
     on(event: 'error', handler: (msg: string) => void): this;
     /** Register the handler that executes approved RPC methods. */
     onRequest(handler: RequestHandler): this;
-    /** Open the WS connection and send pairing_approved. */
+    /** Open the WS connection and start a fresh pairing handshake. */
     connect(): Promise<void>;
+    /**
+     * Re-open the WS connection using a stored seq baseline.
+     * Replay protection resumes from `lastSeq` — messages with seq ≤ lastSeq are dropped.
+     * Use this after a network drop when the session is still valid on the backend.
+     *
+     * @param lastSeq - The highest seq received in the previous connection (from persistent storage).
+     */
+    reconnect(lastSeq: number): Promise<void>;
     /** Close the WebSocket connection. */
     disconnect(): void;
+    private openConnection;
     private emitError;
     private handleRpc;
 }
