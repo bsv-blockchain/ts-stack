@@ -855,6 +855,10 @@ export interface StorageAdminStats {
   txFailedWeek: number
   txFailedMonth: number
   txFailedTotal: number
+  txAbandonedDay: number
+  txAbandonedWeek: number
+  txAbandonedMonth: number
+  txAbandonedTotal: number
   txUnprocessedDay: number
   txUnprocessedWeek: number
   txUnprocessedMonth: number

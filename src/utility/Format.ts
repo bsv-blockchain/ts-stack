@@ -111,6 +111,7 @@ export abstract class Format {
     log += dmt('transactions', s.transactionsDay, s.transactionsMonth, s.transactionsTotal)
     log += dmt('  completed', s.txCompletedDay, s.txCompletedMonth, s.txCompletedTotal)
     log += dmt('  failed', s.txFailedDay, s.txFailedMonth, s.txFailedTotal)
+    log += dmt('  abandoned', s.txAbandonedDay, s.txAbandonedMonth, s.txAbandonedTotal)
     log += dmt('  nosend', s.txNosendDay, s.txNosendMonth, s.txNosendTotal)
     log += dmt('  unproven', s.txUnprovenDay, s.txUnprovenMonth, s.txUnprovenTotal)
     log += dmt('  sending', s.txSendingDay, s.txSendingMonth, s.txSendingTotal)
