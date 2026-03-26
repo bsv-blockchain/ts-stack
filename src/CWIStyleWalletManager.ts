@@ -56,6 +56,7 @@ import {
   WalletInterface,
   OutpointString,
   PrivateKey,
+  Signature,
   LookupResolver,
   LookupAnswer,
   Transaction,
@@ -63,7 +64,7 @@ import {
   CreateActionInput,
   SHIPBroadcaster
 } from '@bsv/sdk'
-import { argon2id } from 'hash-wasm'
+import { argon2id, pbkdf2, createSHA256, createSHA512 } from 'hash-wasm'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 
 /**
@@ -79,9 +80,59 @@ export const ARGON2ID_DEFAULT_MEMORY_KIB = 131072
 export const ARGON2ID_DEFAULT_PARALLELISM = 1
 export const ARGON2ID_DEFAULT_HASH_LENGTH = 32
 
+function isLikelyDerSignatureField(field: number[]): boolean {
+  if (!field || field.length < 8 || field.length > 80) {
+    return false
+  }
+
+  if (field[0] !== 0x30) {
+    return false
+  }
+
+  const declaredLen = field[1]
+  return declaredLen === field.length - 2
+}
+
+function stripVerifiedPushDropSignature(fields: number[][], lockingPublicKey: any): number[][] {
+  if (fields.length <= 11) {
+    return fields
+  }
+
+  const protocolFieldCount = fields.length - 1
+  const trailingField = fields[protocolFieldCount]
+  if (!trailingField || !isLikelyDerSignatureField(trailingField)) {
+    return fields
+  }
+
+  try {
+    let dataLength = 0
+    for (let i = 0; i < protocolFieldCount; i++) {
+      dataLength += fields[i].length
+    }
+
+    const dataToVerify = new Array<number>(dataLength)
+    let writeOffset = 0
+    for (let i = 0; i < protocolFieldCount; i++) {
+      const field = fields[i]
+      for (let j = 0; j < field.length; j++) {
+        dataToVerify[writeOffset++] = field[j]
+      }
+    }
+
+    const signature = Signature.fromDER(trailingField)
+
+    if (signature.verify(dataToVerify, lockingPublicKey)) {
+      return fields.slice(0, protocolFieldCount)
+    }
+  } catch {
+    return fields
+  }
+
+  return fields
+}
+
 /**
- * PBKDF-2 that prefers the browser / Node 20+ WebCrypto implementation and
- * silently falls back to the existing JS code.
+ * PBKDF-2 that prefers WebCrypto and falls back to hash-wasm.
  *
  * @param passwordBytes   Raw password bytes.
  * @param salt            Salt bytes.
@@ -90,7 +141,7 @@ export const ARGON2ID_DEFAULT_HASH_LENGTH = 32
  * @param hash            Digest algorithm (default "sha512").
  * @returns               Derived key bytes.
  */
-async function pbkdf2NativeOrJs(
+async function pbkdf2NativeOrWasm(
   passwordBytes: number[],
   salt: number[],
   iterations: number,
@@ -126,8 +177,17 @@ async function pbkdf2NativeOrJs(
     }
   }
 
-  // ----- slow-path: old JavaScript implementation
-  return Hash.pbkdf2(passwordBytes, salt, iterations, keyLen, hash)
+  const hashFunction = hash === 'sha256' ? createSHA256() : createSHA512()
+  const derived = await pbkdf2({
+    password: new Uint8Array(passwordBytes),
+    salt: new Uint8Array(salt),
+    iterations,
+    hashLength: keyLen,
+    hashFunction,
+    outputType: 'binary'
+  })
+
+  return Array.from(derived)
 }
 
 /**
@@ -155,7 +215,7 @@ async function derivePasswordKey(
 
   // Legacy token or explicit PBKDF2 request
   if (!kdf || kdf.algorithm === 'pbkdf2-sha512') {
-    return pbkdf2NativeOrJs(passwordBytes, token.passwordSalt, kdf?.iterations ?? PBKDF2_NUM_ROUNDS, 32, 'sha512')
+    return pbkdf2NativeOrWasm(passwordBytes, token.passwordSalt, kdf?.iterations ?? PBKDF2_NUM_ROUNDS, 32, 'sha512')
   }
 
   // Argon2id path (UMP v3)
@@ -670,10 +730,9 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         return undefined
       }
 
-      // Parse protocol fields (excluding trailing signature if present)
-      // PushDrop may add a signature as the last field when includeSignature=true
-      // We detect this and exclude it from our protocol field parsing
-      let protocolFields = decoded.fields
+      // Parse protocol fields, excluding the trailing PushDrop signature only when
+      // it is cryptographically valid for the preceding field payload.
+      let protocolFields = stripVerifiedPushDropSignature(decoded.fields, decoded.lockingPublicKey)
 
       // Detect v3 token metadata in either layout:
       // - with profilesEncrypted present: [0..10]=core, [11]=profiles, [12]=version, [13]=algorithm, [14]=params

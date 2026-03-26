@@ -1,4 +1,4 @@
-import { WalletInterface, Random, Hash, Utils, PrivateKey, SymmetricKey } from '@bsv/sdk'
+import { WalletInterface, Random, Hash, Utils, PrivateKey, SymmetricKey, PushDrop, Transaction } from '@bsv/sdk'
 import { PrivilegedKeyManager } from '../sdk'
 import {
   CWIStyleWalletManager,
@@ -8,7 +8,8 @@ import {
   ARGON2ID_DEFAULT_PARALLELISM,
   ARGON2ID_DEFAULT_HASH_LENGTH,
   UMPToken,
-  UMPTokenInteractor
+  UMPTokenInteractor,
+  OverlayUMPTokenInteractor
 } from '../CWIStyleWalletManager'
 import { jest } from '@jest/globals'
 import { argon2id } from 'hash-wasm'
@@ -198,11 +199,11 @@ describe('CWIStyleWalletManager Tests', () => {
   describe('New user flow: presentation + password', () => {
     test('Successfully creates a new token and calls buildAndSend', async () => {
       // New wallet funder is a mock function
-      const newWalletFunder = jest.fn(() => {})
-      ;(manager as any).newWalletFunder = newWalletFunder
+      const newWalletFunder = jest.fn(() => { })
+        ; (manager as any).newWalletFunder = newWalletFunder
 
-      // Mock that no token is found by presentation key hash
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+        // Mock that no token is found by presentation key hash
+        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
 
       // Provide a presentation key
       await manager.providePresentationKey(presentationKey)
@@ -234,7 +235,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
     test('Throws if user tries to provide recovery key during new-user flow', async () => {
       // Mark it as new user flow by no token found
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(Array.from({ length: 32 }, () => 1))
 
       await expect(manager.provideRecoveryKey(Array.from({ length: 32 }, () => 2))).rejects.toThrow(
@@ -247,7 +248,7 @@ describe('CWIStyleWalletManager Tests', () => {
     test('Decryption of primary key and building the wallet', async () => {
       // Provide a mock UMP token
       const mockToken = await createMockUMPToken()
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
+        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
 
       // Provide presentation
       await manager.providePresentationKey(presentationKey)
@@ -275,7 +276,7 @@ describe('CWIStyleWalletManager Tests', () => {
     test('Successfully decrypts with presentation+recovery', async () => {
       // Provide a mock UMP token
       const mockToken = await createMockUMPToken()
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
+        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
 
       await manager.providePresentationKey(presentationKey)
 
@@ -301,7 +302,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
     test('Works with correct keys, sets mode as existing-user', async () => {
       const mockToken = await createMockUMPToken()
-      ;(mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(mockToken)
+        ; (mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(mockToken)
 
       // Provide recovery key
       await manager.provideRecoveryKey(recoveryKey)
@@ -314,7 +315,7 @@ describe('CWIStyleWalletManager Tests', () => {
     })
 
     test('Throws if no token found by recovery key hash', async () => {
-      ;(mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(undefined)
       await expect(manager.provideRecoveryKey(recoveryKey)).rejects.toThrow('No user found with this recovery key')
     })
   })
@@ -326,7 +327,7 @@ describe('CWIStyleWalletManager Tests', () => {
   describe('saveSnapshot / loadSnapshot', () => {
     test('Saves a snapshot and can load it into a fresh manager instance', async () => {
       // We'll do a new user flow so that manager is authenticated with a real token.
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       const presKey = Array.from({ length: 32 }, () => 0xa1)
       await manager.providePresentationKey(presKey)
       await manager.providePassword('mypassword') // triggers creation of new user
@@ -374,7 +375,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Change Password', () => {
     test('Requires authentication and updates the UMP token on-chain', async () => {
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       manager = new CWIStyleWalletManager(
         'admin.walletvendor.com',
         mockWalletBuilder,
@@ -398,7 +399,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Change Recovery Key', () => {
     test('Prompts to save the new key, updates the token', async () => {
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       manager = new CWIStyleWalletManager(
         'admin.walletvendor.com',
         mockWalletBuilder,
@@ -409,7 +410,7 @@ describe('CWIStyleWalletManager Tests', () => {
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
-      ;(mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
+        ; (mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
       await manager.changeRecoveryKey()
 
       // The user is prompted to store the new key
@@ -425,7 +426,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Change Presentation Key', () => {
     test('Requires authentication, re-publishes the token, old token consumed', async () => {
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       manager = new CWIStyleWalletManager(
         'admin.walletvendor.com',
         mockWalletBuilder,
@@ -436,7 +437,7 @@ describe('CWIStyleWalletManager Tests', () => {
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
-      ;(mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
+        ; (mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
       const newPresKey = Array.from({ length: 32 }, () => 0xee)
       await manager.changePresentationKey(newPresKey)
       expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(2)
@@ -445,7 +446,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Profile management', () => {
     test('addProfile adds a new profile and updates the UMP token', async () => {
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
@@ -456,7 +457,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
       const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
 
-      ;(mockUMPTokenInteractor.buildAndSend as any).mockClear()
+        ; (mockUMPTokenInteractor.buildAndSend as any).mockClear()
 
       const newProfileId = await manager.addProfile('Work')
       expect(Array.isArray(newProfileId)).toBe(true)
@@ -474,7 +475,7 @@ describe('CWIStyleWalletManager Tests', () => {
     })
 
     test('syncUMPToken refreshes UMP token and profiles from overlay when newer token exists', async () => {
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
@@ -500,7 +501,7 @@ describe('CWIStyleWalletManager Tests', () => {
       }
 
       const saveSnapshotSpy = jest.spyOn(manager, 'saveSnapshot')
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(updatedToken)
+        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(updatedToken)
 
       const result = await manager.syncUMPToken()
       expect(result).toBe(true)
@@ -514,7 +515,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   test('Destroy callback clears sensitive data', async () => {
     // authenticate as new user
-    ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+    ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
     await manager.providePresentationKey(Array.from({ length: 32 }, () => 12))
     await manager.providePassword('some-pass')
 
@@ -536,14 +537,14 @@ describe('CWIStyleWalletManager Tests', () => {
   describe('Proxy method calls', () => {
     beforeEach(async () => {
       // authenticate
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
     })
 
     test('Throws if user is not authenticated', async () => {
       // force de-auth
-      ;(manager as any).authenticated = false
+      ; (manager as any).authenticated = false
       await expect(() => manager.getPublicKey({ identityKey: true })).rejects.toThrow('User is not authenticated.')
     })
 
@@ -624,10 +625,10 @@ describe('CWIStyleWalletManager Tests', () => {
           return 'test-password'
         }
       )
-      ;(manager as any).passwordRetriever = customPasswordRetriever
+        ; (manager as any).passwordRetriever = customPasswordRetriever
 
-      // Force a new-user flow by having no token found.
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+        // Force a new-user flow by having no token found.
+        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
@@ -652,10 +653,10 @@ describe('CWIStyleWalletManager Tests', () => {
           return 'test-password'
         }
       )
-      ;(manager as any).passwordRetriever = customPasswordRetriever
+        ; (manager as any).passwordRetriever = customPasswordRetriever
 
-      // New-user flow (no existing token)
-      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+        // New-user flow (no existing token)
+        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
 
@@ -907,6 +908,62 @@ describe('CWIStyleWalletManager Tests', () => {
       expect(updatedToken.passwordKdf?.algorithm).toBe('argon2id')
       expect(updatedToken.passwordKdf?.iterations).toBe(7)
       expect(updatedToken.passwordKdf?.memoryKiB).toBe(131072)
+    })
+  })
+
+  describe('OverlayUMPTokenInteractor signature-aware parsing', () => {
+    test('strips verified trailing signature before interpreting optional profiles', () => {
+      const interactor = new OverlayUMPTokenInteractor({} as any, {} as any)
+      const payloadFields = Array.from({ length: 11 }, () => Random(32))
+      const signingKey = PrivateKey.fromRandom()
+      const validSignature = signingKey.sign(payloadFields.flat()).toDER()
+
+      const fromBeefSpy = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
+        outputs: [{ lockingScript: {} as any }],
+        id: () => 'txid123'
+      } as any)
+      const decodeSpy = jest.spyOn(PushDrop, 'decode').mockReturnValue({
+        fields: [...payloadFields, validSignature],
+        lockingPublicKey: signingKey.toPublicKey()
+      } as any)
+
+      const parsed = (interactor as any).parseLookupAnswer({
+        type: 'output-list',
+        outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+      }) as UMPToken
+
+      expect(parsed).toBeDefined()
+      expect(parsed.passwordSalt).toEqual(payloadFields[0])
+      expect(parsed.profilesEncrypted).toBeUndefined()
+
+      fromBeefSpy.mockRestore()
+      decodeSpy.mockRestore()
+    })
+
+    test('does not strip DER-like trailing field when signature verification fails', () => {
+      const interactor = new OverlayUMPTokenInteractor({} as any, {} as any)
+      const payloadFields = Array.from({ length: 11 }, () => Random(32))
+      const derLikeButInvalidForPayload = [0x30, 0x06, 1, 2, 3, 4, 5, 6]
+
+      const fromBeefSpy = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
+        outputs: [{ lockingScript: {} as any }],
+        id: () => 'txid124'
+      } as any)
+      const decodeSpy = jest.spyOn(PushDrop, 'decode').mockReturnValue({
+        fields: [...payloadFields, derLikeButInvalidForPayload],
+        lockingPublicKey: PrivateKey.fromRandom().toPublicKey()
+      } as any)
+
+      const parsed = (interactor as any).parseLookupAnswer({
+        type: 'output-list',
+        outputs: [{ beef: [4, 5, 6], outputIndex: 0 }]
+      }) as UMPToken
+
+      expect(parsed).toBeDefined()
+      expect(parsed.profilesEncrypted).toEqual(derLikeButInvalidForPayload)
+
+      fromBeefSpy.mockRestore()
+      decodeSpy.mockRestore()
     })
   })
 })
