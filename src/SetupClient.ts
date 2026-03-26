@@ -15,6 +15,7 @@ import {
   WalletInterface
 } from '@bsv/sdk'
 import { KeyPairAddress, SetupClientWalletArgs, SetupWallet, SetupWalletClient } from './SetupWallet'
+import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { StorageIdb } from './storage/StorageIdb'
 import { WalletStorageManager } from './storage/WalletStorageManager'
 import { Services } from './services/Services'
@@ -240,8 +241,8 @@ export abstract class SetupClient {
     outpoints: string[],
     p2pkhKey: KeyPairAddress,
     inputBEEF?: BEEF
-  ) {
-    // TODO
+  ): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
+    return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, SetupClient.getUnlockP2PKH.bind(SetupClient), inputBEEF)
   }
 
   /**
