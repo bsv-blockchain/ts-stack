@@ -614,14 +614,16 @@ describe('CWIStyleWalletManager Tests', () => {
       expect(deserialized).toEqual(token)
     })
 
-    test('Password retriever callback: the test function is passed and returns a boolean', async () => {
-      let capturedTestFn: ((candidate: string) => boolean) | null = null
-      const customPasswordRetriever = jest.fn(async (reason: string, testFn: (candidate: string) => boolean) => {
-        capturedTestFn = testFn
-        // In a real scenario the test function would validate a candidate.
-        // For our test we simply return the correct password.
-        return 'test-password'
-      })
+    test('Password retriever callback: the test function is passed and supports async validation', async () => {
+      let capturedTestFn: ((candidate: string) => boolean | Promise<boolean>) | null = null
+      const customPasswordRetriever = jest.fn(
+        async (reason: string, testFn: (candidate: string) => boolean | Promise<boolean>) => {
+          capturedTestFn = testFn
+          // In a real scenario the test function would validate a candidate.
+          // For our test we simply return the correct password.
+          return 'test-password'
+        }
+      )
       ;(manager as any).passwordRetriever = customPasswordRetriever
 
       // Force a new-user flow by having no token found.
@@ -636,22 +638,20 @@ describe('CWIStyleWalletManager Tests', () => {
       await manager.changePassword('test-password') // trigger some privileged operation...
       expect(customPasswordRetriever).toHaveBeenCalled()
       expect(capturedTestFn).not.toBeNull()
-      // Since the internal test function is defined inline, we simply check that its output is a boolean.
-      // NOTE: With v3 tokens using Argon2id, the synchronous test function uses PBKDF2 as a fallback
-      // and may not correctly validate passwords. The actual async password validation still works correctly.
-      const testResult = capturedTestFn!('any-input')
+      // Since the internal test function may now be async (Argon2 path), await the result.
+      const testResult = await capturedTestFn!('any-input')
       expect(typeof testResult).toBe('boolean')
-      expect(capturedTestFn!('any-input')).toBe(false)
-      // Skip password validation check for v3 tokens since test function uses PBKDF2 fallback
-      // expect(capturedTestFn!('test-password')).toBe(true)
+      expect(await capturedTestFn!('any-input')).toBe(false)
     }, 15000) // Argon2id password derivation in changePassword takes time
 
     test('Privileged key expiry: each call to decrypt via the privileged manager invokes passwordRetriever', async () => {
       // In a new-user flow, buildUnderlying is called without a privilegedKey,
       // so any later use of the privileged manager will trigger a password prompt.
-      const customPasswordRetriever = jest.fn(async (reason: string, testFn: (candidate: string) => boolean) => {
-        return 'test-password'
-      })
+      const customPasswordRetriever = jest.fn(
+        async (reason: string, testFn: (candidate: string) => boolean | Promise<boolean>) => {
+          return 'test-password'
+        }
+      )
       ;(manager as any).passwordRetriever = customPasswordRetriever
 
       // New-user flow (no existing token)
@@ -702,11 +702,17 @@ describe('CWIStyleWalletManager Tests', () => {
     function makeLegacyToken(rootPrimary: number[], outpoint = 'legacy.0'): UMPToken {
       return {
         passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(rootPrimary) as number[],
+        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(
+          rootPrimary
+        ) as number[],
         passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, passwordKey)).encrypt(rootPrimary) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimary) as number[],
+        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(
+          rootPrimary
+        ) as number[],
         passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimary, passwordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
+        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(
+          Random(32)
+        ) as number[],
         presentationHash: Hash.sha256(presentationKey),
         recoveryHash: Hash.sha256(recoveryKey),
         presentationKeyEncrypted: Random(48),
@@ -717,25 +723,40 @@ describe('CWIStyleWalletManager Tests', () => {
     }
 
     async function deriveArgon2Key(iterations: number, memorySize: number): Promise<number[]> {
-      return Array.from(await argon2id({
-        password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
-        salt: new Uint8Array(passwordSalt),
-        iterations,
-        memorySize,
-        parallelism: 1,
-        hashLength: 32,
-        outputType: 'binary'
-      }))
+      return Array.from(
+        await argon2id({
+          password: new Uint8Array(Utils.toArray('test-password', 'utf8')),
+          salt: new Uint8Array(passwordSalt),
+          iterations,
+          memorySize,
+          parallelism: 1,
+          hashLength: 32,
+          outputType: 'binary'
+        })
+      )
     }
 
-    function makeV3Token(argon2PasswordKey: number[], rootPrimary: number[], outpoint: string, kdfParams: { iterations: number; memoryKiB: number }): UMPToken {
+    function makeV3Token(
+      argon2PasswordKey: number[],
+      rootPrimary: number[],
+      outpoint: string,
+      kdfParams: { iterations: number; memoryKiB: number }
+    ): UMPToken {
       return {
         passwordSalt,
-        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
+        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, argon2PasswordKey)).encrypt(
+          rootPrimary
+        ) as number[],
         passwordRecoveryPrimary: new SymmetricKey(XOR(recoveryKey, argon2PasswordKey)).encrypt(rootPrimary) as number[],
-        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(rootPrimary) as number[],
-        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimary, argon2PasswordKey)).encrypt(Random(32)) as number[],
-        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(Random(32)) as number[],
+        presentationRecoveryPrimary: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(
+          rootPrimary
+        ) as number[],
+        passwordPrimaryPrivileged: new SymmetricKey(XOR(rootPrimary, argon2PasswordKey)).encrypt(
+          Random(32)
+        ) as number[],
+        presentationRecoveryPrivileged: new SymmetricKey(XOR(presentationKey, recoveryKey)).encrypt(
+          Random(32)
+        ) as number[],
         presentationHash: Hash.sha256(presentationKey),
         recoveryHash: Hash.sha256(recoveryKey),
         presentationKeyEncrypted: Random(48),
@@ -869,7 +890,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
       // Mock getFactor to return mock values (since our test token has random encrypted fields)
       const mockGetFactor = jest.spyOn(manager as any, 'getFactor')
-      mockGetFactor.mockImplementation(async (factorName) => {
+      mockGetFactor.mockImplementation(async factorName => {
         if (factorName === 'recoveryKey') return recoveryKey
         if (factorName === 'presentationKey') return presentationKey
         if (factorName === 'privilegedKey') return Random(32)
