@@ -199,11 +199,11 @@ describe('CWIStyleWalletManager Tests', () => {
   describe('New user flow: presentation + password', () => {
     test('Successfully creates a new token and calls buildAndSend', async () => {
       // New wallet funder is a mock function
-      const newWalletFunder = jest.fn(() => { })
-        ; (manager as any).newWalletFunder = newWalletFunder
+      const newWalletFunder = jest.fn(() => {})
+      ;(manager as any).newWalletFunder = newWalletFunder
 
-        // Mock that no token is found by presentation key hash
-        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      // Mock that no token is found by presentation key hash
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
 
       // Provide a presentation key
       await manager.providePresentationKey(presentationKey)
@@ -235,7 +235,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
     test('Throws if user tries to provide recovery key during new-user flow', async () => {
       // Mark it as new user flow by no token found
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(Array.from({ length: 32 }, () => 1))
 
       await expect(manager.provideRecoveryKey(Array.from({ length: 32 }, () => 2))).rejects.toThrow(
@@ -248,7 +248,7 @@ describe('CWIStyleWalletManager Tests', () => {
     test('Decryption of primary key and building the wallet', async () => {
       // Provide a mock UMP token
       const mockToken = await createMockUMPToken()
-        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
 
       // Provide presentation
       await manager.providePresentationKey(presentationKey)
@@ -276,7 +276,7 @@ describe('CWIStyleWalletManager Tests', () => {
     test('Successfully decrypts with presentation+recovery', async () => {
       // Provide a mock UMP token
       const mockToken = await createMockUMPToken()
-        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(mockToken)
 
       await manager.providePresentationKey(presentationKey)
 
@@ -302,7 +302,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
     test('Works with correct keys, sets mode as existing-user', async () => {
       const mockToken = await createMockUMPToken()
-        ; (mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(mockToken)
+      ;(mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(mockToken)
 
       // Provide recovery key
       await manager.provideRecoveryKey(recoveryKey)
@@ -315,7 +315,7 @@ describe('CWIStyleWalletManager Tests', () => {
     })
 
     test('Throws if no token found by recovery key hash', async () => {
-      ; (mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByRecoveryKeyHash as any).mockResolvedValueOnce(undefined)
       await expect(manager.provideRecoveryKey(recoveryKey)).rejects.toThrow('No user found with this recovery key')
     })
   })
@@ -327,7 +327,7 @@ describe('CWIStyleWalletManager Tests', () => {
   describe('saveSnapshot / loadSnapshot', () => {
     test('Saves a snapshot and can load it into a fresh manager instance', async () => {
       // We'll do a new user flow so that manager is authenticated with a real token.
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       const presKey = Array.from({ length: 32 }, () => 0xa1)
       await manager.providePresentationKey(presKey)
       await manager.providePassword('mypassword') // triggers creation of new user
@@ -375,7 +375,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Change Password', () => {
     test('Requires authentication and updates the UMP token on-chain', async () => {
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       manager = new CWIStyleWalletManager(
         'admin.walletvendor.com',
         mockWalletBuilder,
@@ -399,7 +399,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Change Recovery Key', () => {
     test('Prompts to save the new key, updates the token', async () => {
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       manager = new CWIStyleWalletManager(
         'admin.walletvendor.com',
         mockWalletBuilder,
@@ -410,7 +410,7 @@ describe('CWIStyleWalletManager Tests', () => {
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
-        ; (mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
+      ;(mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
       await manager.changeRecoveryKey()
 
       // The user is prompted to store the new key
@@ -426,7 +426,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Change Presentation Key', () => {
     test('Requires authentication, re-publishes the token, old token consumed', async () => {
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       manager = new CWIStyleWalletManager(
         'admin.walletvendor.com',
         mockWalletBuilder,
@@ -437,7 +437,7 @@ describe('CWIStyleWalletManager Tests', () => {
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
-        ; (mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
+      ;(mockUMPTokenInteractor.buildAndSend as any).mockResolvedValueOnce(makeOutpoint('rcv1', 0))
       const newPresKey = Array.from({ length: 32 }, () => 0xee)
       await manager.changePresentationKey(newPresKey)
       expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(2)
@@ -446,7 +446,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   describe('Profile management', () => {
     test('addProfile adds a new profile and updates the UMP token', async () => {
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
@@ -457,7 +457,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
       const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
 
-        ; (mockUMPTokenInteractor.buildAndSend as any).mockClear()
+      ;(mockUMPTokenInteractor.buildAndSend as any).mockClear()
 
       const newProfileId = await manager.addProfile('Work')
       expect(Array.isArray(newProfileId)).toBe(true)
@@ -475,7 +475,7 @@ describe('CWIStyleWalletManager Tests', () => {
     })
 
     test('syncUMPToken refreshes UMP token and profiles from overlay when newer token exists', async () => {
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
@@ -501,7 +501,7 @@ describe('CWIStyleWalletManager Tests', () => {
       }
 
       const saveSnapshotSpy = jest.spyOn(manager, 'saveSnapshot')
-        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(updatedToken)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(updatedToken)
 
       const result = await manager.syncUMPToken()
       expect(result).toBe(true)
@@ -515,7 +515,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
   test('Destroy callback clears sensitive data', async () => {
     // authenticate as new user
-    ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+    ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
     await manager.providePresentationKey(Array.from({ length: 32 }, () => 12))
     await manager.providePassword('some-pass')
 
@@ -537,14 +537,14 @@ describe('CWIStyleWalletManager Tests', () => {
   describe('Proxy method calls', () => {
     beforeEach(async () => {
       // authenticate
-      ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
     })
 
     test('Throws if user is not authenticated', async () => {
       // force de-auth
-      ; (manager as any).authenticated = false
+      ;(manager as any).authenticated = false
       await expect(() => manager.getPublicKey({ identityKey: true })).rejects.toThrow('User is not authenticated.')
     })
 
@@ -625,10 +625,10 @@ describe('CWIStyleWalletManager Tests', () => {
           return 'test-password'
         }
       )
-        ; (manager as any).passwordRetriever = customPasswordRetriever
+      ;(manager as any).passwordRetriever = customPasswordRetriever
 
-        // Force a new-user flow by having no token found.
-        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      // Force a new-user flow by having no token found.
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
       expect(manager.authenticated).toBe(true)
@@ -653,10 +653,10 @@ describe('CWIStyleWalletManager Tests', () => {
           return 'test-password'
         }
       )
-        ; (manager as any).passwordRetriever = customPasswordRetriever
+      ;(manager as any).passwordRetriever = customPasswordRetriever
 
-        // New-user flow (no existing token)
-        ; (mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      // New-user flow (no existing token)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
       await manager.providePassword('test-password')
 
@@ -788,6 +788,88 @@ describe('CWIStyleWalletManager Tests', () => {
 
       expect(manager.authenticated).toBe(true)
       // Verify PBKDF2 was used (indirectly via successful auth with legacy token)
+    })
+
+    test('Legacy token profile update preserves legacy KDF metadata', async () => {
+      const legacyToken = makeLegacyToken(Random(32))
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
+      manager = makeManager()
+
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const mockGetFactor = jest.spyOn(manager as any, 'getFactor')
+      mockGetFactor.mockImplementation(async factorName => {
+        if (factorName === 'passwordKey') return passwordKey
+        if (factorName === 'presentationKey') return presentationKey
+        if (factorName === 'recoveryKey') return recoveryKey
+        if (factorName === 'privilegedKey') return Random(32)
+        return Random(32)
+      })
+
+      await manager.addProfile('legacy-profile')
+
+      expect(mockInteractor.buildAndSend).toHaveBeenCalled()
+      const updatedToken = (mockInteractor.buildAndSend as any).mock.calls[0][2] as UMPToken
+      expect(updatedToken.umpVersion).toBeUndefined()
+      expect(updatedToken.passwordKdf).toBeUndefined()
+    })
+
+    test('Legacy user can relogin after profile change (regression)', async () => {
+      // This test proves the bug: legacy user logs in, adds profile, logs out,
+      // then cannot log back in because token was silently migrated to v3 metadata
+      // while factors were still wrapped with PBKDF2-derived key.
+
+      const rootPrimary = Random(32)
+      const legacyToken = makeLegacyToken(rootPrimary)
+
+      // Track what token gets published after addProfile
+      let publishedToken: UMPToken | undefined
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
+      mockInteractor.buildAndSend = jest.fn(async (_w: any, _a: any, token: UMPToken) => {
+        publishedToken = token
+        return 'updated.0'
+      })
+
+      manager = makeManager()
+
+      // Step 1: Legacy user logs in successfully
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      expect(manager.authenticated).toBe(true)
+
+      // Step 2: User adds a profile (this triggers updateAuthFactors)
+      const mockGetFactor = jest.spyOn(manager as any, 'getFactor')
+      mockGetFactor.mockImplementation(async factorName => {
+        if (factorName === 'passwordKey') return passwordKey
+        if (factorName === 'presentationKey') return presentationKey
+        if (factorName === 'recoveryKey') return recoveryKey
+        if (factorName === 'privilegedKey') return Random(32)
+        return Random(32)
+      })
+
+      await manager.addProfile('work')
+      expect(publishedToken).toBeDefined()
+
+      // Step 3: User logs out (destroy manager)
+      manager.destroy()
+
+      // Step 4: Simulate relogin - overlay now returns the updated token
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => ({
+        ...publishedToken!,
+        currentOutpoint: 'updated.0'
+      }))
+
+      const manager2 = makeManager()
+      await manager2.providePresentationKey(presentationKey)
+
+      // Step 5: Try to login with password
+      // If token was incorrectly migrated to v3, this will fail because
+      // derivePasswordKey will use Argon2id but factors were wrapped with PBKDF2 key
+      await manager2.providePassword('test-password')
+
+      // With the fix, this should succeed because token stays legacy
+      expect(manager2.authenticated).toBe(true)
     })
 
     test('V3 token login uses Argon2id and respects iterations', async () => {
