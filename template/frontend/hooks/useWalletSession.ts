@@ -28,18 +28,17 @@ export function useWalletSession() {
       const data = (await res.json()) as SessionInfo
       setSession(data)
 
-      // Poll for status changes. Stop only on terminal states:
-      // - 'disconnected': mobile left intentionally
-      // - 'expired' for two consecutive polls: one extra cycle catches the
-      //   brief backend grace window where a session can still flip to 'connected'
+      // Poll for status changes. Stop only when 'expired' (truly terminal).
+      // Do NOT stop on 'disconnected': the mobile can reconnect to the same session
+      // and the backend will flip status back to 'connected' when it does.
+      // Two consecutive 'expired' polls required — the backend grace window means
+      // a session at the 120 s boundary can still flip to 'connected' first.
       let expiredCount = 0
       pollRef.current = setInterval(async () => {
         const statusRes = await fetch(`${API}/session/${data.sessionId}`)
         const updated   = (await statusRes.json()) as SessionInfo
         setSession(prev => ({ ...prev!, ...updated }))
-        if (updated.status === 'disconnected') {
-          stopPolling()
-        } else if (updated.status === 'expired') {
+        if (updated.status === 'expired') {
           if (++expiredCount >= 2) stopPolling()
         } else {
           expiredCount = 0

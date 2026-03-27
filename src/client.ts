@@ -1,7 +1,11 @@
 // ── Client entry ─────────────────────────────────────────────────────────────
 // Browser + React Native. No Node.js dependencies.
 
-export { WalletPairingSession } from './client/WalletPairingSession.js'
+export {
+  WalletPairingSession,
+  DEFAULT_IMPLEMENTED_METHODS,
+  DEFAULT_AUTO_APPROVE_METHODS,
+} from './client/WalletPairingSession.js'
 export type {
   PairingSessionStatus,
   RequestHandler,

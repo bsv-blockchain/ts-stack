@@ -184,7 +184,10 @@ export class WebSocketRelay {
         const other = role === 'mobile' ? entry.desktop : entry.mobile
         if (other?.readyState === WebSocket.OPEN) {
           other.send(JSON.stringify(envelope))
-        } else {
+        } else if (role === 'desktop') {
+          // Only buffer desktop→mobile messages. Mobile→desktop messages are
+          // handled by the onMessage callback; buffering them here would cause
+          // re-delivery to mobile on reconnect (inflating lastSeq on mobile).
           this.buffer(topic, envelope)
         }
 

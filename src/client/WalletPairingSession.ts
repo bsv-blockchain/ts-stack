@@ -4,6 +4,22 @@ import { encryptEnvelope, decryptEnvelope, type CryptoParams } from '../shared/c
 
 export type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
 
+/**
+ * The wallet methods implemented by the BSV Browser mobile app.
+ * Used as the default for `WalletPairingSessionOptions.implementedMethods`.
+ */
+export const DEFAULT_IMPLEMENTED_METHODS = new Set([
+  'getPublicKey', 'listOutputs', 'createAction', 'signAction',
+  'listActions', 'internalizeAction', 'acquireCertificate',
+  'relinquishCertificate', 'revealCounterpartyKeyLinkage',
+])
+
+/**
+ * Methods approved without user interaction by default.
+ * Used as the default for `WalletPairingSessionOptions.autoApproveMethods`.
+ */
+export const DEFAULT_AUTO_APPROVE_METHODS = new Set(['getPublicKey'])
+
 /** Return a result or an error string — used for the onRequest handler. */
 export type RequestHandler = (method: string, params: unknown) => Promise<unknown>
 
@@ -11,13 +27,13 @@ export interface WalletPairingSessionOptions {
   /**
    * Methods your handler actually implements.
    * Requests for any other method receive a 501 without invoking onRequest or onApprovalRequired.
-   * If omitted, all methods are forwarded to onRequest.
+   * Defaults to {@link DEFAULT_IMPLEMENTED_METHODS} (the full BSV Browser method set).
    */
   implementedMethods?: Set<string>
 
   /**
    * Subset of implementedMethods that are executed without calling onApprovalRequired.
-   * Useful for read-only methods like getPublicKey.
+   * Defaults to {@link DEFAULT_AUTO_APPROVE_METHODS} (`getPublicKey` only).
    */
   autoApproveMethods?: Set<string>
 
@@ -71,6 +87,8 @@ export class WalletPairingSession {
   private protocolID: WalletProtocol
   private mobileIdentityKey: string | null = null
   private requestHandler: RequestHandler | null = null
+  private readonly implementedMethods: Set<string>
+  private readonly autoApproveMethods: Set<string>
 
   private listeners: {
     connected: Array<() => void>
@@ -84,6 +102,8 @@ export class WalletPairingSession {
     private options: WalletPairingSessionOptions = {}
   ) {
     this.protocolID = JSON.parse(params.protocolID) as WalletProtocol
+    this.implementedMethods = options.implementedMethods ?? DEFAULT_IMPLEMENTED_METHODS
+    this.autoApproveMethods = options.autoApproveMethods ?? DEFAULT_AUTO_APPROVE_METHODS
   }
 
   get status(): PairingSessionStatus { return this._status }
@@ -164,9 +184,7 @@ export class WalletPairingSession {
           params: {
             mobileIdentityKey: publicKey,
             walletMeta: this.options.walletMeta ?? {},
-            permissions: this.options.implementedMethods
-              ? Array.from(this.options.implementedMethods)
-              : [],
+            permissions: Array.from(this.implementedMethods),
           },
         })
         const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, payload)
@@ -185,14 +203,18 @@ export class WalletPairingSession {
         let plaintext: string
         try {
           plaintext = await decryptEnvelope(this.wallet, cryptoParams, envelope.ciphertext)
-        } catch {
-          return // tampered or wrong key — drop silently
+        } catch (err) {
+          console.warn('[WalletPairingSession] decryptEnvelope failed:', err)
+          return // tampered or wrong key — drop
         }
 
         const msg = JSON.parse(plaintext) as RpcRequest | RpcResponse
 
         // M4: Replay protection — drop anything not strictly greater than last seq
-        if (typeof msg.seq !== 'number' || msg.seq <= this._lastSeq) return
+        if (typeof msg.seq !== 'number' || msg.seq <= this._lastSeq) {
+          console.warn('[WalletPairingSession] dropping message: seq', msg.seq, '<= lastSeq', this._lastSeq)
+          return
+        }
         this._lastSeq = msg.seq
 
         // Any successfully decrypted message confirms the session is live.
@@ -221,6 +243,13 @@ export class WalletPairingSession {
     }
 
     ws.onclose = () => {
+      // disconnect() nulls this.ws before calling ws.close() — if null here,
+      // the close was intentional; skip all state changes.
+      if (this.ws === null) return
+      // Reconnect race: a newer connection already replaced this ws.
+      if (this.ws !== ws) return
+
+      this.ws = null  // clear stale ref
       if (this.connected) {
         this._status = 'disconnected'
         this.listeners.disconnected.forEach(h => h())
@@ -247,7 +276,7 @@ export class WalletPairingSession {
     }
 
     // Unknown method — reject immediately without showing approval UI
-    if (this.options.implementedMethods && !this.options.implementedMethods.has(request.method)) {
+    if (!this.implementedMethods.has(request.method)) {
       await sendResponse({
         id: request.id,
         seq: request.seq,
@@ -257,7 +286,7 @@ export class WalletPairingSession {
     }
 
     // Approval gate
-    const needsApproval = !this.options.autoApproveMethods?.has(request.method)
+    const needsApproval = !this.autoApproveMethods.has(request.method)
     if (needsApproval && this.options.onApprovalRequired) {
       const approved = await this.options.onApprovalRequired(request.method, request.params)
       if (!approved) {
