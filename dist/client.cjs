@@ -20,6 +20,8 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/client.ts
 var client_exports = {};
 __export(client_exports, {
+  DEFAULT_AUTO_APPROVE_METHODS: () => DEFAULT_AUTO_APPROVE_METHODS,
+  DEFAULT_IMPLEMENTED_METHODS: () => DEFAULT_IMPLEMENTED_METHODS,
   PROTOCOL_ID: () => PROTOCOL_ID,
   WalletPairingSession: () => WalletPairingSession,
   base64urlToBytes: () => base64urlToBytes,
@@ -62,6 +64,18 @@ async function decryptEnvelope(wallet, params, ciphertextB64) {
 }
 
 // src/client/WalletPairingSession.ts
+var DEFAULT_IMPLEMENTED_METHODS = /* @__PURE__ */ new Set([
+  "getPublicKey",
+  "listOutputs",
+  "createAction",
+  "signAction",
+  "listActions",
+  "internalizeAction",
+  "acquireCertificate",
+  "relinquishCertificate",
+  "revealCounterpartyKeyLinkage"
+]);
+var DEFAULT_AUTO_APPROVE_METHODS = /* @__PURE__ */ new Set(["getPublicKey"]);
 var WalletPairingSession = class {
   constructor(wallet, params, options = {}) {
     this.wallet = wallet;
@@ -75,6 +89,8 @@ var WalletPairingSession = class {
     this.requestHandler = null;
     this.listeners = { connected: [], disconnected: [], error: [] };
     this.protocolID = JSON.parse(params.protocolID);
+    this.implementedMethods = options.implementedMethods ?? DEFAULT_IMPLEMENTED_METHODS;
+    this.autoApproveMethods = options.autoApproveMethods ?? DEFAULT_AUTO_APPROVE_METHODS;
   }
   get status() {
     return this._status;
@@ -141,7 +157,7 @@ var WalletPairingSession = class {
           params: {
             mobileIdentityKey: publicKey,
             walletMeta: this.options.walletMeta ?? {},
-            permissions: this.options.implementedMethods ? Array.from(this.options.implementedMethods) : []
+            permissions: Array.from(this.implementedMethods)
           }
         });
         const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, payload);
@@ -158,11 +174,15 @@ var WalletPairingSession = class {
         let plaintext;
         try {
           plaintext = await decryptEnvelope(this.wallet, cryptoParams, envelope.ciphertext);
-        } catch {
+        } catch (err) {
+          console.warn("[WalletPairingSession] decryptEnvelope failed:", err);
           return;
         }
         const msg = JSON.parse(plaintext);
-        if (typeof msg.seq !== "number" || msg.seq <= this._lastSeq) return;
+        if (typeof msg.seq !== "number" || msg.seq <= this._lastSeq) {
+          console.warn("[WalletPairingSession] dropping message: seq", msg.seq, "<= lastSeq", this._lastSeq);
+          return;
+        }
         this._lastSeq = msg.seq;
         if (!this.connected) {
           this.connected = true;
@@ -180,6 +200,9 @@ var WalletPairingSession = class {
       this.emitError("WebSocket connection failed");
     };
     ws.onclose = () => {
+      if (this.ws === null) return;
+      if (this.ws !== ws) return;
+      this.ws = null;
       if (this.connected) {
         this._status = "disconnected";
         this.listeners.disconnected.forEach((h) => h());
@@ -200,7 +223,7 @@ var WalletPairingSession = class {
       const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, JSON.stringify(response));
       this.ws?.send(JSON.stringify({ topic, ciphertext }));
     };
-    if (this.options.implementedMethods && !this.options.implementedMethods.has(request.method)) {
+    if (!this.implementedMethods.has(request.method)) {
       await sendResponse({
         id: request.id,
         seq: request.seq,
@@ -208,7 +231,7 @@ var WalletPairingSession = class {
       });
       return;
     }
-    const needsApproval = !this.options.autoApproveMethods?.has(request.method);
+    const needsApproval = !this.autoApproveMethods.has(request.method);
     if (needsApproval && this.options.onApprovalRequired) {
       const approved = await this.options.onApprovalRequired(request.method, request.params);
       if (!approved) {
@@ -309,6 +332,8 @@ function parsePairingUri(raw) {
 var PROTOCOL_ID = [0, "mobile wallet session"];
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  DEFAULT_AUTO_APPROVE_METHODS,
+  DEFAULT_IMPLEMENTED_METHODS,
   PROTOCOL_ID,
   WalletPairingSession,
   base64urlToBytes,

@@ -39,6 +39,8 @@ interface SessionInfo {
     sessionId: string;
     status: SessionStatus;
     qrDataUrl?: string;
+    pairingUri?: string;
+    desktopToken?: string;
 }
 /** Parameters encoded in a wallet://pair?… QR code. */
 interface PairingParams {

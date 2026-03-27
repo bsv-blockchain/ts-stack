@@ -123,7 +123,7 @@ var WebSocketRelay = class {
         const other = role === "mobile" ? entry.desktop : entry.mobile;
         if (other?.readyState === WebSocket.OPEN) {
           other.send(JSON.stringify(envelope));
-        } else {
+        } else if (role === "desktop") {
           this.buffer(topic, envelope);
         }
         this.onMessage?.(topic, envelope, role);
@@ -387,8 +387,11 @@ var WalletRelayService = class {
     this.handler = new WalletRequestHandler();
     this.pending = /* @__PURE__ */ new Map();
     this.mobileAuthTimers = /* @__PURE__ */ new Map();
+    this.wallet = opts.wallet;
+    this.relayUrl = opts.relayUrl ?? process.env["RELAY_URL"] ?? "ws://localhost:3000";
+    this.origin = opts.origin ?? process.env["ORIGIN"] ?? "http://localhost:5173";
     this.sessions = new QRSessionManager();
-    this.relay = new WebSocketRelay(opts.server, { allowedOrigin: opts.origin });
+    this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin });
     this.sessions.onSessionExpired((id) => this.relay.removeTopic(id));
     this.relay.onValidateTopic((topic) => {
       const s = this.sessions.getSession(topic);
@@ -419,18 +422,18 @@ var WalletRelayService = class {
         this.opts.onSessionDisconnected?.(topic);
       }
     });
-    this.registerRoutes(opts.app);
+    if (opts.app) this.registerRoutes(opts.app);
   }
   /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
   async createSession() {
     const session = this.sessions.createSession();
-    const { publicKey: backendIdentityKey } = await this.opts.wallet.getPublicKey({ identityKey: true });
+    const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true });
     const uri = buildPairingUri({
       sessionId: session.id,
-      relayURL: this.opts.relayUrl,
+      relayURL: this.relayUrl,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
-      origin: this.opts.origin
+      origin: this.origin
     });
     const qrDataUrl = await this.sessions.generateQRCode(uri);
     return { sessionId: session.id, status: session.status, qrDataUrl, pairingUri: uri, desktopToken: session.desktopToken };
@@ -452,7 +455,7 @@ var WalletRelayService = class {
     }
     const rpc = this.handler.createRequest(method, params);
     const ciphertext = await encryptEnvelope(
-      this.opts.wallet,
+      this.wallet,
       { protocolID: PROTOCOL_ID, keyID: sessionId, counterparty: session.mobileIdentityKey },
       JSON.stringify(rpc)
     );
@@ -529,7 +532,7 @@ var WalletRelayService = class {
     let plaintext;
     try {
       plaintext = await decryptEnvelope(
-        this.opts.wallet,
+        this.wallet,
         { protocolID: PROTOCOL_ID, keyID: topic, counterparty: session.mobileIdentityKey },
         envelope.ciphertext
       );
@@ -551,7 +554,7 @@ var WalletRelayService = class {
     let plaintext;
     try {
       plaintext = await decryptEnvelope(
-        this.opts.wallet,
+        this.wallet,
         { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
         envelope.ciphertext
       );
@@ -574,7 +577,7 @@ var WalletRelayService = class {
     this.opts.onSessionConnected?.(topic);
     const ack = this.handler.createProtocolMessage("pairing_ack", { topic });
     const ciphertext = await encryptEnvelope(
-      this.opts.wallet,
+      this.wallet,
       { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
       JSON.stringify(ack)
     );

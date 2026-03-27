@@ -1,20 +1,30 @@
-import { c as WalletLike, d as PairingParams } from './encoding-NhGxhxq0.js';
-export { C as CryptoParams, P as PROTOCOL_ID, e as ParseResult, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, W as WireEnvelope, g as base64urlToBytes, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-NhGxhxq0.js';
+import { c as WalletLike, d as PairingParams } from './encoding-DVjN4p5t.js';
+export { C as CryptoParams, P as PROTOCOL_ID, e as ParseResult, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, W as WireEnvelope, g as base64urlToBytes, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-DVjN4p5t.js';
 import '@bsv/sdk';
 
 type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+/**
+ * The wallet methods implemented by the BSV Browser mobile app.
+ * Used as the default for `WalletPairingSessionOptions.implementedMethods`.
+ */
+declare const DEFAULT_IMPLEMENTED_METHODS: Set<string>;
+/**
+ * Methods approved without user interaction by default.
+ * Used as the default for `WalletPairingSessionOptions.autoApproveMethods`.
+ */
+declare const DEFAULT_AUTO_APPROVE_METHODS: Set<string>;
 /** Return a result or an error string — used for the onRequest handler. */
 type RequestHandler = (method: string, params: unknown) => Promise<unknown>;
 interface WalletPairingSessionOptions {
     /**
      * Methods your handler actually implements.
      * Requests for any other method receive a 501 without invoking onRequest or onApprovalRequired.
-     * If omitted, all methods are forwarded to onRequest.
+     * Defaults to {@link DEFAULT_IMPLEMENTED_METHODS} (the full BSV Browser method set).
      */
     implementedMethods?: Set<string>;
     /**
      * Subset of implementedMethods that are executed without calling onApprovalRequired.
-     * Useful for read-only methods like getPublicKey.
+     * Defaults to {@link DEFAULT_AUTO_APPROVE_METHODS} (`getPublicKey` only).
      */
     autoApproveMethods?: Set<string>;
     /**
@@ -68,6 +78,8 @@ declare class WalletPairingSession {
     private protocolID;
     private mobileIdentityKey;
     private requestHandler;
+    private readonly implementedMethods;
+    private readonly autoApproveMethods;
     private listeners;
     constructor(wallet: WalletLike, params: PairingParams, options?: WalletPairingSessionOptions);
     get status(): PairingSessionStatus;
@@ -104,4 +116,4 @@ declare class WalletPairingSession {
     private handleRpc;
 }
 
-export { PairingParams, type PairingSessionStatus, type RequestHandler, WalletLike, WalletPairingSession, type WalletPairingSessionOptions };
+export { DEFAULT_AUTO_APPROVE_METHODS, DEFAULT_IMPLEMENTED_METHODS, PairingParams, type PairingSessionStatus, type RequestHandler, WalletLike, WalletPairingSession, type WalletPairingSessionOptions };

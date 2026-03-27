@@ -1,6 +1,6 @@
 import { Server } from 'http';
-import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './encoding-NhGxhxq0.cjs';
-export { C as CryptoParams, P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo, g as base64urlToBytes, h as buildPairingUri, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-NhGxhxq0.cjs';
+import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './encoding-DVjN4p5t.cjs';
+export { C as CryptoParams, P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo, g as base64urlToBytes, h as buildPairingUri, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-DVjN4p5t.cjs';
 import { Express } from 'express';
 import '@bsv/sdk';
 
@@ -112,16 +112,35 @@ declare class WalletRequestHandler {
 }
 
 interface WalletRelayServiceOptions {
-    /** Express app — REST routes are registered on init. */
-    app: Express;
+    /**
+     * Express app — when provided, REST routes are registered automatically.
+     * Omit when using Next.js (or any other framework): call createSession(),
+     * getSession(), and sendRequest() from your own route handlers instead.
+     */
+    app?: Express;
     /** HTTP server — WebSocket upgrade handler is attached here. */
     server: Server;
-    /** Backend wallet used to encrypt/decrypt messages with mobile. */
+    /**
+     * Backend wallet used to encrypt/decrypt messages with mobile.
+     * Use `ProtoWallet` with a private key stored in an environment variable:
+     * ```ts
+     * import { ProtoWallet, PrivateKey } from '@bsv/sdk'
+     * wallet: new ProtoWallet(PrivateKey.fromWif(process.env['WALLET_WIF']!))
+     * ```
+     * The same key must be used across restarts — the mobile's ECDH shared secret
+     * is derived from the backend's identity key embedded in the QR code.
+     */
     wallet: WalletLike;
-    /** ws(s):// base URL of this server (used in the QR pairing URI). */
-    relayUrl: string;
-    /** http(s):// URL of the desktop frontend (CORS origin + pairing URI). */
-    origin: string;
+    /**
+     * ws(s):// base URL of this server — embedded in the QR pairing URI.
+     * Defaults to the `RELAY_URL` environment variable, then `ws://localhost:3000`.
+     */
+    relayUrl?: string;
+    /**
+     * http(s):// URL of the desktop frontend — used for CORS and the pairing URI.
+     * Defaults to the `ORIGIN` environment variable, then `http://localhost:5173`.
+     */
+    origin?: string;
     /** Called when a mobile completes pairing and the session transitions to 'connected'. */
     onSessionConnected?: (sessionId: string) => void;
     /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
@@ -129,15 +148,22 @@ interface WalletRelayServiceOptions {
 }
 /**
  * High-level facade that wires together the relay, session manager,
- * and RPC handler into a ready-to-use Express + WebSocket service.
+ * and RPC handler into a ready-to-use WebSocket service.
  *
- * Usage:
+ * Express usage (routes registered automatically):
  * ```ts
  * const relay = new WalletRelayService({ app, server, wallet, relayUrl, origin })
- * // REST routes and WS upgrade are registered automatically.
  * ```
  *
- * Registered routes:
+ * Next.js / custom framework (omit `app`, call methods from your route handlers):
+ * ```ts
+ * const relay = new WalletRelayService({ server, wallet, relayUrl, origin })
+ * // In GET /api/session:        relay.createSession()
+ * // In GET /api/session/:id:    relay.getSession(id)
+ * // In POST /api/request/:id:   relay.sendRequest(id, method, params)
+ * ```
+ *
+ * Express auto-registered routes:
  *   GET  /api/session        — create session, return { sessionId, status, qrDataUrl }
  *   GET  /api/session/:id    — return { sessionId, status }
  *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
@@ -149,6 +175,9 @@ declare class WalletRelayService {
     private handler;
     private pending;
     private mobileAuthTimers;
+    private wallet;
+    private relayUrl;
+    private origin;
     constructor(opts: WalletRelayServiceOptions);
     /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
     createSession(): Promise<{
