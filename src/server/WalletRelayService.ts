@@ -9,7 +9,7 @@ import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
 import { PROTOCOL_ID } from '../types.js'
 import type { WireEnvelope, RpcResponse } from '../types.js'
 
-interface WalletRelayServiceOptions {
+export interface WalletRelayServiceOptions {
   /** Express app — REST routes are registered on init. */
   app: Express
   /** HTTP server — WebSocket upgrade handler is attached here. */
@@ -20,6 +20,10 @@ interface WalletRelayServiceOptions {
   relayUrl: string
   /** http(s):// URL of the desktop frontend (CORS origin + pairing URI). */
   origin: string
+  /** Called when a mobile completes pairing and the session transitions to 'connected'. */
+  onSessionConnected?: (sessionId: string) => void
+  /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
+  onSessionDisconnected?: (sessionId: string) => void
 }
 
 interface PendingRequest {
@@ -73,10 +77,14 @@ export class WalletRelayService {
       return s !== null && token !== null && token === s.desktopToken
     })
 
-    // Start auth timer when an unauthenticated mobile connects
+    // When mobile WS opens: lock the session against race-expiry and start auth timer
     this.relay.onMobileConnect(topic => {
       const s = this.sessions.getSession(topic)
-      if (!s || s.mobileIdentityKey) return  // already authenticated — no timer needed
+      if (!s) return
+      // Lock pending sessions so a pairing_approved in-flight doesn't lose to a lazy
+      // expiry check on the next poll (grace window in QRSessionManager.getSession).
+      this.sessions.setPairingStarted(topic)
+      if (s.mobileIdentityKey) return  // already authenticated — no auth timer needed
       const timer = setTimeout(() => {
         this.mobileAuthTimers.delete(topic)
         this.relay.disconnectMobile(topic)
@@ -93,6 +101,7 @@ export class WalletRelayService {
       if (role === 'mobile') {
         this.sessions.setStatus(topic, 'disconnected')
         this.rejectPendingForSession(topic)
+        this.opts.onSessionDisconnected?.(topic)
       }
     })
 
@@ -122,12 +131,13 @@ export class WalletRelayService {
 
   /**
    * Encrypt an RPC call, relay it to the mobile, and await the response.
-   * Resolves with the decrypted RpcResponse or rejects after 30 s.
+   * Rejects if the session is not connected or if the mobile doesn't respond within 30 s.
    */
   async sendRequest(sessionId: string, method: string, params: unknown): Promise<RpcResponse> {
     const session = this.sessions.getSession(sessionId)
     if (!session || session.status !== 'connected' || !session.mobileIdentityKey) {
-      return { id: 'unknown', seq: 0, error: { code: 400, message: `Session is not connected` } }
+      const status = session?.status ?? 'not found'
+      throw new Error(`Session is ${status}`)
     }
 
     const rpc = this.handler.createRequest(method, params)
@@ -192,7 +202,12 @@ export class WalletRelayService {
       if (!method) { res.status(400).json({ error: 'method is required' }); return }
       void this.sendRequest(req.params['id'] as string, method, params)
         .then(response => res.json(response))
-        .catch(err => res.status(504).json({ error: err instanceof Error ? err.message : 'Request failed' }))
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : 'Request failed'
+          // Session-not-connected is a client error (4xx); timeout is a gateway error (5xx).
+          const status = msg.startsWith('Session is') ? 400 : 504
+          res.status(status).json({ error: msg })
+        })
     })
   }
 
@@ -264,6 +279,7 @@ export class WalletRelayService {
 
     this.sessions.setMobileIdentityKey(topic, mobileIdentityKey)
     this.sessions.setStatus(topic, 'connected')
+    this.opts.onSessionConnected?.(topic)
 
     // Send pairing_ack to confirm the session is live
     const ack = this.handler.createProtocolMessage('pairing_ack', { topic })

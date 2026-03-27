@@ -17,12 +17,12 @@ interface BufferedMessage {
   expiresAt: number
 }
 
-type Role = 'desktop' | 'mobile'
-type MessageHandler    = (topic: string, envelope: WireEnvelope, role: Role) => void
-type TopicValidator    = (topic: string) => boolean
-type TokenValidator    = (topic: string, token: string | null) => boolean
-type ConnectHandler    = (topic: string) => void
-type DisconnectHandler = (topic: string, role: Role) => void
+export type Role = 'desktop' | 'mobile'
+export type MessageHandler    = (topic: string, envelope: WireEnvelope, role: Role) => void
+export type TopicValidator    = (topic: string) => boolean
+export type TokenValidator    = (topic: string, token: string | null) => boolean
+export type ConnectHandler    = (topic: string) => void
+export type DisconnectHandler = (topic: string, role: Role) => void
 
 /**
  * Topic-keyed WebSocket relay. Mounts at /ws.

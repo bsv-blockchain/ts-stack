@@ -5,6 +5,15 @@ export { WebSocketRelay } from './server/WebSocketRelay.js'
 export { QRSessionManager } from './server/QRSessionManager.js'
 export { WalletRequestHandler } from './server/WalletRequestHandler.js'
 export { WalletRelayService } from './server/WalletRelayService.js'
+export type { WalletRelayServiceOptions } from './server/WalletRelayService.js'
+export type {
+  Role,
+  MessageHandler,
+  TopicValidator,
+  TokenValidator,
+  ConnectHandler,
+  DisconnectHandler,
+} from './server/WebSocketRelay.js'
 
 // ── Shared utilities (also available from ./client) ───────────────────────────
 

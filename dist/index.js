@@ -168,6 +168,7 @@ var WebSocketRelay = class {
 // src/server/QRSessionManager.ts
 import { randomBytes } from "crypto";
 var PAIRING_TTL_MS = 120 * 1e3;
+var PAIRING_GRACE_MS = 30 * 1e3;
 var SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
 var GC_INTERVAL_MS = 10 * 60 * 1e3;
 var QRSessionManager = class {
@@ -202,9 +203,15 @@ var QRSessionManager = class {
     const session = this.sessions.get(id);
     if (!session) return null;
     if (session.status === "pending" && Date.now() > session.createdAt + PAIRING_TTL_MS) {
-      session.status = "expired";
+      const gracedUntil = (session.pairingStartedAt ?? 0) + PAIRING_GRACE_MS;
+      if (Date.now() > gracedUntil) session.status = "expired";
     }
     return session;
+  }
+  /** Mark that a mobile WS has opened for this session, starting the grace window. */
+  setPairingStarted(id) {
+    const session = this.sessions.get(id);
+    if (session && session.status === "pending") session.pairingStartedAt = Date.now();
   }
   setStatus(id, status) {
     const session = this.sessions.get(id);
@@ -393,7 +400,9 @@ var WalletRelayService = class {
     });
     this.relay.onMobileConnect((topic) => {
       const s = this.sessions.getSession(topic);
-      if (!s || s.mobileIdentityKey) return;
+      if (!s) return;
+      this.sessions.setPairingStarted(topic);
+      if (s.mobileIdentityKey) return;
       const timer = setTimeout(() => {
         this.mobileAuthTimers.delete(topic);
         this.relay.disconnectMobile(topic);
@@ -407,6 +416,7 @@ var WalletRelayService = class {
       if (role === "mobile") {
         this.sessions.setStatus(topic, "disconnected");
         this.rejectPendingForSession(topic);
+        this.opts.onSessionDisconnected?.(topic);
       }
     });
     this.registerRoutes(opts.app);
@@ -432,12 +442,13 @@ var WalletRelayService = class {
   }
   /**
    * Encrypt an RPC call, relay it to the mobile, and await the response.
-   * Resolves with the decrypted RpcResponse or rejects after 30 s.
+   * Rejects if the session is not connected or if the mobile doesn't respond within 30 s.
    */
   async sendRequest(sessionId, method, params) {
     const session = this.sessions.getSession(sessionId);
     if (!session || session.status !== "connected" || !session.mobileIdentityKey) {
-      return { id: "unknown", seq: 0, error: { code: 400, message: `Session is not connected` } };
+      const status = session?.status ?? "not found";
+      throw new Error(`Session is ${status}`);
     }
     const rpc = this.handler.createRequest(method, params);
     const ciphertext = await encryptEnvelope(
@@ -495,7 +506,11 @@ var WalletRelayService = class {
         res.status(400).json({ error: "method is required" });
         return;
       }
-      void this.sendRequest(req.params["id"], method, params).then((response) => res.json(response)).catch((err) => res.status(504).json({ error: err instanceof Error ? err.message : "Request failed" }));
+      void this.sendRequest(req.params["id"], method, params).then((response) => res.json(response)).catch((err) => {
+        const msg = err instanceof Error ? err.message : "Request failed";
+        const status = msg.startsWith("Session is") ? 400 : 504;
+        res.status(status).json({ error: msg });
+      });
     });
   }
   // ── Inbound message handling ──────────────────────────────────────────────────
@@ -556,6 +571,7 @@ var WalletRelayService = class {
     }
     this.sessions.setMobileIdentityKey(topic, mobileIdentityKey);
     this.sessions.setStatus(topic, "connected");
+    this.opts.onSessionConnected?.(topic);
     const ack = this.handler.createProtocolMessage("pairing_ack", { topic });
     const ciphertext = await encryptEnvelope(
       this.opts.wallet,

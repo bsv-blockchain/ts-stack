@@ -18,6 +18,7 @@ export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 
 export { PROTOCOL_ID } from './types.js'
 export type {
+  WalletLike,
   WireEnvelope,
   RpcRequest,
   RpcResponse,

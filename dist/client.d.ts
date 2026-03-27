@@ -1,5 +1,5 @@
-import { c as WalletLike, d as PairingParams } from './encoding-CbAIo4ig.js';
-export { C as CryptoParams, P as PROTOCOL_ID, e as ParseResult, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, W as WireEnvelope, g as base64urlToBytes, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-CbAIo4ig.js';
+import { c as WalletLike, d as PairingParams } from './encoding-NhGxhxq0.js';
+export { C as CryptoParams, P as PROTOCOL_ID, e as ParseResult, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, W as WireEnvelope, g as base64urlToBytes, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-NhGxhxq0.js';
 import '@bsv/sdk';
 
 type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -64,13 +64,24 @@ declare class WalletPairingSession {
     private ws;
     private _status;
     private connected;
-    private lastSeq;
+    private _lastSeq;
     private protocolID;
     private mobileIdentityKey;
     private requestHandler;
     private listeners;
     constructor(wallet: WalletLike, params: PairingParams, options?: WalletPairingSessionOptions);
     get status(): PairingSessionStatus;
+    /**
+     * The highest seq value received from the backend in this connection.
+     * Persist this before disconnecting so you can pass it to `reconnect(lastSeq)`.
+     *
+     * ```ts
+     * session.on('disconnected', () => {
+     *   SecureStore.setItemAsync('lastseq_' + topic, String(session.lastSeq))
+     * })
+     * ```
+     */
+    get lastSeq(): number;
     on(event: 'connected', handler: () => void): this;
     on(event: 'disconnected', handler: () => void): this;
     on(event: 'error', handler: (msg: string) => void): this;
@@ -93,4 +104,4 @@ declare class WalletPairingSession {
     private handleRpc;
 }
 
-export { PairingParams, type PairingSessionStatus, type RequestHandler, WalletPairingSession, type WalletPairingSessionOptions };
+export { PairingParams, type PairingSessionStatus, type RequestHandler, WalletLike, WalletPairingSession, type WalletPairingSessionOptions };

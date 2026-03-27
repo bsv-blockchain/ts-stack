@@ -1,6 +1,6 @@
 import { Server } from 'http';
-import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './encoding-CbAIo4ig.js';
-export { C as CryptoParams, P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo, g as base64urlToBytes, h as buildPairingUri, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-CbAIo4ig.js';
+import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './encoding-NhGxhxq0.js';
+export { C as CryptoParams, P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo, g as base64urlToBytes, h as buildPairingUri, i as bytesToBase64url, j as decryptEnvelope, k as encryptEnvelope, p as parsePairingUri } from './encoding-NhGxhxq0.js';
 import { Express } from 'express';
 import '@bsv/sdk';
 
@@ -84,6 +84,8 @@ declare class QRSessionManager {
     stop(): void;
     createSession(): Session;
     getSession(id: string): Session | null;
+    /** Mark that a mobile WS has opened for this session, starting the grace window. */
+    setPairingStarted(id: string): void;
     setStatus(id: string, status: SessionStatus): void;
     setMobileIdentityKey(id: string, key: string): void;
     /**
@@ -120,6 +122,10 @@ interface WalletRelayServiceOptions {
     relayUrl: string;
     /** http(s):// URL of the desktop frontend (CORS origin + pairing URI). */
     origin: string;
+    /** Called when a mobile completes pairing and the session transitions to 'connected'. */
+    onSessionConnected?: (sessionId: string) => void;
+    /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
+    onSessionDisconnected?: (sessionId: string) => void;
 }
 /**
  * High-level facade that wires together the relay, session manager,
@@ -159,7 +165,7 @@ declare class WalletRelayService {
     } | null;
     /**
      * Encrypt an RPC call, relay it to the mobile, and await the response.
-     * Resolves with the decrypted RpcResponse or rejects after 30 s.
+     * Rejects if the session is not connected or if the mobile doesn't respond within 30 s.
      */
     sendRequest(sessionId: string, method: string, params: unknown): Promise<RpcResponse>;
     /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
@@ -174,4 +180,4 @@ declare class WalletRelayService {
     private handlePairingApproved;
 }
 
-export { QRSessionManager, RpcRequest, RpcResponse, Session, SessionStatus, WalletLike, WalletRelayService, WalletRequestHandler, WebSocketRelay, WireEnvelope };
+export { type ConnectHandler, type DisconnectHandler, type MessageHandler, QRSessionManager, type Role, RpcRequest, RpcResponse, Session, SessionStatus, type TokenValidator, type TopicValidator, WalletLike, WalletRelayService, type WalletRelayServiceOptions, WalletRequestHandler, WebSocketRelay, WireEnvelope };

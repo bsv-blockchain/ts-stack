@@ -46,6 +46,7 @@ export interface Session {
   expiresAt: number
   desktopToken: string        // random secret required for role=desktop WS connections
   mobileIdentityKey?: string  // set once on pairing_approved
+  pairingStartedAt?: number   // set when mobile WS first connects; prevents race-expiry
 }
 
 export interface SessionInfo {

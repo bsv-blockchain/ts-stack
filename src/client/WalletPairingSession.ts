@@ -67,7 +67,7 @@ export class WalletPairingSession {
   private ws: WebSocket | null = null
   private _status: PairingSessionStatus = 'idle'
   private connected = false
-  private lastSeq = 0
+  private _lastSeq = 0
   private protocolID: WalletProtocol
   private mobileIdentityKey: string | null = null
   private requestHandler: RequestHandler | null = null
@@ -87,6 +87,18 @@ export class WalletPairingSession {
   }
 
   get status(): PairingSessionStatus { return this._status }
+
+  /**
+   * The highest seq value received from the backend in this connection.
+   * Persist this before disconnecting so you can pass it to `reconnect(lastSeq)`.
+   *
+   * ```ts
+   * session.on('disconnected', () => {
+   *   SecureStore.setItemAsync('lastseq_' + topic, String(session.lastSeq))
+   * })
+   * ```
+   */
+  get lastSeq(): number { return this._lastSeq }
 
   // ── Event registration ───────────────────────────────────────────────────────
 
@@ -132,7 +144,7 @@ export class WalletPairingSession {
   private async openConnection(initialSeq: number): Promise<void> {
     this._status = 'connecting'
     this.connected = false
-    this.lastSeq = initialSeq
+    this._lastSeq = initialSeq
 
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true })
     this.mobileIdentityKey = publicKey
@@ -147,7 +159,7 @@ export class WalletPairingSession {
       try {
         const payload = JSON.stringify({
           id: crypto.randomUUID(),
-          seq: initialSeq + 1,
+          seq: this._lastSeq + 1,
           method: 'pairing_approved',
           params: {
             mobileIdentityKey: publicKey,
@@ -180,8 +192,8 @@ export class WalletPairingSession {
         const msg = JSON.parse(plaintext) as RpcRequest | RpcResponse
 
         // M4: Replay protection — drop anything not strictly greater than last seq
-        if (typeof msg.seq !== 'number' || msg.seq <= this.lastSeq) return
-        this.lastSeq = msg.seq
+        if (typeof msg.seq !== 'number' || msg.seq <= this._lastSeq) return
+        this._lastSeq = msg.seq
 
         // Any successfully decrypted message confirms the session is live.
         // This handles both the pairing_ack path and any race where ack is missed

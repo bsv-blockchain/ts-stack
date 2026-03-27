@@ -38,7 +38,7 @@ var WalletPairingSession = class {
     this.ws = null;
     this._status = "idle";
     this.connected = false;
-    this.lastSeq = 0;
+    this._lastSeq = 0;
     this.mobileIdentityKey = null;
     this.requestHandler = null;
     this.listeners = { connected: [], disconnected: [], error: [] };
@@ -46,6 +46,19 @@ var WalletPairingSession = class {
   }
   get status() {
     return this._status;
+  }
+  /**
+   * The highest seq value received from the backend in this connection.
+   * Persist this before disconnecting so you can pass it to `reconnect(lastSeq)`.
+   *
+   * ```ts
+   * session.on('disconnected', () => {
+   *   SecureStore.setItemAsync('lastseq_' + topic, String(session.lastSeq))
+   * })
+   * ```
+   */
+  get lastSeq() {
+    return this._lastSeq;
   }
   on(event, handler) {
     const bucket = this.listeners[event];
@@ -80,7 +93,7 @@ var WalletPairingSession = class {
   async openConnection(initialSeq) {
     this._status = "connecting";
     this.connected = false;
-    this.lastSeq = initialSeq;
+    this._lastSeq = initialSeq;
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true });
     this.mobileIdentityKey = publicKey;
     const { topic, relay, backendIdentityKey, keyID } = this.params;
@@ -91,7 +104,7 @@ var WalletPairingSession = class {
       try {
         const payload = JSON.stringify({
           id: crypto.randomUUID(),
-          seq: initialSeq + 1,
+          seq: this._lastSeq + 1,
           method: "pairing_approved",
           params: {
             mobileIdentityKey: publicKey,
@@ -117,8 +130,8 @@ var WalletPairingSession = class {
           return;
         }
         const msg = JSON.parse(plaintext);
-        if (typeof msg.seq !== "number" || msg.seq <= this.lastSeq) return;
-        this.lastSeq = msg.seq;
+        if (typeof msg.seq !== "number" || msg.seq <= this._lastSeq) return;
+        this._lastSeq = msg.seq;
         if (!this.connected) {
           this.connected = true;
           this._status = "connected";

@@ -33,6 +33,7 @@ interface Session {
     expiresAt: number;
     desktopToken: string;
     mobileIdentityKey?: string;
+    pairingStartedAt?: number;
 }
 interface SessionInfo {
     sessionId: string;

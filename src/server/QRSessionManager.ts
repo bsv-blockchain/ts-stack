@@ -1,7 +1,8 @@
 import { randomBytes } from 'crypto'
 import type { Session, SessionStatus } from '../types.js'
 
-const PAIRING_TTL_MS  = 120 * 1000               // 2 min QR expiry
+const PAIRING_TTL_MS   = 120 * 1000  // 2 min QR expiry
+const PAIRING_GRACE_MS = 30  * 1000  // extra window once mobile WS has opened
 const SESSION_TTL_MS  = 30 * 24 * 60 * 60 * 1000 // 30 days
 const GC_INTERVAL_MS  = 10 * 60 * 1000           // GC every 10 min
 
@@ -48,11 +49,22 @@ export class QRSessionManager {
   getSession(id: string): Session | null {
     const session = this.sessions.get(id)
     if (!session) return null
-    // Lazily expire pending sessions past their pairing window
+    // Lazily expire pending sessions past their pairing window.
+    // Respect the grace window: if the mobile WS has already opened (pairingStartedAt is
+    // set), don't flip to 'expired' for another PAIRING_GRACE_MS. This prevents a race
+    // where the mobile connects just before the 120 s boundary and pairing_approved is
+    // still in flight when the caller polls session status.
     if (session.status === 'pending' && Date.now() > session.createdAt + PAIRING_TTL_MS) {
-      session.status = 'expired'
+      const gracedUntil = (session.pairingStartedAt ?? 0) + PAIRING_GRACE_MS
+      if (Date.now() > gracedUntil) session.status = 'expired'
     }
     return session
+  }
+
+  /** Mark that a mobile WS has opened for this session, starting the grace window. */
+  setPairingStarted(id: string): void {
+    const session = this.sessions.get(id)
+    if (session && session.status === 'pending') session.pairingStartedAt = Date.now()
   }
 
   setStatus(id: string, status: SessionStatus): void {
