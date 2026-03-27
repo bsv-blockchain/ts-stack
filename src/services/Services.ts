@@ -38,6 +38,8 @@ import { TableOutput } from '../storage/schema/tables/TableOutput'
 import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 
 export class Services implements WalletServices {
+  static readonly getStatusForTxidsBatchLimit = 20
+
   static createDefaultOptions(chain: Chain): WalletServicesOptions {
     return createDefaultWalletServicesOptions(chain)
   }
@@ -225,7 +227,7 @@ export class Services implements WalletServices {
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
-        const r = await stc.service(txids)
+        const r = await this.getStatusForTxidsBatched(stc, txids)
         if (r.status === 'success') {
           services.addServiceCallSuccess(stc)
           r0 = r
@@ -242,6 +244,31 @@ export class Services implements WalletServices {
     }
 
     return r0
+  }
+
+  private async getStatusForTxidsBatched(
+    stc: ServiceToCall<GetStatusForTxidsService>,
+    txids: string[]
+  ): Promise<GetStatusForTxidsResult> {
+    const results: GetStatusForTxidsResult['results'] = []
+    let error: GetStatusForTxidsResult['error']
+
+    for (let i = 0; i < txids.length; i += Services.getStatusForTxidsBatchLimit) {
+      const batch = txids.slice(i, i + Services.getStatusForTxidsBatchLimit)
+      const r = await stc.service(batch)
+      if (r.status !== 'success') {
+        return r
+      }
+      if (!error && r.error) error = r.error
+      results.push(...r.results)
+    }
+
+    return {
+      name: stc.providerName,
+      status: 'success',
+      error,
+      results
+    }
   }
 
   /**
