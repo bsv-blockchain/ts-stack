@@ -1742,8 +1742,11 @@ export class CWIStyleWalletManager implements WalletInterface {
       profilesEncrypted = new SymmetricKey(rootPrimaryKey).encrypt(profilesBytes) as number[]
     }
 
-    // Construct the new UMP token data (preserve or upgrade to v3 with KDF metadata)
-    const kdfMetadata = this.currentUMPToken.passwordKdf ?? this.kdfConfig
+    // Construct the new UMP token data.
+    // IMPORTANT: For non-password updates (e.g. add/remove profile), preserve legacy
+    // KDF layout exactly. Upgrading legacy tokens to v3 here would require re-deriving
+    // passwordKey from plaintext password, which we do not have in this code path.
+    const kdfMetadata = this.currentUMPToken.passwordKdf
     const newTokenData: UMPToken = {
       passwordSalt,
       passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
@@ -1775,8 +1778,12 @@ export class CWIStyleWalletManager implements WalletInterface {
         })
       ).ciphertext,
       profilesEncrypted, // Add encrypted profiles
-      umpVersion: 3, // UMP protocol version 3
-      passwordKdf: kdfMetadata // Preserve or upgrade KDF metadata
+      ...(kdfMetadata
+        ? {
+            umpVersion: 3,
+            passwordKdf: kdfMetadata
+          }
+        : {})
       // currentOutpoint will be set after publishing
     }
 

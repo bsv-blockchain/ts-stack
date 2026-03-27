@@ -790,6 +790,88 @@ describe('CWIStyleWalletManager Tests', () => {
       // Verify PBKDF2 was used (indirectly via successful auth with legacy token)
     })
 
+    test('Legacy token profile update preserves legacy KDF metadata', async () => {
+      const legacyToken = makeLegacyToken(Random(32))
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
+      manager = makeManager()
+
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const mockGetFactor = jest.spyOn(manager as any, 'getFactor')
+      mockGetFactor.mockImplementation(async factorName => {
+        if (factorName === 'passwordKey') return passwordKey
+        if (factorName === 'presentationKey') return presentationKey
+        if (factorName === 'recoveryKey') return recoveryKey
+        if (factorName === 'privilegedKey') return Random(32)
+        return Random(32)
+      })
+
+      await manager.addProfile('legacy-profile')
+
+      expect(mockInteractor.buildAndSend).toHaveBeenCalled()
+      const updatedToken = (mockInteractor.buildAndSend as any).mock.calls[0][2] as UMPToken
+      expect(updatedToken.umpVersion).toBeUndefined()
+      expect(updatedToken.passwordKdf).toBeUndefined()
+    })
+
+    test('Legacy user can relogin after profile change (regression)', async () => {
+      // This test proves the bug: legacy user logs in, adds profile, logs out,
+      // then cannot log back in because token was silently migrated to v3 metadata
+      // while factors were still wrapped with PBKDF2-derived key.
+
+      const rootPrimary = Random(32)
+      const legacyToken = makeLegacyToken(rootPrimary)
+
+      // Track what token gets published after addProfile
+      let publishedToken: UMPToken | undefined
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => legacyToken)
+      mockInteractor.buildAndSend = jest.fn(async (_w: any, _a: any, token: UMPToken) => {
+        publishedToken = token
+        return 'updated.0'
+      })
+
+      manager = makeManager()
+
+      // Step 1: Legacy user logs in successfully
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      expect(manager.authenticated).toBe(true)
+
+      // Step 2: User adds a profile (this triggers updateAuthFactors)
+      const mockGetFactor = jest.spyOn(manager as any, 'getFactor')
+      mockGetFactor.mockImplementation(async factorName => {
+        if (factorName === 'passwordKey') return passwordKey
+        if (factorName === 'presentationKey') return presentationKey
+        if (factorName === 'recoveryKey') return recoveryKey
+        if (factorName === 'privilegedKey') return Random(32)
+        return Random(32)
+      })
+
+      await manager.addProfile('work')
+      expect(publishedToken).toBeDefined()
+
+      // Step 3: User logs out (destroy manager)
+      manager.destroy()
+
+      // Step 4: Simulate relogin - overlay now returns the updated token
+      mockInteractor.findByPresentationKeyHash = jest.fn(async () => ({
+        ...publishedToken!,
+        currentOutpoint: 'updated.0'
+      }))
+
+      const manager2 = makeManager()
+      await manager2.providePresentationKey(presentationKey)
+
+      // Step 5: Try to login with password
+      // If token was incorrectly migrated to v3, this will fail because
+      // derivePasswordKey will use Argon2id but factors were wrapped with PBKDF2 key
+      await manager2.providePassword('test-password')
+
+      // With the fix, this should succeed because token stays legacy
+      expect(manager2.authenticated).toBe(true)
+    })
+
     test('V3 token login uses Argon2id and respects iterations', async () => {
       const argon2PasswordKey = await deriveArgon2Key(3, 65536)
       const v3Token = makeV3Token(argon2PasswordKey, Random(32), 'v3.0', { iterations: 3, memoryKiB: 65536 })
