@@ -29,7 +29,8 @@ export async function updateExchangeratesapi(
 ): Promise<FiatExchangeRates> {
   if (!options.exchangeratesapiKey) throw new WERR_MISSING_PARAMETER('options.exchangeratesapiKey')
 
-  const unique = Array.from(new Set([...targetCurrencies, 'USD']))
+  // Always update all rates in one request.
+  const unique = Array.from(new Set([...targetCurrencies, 'USD', 'EUR', 'GBP']))
   const iorates = await getExchangeRatesIo(options.exchangeratesapiKey, unique)
 
   if (!iorates.success) throw new WERR_BAD_REQUEST(`getExchangeRatesIo returned success ${iorates.success}`)
@@ -46,7 +47,7 @@ export async function updateExchangeratesapi(
     rates: {}
   }
 
-  for (const currency of targetCurrencies) {
+  for (const currency of unique) {
     if (currency === 'USD') {
       r.rates.USD = 1
       continue

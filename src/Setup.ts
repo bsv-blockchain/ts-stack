@@ -16,6 +16,7 @@ import {
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
+import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { Chain } from './sdk/types'
 import { randomBytesHex, verifyTruthy } from './utility/utilityHelpers'
 import { WERR_INVALID_OPERATION } from './sdk/WERR_errors'
@@ -346,8 +347,8 @@ DEV_KEYS = '{
     outpoints: string[],
     p2pkhKey: KeyPairAddress,
     inputBEEF?: BEEF
-  ) {
-    // TODO
+  ): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
+    return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup), inputBEEF)
   }
   /**
    * Adds `Knex` based storage to a `Wallet` configured by `Setup.createWalletOnly`

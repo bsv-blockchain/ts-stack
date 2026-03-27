@@ -655,7 +655,8 @@ export class Services implements WalletServices {
     const nextRates: Record<string, number> = { ...storedRates }
     const nextTimestamps: Record<string, Date> = { ...(stored.rateTimestamps ?? {}) }
 
-    for (const c of toFetch) {
+    const fetchedCurrencies = Object.keys(fetched.rates ?? {})
+    for (const c of fetchedCurrencies) {
       const v = fetched.rates?.[c]
       if (typeof v === 'number') {
         nextRates[c] = v
