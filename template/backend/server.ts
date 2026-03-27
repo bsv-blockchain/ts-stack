@@ -34,11 +34,11 @@ const ORIGIN = process.env['ORIGIN']        ?? 'http://localhost:5173'
 // secret from the backend identity key embedded in the QR code, so the same key
 // must be used across restarts.
 //
-// Generate a key once and store it in .env as WALLET_WIF:
-//   node -e "const {PrivateKey}=require('@bsv/sdk'); console.log(PrivateKey.fromRandom().toWif())"
+// Generate a key once and store it in .env as WALLET_PRIVATE_KEY:
+//   node --input-type=commonjs -e "const {PrivateKey}=require('@bsv/sdk'); console.log(PrivateKey.fromRandom().toHex())"
 
-if (!process.env['WALLET_WIF']) throw new Error('WALLET_WIF environment variable is required')
-const wallet = new ProtoWallet(PrivateKey.fromWif(process.env['WALLET_WIF']))
+if (!process.env['WALLET_PRIVATE_KEY']) throw new Error('WALLET_PRIVATE_KEY environment variable is required')
+const wallet = new ProtoWallet(PrivateKey.fromHex(process.env['WALLET_PRIVATE_KEY']))
 
 // ── Express app ───────────────────────────────────────────────────────────────
 

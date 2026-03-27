@@ -36,7 +36,7 @@ interface Props {
 export function WalletConnectionModal({
   onLocalWallet,
   onMobileQR,
-  installUrl = 'https://metanet.id',
+  installUrl = 'https://desktop.bsvb.tech',
 }: Props) {
   const [status, setStatus] = useState<DetectionStatus>('detecting')
 

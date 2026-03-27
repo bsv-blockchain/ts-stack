@@ -41,7 +41,7 @@ type WalletMode = 'detecting' | 'local' | 'mobile'
 // Separated into its own component so useWalletSession (which creates a backend
 // session on mount) only runs when the user has actually chosen the mobile path.
 
-function MobileQRContent() {
+export function MobileQRContent() {
   const { session, log, error, createSession, sendRequest } = useWalletSession()
 
   return (

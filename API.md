@@ -38,23 +38,29 @@ Express + WebSocket service that handles the full server-side pairing lifecycle.
 new WalletRelayService(options: WalletRelayServiceOptions)
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `app` | `Express` | Express application instance. REST routes are registered on it. |
-| `server` | `http.Server` | HTTP server. The WebSocket upgrade handler is attached here. |
-| `wallet` | `WalletLike` | Backend wallet used to encrypt/decrypt messages. Accepts `ProtoWallet` or `WalletClient`. |
-| `relayUrl` | `string` | `ws://` or `wss://` base URL of this server. Embedded in the QR pairing URI so the mobile knows where to connect. |
-| `origin` | `string` | `http://` or `https://` URL of the desktop frontend. Used as CORS origin and embedded in the pairing URI. |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `app` | `Express` | No | — | Express application instance. REST routes are registered on it. Omit when using Next.js or another framework — call `createSession()`, `getSession()`, and `sendRequest()` from your own route handlers instead. |
+| `server` | `http.Server` | **Yes** | — | HTTP server. The WebSocket upgrade handler is attached here. |
+| `wallet` | `WalletLike` | **Yes** | — | Backend wallet for encrypting/decrypting messages. Use `ProtoWallet` with a stable private key: `new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))`. The same key must be used across restarts — the mobile derives its ECDH shared secret from the backend identity key embedded in the QR code. |
+| `relayUrl` | `string` | No | `process.env.RELAY_URL` → `ws://localhost:3000` | `ws://` or `wss://` base URL of this server. Embedded in the QR pairing URI so the mobile knows where to connect. |
+| `origin` | `string` | No | `process.env.ORIGIN` → `http://localhost:5173` | `http://` or `https://` URL of the desktop frontend. Used as CORS origin and embedded in the pairing URI. |
 
 #### Methods
 
 **`createSession()`**
 
 ```ts
-createSession(): Promise<{ sessionId: string; status: string; qrDataUrl: string; desktopToken: string }>
+createSession(): Promise<{
+  sessionId:    string
+  status:       string
+  qrDataUrl:    string
+  pairingUri:   string
+  desktopToken: string
+}>
 ```
 
-Creates a new pairing session, builds the `wallet://pair?…` URI, and generates a QR code data URL. Returns the session ID, its initial status (`'pending'`), the base64 QR image, and a `desktopToken`.
+Creates a new pairing session, builds the `wallet://pair?…` URI, and generates a QR code data URL. Returns the session ID, its initial status (`'pending'`), the base64 QR image, the raw pairing URI (pass this to `QRPairingCode` or `useQRPairing`), and a `desktopToken`.
 
 The `desktopToken` is a cryptographically random secret that must be passed as a `?token=` query parameter when the desktop opens its WebSocket connection (`role=desktop`). Keep it server-side — do not embed it in the QR code or share it with the mobile.
 
@@ -94,7 +100,7 @@ Stops the session GC timer and closes the WebSocket server. Call on process shut
 
 | Method | Path | Body | Response |
 |--------|------|------|----------|
-| `GET` | `/api/session` | — | `{ sessionId, status, qrDataUrl }` |
+| `GET` | `/api/session` | — | `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
 | `GET` | `/api/session/:id` | — | `{ sessionId, status }` |
 | `POST` | `/api/request/:id` | `{ method: string, params: unknown }` | `RpcResponse` |
 
@@ -103,6 +109,8 @@ Stops the session GC timer and closes the WebSocket server. Call on process shut
 ### WalletPairingSession
 
 `import { WalletPairingSession } from 'qr-lib/client'`
+
+**This API is for mobile wallet developers.** If you are building a web app that accepts mobile wallet connections, you only need the backend (`WalletRelayService`) and the frontend template — you do not use `WalletPairingSession` directly.
 
 Manages the full mobile-side WebSocket pairing lifecycle:
 
@@ -132,10 +140,20 @@ new WalletPairingSession(
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `implementedMethods` | `Set<string>` | `undefined` | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. If omitted, all methods are forwarded. |
-| `autoApproveMethods` | `Set<string>` | `undefined` | Subset of `implementedMethods` that are executed without calling `onApprovalRequired`. Useful for read-only methods like `getPublicKey`. |
+| `implementedMethods` | `Set<string>` | `DEFAULT_IMPLEMENTED_METHODS` | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`. |
+| `autoApproveMethods` | `Set<string>` | `DEFAULT_AUTO_APPROVE_METHODS` | Subset of `implementedMethods` executed without calling `onApprovalRequired`. Defaults to `{ 'getPublicKey' }`. |
 | `onApprovalRequired` | `(method, params) => Promise<boolean>` | `undefined` | Called for every implemented method not in `autoApproveMethods`. Return `true` to approve, `false` to send a `4001 User Rejected` response. If omitted, all implemented methods are auto-approved. |
 | `walletMeta` | `Record<string, unknown>` | `{}` | Additional metadata sent inside the `pairing_approved` payload. Useful for identifying the wallet on the desktop side (e.g. `{ name, version }`). |
+
+`DEFAULT_IMPLEMENTED_METHODS` and `DEFAULT_AUTO_APPROVE_METHODS` are exported from `qr-lib/client` so you can reference or extend them:
+
+```ts
+import { DEFAULT_IMPLEMENTED_METHODS, DEFAULT_AUTO_APPROVE_METHODS } from 'qr-lib/client'
+
+const session = new WalletPairingSession(wallet, params, {
+  implementedMethods: new Set([...DEFAULT_IMPLEMENTED_METHODS, 'myCustomMethod']),
+})
+```
 
 #### Methods
 
@@ -743,6 +761,24 @@ interface Session {
 
 type SessionStatus = 'pending' | 'connected' | 'disconnected' | 'expired'
 ```
+
+---
+
+### SessionInfo
+
+The shape returned by `GET /api/session` (session creation) and polled via `GET /api/session/:id`. Used as the state type in the `useWalletSession` frontend hook.
+
+```ts
+interface SessionInfo {
+  sessionId:     string
+  status:        SessionStatus
+  qrDataUrl?:    string   // present on session creation — base64 PNG data URL
+  pairingUri?:   string   // present on session creation — pass to QRPairingCode / useQRPairing
+  desktopToken?: string   // present on session creation — pass as ?token= in the desktop WS URL
+}
+```
+
+`qrDataUrl`, `pairingUri`, and `desktopToken` are only present on the initial `GET /api/session` response. Status-poll responses (`GET /api/session/:id`) return only `sessionId` and `status`.
 
 ---
 
