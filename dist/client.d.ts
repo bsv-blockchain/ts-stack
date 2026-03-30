@@ -1,7 +1,7 @@
-import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-C_R4CVqb.js';
-export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WalletRequest, j as WalletResponse, W as WireEnvelope } from './types-C_R4CVqb.js';
-export { W as WalletRelayClient, a as WalletRelayClientOptions } from './WalletRelayClient-DbautuLm.js';
-export { C as CryptoParams, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-CNFWWIKh.js';
+import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-UY3FlsXl.js';
+export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WalletRequest, j as WalletResponse, W as WireEnvelope } from './types-UY3FlsXl.js';
+export { W as WalletRelayClient, a as WalletRelayClientOptions } from './WalletRelayClient-DcLlLvVz.js';
+export { C as CryptoParams, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-DWXkWJMY.js';
 import '@bsv/sdk';
 
 type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';

@@ -176,7 +176,7 @@ const txResponse = await sendRequest('createAction', {
 })
 ```
 
-`sendRequest` posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`.
+`sendRequest` posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`.
 
 The scaffold (`npx qr-lib init`) generates Tailwind-styled versions of these components as a starting point for heavier customisation.
 

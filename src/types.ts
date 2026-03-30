@@ -86,10 +86,12 @@ export type WalletMethodName =
   | 'listOutputs'
   | 'createAction'
   | 'signAction'
+  | 'createSignature'
   | 'listActions'
   | 'internalizeAction'
   | 'acquireCertificate'
   | 'relinquishCertificate'
+  | 'listCertificates'
   | 'revealCounterpartyKeyLinkage'
 
 /** A wallet RPC request tracked by WalletRelayClient. */

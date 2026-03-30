@@ -9,9 +9,9 @@ export type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'discon
  * Used as the default for `WalletPairingSessionOptions.implementedMethods`.
  */
 export const DEFAULT_IMPLEMENTED_METHODS: ReadonlySet<WalletMethodName> = new Set<WalletMethodName>([
-  'getPublicKey', 'listOutputs', 'createAction', 'signAction',
+  'getPublicKey', 'listOutputs', 'createAction', 'signAction', 'createSignature',
   'listActions', 'internalizeAction', 'acquireCertificate',
-  'relinquishCertificate', 'revealCounterpartyKeyLinkage',
+  'relinquishCertificate', 'listCertificates', 'revealCounterpartyKeyLinkage',
 ])
 
 /**

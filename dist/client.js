@@ -35,10 +35,12 @@ var DEFAULT_IMPLEMENTED_METHODS = /* @__PURE__ */ new Set([
   "listOutputs",
   "createAction",
   "signAction",
+  "createSignature",
   "listActions",
   "internalizeAction",
   "acquireCertificate",
   "relinquishCertificate",
+  "listCertificates",
   "revealCounterpartyKeyLinkage"
 ]);
 var DEFAULT_AUTO_APPROVE_METHODS = /* @__PURE__ */ new Set(["getPublicKey"]);

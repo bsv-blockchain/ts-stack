@@ -63,7 +63,7 @@ type ParseResult = {
  * The wallet RPC methods that can be called on a paired mobile wallet.
  * Matches the default implemented method set in WalletPairingSession.
  */
-type WalletMethodName = 'getPublicKey' | 'listOutputs' | 'createAction' | 'signAction' | 'listActions' | 'internalizeAction' | 'acquireCertificate' | 'relinquishCertificate' | 'revealCounterpartyKeyLinkage';
+type WalletMethodName = 'getPublicKey' | 'listOutputs' | 'createAction' | 'signAction' | 'createSignature' | 'listActions' | 'internalizeAction' | 'acquireCertificate' | 'relinquishCertificate' | 'listCertificates' | 'revealCounterpartyKeyLinkage';
 /** A wallet RPC request tracked by WalletRelayClient. */
 interface WalletRequest {
     requestId: string;

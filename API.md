@@ -216,7 +216,7 @@ new WalletPairingSession(
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `implementedMethods` | `Set<string>` | `DEFAULT_IMPLEMENTED_METHODS` | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`. |
+| `implementedMethods` | `Set<string>` | `DEFAULT_IMPLEMENTED_METHODS` | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`. |
 | `autoApproveMethods` | `Set<string>` | `DEFAULT_AUTO_APPROVE_METHODS` | Subset of `implementedMethods` executed without calling `onApprovalRequired`. Defaults to `{ 'getPublicKey' }`. |
 | `onApprovalRequired` | `(method, params) => Promise<boolean>` | `undefined` | Called for every implemented method not in `autoApproveMethods`. Return `true` to approve, `false` to send a `4001 User Rejected` response. If omitted, all implemented methods are auto-approved. |
 | `walletMeta` | `Record<string, unknown>` | `{}` | Additional metadata sent inside the `pairing_approved` payload. Useful for identifying the wallet on the desktop side (e.g. `{ name, version }`). |

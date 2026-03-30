@@ -1,4 +1,4 @@
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, j as WalletResponse } from './types-C_R4CVqb.cjs';
+import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, j as WalletResponse } from './types-UY3FlsXl.js';
 
 interface WalletRelayClientOptions {
     /** Base URL for the relay API. Default: '/api' */
