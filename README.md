@@ -110,25 +110,28 @@ That's the entire backend. `WalletRelayService` registers three REST routes and 
 
 ### 5. Frontend
 
-The scaffolded frontend includes `WalletConnectionModal` — a component that silently checks for a local BSV wallet first, and only shows the QR pairing option if none is found. This gives users the best available experience automatically:
-
-- **Local wallet present** → uses it directly, no modal shown
-- **No local wallet** → modal appears with two choices: install a wallet, or connect via mobile QR
+`qr-lib/react` exports everything needed for wallet detection and QR pairing — no scaffolding required:
 
 ```tsx
 import { useState, useCallback } from 'react'
 import { WalletClient } from '@bsv/sdk'
-import { WalletConnectionModal } from './components/WalletConnectionModal'
-import { MobileQRContent }       from './views/DesktopView'
-
-type WalletMode = 'detecting' | 'local' | 'mobile'
+import {
+  useWalletRelayClient,
+  WalletConnectionModal,
+  QRDisplay,
+} from 'qr-lib/react'
 
 export function App() {
-  const [mode, setMode] = useState<WalletMode>('detecting')
+  const [mode, setMode] = useState<'detecting' | 'local' | 'mobile'>('detecting')
+
+  // autoCreate: false — only start a backend session when the user picks the mobile path
+  const { session, error, createSession, sendRequest } = useWalletRelayClient({
+    autoCreate: false,
+  })
 
   const handleLocalWallet = useCallback((wallet: WalletClient) => {
     setMode('local')
-    // TODO: store wallet and use it for signing / auth in your app
+    // TODO: store wallet and use it in your app
   }, [])
 
   return (
@@ -136,39 +139,44 @@ export function App() {
       {mode === 'detecting' && (
         <WalletConnectionModal
           onLocalWallet={handleLocalWallet}
-          onMobileQR={() => setMode('mobile')}
+          onMobileQR={() => { setMode('mobile'); void createSession() }}
         />
       )}
-      {mode === 'mobile' && <MobileQRContent />}
-      {mode === 'local'  && <YourAppContent />}
+
+      {mode === 'mobile' && (
+        <>
+          {error && <p>{error}</p>}
+          <QRDisplay session={session} onRefresh={createSession} />
+        </>
+      )}
+
+      {mode === 'local' && <YourApp />}
     </>
   )
 }
 ```
 
-The `MobileQRContent` component (from the scaffold) handles session creation, QR display, status polling, and the request log.
+`WalletConnectionModal` silently checks for a local BSV wallet first:
+- **Local wallet found** → calls `onLocalWallet` immediately, renders nothing
+- **Not found** → renders an install link and a "Connect via Mobile QR" button
 
-Once the mobile has scanned and `session.status === 'connected'`, use `sendRequest` from `useWalletSession` to call any wallet method on the mobile:
+`QRDisplay` shows the QR image, a status badge (`pending` / `connected` / `disconnected` / `expired`), and a refresh button when the session expires. Both components are unstyled — pass `className`, `style`, and per-element props to style them. See [API.md](./API.md) for the full prop reference.
+
+Once `session?.status === 'connected'`, use `sendRequest` to call any wallet method on the paired mobile:
 
 ```ts
-const { session, sendRequest } = useWalletSession()
+const response = await sendRequest('getPublicKey', { identityKey: true })
+if (response.result) console.log('Public key:', response.result)
 
-// Example: fetch the user's identity public key
-if (session?.status === 'connected') {
-  const response = await sendRequest('getPublicKey', { identityKey: true })
-  if (response?.result) {
-    console.log('Public key:', response.result)
-  }
-}
-
-// Example: create a transaction action
 const response = await sendRequest('createAction', {
   description: 'My transaction',
   outputs: [{ script: '...', satoshis: 1000 }],
 })
 ```
 
-`sendRequest` posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. The mobile executes it and sends back the response — all over the encrypted WebSocket relay. Available methods match what the mobile wallet supports: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`.
+`sendRequest` posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`.
+
+The scaffold (`npx qr-lib init`) generates Tailwind-styled versions of these components as a starting point for heavier customisation.
 
 ---
 
@@ -212,22 +220,22 @@ await session.reconnect(Number(lastSeq ?? 0))
 
 ---
 
-## React component
+## React components
 
-Renders a tappable QR code. On mobile browsers, tapping opens the `wallet://pair?…` deeplink directly — no camera scan needed when the user is already on a mobile device.
+`qr-lib/react` exports six items:
 
-```tsx
-import { QRPairingCode } from 'qr-lib/react'
+| Export | Description |
+|--------|-------------|
+| `useWalletRelayClient` | Session creation, status polling, and `sendRequest` — the main hook for QR pairing |
+| `WalletConnectionModal` | Detects local wallet; shows install link + mobile QR button if none found |
+| `QRDisplay` | QR image with status badge and session refresh |
+| `QRPairingCode` | Tappable QR that opens the `wallet://pair?…` deeplink directly |
+| `RequestLog` | Live request/response log (useful for debugging and demo UIs) |
+| `useQRPairing` | Cross-platform deeplink hook — use directly in React Native |
 
-<QRPairingCode
-  qrDataUrl={session.qrDataUrl}
-  pairingUri={session.pairingUri}
-  className="rounded-xl shadow-lg"
-  imageProps={{ className: 'w-64 h-64', alt: 'Scan to connect wallet' }}
-/>
-```
+All visual components are unstyled. Pass `className`, `style`, and per-element props to style them. See [API.md](./API.md) for full prop documentation.
 
-**React Native** — use `useQRPairing` directly:
+**React Native** — use `useQRPairing` directly instead of `QRPairingCode`:
 
 ```tsx
 import { Linking } from 'react-native'
@@ -288,8 +296,8 @@ All messages use BSV wallet-native ECDH via `@bsv/sdk`. No custom crypto.
 | Import | Environment | Contains |
 |--------|-------------|----------|
 | `qr-lib` | Node.js only | `WalletRelayService`, `WebSocketRelay`, `QRSessionManager`, `WalletRequestHandler`, shared utilities |
-| `qr-lib/client` | Browser + React Native | `WalletPairingSession`, shared utilities, no Node.js deps |
-| `qr-lib/react` | React ≥17 | `QRPairingCode`, `useQRPairing` |
+| `qr-lib/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, shared utilities, no Node.js deps |
+| `qr-lib/react` | React ≥17 | `useWalletRelayClient`, `WalletConnectionModal`, `QRDisplay`, `QRPairingCode`, `RequestLog`, `useQRPairing` |
 
 ---
 

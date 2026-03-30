@@ -6,9 +6,14 @@
 
 - [High-level facades](#high-level-facades)
   - [WalletRelayService](#walletrelayservice)
+  - [WalletRelayClient](#walletrelayclient)
   - [WalletPairingSession](#walletpairingsession)
 - [React](#react)
+  - [useWalletRelayClient](#usewalletrelayclient)
+  - [WalletConnectionModal](#walletconnectionmodal)
+  - [QRDisplay](#qrdisplay)
   - [QRPairingCode](#qrpairingcode)
+  - [RequestLog](#requestlog)
   - [useQRPairing](#useqrpairing)
 - [Building blocks](#building-blocks)
   - [WebSocketRelay](#websocketrelay)
@@ -21,6 +26,7 @@
   - [decryptEnvelope](#decryptenvelope)
   - [bytesToBase64url / base64urlToBytes](#bytestobase64url--base64urltobytes)
 - [Types](#types)
+  - [WalletRequest / WalletResponse / RequestLogEntry](#walletrequest--walletresponse--requestlogentry)
 
 ---
 
@@ -103,6 +109,76 @@ Stops the session GC timer and closes the WebSocket server. Call on process shut
 | `GET` | `/api/session` | — | `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
 | `GET` | `/api/session/:id` | — | `{ sessionId, status }` |
 | `POST` | `/api/request/:id` | `{ method: string, params: unknown }` | `RpcResponse` |
+
+---
+
+### WalletRelayClient
+
+`import { WalletRelayClient } from 'qr-lib/client'`
+
+Frontend counterpart to `WalletRelayService`. Manages session creation, status polling, and RPC requests against the relay HTTP API. Framework-agnostic — use directly with callbacks, or via [`useWalletRelayClient`](#usewalletrelayclient) for React state integration.
+
+```ts
+const client = new WalletRelayClient({
+  onSessionChange: (s) => render(s),
+  onError:         (msg) => showError(msg),
+})
+await client.createSession()
+const res = await client.sendRequest('getPublicKey', { identityKey: true })
+client.destroy()
+```
+
+#### Constructor
+
+```ts
+new WalletRelayClient(options?: WalletRelayClientOptions)
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiUrl` | `string` | `'/api'` | Base URL for the relay HTTP API. Override when the backend is on a different origin: `'https://api.example.com'`. |
+| `pollInterval` | `number` | `3000` | Session status polling interval in ms. |
+| `onSessionChange` | `(session: SessionInfo) => void` | — | Called on session creation and on every poll that returns a new value. The `qrDataUrl` and `pairingUri` from the initial creation are merged into every subsequent poll response, so they remain available throughout the session lifecycle. |
+| `onLogChange` | `(log: RequestLogEntry[]) => void` | — | Called whenever the request log changes — when a request is added or a response arrives. |
+| `onError` | `(error: string) => void` | — | Called when `createSession()` fails. |
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `session` | `SessionInfo \| null` | Current session state, or `null` before `createSession()` is called. |
+| `log` | `RequestLogEntry[]` | Request log, newest first. |
+| `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
+
+#### Methods
+
+**`createSession()`**
+
+```ts
+createSession(): Promise<SessionInfo>
+```
+
+Creates a new backend session and starts polling for status changes. Any previously running poll is stopped first. Resolves with the new `SessionInfo` (including `qrDataUrl` and `pairingUri`). Throws on HTTP or network failure.
+
+---
+
+**`sendRequest(method, params?)`**
+
+```ts
+sendRequest(method: string, params?: unknown): Promise<WalletResponse>
+```
+
+Sends an RPC request to the paired mobile wallet. Adds a pending entry to the log immediately and resolves it when the response arrives. Throws if there is no active session or if the HTTP request fails.
+
+---
+
+**`destroy()`**
+
+```ts
+destroy(): void
+```
+
+Stops the polling interval. Call on component unmount or teardown.
 
 ---
 
@@ -230,9 +306,140 @@ Current state: `'idle'` | `'connecting'` | `'connected'` | `'disconnected'` | `'
 
 ## React
 
-`import { QRPairingCode, useQRPairing } from 'qr-lib/react'`
+`import { ... } from 'qr-lib/react'`
 
 Peer dependency: `react >= 17`
+
+---
+
+### useWalletRelayClient
+
+`import { useWalletRelayClient } from 'qr-lib/react'`
+
+React hook wrapping [`WalletRelayClient`](#walletrelayclient) with React state. The primary integration point for web apps — replaces the scaffolded `useWalletSession` template hook.
+
+```tsx
+const { session, log, error, createSession, sendRequest } = useWalletRelayClient()
+```
+
+#### Options
+
+All options are optional.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiUrl` | `string` | `'/api'` | Backend base URL. |
+| `pollInterval` | `number` | `3000` | Status polling interval in ms. |
+| `autoCreate` | `boolean` | `true` | When `true`, `createSession()` is called automatically on mount. Set to `false` to control timing manually — for example, only when the user explicitly chooses the mobile pairing path. |
+
+#### Return value
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `session` | `SessionInfo \| null` | Current session. `qrDataUrl` and `pairingUri` are present from creation and preserved through subsequent polls. |
+| `log` | `RequestLogEntry[]` | Request history, newest first. |
+| `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
+| `createSession` | `() => Promise<SessionInfo>` | Create a new session and restart polling. Safe to call multiple times — replaces the existing session. |
+| `sendRequest` | `(method: string, params?: unknown) => Promise<WalletResponse>` | Send an RPC call to the paired mobile. Throws if no session is active. |
+
+React StrictMode safe — an internal ref guard prevents double session creation on the simulated unmount/remount cycle.
+
+---
+
+### WalletConnectionModal
+
+`import { WalletConnectionModal } from 'qr-lib/react'`
+
+Unstyled wallet connection chooser with local wallet auto-detection.
+
+Calls `WalletClient('auto').isAuthenticated()` on mount. If a local wallet is found, calls `onLocalWallet` immediately and renders nothing. If not found, renders a `<div>` containing an install link and a mobile QR button.
+
+Returns `null` while detecting or once a local wallet is found.
+
+#### Props
+
+```ts
+type WalletConnectionModalProps = {
+  onLocalWallet:      (wallet: WalletClient) => void
+  onMobileQR:         () => void
+  installUrl?:        string
+  installLabel?:      string
+  mobileLabel?:       string
+  installLinkProps?:  React.AnchorHTMLAttributes<HTMLAnchorElement>
+  mobileButtonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>
+} & React.HTMLAttributes<HTMLDivElement>
+```
+
+| Prop | Default | Description |
+|------|---------|-------------|
+| `onLocalWallet` | — | Called with the detected `WalletClient` when authentication succeeds. No UI is shown. |
+| `onMobileQR` | — | Called when the user clicks the mobile QR button. |
+| `installUrl` | `'https://desktop.bsvb.tech'` | `href` of the install link. |
+| `installLabel` | `'Install BSV Wallet'` | Text for the install link. |
+| `mobileLabel` | `'Connect via Mobile QR'` | Text for the mobile QR button. |
+| `installLinkProps` | — | Props forwarded to the install `<a>`. |
+| `mobileButtonProps` | — | Props forwarded to the mobile QR `<button>`. |
+| `children` | — | Replace the default install link + QR button with custom content. |
+| `...rootProps` | — | All other props spread onto the root `<div>`. Gets `data-wallet-detection="unavailable"`. |
+
+#### Example
+
+```tsx
+<WalletConnectionModal
+  onLocalWallet={(wallet) => setWallet(wallet)}
+  onMobileQR={() => { setMode('mobile'); void createSession() }}
+  className="fixed inset-0 flex items-center justify-center bg-black/50"
+  installLinkProps={{ className: 'btn-primary block w-full' }}
+  mobileButtonProps={{ className: 'btn-secondary block w-full' }}
+/>
+```
+
+---
+
+### QRDisplay
+
+`import { QRDisplay } from 'qr-lib/react'`
+
+Unstyled QR display with status indicator and session refresh.
+
+Shows a loading placeholder while `session` is null. Once a session exists it renders a [`QRPairingCode`](#qrpairingcode) (when `qrDataUrl` and `pairingUri` are available), a status label, and — when the session expires — a refresh button.
+
+#### Props
+
+```ts
+type QRDisplayProps = {
+  session:             SessionInfo | null
+  onRefresh:           () => void
+  loadingProps?:       React.HTMLAttributes<HTMLDivElement>
+  statusProps?:        React.HTMLAttributes<HTMLSpanElement>
+  refreshButtonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>
+  qrProps?:            Omit<QRPairingCodeProps, 'qrDataUrl' | 'pairingUri'>
+} & React.HTMLAttributes<HTMLDivElement>
+```
+
+| Prop | Description |
+|------|-------------|
+| `session` | Session from `useWalletRelayClient`. `null` renders the loading placeholder (`data-state="loading"`). |
+| `onRefresh` | Called when the user clicks the refresh button (shown when `status === 'expired'`). Pass `createSession`. |
+| `loadingProps` | Props on the loading placeholder `<div>`. |
+| `statusProps` | Props on the status `<span>`. Gets `data-qr-status={status}`. |
+| `refreshButtonProps` | Props on the refresh `<button>`. |
+| `qrProps` | Props forwarded to the inner `QRPairingCode` (e.g. `imageProps`, `onPress`, `className`). |
+| `children` | Rendered in place of `QRPairingCode` when `qrDataUrl` or `pairingUri` are absent. |
+| `...rootProps` | All other props spread onto the root `<div>`. Gets `data-state={status}`. |
+
+#### Example
+
+```tsx
+<QRDisplay
+  session={session}
+  onRefresh={createSession}
+  className="flex flex-col items-center gap-4"
+  qrProps={{ imageProps: { className: 'w-64 h-64' } }}
+  statusProps={{ className: 'text-sm font-medium' }}
+  refreshButtonProps={{ className: 'text-blue-600 hover:underline text-sm' }}
+/>
+```
 
 ---
 
@@ -331,6 +538,47 @@ function PairingScreen({ pairingUri, qrDataUrl }) {
     </TouchableOpacity>
   )
 }
+```
+
+---
+
+### RequestLog
+
+`import { RequestLog } from 'qr-lib/react'`
+
+Unstyled RPC request log showing call history with status and results.
+
+Renders an empty-state element when `entries` is empty. Each entry element gets a `data-state` attribute of `pending`, `error`, or `ok` for CSS-based styling without class logic.
+
+#### Props
+
+```ts
+type RequestLogProps = {
+  entries:     RequestLogEntry[]
+  emptyProps?: React.HTMLAttributes<HTMLDivElement>
+  entryProps?: React.HTMLAttributes<HTMLDivElement>
+} & React.HTMLAttributes<HTMLDivElement>
+```
+
+| Prop | Description |
+|------|-------------|
+| `entries` | Log entries from `useWalletRelayClient`, newest first. |
+| `emptyProps` | Props on the empty-state `<div>`. Gets `data-state="empty"`. |
+| `entryProps` | Props on each entry `<div>`. Gets `data-state="pending" \| "error" \| "ok"`. |
+| `children` | Content shown as the empty state when `entries` is empty. Default: `'No requests yet'`. |
+| `...rootProps` | All other props spread onto the root `<div>`. |
+
+Each entry renders three sub-elements: `<span data-log-method>`, `<span data-log-status>`, and (once resolved) `<pre data-log-result>`.
+
+#### Example
+
+```tsx
+<RequestLog
+  entries={log}
+  className="flex flex-col gap-2 overflow-y-auto max-h-72"
+  entryProps={{ className: 'rounded border p-3 text-xs font-mono' }}
+  emptyProps={{ className: 'text-gray-400 text-center py-6' }}
+/>
 ```
 
 ---
@@ -766,7 +1014,7 @@ type SessionStatus = 'pending' | 'connected' | 'disconnected' | 'expired'
 
 ### SessionInfo
 
-The shape returned by `GET /api/session` (session creation) and polled via `GET /api/session/:id`. Used as the state type in the `useWalletSession` frontend hook.
+The shape returned by `GET /api/session` (session creation) and polled via `GET /api/session/:id`. Used as the state type in `useWalletRelayClient` and `WalletRelayClient`.
 
 ```ts
 interface SessionInfo {
@@ -804,6 +1052,36 @@ interface PairingParams {
 type ParseResult =
   | { params: PairingParams; error: null }
   | { params: null;          error: string }
+```
+
+---
+
+### WalletRequest / WalletResponse / RequestLogEntry
+
+Available from `qr-lib/client`.
+
+Used by `WalletRelayClient`, `useWalletRelayClient`, and the `RequestLog` component to track in-flight and completed RPC calls.
+
+```ts
+interface WalletRequest {
+  requestId: string   // Client-generated UUID (separate from the wire-level RPC id)
+  method:    string
+  params:    unknown
+  timestamp: number   // Unix ms — when the request was sent
+}
+
+interface WalletResponse {
+  requestId: string
+  result?:   unknown
+  error?:    { code: number; message: string }
+  timestamp: number   // Unix ms — when the response arrived
+}
+
+interface RequestLogEntry {
+  request:   WalletRequest
+  response?: WalletResponse   // undefined while pending
+  pending:   boolean
+}
 ```
 
 ---
