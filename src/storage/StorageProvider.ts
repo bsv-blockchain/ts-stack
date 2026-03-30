@@ -56,6 +56,7 @@ import { TableOutput, TableOutputX } from '../../src/storage/schema/tables/Table
 import { TableOutputTag } from '../../src/storage/schema/tables/TableOutputTag'
 import { TableTxLabel } from '../../src/storage/schema/tables/TableTxLabel'
 import { TableMonitorEvent } from '../../src/storage/schema/tables/TableMonitorEvent'
+import { TableUser } from '../../src/storage/schema/tables/TableUser'
 import { TableCertificateX } from './schema/tables/TableCertificate'
 import {
   WERR_INTERNAL,
@@ -202,6 +203,32 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   abstract insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number>
 
   abstract adminStats(adminIdentityKey: string): Promise<AdminStatsResult>
+
+  async recentlyActiveUsers(limit = 50, trx?: TrxToken): Promise<TableUser[]> {
+    const outputs = await this.findOutputs({
+      partial: {},
+      noScript: true,
+      trx
+    })
+
+    const latestByUserId = new Map<number, Date>()
+    for (const output of outputs) {
+      if (output.userId === undefined) continue
+      const createdAt = this.validateDate(output.created_at)
+      const prior = latestByUserId.get(output.userId)
+      if (!prior || createdAt > prior) {
+        latestByUserId.set(output.userId, createdAt)
+      }
+    }
+
+    const sortedUserIds = Array.from(latestByUserId.entries())
+      .sort((a, b) => b[1].getTime() - a[1].getTime())
+      .slice(0, limit)
+      .map(([userId]) => userId)
+
+    const users = await Promise.all(sortedUserIds.map(userId => this.findUserById(userId, trx)))
+    return users.filter((user): user is TableUser => !!user)
+  }
 
   override isStorageProvider(): boolean {
     return true

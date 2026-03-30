@@ -793,6 +793,22 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const r = await q
     return this.validateEntities(r)
   }
+  override async recentlyActiveUsers(limit = 50, trx?: TrxToken): Promise<TableUser[]> {
+    await this.verifyReadyForDatabaseAccess(trx)
+    const latestOutputs = this.toDb(trx)('outputs as o')
+      .select('o.userId')
+      .max({ lastOutputCreatedAt: 'o.created_at' })
+      .groupBy('o.userId')
+      .as('latest_outputs')
+
+    const rows = await this.toDb(trx)('users as u')
+      .join(latestOutputs, 'u.userId', 'latest_outputs.userId')
+      .select('u.*')
+      .orderBy('latest_outputs.lastOutputCreatedAt', 'desc')
+      .limit(limit)
+
+    return this.validateEntities(rows as TableUser[])
+  }
   override async findMonitorEvents(args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
     const q = this.findMonitorEventsQuery(args)
     const r = await q
