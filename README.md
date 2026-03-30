@@ -10,7 +10,7 @@ Lets any web app offer "connect via mobile wallet" as a signing or authenticatio
 
 | You are | What you need |
 |---------|---------------|
-| **Web app developer** adding mobile wallet support to a site | Backend + frontend only — two files and a template component |
+| **Web app developer** adding mobile wallet support to a site | Backend: one `WalletRelayService` call. Frontend: `useWalletRelayClient` + `WalletConnectionModal` + `QRDisplay` from `qr-lib/react` |
 | **Mobile wallet developer** adding QR pairing to a wallet app | `WalletPairingSession` from `qr-lib/client` |
 
 **Most integrators are in the first group.** If you're building a website that lets users connect their mobile BSV wallet, you do not touch the mobile side at all. The `WalletPairingSession` API exists for wallet app developers (like BSV Browser) who are implementing the mobile end of the protocol.
@@ -57,16 +57,16 @@ backend/
   .env.example       — copy to .env and fill in WALLET_PRIVATE_KEY
 frontend/
   hooks/
-    useWalletSession.ts    — session creation, status polling, sendRequest
+    useWalletSession.ts    — re-exports useWalletRelayClient from qr-lib/react
   components/
-    WalletConnectionModal.tsx  — local wallet detection + install/QR modal
-    QRDisplay.tsx              — QR image with status badge and refresh
-    WalletActions.tsx          — buttons for each wallet method
-    RequestLog.tsx             — live request/response log
+    WalletConnectionModal.tsx  — styled wrapper around qr-lib/react WalletConnectionModal
+    QRDisplay.tsx              — styled wrapper around qr-lib/react QRDisplay
+    WalletActions.tsx          — buttons for each wallet method (app-specific, customise here)
+    RequestLog.tsx             — styled wrapper around qr-lib/react RequestLog
   views/
     DesktopView.tsx    — composes all of the above
   types/
-    wallet.ts          — WalletMethod, RequestLogEntry, etc.
+    wallet.ts          — WalletMethod (app-specific); re-exports shared types from qr-lib/client
 ```
 
 Options: `--nextjs` for a Next.js project, `--backend` / `--frontend` for one side only, `--backend-dir` / `--frontend-dir` to control output directories.
@@ -165,10 +165,12 @@ export function App() {
 Once `session?.status === 'connected'`, use `sendRequest` to call any wallet method on the paired mobile:
 
 ```ts
-const response = await sendRequest('getPublicKey', { identityKey: true })
-if (response.result) console.log('Public key:', response.result)
+// Fetch the user's identity public key
+const pkResponse = await sendRequest('getPublicKey', { identityKey: true })
+if (pkResponse.result) console.log('Public key:', pkResponse.result)
 
-const response = await sendRequest('createAction', {
+// Create a transaction
+const txResponse = await sendRequest('createAction', {
   description: 'My transaction',
   outputs: [{ script: '...', satoshis: 1000 }],
 })
