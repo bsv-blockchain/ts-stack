@@ -323,7 +323,11 @@ export class Monitor {
           if (this.storage.getActive().isStorageProvider()) {
             const log = await ttr.runTask()
             if (log && log.length > 0) {
-              console.log(`Task${ttr.name} ${log.slice(0, 1024)}`)
+              let details = log.slice(0, 1024)
+              if (ttr.name === 'MonitorCallHistory') {
+                details = '...'
+              }
+              console.log(`Task${ttr.name} ${details}`)
               await this.logEvent(ttr.name, log)
             }
           }
