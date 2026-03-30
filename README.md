@@ -23,10 +23,12 @@ Lets any web app offer "connect via mobile wallet" as a signing or authenticatio
 
 ```bash
 npm install qr-lib @bsv/sdk
-npm install express cors ws qrcode   # server peer deps
+npm install express cors ws qrcode   # backend peer deps — not needed for frontend-only projects
 ```
 
 `@bsv/sdk` is used throughout — backend wallet crypto, frontend local wallet detection, and mobile pairing. Install it in every layer of your project.
+
+> **TypeScript:** your `tsconfig.json` needs `"moduleResolution": "bundler"` (or `"node16"` / `"nodenext"`) to resolve the `qr-lib/react` and `qr-lib/client` subpath exports.
 
 ### 2. Generate a stable backend key
 
@@ -43,7 +45,15 @@ RELAY_URL=ws://localhost:3000
 ORIGIN=http://localhost:5173
 ```
 
-### 3. Scaffold (optional but recommended)
+- `RELAY_URL` — WebSocket address mobile devices connect to. In production this must be a publicly reachable URL (e.g. `wss://yourapp.com`) — not localhost.
+- `ORIGIN` — URL your frontend runs on. Used for CORS on the backend.
+
+> **Hostname constraint:** for `wss://` relays, `RELAY_URL` and `ORIGIN` must share the same hostname. The mobile app enforces this when scanning the QR — a mismatched relay hostname is rejected as potentially malicious. `wss://yourapp.com` + `https://yourapp.com` ✓ — `wss://relay.otherdomain.com` + `https://yourapp.com` ✗. `ws://` (local dev only) is exempt.
+
+### 3. App setup
+
+<details open>
+<summary><strong>Scaffold (recommended)</strong></summary>
 
 ```bash
 npx qr-lib init
@@ -73,7 +83,21 @@ Options: `--nextjs` for a Next.js project, `--backend` / `--frontend` for one si
 
 The scaffolded files contain `TODO` comments marking the spots you're expected to customise — wallet method implementations, app-specific UI copy, and the `installUrl` in `WalletConnectionModal` (defaults to `https://desktop.bsvb.tech`, the BSV wallet with desktop and mobile support).
 
-### 4. Backend
+**After scaffolding:**
+
+```bash
+cp backend/.env.example backend/.env
+# Fill in WALLET_PRIVATE_KEY in backend/.env, then:
+npm run dev --prefix backend
+npm run dev --prefix frontend
+```
+
+</details>
+
+<details>
+<summary><strong>Manual setup</strong></summary>
+
+#### Backend
 
 ```ts
 import express from 'express'
@@ -108,13 +132,13 @@ That's the entire backend. `WalletRelayService` registers three REST routes and 
 
 > **`desktopToken`** is returned by `GET /api/session` but most apps using the polling approach above don't need it. It is only required if you open a direct desktop WebSocket connection (`/ws?role=desktop&token=<desktopToken>`). If you're just using the REST routes, ignore it.
 
-### 5. Frontend
+#### Frontend
 
-`qr-lib/react` exports everything needed for wallet detection and QR pairing — no scaffolding required:
+`qr-lib/react` exports everything needed for wallet detection and QR pairing:
 
 ```tsx
 import { useState, useCallback } from 'react'
-import { WalletClient } from '@bsv/sdk'
+import type { WalletClient } from '@bsv/sdk'
 import {
   useWalletRelayClient,
   WalletConnectionModal,
@@ -150,7 +174,9 @@ export function App() {
         </>
       )}
 
-      {mode === 'local' && <YourApp />}
+      {mode === 'local' && (
+        <>{/* TODO: render your app here using the local wallet */}</>
+      )}
     </>
   )
 }
@@ -162,23 +188,40 @@ export function App() {
 
 `QRDisplay` shows the QR image, a status badge (`pending` / `connected` / `disconnected` / `expired`), and a refresh button when the session expires. Both components are unstyled — pass `className`, `style`, and per-element props to style them. See [API.md](./API.md) for the full prop reference.
 
-Once `session?.status === 'connected'`, use `sendRequest` to call any wallet method on the paired mobile:
+</details>
 
-```ts
-// Fetch the user's identity public key
-const pkResponse = await sendRequest('getPublicKey', { identityKey: true })
-if (pkResponse.result) console.log('Public key:', pkResponse.result)
+### 4. Send requests
 
-// Create a transaction
-const txResponse = await sendRequest('createAction', {
-  description: 'My transaction',
-  outputs: [{ script: '...', satoshis: 1000 }],
-})
+Once `session?.status === 'connected'`, use `sendRequest` to call wallet methods on the paired mobile. Call it from a React event handler or `useCallback`:
+
+```tsx
+const handleGetKey = useCallback(async () => {
+  const pkResponse = await sendRequest('getPublicKey', { identityKey: true })
+  if (pkResponse.error) {
+    console.error(pkResponse.error.message)
+    return
+  }
+  const { publicKey } = pkResponse.result as { publicKey: string }
+  console.log('Public key:', publicKey)
+}, [sendRequest])
+
+const handleCreateTx = useCallback(async () => {
+  const txResponse = await sendRequest('createAction', {
+    description: 'My transaction',
+    outputs: [{ script: '...', satoshis: 1000 }],
+  })
+  if (txResponse.error) {
+    console.error(txResponse.error.message)
+    return
+  }
+  const { txid } = txResponse.result as { txid: string }
+  console.log('Transaction:', txid)
+}, [sendRequest])
 ```
 
-`sendRequest` posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`.
+`result` is typed as `unknown` — cast it to the appropriate response type from `@bsv/sdk`'s `WalletInterface` (e.g. `GetPublicKeyResult`, `CreateActionResult`). The `error` field is `{ code: number; message: string } | undefined`.
 
-The scaffold (`npx qr-lib init`) generates Tailwind-styled versions of these components as a starting point for heavier customisation.
+`sendRequest` accepts any `WalletMethodName` and posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`.
 
 ---
 
@@ -203,7 +246,8 @@ const session = new WalletPairingSession(wallet, result.params, {
 })
 
 session
-  .onRequest(async (method, params) => wallet[method](params))
+  // WalletClient implements WalletInterface but isn't string-indexed — cast required
+  .onRequest(async (method, params) => (wallet as Record<string, (p: unknown) => Promise<unknown>>)[method](params))
   .on('connected',    () => setStatus('connected'))
   .on('disconnected', () => setStatus('disconnected'))
   .on('error',        msg => setError(msg))
@@ -298,7 +342,7 @@ All messages use BSV wallet-native ECDH via `@bsv/sdk`. No custom crypto.
 | Import | Environment | Contains |
 |--------|-------------|----------|
 | `qr-lib` | Node.js only | `WalletRelayService`, `WebSocketRelay`, `QRSessionManager`, `WalletRequestHandler`, shared utilities |
-| `qr-lib/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, shared utilities, no Node.js deps |
+| `qr-lib/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, `WalletMethodName`, shared utilities, no Node.js deps |
 | `qr-lib/react` | React ≥17 | `useWalletRelayClient`, `WalletConnectionModal`, `QRDisplay`, `QRPairingCode`, `RequestLog`, `useQRPairing` |
 
 ---
