@@ -4,6 +4,11 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.17
+
+- add admin web server for visibility into storage and monitor by operations admin
+- add recentlyActiveUsers to StorageProvider with optimized override in StorageKnex
+
 ## wallet-toolbox 2.1.16
 
 - update Services getStatusForTxids to internally handle provider batch limit
