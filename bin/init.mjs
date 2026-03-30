@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * qr-lib init
+ * wallet-relay init
  *
  * Scaffolds backend and/or frontend template files into your project.
  *
  * Usage:
- *   npx qr-lib init                          — Express backend + React frontend
- *   npx qr-lib init my-app                   — scaffold into ./my-app/
- *   npx qr-lib init --backend                — Express backend only
- *   npx qr-lib init --frontend               — React frontend only
- *   npx qr-lib init --frontend-dir src       — write frontend files into ./src instead of ./frontend
- *   npx qr-lib init --backend-dir server     — write backend files into ./server instead of ./backend
- *   npx qr-lib init --nextjs                 — Next.js (custom server + App Router API routes)
+ *   npx @bsv/wallet-relay init                          — Express backend + React frontend
+ *   npx @bsv/wallet-relay init my-app                   — scaffold into ./my-app/
+ *   npx @bsv/wallet-relay init --backend                — Express backend only
+ *   npx @bsv/wallet-relay init --frontend               — React frontend only
+ *   npx @bsv/wallet-relay init --frontend-dir src       — write frontend files into ./src instead of ./frontend
+ *   npx @bsv/wallet-relay init --backend-dir server     — write backend files into ./server instead of ./backend
+ *   npx @bsv/wallet-relay init --nextjs                 — Next.js (custom server + App Router API routes)
  *
  * Existing files are never overwritten — they are skipped with a warning.
  */
@@ -108,7 +108,7 @@ if (isNextjs) {
   Next.js
   ───────
   1. Install deps:
-       npm install qr-lib @bsv/sdk ws qrcode
+       npm install @bsv/wallet-relay @bsv/sdk ws qrcode
        npm install -D @types/ws @types/node
 
   2. Replace "dev" and "start" in package.json:
@@ -166,8 +166,8 @@ if (isNextjs) {
     console.log(`
   Frontend (React + Vite)
   ───────────────────────
-  1. Install qr-lib as a dependency (if not already):
-       npm install qr-lib
+  1. Install @bsv/wallet-relay as a dependency (if not already):
+       npm install @bsv/wallet-relay
 
   2. The components use Tailwind CSS. If your project doesn't have Tailwind:
        npm install -D tailwindcss @tailwindcss/vite

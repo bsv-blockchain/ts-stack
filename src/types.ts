@@ -75,7 +75,7 @@ export type ParseResult =
   | { params: null; error: string }
 
 // ── Frontend request log types ────────────────────────────────────────────────
-// Used by WalletRelayClient and the React components exported from qr-lib/react.
+// Used by WalletRelayClient and the React components exported from @bsv/wallet-relay/react.
 
 /**
  * The wallet RPC methods that can be called on a paired mobile wallet.

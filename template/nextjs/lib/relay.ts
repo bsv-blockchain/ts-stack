@@ -13,7 +13,7 @@
 
 import type { Server } from 'http'
 import { WalletClient } from '@bsv/sdk'
-import { WalletRelayService } from 'qr-lib'
+import { WalletRelayService } from '@bsv/wallet-relay'
 
 const g = global as typeof globalThis & { __walletRelay?: WalletRelayService }
 

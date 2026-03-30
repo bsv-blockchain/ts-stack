@@ -16,7 +16,7 @@
  * TODO: Update installUrl to point to your target wallet's download/install page.
  */
 
-import { WalletConnectionModal as WalletConnectionModalBase } from 'qr-lib/react'
+import { WalletConnectionModal as WalletConnectionModalBase } from '@bsv/wallet-relay/react'
 import type { WalletClient } from '@bsv/sdk'
 
 interface Props {

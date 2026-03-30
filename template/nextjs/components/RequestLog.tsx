@@ -1,6 +1,6 @@
 'use client'
 
-import { RequestLog as RequestLogBase } from 'qr-lib/react'
+import { RequestLog as RequestLogBase } from '@bsv/wallet-relay/react'
 import type { RequestLogEntry } from '../types/wallet'
 
 interface Props {

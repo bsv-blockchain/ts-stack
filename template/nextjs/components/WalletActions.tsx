@@ -1,6 +1,6 @@
 'use client'
 
-import type { SessionInfo } from 'qr-lib/client'
+import type { SessionInfo } from '@bsv/wallet-relay/client'
 import type { WalletMethod } from '../types/wallet'
 
 interface Props {

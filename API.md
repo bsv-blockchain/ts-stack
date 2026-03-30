@@ -34,7 +34,7 @@
 
 ### WalletRelayService
 
-`import { WalletRelayService } from 'qr-lib'`
+`import { WalletRelayService } from '@bsv/wallet-relay'`
 
 Express + WebSocket service that handles the full server-side pairing lifecycle. Registers REST routes and the `/ws` WebSocket endpoint automatically on construction.
 
@@ -114,7 +114,7 @@ Stops the session GC timer and closes the WebSocket server. Call on process shut
 
 ### WalletRelayClient
 
-`import { WalletRelayClient } from 'qr-lib/client'`
+`import { WalletRelayClient } from '@bsv/wallet-relay/client'`
 
 Frontend counterpart to `WalletRelayService`. Manages session creation, status polling, and RPC requests against the relay HTTP API. Framework-agnostic — use directly with callbacks, or via [`useWalletRelayClient`](#usewalletrelayclient) for React state integration.
 
@@ -184,7 +184,7 @@ Stops the polling interval. Call on component unmount or teardown.
 
 ### WalletPairingSession
 
-`import { WalletPairingSession } from 'qr-lib/client'`
+`import { WalletPairingSession } from '@bsv/wallet-relay/client'`
 
 **This API is for mobile wallet developers.** If you are building a web app that accepts mobile wallet connections, you only need the backend (`WalletRelayService`) and the frontend template — you do not use `WalletPairingSession` directly.
 
@@ -221,10 +221,10 @@ new WalletPairingSession(
 | `onApprovalRequired` | `(method, params) => Promise<boolean>` | `undefined` | Called for every implemented method not in `autoApproveMethods`. Return `true` to approve, `false` to send a `4001 User Rejected` response. If omitted, all implemented methods are auto-approved. |
 | `walletMeta` | `Record<string, unknown>` | `{}` | Additional metadata sent inside the `pairing_approved` payload. Useful for identifying the wallet on the desktop side (e.g. `{ name, version }`). |
 
-`DEFAULT_IMPLEMENTED_METHODS` and `DEFAULT_AUTO_APPROVE_METHODS` are exported from `qr-lib/client` so you can reference or extend them:
+`DEFAULT_IMPLEMENTED_METHODS` and `DEFAULT_AUTO_APPROVE_METHODS` are exported from `@bsv/wallet-relay/client` so you can reference or extend them:
 
 ```ts
-import { DEFAULT_IMPLEMENTED_METHODS, DEFAULT_AUTO_APPROVE_METHODS } from 'qr-lib/client'
+import { DEFAULT_IMPLEMENTED_METHODS, DEFAULT_AUTO_APPROVE_METHODS } from '@bsv/wallet-relay/client'
 
 const session = new WalletPairingSession(wallet, params, {
   implementedMethods: new Set([...DEFAULT_IMPLEMENTED_METHODS, 'myCustomMethod']),
@@ -306,7 +306,7 @@ Current state: `'idle'` | `'connecting'` | `'connected'` | `'disconnected'` | `'
 
 ## React
 
-`import { ... } from 'qr-lib/react'`
+`import { ... } from '@bsv/wallet-relay/react'`
 
 Peer dependency: `react >= 17`
 
@@ -314,7 +314,7 @@ Peer dependency: `react >= 17`
 
 ### useWalletRelayClient
 
-`import { useWalletRelayClient } from 'qr-lib/react'`
+`import { useWalletRelayClient } from '@bsv/wallet-relay/react'`
 
 React hook wrapping [`WalletRelayClient`](#walletrelayclient) with React state. The primary integration point for web apps — replaces the scaffolded `useWalletSession` template hook.
 
@@ -348,7 +348,7 @@ React StrictMode safe — an internal ref guard prevents double session creation
 
 ### WalletConnectionModal
 
-`import { WalletConnectionModal } from 'qr-lib/react'`
+`import { WalletConnectionModal } from '@bsv/wallet-relay/react'`
 
 Unstyled wallet connection chooser with local wallet auto-detection.
 
@@ -398,7 +398,7 @@ type WalletConnectionModalProps = {
 
 ### QRDisplay
 
-`import { QRDisplay } from 'qr-lib/react'`
+`import { QRDisplay } from '@bsv/wallet-relay/react'`
 
 Unstyled QR display with status indicator and session refresh.
 
@@ -527,7 +527,7 @@ function useQRPairing(
 
 ```tsx
 import { Linking } from 'react-native'
-import { useQRPairing } from 'qr-lib/react'
+import { useQRPairing } from '@bsv/wallet-relay/react'
 
 function PairingScreen({ pairingUri, qrDataUrl }) {
   const { open } = useQRPairing(pairingUri, { openUrl: Linking.openURL })
@@ -544,7 +544,7 @@ function PairingScreen({ pairingUri, qrDataUrl }) {
 
 ### RequestLog
 
-`import { RequestLog } from 'qr-lib/react'`
+`import { RequestLog } from '@bsv/wallet-relay/react'`
 
 Unstyled RPC request log showing call history with status and results.
 
@@ -585,13 +585,13 @@ Each entry renders three sub-elements: `<span data-log-method>`, `<span data-log
 
 ## Building blocks
 
-These classes are exported from `qr-lib` (server entry) and can be composed freely for advanced use cases.
+These classes are exported from '@bsv/wallet-relay' (server entry) and can be composed freely for advanced use cases.
 
 ---
 
 ### WebSocketRelay
 
-`import { WebSocketRelay } from 'qr-lib'`
+`import { WebSocketRelay } from '@bsv/wallet-relay'`
 
 Topic-keyed WebSocket bridge. Mounts at `/ws`. Connections use `?topic=<sessionId>&role=desktop|mobile`.
 
@@ -694,7 +694,7 @@ Stops the heartbeat timer and closes the WebSocket server.
 
 ### QRSessionManager
 
-`import { QRSessionManager } from 'qr-lib'`
+`import { QRSessionManager } from '@bsv/wallet-relay'`
 
 In-memory session store with automatic garbage collection.
 
@@ -783,7 +783,7 @@ Clears the GC interval. Call on process shutdown.
 
 ### WalletRequestHandler
 
-`import { WalletRequestHandler } from 'qr-lib'`
+`import { WalletRequestHandler } from '@bsv/wallet-relay'`
 
 Pure JSON-RPC message factory. No I/O — safe to use in any environment.
 
@@ -849,7 +849,7 @@ Constructs an error `RpcResponse` directly.
 
 ## Shared utilities
 
-Available from both `qr-lib` and `qr-lib/client`.
+Available from both `@bsv/wallet-relay` and `@bsv/wallet-relay/client`.
 
 ---
 
@@ -943,7 +943,7 @@ Converts between `number[]` byte arrays and base64url strings using `@bsv/sdk`'s
 
 ## Types
 
-All types are exported from both `qr-lib` and `qr-lib/client`.
+All types are exported from both `@bsv/wallet-relay` and `@bsv/wallet-relay/client`.
 
 ---
 
@@ -1058,7 +1058,7 @@ type ParseResult =
 
 ### WalletRequest / WalletResponse / RequestLogEntry
 
-Available from `qr-lib/client`.
+Available from `@bsv/wallet-relay/client`.
 
 Used by `WalletRelayClient`, `useWalletRelayClient`, and the `RequestLog` component to track in-flight and completed RPC calls.
 

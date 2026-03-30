@@ -1,7 +1,7 @@
 {
-  "name": "qr-lib",
+  "name": "@bsv/wallet-relay",
   "version": "0.1.0",
-  "description": "BSV mobile wallet QR pairing — relay server and pairing client",
+  "description": "BSV mobile wallet relay — relay server and pairing client",
   "type": "module",
   "exports": {
     ".": {
@@ -24,7 +24,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "qr-lib": "./bin/init.mjs"
+    "wallet-relay": "./bin/init.mjs"
   },
   "files": [
     "dist",

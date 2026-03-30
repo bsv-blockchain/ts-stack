@@ -1,5 +1,5 @@
-import { QRDisplay as QRDisplayBase } from 'qr-lib/react'
-import type { SessionInfo } from 'qr-lib/client'
+import { QRDisplay as QRDisplayBase } from '@bsv/wallet-relay/react'
+import type { SessionInfo } from '@bsv/wallet-relay/client'
 
 // TODO: Adjust status colours to match your design system.
 const statusColor: Record<string, string> = {

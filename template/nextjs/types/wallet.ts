@@ -10,7 +10,7 @@
  *       Keep this in sync with the actions array in components/WalletActions.tsx.
  */
 
-export type { WalletRequest, WalletResponse, RequestLogEntry, WalletMethodName } from 'qr-lib/client'
+export type { WalletRequest, WalletResponse, RequestLogEntry, WalletMethodName } from '@bsv/wallet-relay/client'
 
 export type WalletMethod =
   | 'getPublicKey'

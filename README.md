@@ -1,4 +1,4 @@
-# qr-lib
+# @bsv/wallet-relay
 
 BSV mobile wallet QR pairing — relay server, session management, and desktop frontend utilities.
 
@@ -10,8 +10,8 @@ Lets any web app offer "connect via mobile wallet" as a signing or authenticatio
 
 | You are | What you need |
 |---------|---------------|
-| **Web app developer** adding mobile wallet support to a site | Backend: one `WalletRelayService` call. Frontend: `useWalletRelayClient` + `WalletConnectionModal` + `QRDisplay` from `qr-lib/react` |
-| **Mobile wallet developer** adding QR pairing to a wallet app | `WalletPairingSession` from `qr-lib/client` |
+| **Web app developer** adding mobile wallet support to a site | Backend: one `WalletRelayService` call. Frontend: `useWalletRelayClient` + `WalletConnectionModal` + `QRDisplay` from `@bsv/wallet-relay/react` |
+| **Mobile wallet developer** adding QR pairing to a wallet app | `WalletPairingSession` from `@bsv/wallet-relay/client` |
 
 **Most integrators are in the first group.** If you're building a website that lets users connect their mobile BSV wallet, you do not touch the mobile side at all. The `WalletPairingSession` API exists for wallet app developers (like BSV Browser) who are implementing the mobile end of the protocol.
 
@@ -22,13 +22,13 @@ Lets any web app offer "connect via mobile wallet" as a signing or authenticatio
 ### 1. Install
 
 ```bash
-npm install qr-lib @bsv/sdk
+npm install @bsv/wallet-relay @bsv/sdk
 npm install express cors ws qrcode   # backend peer deps — not needed for frontend-only projects
 ```
 
 `@bsv/sdk` is used throughout — backend wallet crypto, frontend local wallet detection, and mobile pairing. Install it in every layer of your project.
 
-> **TypeScript:** your `tsconfig.json` needs `"moduleResolution": "bundler"` (or `"node16"` / `"nodenext"`) to resolve the `qr-lib/react` and `qr-lib/client` subpath exports.
+> **TypeScript:** your `tsconfig.json` needs `"moduleResolution": "bundler"` (or `"node16"` / `"nodenext"`) to resolve the `@bsv/wallet-relay/react` and `@bsv/wallet-relay/client` subpath exports.
 
 ### 2. Generate a stable backend key
 
@@ -56,7 +56,7 @@ ORIGIN=http://localhost:5173
 <summary><strong>Scaffold (recommended)</strong></summary>
 
 ```bash
-npx qr-lib init
+npx @bsv/wallet-relay init
 ```
 
 Generates a working Express backend and React+Vite frontend wired together. Existing files are never overwritten.
@@ -67,16 +67,16 @@ backend/
   .env.example       — copy to .env and fill in WALLET_PRIVATE_KEY
 frontend/
   hooks/
-    useWalletSession.ts    — re-exports useWalletRelayClient from qr-lib/react
+    useWalletSession.ts    — re-exports useWalletRelayClient from @bsv/wallet-relay/react
   components/
-    WalletConnectionModal.tsx  — styled wrapper around qr-lib/react WalletConnectionModal
-    QRDisplay.tsx              — styled wrapper around qr-lib/react QRDisplay
+    WalletConnectionModal.tsx  — styled wrapper around @bsv/wallet-relay/react WalletConnectionModal
+    QRDisplay.tsx              — styled wrapper around @bsv/wallet-relay/react QRDisplay
     WalletActions.tsx          — buttons for each wallet method (app-specific, customise here)
-    RequestLog.tsx             — styled wrapper around qr-lib/react RequestLog
+    RequestLog.tsx             — styled wrapper around @bsv/wallet-relay/react RequestLog
   views/
     DesktopView.tsx    — composes all of the above
   types/
-    wallet.ts          — WalletMethod (app-specific); re-exports shared types from qr-lib/client
+    wallet.ts          — WalletMethod (app-specific); re-exports shared types from @bsv/wallet-relay/client
 ```
 
 Options: `--nextjs` for a Next.js project, `--backend` / `--frontend` for one side only, `--backend-dir` / `--frontend-dir` to control output directories.
@@ -104,7 +104,7 @@ import express from 'express'
 import { createServer } from 'http'
 import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
-import { WalletRelayService } from 'qr-lib'
+import { WalletRelayService } from '@bsv/wallet-relay'
 
 const ORIGIN = process.env.ORIGIN ?? 'http://localhost:5173'
 
@@ -134,7 +134,7 @@ That's the entire backend. `WalletRelayService` registers three REST routes and 
 
 #### Frontend
 
-`qr-lib/react` exports everything needed for wallet detection and QR pairing:
+`@bsv/wallet-relay/react` exports everything needed for wallet detection and QR pairing:
 
 ```tsx
 import { useState, useCallback } from 'react'
@@ -143,7 +143,7 @@ import {
   useWalletRelayClient,
   WalletConnectionModal,
   QRDisplay,
-} from 'qr-lib/react'
+} from '@bsv/wallet-relay/react'
 
 export function App() {
   const [mode, setMode] = useState<'detecting' | 'local' | 'mobile'>('detecting')
@@ -227,11 +227,11 @@ const handleCreateTx = useCallback(async () => {
 
 ## For mobile wallet developers
 
-If you are building a BSV wallet app and want to support QR pairing with desktop web apps, use `WalletPairingSession` from `qr-lib/client`:
+If you are building a BSV wallet app and want to support QR pairing with desktop web apps, use `WalletPairingSession` from `@bsv/wallet-relay/client`:
 
 ```ts
 import { WalletClient } from '@bsv/sdk'
-import { WalletPairingSession, parsePairingUri } from 'qr-lib/client'
+import { WalletPairingSession, parsePairingUri } from '@bsv/wallet-relay/client'
 
 const result = parsePairingUri(scannedUri)
 if (result.error) { showError(result.error); return }
@@ -262,13 +262,13 @@ const lastSeq = await SecureStore.getItemAsync(`lastseq_${topic}`)
 await session.reconnect(Number(lastSeq ?? 0))
 ```
 
-`DEFAULT_IMPLEMENTED_METHODS` and `DEFAULT_AUTO_APPROVE_METHODS` are exported from `qr-lib/client` if you want to reference or extend the defaults.
+`DEFAULT_IMPLEMENTED_METHODS` and `DEFAULT_AUTO_APPROVE_METHODS` are exported from `@bsv/wallet-relay/client` if you want to reference or extend the defaults.
 
 ---
 
 ## React components
 
-`qr-lib/react` exports six items:
+`@bsv/wallet-relay/react` exports six items:
 
 | Export | Description |
 |--------|-------------|
@@ -285,7 +285,7 @@ All visual components are unstyled. Pass `className`, `style`, and per-element p
 
 ```tsx
 import { Linking } from 'react-native'
-import { useQRPairing } from 'qr-lib/react'
+import { useQRPairing } from '@bsv/wallet-relay/react'
 
 const { open } = useQRPairing(pairingUri, { openUrl: Linking.openURL })
 
@@ -310,7 +310,7 @@ import {
   buildPairingUri,
   encryptEnvelope,
   decryptEnvelope,
-} from 'qr-lib'
+} from '@bsv/wallet-relay'
 
 const sessions = new QRSessionManager()
 const relay    = new WebSocketRelay(server)
@@ -341,9 +341,9 @@ All messages use BSV wallet-native ECDH via `@bsv/sdk`. No custom crypto.
 
 | Import | Environment | Contains |
 |--------|-------------|----------|
-| `qr-lib` | Node.js only | `WalletRelayService`, `WebSocketRelay`, `QRSessionManager`, `WalletRequestHandler`, shared utilities |
-| `qr-lib/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, `WalletMethodName`, shared utilities, no Node.js deps |
-| `qr-lib/react` | React ≥17 | `useWalletRelayClient`, `WalletConnectionModal`, `QRDisplay`, `QRPairingCode`, `RequestLog`, `useQRPairing` |
+| `@bsv/wallet-relay` | Node.js only | `WalletRelayService`, `WebSocketRelay`, `QRSessionManager`, `WalletRequestHandler`, shared utilities |
+| `@bsv/wallet-relay/client` | Browser + React Native | `WalletRelayClient`, `WalletPairingSession`, `WalletMethodName`, shared utilities, no Node.js deps |
+| `@bsv/wallet-relay/react` | React ≥17 | `useWalletRelayClient`, `WalletConnectionModal`, `QRDisplay`, `QRPairingCode`, `RequestLog`, `useQRPairing` |
 
 ---
 

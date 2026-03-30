@@ -9,4 +9,4 @@
 //
 // Example with options:
 //   useWalletRelayClient({ apiUrl: 'https://api.example.com' })
-export { useWalletRelayClient as useWalletSession } from 'qr-lib/react'
+export { useWalletRelayClient as useWalletSession } from '@bsv/wallet-relay/react'

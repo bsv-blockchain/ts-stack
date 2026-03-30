@@ -6,7 +6,7 @@
  * If you already have an Express app and HTTP server, you only need to add:
  *
  *   import { ProtoWallet, PrivateKey } from '@bsv/sdk'
- *   import { WalletRelayService } from 'qr-lib'
+ *   import { WalletRelayService } from '@bsv/wallet-relay'
  *
  *   const wallet = new ProtoWallet(PrivateKey.fromWif(process.env['WALLET_WIF']!))
  *   new WalletRelayService({ app, server, wallet })
@@ -23,7 +23,7 @@ import http from 'http'
 import express from 'express'
 import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
-import { WalletRelayService } from 'qr-lib'
+import { WalletRelayService } from '@bsv/wallet-relay'
 
 const PORT   = Number(process.env['PORT']   ?? 3000)
 const ORIGIN = process.env['ORIGIN']        ?? 'http://localhost:5173'
