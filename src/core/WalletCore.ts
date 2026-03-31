@@ -86,7 +86,7 @@ export abstract class WalletCore {
 
   async derivePaymentKey (counterparty: string, invoiceNumber?: string): Promise<string> {
     const protocolID: [SecurityLevel, string] = [2 as SecurityLevel, '3241645161d8']
-    const keyID = invoiceNumber ?? Math.random().toString(36).substring(2)
+    const keyID = invoiceNumber ?? Utils.toBase64(Random(8))
     const result = await this.getClient().getPublicKey({
       protocolID,
       keyID,

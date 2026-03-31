@@ -27,7 +27,7 @@ export class FileRevocationStore implements RevocationStore {
   }
 
   private saveAll (records: Record<string, RevocationRecord>): void {
-    nodeFs.writeFileSync(this.filePath, JSON.stringify(records, null, 2))
+    nodeFs.writeFileSync(this.filePath, JSON.stringify(records, null, 2), { mode: 0o600 })
   }
 
   private async withLock<T>(fn: (records: Record<string, RevocationRecord>) => T): Promise<T> {

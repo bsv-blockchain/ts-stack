@@ -20,7 +20,7 @@ export class JsonFileStore<T> {
   }
 
   save (data: T): void {
-    writeFileSync(this.filePath, JSON.stringify(data, null, 2))
+    writeFileSync(this.filePath, JSON.stringify(data, null, 2), { mode: 0o600 })
   }
 
   delete (): void {
