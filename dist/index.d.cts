@@ -1,8 +1,8 @@
 import { Server } from 'http';
-import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-Dz135aUT.cjs';
-export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-Dz135aUT.cjs';
-import { Express } from 'express';
-export { C as CryptoParams, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cvqq5aUf.cjs';
+import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-ClLaGPT6.cjs';
+export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-ClLaGPT6.cjs';
+import { Request, Response } from 'express';
+export { C as CryptoParams, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cxr3lx5y.cjs';
 import '@bsv/sdk';
 
 type Role = 'desktop' | 'mobile';
@@ -124,13 +124,24 @@ declare class WalletRequestHandler {
     errorResponse(id: string, seq: number, code: number, message: string): RpcResponse;
 }
 
+/**
+ * Minimal Express-compatible router interface.
+ * Using a structural duck-type instead of the nominal `Express` type avoids
+ * conflicts in monorepos where two separate node_modules trees resolve different
+ * copies of @types/express-serve-static-core.
+ */
+type RouterLike = {
+    get(path: string, handler: (req: Request, res: Response) => void): unknown;
+    post(path: string, handler: (req: Request, res: Response) => void): unknown;
+};
+
 interface WalletRelayServiceOptions {
     /**
      * Express app — when provided, REST routes are registered automatically.
      * Omit when using Next.js (or any other framework): call createSession(),
      * getSession(), and sendRequest() from your own route handlers instead.
      */
-    app?: Express;
+    app?: RouterLike;
     /** HTTP server — WebSocket upgrade handler is attached here. */
     server: Server;
     /**

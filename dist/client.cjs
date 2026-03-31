@@ -281,7 +281,12 @@ var WALLET_METHOD_NAMES = [
   "acquireCertificate",
   "relinquishCertificate",
   "listCertificates",
-  "revealCounterpartyKeyLinkage"
+  "revealCounterpartyKeyLinkage",
+  "createHmac",
+  "verifyHmac",
+  "encrypt",
+  "decrypt",
+  "verifySignature"
 ];
 
 // src/client/WalletRelayClient.ts

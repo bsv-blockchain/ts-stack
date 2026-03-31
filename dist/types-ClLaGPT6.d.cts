@@ -63,7 +63,7 @@ type ParseResult = {
  * The wallet RPC methods that can be called on a paired mobile wallet.
  * Matches the default implemented method set in WalletPairingSession.
  */
-declare const WALLET_METHOD_NAMES: readonly ["getPublicKey", "listOutputs", "createAction", "signAction", "createSignature", "listActions", "internalizeAction", "acquireCertificate", "relinquishCertificate", "listCertificates", "revealCounterpartyKeyLinkage"];
+declare const WALLET_METHOD_NAMES: readonly ["getPublicKey", "listOutputs", "createAction", "signAction", "createSignature", "listActions", "internalizeAction", "acquireCertificate", "relinquishCertificate", "listCertificates", "revealCounterpartyKeyLinkage", "createHmac", "verifyHmac", "encrypt", "decrypt", "verifySignature"];
 type WalletMethodName = typeof WALLET_METHOD_NAMES[number];
 /** A wallet RPC request tracked by WalletRelayClient. */
 interface WalletRequest {

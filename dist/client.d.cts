@@ -1,7 +1,7 @@
-import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-Dz135aUT.cjs';
-export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WALLET_METHOD_NAMES, j as WalletRequest, k as WalletResponse, W as WireEnvelope } from './types-Dz135aUT.cjs';
-export { W as WalletRelayClient, a as WalletRelayClientOptions } from './WalletRelayClient-CVHsy7Sr.cjs';
-export { C as CryptoParams, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cvqq5aUf.cjs';
+import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-ClLaGPT6.cjs';
+export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WALLET_METHOD_NAMES, j as WalletRequest, k as WalletResponse, W as WireEnvelope } from './types-ClLaGPT6.cjs';
+export { W as WalletRelayClient, a as WalletRelayClientOptions } from './WalletRelayClient-B8mQ4fXI.cjs';
+export { C as CryptoParams, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cxr3lx5y.cjs';
 import '@bsv/sdk';
 
 type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
