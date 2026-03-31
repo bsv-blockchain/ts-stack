@@ -84,6 +84,21 @@ function QRPairingCode({
 // src/react/useWalletRelayClient.ts
 var import_react2 = require("react");
 
+// src/types.ts
+var WALLET_METHOD_NAMES = [
+  "getPublicKey",
+  "listOutputs",
+  "createAction",
+  "signAction",
+  "createSignature",
+  "listActions",
+  "internalizeAction",
+  "acquireCertificate",
+  "relinquishCertificate",
+  "listCertificates",
+  "revealCounterpartyKeyLinkage"
+];
+
 // src/client/WalletRelayClient.ts
 var WalletRelayClient = class {
   constructor(options) {
@@ -93,8 +108,11 @@ var WalletRelayClient = class {
     this._error = null;
     this._pollTimer = null;
     this._expiredCount = 0;
-    this._apiUrl = (options?.apiUrl ?? "/api").replace(/\/$/, "");
+    this._walletProxy = null;
+    const raw = (options?.apiUrl ?? "/api").replace(/\/$/, "");
+    this._apiUrl = raw.endsWith("/api") ? raw : `${raw}/api`;
     this._pollInterval = options?.pollInterval ?? 3e3;
+    this._connectedPollInterval = options?.connectedPollInterval ?? 1e4;
     this._onSessionChange = options?.onSessionChange;
     this._onLogChange = options?.onLogChange;
     this._onError = options?.onError;
@@ -107,6 +125,33 @@ var WalletRelayClient = class {
   }
   get error() {
     return this._error;
+  }
+  /**
+   * A wallet-interface-compatible proxy that forwards each method call to the
+   * connected mobile wallet via the relay. Drop this in anywhere a `WalletClient`
+   * is expected — no conditional code paths needed at call sites.
+   *
+   * ```ts
+   * const wallet = client.wallet
+   * const { publicKey } = await wallet.getPublicKey({ identityKey: true })
+   * const { certificates } = await wallet.listCertificates({ certifiers: [...] })
+   * ```
+   *
+   * Throws if no session is active or if the mobile returns an error.
+   * The proxy is created once and reused across calls.
+   */
+  get wallet() {
+    if (!this._walletProxy) {
+      const entries = WALLET_METHOD_NAMES.map((method) => [
+        method,
+        (params) => this.sendRequest(method, params).then((res) => {
+          if (res.error) throw Object.assign(new Error(res.error.message), { code: res.error.code });
+          return res.result;
+        })
+      ]);
+      this._walletProxy = Object.fromEntries(entries);
+    }
+    return this._walletProxy;
   }
   /**
    * Create a new pairing session and start polling for status changes.
@@ -177,21 +222,29 @@ var WalletRelayClient = class {
     this._desktopToken = null;
   }
   // ── Private helpers ───────────────────────────────────────────────────────
-  _startPolling(sessionId) {
+  _startPolling(sessionId, interval = this._pollInterval) {
     this._pollTimer = setInterval(async () => {
       try {
         const res = await fetch(`${this._apiUrl}/session/${sessionId}`);
         if (!res.ok) return;
+        const prevStatus = this._session?.status;
         const updated = await res.json();
         this._setSession({ ...this._session, ...updated });
         if (updated.status === "expired") {
           if (++this._expiredCount >= 2) this._stopPolling();
         } else {
           this._expiredCount = 0;
+          if (updated.status === "connected" && prevStatus !== "connected") {
+            this._stopPolling();
+            this._startPolling(sessionId, this._connectedPollInterval);
+          } else if (updated.status === "disconnected" && prevStatus === "connected") {
+            this._stopPolling();
+            this._startPolling(sessionId, this._pollInterval);
+          }
         }
       } catch {
       }
-    }, this._pollInterval);
+    }, interval);
   }
   _stopPolling() {
     if (this._pollTimer !== null) {
@@ -257,7 +310,8 @@ function useWalletRelayClient(options) {
       clientRef.current = null;
     };
   }, [createSession]);
-  return { session, log, error, createSession, sendRequest };
+  const wallet = session?.status === "connected" ? clientRef.current?.wallet ?? null : null;
+  return { session, log, error, createSession, sendRequest, wallet };
 }
 
 // src/react/QRDisplay.tsx

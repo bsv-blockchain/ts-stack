@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { WalletInterface } from '@bsv/sdk'
 import { WalletRelayClient, type WalletRelayClientOptions } from '../client/WalletRelayClient.js'
 import type { SessionInfo, RequestLogEntry, WalletResponse, WalletMethodName } from '../types.js'
 
@@ -29,6 +30,7 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   const [session, setSession] = useState<SessionInfo | null>(null)
   const [log, setLog]         = useState<RequestLogEntry[]>([])
   const [error, setError]     = useState<string | null>(null)
+
 
   // Stable ref to the client instance — persists across StrictMode remounts
   const clientRef  = useRef<WalletRelayClient | null>(null)
@@ -72,5 +74,9 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
     }
   }, [createSession]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { session, log, error, createSession, sendRequest }
+  // Proxy is cached inside the client — null when no client or not connected
+  const wallet: Pick<WalletInterface, WalletMethodName> | null =
+    session?.status === 'connected' ? (clientRef.current?.wallet ?? null) : null
+
+  return { session, log, error, createSession, sendRequest, wallet }
 }

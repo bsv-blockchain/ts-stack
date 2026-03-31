@@ -23,7 +23,7 @@ export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export { PROTOCOL_ID } from './types.js'
+export { PROTOCOL_ID, WALLET_METHOD_NAMES } from './types.js'
 export type {
   WalletLike,
   WireEnvelope,

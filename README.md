@@ -249,38 +249,40 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
 The frontend is identical to the Vite/Express setup — `useWalletRelayClient` works the same regardless of backend framework.
 
-### 4. Send requests
+### 4. Use the wallet proxy — no call site changes needed
 
-Once `session?.status === 'connected'`, use `sendRequest` to call wallet methods on the paired mobile. Call it from a React event handler or `useCallback`:
+`useWalletRelayClient` returns a `wallet` object alongside `session`. Once `session?.status === 'connected'`, `wallet` is a fully `WalletInterface`-compatible proxy that forwards every call to the paired mobile over the relay. When the session is not connected, `wallet` is `null`.
+
+**This means you do not need separate code paths for mobile vs local wallet.** The proxy has the same method signatures as `WalletClient` — swap the `wallet` reference in your existing wallet context and every call site in your app continues to work unchanged:
 
 ```tsx
-const handleGetKey = useCallback(async () => {
-  const pkResponse = await sendRequest('getPublicKey', { identityKey: true })
-  if (pkResponse.error) {
-    console.error(pkResponse.error.message)
-    return
-  }
-  const { publicKey } = pkResponse.result as { publicKey: string }
-  console.log('Public key:', publicKey)
-}, [sendRequest])
+// Before (local WalletClient):
+const { publicKey } = await wallet.getPublicKey({ identityKey: true })
+const { certificates } = await wallet.listCertificates({ certifiers: [...], types: [...] })
+const { txid } = await wallet.createAction({ description: 'Pay invoice', outputs: [...] })
 
-const handleCreateTx = useCallback(async () => {
-  const txResponse = await sendRequest('createAction', {
-    description: 'My transaction',
-    outputs: [{ script: '...', satoshis: 1000 }],
-  })
-  if (txResponse.error) {
-    console.error(txResponse.error.message)
-    return
-  }
-  const { txid } = txResponse.result as { txid: string }
-  console.log('Transaction:', txid)
-}, [sendRequest])
+// After (mobile relay proxy — identical call sites, zero changes):
+const { publicKey } = await wallet.getPublicKey({ identityKey: true })
+const { certificates } = await wallet.listCertificates({ certifiers: [...], types: [...] })
+const { txid } = await wallet.createAction({ description: 'Pay invoice', outputs: [...] })
 ```
 
-`result` is typed as `unknown` — cast it to the appropriate response type from `@bsv/sdk`'s `WalletInterface` (e.g. `GetPublicKeyResult`, `CreateActionResult`). The `error` field is `{ code: number; message: string } | undefined`.
+How it works: each method on the proxy captures its name at construction time, calls `sendRequest(method, params)` internally, unwraps `res.result`, and throws on `res.error` — so callers see a normal return value or a thrown `Error`, exactly as they would from a local `WalletClient`.
 
-`sendRequest` accepts any `WalletMethodName` and posts to `POST /api/request/:id` on your backend, which encrypts the call and relays it to the mobile. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`.
+```tsx
+// Typical integration — inject into your existing wallet context on connect:
+const { session, wallet } = useWalletRelayClient({ autoCreate: false })
+
+useEffect(() => {
+  if (session?.status === 'connected' && wallet) {
+    setWalletContext(wallet) // drop-in — all existing wallet calls now route to mobile
+  }
+}, [session?.status, wallet])
+```
+
+The proxy is created once and cached for the lifetime of the session. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`.
+
+> **Lower-level option:** `sendRequest(method, params)` is still available if you need the raw `{ result, error, requestId, timestamp }` response envelope — useful for request logging or custom error handling.
 
 ---
 
@@ -331,7 +333,7 @@ await session.reconnect(Number(lastSeq ?? 0))
 
 | Export | Description |
 |--------|-------------|
-| `useWalletRelayClient` | Session creation, status polling, and `sendRequest` — the main hook for QR pairing |
+| `useWalletRelayClient` | Session creation, status polling, `wallet` proxy (drop-in `WalletInterface`), and `sendRequest` — the main hook for QR pairing |
 | `WalletConnectionModal` | Detects local wallet; shows install link + mobile QR button if none found |
 | `QRDisplay` | QR image with status badge and session refresh |
 | `QRPairingCode` | Tappable QR that opens the `wallet://pair?…` deeplink directly |

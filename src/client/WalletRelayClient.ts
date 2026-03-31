@@ -1,10 +1,18 @@
+import type { WalletInterface } from '@bsv/sdk'
 import type { SessionInfo, WalletRequest, WalletResponse, RequestLogEntry, WalletMethodName } from '../types.js'
+import { WALLET_METHOD_NAMES } from '../types.js'
 
 export interface WalletRelayClientOptions {
-  /** Base URL for the relay API. Default: '/api' */
+  /**
+   * Base URL for the relay API. Can be the bare host (`http://localhost:3001`)
+   * or include the `/api` prefix — `/api` is appended automatically if missing.
+   * Default: '/api'
+   */
   apiUrl?: string
-  /** Session status polling interval in ms. Default: 3000 */
+  /** Session status polling interval in ms while waiting for mobile to connect. Default: 3000 */
   pollInterval?: number
+  /** Session status polling interval in ms once the mobile is connected. Default: 10000 */
+  connectedPollInterval?: number
   /** Called whenever the session state changes (including on creation). */
   onSessionChange?: (session: SessionInfo) => void
   /** Called when the request log changes. */
@@ -33,6 +41,7 @@ export interface WalletRelayClientOptions {
 export class WalletRelayClient {
   private readonly _apiUrl: string
   private readonly _pollInterval: number
+  private readonly _connectedPollInterval: number
   private readonly _onSessionChange?: (session: SessionInfo) => void
   private readonly _onLogChange?: (log: RequestLogEntry[]) => void
   private readonly _onError?: (error: string) => void
@@ -43,10 +52,13 @@ export class WalletRelayClient {
   private _error: string | null = null
   private _pollTimer: ReturnType<typeof setInterval> | null = null
   private _expiredCount = 0
+  private _walletProxy: Pick<WalletInterface, WalletMethodName> | null = null
 
   constructor(options?: WalletRelayClientOptions) {
-    this._apiUrl = (options?.apiUrl ?? '/api').replace(/\/$/, '')
+    const raw = (options?.apiUrl ?? '/api').replace(/\/$/, '')
+    this._apiUrl = raw.endsWith('/api') ? raw : `${raw}/api`
     this._pollInterval = options?.pollInterval ?? 3000
+    this._connectedPollInterval = options?.connectedPollInterval ?? 10000
     this._onSessionChange = options?.onSessionChange
     this._onLogChange = options?.onLogChange
     this._onError = options?.onError
@@ -55,6 +67,35 @@ export class WalletRelayClient {
   get session(): SessionInfo | null { return this._session }
   get log(): RequestLogEntry[] { return this._log }
   get error(): string | null { return this._error }
+
+  /**
+   * A wallet-interface-compatible proxy that forwards each method call to the
+   * connected mobile wallet via the relay. Drop this in anywhere a `WalletClient`
+   * is expected — no conditional code paths needed at call sites.
+   *
+   * ```ts
+   * const wallet = client.wallet
+   * const { publicKey } = await wallet.getPublicKey({ identityKey: true })
+   * const { certificates } = await wallet.listCertificates({ certifiers: [...] })
+   * ```
+   *
+   * Throws if no session is active or if the mobile returns an error.
+   * The proxy is created once and reused across calls.
+   */
+  get wallet(): Pick<WalletInterface, WalletMethodName> {
+    if (!this._walletProxy) {
+      const entries = WALLET_METHOD_NAMES.map(method => [
+        method,
+        (params: unknown): Promise<unknown> =>
+          this.sendRequest(method, params).then(res => {
+            if (res.error) throw Object.assign(new Error(res.error.message), { code: res.error.code })
+            return res.result
+          }),
+      ])
+      this._walletProxy = Object.fromEntries(entries) as unknown as Pick<WalletInterface, WalletMethodName>
+    }
+    return this._walletProxy!
+  }
 
   /**
    * Create a new pairing session and start polling for status changes.
@@ -132,24 +173,33 @@ export class WalletRelayClient {
 
   // ── Private helpers ───────────────────────────────────────────────────────
 
-  private _startPolling(sessionId: string): void {
+  private _startPolling(sessionId: string, interval = this._pollInterval): void {
     // Two consecutive 'expired' polls required — the backend grace window means
     // a session at the 120 s boundary can still flip to 'connected' first.
     this._pollTimer = setInterval(async () => {
       try {
         const res = await fetch(`${this._apiUrl}/session/${sessionId}`)
         if (!res.ok) return
+        const prevStatus = this._session?.status
         const updated = (await res.json()) as SessionInfo
         this._setSession({ ...this._session!, ...updated })
         if (updated.status === 'expired') {
           if (++this._expiredCount >= 2) this._stopPolling()
         } else {
           this._expiredCount = 0
+          // Slow down once connected; speed back up if mobile disconnects
+          if (updated.status === 'connected' && prevStatus !== 'connected') {
+            this._stopPolling()
+            this._startPolling(sessionId, this._connectedPollInterval)
+          } else if (updated.status === 'disconnected' && prevStatus === 'connected') {
+            this._stopPolling()
+            this._startPolling(sessionId, this._pollInterval)
+          }
         }
       } catch {
         // Ignore transient network errors — next poll will retry
       }
-    }, this._pollInterval)
+    }, interval)
   }
 
   private _stopPolling(): void {

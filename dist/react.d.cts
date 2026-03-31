@@ -1,8 +1,8 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import React from 'react';
-import { a as WalletRelayClientOptions } from './WalletRelayClient-B6-GyQFW.cjs';
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, j as WalletResponse } from './types-UY3FlsXl.cjs';
-import { WalletClient } from '@bsv/sdk';
+import { WalletInterface, WalletClient } from '@bsv/sdk';
+import { a as WalletRelayClientOptions } from './WalletRelayClient-CVHsy7Sr.cjs';
+import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-Dz135aUT.cjs';
 
 type QRPairingCodeProps = {
     /**
@@ -111,6 +111,7 @@ declare function useWalletRelayClient(options?: UseWalletRelayClientOptions): {
     error: string | null;
     createSession: () => Promise<SessionInfo>;
     sendRequest: (method: WalletMethodName, params?: unknown) => Promise<WalletResponse>;
+    wallet: Pick<WalletInterface, "getPublicKey" | "revealCounterpartyKeyLinkage" | "createSignature" | "createAction" | "signAction" | "listActions" | "internalizeAction" | "listOutputs" | "acquireCertificate" | "listCertificates" | "relinquishCertificate"> | null;
 };
 
 type QRDisplayProps = {

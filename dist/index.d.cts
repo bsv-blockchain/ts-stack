@@ -1,8 +1,8 @@
 import { Server } from 'http';
-import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-UY3FlsXl.cjs';
-export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-UY3FlsXl.cjs';
+import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-Dz135aUT.cjs';
+export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-Dz135aUT.cjs';
 import { Express } from 'express';
-export { C as CryptoParams, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-BAowHZJs.cjs';
+export { C as CryptoParams, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cvqq5aUf.cjs';
 import '@bsv/sdk';
 
 type Role = 'desktop' | 'mobile';
