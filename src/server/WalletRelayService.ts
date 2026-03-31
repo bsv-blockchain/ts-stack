@@ -1,5 +1,16 @@
-import type { Express, Request, Response } from 'express'
+import type { Request, Response } from 'express'
 import type { Server } from 'http'
+
+/**
+ * Minimal Express-compatible router interface.
+ * Using a structural duck-type instead of the nominal `Express` type avoids
+ * conflicts in monorepos where two separate node_modules trees resolve different
+ * copies of @types/express-serve-static-core.
+ */
+type RouterLike = {
+  get(path: string, handler: (req: Request, res: Response) => void): unknown
+  post(path: string, handler: (req: Request, res: Response) => void): unknown
+}
 import type { WalletLike } from '../types.js'
 import { WebSocketRelay } from './WebSocketRelay.js'
 import { QRSessionManager } from './QRSessionManager.js'
@@ -15,7 +26,7 @@ export interface WalletRelayServiceOptions {
    * Omit when using Next.js (or any other framework): call createSession(),
    * getSession(), and sendRequest() from your own route handlers instead.
    */
-  app?: Express
+  app?: RouterLike
   /** HTTP server — WebSocket upgrade handler is attached here. */
   server: Server
   /**
@@ -232,7 +243,7 @@ export class WalletRelayService {
 
   // ── Route registration ────────────────────────────────────────────────────────
 
-  private registerRoutes(app: Express): void {
+  private registerRoutes(app: RouterLike): void {
     app.get('/api/session', (req: Request, res: Response) => {
       void this.createSession()
         .then(info => res.json(info))

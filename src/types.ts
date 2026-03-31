@@ -93,6 +93,7 @@ export const WALLET_METHOD_NAMES = [
   'relinquishCertificate',
   'listCertificates',
   'revealCounterpartyKeyLinkage',
+  'createHmac',
 ] as const
 
 export type WalletMethodName = typeof WALLET_METHOD_NAMES[number]

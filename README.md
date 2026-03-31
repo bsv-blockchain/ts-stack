@@ -109,7 +109,10 @@ import { WalletRelayService } from '@bsv/wallet-relay'
 const ORIGIN = process.env.ORIGIN ?? 'http://localhost:5173'
 
 const app    = express()
-app.use(cors({ origin: ORIGIN }))
+app.use(cors({
+  origin: ORIGIN,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token'],
+}))
 app.use(express.json())
 
 const server = createServer(app)
@@ -131,6 +134,8 @@ That's the entire backend. `WalletRelayService` registers three REST routes and 
 `relayUrl` and `origin` are optional — they default to `process.env.RELAY_URL` / `process.env.ORIGIN`, then `ws://localhost:3000` / `http://localhost:5173`.
 
 > **`desktopToken`** is returned by `GET /api/session` and must be sent as an `X-Desktop-Token` header on every `POST /api/request/:id` call. It ensures that only the frontend that created the session can send wallet requests — even if another client somehow learns the `sessionId`. `useWalletRelayClient` / `WalletRelayClient` handle this automatically. If you are calling `relay.sendRequest()` directly from your own route handlers (Next.js, etc.) you must forward the header yourself — see [Next.js setup](#nextjs-setup) below.
+
+> **CORS:** if your frontend and backend run on different origins, you must include `X-Desktop-Token` in your CORS `allowedHeaders`. Without it the browser's preflight check blocks every `POST /api/request/:id` call. The example above already includes it — don't remove it.
 
 #### Frontend
 
@@ -192,24 +197,48 @@ export function App() {
 
 ### Next.js setup
 
-When using Next.js (or any framework where you write your own route handlers), omit `app` from `WalletRelayService` and call its methods directly. The key difference from Express is that you must manually forward the `X-Desktop-Token` header on the request route — the library cannot do it for you since it has no access to the incoming request object.
+> **Serverless / edge deployments (Vercel, Netlify, Lambda) are not supported.** The WebSocket relay requires a persistent Node.js process — it cannot run in a stateless function environment. You need a long-lived server (a VPS, a container, or a self-hosted Next.js deployment with a custom server).
+
+The WebSocket endpoint (`/ws`) cannot be attached to Next.js's internal HTTP server from inside an API route — you must use a **custom server** so you control the underlying `http.Server` instance. The REST routes (`/api/session`, `/api/session/:id`, `/api/request/:id`) are handled by normal Next.js API routes that call `relay` methods directly.
+
+**Step 1 — custom server** (create `server.ts` at the project root, then update `package.json` to run it instead of `next start`):
 
 ```ts
-// lib/relay.ts — shared singleton
+// server.ts
 import { createServer } from 'http'
+import { parse } from 'url'
+import next from 'next'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { WalletRelayService } from '@bsv/wallet-relay'
 
-const server = createServer() // Next.js manages the actual HTTP server — pass a dummy
+const dev    = process.env.NODE_ENV !== 'production'
+const app    = next({ dev })
+const handle = app.getRequestHandler()
+
+await app.prepare()
+
+const server = createServer((req, res) => {
+  handle(req, res, parse(req.url!, true))
+})
+
 export const relay = new WalletRelayService({
   server,
   wallet: new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!)),
 })
+
+server.listen(3000)
 ```
+
+```json
+// package.json — replace "next start" with the custom server
+{ "scripts": { "start": "tsx server.ts", "dev": "tsx server.ts" } }
+```
+
+**Step 2 — API routes** call `relay` methods directly. You must forward `X-Desktop-Token` on the request route — the library cannot do it for you since it has no access to the incoming request object.
 
 ```ts
 // app/api/session/route.ts
-import { relay } from '@/lib/relay'
+import { relay } from '@/server' // the custom server exports relay
 
 export async function GET() {
   const info = await relay.createSession()
@@ -219,7 +248,7 @@ export async function GET() {
 
 ```ts
 // app/api/session/[id]/route.ts
-import { relay } from '@/lib/relay'
+import { relay } from '@/server'
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const info = relay.getSession(params.id)
@@ -230,7 +259,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 ```ts
 // app/api/request/[id]/route.ts
-import { relay } from '@/lib/relay'
+import { relay } from '@/server'
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const { method, params: rpcParams } = await req.json() as { method: string; params: unknown }
