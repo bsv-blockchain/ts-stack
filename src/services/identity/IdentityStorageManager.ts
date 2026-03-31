@@ -16,6 +16,14 @@ export class IdentityStorageManager {
    */
   constructor(private readonly db: Db) {
     this.records = db.collection<IdentityRecord>('identityRecords')
+    this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.serialNumber': 1 }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.subject': 1 }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.certifier': 1 }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.subject': 1, 'certificate.certifier': 1 }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.subject': 1, 'certificate.type': 1 }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.fields.userName': 1 }).catch((e) => console.error(e))
+    this.records.createIndex({ 'certificate.fields.userName': 1, 'certificate.certifier': 1 }).catch((e) => console.error(e))
     this.records.createIndex({
       searchableAttributes: 'text'
     }).catch((e) => console.error(e))
@@ -50,10 +58,23 @@ export class IdentityStorageManager {
     await this.records.deleteOne({ txid, outputIndex })
   }
 
+  private normalizeSearchInput(input: string): string {
+    return input.trim().replace(/\s+/g, ' ')
+  }
+
   // Helper function to convert a string into a regex pattern for fuzzy search
   private getFuzzyRegex(input: string): RegExp {
-    const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(escapedInput.split('').join('.*'), 'i')
+    const normalizedInput = this.normalizeSearchInput(input)
+    if (normalizedInput.length === 0) {
+      return /^$/
+    }
+
+    const fuzzyPattern = normalizedInput
+      .split(' ')
+      .map(token => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('.*')
+
+    return new RegExp(fuzzyPattern, 'i')
   }
 
   /**
@@ -62,33 +83,56 @@ export class IdentityStorageManager {
    * @param {PubKeyHex[]} [certifiers] acceptable identity certifiers
    * @returns {Promise<UTXOReference[]>} returns matching UTXO references
    */
-  async findByAttribute(attributes: IdentityAttributes, certifiers?: string[]): Promise<UTXOReference[]> {
+  async findByAttribute(attributes: IdentityAttributes, certifiers?: string[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     // Make sure valid query attributes are provided
     if (attributes === undefined || Object.keys(attributes).length === 0) {
       return []
     }
 
-    // Initialize the query with certifier filter
+    // Initialize the query and optionally apply certifier filter
     const query: Query = {
-      $and: [
-        { 'certificate.certifier': { $in: certifiers } }
-      ]
+      $and: []
+    }
+
+    if (certifiers !== undefined && certifiers.length > 0) {
+      query.$and.push({ 'certificate.certifier': { $in: certifiers } })
     }
 
     if ('any' in attributes) {
-      // Apply the getFuzzyRegex method directly to the 'any' search term
-      const regexQuery = { searchableAttributes: this.getFuzzyRegex(attributes.any) }
-      query.$and.push(regexQuery)
+      const anySearch = this.normalizeSearchInput(attributes.any)
+      if (anySearch.length === 0) {
+        return []
+      }
+      if (anySearch.length < 2) {
+        return []
+      }
+
+      // Use text search for scalability (indexed via searchableAttributes text index).
+      // Keep regex fallback for very short queries where tokenization may be too coarse.
+      if (anySearch.length > 2) {
+        query.$and.push({ $text: { $search: anySearch } })
+      } else {
+        query.$and.push({ searchableAttributes: this.getFuzzyRegex(anySearch) })
+      }
     } else {
       // Construct regex queries for specific fields
-      const attributeQueries = Object.entries(attributes).map(([key, value]) => ({
-        [`certificate.fields.${key}`]: this.getFuzzyRegex(value)
-      }))
+      const attributeQueries = Object.entries(attributes)
+        .filter(([, value]) => this.normalizeSearchInput(value).length > 0)
+        .map(([key, value]) => ({
+          [`certificate.fields.${key}`]: key === 'userName'
+            ? this.normalizeSearchInput(value)
+            : this.getFuzzyRegex(value)
+        }))
+
+      if (attributeQueries.length === 0) {
+        return []
+      }
+
       query.$and.push(...attributeQueries)
     }
 
     // Find matching results from the DB
-    return await this.findRecordWithQuery(query)
+    return await this.findRecordWithQuery(query, limit, offset)
   }
 
   /**
@@ -97,7 +141,7 @@ export class IdentityStorageManager {
    * @param {PubKeyHex[]} [certifiers] acceptable identity certifiers
    * @returns {Promise<UTXOReference[]>} returns matching UTXO references
    */
-  async findByIdentityKey(identityKey: PubKeyHex, certifiers?: PubKeyHex[]): Promise<UTXOReference[]> {
+  async findByIdentityKey(identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     // Validate search query param
     if (identityKey === undefined) {
       return []
@@ -114,7 +158,7 @@ export class IdentityStorageManager {
     }
 
     // Find matching results from the DB
-    return await this.findRecordWithQuery(query)
+    return await this.findRecordWithQuery(query, limit, offset)
   }
 
   /**
@@ -122,7 +166,7 @@ export class IdentityStorageManager {
    * @param {PubKeyHex[]} certifiers acceptable identity certifiers
    * @returns {Promise<UTXOReference[]>} returns matching UTXO references
    */
-  async findByCertifier(certifiers: PubKeyHex[]): Promise<UTXOReference[]> {
+  async findByCertifier(certifiers: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     // Validate search query param
     if (certifiers === undefined || certifiers.length === 0) {
       return []
@@ -134,31 +178,38 @@ export class IdentityStorageManager {
     }
 
     // Find matching results from the DB
-    return await this.findRecordWithQuery(query)
+    return await this.findRecordWithQuery(query, limit, offset)
   }
 
   /**
    * Find one or more records by matching certificate type
    * @param {Base64String[]} certificateTypes acceptable certificate types
    * @param {PubKeyHex} identityKey identity key of the user
-   * @param {PubKeyHex[]} certifiers certifier public keys
+   * @param {PubKeyHex[]} [certifiers] certifier public keys
    * @returns {Promise<UTXOReference[]>} returns matching UTXO references
    */
-  async findByCertificateType(certificateTypes: Base64String[], identityKey: PubKeyHex, certifiers: PubKeyHex[]): Promise<UTXOReference[]> {
+  async findByCertificateType(certificateTypes: Base64String[], identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     // Validate search query param
-    if (certificateTypes === undefined || certificateTypes.length === 0 || identityKey === undefined || certifiers === undefined || certifiers.length === 0) {
+    if (certificateTypes === undefined || certificateTypes.length === 0 || identityKey === undefined) {
       return []
     }
 
     // Construct the query to search for the certificate type along with identity and certifier filters
-    const query = {
+    const query: {
+      'certificate.subject': PubKeyHex
+      'certificate.type': { $in: Base64String[] }
+      'certificate.certifier'?: { $in: PubKeyHex[] }
+    } = {
       'certificate.subject': identityKey,
-      'certificate.certifier': { $in: certifiers },
       'certificate.type': { $in: certificateTypes }
     }
 
+    if (certifiers !== undefined && certifiers.length > 0) {
+      query['certificate.certifier'] = { $in: certifiers }
+    }
+
     // Find matching results from the DB
-    return await this.findRecordWithQuery(query)
+    return await this.findRecordWithQuery(query, limit, offset)
   }
 
   /**
@@ -166,7 +217,7 @@ export class IdentityStorageManager {
    * @param {Base64String} serialNumber - Unique certificate serial number to query by
    * @returns {Promise<UTXOReference[]>} - Returns matching UTXO references
    */
-  async findByCertificateSerialNumber(serialNumber: Base64String): Promise<UTXOReference[]> {
+  async findByCertificateSerialNumber(serialNumber: Base64String, limit?: number, offset?: number): Promise<UTXOReference[]> {
     // Validate the serial number parameter
     if (serialNumber === undefined || serialNumber === '') {
       return []
@@ -179,7 +230,7 @@ export class IdentityStorageManager {
     }
 
     // Find matching results from the DB
-    return await this.findRecordWithQuery(query)
+    return await this.findRecordWithQuery(query, limit, offset)
   }
 
   /**
@@ -187,9 +238,16 @@ export class IdentityStorageManager {
    * @param {object} query
    * @returns {Promise<UTXOReference[]>} returns matching UTXO references
    */
-  private async findRecordWithQuery(query: object): Promise<UTXOReference[]> {
+  private async findRecordWithQuery(query: object, limit?: number, offset?: number): Promise<UTXOReference[]> {
     // Find matching results from the DB
-    const results = await this.records.find(query).project({ txid: 1, outputIndex: 1 }).toArray()
+    let cursor = this.records.find(query).project({ txid: 1, outputIndex: 1 })
+    if (typeof limit === 'number' && limit > 0) {
+      cursor = cursor.limit(limit)
+    }
+    if (typeof offset === 'number' && offset >= 0) {
+      cursor = cursor.skip(offset)
+    }
+    const results = await cursor.toArray()
 
     // Convert array of Documents to UTXOReferences
     const parsedResults: UTXOReference[] = results.map(record => ({
