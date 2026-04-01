@@ -168,7 +168,6 @@ export class WalletRelayService {
     const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true })
     const uri = buildPairingUri({
       sessionId: session.id,
-      relayURL: this.relayUrl,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: this.origin,
@@ -177,10 +176,10 @@ export class WalletRelayService {
     return { sessionId: session.id, status: session.status, qrDataUrl, pairingUri: uri, desktopToken: session.desktopToken }
   }
 
-  /** Return session status, or null if not found. */
-  getSession(id: string): { sessionId: string; status: string } | null {
+  /** Return session status and relay URL, or null if not found. */
+  getSession(id: string): { sessionId: string; status: string; relay: string } | null {
     const s = this.sessions.getSession(id)
-    return s ? { sessionId: s.id, status: s.status } : null
+    return s ? { sessionId: s.id, status: s.status, relay: this.relayUrl } : null
   }
 
   /**

@@ -56,6 +56,8 @@ async function pairMobile(
 
   if (onRequest) session.onRequest(onRequest)
 
+  await session.resolveRelay()
+
   await new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('pairMobile timed out')), 5000)
     session

@@ -62,7 +62,6 @@ export interface SessionInfo {
 /** Parameters encoded in a wallet://pair?… QR code. */
 export interface PairingParams {
   topic: string
-  relay: string
   backendIdentityKey: string
   protocolID: string  // JSON-encoded [number, string] tuple
   keyID: string       // must equal topic

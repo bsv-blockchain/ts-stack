@@ -84,6 +84,7 @@ export class WalletPairingSession {
   private _status: PairingSessionStatus = 'idle'
   private connected = false
   private _lastSeq = 0
+  private _resolvedRelay: string | null = null
   private protocolID: WalletProtocol
   private mobileIdentityKey: string | null = null
   private requestHandler: RequestHandler | null = null
@@ -139,8 +140,39 @@ export class WalletPairingSession {
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-  /** Open the WS connection and start a fresh pairing handshake. */
+  /**
+   * Fetch the relay WebSocket URL from the origin server.
+   *
+   * Must be called before `connect()`. Returns the relay URL so the app can
+   * display it to the user for approval before proceeding.
+   *
+   * The fetch goes to `params.origin` over HTTPS — the origin's TLS certificate
+   * is the trust anchor. Always show `params.origin` to the user before calling
+   * this method so they can confirm they are connecting to the intended service.
+   *
+   * ```ts
+   * const { params } = parsePairingUri(qrString)
+   * // Show params.origin to the user and wait for approval, then:
+   * const relay = await session.resolveRelay()
+   * // Optionally show relay to the user, then:
+   * await session.connect()
+   * ```
+   */
+  async resolveRelay(): Promise<string> {
+    const res = await fetch(`${this.params.origin}/api/session/${this.params.topic}`)
+    if (!res.ok) throw new Error(`Failed to resolve relay from origin: HTTP ${res.status}`)
+    const data = await res.json() as { relay?: string; status?: string }
+    if (!data.relay) throw new Error('Origin server did not return a relay URL')
+    this._resolvedRelay = data.relay
+    return data.relay
+  }
+
+  /**
+   * Open the WebSocket connection and start a fresh pairing handshake.
+   * Requires `resolveRelay()` to have been called first.
+   */
   async connect(): Promise<void> {
+    if (!this._resolvedRelay) throw new Error('Call resolveRelay() before connect()')
     await this.openConnection(0)
   }
 
@@ -148,10 +180,12 @@ export class WalletPairingSession {
    * Re-open the WS connection using a stored seq baseline.
    * Replay protection resumes from `lastSeq` — messages with seq ≤ lastSeq are dropped.
    * Use this after a network drop when the session is still valid on the backend.
+   * Requires `resolveRelay()` to have been called (relay URL is retained between calls).
    *
    * @param lastSeq - The highest seq received in the previous connection (from persistent storage).
    */
   async reconnect(lastSeq: number): Promise<void> {
+    if (!this._resolvedRelay) throw new Error('Call resolveRelay() before reconnect()')
     await this.openConnection(lastSeq)
   }
 
@@ -169,10 +203,10 @@ export class WalletPairingSession {
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true })
     this.mobileIdentityKey = publicKey
 
-    const { topic, relay, backendIdentityKey, keyID } = this.params
+    const { topic, backendIdentityKey, keyID } = this.params
     const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID, counterparty: backendIdentityKey }
 
-    const ws = new WebSocket(`${relay}/ws?topic=${topic}&role=mobile`)
+    const ws = new WebSocket(`${this._resolvedRelay}/ws?topic=${topic}&role=mobile`)
     this.ws = ws
 
     ws.onopen = async () => {

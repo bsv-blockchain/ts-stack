@@ -7,7 +7,6 @@ const BACKEND_KEY = PrivateKey.fromRandom().toPublicKey().toString()
 
 const VALID_BUILD_PARAMS = {
   sessionId: 'session-abc-123',
-  relayURL: 'wss://app.example.com',   // hostname must match origin for wss:// (M1)
   backendIdentityKey: BACKEND_KEY,
   protocolID: JSON.stringify(PROTOCOL_ID),
   origin: 'https://app.example.com',
@@ -24,10 +23,14 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
     const p = result.params!
     expect(p.topic).toBe('session-abc-123')
     expect(p.keyID).toBe('session-abc-123')  // keyID must equal topic
-    expect(p.relay).toBe('wss://app.example.com')
     expect(p.backendIdentityKey).toBe(BACKEND_KEY)
     expect(p.origin).toBe('https://app.example.com')
     expect(JSON.parse(p.protocolID)).toEqual(PROTOCOL_ID)
+  })
+
+  it('relay URL is not embedded in the URI', () => {
+    const uri = buildPairingUri(VALID_BUILD_PARAMS)
+    expect(uri).not.toContain('relay=')
   })
 
   it('expiry is in the future for a freshly built URI', () => {
@@ -58,7 +61,7 @@ describe('parsePairingUri validation', () => {
 
   it('rejects a URI with missing required fields', () => {
     // Missing backendIdentityKey
-    const uri = 'wallet://pair?topic=abc&relay=wss://relay.example.com'
+    const uri = 'wallet://pair?topic=abc&origin=https://app.example.com'
     const result = parsePairingUri(uri)
     expect(result.error).toBeTruthy()
   })
@@ -66,7 +69,6 @@ describe('parsePairingUri validation', () => {
   it('rejects an expired QR code', () => {
     const p = new URLSearchParams({
       topic: 'x',
-      relay: 'wss://relay.example.com',
       backendIdentityKey: BACKEND_KEY,
       protocolID: JSON.stringify(PROTOCOL_ID),
       keyID: 'x',
@@ -77,40 +79,13 @@ describe('parsePairingUri validation', () => {
     expect(result.error).toMatch(/expired/i)
   })
 
-  it('rejects a relay without ws:// or wss:// scheme', () => {
-    const uri = buildPairingUri({ ...VALID_BUILD_PARAMS, relayURL: 'https://relay.example.com' })
-    const result = parsePairingUri(uri)
-    expect(result.error).toMatch(/ws:\/\//i)
-  })
-
-  it('rejects wss:// relay whose hostname differs from origin (M1 check)', () => {
-    const uri = buildPairingUri({
-      ...VALID_BUILD_PARAMS,
-      relayURL: 'wss://evil-relay.attacker.com',
-      origin: 'https://app.example.com',
-    })
-    const result = parsePairingUri(uri)
-    expect(result.error).toMatch(/relay host/i)
-  })
-
-  it('allows ws:// relay with a different hostname (local dev exempt from M1)', () => {
-    const uri = buildPairingUri({
-      ...VALID_BUILD_PARAMS,
-      relayURL: 'ws://localhost:3000',
-      origin: 'http://localhost:5173',
-    })
-    const result = parsePairingUri(uri)
-    expect(result.error).toBeNull()
-  })
-
   it('rejects a malformed backendIdentityKey', () => {
     const p = new URLSearchParams({
       topic: 'x',
-      relay: 'wss://relay.example.com',
       backendIdentityKey: 'not-a-pubkey',
       protocolID: JSON.stringify(PROTOCOL_ID),
       keyID: 'x',
-      origin: 'https://relay.example.com',
+      origin: 'https://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) + 120),
     })
     const result = parsePairingUri(`wallet://pair?${p}`)
@@ -120,14 +95,26 @@ describe('parsePairingUri validation', () => {
   it('rejects keyID that does not match topic', () => {
     const p = new URLSearchParams({
       topic: 'session-1',
-      relay: 'wss://relay.example.com',
       backendIdentityKey: BACKEND_KEY,
       protocolID: JSON.stringify(PROTOCOL_ID),
       keyID: 'session-2',  // mismatch
-      origin: 'https://relay.example.com',
+      origin: 'https://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) + 120),
     })
     const result = parsePairingUri(`wallet://pair?${p}`)
     expect(result.error).toMatch(/keyID/i)
+  })
+
+  it('rejects an origin that is not http:// or https://', () => {
+    const p = new URLSearchParams({
+      topic: 'x',
+      backendIdentityKey: BACKEND_KEY,
+      protocolID: JSON.stringify(PROTOCOL_ID),
+      keyID: 'x',
+      origin: 'ftp://app.example.com',
+      expiry: String(Math.floor(Date.now() / 1000) + 120),
+    })
+    const result = parsePairingUri(`wallet://pair?${p}`)
+    expect(result.error).toMatch(/origin/i)
   })
 })
