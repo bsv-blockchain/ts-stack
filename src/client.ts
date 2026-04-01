@@ -12,8 +12,8 @@ export type {
   WalletPairingSessionOptions,
 } from './client/WalletPairingSession.js'
 
-export { WalletRelayClient } from './client/WalletRelayClient.js'
-export type { WalletRelayClientOptions } from './client/WalletRelayClient.js'
+export { WalletRelayClient, WalletRelayError } from './client/WalletRelayClient.js'
+export type { WalletRelayClientOptions, WalletRelayErrorCode } from './client/WalletRelayClient.js'
 
 // ── Shared utilities ──────────────────────────────────────────────────────────
 

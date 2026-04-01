@@ -13,12 +13,53 @@ export interface WalletRelayClientOptions {
   pollInterval?: number
   /** Session status polling interval in ms once the mobile is connected. Default: 10000 */
   connectedPollInterval?: number
+  /**
+   * Persist the active session to sessionStorage so a page refresh resumes the
+   * existing session rather than creating a new one. Default: true.
+   * Disable if you want every mount to start a fresh session.
+   */
+  persistSession?: boolean
+  /**
+   * sessionStorage key used to store the session. Defaults to a key namespaced
+   * by apiUrl so multiple relay instances on the same page don't collide.
+   */
+  sessionStorageKey?: string
+  /**
+   * How long a persisted session is considered resumable (ms). After this
+   * the stored entry is discarded without a network request. Default: 86400000 (24 h).
+   * The server is still the authority — an expired server session is detected on
+   * the first poll and cleared regardless of this value.
+   */
+  sessionStorageTtl?: number
   /** Called whenever the session state changes (including on creation). */
   onSessionChange?: (session: SessionInfo) => void
   /** Called when the request log changes. */
   onLogChange?: (log: RequestLogEntry[]) => void
   /** Called when an error occurs during session creation. */
   onError?: (error: string) => void
+}
+
+export type WalletRelayErrorCode =
+  | 'SESSION_NOT_CONNECTED'  // no active session or session not in connected state
+  | 'REQUEST_TIMEOUT'        // mobile did not respond within 30 s
+  | 'SESSION_DISCONNECTED'   // mobile dropped while the request was in-flight
+  | 'INVALID_TOKEN'          // desktopToken mismatch — likely a client config issue
+  | 'NETWORK_ERROR'          // fetch failed or unexpected HTTP error
+
+export class WalletRelayError extends Error {
+  constructor(message: string, public readonly code: WalletRelayErrorCode) {
+    super(message)
+    this.name = 'WalletRelayError'
+  }
+}
+
+interface PersistedSession {
+  sessionId:    string
+  desktopToken: string
+  qrDataUrl?:   string
+  pairingUri?:  string
+  status:       string
+  savedAt:      number
 }
 
 /**
@@ -42,6 +83,9 @@ export class WalletRelayClient {
   private readonly _apiUrl: string
   private readonly _pollInterval: number
   private readonly _connectedPollInterval: number
+  private readonly _persistSession: boolean
+  private readonly _storageKey: string
+  private readonly _sessionStorageTtl: number
   private readonly _onSessionChange?: (session: SessionInfo) => void
   private readonly _onLogChange?: (log: RequestLogEntry[]) => void
   private readonly _onError?: (error: string) => void
@@ -59,6 +103,9 @@ export class WalletRelayClient {
     this._apiUrl = raw.endsWith('/api') ? raw : `${raw}/api`
     this._pollInterval = options?.pollInterval ?? 3000
     this._connectedPollInterval = options?.connectedPollInterval ?? 10000
+    this._persistSession = options?.persistSession ?? true
+    this._storageKey = options?.sessionStorageKey ?? `wallet-relay-session:${this._apiUrl}`
+    this._sessionStorageTtl = options?.sessionStorageTtl ?? 24 * 60 * 60 * 1000
     this._onSessionChange = options?.onSessionChange
     this._onLogChange = options?.onLogChange
     this._onError = options?.onError
@@ -98,6 +145,38 @@ export class WalletRelayClient {
   }
 
   /**
+   * Attempt to resume a previously persisted session from sessionStorage.
+   * Verifies the session is still alive on the server and restarts polling.
+   * Returns the resumed SessionInfo, or null if nothing to resume or session expired.
+   *
+   * Call this before `createSession()` when you want to survive page refreshes:
+   * ```ts
+   * const session = await client.resumeSession() ?? await client.createSession()
+   * ```
+   */
+  async resumeSession(): Promise<SessionInfo | null> {
+    const stored = this._loadFromStorage()
+    if (!stored) return null
+
+    try {
+      const res = await fetch(`${this._apiUrl}/session/${stored.sessionId}`)
+      if (!res.ok) { this._clearStorage(); return null }
+      const data = (await res.json()) as SessionInfo
+      if (data.status === 'expired') { this._clearStorage(); return null }
+
+      this._desktopToken = stored.desktopToken
+      // Merge stored QR data (not returned by status polls) back into session
+      const session: SessionInfo = { ...data, qrDataUrl: stored.qrDataUrl, pairingUri: stored.pairingUri }
+      this._setSession(session)
+      const interval = data.status === 'connected' ? this._connectedPollInterval : this._pollInterval
+      this._startPolling(stored.sessionId, interval)
+      return session
+    } catch {
+      return null
+    }
+  }
+
+  /**
    * Create a new pairing session and start polling for status changes.
    * Any previously active poll loop is stopped and replaced.
    */
@@ -106,6 +185,7 @@ export class WalletRelayClient {
     this._expiredCount = 0
     this._error = null
     this._desktopToken = null
+    this._clearStorage()
 
     try {
       const res = await fetch(`${this._apiUrl}/session`)
@@ -129,7 +209,7 @@ export class WalletRelayClient {
    * Throws if there is no active session.
    */
   async sendRequest(method: WalletMethodName, params: unknown = {}): Promise<WalletResponse> {
-    if (!this._session) throw new Error('No active session')
+    if (!this._session) throw new WalletRelayError('No active session', 'SESSION_NOT_CONNECTED')
 
     const requestId = crypto.randomUUID()
     const request: WalletRequest = { requestId, method, params, timestamp: Date.now() }
@@ -143,7 +223,20 @@ export class WalletRelayClient {
         headers,
         body:    JSON.stringify({ method, params }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        const msg = body.error ?? `HTTP ${res.status}`
+        let code: WalletRelayErrorCode
+        switch (res.status) {
+          case 401:  code = 'INVALID_TOKEN'; break
+          case 400:  code = 'SESSION_NOT_CONNECTED'; break
+          case 504:  code = msg.toLowerCase().includes('disconnect') ? 'SESSION_DISCONNECTED' : 'REQUEST_TIMEOUT'; break
+          default:   code = 'NETWORK_ERROR'
+        }
+        throw new WalletRelayError(msg, code)
+      }
+
       const rpc = (await res.json()) as { result?: unknown; error?: { code: number; message: string } }
       const response: WalletResponse = {
         requestId,
@@ -154,14 +247,15 @@ export class WalletRelayClient {
       this._resolveLogEntry(requestId, response)
       return response
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Request failed'
-      const response: WalletResponse = {
+      const relayErr = err instanceof WalletRelayError
+        ? err
+        : new WalletRelayError(err instanceof Error ? err.message : 'Request failed', 'NETWORK_ERROR')
+      this._resolveLogEntry(requestId, {
         requestId,
-        error: { code: 500, message: msg },
+        error:     { code: 500, message: relayErr.message },
         timestamp: Date.now(),
-      }
-      this._resolveLogEntry(requestId, response)
-      throw new Error(msg)
+      })
+      throw relayErr
     }
   }
 
@@ -184,7 +278,7 @@ export class WalletRelayClient {
         const updated = (await res.json()) as SessionInfo
         this._setSession({ ...this._session!, ...updated })
         if (updated.status === 'expired') {
-          if (++this._expiredCount >= 2) this._stopPolling()
+          if (++this._expiredCount >= 2) { this._stopPolling(); this._clearStorage() }
         } else {
           this._expiredCount = 0
           // Slow down once connected; speed back up if mobile disconnects
@@ -211,7 +305,40 @@ export class WalletRelayClient {
 
   private _setSession(session: SessionInfo): void {
     this._session = session
+    this._saveToStorage()
     this._onSessionChange?.(session)
+  }
+
+  private _saveToStorage(): void {
+    if (!this._persistSession || !this._session) return
+    try {
+      const entry: PersistedSession = {
+        sessionId:    this._session.sessionId,
+        desktopToken: this._desktopToken ?? '',
+        qrDataUrl:    this._session.qrDataUrl,
+        pairingUri:   this._session.pairingUri,
+        status:       this._session.status,
+        savedAt:      Date.now(),
+      }
+      sessionStorage.setItem(this._storageKey, JSON.stringify(entry))
+    } catch { /* SSR or storage unavailable */ }
+  }
+
+  private _clearStorage(): void {
+    try { sessionStorage.removeItem(this._storageKey) } catch {}
+  }
+
+  private _loadFromStorage(): PersistedSession | null {
+    try {
+      const raw = sessionStorage.getItem(this._storageKey)
+      if (!raw) return null
+      const entry = JSON.parse(raw) as PersistedSession
+      if (Date.now() - entry.savedAt > this._sessionStorageTtl) {
+        this._clearStorage()
+        return null
+      }
+      return entry
+    } catch { return null }
   }
 
   private _addLogEntry(entry: RequestLogEntry): void {

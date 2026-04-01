@@ -197,9 +197,17 @@ export function App() {
 
 ### Next.js setup
 
-> **Serverless / edge deployments (Vercel, Netlify, Lambda) are not supported.** The WebSocket relay requires a persistent Node.js process — it cannot run in a stateless function environment. You need a long-lived server (a VPS, a container, or a self-hosted Next.js deployment with a custom server).
+**Which deployment model are you using?**
 
-The WebSocket endpoint (`/ws`) cannot be attached to Next.js's internal HTTP server from inside an API route — you must use a **custom server** so you control the underlying `http.Server` instance. The REST routes (`/api/session`, `/api/session/:id`, `/api/request/:id`) are handled by normal Next.js API routes that call `relay` methods directly.
+| Deployment | Supported | Notes |
+|---|---|---|
+| Self-hosted / VPS / container | ✓ | Use the custom server below |
+| Vercel (serverless) | ✗ | WebSockets require a persistent process — see note below |
+| Netlify / Lambda / edge | ✗ | Same constraint |
+
+> **Vercel and other serverless platforms cannot host the WebSocket relay.** The `/ws` endpoint requires a persistent Node.js process. Serverless functions are stateless and terminated after each response — there is no way to hold a WebSocket connection open. If you are deploying to Vercel, run the relay as a separate small service (a VPS, Railway, Render, or Fly.io instance) and point `RELAY_URL` at it. Your Next.js app handles only the REST routes as a thin proxy.
+
+For self-hosted Next.js, you must use a **custom server** so you control the underlying `http.Server` instance. The WebSocket endpoint attaches there. The REST routes (`/api/session`, `/api/session/:id`, `/api/request/:id`) are handled by normal Next.js API routes that call `relay` methods directly.
 
 **Step 1 — custom server** (create `server.ts` at the project root, then update `package.json` to run it instead of `next start`):
 

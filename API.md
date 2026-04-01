@@ -46,11 +46,14 @@ new WalletRelayService(options: WalletRelayServiceOptions)
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `app` | `Express` | No | — | Express application instance. REST routes are registered on it. Omit when using Next.js or another framework — call `createSession()`, `getSession()`, and `sendRequest()` from your own route handlers instead. |
+| `app` | `RouterLike` | No | — | Express-compatible app with `get` and `post` methods. REST routes are registered on it. Omit when using Next.js or another framework — call `createSession()`, `getSession()`, and `sendRequest()` from your own route handlers instead. Uses a structural duck-type to avoid nominal type conflicts in monorepos. |
 | `server` | `http.Server` | **Yes** | — | HTTP server. The WebSocket upgrade handler is attached here. |
 | `wallet` | `WalletLike` | **Yes** | — | Backend wallet for encrypting/decrypting messages. Use `ProtoWallet` with a stable private key: `new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))`. The same key must be used across restarts — the mobile derives its ECDH shared secret from the backend identity key embedded in the QR code. |
 | `relayUrl` | `string` | No | `process.env.RELAY_URL` → `ws://localhost:3000` | `ws://` or `wss://` base URL of this server. Embedded in the QR pairing URI so the mobile knows where to connect. |
 | `origin` | `string` | No | `process.env.ORIGIN` → `http://localhost:5173` | `http://` or `https://` URL of the desktop frontend. Used as CORS origin and embedded in the pairing URI. |
+| `maxSessions` | `number` | No | unlimited | Maximum number of sessions held in memory at once. `GET /api/session` returns HTTP 429 when the limit is reached. |
+| `onSessionConnected` | `(sessionId: string) => void` | No | — | Called when a mobile completes pairing and the session transitions to `'connected'`. |
+| `onSessionDisconnected` | `(sessionId: string) => void` | No | — | Called when a connected mobile disconnects and the session transitions to `'disconnected'`. |
 
 #### Methods
 
@@ -85,10 +88,10 @@ Returns the current status of a session, or `null` if the session does not exist
 **`sendRequest(sessionId, method, params)`**
 
 ```ts
-sendRequest(sessionId: string, method: string, params: unknown): Promise<RpcResponse>
+sendRequest(sessionId: string, method: string, params: unknown, desktopToken?: string): Promise<RpcResponse>
 ```
 
-Encrypts an RPC call, sends it to the paired mobile wallet over WebSocket, and waits for the response. Rejects with an error after 30 seconds if no response arrives. Returns early with an error response if the session is not in `'connected'` state.
+Encrypts an RPC call, sends it to the paired mobile wallet over WebSocket, and waits for the response. Rejects with an error after 30 seconds if no response arrives. Throws if the session is not in `'connected'` state or if `desktopToken` does not match the token issued at session creation.
 
 ---
 
@@ -136,8 +139,12 @@ new WalletRelayClient(options?: WalletRelayClientOptions)
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `apiUrl` | `string` | `'/api'` | Base URL for the relay HTTP API. Override when the backend is on a different origin: `'https://api.example.com'`. |
-| `pollInterval` | `number` | `3000` | Session status polling interval in ms. |
+| `apiUrl` | `string` | `'/api'` | Base URL for the relay HTTP API. Can be the bare host (`'https://api.example.com'`) or include the `/api` suffix — `/api` is appended automatically if missing. |
+| `pollInterval` | `number` | `3000` | Session status polling interval in ms while waiting for the mobile to connect. |
+| `connectedPollInterval` | `number` | `10000` | Session status polling interval in ms once the mobile is connected. Reduced frequency since the session is stable — polling continues to detect reconnects after a mobile disconnect. |
+| `persistSession` | `boolean` | `true` | Persist the active session to `sessionStorage` so a page refresh resumes the existing session. Disable if you want every mount to start fresh. |
+| `sessionStorageKey` | `string` | `'wallet-relay-session:<apiUrl>'` | Key used in `sessionStorage`. Namespaced by `apiUrl` by default — override if you need multiple relay instances on the same page. |
+| `sessionStorageTtl` | `number` | `86400000` (24 h) | Max age (ms) of a persisted session before it is discarded without a network request. The server is still the authority — an expired server session is detected on the first poll and cleared regardless. |
 | `onSessionChange` | `(session: SessionInfo) => void` | — | Called on session creation and on every poll that returns a new value. The `qrDataUrl` and `pairingUri` from the initial creation are merged into every subsequent poll response, so they remain available throughout the session lifecycle. |
 | `onLogChange` | `(log: RequestLogEntry[]) => void` | — | Called whenever the request log changes — when a request is added or a response arrives. |
 | `onError` | `(error: string) => void` | — | Called when `createSession()` fails. |
@@ -149,8 +156,27 @@ new WalletRelayClient(options?: WalletRelayClientOptions)
 | `session` | `SessionInfo \| null` | Current session state, or `null` before `createSession()` is called. |
 | `log` | `RequestLogEntry[]` | Request log, newest first. |
 | `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
+| `wallet` | `Pick<WalletInterface, WalletMethodName> \| null` | `WalletInterface`-compatible proxy when `session.status === 'connected'`, otherwise `null`. Each method forwards to `sendRequest` and throws on error — use as a drop-in replacement for `WalletClient` at existing call sites. See [wallet proxy](#wallet-proxy). |
 
 #### Methods
+
+**`resumeSession()`**
+
+```ts
+resumeSession(): Promise<SessionInfo | null>
+```
+
+Attempts to resume a previously persisted session from `sessionStorage`. Verifies the session is still alive on the server and restarts polling. Returns the resumed `SessionInfo`, or `null` if there is nothing to resume or the session has expired on the server (in which case storage is cleared).
+
+Use before `createSession()` when you want page refreshes to survive:
+
+```ts
+const session = await client.resumeSession() ?? await client.createSession()
+```
+
+When using `useWalletRelayClient` with `autoCreate: true` (the default), `resumeSession` is called automatically on mount before falling back to `createSession`.
+
+---
 
 **`createSession()`**
 
@@ -158,7 +184,7 @@ new WalletRelayClient(options?: WalletRelayClientOptions)
 createSession(): Promise<SessionInfo>
 ```
 
-Creates a new backend session and starts polling for status changes. Any previously running poll is stopped first. Resolves with the new `SessionInfo` (including `qrDataUrl` and `pairingUri`). Throws on HTTP or network failure.
+Creates a new backend session and starts polling for status changes. Any previously running poll is stopped first and any persisted session is cleared. Resolves with the new `SessionInfo` (including `qrDataUrl` and `pairingUri`). Throws on HTTP or network failure.
 
 ---
 
@@ -168,7 +194,28 @@ Creates a new backend session and starts polling for status changes. Any previou
 sendRequest(method: string, params?: unknown): Promise<WalletResponse>
 ```
 
-Sends an RPC request to the paired mobile wallet. Adds a pending entry to the log immediately and resolves it when the response arrives. Throws if there is no active session or if the HTTP request fails.
+Sends an RPC request to the paired mobile wallet. Adds a pending entry to the log immediately and resolves it when the response arrives.
+
+Throws a [`WalletRelayError`](#walletrelayerror) on failure — catch it and check `.code` to distinguish error types:
+
+```ts
+import { WalletRelayError } from '@bsv/qr-lib/client'
+
+try {
+  const res = await client.sendRequest('getPublicKey', { identityKey: true })
+  console.log(res.result)
+} catch (err) {
+  if (err instanceof WalletRelayError) {
+    switch (err.code) {
+      case 'SESSION_NOT_CONNECTED': // no active session or session not paired yet
+      case 'REQUEST_TIMEOUT':       // mobile did not respond within 30 s
+      case 'SESSION_DISCONNECTED':  // mobile dropped while the request was in-flight
+      case 'INVALID_TOKEN':         // desktopToken mismatch — likely a config issue
+      case 'NETWORK_ERROR':         // fetch failed or unexpected HTTP error
+    }
+  }
+}
+```
 
 ---
 
@@ -179,6 +226,51 @@ destroy(): void
 ```
 
 Stops the polling interval. Call on component unmount or teardown.
+
+---
+
+#### WalletRelayError
+
+```ts
+import { WalletRelayError, WalletRelayErrorCode } from '@bsv/qr-lib/client'
+```
+
+Typed error thrown by `sendRequest()`. Extends `Error` with a `code` discriminant.
+
+```ts
+class WalletRelayError extends Error {
+  readonly code: WalletRelayErrorCode
+}
+
+type WalletRelayErrorCode =
+  | 'SESSION_NOT_CONNECTED'  // no active session or session not yet in connected state
+  | 'REQUEST_TIMEOUT'        // mobile did not respond within 30 s
+  | 'SESSION_DISCONNECTED'   // mobile dropped while the request was in-flight
+  | 'INVALID_TOKEN'          // desktopToken mismatch — likely a client config issue
+  | 'NETWORK_ERROR'          // fetch failed or unexpected HTTP status
+```
+
+Use `err instanceof WalletRelayError` to type-narrow, then `err.code` to branch on the failure mode.
+
+---
+
+#### Wallet proxy
+
+`WalletRelayClient.wallet` returns a `Pick<WalletInterface, WalletMethodName>` proxy built from the full list of relay-supported methods. Each method has the exact same signature as `WalletClient` — params pass through unchanged and the return value is the unwrapped result.
+
+This means you can swap `WalletClient` for the relay proxy at your existing wallet context without touching any call sites:
+
+```ts
+// Before (local WalletClient):
+const { txid } = await wallet.createAction({ description: 'Pay invoice', outputs: [...] })
+
+// After (mobile relay proxy — identical):
+const { txid } = await wallet.createAction({ description: 'Pay invoice', outputs: [...] })
+```
+
+Errors throw as normal `Error` objects with a `.code` property matching the mobile wallet's error code.
+
+The proxy is `null` when the session is not connected and is lazily constructed on first access. Supported methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `verifySignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`, `createHmac`, `verifyHmac`, `encrypt`, `decrypt`.
 
 ---
 
@@ -216,7 +308,7 @@ new WalletPairingSession(
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `implementedMethods` | `Set<string>` | `DEFAULT_IMPLEMENTED_METHODS` | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`. |
+| `implementedMethods` | `Set<string>` | `DEFAULT_IMPLEMENTED_METHODS` | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `listCertificates`, `createAction`, `signAction`, `createSignature`, `verifySignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`, `createHmac`, `verifyHmac`, `encrypt`, `decrypt`. |
 | `autoApproveMethods` | `Set<string>` | `DEFAULT_AUTO_APPROVE_METHODS` | Subset of `implementedMethods` executed without calling `onApprovalRequired`. Defaults to `{ 'getPublicKey' }`. |
 | `onApprovalRequired` | `(method, params) => Promise<boolean>` | `undefined` | Called for every implemented method not in `autoApproveMethods`. Return `true` to approve, `false` to send a `4001 User Rejected` response. If omitted, all implemented methods are auto-approved. |
 | `walletMeta` | `Record<string, unknown>` | `{}` | Additional metadata sent inside the `pairing_approved` payload. Useful for identifying the wallet on the desktop side (e.g. `{ name, version }`). |
@@ -328,9 +420,13 @@ All options are optional.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `apiUrl` | `string` | `'/api'` | Backend base URL. |
-| `pollInterval` | `number` | `3000` | Status polling interval in ms. |
-| `autoCreate` | `boolean` | `true` | When `true`, `createSession()` is called automatically on mount. Set to `false` to control timing manually — for example, only when the user explicitly chooses the mobile pairing path. |
+| `apiUrl` | `string` | `'/api'` | Backend base URL. `/api` is appended automatically if missing. |
+| `pollInterval` | `number` | `3000` | Status polling interval in ms while waiting for mobile to connect. |
+| `connectedPollInterval` | `number` | `10000` | Status polling interval in ms once connected. |
+| `persistSession` | `boolean` | `true` | Persist session to `sessionStorage` for page-refresh survival. |
+| `sessionStorageKey` | `string` | `'wallet-relay-session:<apiUrl>'` | Override the storage key. |
+| `sessionStorageTtl` | `number` | `86400000` | Max age (ms) before a persisted session is discarded client-side. |
+| `autoCreate` | `boolean` | `true` | When `true`, `resumeSession()` is tried on mount, falling back to `createSession()` if nothing to resume. Set to `false` to control timing manually. |
 
 #### Return value
 
@@ -341,6 +437,7 @@ All options are optional.
 | `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
 | `createSession` | `() => Promise<SessionInfo>` | Create a new session and restart polling. Safe to call multiple times — replaces the existing session. |
 | `sendRequest` | `(method: string, params?: unknown) => Promise<WalletResponse>` | Send an RPC call to the paired mobile. Throws if no session is active. |
+| `wallet` | `Pick<WalletInterface, WalletMethodName> \| null` | Drop-in `WalletInterface` proxy when connected, `null` otherwise. See [wallet proxy](#wallet-proxy). |
 
 React StrictMode safe — an internal ref guard prevents double session creation on the simulated unmount/remount cycle.
 
@@ -706,8 +803,12 @@ In-memory session store with automatic garbage collection.
 #### Constructor
 
 ```ts
-new QRSessionManager()
+new QRSessionManager(options?: { maxSessions?: number })
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxSessions` | `number` | unlimited | Maximum concurrent sessions. `createSession()` throws with a `429`-style error when the limit is reached. |
 
 #### Methods
 

@@ -40,11 +40,15 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   function ensureClient(): WalletRelayClient {
     if (!clientRef.current) {
       clientRef.current = new WalletRelayClient({
-        apiUrl:          options?.apiUrl,
-        pollInterval:    options?.pollInterval,
-        onSessionChange: setSession,
-        onLogChange:     setLog,
-        onError:         setError,
+        apiUrl:                options?.apiUrl,
+        pollInterval:          options?.pollInterval,
+        connectedPollInterval: options?.connectedPollInterval,
+        persistSession:        options?.persistSession,
+        sessionStorageKey:     options?.sessionStorageKey,
+        sessionStorageTtl:     options?.sessionStorageTtl,
+        onSessionChange:       setSession,
+        onLogChange:           setLog,
+        onError:               setError,
       })
     }
     return clientRef.current
@@ -65,7 +69,12 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
     if (options?.autoCreate === false) return
     if (createdRef.current) return
     createdRef.current = true
-    const timer = setTimeout(() => { void createSession() }, 0)
+    const timer = setTimeout(() => {
+      const client = ensureClient()
+      void client.resumeSession().then(resumed => {
+        if (!resumed) void createSession()
+      })
+    }, 0)
     return () => {
       clearTimeout(timer)
       createdRef.current = false
