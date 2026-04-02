@@ -116,13 +116,14 @@ describe('WalletRelayService E2E', () => {
       expect(body.status).toBe('pending')
     })
 
-    it('GET /api/session/:id returns the session status', async () => {
+    it('GET /api/session/:id returns the session status and relay URL', async () => {
       const created = await service.createSession()
       const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`)
       expect(res.ok).toBe(true)
-      const body = await res.json() as { sessionId: string; status: string }
+      const body = await res.json() as { sessionId: string; status: string; relay: string }
       expect(body.sessionId).toBe(created.sessionId)
       expect(body.status).toBe('pending')
+      expect(body.relay).toMatch(/^ws:\/\//)
     })
 
     it('GET /api/session/:id returns 404 for an unknown id', async () => {
@@ -150,6 +151,40 @@ describe('WalletRelayService E2E', () => {
         capped.stop()
         await stopServer(server)
       }
+    }, 10_000)
+  })
+
+  // ── resolveRelay ────────────────────────────────────────────────────────────
+
+  describe('resolveRelay', () => {
+    it('returns the relay URL from the origin server', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
+      const relay = await session.resolveRelay()
+      expect(relay).toMatch(/^ws:\/\//)
+    }, 10_000)
+
+    it('connect() throws if resolveRelay() was not called first', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
+      await expect(session.connect()).rejects.toThrow('resolveRelay()')
+    })
+
+    it('reconnect() throws if resolveRelay() was not called first', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
+      await expect(session.reconnect(0)).rejects.toThrow('resolveRelay()')
+    })
+
+    it('resolveRelay() throws when the origin returns 404', async () => {
+      const { params } = parsePairingUri(
+        `wallet://pair?topic=no-such-session&backendIdentityKey=${PrivateKey.fromRandom().toPublicKey()}&protocolID=%5B0%2C%22mobile+wallet+session%22%5D&keyID=no-such-session&origin=${encodeURIComponent(baseUrl)}&expiry=${Math.floor(Date.now() / 1000) + 120}`
+      )
+      const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
+      await expect(session.resolveRelay()).rejects.toThrow(/HTTP 404/)
     }, 10_000)
   })
 
