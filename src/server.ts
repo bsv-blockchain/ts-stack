@@ -5,6 +5,7 @@ export interface PaymentResult {
   accepted: boolean
   satoshisPaid: number
   senderIdentityKey: string
+  txid: string
 }
 
 export interface PaymentMiddlewareOptions {
@@ -73,7 +74,10 @@ export async function validatePayment(
   if (isNaN(timestamp) || Math.abs(Date.now() - timestamp) > paymentWindowMs) return null
 
   const beefArr = Utils.toArray(beef, 'base64')
-  Beef.fromBinary(beefArr) // validates structure
+  const beefObj = Beef.fromBinary(beefArr)
+  const lastTx = beefObj.txs.at(-1)
+  if (!lastTx?.tx) return null
+  const txid = lastTx.tx.id('hex')
 
   const result = await wallet.internalizeAction({
     tx: beefArr,
@@ -95,7 +99,8 @@ export async function validatePayment(
   return {
     accepted: true,
     satoshisPaid: 0, // actual amount is validated by the wallet during internalization
-    senderIdentityKey: sender
+    senderIdentityKey: sender,
+    txid
   }
 }
 
@@ -137,6 +142,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
       }
 
       req.payment = { ...result, satoshisPaid: price }
+      console.log(`Payment accepted: ${req.path} | ${price} sats | txid: ${result.txid}`)
       next()
     } catch {
       if (!identityKey) {
