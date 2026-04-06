@@ -173,14 +173,26 @@ function toAdminStatsLog(stats: AdminStatsLike): string {
   log += row('labels', stats.labelsDay, stats.labelsWeek, stats.labelsMonth, stats.labelsTotal)
   log += row('tags', stats.tagsDay, stats.tagsWeek, stats.tagsMonth, stats.tagsTotal)
   log += row('baskets', stats.basketsDay, stats.basketsWeek, stats.basketsMonth, stats.basketsTotal)
-  log += row('transactions', stats.transactionsDay, stats.transactionsWeek, stats.transactionsMonth, stats.transactionsTotal)
+  log += row(
+    'transactions',
+    stats.transactionsDay,
+    stats.transactionsWeek,
+    stats.transactionsMonth,
+    stats.transactionsTotal
+  )
   log += row('completed', stats.txCompletedDay, stats.txCompletedWeek, stats.txCompletedMonth, stats.txCompletedTotal)
   log += row('failed', stats.txFailedDay, stats.txFailedWeek, stats.txFailedMonth, stats.txFailedTotal)
   log += row('abandoned', stats.txAbandonedDay, stats.txAbandonedWeek, stats.txAbandonedMonth, stats.txAbandonedTotal)
   log += row('nosend', stats.txNosendDay, stats.txNosendWeek, stats.txNosendMonth, stats.txNosendTotal)
   log += row('unproven', stats.txUnprovenDay, stats.txUnprovenWeek, stats.txUnprovenMonth, stats.txUnprovenTotal)
   log += row('sending', stats.txSendingDay, stats.txSendingWeek, stats.txSendingMonth, stats.txSendingTotal)
-  log += row('unprocessed', stats.txUnprocessedDay, stats.txUnprocessedWeek, stats.txUnprocessedMonth, stats.txUnprocessedTotal)
+  log += row(
+    'unprocessed',
+    stats.txUnprocessedDay,
+    stats.txUnprocessedWeek,
+    stats.txUnprocessedMonth,
+    stats.txUnprocessedTotal
+  )
   log += row('unsigned', stats.txUnsignedDay, stats.txUnsignedWeek, stats.txUnsignedMonth, stats.txUnsignedTotal)
   log += row('nonfinal', stats.txNonfinalDay, stats.txNonfinalWeek, stats.txNonfinalMonth, stats.txNonfinalTotal)
   log += row('unfail', stats.txUnfailDay, stats.txUnfailWeek, stats.txUnfailMonth, stats.txUnfailTotal)
@@ -529,7 +541,10 @@ export class AdminServer {
 
     if (!this.context.authWallet || this.context.config.adminIdentityKeys.length === 0) {
       this.app.use((_req: any, res: any) => {
-        res.status(503).type('text/plain').send('Admin server requires ADMIN_IDENTITY_KEYS and a running monitor runtime.')
+        res
+          .status(503)
+          .type('text/plain')
+          .send('Admin server requires ADMIN_IDENTITY_KEYS and a running monitor runtime.')
       })
       return
     }

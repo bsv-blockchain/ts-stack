@@ -4746,6 +4746,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class Services implements WalletServices {
+    static readonly getStatusForTxidsBatchLimit = 20;
     static createDefaultOptions(chain: Chain): WalletServicesOptions 
     options: WalletServicesOptions;
     whatsonchain: WhatsOnChain;

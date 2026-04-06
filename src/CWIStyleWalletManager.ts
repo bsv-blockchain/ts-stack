@@ -1174,11 +1174,11 @@ export class CWIStyleWalletManager implements WalletInterface {
     if (this.authenticated) {
       throw new Error('Already authenticated')
     }
-    if (this.authenticationMode === 'presentation-key-and-password') {
-      throw new Error('No recovery key required in this mode')
-    }
     if (this.authenticationFlow === 'new-user' && this.authenticationMode !== 'recovery-key-and-password') {
       throw new Error('Do not submit recovery key in new-user flow')
+    }
+    if (this.authenticationMode === 'presentation-key-and-password') {
+      throw new Error('No recovery key required in this mode')
     }
 
     if (this.authenticationMode === 'recovery-key-and-password') {
