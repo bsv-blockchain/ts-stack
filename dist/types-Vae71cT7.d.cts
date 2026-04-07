@@ -45,10 +45,8 @@ interface SessionInfo {
 /** Parameters encoded in a wallet://pair?… QR code. */
 interface PairingParams {
     topic: string;
-    relay: string;
     backendIdentityKey: string;
     protocolID: string;
-    keyID: string;
     origin: string;
     expiry: string;
 }

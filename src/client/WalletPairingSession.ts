@@ -203,8 +203,8 @@ export class WalletPairingSession {
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true })
     this.mobileIdentityKey = publicKey
 
-    const { topic, backendIdentityKey, keyID } = this.params
-    const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID, counterparty: backendIdentityKey }
+    const { topic, backendIdentityKey } = this.params
+    const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID: topic, counterparty: backendIdentityKey }
 
     const ws = new WebSocket(`${this._resolvedRelay}/ws?topic=${topic}&role=mobile`)
     this.ws = ws
@@ -301,8 +301,8 @@ export class WalletPairingSession {
   }
 
   private async handleRpc(request: RpcRequest): Promise<void> {
-    const { topic, keyID, backendIdentityKey } = this.params
-    const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID, counterparty: backendIdentityKey }
+    const { topic, backendIdentityKey } = this.params
+    const cryptoParams: CryptoParams = { protocolID: this.protocolID, keyID: topic, counterparty: backendIdentityKey }
 
     const sendResponse = async (response: RpcResponse): Promise<void> => {
       const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, JSON.stringify(response))

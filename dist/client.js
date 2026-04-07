@@ -53,6 +53,7 @@ var WalletPairingSession = class {
     this._status = "idle";
     this.connected = false;
     this._lastSeq = 0;
+    this._resolvedRelay = null;
     this.mobileIdentityKey = null;
     this.requestHandler = null;
     this.listeners = { connected: [], disconnected: [], error: [] };
@@ -87,18 +88,50 @@ var WalletPairingSession = class {
     return this;
   }
   // ── Lifecycle ────────────────────────────────────────────────────────────────
-  /** Open the WS connection and start a fresh pairing handshake. */
+  /**
+   * Fetch the relay WebSocket URL from the origin server.
+   *
+   * Must be called before `connect()`. Returns the relay URL so the app can
+   * display it to the user for approval before proceeding.
+   *
+   * The fetch goes to `params.origin` over HTTPS — the origin's TLS certificate
+   * is the trust anchor. Always show `params.origin` to the user before calling
+   * this method so they can confirm they are connecting to the intended service.
+   *
+   * ```ts
+   * const { params } = parsePairingUri(qrString)
+   * // Show params.origin to the user and wait for approval, then:
+   * const relay = await session.resolveRelay()
+   * // Optionally show relay to the user, then:
+   * await session.connect()
+   * ```
+   */
+  async resolveRelay() {
+    const res = await fetch(`${this.params.origin}/api/session/${this.params.topic}`);
+    if (!res.ok) throw new Error(`Failed to resolve relay from origin: HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.relay) throw new Error("Origin server did not return a relay URL");
+    this._resolvedRelay = data.relay;
+    return data.relay;
+  }
+  /**
+   * Open the WebSocket connection and start a fresh pairing handshake.
+   * Requires `resolveRelay()` to have been called first.
+   */
   async connect() {
+    if (!this._resolvedRelay) throw new Error("Call resolveRelay() before connect()");
     await this.openConnection(0);
   }
   /**
    * Re-open the WS connection using a stored seq baseline.
    * Replay protection resumes from `lastSeq` — messages with seq ≤ lastSeq are dropped.
    * Use this after a network drop when the session is still valid on the backend.
+   * Requires `resolveRelay()` to have been called (relay URL is retained between calls).
    *
    * @param lastSeq - The highest seq received in the previous connection (from persistent storage).
    */
   async reconnect(lastSeq) {
+    if (!this._resolvedRelay) throw new Error("Call resolveRelay() before reconnect()");
     await this.openConnection(lastSeq);
   }
   /** Close the WebSocket connection. */
@@ -112,9 +145,9 @@ var WalletPairingSession = class {
     this._lastSeq = initialSeq;
     const { publicKey } = await this.wallet.getPublicKey({ identityKey: true });
     this.mobileIdentityKey = publicKey;
-    const { topic, relay, backendIdentityKey, keyID } = this.params;
-    const cryptoParams = { protocolID: this.protocolID, keyID, counterparty: backendIdentityKey };
-    const ws = new WebSocket(`${relay}/ws?topic=${topic}&role=mobile`);
+    const { topic, backendIdentityKey } = this.params;
+    const cryptoParams = { protocolID: this.protocolID, keyID: topic, counterparty: backendIdentityKey };
+    const ws = new WebSocket(`${this._resolvedRelay}/ws?topic=${topic}&role=mobile`);
     this.ws = ws;
     ws.onopen = async () => {
       try {
@@ -185,8 +218,8 @@ var WalletPairingSession = class {
     this.listeners.error.forEach((h) => h(msg));
   }
   async handleRpc(request) {
-    const { topic, keyID, backendIdentityKey } = this.params;
-    const cryptoParams = { protocolID: this.protocolID, keyID, counterparty: backendIdentityKey };
+    const { topic, backendIdentityKey } = this.params;
+    const cryptoParams = { protocolID: this.protocolID, keyID: topic, counterparty: backendIdentityKey };
     const sendResponse = async (response) => {
       const ciphertext = await encryptEnvelope(this.wallet, cryptoParams, JSON.stringify(response));
       this.ws?.send(JSON.stringify({ topic, ciphertext }));
@@ -254,6 +287,13 @@ var WALLET_METHOD_NAMES = [
 ];
 
 // src/client/WalletRelayClient.ts
+var WalletRelayError = class extends Error {
+  constructor(message, code) {
+    super(message);
+    this.code = code;
+    this.name = "WalletRelayError";
+  }
+};
 var WalletRelayClient = class {
   constructor(options) {
     this._session = null;
@@ -267,6 +307,9 @@ var WalletRelayClient = class {
     this._apiUrl = raw.endsWith("/api") ? raw : `${raw}/api`;
     this._pollInterval = options?.pollInterval ?? 3e3;
     this._connectedPollInterval = options?.connectedPollInterval ?? 1e4;
+    this._persistSession = options?.persistSession ?? true;
+    this._storageKey = options?.sessionStorageKey ?? `wallet-relay-session:${this._apiUrl}`;
+    this._sessionStorageTtl = options?.sessionStorageTtl ?? 24 * 60 * 60 * 1e3;
     this._onSessionChange = options?.onSessionChange;
     this._onLogChange = options?.onLogChange;
     this._onError = options?.onError;
@@ -308,6 +351,40 @@ var WalletRelayClient = class {
     return this._walletProxy;
   }
   /**
+   * Attempt to resume a previously persisted session from sessionStorage.
+   * Verifies the session is still alive on the server and restarts polling.
+   * Returns the resumed SessionInfo, or null if nothing to resume or session expired.
+   *
+   * Call this before `createSession()` when you want to survive page refreshes:
+   * ```ts
+   * const session = await client.resumeSession() ?? await client.createSession()
+   * ```
+   */
+  async resumeSession() {
+    const stored = this._loadFromStorage();
+    if (!stored) return null;
+    try {
+      const res = await fetch(`${this._apiUrl}/session/${stored.sessionId}`);
+      if (!res.ok) {
+        this._clearStorage();
+        return null;
+      }
+      const data = await res.json();
+      if (data.status === "expired") {
+        this._clearStorage();
+        return null;
+      }
+      this._desktopToken = stored.desktopToken;
+      const session = { ...data, qrDataUrl: stored.qrDataUrl, pairingUri: stored.pairingUri };
+      this._setSession(session);
+      const interval = data.status === "connected" ? this._connectedPollInterval : this._pollInterval;
+      this._startPolling(stored.sessionId, interval);
+      return session;
+    } catch {
+      return null;
+    }
+  }
+  /**
    * Create a new pairing session and start polling for status changes.
    * Any previously active poll loop is stopped and replaced.
    */
@@ -316,6 +393,7 @@ var WalletRelayClient = class {
     this._expiredCount = 0;
     this._error = null;
     this._desktopToken = null;
+    this._clearStorage();
     try {
       const res = await fetch(`${this._apiUrl}/session`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -337,7 +415,7 @@ var WalletRelayClient = class {
    * Throws if there is no active session.
    */
   async sendRequest(method, params = {}) {
-    if (!this._session) throw new Error("No active session");
+    if (!this._session) throw new WalletRelayError("No active session", "SESSION_NOT_CONNECTED");
     const requestId = crypto.randomUUID();
     const request = { requestId, method, params, timestamp: Date.now() };
     this._addLogEntry({ request, pending: true });
@@ -349,7 +427,25 @@ var WalletRelayClient = class {
         headers,
         body: JSON.stringify({ method, params })
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error ?? `HTTP ${res.status}`;
+        let code;
+        switch (res.status) {
+          case 401:
+            code = "INVALID_TOKEN";
+            break;
+          case 400:
+            code = "SESSION_NOT_CONNECTED";
+            break;
+          case 504:
+            code = msg.toLowerCase().includes("disconnect") ? "SESSION_DISCONNECTED" : "REQUEST_TIMEOUT";
+            break;
+          default:
+            code = "NETWORK_ERROR";
+        }
+        throw new WalletRelayError(msg, code);
+      }
       const rpc = await res.json();
       const response = {
         requestId,
@@ -360,14 +456,13 @@ var WalletRelayClient = class {
       this._resolveLogEntry(requestId, response);
       return response;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Request failed";
-      const response = {
+      const relayErr = err instanceof WalletRelayError ? err : new WalletRelayError(err instanceof Error ? err.message : "Request failed", "NETWORK_ERROR");
+      this._resolveLogEntry(requestId, {
         requestId,
-        error: { code: 500, message: msg },
+        error: { code: 500, message: relayErr.message },
         timestamp: Date.now()
-      };
-      this._resolveLogEntry(requestId, response);
-      throw new Error(msg);
+      });
+      throw relayErr;
     }
   }
   /** Stop polling and clean up resources. Call this on component unmount. */
@@ -385,7 +480,10 @@ var WalletRelayClient = class {
         const updated = await res.json();
         this._setSession({ ...this._session, ...updated });
         if (updated.status === "expired") {
-          if (++this._expiredCount >= 2) this._stopPolling();
+          if (++this._expiredCount >= 2) {
+            this._stopPolling();
+            this._clearStorage();
+          }
         } else {
           this._expiredCount = 0;
           if (updated.status === "connected" && prevStatus !== "connected") {
@@ -408,7 +506,43 @@ var WalletRelayClient = class {
   }
   _setSession(session) {
     this._session = session;
+    this._saveToStorage();
     this._onSessionChange?.(session);
+  }
+  _saveToStorage() {
+    if (!this._persistSession || !this._session) return;
+    try {
+      const entry = {
+        sessionId: this._session.sessionId,
+        desktopToken: this._desktopToken ?? "",
+        qrDataUrl: this._session.qrDataUrl,
+        pairingUri: this._session.pairingUri,
+        status: this._session.status,
+        savedAt: Date.now()
+      };
+      sessionStorage.setItem(this._storageKey, JSON.stringify(entry));
+    } catch {
+    }
+  }
+  _clearStorage() {
+    try {
+      sessionStorage.removeItem(this._storageKey);
+    } catch {
+    }
+  }
+  _loadFromStorage() {
+    try {
+      const raw = sessionStorage.getItem(this._storageKey);
+      if (!raw) return null;
+      const entry = JSON.parse(raw);
+      if (Date.now() - entry.savedAt > this._sessionStorageTtl) {
+        this._clearStorage();
+        return null;
+      }
+      return entry;
+    } catch {
+      return null;
+    }
   }
   _addLogEntry(entry) {
     this._log = [entry, ...this._log];
@@ -423,32 +557,22 @@ var WalletRelayClient = class {
 };
 
 // src/shared/pairingUri.ts
-function parsePairingUri(raw) {
+var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-wallet:"]);
+function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
   try {
     const url = new URL(raw);
-    if (url.protocol !== "wallet:") return { params: null, error: "Not a wallet:// URI" };
+    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: "Not a bsv-wallet:// URI" };
     const g = (k) => url.searchParams.get(k) ?? "";
     const topic = g("topic");
-    const relay = g("relay");
     const backendIdentityKey = g("backendIdentityKey");
     const protocolID = g("protocolID");
-    const keyID = g("keyID");
     const origin = g("origin");
     const expiry = g("expiry");
-    if (!topic || !relay || !backendIdentityKey || !protocolID || !keyID || !origin || !expiry) {
+    if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
       return { params: null, error: "QR code is missing required fields" };
     }
     if (Date.now() / 1e3 > Number(expiry)) {
       return { params: null, error: "This QR code has expired \u2014 ask the desktop to generate a new one" };
-    }
-    let relayUrl;
-    try {
-      relayUrl = new URL(relay);
-    } catch {
-      return { params: null, error: "Relay URL is not valid" };
-    }
-    if (relayUrl.protocol !== "ws:" && relayUrl.protocol !== "wss:") {
-      return { params: null, error: "Relay must use ws:// or wss://" };
     }
     let originUrl;
     try {
@@ -458,12 +582,6 @@ function parsePairingUri(raw) {
     }
     if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") {
       return { params: null, error: "Origin must use http:// or https://" };
-    }
-    if (relayUrl.protocol === "wss:" && relayUrl.hostname !== originUrl.hostname) {
-      return {
-        params: null,
-        error: `Relay host "${relayUrl.hostname}" doesn't match origin host "${originUrl.hostname}" \u2014 this QR may be malicious`
-      };
     }
     if (!/^0[23][0-9a-fA-F]{64}$/.test(backendIdentityKey)) {
       return { params: null, error: "Backend identity key is not a valid compressed public key" };
@@ -477,21 +595,20 @@ function parsePairingUri(raw) {
     if (!Array.isArray(proto) || proto.length !== 2 || typeof proto[0] !== "number" || typeof proto[1] !== "string") {
       return { params: null, error: "protocolID must be a [number, string] tuple" };
     }
-    if (keyID !== topic) {
-      return { params: null, error: "keyID must match topic \u2014 malformed QR code" };
-    }
-    return { params: { topic, relay, backendIdentityKey, protocolID, keyID, origin, expiry }, error: null };
+    return { params: { topic, backendIdentityKey, protocolID, origin, expiry }, error: null };
   } catch {
     return { params: null, error: "Could not read QR code" };
   }
 }
 export {
+  DEFAULT_ACCEPTED_SCHEMAS,
   DEFAULT_AUTO_APPROVE_METHODS,
   DEFAULT_IMPLEMENTED_METHODS,
   PROTOCOL_ID,
   WALLET_METHOD_NAMES,
   WalletPairingSession,
   WalletRelayClient,
+  WalletRelayError,
   base64urlToBytes,
   bytesToBase64url,
   decryptEnvelope,

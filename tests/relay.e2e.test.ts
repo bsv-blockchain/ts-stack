@@ -104,7 +104,7 @@ describe('WalletRelayService E2E', () => {
       expect(s.sessionId).toBeTruthy()
       expect(s.status).toBe('pending')
       expect(s.qrDataUrl).toMatch(/^data:image\/png;base64,/)
-      expect(s.pairingUri).toMatch(/^wallet:\/\/pair\?/)
+      expect(s.pairingUri).toMatch(/^bsv-wallet:\/\/pair\?/)
       expect(s.desktopToken).toBeTruthy()
     })
 
@@ -181,7 +181,7 @@ describe('WalletRelayService E2E', () => {
 
     it('resolveRelay() throws when the origin returns 404', async () => {
       const { params } = parsePairingUri(
-        `wallet://pair?topic=no-such-session&backendIdentityKey=${PrivateKey.fromRandom().toPublicKey()}&protocolID=%5B0%2C%22mobile+wallet+session%22%5D&keyID=no-such-session&origin=${encodeURIComponent(baseUrl)}&expiry=${Math.floor(Date.now() / 1000) + 120}`
+        `bsv-wallet://pair?topic=no-such-session&backendIdentityKey=${PrivateKey.fromRandom().toPublicKey()}&protocolID=%5B0%2C%22mobile+wallet+session%22%5D&origin=${encodeURIComponent(baseUrl)}&expiry=${Math.floor(Date.now() / 1000) + 120}`
       )
       const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
       await expect(session.resolveRelay()).rejects.toThrow(/HTTP 404/)

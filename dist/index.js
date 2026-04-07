@@ -279,32 +279,22 @@ var WalletRequestHandler = class {
 };
 
 // src/shared/pairingUri.ts
-function parsePairingUri(raw) {
+var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-wallet:"]);
+function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
   try {
     const url = new URL(raw);
-    if (url.protocol !== "wallet:") return { params: null, error: "Not a wallet:// URI" };
+    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: "Not a bsv-wallet:// URI" };
     const g = (k) => url.searchParams.get(k) ?? "";
     const topic = g("topic");
-    const relay = g("relay");
     const backendIdentityKey = g("backendIdentityKey");
     const protocolID = g("protocolID");
-    const keyID = g("keyID");
     const origin = g("origin");
     const expiry = g("expiry");
-    if (!topic || !relay || !backendIdentityKey || !protocolID || !keyID || !origin || !expiry) {
+    if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
       return { params: null, error: "QR code is missing required fields" };
     }
     if (Date.now() / 1e3 > Number(expiry)) {
       return { params: null, error: "This QR code has expired \u2014 ask the desktop to generate a new one" };
-    }
-    let relayUrl;
-    try {
-      relayUrl = new URL(relay);
-    } catch {
-      return { params: null, error: "Relay URL is not valid" };
-    }
-    if (relayUrl.protocol !== "ws:" && relayUrl.protocol !== "wss:") {
-      return { params: null, error: "Relay must use ws:// or wss://" };
     }
     let originUrl;
     try {
@@ -314,12 +304,6 @@ function parsePairingUri(raw) {
     }
     if (originUrl.protocol !== "http:" && originUrl.protocol !== "https:") {
       return { params: null, error: "Origin must use http:// or https://" };
-    }
-    if (relayUrl.protocol === "wss:" && relayUrl.hostname !== originUrl.hostname) {
-      return {
-        params: null,
-        error: `Relay host "${relayUrl.hostname}" doesn't match origin host "${originUrl.hostname}" \u2014 this QR may be malicious`
-      };
     }
     if (!/^0[23][0-9a-fA-F]{64}$/.test(backendIdentityKey)) {
       return { params: null, error: "Backend identity key is not a valid compressed public key" };
@@ -333,10 +317,7 @@ function parsePairingUri(raw) {
     if (!Array.isArray(proto) || proto.length !== 2 || typeof proto[0] !== "number" || typeof proto[1] !== "string") {
       return { params: null, error: "protocolID must be a [number, string] tuple" };
     }
-    if (keyID !== topic) {
-      return { params: null, error: "keyID must match topic \u2014 malformed QR code" };
-    }
-    return { params: { topic, relay, backendIdentityKey, protocolID, keyID, origin, expiry }, error: null };
+    return { params: { topic, backendIdentityKey, protocolID, origin, expiry }, error: null };
   } catch {
     return { params: null, error: "Could not read QR code" };
   }
@@ -346,15 +327,12 @@ function buildPairingUri(params) {
   const expiry = Math.floor((Date.now() + ttl) / 1e3);
   const p = new URLSearchParams({
     topic: params.sessionId,
-    relay: params.relayURL,
     backendIdentityKey: params.backendIdentityKey,
     protocolID: params.protocolID,
-    keyID: params.sessionId,
-    // sessionId doubles as keyID per protocol spec
     origin: params.origin,
     expiry: String(expiry)
   });
-  return `wallet://pair?${p.toString()}`;
+  return `${params.schema ?? "bsv-wallet"}://pair?${p.toString()}`;
 }
 
 // src/shared/encoding.ts
@@ -403,6 +381,7 @@ var WalletRelayService = class {
     this.wallet = opts.wallet;
     this.relayUrl = opts.relayUrl ?? process.env["RELAY_URL"] ?? "ws://localhost:3000";
     this.origin = opts.origin ?? process.env["ORIGIN"] ?? "http://localhost:5173";
+    this.schema = opts.schema ?? process.env["PAIRING_SCHEMA"] ?? "bsv-wallet";
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions });
     this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin });
     this.sessions.onSessionExpired((id) => this.relay.removeTopic(id));
@@ -448,18 +427,18 @@ var WalletRelayService = class {
     const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true });
     const uri = buildPairingUri({
       sessionId: session.id,
-      relayURL: this.relayUrl,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
-      origin: this.origin
+      origin: this.origin,
+      schema: this.schema
     });
     const qrDataUrl = await this.sessions.generateQRCode(uri);
     return { sessionId: session.id, status: session.status, qrDataUrl, pairingUri: uri, desktopToken: session.desktopToken };
   }
-  /** Return session status, or null if not found. */
+  /** Return session status and relay URL, or null if not found. */
   getSession(id) {
     const s = this.sessions.getSession(id);
-    return s ? { sessionId: s.id, status: s.status } : null;
+    return s ? { sessionId: s.id, status: s.status, relay: this.relayUrl } : null;
   }
   /**
    * Encrypt an RPC call, relay it to the mobile, and await the response.
@@ -611,6 +590,7 @@ var WalletRelayService = class {
   }
 };
 export {
+  DEFAULT_ACCEPTED_SCHEMAS,
   PROTOCOL_ID,
   QRSessionManager,
   WalletRelayService,

@@ -60,6 +60,12 @@ export interface WalletRelayServiceOptions {
    * Default: unlimited.
    */
   maxSessions?: number
+  /**
+   * URI scheme used in the generated QR pairing URI (e.g. `'bsv-wallet'`, `'my-app'`).
+   * Defaults to `'bsv-wallet'`. Must match the deep-link scheme registered by the
+   * wallet app that will scan the QR code.
+   */
+  schema?: string
 }
 
 interface PendingRequest {
@@ -105,11 +111,13 @@ export class WalletRelayService {
   private wallet: WalletLike
   private relayUrl: string
   private origin: string
+  private schema: string
 
   constructor(private opts: WalletRelayServiceOptions) {
     this.wallet   = opts.wallet
     this.relayUrl = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
     this.origin   = opts.origin   ?? process.env['ORIGIN']   ?? 'http://localhost:5173'
+    this.schema   = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-wallet'
 
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions })
     this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin })
@@ -171,6 +179,7 @@ export class WalletRelayService {
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: this.origin,
+      schema: this.schema,
     })
     const qrDataUrl = await this.sessions.generateQRCode(uri)
     return { sessionId: session.id, status: session.status, qrDataUrl, pairingUri: uri, desktopToken: session.desktopToken }

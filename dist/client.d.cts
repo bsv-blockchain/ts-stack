@@ -1,7 +1,7 @@
-import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-ClLaGPT6.cjs';
-export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WALLET_METHOD_NAMES, j as WalletRequest, k as WalletResponse, W as WireEnvelope } from './types-ClLaGPT6.cjs';
-export { W as WalletRelayClient, a as WalletRelayClientOptions } from './WalletRelayClient-B8mQ4fXI.cjs';
-export { C as CryptoParams, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cxr3lx5y.cjs';
+import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-Vae71cT7.cjs';
+export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WALLET_METHOD_NAMES, j as WalletRequest, k as WalletResponse, W as WireEnvelope } from './types-Vae71cT7.cjs';
+export { W as WalletRelayClient, a as WalletRelayClientOptions, b as WalletRelayError, c as WalletRelayErrorCode } from './WalletRelayClient-Dq8nY-qx.cjs';
+export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-BMfacFGz.cjs';
 import '@bsv/sdk';
 
 type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -77,6 +77,7 @@ declare class WalletPairingSession {
     private _status;
     private connected;
     private _lastSeq;
+    private _resolvedRelay;
     private protocolID;
     private mobileIdentityKey;
     private requestHandler;
@@ -101,12 +102,35 @@ declare class WalletPairingSession {
     on(event: 'error', handler: (msg: string) => void): this;
     /** Register the handler that executes approved RPC methods. */
     onRequest(handler: RequestHandler): this;
-    /** Open the WS connection and start a fresh pairing handshake. */
+    /**
+     * Fetch the relay WebSocket URL from the origin server.
+     *
+     * Must be called before `connect()`. Returns the relay URL so the app can
+     * display it to the user for approval before proceeding.
+     *
+     * The fetch goes to `params.origin` over HTTPS — the origin's TLS certificate
+     * is the trust anchor. Always show `params.origin` to the user before calling
+     * this method so they can confirm they are connecting to the intended service.
+     *
+     * ```ts
+     * const { params } = parsePairingUri(qrString)
+     * // Show params.origin to the user and wait for approval, then:
+     * const relay = await session.resolveRelay()
+     * // Optionally show relay to the user, then:
+     * await session.connect()
+     * ```
+     */
+    resolveRelay(): Promise<string>;
+    /**
+     * Open the WebSocket connection and start a fresh pairing handshake.
+     * Requires `resolveRelay()` to have been called first.
+     */
     connect(): Promise<void>;
     /**
      * Re-open the WS connection using a stored seq baseline.
      * Replay protection resumes from `lastSeq` — messages with seq ≤ lastSeq are dropped.
      * Use this after a network drop when the session is still valid on the backend.
+     * Requires `resolveRelay()` to have been called (relay URL is retained between calls).
      *
      * @param lastSeq - The highest seq received in the previous connection (from persistent storage).
      */

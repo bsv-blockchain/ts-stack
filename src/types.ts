@@ -64,7 +64,6 @@ export interface PairingParams {
   topic: string
   backendIdentityKey: string
   protocolID: string  // JSON-encoded [number, string] tuple
-  keyID: string       // must equal topic
   origin: string
   expiry: string      // Unix seconds
 }

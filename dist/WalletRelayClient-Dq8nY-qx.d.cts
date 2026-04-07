@@ -1,5 +1,5 @@
 import { WalletInterface } from '@bsv/sdk';
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-ClLaGPT6.js';
+import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-Vae71cT7.cjs';
 
 interface WalletRelayClientOptions {
     /**
@@ -12,12 +12,35 @@ interface WalletRelayClientOptions {
     pollInterval?: number;
     /** Session status polling interval in ms once the mobile is connected. Default: 10000 */
     connectedPollInterval?: number;
+    /**
+     * Persist the active session to sessionStorage so a page refresh resumes the
+     * existing session rather than creating a new one. Default: true.
+     * Disable if you want every mount to start a fresh session.
+     */
+    persistSession?: boolean;
+    /**
+     * sessionStorage key used to store the session. Defaults to a key namespaced
+     * by apiUrl so multiple relay instances on the same page don't collide.
+     */
+    sessionStorageKey?: string;
+    /**
+     * How long a persisted session is considered resumable (ms). After this
+     * the stored entry is discarded without a network request. Default: 86400000 (24 h).
+     * The server is still the authority — an expired server session is detected on
+     * the first poll and cleared regardless of this value.
+     */
+    sessionStorageTtl?: number;
     /** Called whenever the session state changes (including on creation). */
     onSessionChange?: (session: SessionInfo) => void;
     /** Called when the request log changes. */
     onLogChange?: (log: RequestLogEntry[]) => void;
     /** Called when an error occurs during session creation. */
     onError?: (error: string) => void;
+}
+type WalletRelayErrorCode = 'SESSION_NOT_CONNECTED' | 'REQUEST_TIMEOUT' | 'SESSION_DISCONNECTED' | 'INVALID_TOKEN' | 'NETWORK_ERROR';
+declare class WalletRelayError extends Error {
+    readonly code: WalletRelayErrorCode;
+    constructor(message: string, code: WalletRelayErrorCode);
 }
 /**
  * Frontend counterpart to WalletRelayService.
@@ -40,6 +63,9 @@ declare class WalletRelayClient {
     private readonly _apiUrl;
     private readonly _pollInterval;
     private readonly _connectedPollInterval;
+    private readonly _persistSession;
+    private readonly _storageKey;
+    private readonly _sessionStorageTtl;
     private readonly _onSessionChange?;
     private readonly _onLogChange?;
     private readonly _onError?;
@@ -70,6 +96,17 @@ declare class WalletRelayClient {
      */
     get wallet(): Pick<WalletInterface, WalletMethodName>;
     /**
+     * Attempt to resume a previously persisted session from sessionStorage.
+     * Verifies the session is still alive on the server and restarts polling.
+     * Returns the resumed SessionInfo, or null if nothing to resume or session expired.
+     *
+     * Call this before `createSession()` when you want to survive page refreshes:
+     * ```ts
+     * const session = await client.resumeSession() ?? await client.createSession()
+     * ```
+     */
+    resumeSession(): Promise<SessionInfo | null>;
+    /**
      * Create a new pairing session and start polling for status changes.
      * Any previously active poll loop is stopped and replaced.
      */
@@ -85,8 +122,11 @@ declare class WalletRelayClient {
     private _startPolling;
     private _stopPolling;
     private _setSession;
+    private _saveToStorage;
+    private _clearStorage;
+    private _loadFromStorage;
     private _addLogEntry;
     private _resolveLogEntry;
 }
 
-export { WalletRelayClient as W, type WalletRelayClientOptions as a };
+export { WalletRelayClient as W, type WalletRelayClientOptions as a, WalletRelayError as b, type WalletRelayErrorCode as c };

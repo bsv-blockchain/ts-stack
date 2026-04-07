@@ -1,35 +1,41 @@
 import type { PairingParams, ParseResult } from '../types.js'
 
+/** Default accepted URI schemes for parsePairingUri. */
+export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-wallet:'])
+
 /**
- * Parse and validate a wallet://pair?… QR code URI.
+ * Parse and validate a bsv-wallet://pair?… QR code URI.
  *
  * Checks performed:
- *   - protocol is wallet:
+ *   - protocol is in acceptedSchemas (default: bsv-wallet: and wallet: for backward compat)
  *   - all required fields present
  *   - expiry not passed
  *   - origin is http:// or https://
  *   - backendIdentityKey is a compressed secp256k1 public key
  *   - protocolID is a valid [number, string] JSON tuple
- *   - keyID equals topic (per protocol spec)
  *
  * Note: the relay URL is no longer embedded in the QR. It is fetched at
  * connect-time from the origin server via HTTPS, which is the trust anchor.
  * See WalletPairingSession.resolveRelay().
+ *
+ * @param raw - The raw URI string to parse.
+ * @param acceptedSchemas - Set of accepted URI schemes (e.g. `new Set(['my-app:'])`).
+ *   Defaults to `DEFAULT_ACCEPTED_SCHEMAS`. Pass your own set to support custom deep-link
+ *   schemes used by third-party wallet apps.
  */
-export function parsePairingUri(raw: string): ParseResult {
+export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS): ParseResult {
   try {
     const url = new URL(raw)
-    if (url.protocol !== 'wallet:') return { params: null, error: 'Not a wallet:// URI' }
+    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: 'Not a bsv-wallet:// URI' }
 
     const g = (k: string) => url.searchParams.get(k) ?? ''
     const topic              = g('topic')
     const backendIdentityKey = g('backendIdentityKey')
     const protocolID         = g('protocolID')
-    const keyID              = g('keyID')
     const origin             = g('origin')
     const expiry             = g('expiry')
 
-    if (!topic || !backendIdentityKey || !protocolID || !keyID || !origin || !expiry) {
+    if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
       return { params: null, error: 'QR code is missing required fields' }
     }
 
@@ -53,11 +59,7 @@ export function parsePairingUri(raw: string): ParseResult {
       return { params: null, error: 'protocolID must be a [number, string] tuple' }
     }
 
-    if (keyID !== topic) {
-      return { params: null, error: 'keyID must match topic — malformed QR code' }
-    }
-
-    return { params: { topic, backendIdentityKey, protocolID, keyID, origin, expiry }, error: null }
+    return { params: { topic, backendIdentityKey, protocolID, origin, expiry }, error: null }
   } catch {
     return { params: null, error: 'Could not read QR code' }
   }
@@ -76,6 +78,7 @@ export function buildPairingUri(params: {
   protocolID: string  // JSON.stringify(PROTOCOL_ID)
   origin: string
   pairingTtlMs?: number
+  schema?: string
 }): string {
   const ttl = params.pairingTtlMs ?? 120_000
   const expiry = Math.floor((Date.now() + ttl) / 1000)
@@ -83,9 +86,8 @@ export function buildPairingUri(params: {
     topic: params.sessionId,
     backendIdentityKey: params.backendIdentityKey,
     protocolID: params.protocolID,
-    keyID: params.sessionId,  // sessionId doubles as keyID per protocol spec
     origin: params.origin,
     expiry: String(expiry),
   })
-  return `wallet://pair?${p.toString()}`
+  return `${params.schema ?? 'bsv-wallet'}://pair?${p.toString()}`
 }

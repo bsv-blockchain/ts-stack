@@ -13,19 +13,26 @@ const VALID_BUILD_PARAMS = {
 }
 
 describe('buildPairingUri / parsePairingUri roundtrip', () => {
-  it('builds a wallet:// URI and parses it back to the original params', () => {
+  it('builds a bsv-wallet:// URI and parses it back to the original params', () => {
     const uri = buildPairingUri(VALID_BUILD_PARAMS)
-    const result = parsePairingUri(uri)
+    expect(uri).toMatch(/^bsv-wallet:\/\//)
 
+    const result = parsePairingUri(uri)
     expect(result.error).toBeNull()
     expect(result.params).not.toBeNull()
 
     const p = result.params!
     expect(p.topic).toBe('session-abc-123')
-    expect(p.keyID).toBe('session-abc-123')  // keyID must equal topic
     expect(p.backendIdentityKey).toBe(BACKEND_KEY)
     expect(p.origin).toBe('https://app.example.com')
     expect(JSON.parse(p.protocolID)).toEqual(PROTOCOL_ID)
+  })
+
+  it('accepts a custom schema when passed in acceptedSchemas', () => {
+    const uri = buildPairingUri({ ...VALID_BUILD_PARAMS, schema: 'my-app' })
+    expect(parsePairingUri(uri, new Set(['my-app:'])).error).toBeNull()
+    // rejected without the custom schema
+    expect(parsePairingUri(uri).error).toBeTruthy()
   })
 
   it('relay URL is not embedded in the URI', () => {
@@ -65,7 +72,7 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
 })
 
 describe('parsePairingUri validation', () => {
-  it('rejects a non-wallet:// scheme', () => {
+  it('rejects an unrecognised URI scheme', () => {
     const result = parsePairingUri('https://example.com/pair?foo=bar')
     expect(result.error).toBeTruthy()
     expect(result.params).toBeNull()
@@ -73,7 +80,7 @@ describe('parsePairingUri validation', () => {
 
   it('rejects a URI with missing required fields', () => {
     // Missing backendIdentityKey
-    const uri = 'wallet://pair?topic=abc&origin=https://app.example.com'
+    const uri = 'bsv-wallet://pair?topic=abc&origin=https://app.example.com'
     const result = parsePairingUri(uri)
     expect(result.error).toBeTruthy()
   })
@@ -83,11 +90,10 @@ describe('parsePairingUri validation', () => {
       topic: 'x',
       backendIdentityKey: BACKEND_KEY,
       protocolID: JSON.stringify(PROTOCOL_ID),
-      keyID: 'x',
       origin: 'https://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) - 60),  // 60 s in the past
     })
-    const result = parsePairingUri(`wallet://pair?${p}`)
+    const result = parsePairingUri(`bsv-wallet://pair?${p}`)
     expect(result.error).toMatch(/expired/i)
   })
 
@@ -96,25 +102,11 @@ describe('parsePairingUri validation', () => {
       topic: 'x',
       backendIdentityKey: 'not-a-pubkey',
       protocolID: JSON.stringify(PROTOCOL_ID),
-      keyID: 'x',
       origin: 'https://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) + 120),
     })
-    const result = parsePairingUri(`wallet://pair?${p}`)
+    const result = parsePairingUri(`bsv-wallet://pair?${p}`)
     expect(result.error).toMatch(/public key/i)
-  })
-
-  it('rejects keyID that does not match topic', () => {
-    const p = new URLSearchParams({
-      topic: 'session-1',
-      backendIdentityKey: BACKEND_KEY,
-      protocolID: JSON.stringify(PROTOCOL_ID),
-      keyID: 'session-2',  // mismatch
-      origin: 'https://app.example.com',
-      expiry: String(Math.floor(Date.now() / 1000) + 120),
-    })
-    const result = parsePairingUri(`wallet://pair?${p}`)
-    expect(result.error).toMatch(/keyID/i)
   })
 
   it('rejects an origin that is not http:// or https://', () => {
@@ -122,11 +114,10 @@ describe('parsePairingUri validation', () => {
       topic: 'x',
       backendIdentityKey: BACKEND_KEY,
       protocolID: JSON.stringify(PROTOCOL_ID),
-      keyID: 'x',
       origin: 'ftp://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) + 120),
     })
-    const result = parsePairingUri(`wallet://pair?${p}`)
+    const result = parsePairingUri(`bsv-wallet://pair?${p}`)
     expect(result.error).toMatch(/origin/i)
   })
 })

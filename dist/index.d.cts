@@ -1,8 +1,8 @@
 import { Server } from 'http';
-import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-ClLaGPT6.cjs';
-export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-ClLaGPT6.cjs';
+import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-Vae71cT7.cjs';
+export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-Vae71cT7.cjs';
 import { Request, Response } from 'express';
-export { C as CryptoParams, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Cxr3lx5y.cjs';
+export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-BMfacFGz.cjs';
 import '@bsv/sdk';
 
 type Role = 'desktop' | 'mobile';
@@ -175,6 +175,12 @@ interface WalletRelayServiceOptions {
      * Default: unlimited.
      */
     maxSessions?: number;
+    /**
+     * URI scheme used in the generated QR pairing URI (e.g. `'bsv-wallet'`, `'my-app'`).
+     * Defaults to `'bsv-wallet'`. Must match the deep-link scheme registered by the
+     * wallet app that will scan the QR code.
+     */
+    schema?: string;
 }
 /**
  * High-level facade that wires together the relay, session manager,
@@ -208,6 +214,7 @@ declare class WalletRelayService {
     private wallet;
     private relayUrl;
     private origin;
+    private schema;
     constructor(opts: WalletRelayServiceOptions);
     /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
     createSession(): Promise<{
@@ -217,10 +224,11 @@ declare class WalletRelayService {
         pairingUri: string;
         desktopToken: string;
     }>;
-    /** Return session status, or null if not found. */
+    /** Return session status and relay URL, or null if not found. */
     getSession(id: string): {
         sessionId: string;
         status: string;
+        relay: string;
     } | null;
     /**
      * Encrypt an RPC call, relay it to the mobile, and await the response.
