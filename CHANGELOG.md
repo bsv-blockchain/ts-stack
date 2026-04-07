@@ -4,6 +4,11 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.1.18
+
+- fix provideRecoveryKey guard blocking recovery-key-and-password mode
+- set authenticationFlow to existing-user after recovery key token lookup
+
 ## wallet-toolbox 2.1.17
 
 - add admin web server for visibility into storage and monitor by operations admin

@@ -22,24 +22,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [AdminStatsResult](#interface-adminstatsresult) | [ProvenTxReqHistory](#interface-proventxreqhistory) | [TableOutputBasket](#interface-tableoutputbasket) |
-| [CommitNewTxResults](#interface-commitnewtxresults) | [ProvenTxReqHistorySummaryApi](#interface-proventxreqhistorysummaryapi) | [TableOutputTag](#interface-tableoutputtag) |
-| [EntitySyncMap](#interface-entitysyncmap) | [ProvenTxReqNotify](#interface-proventxreqnotify) | [TableOutputTagMap](#interface-tableoutputtagmap) |
-| [GenerateChangeSdkChangeInput](#interface-generatechangesdkchangeinput) | [StorageAdminStats](#interface-storageadminstats) | [TableOutputX](#interface-tableoutputx) |
-| [GenerateChangeSdkChangeOutput](#interface-generatechangesdkchangeoutput) | [StorageIdbOptions](#interface-storageidboptions) | [TableProvenTx](#interface-tableproventx) |
-| [GenerateChangeSdkInput](#interface-generatechangesdkinput) | [StorageIdbSchema](#interface-storageidbschema) | [TableProvenTxReq](#interface-tableproventxreq) |
-| [GenerateChangeSdkOutput](#interface-generatechangesdkoutput) | [StorageKnexOptions](#interface-storageknexoptions) | [TableProvenTxReqDynamics](#interface-tableproventxreqdynamics) |
-| [GenerateChangeSdkParams](#interface-generatechangesdkparams) | [StorageProviderOptions](#interface-storageprovideroptions) | [TableSettings](#interface-tablesettings) |
-| [GenerateChangeSdkResult](#interface-generatechangesdkresult) | [StorageReaderOptions](#interface-storagereaderoptions) | [TableSyncState](#interface-tablesyncstate) |
-| [GenerateChangeSdkStorageChange](#interface-generatechangesdkstoragechange) | [StorageReaderWriterOptions](#interface-storagereaderwriteroptions) | [TableTransaction](#interface-tabletransaction) |
-| [GetReqsAndBeefDetail](#interface-getreqsandbeefdetail) | [SyncError](#interface-syncerror) | [TableTxLabel](#interface-tabletxlabel) |
-| [GetReqsAndBeefResult](#interface-getreqsandbeefresult) | [SyncMap](#interface-syncmap) | [TableTxLabelMap](#interface-tabletxlabelmap) |
-| [ListActionsSpecOp](#interface-listactionsspecop) | [TableCertificate](#interface-tablecertificate) | [TableUser](#interface-tableuser) |
-| [ListOutputsSpecOp](#interface-listoutputsspecop) | [TableCertificateField](#interface-tablecertificatefield) | [ValidateGenerateChangeSdkParamsResult](#interface-validategeneratechangesdkparamsresult) |
-| [PostBeefResultForTxidApi](#interface-postbeefresultfortxidapi) | [TableCertificateX](#interface-tablecertificatex) | [VerifyAndRepairBeefResult](#interface-verifyandrepairbeefresult) |
-| [PostReqsToNetworkDetails](#interface-postreqstonetworkdetails) | [TableCommission](#interface-tablecommission) | [WalletStorageServerOptions](#interface-walletstorageserveroptions) |
-| [PostReqsToNetworkResult](#interface-postreqstonetworkresult) | [TableMonitorEvent](#interface-tablemonitorevent) | [XValidCreateActionOutput](#interface-xvalidcreateactionoutput) |
-| [ProvenTxFromTxidResult](#interface-proventxfromtxidresult) | [TableOutput](#interface-tableoutput) |  |
+| [AdminStatsResult](#interface-adminstatsresult) | [ProvenTxFromTxidResult](#interface-proventxfromtxidresult) | [TableOutputBasket](#interface-tableoutputbasket) |
+| [CommitNewTxResults](#interface-commitnewtxresults) | [ProvenTxReqHistory](#interface-proventxreqhistory) | [TableOutputTag](#interface-tableoutputtag) |
+| [EntitySyncMap](#interface-entitysyncmap) | [ProvenTxReqHistorySummaryApi](#interface-proventxreqhistorysummaryapi) | [TableOutputTagMap](#interface-tableoutputtagmap) |
+| [GenerateChangeSdkChangeInput](#interface-generatechangesdkchangeinput) | [ProvenTxReqNotify](#interface-proventxreqnotify) | [TableOutputX](#interface-tableoutputx) |
+| [GenerateChangeSdkChangeOutput](#interface-generatechangesdkchangeoutput) | [StorageAdminStats](#interface-storageadminstats) | [TableProvenTx](#interface-tableproventx) |
+| [GenerateChangeSdkInput](#interface-generatechangesdkinput) | [StorageIdbOptions](#interface-storageidboptions) | [TableProvenTxReq](#interface-tableproventxreq) |
+| [GenerateChangeSdkOutput](#interface-generatechangesdkoutput) | [StorageIdbSchema](#interface-storageidbschema) | [TableProvenTxReqDynamics](#interface-tableproventxreqdynamics) |
+| [GenerateChangeSdkParams](#interface-generatechangesdkparams) | [StorageKnexOptions](#interface-storageknexoptions) | [TableSettings](#interface-tablesettings) |
+| [GenerateChangeSdkResult](#interface-generatechangesdkresult) | [StorageProviderOptions](#interface-storageprovideroptions) | [TableSyncState](#interface-tablesyncstate) |
+| [GenerateChangeSdkStorageChange](#interface-generatechangesdkstoragechange) | [StorageReaderOptions](#interface-storagereaderoptions) | [TableTransaction](#interface-tabletransaction) |
+| [GetReqsAndBeefDetail](#interface-getreqsandbeefdetail) | [StorageReaderWriterOptions](#interface-storagereaderwriteroptions) | [TableTxLabel](#interface-tabletxlabel) |
+| [GetReqsAndBeefResult](#interface-getreqsandbeefresult) | [SyncError](#interface-syncerror) | [TableTxLabelMap](#interface-tabletxlabelmap) |
+| [ListActionsSpecOp](#interface-listactionsspecop) | [SyncMap](#interface-syncmap) | [TableUser](#interface-tableuser) |
+| [ListOutputsSpecOp](#interface-listoutputsspecop) | [TableCertificate](#interface-tablecertificate) | [ValidateGenerateChangeSdkParamsResult](#interface-validategeneratechangesdkparamsresult) |
+| [MonitorAdminContext](#interface-monitoradmincontext) | [TableCertificateField](#interface-tablecertificatefield) | [VerifyAndRepairBeefResult](#interface-verifyandrepairbeefresult) |
+| [MonitorAdminContextConfig](#interface-monitoradmincontextconfig) | [TableCertificateX](#interface-tablecertificatex) | [WalletStorageServerOptions](#interface-walletstorageserveroptions) |
+| [PostBeefResultForTxidApi](#interface-postbeefresultfortxidapi) | [TableCommission](#interface-tablecommission) | [XValidCreateActionOutput](#interface-xvalidcreateactionoutput) |
+| [PostReqsToNetworkDetails](#interface-postreqstonetworkdetails) | [TableMonitorEvent](#interface-tablemonitorevent) |  |
+| [PostReqsToNetworkResult](#interface-postreqstonetworkresult) | [TableOutput](#interface-tableoutput) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -384,6 +385,37 @@ If true, and supported by storage, maximum performance optimization, computing b
 ```ts
 totalOutputsIsSumOfSatoshis?: boolean
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorAdminContext
+
+```ts
+export interface MonitorAdminContext {
+    config: MonitorAdminContextConfig;
+    daemon: MonitorDaemon;
+    authWallet?: Wallet;
+}
+```
+
+See also: [MonitorAdminContextConfig](./storage.md#interface-monitoradmincontextconfig), [MonitorDaemon](./monitor.md#class-monitordaemon), [Wallet](./client.md#class-wallet)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorAdminContextConfig
+
+```ts
+export interface MonitorAdminContextConfig {
+    chain: sdk.Chain;
+    adminPort?: number;
+    adminHost: string;
+    adminIdentityKeys: string[];
+}
+```
+
+See also: [Chain](./client.md#type-chain)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -1510,6 +1542,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
+| [AdminServer](#class-adminserver) | [EntityProvenTx](#class-entityproventx) | [StorageClient](#class-storageclient) |
 | [EntityBase](#class-entitybase) | [EntityProvenTxReq](#class-entityproventxreq) | [StorageIdb](#class-storageidb) |
 | [EntityCertificate](#class-entitycertificate) | [EntitySyncState](#class-entitysyncstate) | [StorageKnex](#class-storageknex) |
 | [EntityCertificateField](#class-entitycertificatefield) | [EntityTransaction](#class-entitytransaction) | [StorageProvider](#class-storageprovider) |
@@ -1518,12 +1551,26 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [EntityOutputBasket](#class-entityoutputbasket) | [EntityUser](#class-entityuser) | [StorageServer](#class-storageserver) |
 | [EntityOutputTag](#class-entityoutputtag) | [KnexMigrations](#class-knexmigrations) | [StorageSyncReader](#class-storagesyncreader) |
 | [EntityOutputTagMap](#class-entityoutputtagmap) | [MergeEntity](#class-mergeentity) | [WalletStorageManager](#class-walletstoragemanager) |
-| [EntityProvenTx](#class-entityproventx) | [StorageClient](#class-storageclient) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
+##### Class: AdminServer
+
+```ts
+export class AdminServer {
+    constructor(private readonly context: MonitorAdminContext) 
+    start(): void 
+    async close(): Promise<void> 
+}
+```
+
+See also: [MonitorAdminContext](./storage.md#interface-monitoradmincontext)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Class: EntityBase
 
 ```ts
@@ -3554,6 +3601,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     override async findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> 
     override async findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> 
     override async findUsers(args: FindUsersArgs): Promise<TableUser[]> 
+    override async recentlyActiveUsers(limit = 50, trx?: TrxToken): Promise<TableUser[]> 
     override async findMonitorEvents(args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> 
     async getCount<T extends object>(q: Knex.QueryBuilder<T, T[]>): Promise<number> 
     override async countCertificateFields(args: FindCertificateFieldsArgs): Promise<number> 
@@ -3612,13 +3660,6 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         }));
         const monitorStats: ServicesCallHistory | undefined = monitorEvent ? JSON.parse(monitorEvent.details!) : undefined;
         const servicesStats = this.getServices().getServicesCallHistory(true);
-        await this.insertMonitorEvent({
-            event: "ServicesCallHistory",
-            details: JSON.stringify(servicesStats),
-            created_at: new Date(),
-            updated_at: new Date(),
-            id: 0
-        });
         const one_day_ago = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const one_week_ago = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const one_month_ago = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -3908,6 +3949,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     abstract findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]>;
     abstract insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number>;
     abstract adminStats(adminIdentityKey: string): Promise<AdminStatsResult>;
+    async recentlyActiveUsers(limit = 50, trx?: TrxToken): Promise<TableUser[]> 
     override isStorageProvider(): boolean 
     setServices(v: WalletServices) 
     getServices(): WalletServices 
@@ -3940,7 +3982,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 }
 ```
 
-See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [Chain](./client.md#type-chain), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageFeeModel](./client.md#interface-storagefeemodel), [StorageGetBeefOptions](./client.md#interface-storagegetbeefoptions), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [StorageProviderOptions](./storage.md#interface-storageprovideroptions), [StorageReaderWriter](./storage.md#class-storagereaderwriter), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputX](./storage.md#interface-tableoutputx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableProvenTxReqDynamics](./storage.md#interface-tableproventxreqdynamics), [TableTxLabel](./storage.md#interface-tabletxlabel), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [attemptToPostReqsToNetwork](./storage.md#function-attempttopostreqstonetwork), [createAction](./storage.md#function-createaction), [getBeefForTransaction](./storage.md#function-getbeeffortransaction), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [logger](./client.md#variable-logger), [processAction](./storage.md#function-processaction), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
+See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [Chain](./client.md#type-chain), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageFeeModel](./client.md#interface-storagefeemodel), [StorageGetBeefOptions](./client.md#interface-storagegetbeefoptions), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [StorageProviderOptions](./storage.md#interface-storageprovideroptions), [StorageReaderWriter](./storage.md#class-storagereaderwriter), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputX](./storage.md#interface-tableoutputx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableProvenTxReqDynamics](./storage.md#interface-tableproventxreqdynamics), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableUser](./storage.md#interface-tableuser), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [attemptToPostReqsToNetwork](./storage.md#function-attempttopostreqstonetwork), [createAction](./storage.md#function-createaction), [getBeefForTransaction](./storage.md#function-getbeeffortransaction), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [logger](./client.md#variable-logger), [processAction](./storage.md#function-processaction), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
 
 ###### Method confirmSpendableOutputs
 
@@ -4563,18 +4605,18 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [listActions](#function-listactions) | [reviewStatus](#function-reviewstatus) |
-| [createAction](#function-createaction) | [listActionsIdb](#function-listactionsidb) | [reviewStatusIdb](#function-reviewstatusidb) |
-| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [listCertificates](#function-listcertificates) | [setDisableDoubleSpendCheckForTest](#function-setdisabledoublespendcheckfortest) |
-| [createSyncMap](#function-createsyncmap) | [listOutputs](#function-listoutputs) | [shareReqsWithWorld](#function-sharereqswithworld) |
-| [determineDBType](#function-determinedbtype) | [listOutputsIdb](#function-listoutputsidb) | [transactionInputSize](#function-transactioninputsize) |
-| [generateChangeSdk](#function-generatechangesdk) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [transactionOutputSize](#function-transactionoutputsize) |
-| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [offsetPrivKey](#function-offsetprivkey) | [transactionSize](#function-transactionsize) |
-| [getBeefForTransaction](#function-getbeeffortransaction) | [offsetPubKey](#function-offsetpubkey) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
-| [getListOutputsSpecOp](#function-getlistoutputsspecop) | [processAction](#function-processaction) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
-| [getSyncChunk](#function-getsyncchunk) | [purgeData](#function-purgedata) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
-| [internalizeAction](#function-internalizeaction) | [purgeDataIdb](#function-purgedataidb) | [varUintSize](#function-varuintsize) |
-| [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [redeemServiceCharges](#function-redeemservicecharges) |  |
+| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [listActions](#function-listactions) | [renderAdminPage](#function-renderadminpage) |
+| [createAction](#function-createaction) | [listActionsIdb](#function-listactionsidb) | [reviewStatus](#function-reviewstatus) |
+| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [listCertificates](#function-listcertificates) | [reviewStatusIdb](#function-reviewstatusidb) |
+| [createSyncMap](#function-createsyncmap) | [listOutputs](#function-listoutputs) | [setDisableDoubleSpendCheckForTest](#function-setdisabledoublespendcheckfortest) |
+| [determineDBType](#function-determinedbtype) | [listOutputsIdb](#function-listoutputsidb) | [shareReqsWithWorld](#function-sharereqswithworld) |
+| [generateChangeSdk](#function-generatechangesdk) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [transactionInputSize](#function-transactioninputsize) |
+| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [offsetPrivKey](#function-offsetprivkey) | [transactionOutputSize](#function-transactionoutputsize) |
+| [getBeefForTransaction](#function-getbeeffortransaction) | [offsetPubKey](#function-offsetpubkey) | [transactionSize](#function-transactionsize) |
+| [getListOutputsSpecOp](#function-getlistoutputsspecop) | [processAction](#function-processaction) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
+| [getSyncChunk](#function-getsyncchunk) | [purgeData](#function-purgedata) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
+| [internalizeAction](#function-internalizeaction) | [purgeDataIdb](#function-purgedataidb) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
+| [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [redeemServiceCharges](#function-redeemservicecharges) | [varUintSize](#function-varuintsize) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4915,6 +4957,15 @@ export function redeemServiceCharges(privateKeyWif: string, charges: TableCommis
 ```
 
 See also: [TableCommission](./storage.md#interface-tablecommission)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: renderAdminPage
+
+```ts
+export function renderAdminPage(): string 
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
