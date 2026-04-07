@@ -15,6 +15,7 @@ import {
   WalletDefaults,
   WalletStatus,
   WalletInfo,
+  BalanceResult,
   PaymentOptions,
   SendOptions,
   SendResult,
@@ -62,6 +63,39 @@ export abstract class WalletCore {
       address: this.getAddress(),
       network: this.defaults.network,
       isConnected: true
+    }
+  }
+
+  // ============================================================================
+  // Balance
+  // ============================================================================
+
+  async getBalance (basket?: string): Promise<BalanceResult> {
+    const client = this.getClient()
+
+    if (basket != null) {
+      const result = await client.listOutputs({ basket })
+      const outputs = result?.outputs ?? []
+      const totalSatoshis = outputs.reduce((sum: number, o: any) => sum + ((o.satoshis as number) ?? 0), 0)
+      const spendable = outputs.filter((o: any) => o.spendable !== false)
+      const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + ((o.satoshis as number) ?? 0), 0)
+      return {
+        totalSatoshis,
+        totalOutputs: result?.totalOutputs ?? outputs.length,
+        spendableSatoshis,
+        spendableOutputs: spendable.length
+      }
+    }
+
+    // Use wallet-toolbox specOpWalletBalance for optimized balance query
+    const WALLET_BALANCE_BASKET = '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e6a285371206d2e8'
+    const result = await client.listOutputs({ basket: WALLET_BALANCE_BASKET })
+    const balance = result?.totalOutputs ?? 0
+    return {
+      totalSatoshis: balance,
+      totalOutputs: 0,
+      spendableSatoshis: balance,
+      spendableOutputs: 0
     }
   }
 

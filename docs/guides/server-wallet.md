@@ -117,6 +117,7 @@ Key persistence order (automatic):
 
 The server wallet has all the same methods as the browser wallet:
 
+- `getBalance()` — Get wallet balance (optimized via specOp, or per-basket)
 - `pay()`, `send()`
 - `createToken()`, `listTokenDetails()`, `sendToken()`, `redeemToken()`
 - `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()`

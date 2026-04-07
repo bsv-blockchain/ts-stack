@@ -96,6 +96,22 @@ const wallet = await createWallet({ network: 'main' })
 | `getStatus()` | `WalletStatus` | `{ isConnected, identityKey, network }` |
 | `getWalletInfo()` | `WalletInfo` | `{ identityKey, address, network, isConnected }` |
 | `getClient()` | `WalletInterface` | Underlying SDK wallet client |
+| `getBalance(basket?)` | `Promise<BalanceResult>` | Wallet balance (optimized via specOp when no basket) |
+
+### Balance (WalletCore)
+
+| Method | Params | Returns | Description |
+|--------|--------|---------|-------------|
+| `getBalance(basket?)` | `string?` | `Promise<BalanceResult>` | Get wallet balance. Without basket: uses wallet-toolbox `specOpWalletBalance` for optimized total balance query. With basket: iterates outputs to calculate total and spendable satoshis. |
+
+```typescript
+interface BalanceResult {
+  totalSatoshis: number      // sum of all output satoshis
+  totalOutputs: number       // count of outputs
+  spendableSatoshis: number  // sum of spendable output satoshis
+  spendableOutputs: number   // count of spendable outputs
+}
+```
 
 ### Key Derivation (WalletCore)
 
@@ -622,6 +638,21 @@ No `@bsv/sdk` import needed — use `generatePrivateKey()` from `@bsv/simple/ser
 ---
 
 ## 8. Code Recipes
+
+### 7.0 Check Wallet Balance
+
+```typescript
+// Overall wallet balance (optimized — no output iteration)
+const balance = await wallet.getBalance()
+console.log(balance.totalSatoshis)  // total spendable sats
+
+// Per-basket balance
+const tokenBalance = await wallet.getBalance('tokens')
+console.log(tokenBalance.spendableSatoshis)    // spendable sats in basket
+console.log(tokenBalance.spendableOutputs)     // spendable output count
+console.log(tokenBalance.totalSatoshis)        // total sats (incl. non-spendable)
+console.log(tokenBalance.totalOutputs)         // total output count
+```
 
 ### 7.1 Connect Wallet + Auto-check MessageBox Handle
 

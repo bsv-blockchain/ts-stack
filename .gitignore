@@ -6,3 +6,4 @@ dist/
 .server-wallet.json
 .revocation-secrets.json
 .identity-registry.json
+payment-test-app/

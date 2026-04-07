@@ -22,6 +22,7 @@ export type {
   OutputInfo,
   WalletStatus,
   WalletInfo,
+  BalanceResult,
   PaymentOptions,
   SendOutputSpec,
   SendOutputDetail,

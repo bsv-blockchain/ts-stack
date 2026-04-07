@@ -45,6 +45,18 @@ const info = wallet.getWalletInfo()
 // { identityKey, address, network, isConnected }
 ```
 
+## Balance
+
+```typescript
+// Overall wallet balance (optimized, no output iteration)
+const balance = await wallet.getBalance()
+console.log(`${balance.totalSatoshis} sats`)
+
+// Balance for a specific basket
+const tokenBalance = await wallet.getBalance('tokens')
+console.log(`${tokenBalance.spendableOutputs} spendable, ${tokenBalance.spendableSatoshis} sats`)
+```
+
 ## Key Derivation
 
 Derive public keys for specific protocols and counterparties.
