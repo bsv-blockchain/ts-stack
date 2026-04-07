@@ -1,5 +1,6 @@
-import { PrivateKey } from '@bsv/sdk'
-import { buildPairingUri, parsePairingUri } from '../src/shared/pairingUri.js'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import { buildPairingUri, parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUri.js'
+import { bytesToBase64url } from '../src/shared/encoding.js'
 import { PROTOCOL_ID } from '../src/types.js'
 
 // A valid compressed secp256k1 public key (deterministic for tests)
@@ -69,6 +70,19 @@ describe('buildPairingUri / parsePairingUri roundtrip', () => {
     expect(expiryMs).toBeGreaterThan(Date.now() + tenMinutes - 5_000)
     expect(expiryMs).toBeLessThan(Date.now() + tenMinutes + 5_000)
   })
+
+  it('sig field roundtrips through buildPairingUri / parsePairingUri', () => {
+    const uri = buildPairingUri({ ...VALID_BUILD_PARAMS, sig: 'dGVzdA' })
+    const result = parsePairingUri(uri)
+    expect(result.error).toBeNull()
+    expect(result.params!.sig).toBe('dGVzdA')
+  })
+
+  it('sig is absent when not passed to buildPairingUri', () => {
+    const uri = buildPairingUri(VALID_BUILD_PARAMS)
+    const result = parsePairingUri(uri)
+    expect(result.params!.sig).toBeUndefined()
+  })
 })
 
 describe('parsePairingUri validation', () => {
@@ -120,4 +134,136 @@ describe('parsePairingUri validation', () => {
     const result = parsePairingUri(`bsv-wallet://pair?${p}`)
     expect(result.error).toMatch(/origin/i)
   })
+})
+
+// ── Signature tests ───────────────────────────────────────────────────────────
+
+describe('verifyPairingSignature', () => {
+  let backendKey: PrivateKey
+  let backendKeyHex: string
+  let wallet: ProtoWallet
+
+  beforeEach(() => {
+    backendKey    = PrivateKey.fromRandom()
+    backendKeyHex = backendKey.toPublicKey().toString()
+    wallet        = new ProtoWallet(backendKey)
+  })
+
+  async function makeSignedParams(overrides?: Partial<{
+    topic: string; backendIdentityKey: string; origin: string; expiry: string
+  }>) {
+    const topic  = overrides?.topic              ?? 'test-session-id'
+    const bik    = overrides?.backendIdentityKey ?? backendKeyHex
+    const origin = overrides?.origin             ?? 'https://app.example.com'
+    const expiry = overrides?.expiry             ?? String(Math.floor(Date.now() / 1000) + 120)
+
+    const data = Array.from(new TextEncoder().encode(`${topic}|${bik}|${origin}|${expiry}`))
+    const { signature } = await wallet.createSignature({
+      data, protocolID: [0, 'qr pairing'], keyID: topic, counterparty: 'anyone',
+    })
+    const sig = bytesToBase64url(signature as number[])
+
+    return { topic, backendIdentityKey: bik, protocolID: JSON.stringify(PROTOCOL_ID), origin, expiry, sig }
+  }
+
+  it('returns true for a valid signature', async () => {
+    expect(await verifyPairingSignature(await makeSignedParams())).toBe(true)
+  })
+
+  it('returns false when backendIdentityKey is tampered', async () => {
+    const params = await makeSignedParams()
+    const otherKey = PrivateKey.fromRandom().toPublicKey().toString()
+    expect(await verifyPairingSignature({ ...params, backendIdentityKey: otherKey })).toBe(false)
+  })
+
+  it('returns false when origin is tampered', async () => {
+    const params = await makeSignedParams()
+    expect(await verifyPairingSignature({ ...params, origin: 'https://evil.example.com' })).toBe(false)
+  })
+
+  it('returns false when expiry is tampered', async () => {
+    const params = await makeSignedParams()
+    expect(await verifyPairingSignature({ ...params, expiry: String(Number(params.expiry) + 9999) })).toBe(false)
+  })
+
+  it('returns true (no-op) when sig is absent', async () => {
+    const { sig: _sig, ...unsigned } = await makeSignedParams()
+    expect(await verifyPairingSignature(unsigned)).toBe(true)
+  })
+
+  it('returns false for a corrupted sig string', async () => {
+    const params = await makeSignedParams()
+    expect(await verifyPairingSignature({ ...params, sig: 'AAAAAAAAAA' })).toBe(false)
+  })
+
+  it('buildPairingUri + parsePairingUri roundtrips the sig and verifies', async () => {
+    const params = await makeSignedParams()
+    const uri = buildPairingUri({
+      sessionId:          params.topic,
+      backendIdentityKey: params.backendIdentityKey,
+      protocolID:         params.protocolID,
+      origin:             params.origin,
+      expiry:             Number(params.expiry),
+      sig:                params.sig,
+    })
+    const result = parsePairingUri(uri)
+    expect(result.error).toBeNull()
+    expect(result.params!.sig).toBe(params.sig)
+    expect(await verifyPairingSignature(result.params!)).toBe(true)
+  })
+})
+
+// ── Performance tests ─────────────────────────────────────────────────────────
+
+describe('QR signature performance', () => {
+  const ITERATIONS = 20
+
+  it(`createSignature: avg < 500 ms over ${ITERATIONS} iterations`, async () => {
+    const key    = PrivateKey.fromRandom()
+    const wallet = new ProtoWallet(key)
+    const bik    = key.toPublicKey().toString()
+    const topic  = 'perf-session'
+    const origin = 'https://app.example.com'
+
+    const durations: number[] = []
+    for (let i = 0; i < ITERATIONS; i++) {
+      const expiry = Math.floor((Date.now() + 120_000) / 1000)
+      const data = Array.from(new TextEncoder().encode(`${topic}|${bik}|${origin}|${expiry}`))
+      const t0 = performance.now()
+      await wallet.createSignature({ data, protocolID: [0, 'qr pairing'], keyID: topic, counterparty: 'anyone' })
+      durations.push(performance.now() - t0)
+    }
+
+    const avg = durations.reduce((a, b) => a + b, 0) / durations.length
+    console.log(`createSignature avg=${avg.toFixed(2)}ms  min=${Math.min(...durations).toFixed(2)}ms  max=${Math.max(...durations).toFixed(2)}ms`)
+    expect(avg).toBeLessThan(500)
+  }, 30_000)
+
+  it(`verifyPairingSignature: avg < 500 ms over ${ITERATIONS} iterations`, async () => {
+    const key    = PrivateKey.fromRandom()
+    const wallet = new ProtoWallet(key)
+    const bik    = key.toPublicKey().toString()
+    const topic  = 'perf-session'
+    const origin = 'https://app.example.com'
+    const expiry = Math.floor((Date.now() + 120_000) / 1000)
+
+    const data = Array.from(new TextEncoder().encode(`${topic}|${bik}|${origin}|${expiry}`))
+    const { signature } = await wallet.createSignature({
+      data, protocolID: [0, 'qr pairing'], keyID: topic, counterparty: 'anyone',
+    })
+    const sig = bytesToBase64url(signature as number[])
+    const uri = buildPairingUri({ sessionId: topic, backendIdentityKey: bik, protocolID: JSON.stringify(PROTOCOL_ID), origin, expiry, sig })
+    const { params } = parsePairingUri(uri)
+
+    const durations: number[] = []
+    for (let i = 0; i < ITERATIONS; i++) {
+      const t0 = performance.now()
+      await verifyPairingSignature(params!)
+      durations.push(performance.now() - t0)
+    }
+
+    const avg = durations.reduce((a, b) => a + b, 0) / durations.length
+    console.log(`verifyPairingSignature avg=${avg.toFixed(2)}ms  min=${Math.min(...durations).toFixed(2)}ms  max=${Math.max(...durations).toFixed(2)}ms`)
+    expect(avg).toBeLessThan(500)
+  }, 30_000)
 })

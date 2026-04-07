@@ -12,7 +12,7 @@ import { WebSocket } from 'ws'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { WalletRelayService } from '../src/server/WalletRelayService.js'
 import { WalletPairingSession } from '../src/client/WalletPairingSession.js'
-import { parsePairingUri } from '../src/shared/pairingUri.js'
+import { parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUri.js'
 
 // WalletPairingSession uses `new WebSocket(...)` via the browser global.
 // Polyfill it here so the mobile client works inside Node.js tests.
@@ -309,6 +309,50 @@ describe('WalletRelayService E2E', () => {
       expect(rpc.error?.message).toBe('wallet unavailable')
       mobile.disconnect()
     }, 10_000)
+  })
+
+  // ── QR signing ───────────────────────────────────────────────────────────────
+
+  describe('QR signing', () => {
+    it('createSession() embeds a sig in the pairing URI by default', async () => {
+      const s = await service.createSession()
+      const url = new URL(s.pairingUri)
+      expect(url.searchParams.get('sig')).toBeTruthy()
+    })
+
+    it('embedded sig verifies against backendIdentityKey', async () => {
+      const s = await service.createSession()
+      const { params, error } = parsePairingUri(s.pairingUri)
+      expect(error).toBeNull()
+      expect(await verifyPairingSignature(params!)).toBe(true)
+    })
+
+    it('signQrCodes: false omits the sig from the pairing URI', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const unsigned = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        signQrCodes: false,
+      })
+      try {
+        const s = await unsigned.createSession()
+        const url = new URL(s.pairingUri)
+        expect(url.searchParams.get('sig')).toBeNull()
+      } finally {
+        unsigned.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('expiry in URI matches the value covered by the signature', async () => {
+      // Guards against a race where expiry is re-computed after signing
+      const s = await service.createSession()
+      const { params } = parsePairingUri(s.pairingUri)
+      expect(await verifyPairingSignature(params!)).toBe(true)
+    })
   })
 
   // ── Error cases ──────────────────────────────────────────────────────────────

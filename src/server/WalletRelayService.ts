@@ -17,6 +17,7 @@ import { QRSessionManager } from './QRSessionManager.js'
 import { WalletRequestHandler } from './WalletRequestHandler.js'
 import { buildPairingUri } from '../shared/pairingUri.js'
 import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
+import { bytesToBase64url } from '../shared/encoding.js'
 import { PROTOCOL_ID } from '../types.js'
 import type { WireEnvelope, RpcResponse } from '../types.js'
 
@@ -66,6 +67,14 @@ export interface WalletRelayServiceOptions {
    * wallet app that will scan the QR code.
    */
   schema?: string
+  /**
+   * Sign the QR pairing URI with the backend wallet key.
+   * When `true` (the default), `createSession()` embeds a `sig` parameter in the
+   * pairing URI; the mobile can call `verifyPairingSignature()` to authenticate
+   * the QR before connecting.
+   * Set to `false` to disable for testing or legacy compatibility.
+   */
+  signQrCodes?: boolean
 }
 
 interface PendingRequest {
@@ -112,12 +121,14 @@ export class WalletRelayService {
   private relayUrl: string
   private origin: string
   private schema: string
+  private signQrCodes: boolean
 
   constructor(private opts: WalletRelayServiceOptions) {
-    this.wallet   = opts.wallet
-    this.relayUrl = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
-    this.origin   = opts.origin   ?? process.env['ORIGIN']   ?? 'http://localhost:5173'
-    this.schema   = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-wallet'
+    this.wallet      = opts.wallet
+    this.relayUrl    = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
+    this.origin      = opts.origin   ?? process.env['ORIGIN']   ?? 'http://localhost:5173'
+    this.schema      = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-wallet'
+    this.signQrCodes = opts.signQrCodes ?? true
 
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions })
     this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin })
@@ -174,11 +185,31 @@ export class WalletRelayService {
   async createSession(): Promise<{ sessionId: string; status: string; qrDataUrl: string; pairingUri: string; desktopToken: string }> {
     const session = this.sessions.createSession()
     const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true })
+
+    // Pre-compute expiry so the same value is used in both the signature and the URI.
+    const expiry = Math.floor((Date.now() + 120_000) / 1000)
+
+    let sig: string | undefined
+    if (this.signQrCodes) {
+      const data = Array.from(
+        new TextEncoder().encode(`${session.id}|${backendIdentityKey}|${this.origin}|${expiry}`)
+      )
+      const { signature } = await this.wallet.createSignature({
+        data,
+        protocolID:   [0, 'qr pairing'],
+        keyID:        session.id,
+        counterparty: 'anyone',
+      })
+      sig = bytesToBase64url(signature as number[])
+    }
+
     const uri = buildPairingUri({
       sessionId: session.id,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: this.origin,
+      expiry,
+      sig,
       schema: this.schema,
     })
     const qrDataUrl = await this.sessions.generateQRCode(uri)

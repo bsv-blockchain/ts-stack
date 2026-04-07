@@ -18,7 +18,7 @@ export type {
 
 // ── Shared utilities (also available from ./client) ───────────────────────────
 
-export { parsePairingUri, buildPairingUri, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
+export { parsePairingUri, buildPairingUri, verifyPairingSignature, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
 export { encryptEnvelope, decryptEnvelope } from './shared/crypto.js'
 export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 

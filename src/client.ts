@@ -17,7 +17,7 @@ export type { WalletRelayClientOptions, WalletRelayErrorCode } from './client/Wa
 
 // ── Shared utilities ──────────────────────────────────────────────────────────
 
-export { parsePairingUri, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
+export { parsePairingUri, verifyPairingSignature, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
 export { encryptEnvelope, decryptEnvelope } from './shared/crypto.js'
 export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 

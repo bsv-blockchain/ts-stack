@@ -4,7 +4,7 @@ import type { WalletProtocol, WalletInterface } from '@bsv/sdk'
 // Minimal subset of @bsv/sdk's WalletInterface — satisfied by both ProtoWallet and WalletClient.
 // We only need the three crypto primitives; no blockchain methods required.
 
-export type WalletLike = Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt'>
+export type WalletLike = Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt' | 'createSignature'>
 
 // ── Protocol constant ─────────────────────────────────────────────────────────
 
@@ -66,6 +66,7 @@ export interface PairingParams {
   protocolID: string  // JSON-encoded [number, string] tuple
   origin: string
   expiry: string      // Unix seconds
+  sig?: string        // base64url DER ECDSA signature over topic|backendIdentityKey|origin|expiry
 }
 
 export type ParseResult =
