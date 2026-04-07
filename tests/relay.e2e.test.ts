@@ -353,6 +353,28 @@ describe('WalletRelayService E2E', () => {
       const { params } = parsePairingUri(s.pairingUri)
       expect(await verifyPairingSignature(params!)).toBe(true)
     })
+
+    it('tampered origin fails signature verification', async () => {
+      const s = await service.createSession()
+      const { params } = parsePairingUri(s.pairingUri)
+      const tampered = { ...params!, origin: 'https://evil.example.com' }
+      expect(await verifyPairingSignature(tampered)).toBe(false)
+    })
+
+    it('tampered backendIdentityKey fails signature verification', async () => {
+      const s = await service.createSession()
+      const { params } = parsePairingUri(s.pairingUri)
+      const fakeKey = PrivateKey.fromRandom().toPublicKey().toString()
+      const tampered = { ...params!, backendIdentityKey: fakeKey }
+      expect(await verifyPairingSignature(tampered)).toBe(false)
+    })
+
+    it('tampered topic fails signature verification', async () => {
+      const s = await service.createSession()
+      const { params } = parsePairingUri(s.pairingUri)
+      const tampered = { ...params!, topic: 'ffffffff-ffff-ffff-ffff-ffffffffffff' }
+      expect(await verifyPairingSignature(tampered)).toBe(false)
+    })
   })
 
   // ── Error cases ──────────────────────────────────────────────────────────────

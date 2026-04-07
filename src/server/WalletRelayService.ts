@@ -106,7 +106,7 @@ const MOBILE_AUTH_TIMEOUT_MS = 15_000
  *
  * Express auto-registered routes:
  *   GET  /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET  /api/session/:id    — return { sessionId, status }
+ *   GET  /api/session/:id    — return { sessionId, status, relay }
  *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  */
 export class WalletRelayService {
