@@ -451,10 +451,11 @@ function QRDisplay({
   const { status, qrDataUrl, pairingUri } = session;
   const statusText = STATUS_TEXT[status] ?? status;
   const isExpired = status === "expired";
+  const isDisconnected = status === "disconnected";
   return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { "data-state": status, ...rootProps, children: [
     qrDataUrl && pairingUri ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(QRPairingCode, { qrDataUrl, pairingUri, ...qrProps }) : children,
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { "data-qr-status": status, ...statusProps, children: statusText }),
-    isExpired && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", onClick: onRefresh, ...refreshButtonProps, children: "Generate new QR" })
+    (isExpired || isDisconnected) && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", onClick: onRefresh, ...refreshButtonProps, children: "Generate new QR" })
   ] });
 }
 

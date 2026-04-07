@@ -121,7 +121,7 @@ type QRDisplayProps = {
      */
     session: SessionInfo | null;
     /**
-     * Called when the user clicks the refresh button (shown when status is "expired").
+     * Called when the user clicks the refresh button (shown when status is "expired" or "disconnected").
      * Typically: `() => createSession()`
      */
     onRefresh: () => void;
@@ -136,7 +136,7 @@ type QRDisplayProps = {
      */
     statusProps?: React.HTMLAttributes<HTMLSpanElement>;
     /**
-     * Props forwarded to the refresh button (rendered when status is "expired").
+     * Props forwarded to the refresh button (rendered when status is "expired" or "disconnected").
      */
     refreshButtonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
     /**
