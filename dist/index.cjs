@@ -41,7 +41,8 @@ __export(src_exports, {
   bytesToBase64url: () => bytesToBase64url,
   decryptEnvelope: () => decryptEnvelope,
   encryptEnvelope: () => encryptEnvelope,
-  parsePairingUri: () => parsePairingUri
+  parsePairingUri: () => parsePairingUri,
+  verifyPairingSignature: () => verifyPairingSignature
 });
 module.exports = __toCommonJS(src_exports);
 
@@ -326,7 +327,22 @@ var WalletRequestHandler = class {
 };
 
 // src/shared/pairingUri.ts
+var import_sdk2 = require("@bsv/sdk");
+
+// src/shared/encoding.ts
+var import_sdk = require("@bsv/sdk");
+function bytesToBase64url(bytes) {
+  return import_sdk.Utils.toBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+function base64urlToBytes(str) {
+  return import_sdk.Utils.toArray(str.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
+// src/shared/pairingUri.ts
 var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-wallet:"]);
+function sigPayload(topic, backendIdentityKey, origin, expiry) {
+  return Array.from(new TextEncoder().encode(`${topic}|${backendIdentityKey}|${origin}|${expiry}`));
+}
 function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
   try {
     const url = new URL(raw);
@@ -337,6 +353,7 @@ function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
     const protocolID = g("protocolID");
     const origin = g("origin");
     const expiry = g("expiry");
+    const sig = url.searchParams.get("sig") ?? void 0;
     if (!topic || !backendIdentityKey || !protocolID || !origin || !expiry) {
       return { params: null, error: "QR code is missing required fields" };
     }
@@ -364,14 +381,13 @@ function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
     if (!Array.isArray(proto) || proto.length !== 2 || typeof proto[0] !== "number" || typeof proto[1] !== "string") {
       return { params: null, error: "protocolID must be a [number, string] tuple" };
     }
-    return { params: { topic, backendIdentityKey, protocolID, origin, expiry }, error: null };
+    return { params: { topic, backendIdentityKey, protocolID, origin, expiry, sig }, error: null };
   } catch {
     return { params: null, error: "Could not read QR code" };
   }
 }
 function buildPairingUri(params) {
-  const ttl = params.pairingTtlMs ?? 12e4;
-  const expiry = Math.floor((Date.now() + ttl) / 1e3);
+  const expiry = params.expiry ?? Math.floor((Date.now() + (params.pairingTtlMs ?? 12e4)) / 1e3);
   const p = new URLSearchParams({
     topic: params.sessionId,
     backendIdentityKey: params.backendIdentityKey,
@@ -379,16 +395,24 @@ function buildPairingUri(params) {
     origin: params.origin,
     expiry: String(expiry)
   });
+  if (params.sig) p.set("sig", params.sig);
   return `${params.schema ?? "bsv-wallet"}://pair?${p.toString()}`;
 }
-
-// src/shared/encoding.ts
-var import_sdk = require("@bsv/sdk");
-function bytesToBase64url(bytes) {
-  return import_sdk.Utils.toBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-function base64urlToBytes(str) {
-  return import_sdk.Utils.toArray(str.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+async function verifyPairingSignature(params) {
+  if (!params.sig) return true;
+  try {
+    const anyoneWallet = new import_sdk2.ProtoWallet(new import_sdk2.PrivateKey(1));
+    const { valid } = await anyoneWallet.verifySignature({
+      data: sigPayload(params.topic, params.backendIdentityKey, params.origin, params.expiry),
+      signature: base64urlToBytes(params.sig),
+      protocolID: [0, "qr pairing"],
+      keyID: params.topic,
+      counterparty: params.backendIdentityKey
+    });
+    return valid;
+  } catch {
+    return false;
+  }
 }
 
 // src/shared/crypto.ts
@@ -429,6 +453,7 @@ var WalletRelayService = class {
     this.relayUrl = opts.relayUrl ?? process.env["RELAY_URL"] ?? "ws://localhost:3000";
     this.origin = opts.origin ?? process.env["ORIGIN"] ?? "http://localhost:5173";
     this.schema = opts.schema ?? process.env["PAIRING_SCHEMA"] ?? "bsv-wallet";
+    this.signQrCodes = opts.signQrCodes ?? true;
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions });
     this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin });
     this.sessions.onSessionExpired((id) => this.relay.removeTopic(id));
@@ -472,11 +497,27 @@ var WalletRelayService = class {
   async createSession() {
     const session = this.sessions.createSession();
     const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true });
+    const expiry = Math.floor((Date.now() + 12e4) / 1e3);
+    let sig;
+    if (this.signQrCodes) {
+      const data = Array.from(
+        new TextEncoder().encode(`${session.id}|${backendIdentityKey}|${this.origin}|${expiry}`)
+      );
+      const { signature } = await this.wallet.createSignature({
+        data,
+        protocolID: [0, "qr pairing"],
+        keyID: session.id,
+        counterparty: "anyone"
+      });
+      sig = bytesToBase64url(signature);
+    }
     const uri = buildPairingUri({
       sessionId: session.id,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
       origin: this.origin,
+      expiry,
+      sig,
       schema: this.schema
     });
     const qrDataUrl = await this.sessions.generateQRCode(uri);
@@ -649,6 +690,7 @@ var WalletRelayService = class {
   bytesToBase64url,
   decryptEnvelope,
   encryptEnvelope,
-  parsePairingUri
+  parsePairingUri,
+  verifyPairingSignature
 });
 //# sourceMappingURL=index.cjs.map

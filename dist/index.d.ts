@@ -1,8 +1,8 @@
 import { Server } from 'http';
-import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-Vae71cT7.js';
-export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-Vae71cT7.js';
+import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-BIOdtOVN.js';
+export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-BIOdtOVN.js';
 import { Request, Response } from 'express';
-export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri } from './encoding-Dln_18We.js';
+export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-BTpHLuFX.js';
 import '@bsv/sdk';
 
 type Role = 'desktop' | 'mobile';
@@ -181,6 +181,14 @@ interface WalletRelayServiceOptions {
      * wallet app that will scan the QR code.
      */
     schema?: string;
+    /**
+     * Sign the QR pairing URI with the backend wallet key.
+     * When `true` (the default), `createSession()` embeds a `sig` parameter in the
+     * pairing URI; the mobile can call `verifyPairingSignature()` to authenticate
+     * the QR before connecting.
+     * Set to `false` to disable for testing or legacy compatibility.
+     */
+    signQrCodes?: boolean;
 }
 /**
  * High-level facade that wires together the relay, session manager,
@@ -215,6 +223,7 @@ declare class WalletRelayService {
     private relayUrl;
     private origin;
     private schema;
+    private signQrCodes;
     constructor(opts: WalletRelayServiceOptions);
     /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
     createSession(): Promise<{

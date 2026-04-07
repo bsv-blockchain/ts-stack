@@ -1,5 +1,5 @@
 import { WalletInterface } from '@bsv/sdk';
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-Vae71cT7.js';
+import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-BIOdtOVN.js';
 
 interface WalletRelayClientOptions {
     /**

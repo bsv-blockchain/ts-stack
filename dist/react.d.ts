@@ -1,8 +1,8 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import React from 'react';
 import { WalletInterface, WalletClient } from '@bsv/sdk';
-import { a as WalletRelayClientOptions } from './WalletRelayClient-BakfqgK5.js';
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-Vae71cT7.js';
+import { a as WalletRelayClientOptions } from './WalletRelayClient-Dhy5kYmE.js';
+import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-BIOdtOVN.js';
 
 type QRPairingCodeProps = {
     /**
@@ -111,7 +111,7 @@ declare function useWalletRelayClient(options?: UseWalletRelayClientOptions): {
     error: string | null;
     createSession: () => Promise<SessionInfo>;
     sendRequest: (method: WalletMethodName, params?: unknown) => Promise<WalletResponse>;
-    wallet: Pick<WalletInterface, "getPublicKey" | "encrypt" | "decrypt" | "revealCounterpartyKeyLinkage" | "createHmac" | "verifyHmac" | "createSignature" | "verifySignature" | "createAction" | "signAction" | "listActions" | "internalizeAction" | "listOutputs" | "acquireCertificate" | "listCertificates" | "relinquishCertificate"> | null;
+    wallet: Pick<WalletInterface, "getPublicKey" | "encrypt" | "decrypt" | "createSignature" | "revealCounterpartyKeyLinkage" | "createHmac" | "verifyHmac" | "verifySignature" | "createAction" | "signAction" | "listActions" | "internalizeAction" | "listOutputs" | "acquireCertificate" | "listCertificates" | "relinquishCertificate"> | null;
 };
 
 type QRDisplayProps = {

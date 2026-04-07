@@ -1,4 +1,4 @@
-import { e as ParseResult, c as WalletLike } from './types-Vae71cT7.js';
+import { e as ParseResult, d as PairingParams, c as WalletLike } from './types-BIOdtOVN.cjs';
 import { WalletProtocol } from '@bsv/sdk';
 
 /** Default accepted URI schemes for parsePairingUri. */
@@ -7,7 +7,7 @@ declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
  * Parse and validate a bsv-wallet://pair?… QR code URI.
  *
  * Checks performed:
- *   - protocol is in acceptedSchemas (default: bsv-wallet: and wallet: for backward compat)
+ *   - protocol is in acceptedSchemas (default: bsv-wallet:)
  *   - all required fields present
  *   - expiry not passed
  *   - origin is http:// or https://
@@ -25,8 +25,10 @@ declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
  */
 declare function parsePairingUri(raw: string, acceptedSchemas?: ReadonlySet<string>): ParseResult;
 /**
- * Build a wallet://pair?… URI from session parameters.
+ * Build a bsv-wallet://pair?… URI from session parameters.
  * `pairingTtlMs` controls how long the QR code is valid (default 120 s).
+ * Pass `expiry` (Unix seconds) to override the computed value — required when
+ * signing so the same value is used in both the signature and the URI.
  *
  * Note: the relay URL is intentionally omitted. The mobile fetches it at
  * connect-time from the origin server — see WalletPairingSession.resolveRelay().
@@ -37,8 +39,22 @@ declare function buildPairingUri(params: {
     protocolID: string;
     origin: string;
     pairingTtlMs?: number;
+    expiry?: number;
+    sig?: string;
     schema?: string;
 }): string;
+/**
+ * Verify the `sig` field embedded in a parsed PairingParams object.
+ *
+ * Uses `ProtoWallet(new PrivateKey(1))` (the "anyone" verifier) to confirm the
+ * signature over `topic|backendIdentityKey|origin|expiry` was produced by the
+ * private key behind `backendIdentityKey`. No mobile wallet is needed.
+ *
+ * Returns `true` immediately (no-op) when `params.sig` is absent — backward
+ * compatible with servers that have `signQrCodes: false`.
+ * Returns `false` on any verification failure.
+ */
+declare function verifyPairingSignature(params: PairingParams): Promise<boolean>;
 
 interface CryptoParams {
     protocolID: WalletProtocol;
@@ -61,4 +77,4 @@ declare function bytesToBase64url(bytes: number[]): string;
 /** Decode a base64url string to a byte array using @bsv/sdk Utils. */
 declare function base64urlToBytes(str: string): number[];
 
-export { type CryptoParams as C, DEFAULT_ACCEPTED_SCHEMAS as D, buildPairingUri as a, base64urlToBytes as b, bytesToBase64url as c, decryptEnvelope as d, encryptEnvelope as e, parsePairingUri as p };
+export { type CryptoParams as C, DEFAULT_ACCEPTED_SCHEMAS as D, buildPairingUri as a, base64urlToBytes as b, bytesToBase64url as c, decryptEnvelope as d, encryptEnvelope as e, parsePairingUri as p, verifyPairingSignature as v };

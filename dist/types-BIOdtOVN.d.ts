@@ -1,6 +1,6 @@
 import { WalletProtocol, WalletInterface } from '@bsv/sdk';
 
-type WalletLike = Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt'>;
+type WalletLike = Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt' | 'createSignature'>;
 declare const PROTOCOL_ID: WalletProtocol;
 /** Outer envelope routed by the relay — ciphertext is never decoded by the relay. */
 interface WireEnvelope {
@@ -49,6 +49,7 @@ interface PairingParams {
     protocolID: string;
     origin: string;
     expiry: string;
+    sig?: string;
 }
 type ParseResult = {
     params: PairingParams;
