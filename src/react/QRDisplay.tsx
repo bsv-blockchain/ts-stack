@@ -9,7 +9,7 @@ export type QRDisplayProps = {
    */
   session: SessionInfo | null
   /**
-   * Called when the user clicks the refresh button (shown when status is "expired").
+   * Called when the user clicks the refresh button (shown when status is "expired" or "disconnected").
    * Typically: `() => createSession()`
    */
   onRefresh: () => void
@@ -24,7 +24,7 @@ export type QRDisplayProps = {
    */
   statusProps?: React.HTMLAttributes<HTMLSpanElement>
   /**
-   * Props forwarded to the refresh button (rendered when status is "expired").
+   * Props forwarded to the refresh button (rendered when status is "expired" or "disconnected").
    */
   refreshButtonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>
   /**
@@ -78,8 +78,9 @@ export function QRDisplay({
   }
 
   const { status, qrDataUrl, pairingUri } = session
-  const statusText = STATUS_TEXT[status] ?? status
-  const isExpired  = status === 'expired'
+  const statusText     = STATUS_TEXT[status] ?? status
+  const isExpired      = status === 'expired'
+  const isDisconnected = status === 'disconnected'
 
   return (
     <div data-state={status} {...rootProps}>
@@ -88,7 +89,7 @@ export function QRDisplay({
         : children
       }
       <span data-qr-status={status} {...statusProps}>{statusText}</span>
-      {isExpired && (
+      {(isExpired || isDisconnected) && (
         <button type="button" onClick={onRefresh} {...refreshButtonProps}>
           Generate new QR
         </button>
