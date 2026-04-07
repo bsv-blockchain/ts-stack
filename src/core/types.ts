@@ -59,6 +59,13 @@ export interface WalletInfo {
   isConnected: boolean
 }
 
+export interface BalanceResult {
+  totalSatoshis: number
+  totalOutputs: number
+  spendableSatoshis: number
+  spendableOutputs: number
+}
+
 // ============================================================================
 // Payment Types
 // ============================================================================

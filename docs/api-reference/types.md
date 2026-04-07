@@ -65,6 +65,17 @@ interface WalletInfo {
 }
 ```
 
+### BalanceResult
+
+```typescript
+interface BalanceResult {
+  totalSatoshis: number      // sum of all output satoshis
+  totalOutputs: number       // count of outputs
+  spendableSatoshis: number  // sum of spendable output satoshis
+  spendableOutputs: number   // count of spendable outputs
+}
+```
+
 ## Transaction Results
 
 ### TransactionResult

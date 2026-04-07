@@ -76,6 +76,38 @@ getWalletInfo(): WalletInfo
 }
 ```
 
+## Balance
+
+### getBalance()
+
+```typescript
+async getBalance(basket?: string): Promise<BalanceResult>
+```
+
+Get the wallet's balance. Works on both browser and server wallets.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `basket` | `string` | `undefined` | Optional basket name. If omitted, returns total wallet balance. |
+
+**Returns:** [`BalanceResult`](types.md#balanceresult)
+
+**Behavior:**
+- **Without basket:** Uses the wallet-toolbox `specOpWalletBalance` special operation for an optimized query — the balance is computed at the storage layer without fetching individual outputs. Returns the total spendable change balance. `totalOutputs` and `spendableOutputs` are `0` (output-level counts are not available in this mode).
+- **With basket:** Calls `listOutputs({ basket })` and iterates over the returned outputs to compute total/spendable satoshis and output counts.
+
+**Example:**
+
+```typescript
+// Overall wallet balance (optimized)
+const balance = await wallet.getBalance()
+console.log(`Balance: ${balance.totalSatoshis} sats`)
+
+// Balance for a specific basket
+const tokenBalance = await wallet.getBalance('tokens')
+console.log(`${tokenBalance.spendableOutputs} spendable token outputs worth ${tokenBalance.spendableSatoshis} sats`)
+```
+
 ## Key Derivation
 
 ### derivePublicKey()
