@@ -257,7 +257,10 @@ export async function generateChangeSdk(
           exactSatoshis = -feeExcess(1)
         }
         const ao = addOutputToBalanceNewInput() ? 1 : 0
-        const targetSatoshis = -feeExcess(1, ao) + (ao === 1 ? 2 * params.changeInitialSatoshis : 0)
+        // When no change output exists yet, include the dust floor in the target
+        // so the allocated input leaves enough excess for a viable change output.
+        const changeBuffer = r.changeOutputs.length === 0 && ao === 0 ? dustFloor + feeTarget(0, 1) - feeTarget() : 0
+        const targetSatoshis = -feeExcess(1, ao) + (ao === 1 ? 2 * params.changeInitialSatoshis : 0) + changeBuffer
 
         const allocatedChangeInput = await allocateChangeInput(targetSatoshis, exactSatoshis)
 
