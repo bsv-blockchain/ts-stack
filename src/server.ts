@@ -2,10 +2,15 @@ import { type WalletInterface, Utils, Beef } from '@bsv/sdk'
 import { HEADERS, DEFAULT_PAYMENT_WINDOW_MS } from './constants.js'
 
 export interface PaymentResult {
-  accepted: boolean
+  accepted: true
   satoshisPaid: number
   senderIdentityKey: string
   txid: string
+}
+
+export interface PaymentError {
+  accepted: false
+  reason: string
 }
 
 export interface PaymentMiddlewareOptions {
@@ -49,13 +54,17 @@ export function send402(
 
 /**
  * Validates payment headers on an incoming request.
- * Returns a PaymentResult if the payment is valid, or null if the request should be rejected.
+ * Returns a PaymentResult if the payment is valid, a PaymentError with a reason if the payment
+ * is structurally invalid or a replay, or null if headers are missing/malformed.
+ *
+ * @param requiredSats - The minimum satoshi value expected at the specified output index.
  */
 export async function validatePayment(
   req: PaymentRequest,
   wallet: WalletInterface,
+  requiredSats: number,
   paymentWindowMs: number = DEFAULT_PAYMENT_WINDOW_MS
-): Promise<PaymentResult | null> {
+): Promise<PaymentResult | PaymentError | null> {
   const h = (name: string): string | undefined => {
     const v = req.headers[name]
     return Array.isArray(v) ? v[0] : v
@@ -79,10 +88,15 @@ export async function validatePayment(
   if (!lastTx?.tx) return null
   const txid = lastTx.tx.id('hex')
 
+  // Verify the specified output carries at least the required satoshi amount
+  const voutIndex = Number.parseInt(vout)
+  const output = lastTx.tx.outputs[voutIndex]
+  if (!output || output.satoshis === undefined || output.satoshis < requiredSats) return null
+
   const result = await wallet.internalizeAction({
     tx: beefArr,
     outputs: [{
-      outputIndex: Number.parseInt(vout),
+      outputIndex: voutIndex,
       protocol: 'wallet payment',
       paymentRemittance: {
         derivationPrefix: nonce,
@@ -93,12 +107,14 @@ export async function validatePayment(
     description: `Payment for ${req.path}`
   }) as { accepted: boolean; isMerge?: boolean }
 
-  // Reject replayed transactions
-  if (result.isMerge) return null
+  // Reject replayed transactions with an explicit error so callers can log it
+  if (result.isMerge) {
+    return { accepted: false, reason: `Replayed transaction: txid ${txid} has already been processed` }
+  }
 
   return {
     accepted: true,
-    satoshisPaid: 0, // actual amount is validated by the wallet during internalization
+    satoshisPaid: output.satoshis,
     senderIdentityKey: sender,
     txid
   }
@@ -136,8 +152,12 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
         return send402(res, identityKey, price)
       }
 
-      const result = await validatePayment(req, wallet, paymentWindowMs)
+      const result = await validatePayment(req, wallet, price, paymentWindowMs)
       if (!result) {
+        return send402(res, identityKey, price)
+      }
+      if (!result.accepted) {
+        console.error(`Payment rejected: ${req.path} | ${result.reason}`)
         return send402(res, identityKey, price)
       }
 
