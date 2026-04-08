@@ -1174,17 +1174,19 @@ export class CWIStyleWalletManager implements WalletInterface {
     if (this.authenticated) {
       throw new Error('Already authenticated')
     }
-    if (this.authenticationFlow === 'new-user') {
+    if (this.authenticationFlow === 'new-user' && this.authenticationMode !== 'recovery-key-and-password') {
       throw new Error('Do not submit recovery key in new-user flow')
     }
-
     if (this.authenticationMode === 'presentation-key-and-password') {
       throw new Error('No recovery key required in this mode')
-    } else if (this.authenticationMode === 'recovery-key-and-password') {
+    }
+
+    if (this.authenticationMode === 'recovery-key-and-password') {
       // Wait for password
       const hash = Hash.sha256(recoveryKey)
       const token = await this.UMPTokenInteractor.findByRecoveryKeyHash(hash)
       if (!token) throw new Error('No user found with this recovery key')
+      this.authenticationFlow = 'existing-user'
       this.recoveryKey = recoveryKey
       this.currentUMPToken = token
     } else {
