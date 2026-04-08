@@ -2,7 +2,7 @@ import { Server } from 'http';
 import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-BIOdtOVN.cjs';
 export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-BIOdtOVN.cjs';
 import { Request, Response } from 'express';
-export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-DAx-J1fH.cjs';
+export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-B2hOFTFs.cjs';
 import '@bsv/sdk';
 
 type Role = 'desktop' | 'mobile';
@@ -176,8 +176,8 @@ interface WalletRelayServiceOptions {
      */
     maxSessions?: number;
     /**
-     * URI scheme used in the generated QR pairing URI (e.g. `'bsv-wallet'`, `'my-app'`).
-     * Defaults to `'bsv-wallet'`. Must match the deep-link scheme registered by the
+     * URI scheme used in the generated QR pairing URI (e.g. `'bsv-browser'`, `'my-app'`).
+     * Defaults to `'bsv-browser'`. Must match the deep-link scheme registered by the
      * wallet app that will scan the QR code.
      */
     schema?: string;
@@ -209,7 +209,7 @@ interface WalletRelayServiceOptions {
  *
  * Express auto-registered routes:
  *   GET  /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET  /api/session/:id    — return { sessionId, status }
+ *   GET  /api/session/:id    — return { sessionId, status, relay }
  *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  */
 declare class WalletRelayService {

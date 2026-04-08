@@ -558,14 +558,14 @@ var WalletRelayClient = class {
 
 // src/shared/pairingUri.ts
 import { ProtoWallet, PrivateKey } from "@bsv/sdk";
-var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-wallet:"]);
+var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-browser:"]);
 function sigPayload(topic, backendIdentityKey, origin, expiry) {
   return Array.from(new TextEncoder().encode(`${topic}|${backendIdentityKey}|${origin}|${expiry}`));
 }
 function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
   try {
     const url = new URL(raw);
-    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: "Not a bsv-wallet:// URI" };
+    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: "URI scheme is not a recognised wallet pairing scheme" };
     const g = (k) => url.searchParams.get(k) ?? "";
     const topic = g("topic");
     const backendIdentityKey = g("backendIdentityKey");

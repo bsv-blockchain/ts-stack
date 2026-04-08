@@ -52,6 +52,7 @@ new WalletRelayService(options: WalletRelayServiceOptions)
 | `relayUrl` | `string` | No | `process.env.RELAY_URL` → `ws://localhost:3000` | `ws://` or `wss://` base URL of this server. Returned by `GET /api/session/:id` so the mobile can resolve it after scanning the QR. Not embedded in the QR itself. |
 | `origin` | `string` | No | `process.env.ORIGIN` → `http://localhost:5173` | `http://` or `https://` URL of the backend API root. Used for WebSocket origin validation and embedded in the QR pairing URI. The mobile calls `{origin}/api/session/{topic}` over HTTPS to resolve the relay URL — this is the trust anchor. In production this is your app domain. In local dev with a split Vite/Node setup, set this to the backend's LAN address so the mobile device can reach it (see `MOBILE_ORIGIN` in the quickstart). |
 | `maxSessions` | `number` | No | unlimited | Maximum number of sessions held in memory at once. `GET /api/session` returns HTTP 429 when the limit is reached. |
+| `schema` | `string` | No | `process.env.PAIRING_SCHEMA` → `'bsv-browser'` | Deep-link scheme used in the generated QR URI (without `://`). Defaults to `'bsv-browser'`. Set to your wallet's own scheme (e.g. `'bsv-browser'`, `'my-wallet'`) to target a specific app — the OS will open that app directly instead of showing a picker when multiple wallets are installed. The mobile app must register this scheme and pass it to `parsePairingUri` via `acceptedSchemas`. |
 | `signQrCodes` | `boolean` | No | `true` | Sign the QR pairing URI with the backend wallet key. The mobile can verify the signature using `verifyPairingSignature` before connecting — this proves the QR fields have not been tampered with. Set to `false` only for backward compatibility with mobile apps that do not yet call `verifyPairingSignature`. |
 | `onSessionConnected` | `(sessionId: string) => void` | No | — | Called when a mobile completes pairing and the session transitions to `'connected'`. |
 | `onSessionDisconnected` | `(sessionId: string) => void` | No | — | Called when a connected mobile disconnects and the session transitions to `'disconnected'`. |
@@ -993,13 +994,13 @@ Available from both `@bsv/wallet-relay` and `@bsv/wallet-relay/client`.
 function parsePairingUri(raw: string): ParseResult
 ```
 
-Parses and validates a `bsv-wallet://pair?…` QR code URI. Returns `{ params, error: null }` on success or `{ params: null, error: string }` on failure.
+Parses and validates a `bsv-browser://pair?…` QR code URI. Returns `{ params, error: null }` on success or `{ params: null, error: string }` on failure.
 
 Validations performed:
 
 | Check | Detail |
 |-------|--------|
-| Protocol | Must be `bsv-wallet:` |
+| Protocol | Must be `bsv-browser:` |
 | Required fields | `topic`, `backendIdentityKey`, `protocolID`, `origin`, `expiry` all present |
 | Expiry | `expiry` must be in the future |
 | Origin scheme | Must be `http://` or `https://` |
@@ -1025,7 +1026,7 @@ function buildPairingUri(params: {
 }): string
 ```
 
-Builds a `bsv-wallet://pair?…` URI from session parameters. The `sessionId` is used as `topic`. Expiry is computed as `Math.floor((Date.now() + pairingTtlMs) / 1000)` unless `expiry` is provided explicitly — pass an explicit value when signing so the signature and URI cover the same expiry.
+Builds a `bsv-browser://pair?…` URI from session parameters. The `sessionId` is used as `topic`. Expiry is computed as `Math.floor((Date.now() + pairingTtlMs) / 1000)` unless `expiry` is provided explicitly — pass an explicit value when signing so the signature and URI cover the same expiry.
 
 The relay URL is intentionally omitted from the URI. The mobile fetches it from `{origin}/api/session/{sessionId}` after scanning — this is the trust anchor.
 

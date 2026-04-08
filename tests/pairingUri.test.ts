@@ -14,9 +14,9 @@ const VALID_BUILD_PARAMS = {
 }
 
 describe('buildPairingUri / parsePairingUri roundtrip', () => {
-  it('builds a bsv-wallet:// URI and parses it back to the original params', () => {
+  it('builds a bsv-browser:// URI and parses it back to the original params', () => {
     const uri = buildPairingUri(VALID_BUILD_PARAMS)
-    expect(uri).toMatch(/^bsv-wallet:\/\//)
+    expect(uri).toMatch(/^bsv-browser:\/\//)
 
     const result = parsePairingUri(uri)
     expect(result.error).toBeNull()
@@ -94,7 +94,7 @@ describe('parsePairingUri validation', () => {
 
   it('rejects a URI with missing required fields', () => {
     // Missing backendIdentityKey
-    const uri = 'bsv-wallet://pair?topic=abc&origin=https://app.example.com'
+    const uri = 'bsv-browser://pair?topic=abc&origin=https://app.example.com'
     const result = parsePairingUri(uri)
     expect(result.error).toBeTruthy()
   })
@@ -107,7 +107,7 @@ describe('parsePairingUri validation', () => {
       origin: 'https://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) - 60),  // 60 s in the past
     })
-    const result = parsePairingUri(`bsv-wallet://pair?${p}`)
+    const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/expired/i)
   })
 
@@ -119,7 +119,7 @@ describe('parsePairingUri validation', () => {
       origin: 'https://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) + 120),
     })
-    const result = parsePairingUri(`bsv-wallet://pair?${p}`)
+    const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/public key/i)
   })
 
@@ -131,7 +131,7 @@ describe('parsePairingUri validation', () => {
       origin: 'ftp://app.example.com',
       expiry: String(Math.floor(Date.now() / 1000) + 120),
     })
-    const result = parsePairingUri(`bsv-wallet://pair?${p}`)
+    const result = parsePairingUri(`bsv-browser://pair?${p}`)
     expect(result.error).toMatch(/origin/i)
   })
 })

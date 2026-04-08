@@ -1,13 +1,13 @@
-import { e as ParseResult, d as PairingParams, c as WalletLike } from './types-BIOdtOVN.cjs';
+import { e as ParseResult, d as PairingParams, c as WalletLike } from './types-BIOdtOVN.js';
 import { WalletProtocol } from '@bsv/sdk';
 
 /** Default accepted URI schemes for parsePairingUri. */
 declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
 /**
- * Parse and validate a bsv-wallet://pair?… QR code URI.
+ * Parse and validate a bsv-browser://pair?… QR code URI.
  *
  * Checks performed:
- *   - protocol is in acceptedSchemas (default: bsv-wallet:)
+ *   - protocol is in acceptedSchemas (default: bsv-browser:)
  *   - all required fields present
  *   - expiry not passed
  *   - origin is http:// or https://
@@ -25,7 +25,7 @@ declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
  */
 declare function parsePairingUri(raw: string, acceptedSchemas?: ReadonlySet<string>): ParseResult;
 /**
- * Build a bsv-wallet://pair?… URI from session parameters.
+ * Build a bsv-browser://pair?… URI from session parameters.
  * `pairingTtlMs` controls how long the QR code is valid (default 120 s).
  * Pass `expiry` (Unix seconds) to override the computed value — required when
  * signing so the same value is used in both the signature and the URI.

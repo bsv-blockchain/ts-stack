@@ -3,7 +3,7 @@ import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { bytesToBase64url, base64urlToBytes } from './encoding.js'
 
 /** Default accepted URI schemes for parsePairingUri. */
-export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-wallet:'])
+export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-browser:'])
 
 // ── Internal helper ───────────────────────────────────────────────────────────
 
@@ -20,10 +20,10 @@ function sigPayload(
 // ── parsePairingUri ───────────────────────────────────────────────────────────
 
 /**
- * Parse and validate a bsv-wallet://pair?… QR code URI.
+ * Parse and validate a bsv-browser://pair?… QR code URI.
  *
  * Checks performed:
- *   - protocol is in acceptedSchemas (default: bsv-wallet:)
+ *   - protocol is in acceptedSchemas (default: bsv-browser:)
  *   - all required fields present
  *   - expiry not passed
  *   - origin is http:// or https://
@@ -42,7 +42,7 @@ function sigPayload(
 export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string> = DEFAULT_ACCEPTED_SCHEMAS): ParseResult {
   try {
     const url = new URL(raw)
-    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: 'Not a bsv-wallet:// URI' }
+    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: 'URI scheme is not a recognised wallet pairing scheme' }
 
     const g = (k: string) => url.searchParams.get(k) ?? ''
     const topic              = g('topic')
@@ -85,7 +85,7 @@ export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string
 // ── buildPairingUri ───────────────────────────────────────────────────────────
 
 /**
- * Build a bsv-wallet://pair?… URI from session parameters.
+ * Build a bsv-browser://pair?… URI from session parameters.
  * `pairingTtlMs` controls how long the QR code is valid (default 120 s).
  * Pass `expiry` (Unix seconds) to override the computed value — required when
  * signing so the same value is used in both the signature and the URI.
@@ -112,7 +112,7 @@ export function buildPairingUri(params: {
     expiry: String(expiry),
   })
   if (params.sig) p.set('sig', params.sig)
-  return `${params.schema ?? 'bsv-wallet'}://pair?${p.toString()}`
+  return `${params.schema ?? 'bsv-browser'}://pair?${p.toString()}`
 }
 
 // ── verifyPairingSignature ────────────────────────────────────────────────────

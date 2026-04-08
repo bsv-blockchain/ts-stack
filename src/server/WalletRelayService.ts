@@ -62,8 +62,8 @@ export interface WalletRelayServiceOptions {
    */
   maxSessions?: number
   /**
-   * URI scheme used in the generated QR pairing URI (e.g. `'bsv-wallet'`, `'my-app'`).
-   * Defaults to `'bsv-wallet'`. Must match the deep-link scheme registered by the
+   * URI scheme used in the generated QR pairing URI (e.g. `'bsv-browser'`, `'my-app'`).
+   * Defaults to `'bsv-browser'`. Must match the deep-link scheme registered by the
    * wallet app that will scan the QR code.
    */
   schema?: string
@@ -127,7 +127,7 @@ export class WalletRelayService {
     this.wallet      = opts.wallet
     this.relayUrl    = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
     this.origin      = opts.origin   ?? process.env['ORIGIN']   ?? 'http://localhost:5173'
-    this.schema      = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-wallet'
+    this.schema      = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-browser'
     this.signQrCodes = opts.signQrCodes ?? true
 
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions })

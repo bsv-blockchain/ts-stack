@@ -1,7 +1,7 @@
 import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-BIOdtOVN.js';
 export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WALLET_METHOD_NAMES, j as WalletRequest, k as WalletResponse, W as WireEnvelope } from './types-BIOdtOVN.js';
 export { W as WalletRelayClient, a as WalletRelayClientOptions, b as WalletRelayError, c as WalletRelayErrorCode } from './WalletRelayClient-Dhy5kYmE.js';
-export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-BTpHLuFX.js';
+export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-eCkLe8Vx.js';
 import '@bsv/sdk';
 
 type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';

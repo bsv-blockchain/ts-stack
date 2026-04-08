@@ -291,14 +291,14 @@ function base64urlToBytes(str) {
 }
 
 // src/shared/pairingUri.ts
-var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-wallet:"]);
+var DEFAULT_ACCEPTED_SCHEMAS = /* @__PURE__ */ new Set(["bsv-browser:"]);
 function sigPayload(topic, backendIdentityKey, origin, expiry) {
   return Array.from(new TextEncoder().encode(`${topic}|${backendIdentityKey}|${origin}|${expiry}`));
 }
 function parsePairingUri(raw, acceptedSchemas = DEFAULT_ACCEPTED_SCHEMAS) {
   try {
     const url = new URL(raw);
-    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: "Not a bsv-wallet:// URI" };
+    if (!acceptedSchemas.has(url.protocol)) return { params: null, error: "URI scheme is not a recognised wallet pairing scheme" };
     const g = (k) => url.searchParams.get(k) ?? "";
     const topic = g("topic");
     const backendIdentityKey = g("backendIdentityKey");
@@ -348,7 +348,7 @@ function buildPairingUri(params) {
     expiry: String(expiry)
   });
   if (params.sig) p.set("sig", params.sig);
-  return `${params.schema ?? "bsv-wallet"}://pair?${p.toString()}`;
+  return `${params.schema ?? "bsv-browser"}://pair?${p.toString()}`;
 }
 async function verifyPairingSignature(params) {
   if (!params.sig) return true;
@@ -404,7 +404,7 @@ var WalletRelayService = class {
     this.wallet = opts.wallet;
     this.relayUrl = opts.relayUrl ?? process.env["RELAY_URL"] ?? "ws://localhost:3000";
     this.origin = opts.origin ?? process.env["ORIGIN"] ?? "http://localhost:5173";
-    this.schema = opts.schema ?? process.env["PAIRING_SCHEMA"] ?? "bsv-wallet";
+    this.schema = opts.schema ?? process.env["PAIRING_SCHEMA"] ?? "bsv-browser";
     this.signQrCodes = opts.signQrCodes ?? true;
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions });
     this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin });
