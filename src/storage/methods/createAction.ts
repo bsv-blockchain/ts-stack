@@ -996,7 +996,7 @@ async function fundNewTransactionSdk(
 function trimInputBeef(beef: Beef, vargs: Validation.ValidCreateActionArgs): number[] | undefined {
   if (vargs.options.returnTXIDOnly) return undefined
   const knownTxids: Record<string, boolean> = {}
-  for (const txid of vargs.options.knownTxids) knownTxids[txid] = true
+  for (const txid of vargs.options.knownTxids || []) knownTxids[txid] = true
   for (const txid of beef.txs.map(btx => btx.txid)) if (knownTxids[txid]) beef.makeTxidOnly(txid)
   return beef.toBinary()
 }
@@ -1019,7 +1019,7 @@ async function mergeAllocatedChangeBeefs(
   }
   if (vargs.options.returnTXIDOnly) return undefined
   for (const o of allocatedChange) {
-    if (!beef.findTxid(o.txid!) && !vargs.options.knownTxids.find(txid => txid === o.txid)) {
+    if (!beef.findTxid(o.txid!) && !(vargs.options.knownTxids || []).find(txid => txid === o.txid)) {
       await storage.getBeefForTransaction(o.txid!, options)
     }
   }
