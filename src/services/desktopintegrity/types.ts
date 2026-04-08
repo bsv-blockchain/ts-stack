@@ -9,4 +9,5 @@ export interface DesktopIntegrityRecord {
 export interface UTXOReference {
   txid: string
   outputIndex: number
+  context?: number[]
 }

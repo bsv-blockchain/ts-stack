@@ -68,21 +68,17 @@ export class DesktopIntegrityStorage {
     // Map text value → numeric MongoDB sort direction
     const direction = sortOrder === 'asc' ? 1 : -1
 
-    return this.records
+    const results = await this.records
       .find(
         { fileHash },
-        { projection: { txid: 1, outputIndex: 1, createdAt: 1 } }
+        { projection: { txid: 1, outputIndex: 1, offChainValues: 1, createdAt: 1 } }
       )
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
+      .project<{ txid: string; outputIndex: number; offChainValues: number[] }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
       .toArray()
-      .then(results =>
-        results.map(r => ({
-          txid: r.txid,
-          outputIndex: r.outputIndex
-        }))
-      )
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues }))
   }
 
   /**
@@ -104,21 +100,17 @@ export class DesktopIntegrityStorage {
     // Map text value → numeric MongoDB sort direction
     const direction = sortOrder === 'asc' ? 1 : -1
 
-    return this.records
+    const results = await this.records
       .find(
         { txid },
-        { projection: { txid: 1, outputIndex: 1, createdAt: 1 } }
+        { projection: { txid: 1, outputIndex: 1, offChainValues: 1, createdAt: 1 } }
       )
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
+      .project<{ txid: string; outputIndex: number; offChainValues: number[] }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
       .toArray()
-      .then(results =>
-        results.map(r => ({
-          txid: r.txid,
-          outputIndex: r.outputIndex
-        }))
-      )
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues }))
   }
 
   /**
@@ -146,16 +138,13 @@ export class DesktopIntegrityStorage {
 
     const sortDirection = sortOrder === 'asc' ? 1 : -1
 
-    return await this.records.find(query)
+    const results = await this.records.find(query)
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)
-      .project<UTXOReference>({ txid: 1, outputIndex: 1 })
+      .project<{ txid: string; outputIndex: number; offChainValues: number[] }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
       .toArray()
-      .then(results => results.map(record => ({
-        txid: record.txid,
-        outputIndex: record.outputIndex
-      })))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues }))
   }
 
   // Additional custom query functions can be added here. ---------------------------------------------
