@@ -1,44 +1,44 @@
 import { Collection, Db } from 'mongodb'
-import { HelloWorldRecord, UTXOReference } from './types.js'
+import { SupplyChainRecord, UTXOReference } from './types.js'
 
-// Implements a Lookup StorageEngine for HelloWorld
-export class HelloWorldStorage {
-  private readonly records: Collection<HelloWorldRecord>
+// Implements a Lookup StorageEngine for SupplyChain
+export class SupplyChainStorage {
+  private readonly records: Collection<SupplyChainRecord>
 
   /**
-   * Constructs a new HelloWorldStorage instance
+   * Constructs a new SupplyChainStorage instance
    * @param {Db} db - A connected MongoDB database instance
    */
   constructor(private readonly db: Db) {
-    this.records = db.collection<HelloWorldRecord>('helloWorldRecords')
+    this.records = db.collection<SupplyChainRecord>('supplyChainRecords')
     this.createSearchableIndex() // Initialize the searchable index
   }
 
-  /* Ensures a text index exists for the `message` field, enabling efficient searches.
-   * The index is named `MessageTextIndex`.
+  /* Ensures a text index exists for the `fileHash` field, enabling efficient searches.
+   * The index is named `fileHashIndex`.
    */
   private async createSearchableIndex(): Promise<void> {
-    await this.records.createIndex({ message: 'text' }, { name: 'MessageTextIndex' })
+    await this.records.createIndex({ "offChainValues.chainId": 1 }, { name: 'offChainValuesIndex' })
   }
 
   /**
-   * Stores a new HelloWorld record in the database.
+   * Stores a new SupplyChain record in the database.
    * @param {string} txid - The transaction ID associated with this record
    * @param {number} outputIndex - The UTXO output index
-   * @param {string} message - The message to be stored
+   * @param {number[]} offChainValues - The off-chain values to be stored
    * @returns {Promise<void>} - Resolves when the record has been successfully stored
    */
-  async storeRecord(txid: string, outputIndex: number, message: string): Promise<void> {
+  async storeRecord(txid: string, outputIndex: number, offChainValues: Record<string, any>): Promise<void> {
     await this.records.insertOne({
       txid,
       outputIndex,
-      message,
+      offChainValues,
       createdAt: new Date()
     })
   }
 
   /**
-   * Deletes a HelloWorld record that matches the given transaction ID and output index.
+   * Deletes a SupplyChain record that matches the given transaction ID and output index.
    * @param {string} txid - The transaction ID of the record to delete
    * @param {number} outputIndex - The UTXO output index of the record to delete
    * @returns {Promise<void>} - Resolves when the record has been successfully deleted
@@ -48,44 +48,77 @@ export class HelloWorldStorage {
   }
 
   /**
-   * Finds HelloWorld records containing the specified message (case-insensitive).
-   * Uses the collection’s full-text index for efficient matching.
+   * Records a SupplyChain transaction as spent.
+   * 
+   * @param {string} txid - The transaction ID of the record to delete
+   * @param {number} outputIndex - The UTXO output index of the record to delete
+   * @param {string} spendingTxid - The transaction ID of the spending transaction
+   * @returns {Promise<void>} - Resolves when the record has been successfully updated
+   */
+  async spendRecord(txid: string, outputIndex: number, spendingTxid: string): Promise<void> {
+    console.log("SupplyChain spendRecord updating:", txid, outputIndex, spendingTxid)
+    await this.records.updateOne({ txid, outputIndex }, { $set: { spendingTxid } })
+  }
+
+  /**
+   * Finds SupplyChain records containing the specified chainId (case-insensitive).
    *
-   * @param message       Partial or full message to search for
+   * @param chainId       Partial or full chainId to search for
+   * @param limit         Max number of results to return (default = 8)
+   * @param skip          Number of results to skip for pagination (default = 0)
+   */
+  async findByChainId(
+    chainId: string,
+    limit: number = 8,
+    skip: number = 0,
+  ): Promise<UTXOReference[]> {
+    if (!chainId) return []
+
+    return this.records
+      .find(
+        { "offChainValues.chainId": chainId },
+        { projection: { txid: 1, outputIndex: 1, createdAt: 1 } }
+      )
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .project<UTXOReference>({ txid: 1, outputIndex: 1 })
+      .toArray()
+  }
+
+  /**
+   * Finds SupplyChain records containing the specified transaction ID (case-insensitive).
+   *
+   * @param txid            Partial or full transaction ID to search for
    * @param limit         Max number of results to return (default = 50)
    * @param skip          Number of results to skip for pagination (default = 0)
    * @param sortOrder     'asc' | 'desc' – sort by createdAt (default = 'desc')
    */
-  async findByMessage(
-    message: string,
+  async findByTxid(
+    txid: string,
     limit: number = 50,
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
   ): Promise<UTXOReference[]> {
-    if (!message) return []
+    if (!txid) return []
 
     // Map text value → numeric MongoDB sort direction
     const direction = sortOrder === 'asc' ? 1 : -1
 
     return this.records
       .find(
-        { $text: { $search: message } },
+        { txid },
         { projection: { txid: 1, outputIndex: 1, createdAt: 1 } }
       )
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
+      .project<UTXOReference>({ txid: 1, outputIndex: 1 })
       .toArray()
-      .then(results =>
-        results.map(r => ({
-          txid: r.txid,
-          outputIndex: r.outputIndex
-        }))
-      )
   }
 
   /**
-   * Retrieves all HelloWorld records, optionally filtered by date range and sorted by creation time.
+   * Retrieves all SupplyChain records, optionally filtered by date range and sorted by creation time.
    * @param {number} [limit=50] - The maximum number of results to return
    * @param {number} [skip=0] - The number of results to skip (for pagination)
    * @param {Date} [startDate] - The earliest creation date to include (inclusive)
@@ -109,7 +142,7 @@ export class HelloWorldStorage {
 
     const sortDirection = sortOrder === 'asc' ? 1 : -1
 
-    return await this.records.find(query)
+    return this.records.find(query)
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)

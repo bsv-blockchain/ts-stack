@@ -99,13 +99,6 @@ export class CertMapStorageManager {
      */
   private async findRecordWithQuery(query: object): Promise<UTXOReference[]> {
     // Find matching results from the DB
-    const results = await this.records.find(query).project({ txid: 1, outputIndex: 1 }).toArray()
-
-    // Convert array of Documents to UTXOReferences
-    const parsedResults: UTXOReference[] = results.map(record => ({
-      txid: record.txid,
-      outputIndex: record.outputIndex
-    }))
-    return parsedResults
+    return this.records.find(query).project<UTXOReference>({ txid: 1, outputIndex: 1 }).toArray()
   }
 }

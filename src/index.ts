@@ -20,11 +20,25 @@ import SlackThreadTopicManager from './services/slackthreads/SlackThreadsTopicMa
 import SlackThreadLookupService from './services/slackthreads/SlackThreadsLookupServiceFactory'
 import DesktopIntegrityTopicManager from './services/desktopintegrity/DesktopIntegrityTopicManager'
 import DesktopIntegrityLookupService from './services/desktopintegrity/DesktopIntegrityLookupServiceFactory'
+import FractionalizeTopicManager from './services/fractionalize/FractionalizeTopicManager'
+import FractionalizeLookupService from './services/fractionalize/FractionalizeLookupServiceFactory'
+import SupplyChainTopicManager from './services/supplychain/SupplyChainTopicManager'
+import SupplyChainLookupService from './services/supplychain/SupplyChainLookupServiceFactory'
+import MonsterBattleTopicManager from './services/monsterbattle/MonsterBattleTopicManager'
+import MonsterBattleLookupService from './services/monsterbattle/MonsterBattleLookupServiceFactory'
 import AnyTopicManager from './services/any/AnyTopicManager'
 import AnyLookupService from './services/any/AnyLookupServiceFactory'
 import AppsTopicManager from './services/apps/AppsTopicManager'
 import AppsLookupService from './services/apps/AppsLookupServiceFactory'
+import DIDTopicManager from './services/did/DIDTopicManager'
+import DIDLookupService from './services/did/DIDLookupServiceFactory'
+import WalletConfigTopicManager from './services/walletconfig/WalletConfigTopicManager'
+import WalletConfigLookupService from './services/walletconfig/WalletConfigLookupServiceFactory'
+import TokenDemoTopicManager from './services/utility-tokens/TokenDemoTopicManager'
+import TokenDemoLookupService from './services/utility-tokens/TokenDemoLookupServiceFactory'
+
 import { config } from 'dotenv'
+import packageJson from '../package.json'
 config()
 
 // Hi there! Let's configure Overlay Express!
@@ -115,6 +129,18 @@ const main = async () => {
     server.configureTopicManager('tm_desktopintegrity', new DesktopIntegrityTopicManager())
     server.configureLookupServiceWithMongo('ls_desktopintegrity', DesktopIntegrityLookupService)
 
+    // Fractionalize
+    server.configureTopicManager('tm_fractionalize', new FractionalizeTopicManager())
+    server.configureLookupServiceWithMongo('ls_fractionalize', FractionalizeLookupService)
+
+    // SupplyChain
+    server.configureTopicManager('tm_supplychain', new SupplyChainTopicManager())
+    server.configureLookupServiceWithMongo('ls_supplychain', SupplyChainLookupService)
+
+    // MonsterBattle
+    server.configureTopicManager('tm_monsterbattle', new MonsterBattleTopicManager())
+    server.configureLookupServiceWithMongo('ls_monsterbattle', MonsterBattleLookupService)
+
     // Any
     server.configureTopicManager('tm_anytx', new AnyTopicManager())
     server.configureLookupServiceWithMongo('ls_anytx', AnyLookupService)
@@ -122,6 +148,18 @@ const main = async () => {
     // Apps
     server.configureTopicManager('tm_apps', new AppsTopicManager())
     server.configureLookupServiceWithMongo('ls_apps', AppsLookupService)
+
+    // DID
+    server.configureTopicManager('tm_did', new DIDTopicManager())
+    server.configureLookupServiceWithMongo('ls_did', DIDLookupService)
+
+    // WalletConfig
+    server.configureTopicManager('tm_walletconfig', new WalletConfigTopicManager())
+    server.configureLookupServiceWithMongo('ls_walletconfig', WalletConfigLookupService)
+
+    // TokenDemo
+    server.configureTopicManager('tm_tokendemo', new TokenDemoTopicManager())
+    server.configureLookupServiceWithMongo('ls_tokendemo', TokenDemoLookupService)
 
     // For simple local deployments, sync can be disabled.
     server.configureEnableGASPSync(process.env?.GASP_ENABLED === 'true')
@@ -131,6 +169,10 @@ const main = async () => {
 
     // Configure verbose request logging
     server.configureVerboseRequestLogging(true)
+
+    server.app.get('/version', (req, res) => {
+        res.json(packageJson)
+    })
 
     // Start the server
     await server.start()

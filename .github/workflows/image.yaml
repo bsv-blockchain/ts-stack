@@ -24,13 +24,13 @@ jobs:
         run: |
           raw=$(git branch -r --contains ${{ github.ref }})
           branch="$(echo ${raw//origin\//} | tr -d '\n')"
-          echo "{name}=branch" >> $GITHUB_OUTPUT
+          echo "branch=$branch" >> $GITHUB_OUTPUT
           echo "Branches where this tag exists : $branch."
 
   image:
     runs-on: ubuntu-latest
     needs: check-current-branch
-    if: contains(${{ needs.check.outputs.branch }}, 'main')`
+    if: contains(needs.check-current-branch.outputs.branch, 'main')
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4

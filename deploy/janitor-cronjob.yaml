@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -o deploy/
+    kompose.version: 1.34.0 (cbf2835db)
+  labels:
+    io.kompose.service: janitor
+  name: janitor
+spec:
+  schedule: "0 0 * * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            io.kompose.service: janitor
+        spec:
+          containers:
+            - name: janitor
+              image: curlimages/curl:latest
+              env:
+                - name: ADMIN_TOKEN
+                  value: ""
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  curl -X POST -H "Authorization: Bearer ${ADMIN_TOKEN}" http://app:3000/admin/janitor
+          restartPolicy: OnFailure

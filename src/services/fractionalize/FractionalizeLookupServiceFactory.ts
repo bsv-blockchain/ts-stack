@@ -1,4 +1,4 @@
-import docs from './SlackThreadsLookupServiceDocs.md.js'
+import docs from './FractionalizeLookupDocs.md.js'
 import {
   LookupService,
   LookupQuestion,
@@ -8,30 +8,20 @@ import {
   OutputAdmittedByTopic,
   OutputSpent
 } from '@bsv/overlay'
-import { SlackThreadsStorage } from './SlackThreadsStorage.js'
-import { Utils } from '@bsv/sdk'
+import { FractionalizeStorage } from './FractionalizeStorage.js'
 import { Db } from 'mongodb'
-
-export interface SlackThreadQuery {
-  threadHash?: string
-  txid?: string
-  limit?: number
-  skip?: number
-  startDate?: Date
-  endDate?: Date
-  sortOrder?: 'asc' | 'desc'
-}
+import { FractionalizeQuery } from './types.js'
 
 /**
- * Implements a lookup service for the SlackThread protocol.
- * Each admitted BRC‑48 Pay‑to‑Push‑Drop output stores **exactly one** UTF‑8 field – the thread hash.
- * This service indexes those thread hashes so they can be queried later.
+ * Implements a lookup service for the Hello‑World protocol.
+ * Each admitted BRC‑48 Pay‑to‑Push‑Drop output stores **exactly one** UTF‑8 field – the message.
+ * This service indexes those messages so they can be queried later.
  */
-export class SlackThreadLookupService implements LookupService {
+export class FractionalizeLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
-  readonly spendNotificationMode: SpendNotificationMode = 'none'
+  readonly spendNotificationMode: SpendNotificationMode = 'txid'
 
-  constructor(public storage: SlackThreadsStorage) { }
+  constructor(public storage: FractionalizeStorage) { }
 
   /**
    * Invoked when a new output is added to the overlay.
@@ -39,18 +29,13 @@ export class SlackThreadLookupService implements LookupService {
    */
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
-    const { topic, lockingScript, txid, outputIndex } = payload
-    if (topic !== 'tm_slackthread') return
+    const { topic, txid, outputIndex } = payload
+    if (payload.topic !== 'tm_fractionalize') return
 
     try {
-      const threadHash = lockingScript.chunks[1].data
-      if (threadHash.length !== 32) throw new Error('Invalid SlackThread token: thread hash must be exactly 32 bytes')
-      const threadHashString = Utils.toHex(threadHash)
-
-      // Persist for future lookup
-      await this.storage.storeRecord(txid, outputIndex, threadHashString)
+      await this.storage.storeRecord(txid, outputIndex)
     } catch (err) {
-      console.error(`SlackThreadLookupService: failed to index ${txid}.${outputIndex}`, err)
+      console.error(`FractionalizeLookupService: failed to index ${txid}.${outputIndex}`, err)
     }
   }
 
@@ -59,10 +44,10 @@ export class SlackThreadLookupService implements LookupService {
    * @param payload - The output admitted by the topic manager
    */
   async outputSpent(payload: OutputSpent): Promise<void> {
-    if (payload.mode !== 'none') throw new Error('Invalid mode')
-    const { topic, txid, outputIndex } = payload
-    if (topic !== 'tm_slackthread') return
-    await this.storage.deleteRecord(txid, outputIndex)
+    if (payload.mode !== 'txid') throw new Error('Invalid mode')
+    const { topic, txid, outputIndex, spendingTxid} = payload
+    if (topic !== 'tm_fractionalize') return
+    await this.storage.spendRecord(txid, outputIndex, spendingTxid)
   }
 
   /**
@@ -81,17 +66,16 @@ export class SlackThreadLookupService implements LookupService {
    */
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
     if (!question) throw new Error('A valid query must be provided!')
-    if (question.service !== 'ls_slackthread') throw new Error('Lookup service not supported!')
+    if (question.service !== 'ls_fractionalize') throw new Error('Lookup service not supported!')
 
     const {
-      threadHash,
       txid,
       limit = 50,
       skip = 0,
       startDate,
       endDate,
       sortOrder
-    } = question.query as SlackThreadQuery
+    } = question.query as FractionalizeQuery
 
     // Basic validation
     if (limit < 0) throw new Error('Limit must be a non‑negative number')
@@ -102,15 +86,12 @@ export class SlackThreadLookupService implements LookupService {
     if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
     if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
-    if (threadHash) {
-      return this.storage.findByThreadHash(threadHash, limit, skip, sortOrder)
-    }
-
     if (txid) {
-      return this.storage.findByTxid(txid, limit, skip, sortOrder)
+      const result = await this.storage.findByTxid(txid)
+      return [result]
     }
-
-    return this.storage.findAll(limit, skip, from, to, sortOrder)
+    
+    return await this.storage.findAll(limit, skip, from, to, sortOrder || 'desc')
   }
 
   /** Overlay docs. */
@@ -127,11 +108,11 @@ export class SlackThreadLookupService implements LookupService {
     informationURL?: string
   }> {
     return {
-      name: 'SlackThread Lookup Service',
-      shortDescription: 'Find threads on‑chain.'
+      name: 'Any Lookup Service',
+      shortDescription: 'Lookup your outputs.'
     }
   }
 }
 
 // Factory
-export default (db: Db): SlackThreadLookupService => new SlackThreadLookupService(new SlackThreadsStorage(db))
+export default (db: Db): FractionalizeLookupService => new FractionalizeLookupService(new FractionalizeStorage(db))

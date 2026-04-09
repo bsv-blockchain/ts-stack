@@ -1,8 +1,8 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Signature, Transaction, PushDrop, Utils, OP } from '@bsv/sdk'
-import docs from './DesktopIntegrityTopicDocs.js'
+import { Transaction, OP } from '@bsv/sdk'
+import docs from './SupplyChainTopicDocs.js'
 
-export default class DesktopIntegrityTopicManager implements TopicManager {
+export default class SupplyChainTopicManager implements TopicManager {
   /**
    * Identify which outputs in the supplied transaction are admissible.
    *
@@ -24,10 +24,14 @@ export default class DesktopIntegrityTopicManager implements TopicManager {
 
       // Inspect every output
       for (const [index, output] of parsedTx.outputs.entries()) {
+        // For pushdata chunks we simply check <= 0 because they differ depending on the data
         try {
-          if (output.lockingScript.chunks.length !== 2) throw new Error('Invalid locking script')
-          if (output.lockingScript.chunks[0].op !== OP.OP_FALSE) throw new Error('Invalid locking script')
-          if (output.lockingScript.chunks[1].op !== OP.OP_RETURN) throw new Error('Invalid locking script')
+          if (output.lockingScript.chunks.length !== 5) throw new Error('Invalid locking script error 1') // Pushdrop script has length of 5
+          if (output.lockingScript.chunks[0].op <= 0) throw new Error('Invalid locking script error 2') // Pushdrop metadata
+          if (output.lockingScript.chunks[1].op <= 0) throw new Error('Invalid locking script error 3')
+          if (output.lockingScript.chunks[2].op !== OP.OP_2DROP) throw new Error('Invalid locking script error 4')
+          if (output.lockingScript.chunks[3].op !== 33) throw new Error('Invalid locking script error 5') // Public key hash
+          if (output.lockingScript.chunks[4].op !== OP.OP_CHECKSIG) throw new Error('Invalid locking script error 6')
 
           outputsToAdmit.push(index)
         } catch (err) {
@@ -37,17 +41,17 @@ export default class DesktopIntegrityTopicManager implements TopicManager {
       }
 
       if (outputsToAdmit.length === 0) {
-        throw new Error('DesktopIntegrity topic manager: no outputs admitted!')
+        throw new Error('SupplyChain topic manager: no outputs admitted!')
       }
 
-      console.log(`Admitted ${outputsToAdmit.length} DesktopIntegrity ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`)
+      console.log(`Admitted ${outputsToAdmit.length} SupplyChain ${outputsToAdmit.length === 1 ? 'output' : 'outputs'}!`)
     } catch (err) {
       if (outputsToAdmit.length === 0 && (!previousCoins || previousCoins.length === 0)) {
         console.error('Error identifying admissible outputs:', err)
       }
     }
 
-    // The DesktopIntegrity protocol never retains previous coins
+    // The SupplyChain protocol never retains previous coins
     return {
       outputsToAdmit,
       coinsToRetain: []
@@ -74,7 +78,7 @@ export default class DesktopIntegrityTopicManager implements TopicManager {
     informationURL?: string
   }> {
     return {
-      name: 'DesktopIntegrity Topic Manager',
+      name: 'SupplyChain Topic Manager',
       shortDescription: "Saves hashes of files and integrity off-chain values"
     }
   }

@@ -25,11 +25,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
 
-  app:
+  overlay-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ts-app
+    container_name: overlay-server
     depends_on:
       - mongodb
       - mysql
@@ -47,6 +47,21 @@ services:
       ADMIN_TOKEN: 0f9888ec903a
       GASP_ENABLED: "false"
     command: ["npm", "run", "start"]
+
+  janitor:
+    image: alpine:latest
+    container_name: janitor
+    depends_on:
+      - overlay-server
+    environment:
+      ADMIN_TOKEN: 0f9888ec903a
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        apk add --no-cache curl
+        echo '0 0 * * * curl -X POST -H "Authorization: Bearer ${ADMIN_TOKEN}" http://app:8080/admin/janitor' > /etc/crontabs/root
+        crond -f -l 2
 
 volumes:
   mongo_data:
