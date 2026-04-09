@@ -841,7 +841,7 @@ async function fundNewTransactionSdk(
       lockingScriptLength: xo.lockingScript.length / 2
     })),
     feeModel: ctx.feeModel,
-    changeInitialSatoshis: ctx.changeBasket.minimumDesiredUTXOValue,
+    changeInitialSatoshis: Math.max(1, ctx.changeBasket.minimumDesiredUTXOValue),
     changeFirstSatoshis: Math.max(1, Math.round(ctx.changeBasket.minimumDesiredUTXOValue / 4)),
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
