@@ -34,7 +34,7 @@ export class DesktopIntegrityStorage {
       txid,
       outputIndex,
       fileHash,
-      offChainValues,
+      offChainValues: Buffer.from(offChainValues),
       createdAt: new Date()
     })
   }
@@ -76,9 +76,9 @@ export class DesktopIntegrityStorage {
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
-      .project<{ txid: string; outputIndex: number; offChainValues: number[] }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
+      .project<{ txid: string; outputIndex: number; offChainValues: { buffer: Buffer } | null }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
       .toArray()
-    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues }))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues ? Array.from(r.offChainValues.buffer) : undefined }))
   }
 
   /**
@@ -108,9 +108,9 @@ export class DesktopIntegrityStorage {
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
-      .project<{ txid: string; outputIndex: number; offChainValues: number[] }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
+      .project<{ txid: string; outputIndex: number; offChainValues: { buffer: Buffer } | null }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
       .toArray()
-    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues }))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues ? Array.from(r.offChainValues.buffer) : undefined }))
   }
 
   /**
@@ -142,9 +142,9 @@ export class DesktopIntegrityStorage {
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)
-      .project<{ txid: string; outputIndex: number; offChainValues: number[] }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
+      .project<{ txid: string; outputIndex: number; offChainValues: { buffer: Buffer } | null }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
       .toArray()
-    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues }))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues ? Array.from(r.offChainValues.buffer) : undefined }))
   }
 
   // Additional custom query functions can be added here. ---------------------------------------------
