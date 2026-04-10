@@ -71,7 +71,7 @@ export class AnyStorage {
     return this.records
       .findOne(
         { txid },
-        { projection: { _id: -1 } }
+        { projection: { txid: 1, outputIndex: 1 } }
       )
   }
 
@@ -100,11 +100,11 @@ export class AnyStorage {
 
     const sortDirection = sortOrder === 'asc' ? 1 : -1
 
-    return await this.records.find(query)
+    return this.records.find(query)
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)
-      .project<UTXOReference>({ _id: -1 })
+      .project<UTXOReference>({ txid: 1, outputIndex: 1 })
       .toArray()
   }
 

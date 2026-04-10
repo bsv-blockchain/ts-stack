@@ -1,4 +1,4 @@
-import docs from './SlackThreadsLookupServiceDocs.md.js'
+import docs from './SupplyChainLookupServiceDocs.md.js'
 import {
   LookupService,
   LookupQuestion,
@@ -8,13 +8,13 @@ import {
   OutputAdmittedByTopic,
   OutputSpent
 } from '@bsv/overlay'
-import { SlackThreadsStorage } from './SlackThreadsStorage.js'
 import { Utils } from '@bsv/sdk'
+import { SupplyChainStorage } from './SupplyChainStorage.js'
 import { Db } from 'mongodb'
 
-export interface SlackThreadQuery {
-  threadHash?: string
+export interface SupplyChainQuery {
   txid?: string
+  chainId?: string
   limit?: number
   skip?: number
   startDate?: Date
@@ -23,15 +23,15 @@ export interface SlackThreadQuery {
 }
 
 /**
- * Implements a lookup service for the SlackThread protocol.
+ * Implements a lookup service for the SupplyChain protocol.
  * Each admitted BRC‑48 Pay‑to‑Push‑Drop output stores **exactly one** UTF‑8 field – the thread hash.
  * This service indexes those thread hashes so they can be queried later.
  */
-export class SlackThreadLookupService implements LookupService {
+export class SupplyChainLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
-  readonly spendNotificationMode: SpendNotificationMode = 'none'
+  readonly spendNotificationMode: SpendNotificationMode = 'txid'
 
-  constructor(public storage: SlackThreadsStorage) { }
+  constructor(public storage: SupplyChainStorage) { }
 
   /**
    * Invoked when a new output is added to the overlay.
@@ -39,18 +39,22 @@ export class SlackThreadLookupService implements LookupService {
    */
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
-    const { topic, lockingScript, txid, outputIndex } = payload
-    if (topic !== 'tm_slackthread') return
+    const { topic, lockingScript, txid, outputIndex, offChainValues } = payload
+    if (topic !== 'tm_supplychain') return
+    // Make sure offChainValues exists
+    if (!offChainValues) throw new Error('Missing off-chain values')
+
+    // Change offChainValues from number[] back to utf8 object (originally a json string)
+    const offChainValuesString = Utils.toUTF8(offChainValues)
+    const offChainValuesObject = JSON.parse(offChainValuesString)
+    if (!offChainValuesObject.chainId) throw new Error('Missing chainId')
+    console.log("SupplyChain LookupService offChainValuesObject:", offChainValuesObject)
 
     try {
-      const threadHash = lockingScript.chunks[1].data
-      if (threadHash.length !== 32) throw new Error('Invalid SlackThread token: thread hash must be exactly 32 bytes')
-      const threadHashString = Utils.toHex(threadHash)
-
       // Persist for future lookup
-      await this.storage.storeRecord(txid, outputIndex, threadHashString)
+      await this.storage.storeRecord(txid, outputIndex, offChainValuesObject)
     } catch (err) {
-      console.error(`SlackThreadLookupService: failed to index ${txid}.${outputIndex}`, err)
+      console.error(`SupplyChainLookupService: failed to index ${txid}.${outputIndex}`, err)
     }
   }
 
@@ -59,10 +63,10 @@ export class SlackThreadLookupService implements LookupService {
    * @param payload - The output admitted by the topic manager
    */
   async outputSpent(payload: OutputSpent): Promise<void> {
-    if (payload.mode !== 'none') throw new Error('Invalid mode')
-    const { topic, txid, outputIndex } = payload
-    if (topic !== 'tm_slackthread') return
-    await this.storage.deleteRecord(txid, outputIndex)
+    if (payload.mode !== 'txid') throw new Error('Invalid mode')
+    const { topic, txid, outputIndex, spendingTxid } = payload
+    if (topic !== 'tm_supplychain') return
+    await this.storage.spendRecord(txid, outputIndex, spendingTxid)
   }
 
   /**
@@ -81,17 +85,17 @@ export class SlackThreadLookupService implements LookupService {
    */
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
     if (!question) throw new Error('A valid query must be provided!')
-    if (question.service !== 'ls_slackthread') throw new Error('Lookup service not supported!')
+    if (question.service !== 'ls_supplychain') throw new Error('Lookup service not supported!')
 
     const {
-      threadHash,
       txid,
+      chainId,
       limit = 50,
       skip = 0,
       startDate,
       endDate,
       sortOrder
-    } = question.query as SlackThreadQuery
+    } = question.query as SupplyChainQuery
 
     // Basic validation
     if (limit < 0) throw new Error('Limit must be a non‑negative number')
@@ -102,12 +106,12 @@ export class SlackThreadLookupService implements LookupService {
     if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
     if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
-    if (threadHash) {
-      return this.storage.findByThreadHash(threadHash, limit, skip, sortOrder)
-    }
-
     if (txid) {
       return this.storage.findByTxid(txid, limit, skip, sortOrder)
+    }
+
+    if (chainId) {
+      return this.storage.findByChainId(chainId, limit, skip)
     }
 
     return this.storage.findAll(limit, skip, from, to, sortOrder)
@@ -127,11 +131,11 @@ export class SlackThreadLookupService implements LookupService {
     informationURL?: string
   }> {
     return {
-      name: 'SlackThread Lookup Service',
-      shortDescription: 'Find threads on‑chain.'
+      name: 'SupplyChain Lookup Service',
+      shortDescription: 'Find files on‑chain.'
     }
   }
 }
 
 // Factory
-export default (db: Db): SlackThreadLookupService => new SlackThreadLookupService(new SlackThreadsStorage(db))
+export default (db: Db): SupplyChainLookupService => new SupplyChainLookupService(new SupplyChainStorage(db))

@@ -46,9 +46,8 @@ export class AnyLookupService implements LookupService {
   async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'txid') throw new Error('Invalid mode')
     const { topic, txid, outputIndex, spendingTxid} = payload
-    if (topic !== 'tm_anytx') {
-      await this.storage.spendRecord(txid, outputIndex, spendingTxid)
-    }
+    if (topic !== 'tm_anytx') return 
+    await this.storage.spendRecord(txid, outputIndex, spendingTxid)
   }
 
   /**
@@ -91,8 +90,8 @@ export class AnyLookupService implements LookupService {
       const result = await this.storage.findByTxid(txid)
       return [result]
     }
-
-    return this.storage.findAll(limit, skip, from, to, sortOrder || 'desc')
+    
+    return await this.storage.findAll(limit, skip, from, to, sortOrder || 'desc')
   }
 
   /** Overlay docs. */

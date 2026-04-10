@@ -36,6 +36,8 @@ spec:
               value: ""
             - name: HOSTING_URL
               value: ""
+            - name: ADMIN_TOKEN
+              value: ""
           image: docker.io/bsvb/overlay-example:latest
           name: overlay
           ports:

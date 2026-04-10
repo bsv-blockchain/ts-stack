@@ -43,9 +43,9 @@ export class DesktopIntegrityLookupService implements LookupService {
     if (topic !== 'tm_desktopintegrity') return
 
     try {
-      const fileHash = lockingScript.chunks[2].data
-      if (fileHash.length !== 32) throw new Error('Invalid DesktopIntegrity token: file hash must be exactly 32 bytes')
-      const fileHashString = Utils.toHex(fileHash)
+      const fileHash = lockingScript.chunks[1].data
+      if (fileHash[0] !== 32 || fileHash.length !== 33) throw new Error('Invalid DesktopIntegrity token: file hash must be exactly 32 bytes')
+      const fileHashString = Utils.toHex(fileHash.slice(1))
 
       // Persist for future lookup
       await this.storage.storeRecord(txid, outputIndex, fileHashString, offChainValues)
@@ -61,9 +61,8 @@ export class DesktopIntegrityLookupService implements LookupService {
   async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid mode')
     const { topic, txid, outputIndex } = payload
-    if (topic !== 'tm_desktopintegrity') {
-      await this.storage.deleteRecord(txid, outputIndex)
-    }
+    if (topic !== 'tm_desktopintegrity') return
+    await this.storage.deleteRecord(txid, outputIndex)
   }
 
   /**
