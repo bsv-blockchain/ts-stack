@@ -287,16 +287,16 @@ export const validBulkHeaderFiles: BulkHeaderFileInfo[] = [
     validated: true
   },
   {
-    chain: "test",
+    chain: 'test',
     count: 28130,
-    fileHash: "2DNTS2vBk4ddDzVz5MbFfRtxuze4FN4wrtKfaxbfC98=",
-    fileName: "testNet_17.headers",
+    fileHash: '2DNTS2vBk4ddDzVz5MbFfRtxuze4FN4wrtKfaxbfC98=',
+    fileName: 'testNet_17.headers',
     firstHeight: 1700000,
-    lastChainWork: "0000000000000000000000000000000000000000000001581bdf712d6fabd4da",
-    lastHash: "0000000072d02bc85e05ff155357fbbde7fe80057c4f9354fe5535147de00687",
-    prevChainWork: "00000000000000000000000000000000000000000000015814b9c82dabd4ea74",
-    prevHash: "000000000001561e0532f48401f822f5c0d8797e364b1d612a317eca6983ca36",
-    sourceUrl: "https://cdn.projectbabbage.com/blockheaders"
+    lastChainWork: '0000000000000000000000000000000000000000000001581bdf712d6fabd4da',
+    lastHash: '0000000072d02bc85e05ff155357fbbde7fe80057c4f9354fe5535147de00687',
+    prevChainWork: '00000000000000000000000000000000000000000000015814b9c82dabd4ea74',
+    prevHash: '000000000001561e0532f48401f822f5c0d8797e364b1d612a317eca6983ca36',
+    sourceUrl: 'https://cdn.projectbabbage.com/blockheaders'
   },
   {
     sourceUrl: 'https://cdn.projectbabbage.com/blockheaders',
@@ -416,15 +416,15 @@ export const validBulkHeaderFiles: BulkHeaderFileInfo[] = [
     validated: true
   },
   {
-    chain: "main",
+    chain: 'main',
     count: 42761,
-    fileHash: "iWZR7qvenqLKHANygKBBnikqmiW8GCoVCN7zjVXwgwY=",
-    fileName: "mainNet_9.headers",
+    fileHash: 'iWZR7qvenqLKHANygKBBnikqmiW8GCoVCN7zjVXwgwY=',
+    fileName: 'mainNet_9.headers',
     firstHeight: 900000,
-    lastChainWork: "0000000000000000000000000000000000000000016bf64e6fb83417f3b94c86",
-    lastHash: "0000000000000000108a6b142072acf8a781d5fcdd1c9a637d2194ad6b9c09dc",
-    prevChainWork: "000000000000000000000000000000000000000001664db1f2d50327928007e0",
-    prevHash: "00000000000000000e7dcc27c06ee353bd37260b2e7e664314c204f0324a5087",
-    sourceUrl: "https://cdn.projectbabbage.com/blockheaders"
+    lastChainWork: '0000000000000000000000000000000000000000016bf64e6fb83417f3b94c86',
+    lastHash: '0000000000000000108a6b142072acf8a781d5fcdd1c9a637d2194ad6b9c09dc',
+    prevChainWork: '000000000000000000000000000000000000000001664db1f2d50327928007e0',
+    prevHash: '00000000000000000e7dcc27c06ee353bd37260b2e7e664314c204f0324a5087',
+    sourceUrl: 'https://cdn.projectbabbage.com/blockheaders'
   }
 ]
