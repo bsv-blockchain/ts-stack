@@ -2838,7 +2838,7 @@ export class WalletPermissionsManager implements WalletInterface {
         },
         this.adminOriginator
       )
-      total += actions.reduce((a, e) => a + e.satoshis, 0)
+      total += actions.reduce((a, e) => a - e.satoshis, 0)
     }
 
     return total
