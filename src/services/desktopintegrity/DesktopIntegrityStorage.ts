@@ -26,15 +26,13 @@ export class DesktopIntegrityStorage {
    * @param {string} txid - The transaction ID associated with this record
    * @param {number} outputIndex - The UTXO output index
    * @param {string} fileHash - The file hash to be stored
-   * @param {number[]} offChainValues - The off-chain values to be stored
    * @returns {Promise<void>} - Resolves when the record has been successfully stored
    */
-  async storeRecord(txid: string, outputIndex: number, fileHash: string, offChainValues: number[]): Promise<void> {
+  async storeRecord(txid: string, outputIndex: number, fileHash: string): Promise<void> {
     await this.records.insertOne({
       txid,
       outputIndex,
       fileHash,
-      offChainValues: Buffer.from(offChainValues),
       createdAt: new Date()
     })
   }
@@ -69,16 +67,13 @@ export class DesktopIntegrityStorage {
     const direction = sortOrder === 'asc' ? 1 : -1
 
     const results = await this.records
-      .find(
-        { fileHash },
-        { projection: { txid: 1, outputIndex: 1, offChainValues: 1, createdAt: 1 } }
-      )
+      .find({ fileHash })
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
-      .project<{ txid: string; outputIndex: number; offChainValues: { buffer: Buffer } | null }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
+      .project<{ txid: string; outputIndex: number }>({ txid: 1, outputIndex: 1 })
       .toArray()
-    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues ? Array.from(r.offChainValues.buffer) : undefined }))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex }))
   }
 
   /**
@@ -101,16 +96,13 @@ export class DesktopIntegrityStorage {
     const direction = sortOrder === 'asc' ? 1 : -1
 
     const results = await this.records
-      .find(
-        { txid },
-        { projection: { txid: 1, outputIndex: 1, offChainValues: 1, createdAt: 1 } }
-      )
+      .find({ txid })
       .sort({ createdAt: direction })
       .skip(skip)
       .limit(limit)
-      .project<{ txid: string; outputIndex: number; offChainValues: { buffer: Buffer } | null }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
+      .project<{ txid: string; outputIndex: number }>({ txid: 1, outputIndex: 1 })
       .toArray()
-    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues ? Array.from(r.offChainValues.buffer) : undefined }))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex }))
   }
 
   /**
@@ -142,9 +134,9 @@ export class DesktopIntegrityStorage {
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)
-      .project<{ txid: string; outputIndex: number; offChainValues: { buffer: Buffer } | null }>({ txid: 1, outputIndex: 1, offChainValues: 1 })
+      .project<{ txid: string; outputIndex: number }>({ txid: 1, outputIndex: 1 })
       .toArray()
-    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex, context: r.offChainValues ? Array.from(r.offChainValues.buffer) : undefined }))
+    return results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex }))
   }
 
   // Additional custom query functions can be added here. ---------------------------------------------

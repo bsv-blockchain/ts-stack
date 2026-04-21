@@ -39,7 +39,7 @@ export class DesktopIntegrityLookupService implements LookupService {
    */
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
-    const { topic, lockingScript, txid, outputIndex, offChainValues } = payload
+    const { topic, lockingScript, txid, outputIndex } = payload
     if (topic !== 'tm_desktopintegrity') return
 
     try {
@@ -48,7 +48,7 @@ export class DesktopIntegrityLookupService implements LookupService {
       const fileHashString = Utils.toHex(fileHash.slice(1))
 
       // Persist for future lookup
-      await this.storage.storeRecord(txid, outputIndex, fileHashString, offChainValues)
+      await this.storage.storeRecord(txid, outputIndex, fileHashString)
     } catch (err) {
       console.error(`DesktopIntegrityLookupService: failed to index ${txid}.${outputIndex}`, err)
     }

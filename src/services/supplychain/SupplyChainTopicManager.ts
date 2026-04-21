@@ -51,10 +51,9 @@ export default class SupplyChainTopicManager implements TopicManager {
       }
     }
 
-    // The SupplyChain protocol never retains previous coins
     return {
       outputsToAdmit,
-      coinsToRetain: []
+      coinsToRetain: previousCoins
     }
   }
 
