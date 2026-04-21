@@ -23,4 +23,6 @@ export interface IdentityQuery {
   identityKey?: PubKeyHex
   certificateTypes?: Base64String[]
   serialNumber?: Base64String
+  limit?: number
+  offset?: number
 }

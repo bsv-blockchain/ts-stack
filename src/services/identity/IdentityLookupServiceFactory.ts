@@ -12,6 +12,7 @@ import { Db } from 'mongodb'
 class IdentityLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
+  private readonly anyoneWallet = new ProtoWallet('anyone')
 
   constructor(public storageManager: IdentityStorageManager) { }
 
@@ -35,7 +36,7 @@ class IdentityLookupService implements LookupService {
     )
 
     // Decrypt certificate fields
-    const decryptedFields = await certificate.decryptFields(new ProtoWallet('anyone'))
+    const decryptedFields = await certificate.decryptFields(this.anyoneWallet)
     if (Object.keys(decryptedFields).length === 0) throw new Error('No publicly revealed attributes present!')
 
     // Replace the certificate fields with the decrypted versions
@@ -77,6 +78,8 @@ class IdentityLookupService implements LookupService {
     }
 
     const questionToAnswer = (question.query as IdentityQuery)
+    const limit = questionToAnswer.limit
+    const offset = questionToAnswer.offset
     let results
 
     // If a unique serialNumber is provided, use findByCertificateSerialNumber.
@@ -84,38 +87,48 @@ class IdentityLookupService implements LookupService {
       questionToAnswer.serialNumber !== undefined
     ) {
       results = await this.storageManager.findByCertificateSerialNumber(
-        questionToAnswer.serialNumber
+        questionToAnswer.serialNumber,
+        limit,
+        offset
       )
       console.log('Identity lookup returning this many results: ', results.length)
       return results
     }
 
     // Handle all available queries
-    if (questionToAnswer.attributes !== undefined && questionToAnswer.certifiers !== undefined) {
+    if (questionToAnswer.attributes !== undefined) {
       results = await this.storageManager.findByAttribute(
         questionToAnswer.attributes,
-        questionToAnswer.certifiers
+        questionToAnswer.certifiers,
+        limit,
+        offset
       )
       console.log('Identity lookup returning this many results: ', results.length)
       return results
-    } else if (questionToAnswer.identityKey !== undefined && questionToAnswer.certificateTypes !== undefined && questionToAnswer.certifiers !== undefined) {
+    } else if (questionToAnswer.identityKey !== undefined && questionToAnswer.certificateTypes !== undefined) {
       results = await this.storageManager.findByCertificateType(
         questionToAnswer.certificateTypes,
         questionToAnswer.identityKey,
-        questionToAnswer.certifiers
+        questionToAnswer.certifiers,
+        limit,
+        offset
       )
       console.log('Identity lookup returning this many results: ', results.length)
       return results
-    } else if (questionToAnswer.identityKey !== undefined && questionToAnswer.certifiers !== undefined) {
+    } else if (questionToAnswer.identityKey !== undefined) {
       results = await this.storageManager.findByIdentityKey(
         questionToAnswer.identityKey,
-        questionToAnswer.certifiers
+        questionToAnswer.certifiers,
+        limit,
+        offset
       )
       console.log('Identity lookup returning this many results: ', results.length)
       return results
     } else if (questionToAnswer.certifiers !== undefined) {
       results = await this.storageManager.findByCertifier(
-        questionToAnswer.certifiers
+        questionToAnswer.certifiers,
+        limit,
+        offset
       )
       console.log('Identity lookup returning this many results: ', results.length)
       return results

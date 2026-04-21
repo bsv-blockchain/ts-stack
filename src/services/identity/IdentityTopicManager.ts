@@ -24,6 +24,8 @@ export default class IdentityTopicManager implements TopicManager {
       if (!Array.isArray(parsedTransaction.outputs) || parsedTransaction.outputs.length < 1) throw new Error('Missing parameter: outputs')
       console.log('Identity topic manager has parsed a the transaction: ', parsedTransaction.id('hex'))
 
+      const anyoneWallet = new ProtoWallet('anyone')
+
       // Try to decode and validate transaction outputs
       for (const [i, output] of parsedTransaction.outputs.entries()) {
         // Decode the Identity fields
@@ -42,9 +44,11 @@ export default class IdentityTopicManager implements TopicManager {
           )
 
           // First, we ensure that the signature over the data is valid for the claimed identity key.
-          const anyoneWallet = new ProtoWallet('anyone')
           const signature = result.fields.pop() as number[]
-          const data = result.fields.reduce((a, e) => [...a, ...e], [])
+          const data: number[] = []
+          for (const field of result.fields) {
+            data.push(...field)
+          }
 
           const { valid: hasValidSignature } = await anyoneWallet.verifySignature({
             data,
