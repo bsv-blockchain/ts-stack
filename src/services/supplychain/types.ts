@@ -8,4 +8,5 @@ export interface SupplyChainRecord {
 export interface UTXOReference {
   txid: string
   outputIndex: number
+  spendingTxid?: string
 }
