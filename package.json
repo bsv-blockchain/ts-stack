@@ -38,8 +38,8 @@
   },
   "homepage": "https://github.com/bsv-blockchain/wallet-toolbox#readme",
   "dependencies": {
-    "@bsv/auth-express-middleware": "^2.0.4",
-    "@bsv/payment-express-middleware": "^2.0.1",
+    "@bsv/auth-express-middleware": "^2.0.5",
+    "@bsv/payment-express-middleware": "^2.0.2",
     "@bsv/sdk": "^2.0.13",
     "better-sqlite3": "^12.6.2",
     "express": "^4.21.2",
