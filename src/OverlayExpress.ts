@@ -578,7 +578,10 @@ export default class OverlayExpress {
         advertiser = new DiscoveryServices.WalletAdvertiser(
           this.network,
           this.privateKey,
-          this.network === 'test' // For now, we hard-code some storage servers. In the future, this needs to be configurable.
+          // Default to Babbage-hosted storage for SHIP/SLAP advertisement
+          // metadata. This is a vendor-hosted default, not a protocol
+          // requirement, and should become configurable.
+          this.network === 'test'
             ? 'https://staging-storage.babbage.systems'
             : 'https://storage.babbage.systems',
           // Until multiple protocols (like https+bsvauth+smf) are fully supported, HTTPS is the one to always use.
