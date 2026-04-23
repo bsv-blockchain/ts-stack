@@ -118,7 +118,7 @@ describe('KVStoreLookupService', () => {
       })
 
       await expect(lookupService.outputAdmittedByTopic(payload))
-        .rejects.toThrow(`KVStore token must have exactly ${Object.keys(kvProtocol).length} PushDrop fields`)
+        .rejects.toThrow(`KVStore token must have ${Object.keys(kvProtocol).length - 1} fields (old format) or ${Object.keys(kvProtocol).length} fields (with tags), got 3 fields`)
 
       // Restore original function
       PushDrop.decode = originalDecode
@@ -211,21 +211,58 @@ describe('KVStoreLookupService', () => {
       expect(results).toHaveLength(3) // All records have same protocolID
     })
 
-    it('should return all records when no specific query', async () => {
+    it('should reject queries without selectors', async () => {
       const question = {
         service: 'ls_kvstore',
         query: {}
       }
 
-      const results = await lookupService.lookup(question)
-
-      expect(results).toHaveLength(3)
+      await expect(lookupService.lookup(question))
+        .rejects.toThrow('Must specify at least one selector: key, controller, protocolID, or tags')
     })
 
-    it('should support pagination and sorting', async () => {
+    it('should reject pagination-only queries', async () => {
       const question = {
         service: 'ls_kvstore',
         query: {
+          limit: 2,
+          skip: 1
+        }
+      }
+
+      await expect(lookupService.lookup(question))
+        .rejects.toThrow('Must specify at least one selector: key, controller, protocolID, or tags')
+    })
+
+    it('should reject ordering-only queries', async () => {
+      const question = {
+        service: 'ls_kvstore',
+        query: {
+          sortOrder: 'asc'
+        }
+      }
+
+      await expect(lookupService.lookup(question))
+        .rejects.toThrow('Must specify at least one selector: key, controller, protocolID, or tags')
+    })
+
+    it('should reject empty tag selector queries', async () => {
+      const question = {
+        service: 'ls_kvstore',
+        query: {
+          tags: []
+        }
+      }
+
+      await expect(lookupService.lookup(question))
+        .rejects.toThrow('Must specify at least one selector: key, controller, protocolID, or tags')
+    })
+
+    it('should support pagination and sorting with a selector', async () => {
+      const question = {
+        service: 'ls_kvstore',
+        query: {
+          protocolID: [1, 'kvstore'],
           limit: 2,
           skip: 1,
           sortOrder: 'asc'
@@ -233,7 +270,6 @@ describe('KVStoreLookupService', () => {
       }
 
       const results = await lookupService.lookup(question)
-
       expect(results).toHaveLength(2)
     })
 

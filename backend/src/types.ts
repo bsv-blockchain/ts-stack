@@ -1,11 +1,16 @@
-import { PubKeyHex, WalletProtocol } from "@bsv/sdk"
+import { PubKeyHex, WalletProtocol } from '@bsv/sdk'
 
 export interface KVStoreQuery {
+  /**
+   * Lookup queries must include at least one selector: key, controller, protocolID,
+   * or a non-empty tags array. Pagination and ordering fields only refine
+   * selector-based lookups.
+   */
   key?: string
   controller?: PubKeyHex
-  protocolID?: WalletProtocol  // Client sends this as WalletProtocol, we stringify for storage
-  tags?: string[]  // Optional tags for advanced querying
-  /** 
+  protocolID?: WalletProtocol // Client sends this as WalletProtocol, we stringify for storage
+  tags?: string[] // Optional tags for advanced querying
+  /**
    * Controls tag matching behavior when tags are specified.
    * - 'all': Requires all specified tags to be present (default)
    * - 'any': Requires at least one of the specified tags to be present
@@ -13,7 +18,7 @@ export interface KVStoreQuery {
   tagQueryMode?: 'all' | 'any'
   limit?: number
   skip?: number
-  sortOrder?: 'asc' | 'desc'  // Sort direction (default: 'desc' - newest first)
+  sortOrder?: 'asc' | 'desc' // Sort direction (default: 'desc' - newest first)
 
   // History depth for chain tracking
   history?: boolean
@@ -28,7 +33,7 @@ export interface KVStoreRecord {
   key: string
   protocolID: string
   controller: PubKeyHex
-  tags?: string[]  // Optional tags for advanced querying
+  tags?: string[] // Optional tags for advanced querying
   createdAt: Date
 }
 

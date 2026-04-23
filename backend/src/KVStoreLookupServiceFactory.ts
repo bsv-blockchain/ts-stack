@@ -3,7 +3,7 @@ import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmi
 import { PushDrop, Transaction, Utils } from '@bsv/sdk'
 import docs from './docs/KVStoreLookupDocs.md.js'
 import { Db } from 'mongodb'
-import { kvProtocol, KVStoreLookupResult, KVStoreQuery, KVStoreRecord } from './types.js'
+import { kvProtocol, KVStoreLookupResult, KVStoreQuery } from './types.js'
 
 /**
  * Implements a lookup service for KVStore tokens
@@ -96,34 +96,21 @@ class KVStoreLookupService implements LookupService {
     }
 
     const query = (question.query as KVStoreQuery)
+    this.validateQuerySelectors(query)
 
-    // Check if we have any filters to apply
-    const hasFilters = query.key || query.protocolID || query.controller || (query.tags && query.tags.length > 0)
-
-    let results: KVStoreRecord[]
-
-    if (hasFilters) {
-      // Use dynamic filtering for any combination of filters
-      results = await this.storageManager.findWithFilters(
-        {
-          key: query.key,
-          protocolID: query.protocolID,
-          controller: query.controller,
-          tags: query.tags
-        },
-        query.tagQueryMode ?? 'all',
-        query.limit,
-        query.skip,
-        query.sortOrder
-      )
-    } else {
-      // No filters - return all records
-      results = await this.storageManager.findAllRecords(
-        query.limit,
-        query.skip,
-        query.sortOrder
-      )
-    }
+    // Use dynamic filtering for any combination of selectors.
+    const results = await this.storageManager.findWithFilters(
+      {
+        key: query.key,
+        protocolID: query.protocolID,
+        controller: query.controller,
+        tags: query.tags
+      },
+      query.tagQueryMode ?? 'all',
+      query.limit,
+      query.skip,
+      query.sortOrder
+    )
 
     const lookupResults: KVStoreLookupResult[] = []
 
@@ -138,6 +125,18 @@ class KVStoreLookupService implements LookupService {
     }
 
     return lookupResults
+  }
+
+  private validateQuerySelectors(query: KVStoreQuery): void {
+    const hasSelector =
+      (typeof query.key === 'string' && query.key.length > 0) ||
+      (typeof query.controller === 'string' && query.controller.length > 0) ||
+      (Array.isArray(query.protocolID) && query.protocolID.length === 2) ||
+      (Array.isArray(query.tags) && query.tags.length > 0)
+
+    if (!hasSelector) {
+      throw new Error('Must specify at least one selector: key, controller, protocolID, or tags')
+    }
   }
 
   /**
