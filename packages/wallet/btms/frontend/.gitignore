@@ -1,7 +1,0 @@
-node_modules
-.DS_Store
-/build
-/mysql
-/mongo
-/dist
-/local-data
