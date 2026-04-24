@@ -327,7 +327,7 @@ describe('CertificateField class method tests', () => {
     expect(entity.masterKey).toBe('masterKey1')
 
     // Validate overridden properties
-    expect(() => entity.id).toThrowError('entity has no "id" value')
+    expect(() => entity.id).toThrow('entity has no "id" value')
     expect(entity.entityName).toBe('certificateField')
     expect(entity.entityTable).toBe('certificate_fields')
 

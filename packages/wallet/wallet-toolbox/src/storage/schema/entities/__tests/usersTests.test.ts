@@ -333,7 +333,7 @@ describe('User class method tests', () => {
     const trx = undefined // Optional transaction token, set as undefined.
 
     // The method should throw an error when called
-    await expect(user.mergeNew(storage as any, userId, syncMap as any, trx)).rejects.toThrowError(
+    await expect(user.mergeNew(storage as any, userId, syncMap as any, trx)).rejects.toThrow(
       'a sync chunk merge must never create a new user'
     )
   })
