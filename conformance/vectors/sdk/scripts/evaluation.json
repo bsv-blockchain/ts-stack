@@ -54,7 +54,7 @@
         "pubkey_hash_hex": "0000000000000000000000000000000000000000"
       },
       "expected": {
-        "hex": "76a9140000000000000000000000000000000000000000088ac",
+        "hex": "76a914000000000000000000000000000000000000000088ac",
         "asm_prefix": "OP_DUP OP_HASH160",
         "asm_suffix": "OP_EQUALVERIFY OP_CHECKSIG",
         "byte_length": 25,

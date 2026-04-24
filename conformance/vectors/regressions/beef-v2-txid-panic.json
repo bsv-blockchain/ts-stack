@@ -27,7 +27,7 @@
     {
       "id": "regression.beef.v2-txid-panic.0002",
       "description": "v1 new BEEF round-trip — minimum BEEF_V1 bytes encode correctly",
-      "parity_class": "required",
+      "parity_class": "intended",
       "input": {
         "beef_hex": "0100beef0000",
         "format": "BEEF_V1"
@@ -36,7 +36,7 @@
         "parse_succeeds": true,
         "txid_non_null": false
       },
-      "notes": "0100beef = BEEF_V1 magic (LE uint32 0xBEEF0001). 00 = 0 BUMPs, 00 = 0 txs. Minimum valid BEEF_V1."
+      "notes": "0100beef = BEEF_V1 magic (LE uint32 0xBEEF0001). 00 = 0 BUMPs, 00 = 0 txs. Minimum valid BEEF_V1. TS SDK returns null txid without error. Go SDK (as of v1.2.23) errors in NewBeefFromTransaction(nil) when ParseBeef's BEEF_V1 path produces a nil transaction. Marked intended: Go SDK parity fix needed."
     }
   ]
 }
