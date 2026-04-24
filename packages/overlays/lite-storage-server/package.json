@@ -1,0 +1,43 @@
+{
+  "name": "@bsv/uhrp-lite",
+  "version": "0.1.0",
+  "main": "./out/src/index.js",
+  "types": "./out/src/index.d.ts",
+  "files": [
+    "out/src",
+    "src"
+  ],
+  "repository": "https://github.com/bitcoin-sv/uhrp-storage-server",
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "dependencies": {
+    "@bsv/auth-express-middleware": "^1.2.0",
+    "@bsv/payment-express-middleware": "^1.2.1",
+    "@bsv/sdk": "^1.6.11",
+    "@bsv/wallet-toolbox-client": "^1.5.9",
+    "axios": "^0.21.1",
+    "body-parser": "^1.20.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.18.2",
+    "prettyjson": "^1.2.5"
+  },
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register src/index.ts\"",
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "standard --fix ."
+  },
+  "devDependencies": {
+    "@types/body-parser": "^1.19.5",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "@types/prettyjson": "^0.0.33",
+    "jest": "^26.6.3",
+    "nodemon": "^2.0.19",
+    "standard": "^16.0.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
+}
