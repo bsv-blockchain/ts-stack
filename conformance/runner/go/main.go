@@ -13,7 +13,9 @@ import (
 	"time"
 
 	ecprim "github.com/bsv-blockchain/go-sdk/primitives/ec"
+	primaesgcm "github.com/bsv-blockchain/go-sdk/primitives/aesgcm"
 	primhash "github.com/bsv-blockchain/go-sdk/primitives/hash"
+	goecies "github.com/bsv-blockchain/go-sdk/compat/ecies"
 	gostorage "github.com/bsv-blockchain/go-sdk/storage"
 )
 
@@ -293,6 +295,199 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 	return StatusNotImplemented, "ECDSA sign/custom-k vectors require private-key operations not yet wired in Go runner"
 }
 
+// dispatchECIES handles Electrum ECIES encrypt/decrypt vectors.
+// Supports two shapes:
+//  1. sender/recipient keys + message → encrypt + decrypt verify
+//  2. recipient key + ciphertext_hex → decrypt only (sender pubkey embedded in ciphertext)
+func dispatchECIES(input, expected map[string]interface{}) (Status, string) {
+	// Normalize field names (some vectors use alice/bob, others sender/recipient)
+	senderPrivHex := getString(input, "sender_private_key")
+	if senderPrivHex == "" {
+		senderPrivHex = getString(input, "alice_private_key")
+	}
+	recipPubHex := getString(input, "recipient_public_key")
+	if recipPubHex == "" {
+		recipPubHex = getString(input, "bob_public_key")
+	}
+	recipPrivHex := getString(input, "recipient_private_key")
+	if recipPrivHex == "" {
+		recipPrivHex = getString(input, "bob_private_key")
+	}
+
+	msgHex := getString(input, "message")
+	msgEncoding := getString(input, "message_encoding")
+
+	// Shape 2: decrypt-only (recipient key + pre-made ciphertext, no sender key)
+	if senderPrivHex == "" {
+		ctHex := getString(input, "ciphertext_hex")
+		wantPlainHex := getString(expected, "decrypted_message")
+		if ctHex == "" || recipPrivHex == "" {
+			return StatusNotImplemented, "ecies: missing ciphertext_hex or recipient_private_key"
+		}
+		ct, err := hex.DecodeString(ctHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode ciphertext_hex: %v", err)
+		}
+		recipPriv, err := ecprim.PrivateKeyFromHex(recipPrivHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode recipient_private_key: %v", err)
+		}
+		plain, err := goecies.ElectrumDecrypt(ct, recipPriv, nil)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ElectrumDecrypt: %v", err)
+		}
+		gotHex := hex.EncodeToString(plain)
+		if gotHex != wantPlainHex {
+			return StatusFail, fmt.Sprintf("plaintext: got %s, want %s", gotHex, wantPlainHex)
+		}
+		return StatusPass, ""
+	}
+
+	senderPriv, err := ecprim.PrivateKeyFromHex(senderPrivHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode sender_private_key: %v", err)
+	}
+
+	// Skip no_key=true (symmetric-only) variants — different format
+	if getBool(input, "no_key") {
+		return StatusNotImplemented, "ecies: no_key=true symmetric variant not implemented"
+	}
+
+	var msgBytes []byte
+	if msgEncoding == "hex" {
+		msgBytes, err = hex.DecodeString(msgHex)
+	} else {
+		msgBytes = []byte(msgHex)
+	}
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode message: %v", err)
+	}
+
+	// Encrypt
+	if wantCtHex := getString(expected, "ciphertext_hex"); wantCtHex != "" {
+		recipPubBytes, err := hex.DecodeString(recipPubHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode recipient_public_key: %v", err)
+		}
+		recipPub, err := ecprim.ParsePubKey(recipPubBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("parse recipient_public_key: %v", err)
+		}
+		ct, err := goecies.ElectrumEncrypt(msgBytes, recipPub, senderPriv, false)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ElectrumEncrypt: %v", err)
+		}
+		gotHex := hex.EncodeToString(ct)
+		if gotHex != wantCtHex {
+			return StatusFail, fmt.Sprintf("ciphertext: got %s, want %s", gotHex, wantCtHex)
+		}
+	}
+
+	// Decrypt verify
+	if wantPlainHex := getString(expected, "decrypted_message"); wantPlainHex != "" && recipPrivHex != "" {
+		recipPriv, err := ecprim.PrivateKeyFromHex(recipPrivHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode recipient_private_key: %v", err)
+		}
+		ctHex := getString(input, "ciphertext_hex")
+		var ct []byte
+		if ctHex != "" {
+			ct, err = hex.DecodeString(ctHex)
+		} else {
+			// Get ciphertext from expected (we just encrypted it above)
+			ct, err = hex.DecodeString(getString(expected, "ciphertext_hex"))
+		}
+		if err != nil {
+			return StatusFail, fmt.Sprintf("get ciphertext for decrypt: %v", err)
+		}
+		plain, err := goecies.ElectrumDecrypt(ct, recipPriv, senderPriv.PubKey())
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ElectrumDecrypt: %v", err)
+		}
+		gotHex := hex.EncodeToString(plain)
+		if gotHex != wantPlainHex {
+			return StatusFail, fmt.Sprintf("plaintext: got %s, want %s", gotHex, wantPlainHex)
+		}
+	}
+
+	return StatusPass, ""
+}
+
+// dispatchAES handles AES block and AES-GCM encrypt/decrypt vectors.
+func dispatchAES(input, expected map[string]interface{}) (Status, string) {
+	algorithm := getString(input, "algorithm")
+	keyHex := getString(input, "key")
+	key, err := hex.DecodeString(keyHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode key: %v", err)
+	}
+
+	switch algorithm {
+	case "aes-block":
+		ptHex := getString(input, "plaintext")
+		pt, err := hex.DecodeString(ptHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode plaintext: %v", err)
+		}
+		ct, err := primaesgcm.AESEncrypt(pt, key)
+		if err != nil {
+			wantErr := getString(expected, "error")
+			if wantErr != "" {
+				return StatusPass, ""
+			}
+			return StatusFail, fmt.Sprintf("AESEncrypt: %v", err)
+		}
+		want := getString(expected, "ciphertext")
+		got := hex.EncodeToString(ct)
+		if got != want {
+			return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+		}
+		return StatusPass, ""
+
+	case "aes-gcm":
+		ptHex := getString(input, "plaintext")
+		ivHex := getString(input, "iv")
+		aadHex := getString(input, "aad")
+
+		pt, err := hex.DecodeString(ptHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode plaintext: %v", err)
+		}
+		iv, err := hex.DecodeString(ivHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode iv: %v", err)
+		}
+		var aad []byte
+		if aadHex != "" {
+			aad, err = hex.DecodeString(aadHex)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("decode aad: %v", err)
+			}
+		}
+
+		ct, tag, err := primaesgcm.AESGCMEncrypt(pt, key, iv, aad)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("AESGCMEncrypt: %v", err)
+		}
+
+		wantCT := getString(expected, "ciphertext")
+		wantTag := getString(expected, "authentication_tag")
+		gotCT := hex.EncodeToString(ct)
+		gotTag := hex.EncodeToString(tag)
+
+		if gotCT != wantCT {
+			return StatusFail, fmt.Sprintf("ciphertext: got %s, want %s", gotCT, wantCT)
+		}
+		if gotTag != wantTag {
+			return StatusFail, fmt.Sprintf("auth_tag: got %s, want %s", gotTag, wantTag)
+		}
+		return StatusPass, ""
+
+	default:
+		return StatusNotImplemented, fmt.Sprintf("aes algorithm %q not implemented", algorithm)
+	}
+}
+
 // dispatchMerkleParent handles merkle_tree_parent operation vectors.
 // Input: left_hex (32-byte hash), right_hex (32-byte hash)
 // Expected: parent_hex (sha256d(left || right))
@@ -477,6 +672,10 @@ func runVector(fileID string, filePath string, v map[string]interface{}) Result 
 		status, msg = dispatchHMAC(inputRaw, expectedRaw)
 	case "ecdsa":
 		status, msg = dispatchECDSA(inputRaw, expectedRaw)
+	case "aes":
+		status, msg = dispatchAES(inputRaw, expectedRaw)
+	case "ecies":
+		status, msg = dispatchECIES(inputRaw, expectedRaw)
 	// Regression categories
 	case "merkle-path-odd-node":
 		op := getString(inputRaw, "operation")
