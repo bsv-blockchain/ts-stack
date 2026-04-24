@@ -1,0 +1,88 @@
+{
+  "name": "@bsv/message-box-client",
+  "version": "2.1.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/message-box-client.git"
+  },
+  "homepage": "https://github.com/bsv-blockchain/message-box-client#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/message-box-client/issues"
+  },
+  "description": "A client for P2P messaging and payments",
+  "type": "module",
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "mod.ts",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "npm run build:ts && npm run build:umd",
+    "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "build:umd": "webpack --config webpack.config.js",
+    "test": "jest --config=jest.config.ts",
+    "test:integration": "jest --config=jest.config.integration.ts",
+    "test:coverage": "jest --coverage --coverageReporters=text --coverageReporters=html",
+    "test:watch": "jest --watch",
+    "lint": "ts-standard --fix .",
+    "clean": "rimraf dist node_modules && npm install"
+  },
+  "keywords": [
+    "BSV",
+    "Blockchain",
+    "P2P",
+    "Bitcoin",
+    "SV",
+    "Messaging",
+    "MessageBox"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js",
+      "types": "./dist/types/mod.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "author": "BSV Blockchain Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "devDependencies": {
+    "@bsv/auth-express-middleware": "^2.0.4",
+    "@bsv/payment-express-middleware": "^2.0.1",
+    "@eslint/js": "^9.20.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.2",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.24.1",
+    "@typescript-eslint/parser": "^8.24.1",
+    "ejs": "^3.1.10",
+    "eslint": "^9.20.1",
+    "eslint-plugin-react": "^7.37.4",
+    "globals": "^15.15.0",
+    "jest": "^29.7.0",
+    "jest-fetch-mock": "^3.0.3",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "ts-standard": "^12.0.2",
+    "ts2md": "^0.2.8",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.24.0",
+    "webpack": "^5.98.0",
+    "webpack-bundle-analyzer": "^4.10.2",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.0",
+    "webpack-merge": "^6.0.1"
+  },
+  "dependencies": {
+    "@bsv/authsocket-client": "^2.0.2",
+    "@bsv/sdk": "^2.0.13"
+  }
+}
