@@ -11,13 +11,13 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | **SDK** | `packages/sdk/` | 2 |
 | **Wallet** | `packages/wallet/` | 7 |
 | **Network** | `packages/network/` | 2 |
-| **Overlays** | `packages/overlays/` | 16 |
+| **Overlays** | `packages/overlays/` | 17 |
 | **Messaging** | `packages/messaging/` | 5 |
 | **Middleware** | `packages/middleware/` | 3 |
 | **Helpers** | `packages/helpers/` | 5 |
 | **Conformance** | `conformance/` | 1 runner |
 
-**40 packages** + conformance runner across 7 domains.
+**41 packages** + conformance runner across 7 domains.
 
 ---
 
@@ -65,6 +65,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [identity-services](packages/overlays/identity-services) | `@bsv/identity-services` *(private)* |
 | [did-client](packages/overlays/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 | [btms-backend](packages/overlays/btms-backend) | `@bsv/btms-backend` *(private)* |
+| [topics](packages/overlays/topics) | `@bsv/overlay-topics` |
 
 ### Messaging — `packages/messaging/`
 | Package | npm |
