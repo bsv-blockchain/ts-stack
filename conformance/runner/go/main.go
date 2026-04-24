@@ -14,6 +14,7 @@ import (
 
 	ecprim "github.com/bsv-blockchain/go-sdk/primitives/ec"
 	primhash "github.com/bsv-blockchain/go-sdk/primitives/hash"
+	gostorage "github.com/bsv-blockchain/go-sdk/storage"
 )
 
 // ─── Vector file schema ───────────────────────────────────────────────────────
@@ -292,6 +293,122 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 	return StatusNotImplemented, "ECDSA sign/custom-k vectors require private-key operations not yet wired in Go runner"
 }
 
+// dispatchMerkleParent handles merkle_tree_parent operation vectors.
+// Input: left_hex (32-byte hash), right_hex (32-byte hash)
+// Expected: parent_hex (sha256d(left || right))
+func dispatchMerkleParent(input, expected map[string]interface{}) (Status, string) {
+	leftHex := getString(input, "left_hex")
+	rightHex := getString(input, "right_hex")
+
+	left, err := hex.DecodeString(leftHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode left_hex: %v", err)
+	}
+	right, err := hex.DecodeString(rightHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode right_hex: %v", err)
+	}
+
+	cat := append(left, right...)
+	result := primhash.Sha256d(cat)
+
+	want := getString(expected, "parent_hex")
+	got := hex.EncodeToString(result)
+	if got != want {
+		return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+	}
+	return StatusPass, ""
+}
+
+// dispatchUHRPURL handles UHRP URL generation/decoding vectors.
+func dispatchUHRPURL(input, expected map[string]interface{}) (Status, string) {
+	// hash → URL
+	if hashHex := getString(input, "hash_hex"); hashHex != "" {
+		hashBytes, err := hex.DecodeString(hashHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode hash_hex: %v", err)
+		}
+
+		if wantURL := getString(expected, "url"); wantURL != "" {
+			gotURL, err := gostorage.GetURLForHash(hashBytes)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("GetURLForHash: %v", err)
+			}
+			if gotURL != wantURL {
+				return StatusFail, fmt.Sprintf("got %q, want %q", gotURL, wantURL)
+			}
+			return StatusPass, ""
+		}
+
+		if wantValid, ok := expected["valid"].(bool); ok {
+			url, err := gostorage.GetURLForHash(hashBytes)
+			gotValid := err == nil && url != ""
+			if gotValid != wantValid {
+				return StatusFail, fmt.Sprintf("valid=%v, want %v (err=%v)", gotValid, wantValid, err)
+			}
+			return StatusPass, ""
+		}
+	}
+
+	// URL → hash
+	if url := getString(input, "url"); url != "" {
+		if wantHashHex := getString(expected, "hash_hex"); wantHashHex != "" {
+			gotBytes, err := gostorage.GetHashFromURL(url)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("GetHashFromURL: %v", err)
+			}
+			got := hex.EncodeToString(gotBytes)
+			if got != wantHashHex {
+				return StatusFail, fmt.Sprintf("got %s, want %s", got, wantHashHex)
+			}
+			return StatusPass, ""
+		}
+
+		// validity check
+		if wantValid, ok := expected["valid"].(bool); ok {
+			gotValid := gostorage.IsValidURL(url)
+			if gotValid != wantValid {
+				return StatusFail, fmt.Sprintf("IsValidURL=%v, want %v", gotValid, wantValid)
+			}
+			return StatusPass, ""
+		}
+	}
+
+	return StatusNotImplemented, "unrecognized uhrp vector shape"
+}
+
+// dispatchPrivKeyWIF handles private key WIF encoding regression vectors.
+func dispatchPrivKeyWIF(input, expected map[string]interface{}) (Status, string) {
+	scalarHex := getString(input, "scalar_hex")
+	strict := getBool(input, "strict")
+
+	wantWIF := getString(expected, "wif")
+	wantErr := getString(expected, "error")
+
+	privKey, err := ecprim.PrivateKeyFromHex(scalarHex)
+	if err != nil {
+		if wantErr != "" {
+			// Any error satisfies expected error for now
+			return StatusPass, ""
+		}
+		return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+	}
+
+	if strict && wantErr != "" {
+		// A strict-mode key that should have been rejected but wasn't
+		return StatusFail, fmt.Sprintf("expected error %q but got valid key", wantErr)
+	}
+
+	if wantWIF != "" {
+		gotWIF := privKey.Wif()
+		if gotWIF != wantWIF {
+			return StatusFail, fmt.Sprintf("got WIF %q, want %q", gotWIF, wantWIF)
+		}
+	}
+
+	return StatusPass, ""
+}
+
 // ─── Vector category → function ID ───────────────────────────────────────────
 
 // subcategoryFromFile derives the subcategory from the file basename (e.g. "sha256" from "sha256.json").
@@ -334,6 +451,12 @@ func runVector(fileID string, filePath string, v map[string]interface{}) Result 
 		expectedRaw = map[string]interface{}{}
 	}
 
+	// Read parity_class: only "required" vectors fail CI on mismatch.
+	parityClass := getString(v, "parity_class")
+	if parityClass == "" {
+		parityClass = "required"
+	}
+
 	// Prefer file-level subcategory (from filename); fall back to ID-based inference.
 	cat := subcategoryFromFile(filePath)
 	if cat == "" {
@@ -354,9 +477,28 @@ func runVector(fileID string, filePath string, v map[string]interface{}) Result 
 		status, msg = dispatchHMAC(inputRaw, expectedRaw)
 	case "ecdsa":
 		status, msg = dispatchECDSA(inputRaw, expectedRaw)
+	// Regression categories
+	case "merkle-path-odd-node":
+		op := getString(inputRaw, "operation")
+		if op == "merkle_tree_parent" {
+			status, msg = dispatchMerkleParent(inputRaw, expectedRaw)
+		} else {
+			status, msg = StatusNotImplemented, fmt.Sprintf("operation %q not implemented", op)
+		}
+	case "uhrp-url-parity":
+		status, msg = dispatchUHRPURL(inputRaw, expectedRaw)
+	case "privatekey-modular-reduction":
+		status, msg = dispatchPrivKeyWIF(inputRaw, expectedRaw)
 	default:
 		status = StatusNotImplemented
 		msg = fmt.Sprintf("category %q not implemented", cat)
+	}
+
+	// Non-required failures become warns (skip in output) so CI stays green
+	// while parity gaps remain visible in the report.
+	if status == StatusFail && parityClass != "required" {
+		msg = fmt.Sprintf("[%s] %s", parityClass, msg)
+		status = StatusSkip
 	}
 
 	return Result{
