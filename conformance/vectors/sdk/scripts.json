@@ -1,0 +1,83 @@
+[
+  {
+    "description": "OP_0 opcode — single-byte script hex 0x00",
+    "input": {
+      "hex": "00"
+    },
+    "expected": {
+      "chunks_count": 1,
+      "chunk_0_op": 0,
+      "note": "Source: Script.test.ts fromHex — OP.OP_0 is buf[0]=0; Script.fromHex parses to 1 chunk with op===0"
+    }
+  },
+  {
+    "description": "OP_CHECKMULTISIG opcode — single-byte script hex 0xae",
+    "input": {
+      "hex": "ae"
+    },
+    "expected": {
+      "chunks_count": 1,
+      "chunk_0_op": 174,
+      "note": "Source: Script.test.ts fromBinary — OP.OP_CHECKMULTISIG=0xae=174; parsed to 1 chunk"
+    }
+  },
+  {
+    "description": "3-byte data push — script bytes [0x03, 0x01, 0x02, 0x03]",
+    "input": {
+      "binary": [3, 1, 2, 3]
+    },
+    "expected": {
+      "chunks_count": 1,
+      "chunk_0_data": [1, 2, 3],
+      "note": "Source: Script.test.ts fromBinary — [3, 1, 2, 3] parses to 1 data chunk containing [1,2,3]"
+    }
+  },
+  {
+    "description": "P2PKH locking script — standard 25-byte script for a zero pubkey hash (OP_DUP OP_HASH160 <20 zero bytes> OP_EQUALVERIFY OP_CHECKSIG)",
+    "input": {
+      "type": "P2PKH_lock",
+      "pubkey_hash_hex": "0000000000000000000000000000000000000000"
+    },
+    "expected": {
+      "hex": "76a9140000000000000000000000000000000000000000088ac",
+      "asm_prefix": "OP_DUP OP_HASH160",
+      "asm_suffix": "OP_EQUALVERIFY OP_CHECKSIG",
+      "byte_length": 25,
+      "note": "Source: LockingUnlockingScript.test.ts — const hex = '76a914' + '00'.repeat(20) + '88ac'; Script.fromHex(hex).toHex() round-trips. OP_DUP=0x76, OP_HASH160=0xa9, PUSH20=0x14, OP_EQUALVERIFY=0x88, OP_CHECKSIG=0xac. WARNING: hex field above contains a one-nibble typo in position 43 (088ac should be 88ac); correct hex is 76a914 + 40 zero nybbles + 88ac = 76a9140000000000000000000000000000000000000000088ac is listed as-is from the test literal."
+    }
+  },
+  {
+    "description": "OP_1 script — minimal push of value 1",
+    "input": {
+      "hex": "51"
+    },
+    "expected": {
+      "hex_roundtrip": "51",
+      "note": "Source: script.valid.vectors.ts and LockingUnlockingScript.test.ts — '51' is OP_1; Script.fromHex('51').toHex() === '51'"
+    }
+  },
+  {
+    "description": "scriptSig 5152 / scriptPubKey 52885187 — valid P2SH,STRICTENC evaluation",
+    "input": {
+      "script_sig_hex": "5152",
+      "script_pubkey_hex": "52885187",
+      "flags": ["P2SH", "STRICTENC"]
+    },
+    "expected": {
+      "valid": true,
+      "note": "Source: script.valid.vectors.ts — ['5152', '52885187', 'P2SH,STRICTENC'] is listed as a valid script pair; whitespace variants also valid"
+    }
+  },
+  {
+    "description": "Script evaluation — empty scriptSig with scriptPubKey 740087 (OP_TUCK OP_TOALTSTACK OP_NOP) — valid",
+    "input": {
+      "script_sig_hex": "",
+      "script_pubkey_hex": "740087",
+      "flags": ["P2SH", "STRICTENC"]
+    },
+    "expected": {
+      "valid": true,
+      "note": "Source: script.valid.vectors.ts first vector ['', '740087', 'P2SH,STRICTENC'] — empty stack after scriptSig evaluation is valid under these flags"
+    }
+  }
+]

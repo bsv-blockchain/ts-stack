@@ -1,0 +1,82 @@
+[
+  {
+    "description": "Known private key hex — valid range, round-trip check",
+    "input": {
+      "privkey_hex": "0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "expected": {
+      "privkey_hex_roundtrip": "0000000000000000000000000000000000000000000000000000000000000001",
+      "note": "Asserted in PrivateKey.test.ts validKeys array: fromHex → toHex round-trip equals original"
+    }
+  },
+  {
+    "description": "Known private key hex — maximum valid secp256k1 key (n-1)",
+    "input": {
+      "privkey_hex": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"
+    },
+    "expected": {
+      "privkey_hex_roundtrip": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
+      "note": "Asserted in PrivateKey.test.ts validKeys array"
+    }
+  },
+  {
+    "description": "BRC-42 key derivation — private child key from sender public key + recipient private key",
+    "input": {
+      "recipient_private_key_hex": "6a1751169c111b4667a6539ee1be6b7cd9f6e9c8fe011a5f2fe31e03a15e0ede",
+      "sender_public_key_hex": "033f9160df035156f1c48e75eae99914fa1a1546bec19781e8eddb900200bff9d1",
+      "invoice_number": "f3WCaUmnN9U="
+    },
+    "expected": {
+      "derived_private_key_hex": "761656715bbfa172f8f9f58f5af95d9d0dfd69014cfdcacc9a245a10ff8893ef",
+      "note": "Source: BRC42.private.vectors.ts vector #1, from sendover test suite"
+    }
+  },
+  {
+    "description": "BRC-42 key derivation — private child key vector #2",
+    "input": {
+      "recipient_private_key_hex": "cab2500e206f31bc18a8af9d6f44f0b9a208c32d5cca2b22acfe9d1a213b2f36",
+      "sender_public_key_hex": "027775fa43959548497eb510541ac34b01d5ee9ea768de74244a4a25f7b60fae8d",
+      "invoice_number": "2Ska++APzEc="
+    },
+    "expected": {
+      "derived_private_key_hex": "09f2b48bd75f4da6429ac70b5dce863d5ed2b350b6f2119af5626914bdb7c276",
+      "note": "Source: BRC42.private.vectors.ts vector #2, from sendover test suite"
+    }
+  },
+  {
+    "description": "BRC-42 public key derivation — public child key from recipient public key + sender private key",
+    "input": {
+      "sender_private_key_hex": "583755110a8c059de5cd81b8a04e1be884c46083ade3f779c1e022f6f89da94c",
+      "recipient_public_key_hex": "02c0c1e1a1f7d247827d1bcf399f0ef2deef7695c322fd91a01a91378f101b6ffc",
+      "invoice_number": "IBioA4D/OaE="
+    },
+    "expected": {
+      "derived_public_key_hex": "03c1bf5baadee39721ae8c9882b3cf324f0bf3b9eb3fc1b8af8089ca7a7c2e669f",
+      "note": "Source: BRC42.public.vectors.ts vector #1, from sendover test suite"
+    }
+  },
+  {
+    "description": "BRC-42 public key derivation — vector #2",
+    "input": {
+      "sender_private_key_hex": "2c378b43d887d72200639890c11d79e8f22728d032a5733ba3d7be623d1bb118",
+      "recipient_public_key_hex": "039a9da906ecb8ced5c87971e9c2e7c921e66ad450fd4fc0a7d569fdb5bede8e0f",
+      "invoice_number": "PWYuo9PDKvI="
+    },
+    "expected": {
+      "derived_public_key_hex": "0398cdf4b56a3b2e106224ff3be5253afd5b72de735d647831be51c713c9077848",
+      "note": "Source: BRC42.public.vectors.ts vector #2, from sendover test suite"
+    }
+  },
+  {
+    "description": "PublicKey DER compressed encoding — fixed test key f97c89aa...",
+    "input": {
+      "privkey_hex": "f97c89aaacf0cd2e47ddbacc97dae1f88bec49106ac37716c451dcdd008a581b"
+    },
+    "expected": {
+      "pubkey_der_length_bytes": 33,
+      "pubkey_der_hex_length_chars": 66,
+      "pubkey_der_prefix": "02 or 03",
+      "note": "Asserted in PublicKey.additional.test.ts: toDER returns 33 bytes / 66 hex chars starting with 02 or 03"
+    }
+  }
+]

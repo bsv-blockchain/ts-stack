@@ -1,0 +1,53 @@
+# BASELINE — @bsv/payment-express-middleware
+
+> Captured: 2026-04-24. Reflects state at time of ts-stack migration.
+
+## Identity
+| Field | Value |
+|-------|-------|
+| Package | `@bsv/payment-express-middleware` |
+| Path | `packages/middleware/payment-express-middleware` |
+| npm | [@bsv/payment-express-middleware](https://www.npmjs.com/package/@bsv/payment-express-middleware) |
+| Version | 2.0.2 |
+| Criticality | **Tier 2** — important middleware; failure isolated to payment-gated routes |
+| Reliability Level | **RL1** — builds, only 1 test file found, coverage not verified |
+| Owner | @sirdeggen |
+| Backup owner | — |
+
+## Build
+| Field | Value |
+|-------|-------|
+| Build command | `tsc -b && tsconfig-to-dual-package tsconfig.cjs.json` |
+| Build status | ✅ Passing (assumed — not yet verified in ts-stack CI) |
+| Outputs | Dual ESM + CJS via tsconfig-to-dual-package |
+
+## Tests
+| Field | Value |
+|-------|-------|
+| Test command | `npm run build && jest` |
+| Test files | 1 |
+| Coverage command | `npm run build && jest --coverage` |
+| Coverage | Not yet captured as baseline |
+| Known flaky | None identified |
+
+## Lint
+| Field | Value |
+|-------|-------|
+| Linter | ts-standard |
+| Lint command | `ts-standard --fix src/**/*.ts` |
+
+## Dependencies
+| Type | Count | Packages |
+|------|-------|---------|
+| Production | 2 | @bsv/sdk, express |
+
+## Known Issues & Incidents
+None recorded at migration time.
+
+## Migration Gate Checklist (MBGA §13.3)
+- [x] BASELINE.md captured
+- [ ] Conformance runner vectors passing
+- [ ] Contract tests green
+- [ ] Publishing rehearsed (npm dry-run)
+- [ ] Rollback documented
+- [ ] 60-day deprecation notice in source repo
