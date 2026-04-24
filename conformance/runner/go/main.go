@@ -488,6 +488,221 @@ func dispatchAES(input, expected map[string]interface{}) (Status, string) {
 	}
 }
 
+// dispatchKeyDerivation handles private/public key round-trip and BRC-42 derivation vectors.
+func dispatchKeyDerivation(input, expected map[string]interface{}) (Status, string) {
+	// Shape 1: privkey hex round-trip
+	if privHex := getString(input, "privkey_hex"); privHex != "" {
+		if wantRound := getString(expected, "privkey_hex_roundtrip"); wantRound != "" {
+			privKey, err := ecprim.PrivateKeyFromHex(privHex)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+			}
+			got := hex.EncodeToString(privKey.Serialize())
+			if got != wantRound {
+				return StatusFail, fmt.Sprintf("round-trip: got %s, want %s", got, wantRound)
+			}
+			return StatusPass, ""
+		}
+		// pubkey DER property check (key-015): length + prefix
+		if wantPrefix := getString(expected, "pubkey_der_prefix"); wantPrefix != "" {
+			privKey, err := ecprim.PrivateKeyFromHex(privHex)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+			}
+			der := privKey.PubKey().ToDER()
+			// Length checks
+			if wantLen, ok := expected["pubkey_der_length_bytes"]; ok {
+				if wl, ok2 := wantLen.(float64); ok2 && len(der) != int(wl) {
+					return StatusFail, fmt.Sprintf("der length: got %d, want %d", len(der), int(wl))
+				}
+			}
+			// Prefix check: wantPrefix may be "02 or 03"
+			gotPrefix := hex.EncodeToString(der[:1])
+			matched := false
+			for _, p := range strings.Split(wantPrefix, " or ") {
+				if gotPrefix == strings.TrimSpace(p) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return StatusFail, fmt.Sprintf("prefix: got %s, want %s", gotPrefix, wantPrefix)
+			}
+			return StatusPass, ""
+		}
+	}
+
+	// Shape 2: BRC-42 recipient key derivation (private)
+	if recipPrivHex := getString(input, "recipient_private_key_hex"); recipPrivHex != "" {
+		senderPubHex := getString(input, "sender_public_key_hex")
+		invoiceNum := getString(input, "invoice_number")
+		wantDerived := getString(expected, "derived_private_key_hex")
+
+		recipPriv, err := ecprim.PrivateKeyFromHex(recipPrivHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode recipient_private_key_hex: %v", err)
+		}
+		senderPubBytes, err := hex.DecodeString(senderPubHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode sender_public_key_hex: %v", err)
+		}
+		senderPub, err := ecprim.ParsePubKey(senderPubBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("parse sender_public_key_hex: %v", err)
+		}
+		derived, err := recipPriv.DeriveChild(senderPub, invoiceNum)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("DeriveChild: %v", err)
+		}
+		got := hex.EncodeToString(derived.Serialize())
+		if got != wantDerived {
+			return StatusFail, fmt.Sprintf("derived key: got %s, want %s", got, wantDerived)
+		}
+		return StatusPass, ""
+	}
+
+	// Shape 3: BRC-42 sender key derivation (public)
+	if senderPrivHex := getString(input, "sender_private_key_hex"); senderPrivHex != "" {
+		recipPubHex := getString(input, "recipient_public_key_hex")
+		invoiceNum := getString(input, "invoice_number")
+		wantDerived := getString(expected, "derived_public_key_hex")
+
+		senderPriv, err := ecprim.PrivateKeyFromHex(senderPrivHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode sender_private_key_hex: %v", err)
+		}
+		recipPubBytes, err := hex.DecodeString(recipPubHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode recipient_public_key_hex: %v", err)
+		}
+		recipPub, err := ecprim.ParsePubKey(recipPubBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("parse recipient_public_key_hex: %v", err)
+		}
+		derived, err := recipPub.DeriveChild(senderPriv, invoiceNum)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("DeriveChild: %v", err)
+		}
+		got := hex.EncodeToString(derived.ToDER())
+		if got != wantDerived {
+			return StatusFail, fmt.Sprintf("derived pubkey: got %s, want %s", got, wantDerived)
+		}
+		return StatusPass, ""
+	}
+
+	// Error-case vectors (key-016, key-017) — skip for now
+	if getString(input, "operation") != "" {
+		return StatusNotImplemented, "error-case operations not implemented"
+	}
+
+	return StatusNotImplemented, "unrecognized key-derivation vector shape"
+}
+
+// dispatchPrivateKey handles sdk/keys/private-key vectors.
+// Shapes: WIF decode, hex round-trip + pubkey, BRC-42 private derivation.
+func dispatchPrivateKey(input, expected map[string]interface{}) (Status, string) {
+	// Shape: fromWif → privkey_hex + pubkey_hex
+	if wif := getString(input, "wif"); wif != "" {
+		privKey, err := ecprim.PrivateKeyFromWif(wif)
+		if err != nil {
+			if getString(expected, "error") != "" {
+				return StatusPass, ""
+			}
+			return StatusFail, fmt.Sprintf("PrivateKeyFromWif: %v", err)
+		}
+		if wantHex := getString(expected, "privkey_hex"); wantHex != "" {
+			got := hex.EncodeToString(privKey.Serialize())
+			if got != wantHex {
+				return StatusFail, fmt.Sprintf("privkey_hex: got %s, want %s", got, wantHex)
+			}
+		}
+		if wantPub := getString(expected, "pubkey_hex"); wantPub != "" {
+			got := hex.EncodeToString(privKey.PubKey().ToDER())
+			if got != wantPub {
+				return StatusFail, fmt.Sprintf("pubkey_hex: got %s, want %s", got, wantPub)
+			}
+		}
+		return StatusPass, ""
+	}
+
+	// Shape: privkey_hex → round-trip + optional pubkey_hex
+	if privHex := getString(input, "privkey_hex"); privHex != "" {
+		privKey, err := ecprim.PrivateKeyFromHex(privHex)
+		if err != nil {
+			if getString(expected, "error") != "" {
+				return StatusPass, ""
+			}
+			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+		}
+		if wantRound := getString(expected, "privkey_hex_roundtrip"); wantRound != "" {
+			got := hex.EncodeToString(privKey.Serialize())
+			if got != wantRound {
+				return StatusFail, fmt.Sprintf("roundtrip: got %s, want %s", got, wantRound)
+			}
+		}
+		if wantPub := getString(expected, "pubkey_hex"); wantPub != "" {
+			got := hex.EncodeToString(privKey.PubKey().ToDER())
+			if got != wantPub {
+				return StatusFail, fmt.Sprintf("pubkey_hex: got %s, want %s", got, wantPub)
+			}
+		}
+		return StatusPass, ""
+	}
+
+	// Shape: BRC-42 private derivation (reuse key-derivation dispatcher)
+	if getString(input, "recipient_private_key_hex") != "" {
+		return dispatchKeyDerivation(input, expected)
+	}
+
+	return StatusNotImplemented, "unrecognized private-key vector shape"
+}
+
+// dispatchPublicKey handles sdk/keys/public-key vectors.
+// Shapes: privkey → pubkey DER, pubkey DER round-trip, BRC-42 public derivation.
+func dispatchPublicKey(input, expected map[string]interface{}) (Status, string) {
+	// Shape: privkey_hex → pubkey_der_hex
+	if privHex := getString(input, "privkey_hex"); privHex != "" {
+		privKey, err := ecprim.PrivateKeyFromHex(privHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+		}
+		pub := privKey.PubKey()
+		if wantDER := getString(expected, "pubkey_der_hex"); wantDER != "" {
+			got := hex.EncodeToString(pub.ToDER())
+			if got != wantDER {
+				return StatusFail, fmt.Sprintf("pubkey_der_hex: got %s, want %s", got, wantDER)
+			}
+		}
+		return StatusPass, ""
+	}
+
+	// Shape: pubkey_der_hex → parse → serialize round-trip
+	if pubHex := getString(input, "pubkey_der_hex"); pubHex != "" {
+		pubBytes, err := hex.DecodeString(pubHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode pubkey_der_hex: %v", err)
+		}
+		pub, err := ecprim.ParsePubKey(pubBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ParsePubKey: %v", err)
+		}
+		if wantRT := getString(expected, "pubkey_der_hex_roundtrip"); wantRT != "" {
+			got := hex.EncodeToString(pub.ToDER())
+			if got != wantRT {
+				return StatusFail, fmt.Sprintf("roundtrip: got %s, want %s", got, wantRT)
+			}
+		}
+		return StatusPass, ""
+	}
+
+	// Shape: BRC-42 public derivation (reuse key-derivation dispatcher)
+	if getString(input, "sender_private_key_hex") != "" {
+		return dispatchKeyDerivation(input, expected)
+	}
+
+	return StatusNotImplemented, "unrecognized public-key vector shape"
+}
+
 // dispatchMerkleParent handles merkle_tree_parent operation vectors.
 // Input: left_hex (32-byte hash), right_hex (32-byte hash)
 // Expected: parent_hex (sha256d(left || right))
@@ -676,6 +891,13 @@ func runVector(fileID string, filePath string, v map[string]interface{}) Result 
 		status, msg = dispatchAES(inputRaw, expectedRaw)
 	case "ecies":
 		status, msg = dispatchECIES(inputRaw, expectedRaw)
+	// Key categories
+	case "key-derivation":
+		status, msg = dispatchKeyDerivation(inputRaw, expectedRaw)
+	case "private-key":
+		status, msg = dispatchPrivateKey(inputRaw, expectedRaw)
+	case "public-key":
+		status, msg = dispatchPublicKey(inputRaw, expectedRaw)
 	// Regression categories
 	case "merkle-path-odd-node":
 		op := getString(inputRaw, "operation")
