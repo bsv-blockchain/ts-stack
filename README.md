@@ -52,6 +52,8 @@ npm run lars
 
 ### Lookup Service Queries
 
+Lookup queries must include at least one selector: `key`, `controller`, `protocolID`, or a non-empty `tags` array. Pagination and ordering parameters refine selector-based lookups; they are not valid selectors by themselves.
+
 ```typescript
 // Find by key
 const results = await lookupService.lookup({
@@ -90,7 +92,8 @@ const results = await lookupService.lookup({
 - **Field 1**: Key (variable length UTF-8 string)
 - **Field 2**: Value (variable length UTF-8 string) 
 - **Field 3**: Controller (33-byte compressed ECDSA public key)
-- **Field 4**: Signature (64-byte signature over fields 0-3)
+- **Field 4**: Optional tags (JSON string array)
+- **Field 5**: Signature (64-byte signature over the preceding fields)
 
 ### Service Configuration
 - **Service ID**: `ls_kvstore`
@@ -104,7 +107,8 @@ The lookup service supports filtering by:
 - **key**: Find records with a specific key
 - **controller**: Find records controlled by a specific public key
 - **protocolID**: Find records for a specific protocol version
-- **Pagination**: `limit`, `skip`, and `sortOrder` parameters
+- **tags**: Find records with all or any supplied tags
+- **Pagination**: `limit`, `skip`, and `sortOrder` parameters when combined with a selector
 - **Combined filters**: Multiple criteria can be combined
 
 ### Database Schema

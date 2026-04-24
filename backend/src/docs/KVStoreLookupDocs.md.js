@@ -1,6 +1,6 @@
 export default `# KVStore Lookup Service
 
-The KVStore Lookup Service enables efficient querying of on-chain key-value pairs stored using the KVStore protocol. This service indexes KVStore tokens and provides flexible lookups by key, controller, protocolID, or any combination.
+The KVStore Lookup Service enables efficient querying of on-chain key-value pairs stored using the KVStore protocol. This service indexes KVStore tokens and provides flexible lookups by key, controller, protocolID, tags, or any combination of those selectors.
 
 ## Protocol Overview
 
@@ -9,9 +9,12 @@ KVStore tokens use PushDrop locking scripts with the following field structure:
 - Field 1: key (UTF-8 string)
 - Field 2: value (UTF-8 string) 
 - Field 3: controller (hex-encoded public key)
-- Field 4: signature (PushDrop signature over fields 0-3)
+- Field 4: optional tags (JSON string array)
+- Field 5: signature (PushDrop signature over the preceding fields)
 
 ## Supported Query Parameters
+
+Every query must include at least one selector: \`key\`, \`controller\`, \`protocolID\`, or a non-empty \`tags\` array. Pagination, ordering, and history options refine selector-based lookups and are not valid selectors by themselves.
 
 ### key (string, optional)
 The key to search for. Returns entries with this exact key across all controllers.
@@ -21,6 +24,12 @@ Hex-encoded public key of the controller. Returns all entries controlled by this
 
 ### protocolID (WalletProtocol, optional)
 Protocol identifier tuple, e.g., \`[1, "kvstore"]\`. Returns entries under this protocol.
+
+### tags (string[], optional)
+Tags to search for. Empty tag arrays are not valid selectors.
+
+### tagQueryMode ('all' | 'any', default: 'all')
+Controls tag matching behavior when \`tags\` is supplied. \`all\` requires every supplied tag, while \`any\` requires at least one supplied tag.
 
 ### limit (number, default: 50)
 Maximum number of results to return.
@@ -37,9 +46,10 @@ Whether to include historical chain of spends for each token returned in the res
 ## Query Behavior
 
 - **Single Parameters**: \`key\`, \`controller\`, or \`protocolID\` alone return arrays of all matching entries
+- **Tags**: \`tags\` can be used alone or with other selectors; \`tagQueryMode\` controls whether all or any tags must match
 - **Combined Parameters**: Multiple filters narrow results (AND logic)
 - **Key + Controller**: Returns single result (most specific query)
-- **No Parameters**: Returns all records (with pagination)
+- **Selector Required**: Empty, pagination-only, ordering-only, and empty-tag queries are rejected
 
 ## Example Queries
 
@@ -83,11 +93,12 @@ Whether to include historical chain of spends for each token returned in the res
 }
 \`\`\`
 
-### List All Records
+### Find by Tags
 \`\`\`json
 {
-  "limit": 100,
-  "skip": 0
+  "tags": ["music", "rock"],
+  "tagQueryMode": "all",
+  "limit": 100
 }
 \`\`\`
 
@@ -115,8 +126,9 @@ When history is enabled, each result includes a history function that filters th
 ## Error Messages
 
 - \`"A valid query must be provided"\`: Query is null, undefined, or missing
+- \`"Must specify at least one selector: key, controller, protocolID, or tags"\`: Query lacks a valid selector
 - \`"Lookup service not supported"\`: Service ID doesn't match \`ls_kvstore\`
-- \`"KVStore token must have exactly X PushDrop fields..."\`: Token doesn't have expected field count
+- \`"KVStore token must have 5 fields (old format) or 6 fields (with tags)..."\`: Token doesn't have expected field count
 - \`"KVStore tokens must have a non-empty key"\`: Key field is missing or empty
 - \`"KVStore tokens must have a non-empty value"\`: Value field is missing or empty  
 - \`"Invalid KVStore token: signature verification failed"\`: PushDrop signature validation failed
