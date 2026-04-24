@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,14 @@ func getBool(m map[string]interface{}, key string) bool {
 	}
 	b, _ := v.(bool)
 	return b
+}
+
+// decodeHexPad decodes hex, left-padding with "0" if odd length (BigNumber hex compat).
+func decodeHexPad(h string) ([]byte, error) {
+	if len(h)%2 != 0 {
+		h = "0" + h
+	}
+	return hex.DecodeString(h)
 }
 
 // decodeMessage decodes a message field using its accompanying encoding field.
@@ -238,54 +247,54 @@ func dispatchHMAC(input, expected map[string]interface{}) (Status, string) {
 	return StatusPass, ""
 }
 
-// dispatchECDSA handles ecdsa vectors.
-// The ECDSA vectors in this suite are design/behavioural tests that require
-// signing, custom-k, and curve operations not exposed by the current Go SDK
-// public API in a portable way.  We skip them with "not-implemented" rather
-// than breaking the runner.
-//
-// Exception: vectors that provide explicit r/s or DER bytes for pure
-// verification could be run, but the current vector set doesn't include those —
-// it focuses on sign+verify round-trips that need a private key and k value.
+// dispatchECDSA handles ECDSA sign/verify vectors.
 func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
-	// Check if the vector is a pure verify case with explicit DER bytes.
-	// (None of the current vectors match this pattern, but we handle it
-	//  for future-proofing.)
-	sigDERHex := getString(input, "signature_der")
-	msgHashHex := getString(input, "message_hash")
-	pubkeyHex := getString(input, "public_key")
+	// ── Not-implemented shapes ────────────────────────────────────────────────
+	// Custom k (TS-specific API), curve point ops, k_function, message_too_large
+	kVal := getString(input, "k")
+	if kVal != "" && kVal != "drbg" {
+		// Custom k values (0x01, 0x054e, etc.) require a sign-with-fixed-k API
+		// not exposed by Go SDK.
+		return StatusNotImplemented, "custom-k sign vectors require TS-specific k API"
+	}
+	if _, ok := input["k_function"]; ok {
+		return StatusNotImplemented, "k_function vectors require TS-specific callable k API"
+	}
+	if _, ok := input["operation"]; ok {
+		return StatusNotImplemented, "curve-operation vectors (point_add_negation, scalar_mul_zero) not implemented"
+	}
+	if getBool(input, "message_too_large") {
+		return StatusNotImplemented, "message_too_large vectors test TS-specific size-check API"
+	}
 
-	if sigDERHex != "" && msgHashHex != "" && pubkeyHex != "" {
-		sigDER, err := hex.DecodeString(sigDERHex)
-		if err != nil {
-			return StatusFail, fmt.Sprintf("decode signature_der: %v", err)
-		}
-		msgHash, err := hex.DecodeString(msgHashHex)
-		if err != nil {
-			return StatusFail, fmt.Sprintf("decode message_hash: %v", err)
-		}
-		pubKeyBytes, err := hex.DecodeString(pubkeyHex)
-		if err != nil {
-			return StatusFail, fmt.Sprintf("decode public_key: %v", err)
-		}
+	// ── Explicit-signature verify vectors (016–019) ───────────────────────────
+	// Input: privkey_hex + message_hex + signature_r + signature_s → verify=false
+	if rHex := getString(input, "signature_r"); rHex != "" {
+		sHex := getString(input, "signature_s")
+		privHex := getString(input, "privkey_hex")
+		msgHex := getString(input, "message_hex")
 
-		pubKey, err := ecprim.ParsePubKey(pubKeyBytes)
+		msgBytes, err := hex.DecodeString(msgHex)
 		if err != nil {
-			// Invalid public key: if expected.valid is false, that is the
-			// correct outcome.
-			wantValid := getBool(expected, "valid")
-			if !wantValid {
-				return StatusPass, ""
-			}
-			return StatusFail, fmt.Sprintf("parse public key: %v", err)
+			return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
 		}
-
-		sig, err := ecprim.FromDER(sigDER)
+		rBytes, err := hex.DecodeString(rHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("parse DER signature: %v", err)
+			return StatusFail, fmt.Sprintf("decode signature_r: %v", err)
 		}
-
-		valid := ecprim.Verify(msgHash, sig, pubKey.ToECDSA())
+		sBytes, err := hex.DecodeString(sHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode signature_s: %v", err)
+		}
+		privKey, err := ecprim.PrivateKeyFromHex(privHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+		}
+		sig := &ecprim.Signature{
+			R: new(big.Int).SetBytes(rBytes),
+			S: new(big.Int).SetBytes(sBytes),
+		}
+		valid := ecprim.Verify(msgBytes, sig, privKey.PubKey().ToECDSA())
 		wantValid := getBool(expected, "valid")
 		if valid != wantValid {
 			return StatusFail, fmt.Sprintf("verify=%v, want %v", valid, wantValid)
@@ -293,8 +302,153 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 		return StatusPass, ""
 	}
 
-	// All other ECDSA vectors require sign+custom-k operations; skip them.
-	return StatusNotImplemented, "ECDSA sign/custom-k vectors require private-key operations not yet wired in Go runner"
+	// ── DRBG sign + verify vectors ────────────────────────────────────────────
+	privHex := getString(input, "privkey_hex")
+	if privHex == "" {
+		return StatusNotImplemented, "unrecognized ECDSA vector shape"
+	}
+	privKey, err := ecprim.PrivateKeyFromHex(privHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+	}
+
+	// message to sign (use decodeHexPad: BigNumber hex may have odd length)
+	signMsgHex := getString(input, "message_hex")
+	if signMsgHex == "" {
+		signMsgHex = getString(input, "signed_message_hex")
+	}
+	signMsgBytes, err := decodeHexPad(signMsgHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+	}
+
+	// Wrong-pubkey verify (ecdsa-004)
+	if wrongScalar := getString(input, "wrong_pubkey_scalar"); wrongScalar != "" {
+		sig, err := privKey.Sign(signMsgBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("Sign: %v", err)
+		}
+		scalarInt, _ := new(big.Int).SetString(wrongScalar, 10)
+		scalarBytes := make([]byte, 32)
+		copy(scalarBytes[32-len(scalarInt.Bytes()):], scalarInt.Bytes())
+		wrongPrivKey, err := ecprim.PrivateKeyFromHex(hex.EncodeToString(scalarBytes))
+		if err != nil {
+			return StatusFail, fmt.Sprintf("wrong pubkey scalar: %v", err)
+		}
+		valid := ecprim.Verify(signMsgBytes, sig, wrongPrivKey.PubKey().ToECDSA())
+		wantValid := getBool(expected, "valid")
+		if valid != wantValid {
+			return StatusFail, fmt.Sprintf("wrong-pubkey verify=%v, want %v", valid, wantValid)
+		}
+		return StatusPass, ""
+	}
+
+	// Batch forceLowS across multiple messages (ecdsa-022)
+	if msgs, ok := input["messages"]; ok {
+		msgList, _ := msgs.([]interface{})
+		halfN := new(big.Int).Rsh(ecprim.S256().N, 1) // N/2
+		for _, mh := range msgList {
+			msgHexI, _ := mh.(string)
+			mb, err := hex.DecodeString(msgHexI)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("decode message %s: %v", msgHexI, err)
+			}
+			sig, err := privKey.Sign(mb)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("Sign(%s): %v", msgHexI, err)
+			}
+			if sig.S.Cmp(halfN) > 0 {
+				return StatusFail, fmt.Sprintf("s > N/2 for message %s", msgHexI)
+			}
+		}
+		if wantAll, ok := expected["all_s_lte_half_n"]; ok {
+			if b, _ := wantAll.(bool); b {
+				return StatusPass, ""
+			}
+		}
+		return StatusPass, ""
+	}
+
+	sig, err := privKey.Sign(signMsgBytes)
+	if err != nil {
+		if getBool(expected, "throws") {
+			return StatusPass, ""
+		}
+		return StatusFail, fmt.Sprintf("Sign: %v", err)
+	}
+
+	// Wrong-message verify (ecdsa-003)
+	verifyMsgHex := getString(input, "verify_message_hex")
+	if verifyMsgHex == "" {
+		verifyMsgHex = signMsgHex
+	}
+	verifyMsgBytes, err := decodeHexPad(verifyMsgHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode verify_message_hex: %v", err)
+	}
+
+	// Verify
+	if wantValid, hasValid := expected["valid"]; hasValid {
+		valid := ecprim.Verify(verifyMsgBytes, sig, privKey.PubKey().ToECDSA())
+		wantValidBool, _ := wantValid.(bool)
+		if valid != wantValidBool {
+			return StatusFail, fmt.Sprintf("verify=%v, want %v", valid, wantValidBool)
+		}
+	}
+
+	// DER length check
+	if wantDERLen, ok := expected["der_length_bytes"]; ok {
+		derBytes, err := sig.ToDER()
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ToDER: %v", err)
+		}
+		wantLen, _ := wantDERLen.(float64)
+		if len(derBytes) != int(wantLen) {
+			return StatusFail, fmt.Sprintf("DER length: got %d, want %d", len(derBytes), int(wantLen))
+		}
+	}
+
+	// DER hex length check
+	if wantHexLen, ok := expected["der_hex_length_chars"]; ok {
+		derBytes, err := sig.ToDER()
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ToDER: %v", err)
+		}
+		gotHexLen := len(hex.EncodeToString(derBytes))
+		wantLen, _ := wantHexLen.(float64)
+		if gotHexLen != int(wantLen) {
+			return StatusFail, fmt.Sprintf("DER hex length: got %d, want %d", gotHexLen, int(wantLen))
+		}
+	}
+
+	// DER round-trip r/s equality check
+	if wantRT, ok := expected["roundtrip_r_s_equal"]; ok {
+		if b, _ := wantRT.(bool); b {
+			derBytes, err := sig.ToDER()
+			if err != nil {
+				return StatusFail, fmt.Sprintf("ToDER: %v", err)
+			}
+			sig2, err := ecprim.FromDER(derBytes)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("fromDER round-trip: %v", err)
+			}
+			if sig.R.Cmp(sig2.R) != 0 || sig.S.Cmp(sig2.S) != 0 {
+				return StatusFail, "DER round-trip r/s mismatch"
+			}
+		}
+	}
+
+	// s <= N/2 check (forceLowS)
+	if wantLowS, ok := expected["s_lte_half_n"]; ok {
+		halfN := new(big.Int).Rsh(ecprim.S256().N, 1)
+		isLowS := sig.S.Cmp(halfN) <= 0
+		wantBool, _ := wantLowS.(bool)
+		if isLowS != wantBool {
+			return StatusFail, fmt.Sprintf("s_lte_half_n=%v, want %v", isLowS, wantBool)
+		}
+	}
+
+	return StatusPass, ""
 }
 
 // dispatchECIES handles Electrum ECIES encrypt/decrypt vectors.
