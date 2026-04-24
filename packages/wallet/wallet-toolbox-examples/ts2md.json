@@ -1,0 +1,59 @@
+{
+  "options": [
+    {
+      "inputFilename": "src/index.misc.ts",
+      "outputFilename": "docs/README.md",
+      "firstHeadingLevel": 2,
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/p2pkh.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/p2pkh",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/brc29.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/brc29",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/pushdrop.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/pushdrop",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/listChange.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/listChange",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/internalize.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/internalize",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/nosend.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/nosend",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/janitor.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/janitor",
+      "noDetailsSummary": true
+    }
+  ]
+}
