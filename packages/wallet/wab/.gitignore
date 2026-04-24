@@ -1,0 +1,12 @@
+node_modules
+data/database.sqlite
+data/mysql-data
+.env
+yarn-error.log
+functions
+yarn.lock
+public/.well-known/cwi-secret-server
+coverage
+.DS_Store
+dist
+src/dev.sqlite3

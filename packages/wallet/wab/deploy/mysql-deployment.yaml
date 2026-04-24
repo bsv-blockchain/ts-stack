@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: mysql
+    app: wab
+  name: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        service: mysql
+    spec:
+      containers:
+        - env:
+            - name: MYSQL_DATABASE
+              value: exampledb
+            - name: MYSQL_PASSWORD
+              value: examplepass
+            - name: MYSQL_ROOT_PASSWORD
+              value: example
+            - name: MYSQL_USER
+              value: exampleuser
+          image: mysql:8
+          name: mysql
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: db-data
+      restartPolicy: Always
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: db-data

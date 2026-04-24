@@ -1,0 +1,51 @@
+name: Build and Push to AWS Marketplace ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.7)'
+        required: true
+        default: '1.0.7'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | \
+          docker login --username AWS --password-stdin \
+          709825985650.dkr.ecr.us-east-1.amazonaws.com
+      
+      - name: Build Docker image
+        run: |
+          docker build --platform linux/amd64 -t wab:${{ github.event.inputs.version }} .
+      
+      - name: Tag image
+        run: |
+          docker tag wab:${{ github.event.inputs.version }} \
+          709825985650.dkr.ecr.us-east-1.amazonaws.com/bsv-blockchain/wab:${{ github.event.inputs.version }}
+      
+      - name: Push to ECR
+        run: |
+          docker push 709825985650.dkr.ecr.us-east-1.amazonaws.com/bsv-blockchain/wab:${{ github.event.inputs.version }}
+      
+      - name: Verify push
+        run: |
+          aws ecr describe-images \
+            --registry-id 709825985650 \
+            --repository-name bsv-blockchain/wab \
+            --region us-east-1 \
+            --image-ids imageTag=${{ github.event.inputs.version }}

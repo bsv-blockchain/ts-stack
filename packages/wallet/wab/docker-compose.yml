@@ -1,0 +1,43 @@
+services:
+  web:
+    build: .
+    environment:
+      DEV_CONSOLE_AUTH_METHOD_ENABLED: 'true'
+      DB_CLIENT: mysql2
+      DB_USER: app
+      DB_PASS: pass1234
+      DB_NAME: app
+      DB_HOST: mysql
+      DB_PORT: 3306
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID}
+      SERVER_PRIVATE_KEY: ${SERVER_PRIVATE_KEY}
+      STORAGE_URL: ${STORAGE_URL}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: always
+
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: app
+      MYSQL_USER: app
+      MYSQL_PASSWORD: pass1234
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "app", "-ppass1234"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
+
+volumes:
+  db_data:

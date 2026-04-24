@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: web
+    app: wab
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: web
+  template:
+    metadata:
+      labels:
+        service: web
+    spec:
+      containers:
+        - image: docker.io/bsvb/wab:latest
+          env:
+          - name: DB_CLIENT
+            value: mysql2
+          - name: DB_USER
+            value: exampleuser
+          - name: DB_PASS
+            value: examplepass
+          - name: DB_NAME
+            value: exampledb
+          - name: DB_HOST
+            value: mysql
+          name: web
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+      restartPolicy: Always
