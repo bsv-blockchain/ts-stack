@@ -1,0 +1,11 @@
+node_modules
+/dist
+/coverage
+
+eslint-debug-output.txt
+file_list.txt
+CLAUDE.md
+
+# MkDocs documentation
+/site
+.DS_Store

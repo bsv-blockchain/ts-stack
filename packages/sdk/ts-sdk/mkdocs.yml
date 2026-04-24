@@ -1,0 +1,70 @@
+site_name: BSV TypeScript SDK
+site_description: TypeScript SDK for Bitcoin SV
+site_url: https://bsv-blockchain.github.io/ts-sdk/
+repo_url: https://github.com/bsv-blockchain/ts-sdk
+repo_name: bsv-blockchain/ts-sdk
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+nav:
+  - Home: index.md
+  - WalletClient QuickStart: https://fast.brc.dev
+  - Swagger BRC-100 Interface: swagger/index.html
+  - Guides:
+    - Remittance Getting Started: remittance-getting-started.md
+  - Reference:
+    - Wallet: reference/wallet.md
+    - Primitives: reference/primitives.md
+    - Script: reference/script.md
+    - Transaction: reference/transaction.md
+    - Mutual Authentication: reference/auth.md
+    - Identity: reference/identity.md
+    - Overlay Tools: reference/overlay-tools.md
+    - Registry: reference/registry.md
+    - Storage: reference/storage.md
+    - KV Store: reference/kvstore.md
+    - Remittance: reference/remittance.md
+    - Messages: reference/messages.md
+    - TOTP: reference/totp.md
+    - Compatibility: reference/compat.md
+  - Performance: performance.md

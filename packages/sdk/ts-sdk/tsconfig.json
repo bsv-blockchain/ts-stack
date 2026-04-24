@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "strictNullChecks": true
+  },
+  "references": [
+    {
+      "path": "tsconfig.esm.json"
+    },
+    {
+      "path": "tsconfig.cjs.json"
+    },
+    {
+      "path": "tsconfig.types.json"
+    }
+  ]
+}

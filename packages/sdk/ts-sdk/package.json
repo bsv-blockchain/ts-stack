@@ -1,0 +1,278 @@
+{
+  "name": "@bsv/sdk",
+  "version": "2.0.14",
+  "type": "module",
+  "description": "BSV Blockchain Software Development Kit",
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "docs",
+    "mod.ts",
+    "LICENSE.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/mod.d.ts",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./*.ts": {
+      "types": "./dist/types/src/*.d.ts",
+      "import": "./dist/esm/src/*.js",
+      "require": "./dist/cjs/src/*.js"
+    },
+    "./primitives": {
+      "import": "./dist/esm/src/primitives/index.js",
+      "require": "./dist/cjs/src/primitives/index.js",
+      "types": "./dist/types/src/primitives/index.d.ts"
+    },
+    "./primitives/*": {
+      "import": "./dist/esm/src/primitives/*.js",
+      "require": "./dist/cjs/src/primitives/*.js",
+      "types": "./dist/types/src/primitives/*.d.ts"
+    },
+    "./script": {
+      "import": "./dist/esm/src/script/index.js",
+      "require": "./dist/cjs/src/script/index.js",
+      "types": "./dist/types/src/script/index.d.ts"
+    },
+    "./script/*": {
+      "import": "./dist/esm/src/script/*.js",
+      "require": "./dist/cjs/src/script/*.js",
+      "types": "./dist/types/src/script/*.d.ts"
+    },
+    "./script/templates": {
+      "import": "./dist/esm/src/script/templates/index.js",
+      "require": "./dist/cjs/src/script/templates/index.js",
+      "types": "./dist/types/src/script/templates/index.d.ts"
+    },
+    "./script/templates/*": {
+      "import": "./dist/esm/src/script/templates/*.js",
+      "require": "./dist/cjs/src/script/templates/*.js",
+      "types": "./dist/types/src/script/templates/*.d.ts"
+    },
+    "./transaction": {
+      "import": "./dist/esm/src/transaction/index.js",
+      "require": "./dist/cjs/src/transaction/index.js",
+      "types": "./dist/types/src/transaction/index.d.ts"
+    },
+    "./transaction/*": {
+      "import": "./dist/esm/src/transaction/*.js",
+      "require": "./dist/cjs/src/transaction/*.js",
+      "types": "./dist/types/src/transaction/*.d.ts"
+    },
+    "./transaction/broadcaster": {
+      "import": "./dist/esm/src/transaction/broadcaster/index.js",
+      "require": "./dist/cjs/src/transaction/broadcaster/index.js",
+      "types": "./dist/types/src/transaction/broadcaster/index.d.ts"
+    },
+    "./transaction/broadcaster/*": {
+      "import": "./dist/esm/src/transaction/broadcaster/*.js",
+      "require": "./dist/cjs/src/transaction/broadcaster/*.js",
+      "types": "./dist/types/src/transaction/broadcaster/*.d.ts"
+    },
+    "./transaction/chaintrackers": {
+      "import": "./dist/esm/src/transaction/chaintrackers/index.js",
+      "require": "./dist/cjs/src/transaction/chaintrackers/index.js",
+      "types": "./dist/types/src/transaction/chaintrackers/index.d.ts"
+    },
+    "./transaction/chaintrackers/*": {
+      "import": "./dist/esm/src/transaction/chaintrackers/*.js",
+      "require": "./dist/cjs/src/transaction/chaintrackers/*.js",
+      "types": "./dist/types/src/transaction/chaintrackers/*.d.ts"
+    },
+    "./transaction/http": {
+      "import": "./dist/esm/src/transaction/http/index.js",
+      "require": "./dist/cjs/src/transaction/http/index.js",
+      "types": "./dist/types/src/transaction/http/index.d.ts"
+    },
+    "./transaction/http/*": {
+      "import": "./dist/esm/src/transaction/http/*.js",
+      "require": "./dist/cjs/src/transaction/http/*.js",
+      "types": "./dist/types/src/transaction/http/*.d.ts"
+    },
+    "./transaction/fee-model": {
+      "import": "./dist/esm/src/transaction/fee-model/index.js",
+      "require": "./dist/cjs/src/transaction/fee-model/index.js",
+      "types": "./dist/types/src/transaction/fee-model/index.d.ts"
+    },
+    "./transaction/fee-model/*": {
+      "import": "./dist/esm/src/transaction/fee-model/*.js",
+      "require": "./dist/cjs/src/transaction/fee-model/*.js",
+      "types": "./dist/types/src/transaction/fee-model/*.d.ts"
+    },
+    "./messages": {
+      "import": "./dist/esm/src/messages/index.js",
+      "require": "./dist/cjs/src/messages/index.js",
+      "types": "./dist/types/src/messages/index.d.ts"
+    },
+    "./messages/*": {
+      "import": "./dist/esm/src/messages/*.js",
+      "require": "./dist/cjs/src/messages/*.js",
+      "types": "./dist/types/src/messages/*.d.ts"
+    },
+    "./compat": {
+      "import": "./dist/esm/src/compat/index.js",
+      "require": "./dist/cjs/src/compat/index.js",
+      "types": "./dist/types/src/compat/index.d.ts"
+    },
+    "./compat/*": {
+      "import": "./dist/esm/src/compat/*.js",
+      "require": "./dist/cjs/src/compat/*.js",
+      "types": "./dist/types/src/compat/*.d.ts"
+    },
+    "./totp": {
+      "import": "./dist/esm/src/totp/index.js",
+      "require": "./dist/cjs/src/totp/index.js",
+      "types": "./dist/types/src/totp/index.d.ts"
+    },
+    "./totp/*": {
+      "import": "./dist/esm/src/totp/*.js",
+      "require": "./dist/cjs/src/totp/*.js",
+      "types": "./dist/types/src/totp/*.d.ts"
+    },
+    "./wallet": {
+      "import": "./dist/esm/src/wallet/index.js",
+      "require": "./dist/cjs/src/wallet/index.js",
+      "types": "./dist/types/src/wallet/index.d.ts"
+    },
+    "./wallet/*": {
+      "import": "./dist/esm/src/wallet/*.js",
+      "require": "./dist/cjs/src/wallet/*.js",
+      "types": "./dist/types/src/wallet/*.d.ts"
+    },
+    "./wallet/substrates": {
+      "import": "./dist/esm/src/wallet/substrates/index.js",
+      "require": "./dist/cjs/src/wallet/substrates/index.js",
+      "types": "./dist/types/src/wallet/substrates/index.d.ts"
+    },
+    "./wallet/substrates/*": {
+      "import": "./dist/esm/src/wallet/substrates/*.js",
+      "require": "./dist/cjs/src/wallet/substrates/*.js",
+      "types": "./dist/types/src/wallet/substrates/*.d.ts"
+    },
+    "./auth": {
+      "import": "./dist/esm/src/auth/index.js",
+      "require": "./dist/cjs/src/auth/index.js",
+      "types": "./dist/types/src/auth/index.d.ts"
+    },
+    "./auth/*": {
+      "import": "./dist/esm/src/auth/*.js",
+      "require": "./dist/cjs/src/auth/*.js",
+      "types": "./dist/types/src/auth/*.d.ts"
+    },
+    "./auth/certificate": {
+      "import": "./dist/esm/src/auth/certificate/index.js",
+      "require": "./dist/cjs/src/auth/certificate/index.js",
+      "types": "./dist/types/src/auth/certificate/index.d.ts"
+    },
+    "./auth/certificate/*": {
+      "import": "./dist/esm/src/auth/certificate/*.js",
+      "require": "./dist/cjs/src/auth/certificate/*.js",
+      "types": "./dist/types/src/auth/certificate/*.d.ts"
+    },
+    "./overlay-tools": {
+      "import": "./dist/esm/src/overlay-tools/index.js",
+      "require": "./dist/cjs/src/overlay-tools/index.js",
+      "types": "./dist/types/src/overlay-tools/index.d.ts"
+    },
+    "./overlay-tools/*": {
+      "import": "./dist/esm/src/overlay-tools/*.js",
+      "require": "./dist/cjs/src/overlay-tools/*.js",
+      "types": "./dist/types/src/overlay-tools/*.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/esm/src/storage/index.js",
+      "require": "./dist/cjs/src/storage/index.js",
+      "types": "./dist/types/src/storage/index.d.ts"
+    },
+    "./storage/*": {
+      "import": "./dist/esm/src/storage/*.js",
+      "require": "./dist/cjs/src/storage/*.js",
+      "types": "./dist/types/src/storage/*.d.ts"
+    },
+    "./kvstore": {
+      "import": "./dist/esm/src/kvstore/index.js",
+      "require": "./dist/cjs/src/kvstore/index.js",
+      "types": "./dist/types/src/kvstore/index.d.ts"
+    },
+    "./kvstore/*": {
+      "import": "./dist/esm/src/kvstore/*.js",
+      "require": "./dist/cjs/src/kvstore/*.js",
+      "types": "./dist/types/src/kvstore/*.d.ts"
+    },
+    "./remittance": {
+      "import": "./dist/esm/src/remittance/index.js",
+      "require": "./dist/cjs/src/remittance/index.js",
+      "types": "./dist/types/src/remittance/index.d.ts"
+    },
+    "./remittance/*": {
+      "import": "./dist/esm/src/remittance/*.js",
+      "require": "./dist/cjs/src/remittance/*.js",
+      "types": "./dist/types/src/remittance/*.d.ts"
+    },
+    "./umd": {
+      "import": "./dist/umd/bundle.js"
+    }
+  },
+  "scripts": {
+    "test": "npm run build && jest",
+    "test:watch": "npm run build && jest --watch",
+    "test:coverage": "npm run build && jest --coverage",
+    "lint:ci": "ts-standard src/**/*.ts",
+    "lint": "ts-standard --fix src/**/*.ts",
+    "build": "npm run build:ts && npm run build:umd",
+    "build:ts": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "build:umd": "rspack --config rspack.config.js",
+    "dev": "tsc -b -w",
+    "prepublish": "npm run build",
+    "doc": "ts2md",
+    "docs:serve": "mkdocs serve",
+    "docs:build": "mkdocs build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-sdk.git"
+  },
+  "keywords": [
+    "BSV",
+    "Blockchain",
+    "SDK",
+    "Bitcoin",
+    "SV"
+  ],
+  "author": "BSV Blockchain Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-sdk/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-sdk#readme",
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@jest/globals": "^30.2.0",
+    "@rspack/cli": "^2.0.0",
+    "@rspack/core": "^1.6.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "ts-jest": "^29.4.5",
+    "ts-loader": "^9.5.4",
+    "ts-standard": "^12.0.2",
+    "ts2md": "^0.2.8",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4"
+  },
+  "ts-standard": {
+    "project": "tsconfig.eslint.json",
+    "ignore": [
+      "dist"
+    ]
+  }
+}
