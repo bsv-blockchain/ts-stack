@@ -1,0 +1,71 @@
+{
+  "name": "@bsv/simple",
+  "version": "0.3.0",
+  "description": "Simplified, modular helper library for BSV blockchain development",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/simple.git"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "ts-standard --fix src/**/*.ts",
+    "lint:ci": "ts-standard src/**/*.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "bsv",
+    "bitcoin",
+    "blockchain",
+    "wallet",
+    "inscription",
+    "messagebox",
+    "tokens",
+    "certification"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@bsv/message-box-client": "^2.0.2",
+    "@bsv/sdk": "^2.0.4",
+    "@bsv/wallet-toolbox": "^2.0.19",
+    "@bsv/wallet-toolbox-client": "^2.0.19"
+  },
+  "overrides": {
+    "minimatch": "^10.2.1"
+  },
+  "ts-standard": {
+    "project": "tsconfig.eslint.json",
+    "ignore": [
+      "dist"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "dotenv": "^17.3.1",
+    "jest": "^30.2.0",
+    "ts-standard": "^12.0.2",
+    "typescript": "^5.3.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
