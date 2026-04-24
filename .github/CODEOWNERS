@@ -1,0 +1,29 @@
+# Default owner for everything
+*                                               @sirdeggen
+
+# SDK
+packages/sdk/                                   @sirdeggen
+
+# Wallet
+packages/wallet/                                @sirdeggen
+
+# Network
+packages/network/                               @sirdeggen
+
+# Overlays
+packages/overlays/                              @sirdeggen
+
+# Messaging
+packages/messaging/                             @sirdeggen
+
+# Middleware
+packages/middleware/                            @sirdeggen
+
+# Helpers
+packages/helpers/                               @sirdeggen
+
+# Conformance runner
+conformance/                                    @sirdeggen
+
+# CI / release / repo config
+.github/                                        @sirdeggen
