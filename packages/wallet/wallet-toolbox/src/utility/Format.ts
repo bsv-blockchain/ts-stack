@@ -4,7 +4,7 @@ import { TableTransaction } from '../storage/schema/tables'
 import { StorageAdminStats, StorageProvider } from '../storage/StorageProvider'
 
 export abstract class Format {
-  static alignLeft(v: string | number, fixedWidth: number): string {
+  static alignLeft (v: string | number, fixedWidth: number): string {
     v = v.toString()
     if (v.length > fixedWidth) {
       return v.slice(0, fixedWidth - 1) + '…'
@@ -12,7 +12,7 @@ export abstract class Format {
     return v.toString().padEnd(fixedWidth)
   }
 
-  static alignRight(v: string | number, fixedWidth: number): string {
+  static alignRight (v: string | number, fixedWidth: number): string {
     v = v.toString()
     if (v.length > fixedWidth) {
       return '…' + v.slice(-fixedWidth + 1)
@@ -20,7 +20,7 @@ export abstract class Format {
     return v.toString().padStart(fixedWidth)
   }
 
-  static alignMiddle(v: string | number, fixedWidth: number): string {
+  static alignMiddle (v: string | number, fixedWidth: number): string {
     v = v.toString()
     if (v.length === fixedWidth) return v
     const l = Math.ceil(fixedWidth / 2)
@@ -33,25 +33,25 @@ export abstract class Format {
     return `${ar(v.slice(0, pl), l)}${al(v.slice(-pr), r)}`
   }
 
-  static satoshis(s: number): string {
+  static satoshis (s: number): string {
     const minus = s < 0 ? '-' : ''
     s = Math.abs(s)
-    let a = s.toString().split('')
+    const a = s.toString().split('')
     if (a.length > 2) a.splice(-2, 0, '_')
     if (a.length > 6) a.splice(-6, 0, '_')
     if (a.length > 10) a.splice(-10, 0, '.')
     if (a.length > 14) a.splice(-14, 0, '_')
     if (a.length > 18) a.splice(-18, 0, '_')
-    let v = a.join('')
+    const v = a.join('')
     return minus + v
   }
 
-  static toLogStringTransaction(tx: Transaction): string {
+  static toLogStringTransaction (tx: Transaction): string {
     const txid = tx.id('hex')
     try {
       let log = ''
-      let totalIn = 0,
-        totalOut = 0
+      let totalIn = 0
+      let totalOut = 0
       for (let i = 0; i < Math.max(tx.inputs.length, tx.outputs.length); i++) {
         let ilog: string = ''
         let olog: string = ''
@@ -80,13 +80,13 @@ export abstract class Format {
     }
   }
 
-  static toLogStringBeefTxid(beef: Beef, txid: string): string {
+  static toLogStringBeefTxid (beef: Beef, txid: string): string {
     const tx = beef.findAtomicTransaction(txid)
-    if (!tx) return `Transaction ${txid} not found in beef`
+    if (tx == null) return `Transaction ${txid} not found in beef`
     return Format.toLogStringTransaction(tx)
   }
 
-  static async toLogStringTableTransaction(tx: TableTransaction, storage: StorageProvider): Promise<string> {
+  static async toLogStringTableTransaction (tx: TableTransaction, storage: StorageProvider): Promise<string> {
     if (!tx.txid) return `Transaction ${tx.transactionId} has no txid`
     try {
       const beef = await storage.getBeefForTransaction(tx.txid, { minProofLevel: 1 })
@@ -99,7 +99,7 @@ export abstract class Format {
     }
   }
 
-  static toLogStringAdminStats(s: StorageAdminStats): string {
+  static toLogStringAdminStats (s: StorageAdminStats): string {
     let log = `StorageAdminStats: ${s.when} ${s.requestedBy}\n`
     log += `  ${al('', 13)} ${ar('Day', 18)} ${ar('Month', 18)} ${ar('Total', 18)}\n`
     log += dmt('users', s.usersDay, s.usersMonth, s.usersTotal)
@@ -122,7 +122,7 @@ export abstract class Format {
 
     return log
 
-    function dmt(l: string, d: number | string, m: number | string, t: number | string): string {
+    function dmt (l: string, d: number | string, m: number | string, t: number | string): string {
       return `  ${al(l, 13)} ${ar(d, 18)} ${ar(m, 18)} ${ar(t, 18)}\n`
     }
   }

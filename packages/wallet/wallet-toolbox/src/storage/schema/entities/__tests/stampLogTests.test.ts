@@ -50,7 +50,7 @@ describe('stampLog and stampLogFormat Tests', () => {
   // Test: Formatting valid log without **NETWORK**
   test('3_formats_valid_log_without_network', async () => {
     for (const { wallet } of ctxs) {
-      const log = `2025-01-10T10:00:00.000Z Event 1\n2025-01-10T10:00:01.000Z Event 2\n2025-01-10T10:00:03.000Z Event 3`
+      const log = '2025-01-10T10:00:00.000Z Event 1\n2025-01-10T10:00:01.000Z Event 2\n2025-01-10T10:00:03.000Z Event 3'
       const output = stampLogFormat(log)
       expect(output).toContain('Total = 3000 msecs')
       expect(output).toContain(' 1000 Event 2')
@@ -61,7 +61,7 @@ describe('stampLog and stampLogFormat Tests', () => {
   // Test: Formatting valid log with **NETWORK** entries
   test('4_formats_log_with_network_entries', async () => {
     for (const { wallet } of ctxs) {
-      const log = `2025-01-10T10:00:00.000Z Event 1\n2025-01-10T10:00:01.000Z **NETWORK**\n2025-01-10T10:00:02.000Z Event 2\n2025-01-10T10:00:03.000Z **NETWORK**\n2025-01-10T10:00:05.000Z Event 3`
+      const log = '2025-01-10T10:00:00.000Z Event 1\n2025-01-10T10:00:01.000Z **NETWORK**\n2025-01-10T10:00:02.000Z Event 2\n2025-01-10T10:00:03.000Z **NETWORK**\n2025-01-10T10:00:05.000Z Event 3'
       const output = stampLogFormat(log)
       expect(output).toContain('Total = 5000 msecs')
       expect(output).toContain(' 1000 **NETWORK**')
@@ -72,7 +72,7 @@ describe('stampLog and stampLogFormat Tests', () => {
   // Test: Handles improperly formatted log entries
   test('5_handles_invalid_log_entries_gracefully', async () => {
     for (const { wallet } of ctxs) {
-      const log = `Invalid Timestamp Event 1\n2025-01-10T10:00:01.000Z Event 2`
+      const log = 'Invalid Timestamp Event 1\n2025-01-10T10:00:01.000Z Event 2'
 
       // Expect the function to throw a RangeError due to invalid timestamp
       expect(() => stampLogFormat(log)).toThrow(RangeError)

@@ -23,9 +23,9 @@ export interface ParsedOutpoint {
 }
 
 /** Strictly parse an outpoint string into txid and vout components. */
-export function parseOutpoint(s: string): ParsedOutpoint {
+export function parseOutpoint (s: string): ParsedOutpoint {
   const m = /^([0-9a-fA-F]{64})\.(\d+)$/.exec(s)
-  if (!m) throw new Error(`Invalid outpoint format: ${s}`)
+  if (m == null) throw new Error(`Invalid outpoint format: ${s}`)
   const txid = m[1].toLowerCase()
   const vout = Number(m[2])
   if (!Number.isSafeInteger(vout) || vout < 0) throw new Error(`Invalid vout in outpoint: ${s}`)
@@ -33,7 +33,7 @@ export function parseOutpoint(s: string): ParsedOutpoint {
 }
 
 /** Parse raw hex into a Transaction and assert its hash matches the expected txid. */
-export function parseTxAndAssertId(rawHex: string, expectedTxid: string): Transaction {
+export function parseTxAndAssertId (rawHex: string, expectedTxid: string): Transaction {
   const tx = Transaction.fromHex(rawHex)
   const got = tx.id('hex')
   if (got.toLowerCase() !== expectedTxid.toLowerCase()) {
@@ -43,7 +43,7 @@ export function parseTxAndAssertId(rawHex: string, expectedTxid: string): Transa
 }
 
 /** Verify that a locking script is standard P2PKH and its hash160 matches the given public key. */
-export function verifyP2PKHOwnership(lockingScript: LockingScript, publicKey: PublicKey): void {
+export function verifyP2PKHOwnership (lockingScript: LockingScript, publicKey: PublicKey): void {
   const chunks = lockingScript.chunks
   if (chunks.length !== 5) throw new Error('UTXO is not standard P2PKH')
   if (chunks[0].op !== 118) throw new Error('UTXO is not P2PKH (missing OP_DUP)')
@@ -52,7 +52,7 @@ export function verifyP2PKHOwnership(lockingScript: LockingScript, publicKey: Pu
   if (chunks[3].op !== 136) throw new Error('UTXO is not P2PKH (missing OP_EQUALVERIFY)')
   if (chunks[4].op !== 172) throw new Error('UTXO is not P2PKH (missing OP_CHECKSIG)')
 
-  const scriptHash = chunks[2].data!
+  const scriptHash = chunks[2].data
   const keyHash = publicKey.toHash() as number[]
   if (scriptHash.length !== keyHash.length) throw new Error('P2PKH hash160 length mismatch')
   for (let i = 0; i < scriptHash.length; i++) {
@@ -61,11 +61,11 @@ export function verifyP2PKHOwnership(lockingScript: LockingScript, publicKey: Pu
 }
 
 /** @internal */
-export function resolveAutoSigned(car: CreateActionResult, txid: string, vout: number): string {
+export function resolveAutoSigned (car: CreateActionResult, txid: string, vout: number): string {
   if (!car.txid || !/^[0-9a-f]{64}$/i.test(car.txid)) {
     throw new Error('createAction returned no signableTransaction and no valid txid')
   }
-  if (car.tx) {
+  if (car.tx != null) {
     const completedTx = Transaction.fromAtomicBEEF(car.tx)
     if (completedTx.id('hex').toLowerCase() !== car.txid.toLowerCase()) {
       throw new Error('Auto-signed tx id mismatch with car.txid')
@@ -80,7 +80,7 @@ export function resolveAutoSigned(car: CreateActionResult, txid: string, vout: n
 }
 
 /** @internal */
-export async function signAndComplete(
+export async function signAndComplete (
   wallet: WalletInterface,
   st: SignableTransaction,
   txid: string,
@@ -93,7 +93,7 @@ export async function signAndComplete(
   let unsignedTx: Transaction | undefined
   let inputIndex = -1
   for (const stbtx of stBeef.txs) {
-    if (!stbtx.tx) continue
+    if (stbtx.tx == null) continue
     for (let i = 0; i < stbtx.tx.inputs.length; i++) {
       const inp = stbtx.tx.inputs[i]
       if (String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout) {
@@ -102,9 +102,9 @@ export async function signAndComplete(
         break
       }
     }
-    if (unsignedTx) break
+    if (unsignedTx != null) break
   }
-  if (!unsignedTx || inputIndex < 0) throw new Error('Could not find requested outpoint in signable transaction inputs')
+  if ((unsignedTx == null) || inputIndex < 0) throw new Error('Could not find requested outpoint in signable transaction inputs')
   unsignedTx.inputs[inputIndex].unlockingScriptTemplate = getUnlockP2PKH(p2pkhKey.privateKey, satoshis)
   await unsignedTx.sign()
   const unlockingScript = unsignedTx.inputs[inputIndex].unlockingScript!.toHex()
@@ -114,7 +114,7 @@ export async function signAndComplete(
 }
 
 /** @internal */
-export async function importSingleOutpoint(
+export async function importSingleOutpoint (
   wallet: WalletInterface,
   beef: Beef,
   beefBin: BEEF,
@@ -124,9 +124,8 @@ export async function importSingleOutpoint(
 ): Promise<string> {
   const { outpoint, txid, vout } = parsed
   const btx = beef.findTxid(txid)
-  if (!btx?.tx) throw new Error(`Transaction ${txid} not found in inputBEEF`)
-  if (vout < 0 || vout >= btx.tx.outputs.length)
-    throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`)
+  if ((btx?.tx) == null) throw new Error(`Transaction ${txid} not found in inputBEEF`)
+  if (vout < 0 || vout >= btx.tx.outputs.length) { throw new Error(`vout ${vout} out of range (tx has ${btx.tx.outputs.length} outputs)`) }
   const output = btx.tx.outputs[vout]
   const satoshis = output.satoshis
   if (!satoshis || satoshis <= 0) throw new Error(`Output ${outpoint} has no satoshis`)
@@ -138,10 +137,10 @@ export async function importSingleOutpoint(
     description: `Import P2PKH UTXO ${txid.slice(0, 16)}...`,
     options: { trustSelf: 'known' }
   })
-  if (!car.signableTransaction) {
+  if (car.signableTransaction == null) {
     return resolveAutoSigned(car, txid, vout)
   }
-  return signAndComplete(wallet, car.signableTransaction, txid, vout, satoshis, p2pkhKey, getUnlockP2PKH)
+  return await signAndComplete(wallet, car.signableTransaction, txid, vout, satoshis, p2pkhKey, getUnlockP2PKH)
 }
 
 /**
@@ -150,13 +149,13 @@ export async function importSingleOutpoint(
  * Accepts outpoints + a P2PKH key pair, optionally with a pre-built BEEF.
  * If no BEEF is provided, one is built via buildBeefForOutpoints.
  */
-export async function fundWalletFromP2PKHOutpoints(
+export async function fundWalletFromP2PKHOutpoints (
   wallet: WalletInterface,
   outpoints: string[],
   p2pkhKey: KeyPairAddress,
   getUnlockP2PKH: (priv: KeyPairAddress['privateKey'], satoshis: number) => ScriptTemplateUnlock,
   inputBEEF?: BEEF
-): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
+): Promise<Array<{ outpoint: string, txid?: string, success: boolean, error?: string }>> {
   const parsed = outpoints.map(o => parseOutpoint(o))
   const seen = new Set<string>()
   for (const p of parsed) {
@@ -166,7 +165,7 @@ export async function fundWalletFromP2PKHOutpoints(
   }
   const beefBin = inputBEEF ?? (await buildBeefForOutpoints(outpoints))
   const beef = Beef.fromBinary(beefBin)
-  const results: { outpoint: string; txid?: string; success: boolean; error?: string }[] = []
+  const results: Array<{ outpoint: string, txid?: string, success: boolean, error?: string }> = []
   for (const p of parsed) {
     try {
       const resultTxid = await importSingleOutpoint(wallet, beef, beefBin, p, p2pkhKey, getUnlockP2PKH)
@@ -189,11 +188,11 @@ export async function fundWalletFromP2PKHOutpoints(
  *
  * @internal
  */
-export async function buildBeefForOutpoints(outpoints: string[], maxDepth = 10): Promise<BEEF> {
+export async function buildBeefForOutpoints (outpoints: string[], maxDepth = 10): Promise<BEEF> {
   const beef = new Beef()
   const fetched = new Set<string>()
 
-  async function fetchRawTx(txid: string): Promise<string | null> {
+  async function fetchRawTx (txid: string): Promise<string | null> {
     const providers = [
       `https://ordinals.gorillapool.io/api/tx/${txid}/hex`,
       `https://api.whatsonchain.com/v1/bsv/main/tx/${txid}/hex`
@@ -212,7 +211,7 @@ export async function buildBeefForOutpoints(outpoints: string[], maxDepth = 10):
     return null
   }
 
-  async function fetchMerklePath(txid: string): Promise<MerklePath | null> {
+  async function fetchMerklePath (txid: string): Promise<MerklePath | null> {
     try {
       const ctrl = new AbortController()
       const t = setTimeout(() => ctrl.abort(), 8000)
@@ -226,7 +225,7 @@ export async function buildBeefForOutpoints(outpoints: string[], maxDepth = 10):
     }
   }
 
-  async function addTxToBeef(txid: string, depth: number): Promise<void> {
+  async function addTxToBeef (txid: string, depth: number): Promise<void> {
     if (fetched.has(txid)) return
     if (depth > maxDepth) {
       throw new Error(`BEEF build exceeded maxDepth=${maxDepth} while resolving ${txid}`)
@@ -239,7 +238,7 @@ export async function buildBeefForOutpoints(outpoints: string[], maxDepth = 10):
     const tx = parseTxAndAssertId(rawHex, txid)
     const merklePath = await fetchMerklePath(txid)
 
-    if (merklePath) {
+    if (merklePath != null) {
       tx.merklePath = merklePath
     } else {
       for (const input of tx.inputs) {

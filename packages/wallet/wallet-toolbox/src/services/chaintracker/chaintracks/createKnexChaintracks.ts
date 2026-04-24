@@ -6,7 +6,7 @@ import { ChaintracksFetchApi } from './Api/ChaintracksFetchApi'
 import { ChaintracksStorageKnex } from './Storage/ChaintracksStorageKnex'
 import { createDefaultKnexChaintracksOptions } from './createDefaultKnexChaintracksOptions'
 
-export async function createKnexChaintracks(
+export async function createKnexChaintracks (
   chain: Chain,
   rootFolder: string = './data/',
   knexConfig?: Knex.Config,
@@ -21,13 +21,13 @@ export async function createKnexChaintracks(
   batchInsertLimit: number = 400,
   addLiveRecursionLimit: number = 36
 ): Promise<{
-  chain: Chain
-  maxPerFile: number
-  fetch: ChaintracksFetchApi
-  storage: ChaintracksStorageKnex
-  chaintracks: Chaintracks
-  available: Promise<void>
-}> {
+    chain: Chain
+    maxPerFile: number
+    fetch: ChaintracksFetchApi
+    storage: ChaintracksStorageKnex
+    chaintracks: Chaintracks
+    available: Promise<void>
+  }> {
   try {
     fetch ||= new ChaintracksFetch()
 

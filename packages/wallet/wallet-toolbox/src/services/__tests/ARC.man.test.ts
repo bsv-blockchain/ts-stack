@@ -47,7 +47,7 @@ describe('ARC tests', () => {
   })
 })
 
-async function postBeefTest(chain: sdk.Chain, arc: ARC): Promise<string> {
+async function postBeefTest (chain: sdk.Chain, arc: ARC): Promise<string> {
   if (Setup.noEnv(chain)) return 'skipped'
   const c = await _tu.createNoSendTxPair(chain)
 
@@ -82,7 +82,7 @@ async function postBeefTest(chain: sdk.Chain, arc: ARC): Promise<string> {
   return 'passed'
 }
 
-async function postRawTxTest(chain: sdk.Chain, arc: ARC): Promise<void> {
+async function postRawTxTest (chain: sdk.Chain, arc: ARC): Promise<void> {
   if (Setup.noEnv(chain)) return
   const c = await _tu.createNoSendTxPair(chain)
 

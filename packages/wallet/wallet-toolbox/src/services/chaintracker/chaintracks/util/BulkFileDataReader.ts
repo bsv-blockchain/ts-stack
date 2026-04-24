@@ -9,7 +9,7 @@ export class BulkFileDataReader {
   readonly maxBufferSize: number
   nextHeight: number
 
-  constructor(manager: BulkFileDataManager, range: HeightRange, maxBufferSize: number) {
+  constructor (manager: BulkFileDataManager, range: HeightRange, maxBufferSize: number) {
     this.manager = manager
     this.range = range
     this.maxBufferSize = maxBufferSize
@@ -23,10 +23,10 @@ export class BulkFileDataReader {
    * @param file
    * @param range
    */
-  private async readBufferFromFile(file: BulkHeaderFileInfo, range?: HeightRange): Promise<Uint8Array | undefined> {
+  private async readBufferFromFile (file: BulkHeaderFileInfo, range?: HeightRange): Promise<Uint8Array | undefined> {
     // Constrain the range to the file's contents...
     let fileRange = new HeightRange(file.firstHeight, file.firstHeight + file.count - 1)
-    if (range) fileRange = fileRange.intersect(range)
+    if (range != null) fileRange = fileRange.intersect(range)
     if (fileRange.isEmpty) return undefined
     const offset = (fileRange.minHeight - file.firstHeight) * 80
     const length = fileRange.length * 80
@@ -36,19 +36,18 @@ export class BulkFileDataReader {
   /**
    * @returns an array containing the next `maxBufferSize` bytes of headers from the files.
    */
-  async read(): Promise<Uint8Array | undefined> {
-    if (this.nextHeight === undefined || !this.range || this.range.isEmpty || this.nextHeight > this.range.maxHeight)
-      return undefined
+  async read (): Promise<Uint8Array | undefined> {
+    if (this.nextHeight === undefined || !this.range || this.range.isEmpty || this.nextHeight > this.range.maxHeight) { return undefined }
     let lastHeight = this.nextHeight + this.maxBufferSize / 80 - 1
     lastHeight = Math.min(lastHeight, this.range.maxHeight)
     let file = await this.manager.getFileForHeight(this.nextHeight)
-    if (!file) throw new WERR_INTERNAL(`logic error`)
+    if (file == null) throw new WERR_INTERNAL('logic error')
     const readRange = new HeightRange(this.nextHeight, lastHeight)
-    let buffers = new Uint8Array(readRange.length * 80)
+    const buffers = new Uint8Array(readRange.length * 80)
     let offset = 0
-    while (file) {
+    while (file != null) {
       const buffer = await this.readBufferFromFile(file, readRange)
-      if (!buffer) break
+      if (buffer == null) break
       buffers.set(buffer, offset)
       offset += buffer.length
       file = await this.manager.getFileForHeight(file.firstHeight + file.count)

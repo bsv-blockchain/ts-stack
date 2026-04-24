@@ -3,7 +3,7 @@ import { StorageProvider, TableCertificate } from '../index.client'
 import { AuthId, FindCertificatesArgs } from '../../sdk/WalletStorage.interfaces'
 import { Paged } from '../../sdk/types'
 
-export async function listCertificates(
+export async function listCertificates (
   storage: StorageProvider,
   auth: AuthId,
   vargs: Validation.ValidListCertificatesArgs,
@@ -16,14 +16,14 @@ export async function listCertificates(
     isDeleted: false
   }
 
-  if (vargs.partial) {
+  if (vargs.partial != null) {
     const vp = vargs.partial
-    if (vp.type) partial['type'] = vp.type
-    if (vp.subject) partial['subject'] = vp.subject
-    if (vp.serialNumber) partial['serialNumber'] = vp.serialNumber
-    if (vp.certifier) partial['certifier'] = vp.certifier
-    if (vp.revocationOutpoint) partial['revocationOutpoint'] = vp.revocationOutpoint
-    if (vp.signature) partial['signature'] = vp.signature
+    if (vp.type) partial.type = vp.type
+    if (vp.subject) partial.subject = vp.subject
+    if (vp.serialNumber) partial.serialNumber = vp.serialNumber
+    if (vp.certifier) partial.certifier = vp.certifier
+    if (vp.revocationOutpoint) partial.revocationOutpoint = vp.revocationOutpoint
+    if (vp.signature) partial.signature = vp.signature
   }
 
   const r = await storage.transaction(async trx => {

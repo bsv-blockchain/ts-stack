@@ -23,7 +23,7 @@ export interface MonitorAdminContext {
   authWallet?: Wallet
 }
 
-type ReqRow = {
+interface ReqRow {
   updated_at: Date | string
   req_created_at: Date | string
   tx_created_at?: Date | string
@@ -46,18 +46,18 @@ type ReqRow = {
   inputBeefHex?: string
 }
 
-function asNumber(value: unknown, fallback: number): number {
+function asNumber (value: unknown, fallback: number): number {
   const parsed = Number.parseInt(String(value ?? ''), 10)
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
-function toHex(value?: number[] | Buffer): string | undefined {
-  if (!value) return undefined
+function toHex (value?: number[] | Buffer): string | undefined {
+  if (value == null) return undefined
   if (Buffer.isBuffer(value)) return value.toString('hex')
   return Buffer.from(value).toString('hex')
 }
 
-type AdminStatsLike = {
+interface AdminStatsLike {
   requestedBy?: unknown
   when?: unknown
   usersDay?: unknown
@@ -130,7 +130,7 @@ type AdminStatsLike = {
   txUnfailTotal?: unknown
 }
 
-function prettyJson(value?: string): string | undefined {
+function prettyJson (value?: string): string | undefined {
   if (!value) return undefined
   try {
     return JSON.stringify(JSON.parse(value), null, 2)
@@ -139,17 +139,17 @@ function prettyJson(value?: string): string | undefined {
   }
 }
 
-function alignLeft(value: unknown, width: number): string {
+function alignLeft (value: unknown, width: number): string {
   const text = String(value)
   return text.length > width ? `${text.slice(0, width - 1)}…` : text.padEnd(width)
 }
 
-function alignRight(value: unknown, width: number): string {
+function alignRight (value: unknown, width: number): string {
   const text = String(value)
   return text.length > width ? `…${text.slice(-width + 1)}` : text.padStart(width)
 }
 
-function toAdminStatsLog(stats: AdminStatsLike): string {
+function toAdminStatsLog (stats: AdminStatsLike): string {
   const row = (label: string, day: unknown, week: unknown, month: unknown, total: unknown) =>
     `  ${alignLeft(label, 13)} ${alignRight(day ?? '', 18)} ${alignRight(week ?? '', 18)} ${alignRight(month ?? '', 18)} ${alignRight(total ?? '', 18)}\n`
 
@@ -199,12 +199,12 @@ function toAdminStatsLog(stats: AdminStatsLike): string {
   return log
 }
 
-function formatSatoshis(value: unknown): string {
+function formatSatoshis (value: unknown): string {
   const n = typeof value === 'number' ? value : Number(value ?? 0)
   return Format.satoshis(Number.isFinite(n) ? n : 0)
 }
 
-function parseJson(value?: string): unknown {
+function parseJson (value?: string): unknown {
   if (!value) return undefined
   try {
     return JSON.parse(value)
@@ -213,8 +213,8 @@ function parseJson(value?: string): unknown {
   }
 }
 
-function decodeRawTx(rawTx?: number[]) {
-  if (!rawTx) return undefined
+function decodeRawTx (rawTx?: number[]) {
+  if (rawTx == null) return undefined
   const tx = Transaction.fromBinary(rawTx)
   return {
     txid: tx.id('hex'),
@@ -235,20 +235,20 @@ function decodeRawTx(rawTx?: number[]) {
   }
 }
 
-async function getStorage(context: MonitorAdminContext) {
+async function getStorage (context: MonitorAdminContext) {
   const storage = context.daemon.setup?.storageProvider
-  if (!storage) throw new Error('Monitor storage provider is not available.')
+  if (storage == null) throw new Error('Monitor storage provider is not available.')
   return storage
 }
 
-async function getKnex(context: MonitorAdminContext) {
+async function getKnex (context: MonitorAdminContext) {
   const storage = await getStorage(context)
   const knex = (storage as any).knex
   if (!knex) throw new Error('Joined admin review requires StorageKnex / MySQL.')
   return knex
 }
 
-async function queryReqReview(context: MonitorAdminContext, query: Record<string, unknown>) {
+async function queryReqReview (context: MonitorAdminContext, query: Record<string, unknown>) {
   const knex = await getKnex(context)
   const status = typeof query.status === 'string' && query.status.trim() ? query.status.trim() : undefined
   const txid = typeof query.txid === 'string' && query.txid.trim() ? query.txid.trim() : undefined
@@ -310,21 +310,21 @@ async function queryReqReview(context: MonitorAdminContext, query: Record<string
   }
 }
 
-function normalizeReviewMode(value: unknown): 'all' | 'change' {
+function normalizeReviewMode (value: unknown): 'all' | 'change' {
   return value === 'change' ? 'change' : 'all'
 }
 
-function getReviewUtxosTask(context: MonitorAdminContext): {
-  reviewByIdentityKey(identityKey: string, mode: 'all' | 'change'): Promise<string>
+function getReviewUtxosTask (context: MonitorAdminContext): {
+  reviewByIdentityKey: (identityKey: string, mode: 'all' | 'change') => Promise<string>
 } {
   const monitor = context.daemon.setup?.monitor
-  if (!monitor) throw new Error('Monitor is not available.')
+  if (monitor == null) throw new Error('Monitor is not available.')
 
   const task = [...monitor._tasks, ...monitor._otherTasks].find(item => item.name === 'ReviewUtxos') as
-    | { reviewByIdentityKey?(identityKey: string, mode: 'all' | 'change'): Promise<string> }
+    | { reviewByIdentityKey?: (identityKey: string, mode: 'all' | 'change') => Promise<string> }
     | undefined
 
-  if (!task?.reviewByIdentityKey) {
+  if ((task?.reviewByIdentityKey) == null) {
     throw new Error('ReviewUtxos task is not available in this monitor runtime.')
   }
 
@@ -333,7 +333,7 @@ function getReviewUtxosTask(context: MonitorAdminContext): {
   }
 }
 
-async function queryUsers(context: MonitorAdminContext, query: Record<string, unknown>) {
+async function queryUsers (context: MonitorAdminContext, query: Record<string, unknown>) {
   const storage = await getStorage(context)
   const search = typeof query.search === 'string' ? query.search.trim() : ''
   const limit = Math.min(Math.max(asNumber(query.limit, 50), 1), 200)
@@ -341,8 +341,8 @@ async function queryUsers(context: MonitorAdminContext, query: Record<string, un
 
   const filtered = search
     ? users.filter(
-        user => user.identityKey.includes(search) || (user.userId !== undefined && String(user.userId).includes(search))
-      )
+      user => user.identityKey.includes(search) || (user.userId !== undefined && String(user.userId).includes(search))
+    )
     : users
 
   return {
@@ -355,7 +355,7 @@ async function queryUsers(context: MonitorAdminContext, query: Record<string, un
   }
 }
 
-async function resolveIdentityKeyFromInput(context: MonitorAdminContext, userInput: string): Promise<string> {
+async function resolveIdentityKeyFromInput (context: MonitorAdminContext, userInput: string): Promise<string> {
   const value = userInput.trim()
   if (!value) throw new Error('identityKey or userId is required.')
 
@@ -371,7 +371,7 @@ async function resolveIdentityKeyFromInput(context: MonitorAdminContext, userInp
   return value
 }
 
-async function queryMonitorCallHistory(context: MonitorAdminContext, query: Record<string, unknown>) {
+async function queryMonitorCallHistory (context: MonitorAdminContext, query: Record<string, unknown>) {
   const storage = await getStorage(context)
   const limit = Math.min(Math.max(asNumber(query.limit, 120), 1), 120)
   const offset = Math.max(asNumber(query.offset, 0), 0)
@@ -406,7 +406,7 @@ async function queryMonitorCallHistory(context: MonitorAdminContext, query: Reco
   }
 }
 
-async function reviewUtxosByIdentityKey(
+async function reviewUtxosByIdentityKey (
   context: MonitorAdminContext,
   requestedBy: string,
   userInput: string,
@@ -433,7 +433,7 @@ async function reviewUtxosByIdentityKey(
   }
 }
 
-async function getReqDetail(context: MonitorAdminContext, provenTxReqId: number) {
+async function getReqDetail (context: MonitorAdminContext, provenTxReqId: number) {
   const storage = await getStorage(context)
   const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId } }))[0]
   if (!req) throw new Error(`ProvenTxReq ${provenTxReqId} not found`)
@@ -457,7 +457,7 @@ async function getReqDetail(context: MonitorAdminContext, provenTxReqId: number)
   }
 }
 
-async function rebroadcastReq(
+async function rebroadcastReq (
   context: MonitorAdminContext,
   provenTxReqId: number,
   provider: string,
@@ -467,7 +467,7 @@ async function rebroadcastReq(
   const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId } }))[0]
   if (!req?.rawTx) throw new Error(`ProvenTxReq ${provenTxReqId} is missing rawTx`)
 
-  const services = context.daemon.setup?.services as Services | undefined
+  const services = context.daemon.setup?.services
   if (!(services instanceof Services)) {
     throw new Error('Manual rebroadcast requires monitor services to be a Services instance.')
   }
@@ -504,20 +504,20 @@ async function rebroadcastReq(
 }
 
 export class AdminServer {
-  private app: any
+  private readonly app: any
   private server: any
 
-  constructor(private readonly context: MonitorAdminContext) {
+  constructor (private readonly context: MonitorAdminContext) {
     this.app = express()
     this.setupRoutes()
   }
 
-  private getSdkBundlePath(): string {
+  private getSdkBundlePath (): string {
     const sdkMainPath = require.resolve('@bsv/sdk')
     return path.resolve(path.dirname(sdkMainPath), '../umd/bundle.js')
   }
 
-  private setupRoutes(): void {
+  private setupRoutes (): void {
     this.app.use(express.json({ limit: '5mb' }))
     this.app.use((req: any, res: any, next: any) => {
       res.header('Access-Control-Allow-Origin', '*')
@@ -539,7 +539,7 @@ export class AdminServer {
       res.type('text/html').send(renderAdminPage())
     })
 
-    if (!this.context.authWallet || this.context.config.adminIdentityKeys.length === 0) {
+    if ((this.context.authWallet == null) || this.context.config.adminIdentityKeys.length === 0) {
       this.app.use((_req: any, res: any) => {
         res
           .status(503)
@@ -600,7 +600,7 @@ export class AdminServer {
 
     this.app.get('/admin/api/tasks', async (_req: any, res: any) => {
       const monitor = this.context.daemon.setup?.monitor
-      if (!monitor) throw new Error('Monitor is not available.')
+      if (monitor == null) throw new Error('Monitor is not available.')
       res.json({
         tasks: [
           ...monitor._tasks.map(task => ({ name: task.name, kind: 'scheduled' })),
@@ -620,7 +620,7 @@ export class AdminServer {
     this.app.post('/admin/api/tasks/:name/run', async (req: any, res: any) => {
       const monitor = this.context.daemon.setup?.monitor
       const storage = await getStorage(this.context)
-      if (!monitor) throw new Error('Monitor is not available.')
+      if (monitor == null) throw new Error('Monitor is not available.')
       const name = String(req.params.name)
       const log = await monitor.runTask(name)
       await storage.insertMonitorEvent({
@@ -669,7 +669,7 @@ export class AdminServer {
     })
   }
 
-  private requireAdmin(req: any, _res: any, next: any): void {
+  private requireAdmin (req: any, _res: any, next: any): void {
     const identityKey = req.auth?.identityKey
     if (!identityKey || !this.context.config.adminIdentityKeys.includes(identityKey)) {
       next(new Error('Authenticated user is not an allowed monitor admin.'))
@@ -678,7 +678,7 @@ export class AdminServer {
     next()
   }
 
-  start(): void {
+  start (): void {
     this.server = this.app.listen(this.context.config.adminPort, this.context.config.adminHost, () => {
       console.log(
         `Monitor admin listening at http://${this.context.config.adminHost}:${this.context.config.adminPort}/admin`
@@ -686,7 +686,7 @@ export class AdminServer {
     })
   }
 
-  async close(): Promise<void> {
+  async close (): Promise<void> {
     if (!this.server) return
     await new Promise<void>(resolve => this.server.close(() => resolve()))
     this.server = undefined

@@ -54,7 +54,7 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
    * @param localCachePath defaults to './data/ingest_whatsonchain_headers'
    * @returns
    */
-  static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions {
+  static createBulkIngestorWhatsOnChainOptions (chain: Chain): BulkIngestorWhatsOnChainOptions {
     const options: BulkIngestorWhatsOnChainOptions = {
       ...WhatsOnChainServices.createWhatsOnChainServicesOptions(chain),
       ...BulkIngestorBase.createBulkIngestorBaseOptions(chain),
@@ -68,20 +68,20 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
   woc: WhatsOnChainServices
   stopOldListenersToken: StopListenerToken = { stop: undefined }
 
-  constructor(options: BulkIngestorWhatsOnChainOptions) {
+  constructor (options: BulkIngestorWhatsOnChainOptions) {
     super(options)
     this.idleWait = options.idleWait || 5000
     this.woc = new WhatsOnChainServices(options)
     this.fetch = options.fetch || new ChaintracksFetch()
   }
 
-  override async getPresentHeight(): Promise<number | undefined> {
+  override async getPresentHeight (): Promise<number | undefined> {
     const presentHeight = await this.woc.getChainTipHeight()
     // this.log(`presentHeight=${presentHeight}`)
     return presentHeight
   }
 
-  async fetchHeaders(
+  async fetchHeaders (
     before: HeightRanges,
     fetchRange: HeightRange,
     bulkRange: HeightRange,
@@ -95,8 +95,7 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
       for (const range of ranges) {
         for (let height = range.range.minHeight; height <= range.range.maxHeight; height++) {
           if (fetchRange.contains(height)) {
-            if (!range.data)
-              range.data = await this.fetch.download(this.fetch.pathJoin(range.sourceUrl, range.fileName))
+            if (range.data == null) { range.data = await this.fetch.download(this.fetch.pathJoin(range.sourceUrl, range.fileName)) }
             const h = deserializeBlockHeader(range.data, (height - range.range.minHeight) * 80, height)
             oldHeaders.push(h)
           }

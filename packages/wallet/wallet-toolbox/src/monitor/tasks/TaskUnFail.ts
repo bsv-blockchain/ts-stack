@@ -23,14 +23,14 @@ export class TaskUnFail extends WalletMonitorTask {
    */
   static checkNow = false
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 10
   ) {
     super(monitor, TaskUnFail.taskName)
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskUnFail.checkNow ||
@@ -38,7 +38,7 @@ export class TaskUnFail extends WalletMonitorTask {
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     TaskUnFail.checkNow = false
 
@@ -54,7 +54,7 @@ export class TaskUnFail extends WalletMonitorTask {
       log += `${reqs.length} reqs with status 'unfail'\n`
       const r = await this.unfail(reqs, 2)
       log += `${r.log}\n`
-      //console.log(log);
+      // console.log(log);
       if (reqs.length < limit) break
       offset += limit
     }
@@ -62,22 +62,22 @@ export class TaskUnFail extends WalletMonitorTask {
     return log
   }
 
-  async unfail(reqs: TableProvenTxReq[], indent = 0): Promise<{ log: string }> {
+  async unfail (reqs: TableProvenTxReq[], indent = 0): Promise<{ log: string }> {
     let log = ''
     for (const reqApi of reqs) {
       const req = new EntityProvenTxReq(reqApi)
       log += ' '.repeat(indent)
       log += `reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
       const r = await this.monitor.services.getMerklePath(req.txid)
-      if (r.merklePath) {
+      if (r.merklePath != null) {
         // 1. set the req status to 'unmined'
         req.status = 'unmined'
         req.attempts = 0
-        log += `unfailed. status is now 'unmined'\n`
+        log += 'unfailed. status is now \'unmined\'\n'
         log += await this.unfailReq(req, indent + 2)
       } else {
         req.status = 'invalid'
-        log += `returned to status 'invalid'\n`
+        log += 'returned to status \'invalid\'\n'
       }
       await req.updateStorageDynamicProperties(this.storage)
     }
@@ -93,7 +93,7 @@ export class TaskUnFail extends WalletMonitorTask {
    * @param indent
    * @returns
    */
-  async unfailReq(req: EntityProvenTxReq, indent: number): Promise<string> {
+  async unfailReq (req: EntityProvenTxReq, indent: number): Promise<string> {
     let log = ''
 
     const storage = this.storage
@@ -103,9 +103,9 @@ export class TaskUnFail extends WalletMonitorTask {
     for (const id of txIds) {
       const bsvtx = Transaction.fromBinary(req.rawTx)
       await this.storage.runAsStorageProvider(async sp => {
-        const spk = sp as StorageProvider
+        const spk = sp
         const tx = await sp.findTransactionById(id, undefined, true)
-        if (!tx) {
+        if (tx == null) {
           log += ' '.repeat(indent) + `transaction ${id} was not found\n`
           return
         }
@@ -131,7 +131,7 @@ export class TaskUnFail extends WalletMonitorTask {
         const outputs = await sp.findOutputs({ partial: { userId: tx.userId, transactionId: tx.transactionId } })
         for (const o of outputs) {
           await spk.validateOutputScript(o)
-          if (!o.lockingScript) {
+          if (o.lockingScript == null) {
             log += ' '.repeat(indent + 2) + `output ${o.outputId} does not have a valid locking script\n`
           } else {
             const isUtxo = await services.isUtxo(o)

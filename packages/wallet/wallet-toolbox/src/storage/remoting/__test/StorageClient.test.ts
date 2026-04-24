@@ -9,14 +9,14 @@ import { WalletError } from '../../../sdk/WalletError'
 describe('StorageClient tests', () => {
   jest.setTimeout(99999999)
 
-  let server: { setup: TestWalletNoSetup; server: StorageServer }
+  let server: { setup: TestWalletNoSetup, server: StorageServer }
 
   let client: TestWalletOnly
 
   let logSpy: jest.SpyInstance
-  let capturedLogs: string[] = []
+  const capturedLogs: string[] = []
   let errorSpy: jest.SpyInstance
-  let capturedErrors: string[] = []
+  const capturedErrors: string[] = []
 
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
@@ -36,8 +36,8 @@ describe('StorageClient tests', () => {
   })
 
   afterAll(async () => {
-    //console.log('All captured logs:', capturedLogs);
-    //console.log('All captured errors:', capturedErrors);
+    // console.log('All captured logs:', capturedLogs);
+    // console.log('All captured errors:', capturedErrors);
     logSpy.mockRestore()
     errorSpy.mockRestore()
 
@@ -54,13 +54,13 @@ describe('StorageClient tests', () => {
 
   test('1 repeatable createAction', async () => {
     const wallet = client.wallet
-    //wallet.makeLogger = () => console
+    // wallet.makeLogger = () => console
     wallet.makeLogger = () => new WalletLogger()
     wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
     const root = '02135476'
     const kp = _tu.getKeyPair(root.repeat(8))
     const createArgs: CreateActionArgs = {
-      description: `repeatable`,
+      description: 'repeatable',
       outputs: [
         {
           satoshis: 45,
@@ -83,13 +83,13 @@ describe('StorageClient tests', () => {
     if (_tu.noEnv('main')) return
 
     const wallet = client.wallet
-    //wallet.makeLogger = () => console
+    // wallet.makeLogger = () => console
     wallet.makeLogger = () => new WalletLogger()
     wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
     const root = '02135476'
     const kp = _tu.getKeyPair(root.repeat(8))
     const createArgs: CreateActionArgs = {
-      description: `error`,
+      description: 'error',
       outputs: [
         {
           satoshis: 45,
@@ -115,7 +115,7 @@ describe('StorageClient tests', () => {
   })
 })
 
-async function createStorageServer(): Promise<{ setup: TestWalletNoSetup; server: StorageServer }> {
+async function createStorageServer (): Promise<{ setup: TestWalletNoSetup, server: StorageServer }> {
   const setup = await _tu.createLegacyWalletSQLiteCopy('StorageClientTest')
 
   const options: WalletStorageServerOptions = {

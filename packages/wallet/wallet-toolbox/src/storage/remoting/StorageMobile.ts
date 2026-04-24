@@ -61,7 +61,7 @@ export class StorageClient implements WalletStorageProvider {
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: TableSettings
 
-  constructor(wallet: WalletInterface, endpointUrl: string) {
+  constructor (wallet: WalletInterface, endpointUrl: string) {
     this.authClient = new AuthFetch(wallet)
     this.endpointUrl = endpointUrl
   }
@@ -72,13 +72,13 @@ export class StorageClient implements WalletStorageProvider {
    *
    * @returns false
    */
-  isStorageProvider(): boolean {
+  isStorageProvider (): boolean {
     return false
   }
 
-  //////////////////////////////////////////////////////////////////////////////
+  /// ///////////////////////////////////////////////////////////////////////////
   // JSON-RPC helper
-  //////////////////////////////////////////////////////////////////////////////
+  /// ///////////////////////////////////////////////////////////////////////////
 
   /**
    * Make a JSON-RPC call to the remote server.
@@ -129,17 +129,17 @@ export class StorageClient implements WalletStorageProvider {
   /**
    * @returns true once storage `TableSettings` have been retreived from remote storage.
    */
-  isAvailable(): boolean {
+  isAvailable (): boolean {
     // We'll just say "yes" if we have settings
-    return !!this.settings
+    return !(this.settings == null)
   }
 
   /**
    * @returns remote storage `TableSettings` if they have been retreived by `makeAvailable`.
    * @throws WERR_INVALID_OPERATION if `makeAvailable` has not yet been called.
    */
-  getSettings(): TableSettings {
-    if (!this.settings) {
+  getSettings (): TableSettings {
+    if (this.settings == null) {
       throw new WERR_INVALID_OPERATION('call makeAvailable at least once before getSettings')
     }
     return this.settings
@@ -150,26 +150,26 @@ export class StorageClient implements WalletStorageProvider {
    * Retreives `TableSettings` from remote storage provider.
    * @returns remote storage `TableSettings`
    */
-  async makeAvailable(): Promise<TableSettings> {
-    if (!this.settings) {
+  async makeAvailable (): Promise<TableSettings> {
+    if (this.settings == null) {
       this.settings = await this.rpcCall<TableSettings>('makeAvailable', [])
     }
     return this.settings
   }
 
-  //////////////////////////////////////////////////////////////////////////////
+  /// ///////////////////////////////////////////////////////////////////////////
   //
   // Implementation of all WalletStorage interface methods
   // They are simple pass-thrus to rpcCall
   //
   // IMPORTANT: The parameter ordering must match exactly as in your interface.
-  //////////////////////////////////////////////////////////////////////////////
+  /// ///////////////////////////////////////////////////////////////////////////
 
   /**
    * Called to cleanup resources when no further use of this object will occur.
    */
-  async destroy(): Promise<void> {
-    return this.rpcCall<void>('destroy', [])
+  async destroy (): Promise<void> {
+    return await this.rpcCall<void>('destroy', [])
   }
 
   /**
@@ -179,15 +179,15 @@ export class StorageClient implements WalletStorageProvider {
    * @param storageIdentityKey Unique identity key for remote storage if it does not yet exist.
    * @returns current schema migration identifier
    */
-  async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
-    return this.rpcCall<string>('migrate', [storageName])
+  async migrate (storageName: string, storageIdentityKey: string): Promise<string> {
+    return await this.rpcCall<string>('migrate', [storageName])
   }
 
   /**
    * Remote storage does not offer `Services` to remote clients.
    * @throws WERR_INVALID_OPERATION
    */
-  getServices(): WalletServices {
+  getServices (): WalletServices {
     // Typically, the client would not store or retrieve "Services" from a remote server.
     // The "services" in local in-memory usage is a no-op or your own approach:
     throw new WERR_INVALID_OPERATION(
@@ -198,7 +198,7 @@ export class StorageClient implements WalletStorageProvider {
   /**
    * Ignored. Remote storage cannot share `Services` with remote clients.
    */
-  setServices(v: WalletServices): void {
+  setServices (v: WalletServices): void {
     // Typically no-op for remote client
     // Because "services" are usually local definitions to the Storage.
   }
@@ -212,8 +212,8 @@ export class StorageClient implements WalletStorageProvider {
    * @param args Original wallet `internalizeAction` arguments.
    * @returns `internalizeAction` results
    */
-  async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
-    return this.rpcCall<StorageInternalizeActionResult>('internalizeAction', [auth, args])
+  async internalizeAction (auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
+    return await this.rpcCall<StorageInternalizeActionResult>('internalizeAction', [auth, args])
   }
 
   /**
@@ -223,8 +223,8 @@ export class StorageClient implements WalletStorageProvider {
    * @param args Validated extension of original wallet `createAction` arguments.
    * @returns `StorageCreateActionResults` supporting additional wallet processing to yield `createAction` results.
    */
-  async createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
-    return this.rpcCall<StorageCreateActionResult>('createAction', [auth, args])
+  async createAction (auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
+    return await this.rpcCall<StorageCreateActionResult>('createAction', [auth, args])
   }
 
   /**
@@ -237,8 +237,8 @@ export class StorageClient implements WalletStorageProvider {
    * @param args `StorageProcessActionArgs` convey completed signed transaction to storage.
    * @returns `StorageProcessActionResults` supporting final wallet processing to yield `createAction` or `signAction` results.
    */
-  async processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
-    return this.rpcCall<StorageProcessActionResults>('processAction', [auth, args])
+  async processAction (auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
+    return await this.rpcCall<StorageProcessActionResults>('processAction', [auth, args])
   }
 
   /**
@@ -248,8 +248,8 @@ export class StorageClient implements WalletStorageProvider {
    * @param args original wallet `abortAction` args.
    * @returns `abortAction` result.
    */
-  async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
-    return this.rpcCall<AbortActionResult>('abortAction', [auth, args])
+  async abortAction (auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
+    return await this.rpcCall<AbortActionResult>('abortAction', [auth, args])
   }
 
   /**
@@ -258,8 +258,8 @@ export class StorageClient implements WalletStorageProvider {
    * @param identityKey of the user.
    * @returns `TableUser` for the user and whether a new user was created.
    */
-  async findOrInsertUser(identityKey): Promise<{ user: TableUser; isNew: boolean }> {
-    return this.rpcCall<{ user: TableUser; isNew: boolean }>('findOrInsertUser', [identityKey])
+  async findOrInsertUser (identityKey): Promise<{ user: TableUser, isNew: boolean }> {
+    return await this.rpcCall<{ user: TableUser, isNew: boolean }>('findOrInsertUser', [identityKey])
   }
 
   /**
@@ -270,12 +270,12 @@ export class StorageClient implements WalletStorageProvider {
    * @param storageIdentityKey the identity key of the remote storage being sync'd
    * @returns `TableSyncState` and whether a new record was created.
    */
-  async findOrInsertSyncStateAuth(
+  async findOrInsertSyncStateAuth (
     auth: AuthId,
     storageIdentityKey: string,
     storageName: string
-  ): Promise<{ syncState: TableSyncState; isNew: boolean }> {
-    const r = await this.rpcCall<{ syncState: TableSyncState; isNew: boolean }>('findOrInsertSyncStateAuth', [
+  ): Promise<{ syncState: TableSyncState, isNew: boolean }> {
+    const r = await this.rpcCall<{ syncState: TableSyncState, isNew: boolean }>('findOrInsertSyncStateAuth', [
       auth,
       storageIdentityKey,
       storageName
@@ -291,7 +291,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param certificate the certificate to insert.
    * @returns record Id of the inserted `TableCertificate` record.
    */
-  async insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number> {
+  async insertCertificateAuth (auth: AuthId, certificate: TableCertificateX): Promise<number> {
     const r = await this.rpcCall<number>('insertCertificateAuth', [auth, certificate])
     return r
   }
@@ -303,7 +303,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listActions` arguments.
    * @returns `listActions` results.
    */
-  async listActions(auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
+  async listActions (auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
     const r = await this.rpcCall<ListActionsResult>('listActions', [auth, vargs])
     return r
   }
@@ -315,7 +315,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listOutputs` arguments.
    * @returns `listOutputs` results.
    */
-  async listOutputs(auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
+  async listOutputs (auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
     const r = await this.rpcCall<ListOutputsResult>('listOutputs', [auth, vargs])
     return r
   }
@@ -327,7 +327,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listCertificates` arguments.
    * @returns `listCertificates` results.
    */
-  async listCertificates(auth: AuthId, vargs: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+  async listCertificates (auth: AuthId, vargs: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
     const r = await this.rpcCall<ListCertificatesResult>('listCertificates', [auth, vargs])
     return r
   }
@@ -343,12 +343,12 @@ export class StorageClient implements WalletStorageProvider {
    * @param args `FindCertificatesArgs` determines which certificates to retrieve and whether to include fields.
    * @returns array of certificates matching args.
    */
-  async findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+  async findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     const r = await this.rpcCall<TableCertificateX[]>('findCertificatesAuth', [auth, args])
     this.validateEntities(r)
     if (args.includeFields) {
       for (const c of r) {
-        if (c.fields) this.validateEntities(c.fields)
+        if (c.fields != null) this.validateEntities(c.fields)
       }
     }
     return r
@@ -364,7 +364,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args `FindOutputBasketsArgs` determines which baskets to retrieve.
    * @returns array of output baskets matching args.
    */
-  async findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+  async findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     const r = await this.rpcCall<TableOutputBasket[]>('findOutputBaskets', [auth, args])
     this.validateEntities(r)
     return r
@@ -380,7 +380,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args `FindOutputsArgs` determines which outputs to retrieve.
    * @returns array of outputs matching args.
    */
-  async findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
+  async findOutputsAuth (auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
     const r = await this.rpcCall<TableOutput[]>('findOutputsAuth', [auth, args])
     this.validateEntities(r)
     return r
@@ -396,7 +396,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args `FindProvenTxReqsArgs` determines which proof requests to retrieve.
    * @returns array of proof requests matching args.
    */
-  async findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+  async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
     const r = await this.rpcCall<TableProvenTxReq[]>('findProvenTxReqs', [args])
     this.validateEntities(r)
     return r
@@ -412,8 +412,8 @@ export class StorageClient implements WalletStorageProvider {
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param args original wallet `relinquishCertificate` args.
    */
-  async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
-    return this.rpcCall<number>('relinquishCertificate', [auth, args])
+  async relinquishCertificate (auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
+    return await this.rpcCall<number>('relinquishCertificate', [auth, args])
   }
 
   /**
@@ -425,8 +425,8 @@ export class StorageClient implements WalletStorageProvider {
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param args original wallet `relinquishOutput` args.
    */
-  async relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
-    return this.rpcCall<number>('relinquishOutput', [auth, args])
+  async relinquishOutput (auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
+    return await this.rpcCall<number>('relinquishOutput', [auth, args])
   }
 
   /**
@@ -438,7 +438,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param chunk the current data chunk to process.
    * @returns whether processing is done, counts of inserts and udpates, and related progress tracking properties.
    */
-  async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+  async processSyncChunk (args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
     const r = await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, chunk])
     return r
   }
@@ -452,21 +452,21 @@ export class StorageClient implements WalletStorageProvider {
    * @param args that identify the non-active storage which will receive replication data and constrains the replication process.
    * @returns the next "chunk" of replication data
    */
-  async getSyncChunk(args: RequestSyncChunkArgs): Promise<SyncChunk> {
+  async getSyncChunk (args: RequestSyncChunkArgs): Promise<SyncChunk> {
     const r = await this.rpcCall<SyncChunk>('getSyncChunk', [args])
-    if (r.certificateFields) r.certificateFields = this.validateEntities(r.certificateFields)
-    if (r.certificates) r.certificates = this.validateEntities(r.certificates)
-    if (r.commissions) r.commissions = this.validateEntities(r.commissions)
-    if (r.outputBaskets) r.outputBaskets = this.validateEntities(r.outputBaskets)
-    if (r.outputTagMaps) r.outputTagMaps = this.validateEntities(r.outputTagMaps)
-    if (r.outputTags) r.outputTags = this.validateEntities(r.outputTags)
-    if (r.outputs) r.outputs = this.validateEntities(r.outputs)
-    if (r.provenTxReqs) r.provenTxReqs = this.validateEntities(r.provenTxReqs)
-    if (r.provenTxs) r.provenTxs = this.validateEntities(r.provenTxs)
-    if (r.transactions) r.transactions = this.validateEntities(r.transactions)
-    if (r.txLabelMaps) r.txLabelMaps = this.validateEntities(r.txLabelMaps)
-    if (r.txLabels) r.txLabels = this.validateEntities(r.txLabels)
-    if (r.user) r.user = this.validateEntity(r.user)
+    if (r.certificateFields != null) r.certificateFields = this.validateEntities(r.certificateFields)
+    if (r.certificates != null) r.certificates = this.validateEntities(r.certificates)
+    if (r.commissions != null) r.commissions = this.validateEntities(r.commissions)
+    if (r.outputBaskets != null) r.outputBaskets = this.validateEntities(r.outputBaskets)
+    if (r.outputTagMaps != null) r.outputTagMaps = this.validateEntities(r.outputTagMaps)
+    if (r.outputTags != null) r.outputTags = this.validateEntities(r.outputTags)
+    if (r.outputs != null) r.outputs = this.validateEntities(r.outputs)
+    if (r.provenTxReqs != null) r.provenTxReqs = this.validateEntities(r.provenTxReqs)
+    if (r.provenTxs != null) r.provenTxs = this.validateEntities(r.provenTxs)
+    if (r.transactions != null) r.transactions = this.validateEntities(r.transactions)
+    if (r.txLabelMaps != null) r.txLabelMaps = this.validateEntities(r.txLabelMaps)
+    if (r.txLabels != null) r.txLabels = this.validateEntities(r.txLabels)
+    if (r.user != null) r.user = this.validateEntity(r.user)
     return r
   }
 
@@ -480,7 +480,7 @@ export class StorageClient implements WalletStorageProvider {
    * @param args proof request and new transaction proof data
    * @returns results of updates
    */
-  async updateProvenTxReqWithNewProvenTx(
+  async updateProvenTxReqWithNewProvenTx (
     args: UpdateProvenTxReqWithNewProvenTxArgs
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
     const r = await this.rpcCall<UpdateProvenTxReqWithNewProvenTxResult>('updateProvenTxReqWithNewProvenTx', [args])
@@ -496,11 +496,11 @@ export class StorageClient implements WalletStorageProvider {
    * This must match the `AuthFetch` identity securing the remote conneciton.
    * @param newActiveStorageIdentityKey which must be a currently configured backup storage provider.
    */
-  async setActive(auth: AuthId, newActiveStorageIdentityKey: string): Promise<number> {
-    return this.rpcCall<number>('setActive', [auth, newActiveStorageIdentityKey])
+  async setActive (auth: AuthId, newActiveStorageIdentityKey: string): Promise<number> {
+    return await this.rpcCall<number>('setActive', [auth, newActiveStorageIdentityKey])
   }
 
-  validateDate(date: Date | string | number): Date {
+  validateDate (date: Date | string | number): Date {
     let r: Date
     if (date instanceof Date) r = date
     else r = new Date(date)
@@ -514,7 +514,7 @@ export class StorageClient implements WalletStorageProvider {
   validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T {
     entity.created_at = this.validateDate(entity.created_at)
     entity.updated_at = this.validateDate(entity.updated_at)
-    if (dateFields) {
+    if (dateFields != null) {
       for (const df of dateFields) {
         if (entity[df]) entity[df] = this.validateDate(entity[df])
       }

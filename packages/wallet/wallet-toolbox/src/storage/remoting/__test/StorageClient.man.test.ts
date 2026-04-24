@@ -65,7 +65,7 @@ describe('StorageClient to tagged revision manual tests', () => {
         console.log(`Created outpoint: ${car.txid}:0`)
       } else {
         const o = outputs.outputs[0]
-        if (o && o.outpoint && outputs.BEEF) {
+        if (o && o.outpoint && (outputs.BEEF != null)) {
           // Consume the first output found...
           const unlock = _tu.getUnlockP2PKH(k, o.satoshis)
           const unlockingScriptLength = await unlock.estimateLength()
@@ -87,8 +87,8 @@ describe('StorageClient to tagged revision manual tests', () => {
             }
           })
           expect(cas.signableTransaction).toBeTruthy()
-          if (cas.signableTransaction) {
-            const st = cas.signableTransaction!
+          if (cas.signableTransaction != null) {
+            const st = cas.signableTransaction
             expect(st.reference).toBeTruthy()
             const atomicBeef = Beef.fromBinary(st.tx)
             const tx = atomicBeef.txs[atomicBeef.txs.length - 1].tx!
@@ -120,7 +120,7 @@ describe('StorageClient to tagged revision manual tests', () => {
     const env = _tu.getEnv('main')
     const tag = 'v1-0-155---' // revision tags must be followed by '---' as a GCR service URL prefix.
     // const endpointUrl = `https://${tag}prod-storage-921101068003.us-west1.run.app`
-    const endpointUrl = `https://storage.babbage.systems`
+    const endpointUrl = 'https://storage.babbage.systems'
     const s = await _tu.createTestWalletWithStorageClient({
       rootKeyHex: env.devKeys[env.identityKey],
       endpointUrl,
@@ -153,7 +153,7 @@ describe('StorageClient to tagged revision manual tests', () => {
       }
 
       if (missing > 0) {
-        const createPromises: Promise<CreateActionResult>[] = []
+        const createPromises: Array<Promise<CreateActionResult>> = []
 
         for (let i = 0; i < missing; i++) {
           // Create an output in the testCode basket if it doesn't exist
@@ -186,12 +186,12 @@ describe('StorageClient to tagged revision manual tests', () => {
         outputs = await s.wallet.listOutputs({ basket: testCode, include: 'entire transactions', limit: count })
       }
 
-      const consumeCreatePromises: Promise<CreateActionResult>[] = []
+      const consumeCreatePromises: Array<Promise<CreateActionResult>> = []
       const beef = Beef.fromBinary(outputs.BEEF!)
 
       for (let i = 0; i < count; i++) {
         const o = outputs.outputs[i]
-        if (o && o.outpoint && outputs.BEEF) {
+        if (o && o.outpoint && (outputs.BEEF != null)) {
           // Consume the first output found...
           const unlock = _tu.getUnlockP2PKH(k, satoshis)
           const unlockingScriptLength = await unlock.estimateLength()
@@ -223,12 +223,12 @@ describe('StorageClient to tagged revision manual tests', () => {
         `${consumeCreatePromises.length} consumeCreatePromises resulting in ${consumeCreateResults.length} consumeCreateResults`
       )
 
-      const consumeSignPromises: Promise<SignActionResult>[] = []
+      const consumeSignPromises: Array<Promise<SignActionResult>> = []
 
       for (const cas of consumeCreateResults) {
         expect(cas.signableTransaction).toBeTruthy()
-        if (cas.signableTransaction) {
-          const st = cas.signableTransaction!
+        if (cas.signableTransaction != null) {
+          const st = cas.signableTransaction
           expect(st.reference).toBeTruthy()
           const atomicBeef = Beef.fromBinary(st.tx)
           const tx = atomicBeef.txs[atomicBeef.txs.length - 1].tx!
@@ -292,7 +292,7 @@ describe('StorageClient to tagged revision manual tests', () => {
     const knex = Setup.createMySQLKnex(process.env.MAIN_CLOUD_MYSQL_CONNECTION!)
     const activeStorage = new StorageKnex({
       chain: env.chain,
-      knex: knex,
+      knex,
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
       feeModel: { model: 'sat/kb', value: 1 }

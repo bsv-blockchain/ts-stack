@@ -6,17 +6,17 @@ const includeTestChaintracks = false
 describe('ChaintracksChaintracker tests', () => {
   jest.setTimeout(99999999)
 
-  test(`0 test`, async () => {
+  test('0 test', async () => {
     if (!includeTestChaintracks) return
     await testChaintracksChaintracker('test')
   })
 
-  test(`1 main`, async () => {
+  test('1 main', async () => {
     await testChaintracksChaintracker('main')
   })
 })
 
-async function testChaintracksChaintracker(chain: sdk.Chain) {
+async function testChaintracksChaintracker (chain: sdk.Chain) {
   const tracker = new ChaintracksChainTracker(chain)
   const height = await tracker.currentHeight()
   expect(height).toBeGreaterThan(877598)

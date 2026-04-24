@@ -18,7 +18,7 @@ import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 
-export async function listActions(
+export async function listActions (
   storage: StorageKnex,
   auth: AuthId,
   vargs: Validation.ValidListActionsArgs
@@ -43,7 +43,7 @@ export async function listActions(
   const createdAtFrom = actionTimeFrom !== undefined ? new Date(actionTimeFrom) : undefined
   const createdAtTo = actionTimeTo !== undefined ? new Date(actionTimeTo) : undefined
 
-  let specOp: ListActionsSpecOp | undefined = undefined
+  let specOp: ListActionsSpecOp | undefined
   let specOpLabels: string[] = []
   let labels: string[] = []
   for (const label of ordinaryLabelsPreSpecOp) {
@@ -54,14 +54,14 @@ export async function listActions(
     }
   }
   if (specOp?.labelsToIntercept !== undefined) {
-    const intercept = specOp.labelsToIntercept!
+    const intercept = specOp.labelsToIntercept
     const labels2 = labels
     labels = []
     if (intercept.length === 0) {
       specOpLabels = labels2
     }
     for (const label of labels2) {
-      if (intercept.indexOf(label) >= 0) {
+      if (intercept.includes(label)) {
         specOpLabels.push(label)
       } else {
         labels.push(label)
@@ -80,17 +80,17 @@ export async function listActions(
       .whereIn('label', labels)
       .select('txLabelId')
     const r = await q
-    labelIds = r.map(r => r.txLabelId!)
+    labelIds = r.map(r => r.txLabelId)
   }
 
   const isQueryModeAll = vargs.labelQueryMode === 'all'
   if (isQueryModeAll && labelIds.length < labels.length)
-    // all the required labels don't exist, impossible to satisfy.
-    return r
+  // all the required labels don't exist, impossible to satisfy.
+  { return r }
 
   if (!isQueryModeAll && labelIds.length === 0 && labels.length > 0)
-    // any and only non-existing labels, impossible to satisfy.
-    return r
+  // any and only non-existing labels, impossible to satisfy.
+  { return r }
 
   const columns: string[] = [
     'created_at',
@@ -105,7 +105,7 @@ export async function listActions(
     'lockTime'
   ]
 
-  const stati: string[] = specOp?.setStatusFilter
+  const stati: string[] = ((specOp?.setStatusFilter) != null)
     ? specOp.setStatusFilter()
     : ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
 
@@ -114,8 +114,8 @@ export async function listActions(
   const applyTimestampFilters = (q: any) => {
     if (!timeFilterRequested) return
     q.whereNotNull('created_at')
-    if (createdAtFrom) q.where('created_at', '>=', storage.validateDateForWhere(createdAtFrom))
-    if (createdAtTo) q.where('created_at', '<', storage.validateDateForWhere(createdAtTo))
+    if (createdAtFrom != null) q.where('created_at', '>=', storage.validateDateForWhere(createdAtFrom))
+    if (createdAtTo != null) q.where('created_at', '<', storage.validateDateForWhere(createdAtTo))
   }
 
   const makeWithLabelsQueries = () => {
@@ -153,16 +153,16 @@ export async function listActions(
 
   q.limit(limit).offset(offset).orderBy('transactionId', 'asc')
 
-  const txs: Partial<TableTransaction>[] = await q
+  const txs: Array<Partial<TableTransaction>> = await q
 
-  if (specOp?.postProcess) {
+  if ((specOp?.postProcess) != null) {
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs)
   }
 
   if (!limit) r.totalActions = txs.length
   else if (txs.length < limit) r.totalActions = (offset || 0) + txs.length
   else {
-    const total = verifyOne(await qcount)['total']
+    const total = verifyOne(await qcount).total
     r.totalActions = Number(total)
   }
 
@@ -170,7 +170,7 @@ export async function listActions(
     const wtx: WalletAction = {
       txid: tx.txid || '',
       satoshis: tx.satoshis || 0,
-      status: <ActionStatus>tx.status!,
+      status: tx.status! as ActionStatus,
       isOutgoing: !!tx.isOutgoing,
       description: tx.description || '',
       version: tx.version || 0,
@@ -182,14 +182,14 @@ export async function listActions(
   if (vargs.includeLabels || vargs.includeInputs || vargs.includeOutputs) {
     await Promise.all(
       txs.map(async (tx, i) => {
-        //let i = -1
-        //for (const tx of txs) {
+        // let i = -1
+        // for (const tx of txs) {
         //    i++
         const action = r.actions[i]
         if (vargs.includeLabels) {
           action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
           if (timeFilterRequested) {
-            const ts = tx.created_at ? new Date(tx.created_at as any).getTime() : NaN
+            const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : NaN
             if (!Number.isNaN(ts)) {
               const timeLabel = makeBrc114ActionTimeLabel(ts)
               if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
@@ -224,8 +224,8 @@ export async function listActions(
           action.inputs = []
           if (inputs.length > 0) {
             const rawTx = await storage.getRawTxOfKnownValidTransaction(tx.txid)
-            let bsvTx: BsvTransaction | undefined = undefined
-            if (rawTx) {
+            let bsvTx: BsvTransaction | undefined
+            if (rawTx != null) {
               bsvTx = BsvTransaction.fromBinary(rawTx)
             }
             for (const o of inputs) {
@@ -247,7 +247,7 @@ export async function listActions(
             }
           }
         }
-        //}
+        // }
       })
     )
   }

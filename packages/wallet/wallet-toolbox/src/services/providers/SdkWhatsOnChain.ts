@@ -19,7 +19,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
    * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
-  constructor(network: 'main' | 'test' | 'stn' | 'teratest' = 'main', config: WhatsOnChainConfig = {}) {
+  constructor (network: 'main' | 'test' | 'stn' | 'teratest' = 'main', config: WhatsOnChainConfig = {}) {
     const { apiKey, httpClient } = config
     this.network = network
     this.URL = `https://api.whatsonchain.com/v1/bsv/${network}`
@@ -27,7 +27,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     this.apiKey = apiKey ?? ''
   }
 
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
     const requestOptions = {
       method: 'GET',
       headers: this.getHttpHeaders()
@@ -49,7 +49,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     }
   }
 
-  async currentHeight(): Promise<number> {
+  async currentHeight (): Promise<number> {
     try {
       const requestOptions = {
         method: 'GET',
@@ -69,7 +69,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     }
   }
 
-  protected getHttpHeaders(): Record<string, string> {
+  protected getHttpHeaders (): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json'
     }

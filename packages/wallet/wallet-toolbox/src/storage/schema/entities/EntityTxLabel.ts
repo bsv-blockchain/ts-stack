@@ -4,7 +4,7 @@ import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 import { TableTxLabel } from '../tables/TableTxLabel'
 
 export class EntityTxLabel extends EntityBase<TableTxLabel> {
-  constructor(api?: TableTxLabel) {
+  constructor (api?: TableTxLabel) {
     const now = new Date()
     super(
       api || {
@@ -18,91 +18,105 @@ export class EntityTxLabel extends EntityBase<TableTxLabel> {
     )
   }
 
-  override updateApi(): void {
+  override updateApi (): void {
     /* nothing needed yet... */
   }
 
-  get txLabelId() {
+  get txLabelId () {
     return this.api.txLabelId
   }
-  set txLabelId(v: number) {
+
+  set txLabelId (v: number) {
     this.api.txLabelId = v
   }
-  get created_at() {
+
+  get created_at () {
     return this.api.created_at
   }
-  set created_at(v: Date) {
+
+  set created_at (v: Date) {
     this.api.created_at = v
   }
-  get updated_at() {
+
+  get updated_at () {
     return this.api.updated_at
   }
-  set updated_at(v: Date) {
+
+  set updated_at (v: Date) {
     this.api.updated_at = v
   }
-  get label() {
+
+  get label () {
     return this.api.label
   }
-  set label(v: string) {
+
+  set label (v: string) {
     this.api.label = v
   }
-  get userId() {
+
+  get userId () {
     return this.api.userId
   }
-  set userId(v: number) {
+
+  set userId (v: number) {
     this.api.userId = v
   }
-  get isDeleted() {
+
+  get isDeleted () {
     return this.api.isDeleted
   }
-  set isDeleted(v: boolean) {
+
+  set isDeleted (v: boolean) {
     this.api.isDeleted = v
   }
 
-  override get id(): number {
+  override get id (): number {
     return this.api.txLabelId
   }
-  override set id(v: number) {
+
+  override set id (v: number) {
     this.api.txLabelId = v
   }
-  override get entityName(): string {
+
+  override get entityName (): string {
     return 'txLabel'
   }
-  override get entityTable(): string {
+
+  override get entityTable (): string {
     return 'tx_labels'
   }
 
-  override equals(ei: TableTxLabel, syncMap?: SyncMap): boolean {
+  override equals (ei: TableTxLabel, syncMap?: SyncMap): boolean {
     const eo = this.toApi()
     if (eo.label != ei.label || eo.isDeleted != ei.isDeleted) return false
-    if (!syncMap) {
+    if (syncMap == null) {
       if (eo.userId !== ei.userId) return false
     }
     return true
   }
 
-  static async mergeFind(
+  static async mergeFind (
     storage: EntityStorage,
     userId: number,
     ei: TableTxLabel,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean; eo: EntityTxLabel; eiId: number }> {
+  ): Promise<{ found: boolean, eo: EntityTxLabel, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findTxLabels({ partial: { label: ei.label, userId }, trx }))
     return {
-      found: !!ef,
+      found: !(ef == null),
       eo: new EntityTxLabel(ef || { ...ei }),
       eiId: verifyId(ei.txLabelId)
     }
   }
 
-  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.userId = userId
     this.txLabelId = 0
     this.txLabelId = await storage.insertTxLabel(this.toApi(), trx)
   }
 
-  override async mergeExisting(
+  override async mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableTxLabel,

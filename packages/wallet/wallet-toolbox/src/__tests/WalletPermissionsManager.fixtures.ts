@@ -1,7 +1,7 @@
 const { Validation } = jest.requireActual('@bsv/sdk')
 
 const existingFetch = (globalThis as any).fetch
-if (!existingFetch || !(existingFetch as any)._isMockFunction) {
+if (!existingFetch || !(existingFetch)._isMockFunction) {
   ;(globalThis as any).fetch = jest.fn(async () => ({
     ok: false,
     status: 404,
@@ -20,7 +20,7 @@ if (!existingFetch || !(existingFetch as any)._isMockFunction) {
 
 /* ---------------------------------------------------------------------------
  * 1) Partial Mocks for @bsv/sdk
- * -------------------------------------------------------------------------*/
+ * ------------------------------------------------------------------------- */
 
 /**
  * A minimal mock for `Transaction` that won't throw "Invalid Atomic BEEF prefix."
@@ -31,21 +31,21 @@ export class MockTransaction {
   public outputs: any[] = []
   public fee: number = 0
 
-  constructor() {}
-  static fromAtomicBEEF() {
+  constructor () {}
+  static fromAtomicBEEF () {
     // Mocked below
   }
 
-  static fromBEEF(beef: number[]): MockTransaction {
+  static fromBEEF (beef: number[]): MockTransaction {
     // Same approach as above
     return new MockTransaction()
   }
 
-  getFee(): number {
+  getFee (): number {
     return this.fee
   }
 
-  toBEEF(): number[] {
+  toBEEF (): number[] {
     // Return an empty array for the BEEF representation
     return []
   }
@@ -63,13 +63,15 @@ export class MockTransaction {
  */
 export class MockLockingScript {
   hex: string
-  constructor(hex: string) {
+  constructor (hex: string) {
     this.hex = hex
   }
-  public toHex(): string {
+
+  public toHex (): string {
     return this.hex
   }
-  static fromHex(hex: string): MockLockingScript {
+
+  static fromHex (hex: string): MockLockingScript {
     return new MockLockingScript(hex)
   }
 }
@@ -79,12 +81,12 @@ export class MockLockingScript {
  */
 export class MockPushDrop {
   // Typically we might store the wallet reference, but we can skip for now.
-  constructor() {
+  constructor () {
     //
   }
 
   // Decodes a LockingScript into some {fields: number[][], protocol...} or undefined
-  static decode(script: MockLockingScript): { fields: number[][] } | undefined {
+  static decode (script: MockLockingScript): { fields: number[][] } | undefined {
     // If you rely on a real format, parse or store a pattern.
     // For now, returning a minimal stub: empty fields
     if (!script || !script.hex) return undefined
@@ -106,7 +108,7 @@ export class MockPushDrop {
     return { fields: [] }
   }
 
-  lock(
+  lock (
     fields: number[][],
     protocolID: [number, string],
     keyID: string,
@@ -117,7 +119,7 @@ export class MockPushDrop {
     return new MockLockingScript('deadbeef')
   }
 
-  unlock(
+  unlock (
     protocolID: [number, string],
     keyID: string,
     counterparty: string,
@@ -126,8 +128,8 @@ export class MockPushDrop {
     sigSize: number,
     lockingScript: MockLockingScript
   ): {
-    sign: (tx: MockTransaction, vin: number) => Promise<MockLockingScript>
-  } {
+      sign: (tx: MockTransaction, vin: number) => Promise<MockLockingScript>
+    } {
     // In real usage, it would handle signature logic. We'll return a minimal stub.
     return {
       sign: async (tx: MockTransaction, vin: number) => {
@@ -204,12 +206,12 @@ export const MockedBSV_SDK = {
   Utils: MockUtils,
   Random: MockRandom,
   Certificate: null,
-  Validation: Validation
+  Validation
 }
 
 /* ---------------------------------------------------------------------------
  * 2) A full mock for the BRC-100 WalletInterface
- * -------------------------------------------------------------------------*/
+ * ------------------------------------------------------------------------- */
 
 /**
  * A helper function returning a Jest-mocked `WalletInterface`.
@@ -220,7 +222,7 @@ export const MockedBSV_SDK = {
  * - You can override or chain .mockResolvedValueOnce(...) inside individual tests
  *   if you want more specific behavior in certain test steps.
  */
-export function mockUnderlyingWallet(): jest.Mocked<any> {
+export function mockUnderlyingWallet (): jest.Mocked<any> {
   return {
     getPublicKey: jest.fn().mockResolvedValue({ publicKey: '029999...' }),
     revealCounterpartyKeyLinkage: jest.fn().mockResolvedValue({

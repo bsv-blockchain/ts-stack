@@ -4,7 +4,7 @@ import { Utils, PrivateKey, Hash, Random } from '@bsv/sdk'
 const sampleData = [3, 1, 4, 1, 5, 9]
 
 // A helper function to get a 32-byte hex
-function getRandom32ByteHex(): string {
+function getRandom32ByteHex (): string {
   const rawBytes = Random(32)
   return Utils.toHex(rawBytes)
 }

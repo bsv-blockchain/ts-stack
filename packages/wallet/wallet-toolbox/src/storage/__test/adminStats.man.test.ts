@@ -12,7 +12,7 @@ describe('storage adminStats tests', () => {
   const knex = Setup.createMySQLKnex(process.env.MAIN_CLOUD_MYSQL_CONNECTION!)
   const storage = new StorageKnex({
     chain: env.chain,
-    knex: knex,
+    knex,
     commissionSatoshis: 0,
     commissionPubKeyHex: undefined,
     feeModel: { model: 'sat/kb', value: 1 }

@@ -24,7 +24,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
 
   triggerNextMsecs: number
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 12,
     public reviewLimit = 100,
@@ -35,7 +35,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskReviewDoubleSpends.checkNow ||
@@ -43,7 +43,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     }
   }
 
-  async getLastReviewedCheckpoint(): Promise<{ resumeOffset: number; expectedProvenTxReqId?: number } | undefined> {
+  async getLastReviewedCheckpoint (): Promise<{ resumeOffset: number, expectedProvenTxReqId?: number } | undefined> {
     let events: Array<{ details?: string }> = []
     await this.storage.runAsStorageProvider(async sp => {
       events = await sp.findMonitorEvents({
@@ -71,7 +71,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     return undefined
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     TaskReviewDoubleSpends.checkNow = false
 
     const checkpoint = await this.getLastReviewedCheckpoint()
@@ -86,7 +86,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
 
     const reviewed: TableProvenTxReq[] = []
     const unfails: number[] = []
-    let log = ``
+    let log = ''
     let lastRetainedDoubleSpendIndex = -1
     let retainedDoubleSpendCount = 0
 
@@ -122,13 +122,13 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     } satisfies ReviewDoubleSpendsCheckpoint)
   }
 
-  private async findReqsToReview(
-    checkpoint: { resumeOffset: number; expectedProvenTxReqId?: number } | undefined,
+  private async findReqsToReview (
+    checkpoint: { resumeOffset: number, expectedProvenTxReqId?: number } | undefined,
     updatedBefore: Date
   ): Promise<TableProvenTxReq[] & { sourceOffset?: number }> {
     let offset = checkpoint?.resumeOffset || 0
 
-    if (checkpoint && checkpoint.expectedProvenTxReqId !== undefined) {
+    if ((checkpoint != null) && checkpoint.expectedProvenTxReqId !== undefined) {
       const verify = await this.storage.findProvenTxReqs({
         partial: { status: 'doubleSpend' },
         paged: { limit: 1, offset: checkpoint.resumeOffset }

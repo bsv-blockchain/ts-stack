@@ -18,7 +18,7 @@ export interface ListActionsSpecOp {
     auth: AuthId,
     vargs: Validation.ValidListActionsArgs,
     specOpLabels: string[],
-    txs: Partial<TableTransaction>[]
+    txs: Array<Partial<TableTransaction>>
   ) => Promise<void>
 }
 
@@ -33,9 +33,9 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
         auth: AuthId,
         vargs: Validation.ValidListActionsArgs,
         specOpLabels: string[],
-        txs: Partial<TableTransaction>[]
+        txs: Array<Partial<TableTransaction>>
       ): Promise<void> => {
-        if (specOpLabels.indexOf('abort') >= 0) {
+        if (specOpLabels.includes('abort')) {
           for (const tx of txs) {
             if (tx.status === 'nosend') {
               await s.abortAction(auth, { reference: tx.reference! })
@@ -54,9 +54,9 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
         auth: AuthId,
         vargs: Validation.ValidListActionsArgs,
         specOpLabels: string[],
-        txs: Partial<TableTransaction>[]
+        txs: Array<Partial<TableTransaction>>
       ): Promise<void> => {
-        if (specOpLabels.indexOf('unfail') >= 0) {
+        if (specOpLabels.includes('unfail')) {
           for (const tx of txs) {
             if (tx.status === 'failed') {
               await s.updateTransaction(tx.transactionId!, { status: 'unfail' })

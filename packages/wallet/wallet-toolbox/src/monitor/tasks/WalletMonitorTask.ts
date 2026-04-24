@@ -24,7 +24,7 @@ export abstract class WalletMonitorTask {
 
   storage: MonitorStorage
 
-  constructor(
+  constructor (
     public monitor: Monitor,
     public name: string
   ) {
@@ -36,12 +36,12 @@ export abstract class WalletMonitorTask {
    *
    * Called before first call to `trigger`
    */
-  async asyncSetup(): Promise<void> {}
+  async asyncSetup (): Promise<void> {}
 
   /**
    * Return true if `runTask` needs to be called now.
    */
-  abstract trigger(nowMsecsSinceEpoch: number): { run: boolean }
+  abstract trigger (nowMsecsSinceEpoch: number): { run: boolean }
 
-  abstract runTask(): Promise<string>
+  abstract runTask (): Promise<string>
 }

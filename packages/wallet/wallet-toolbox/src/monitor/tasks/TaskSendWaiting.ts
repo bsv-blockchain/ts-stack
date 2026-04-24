@@ -23,7 +23,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
    * @param triggerQuickMsecs Follow-up interval used when a full chunk was consumed and more work may remain.
    * @param chunkLimit Maximum number of waiting requests to fetch and inspect in a single run.
    */
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = Monitor.oneSecond * 8,
     public agedMsecs = Monitor.oneSecond * 7,
@@ -35,7 +35,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     this.includeSending =
       !this.lastSendingRunMsecsSinceEpoch || nowMsecsSinceEpoch > this.lastSendingRunMsecsSinceEpoch + this.sendingMsecs
     if (this.includeSending) this.lastSendingRunMsecsSinceEpoch = nowMsecsSinceEpoch
@@ -44,7 +44,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     const nowMsecsSinceEpoch = Date.now()
     const agedLimit = new Date(nowMsecsSinceEpoch - this.agedMsecs)
@@ -81,7 +81,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     return log
   }
 
-  private async expandBatches(reqs: TableProvenTxReq[], status: ProvenTxReqStatus[]): Promise<TableProvenTxReq[]> {
+  private async expandBatches (reqs: TableProvenTxReq[], status: ProvenTxReqStatus[]): Promise<TableProvenTxReq[]> {
     const expanded: TableProvenTxReq[] = []
     const seenReqIds = new Set<number>()
     const seenBatches = new Set<string>()
@@ -111,7 +111,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     return expanded
   }
 
-  private filterAgedReqs(reqs: TableProvenTxReq[], agedLimit: Date): TableProvenTxReq[] {
+  private filterAgedReqs (reqs: TableProvenTxReq[], agedLimit: Date): TableProvenTxReq[] {
     const agedReqs: TableProvenTxReq[] = []
     const seenBatches = new Set<string>()
 
@@ -151,7 +151,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
    *
    * @param reqApis
    */
-  async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
+  async processUnsent (reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
     const txids = reqApis.map(r => r.txid)
     const logs: Record<string, string> = {}
     const reqApiIds = new Set(reqApis.map(r => r.provenTxReqId))
@@ -163,7 +163,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     for (let i = 0; i < reqApis.length; i++) {
       const reqApi = reqApis[i]
       if (groupedReqIds.has(reqApi.provenTxReqId)) {
-        logs[reqApi.txid] += ` processed with batch`
+        logs[reqApi.txid] += ' processed with batch'
         continue
       }
       if (reqApi.status !== 'unsent' && reqApi.status !== 'sending') {
@@ -189,14 +189,14 @@ export class TaskSendWaiting extends WalletMonitorTask {
       }
 
       const r = await this.storage.runAsStorageProvider(async sp => {
-        return attemptToPostReqsToNetwork(sp, reqs)
+        return await attemptToPostReqsToNetwork(sp, reqs)
       })
 
       for (const rd of r.details) {
         logs[rd.txid] += ` req.status ${rd.req.status} post.status ${rd.status}`
       }
 
-      if (this.monitor.onTransactionBroadcasted) {
+      if (this.monitor.onTransactionBroadcasted != null) {
         const rar = await this.storage.runAsStorageProvider(async sp => {
           const ars: SendWithResult[] = [{ txid: req.txid, status: 'sending' }]
           const { rar } = await aggregateActionResults(sp, ars, r)

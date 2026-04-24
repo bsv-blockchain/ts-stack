@@ -8,7 +8,7 @@ dotenv.config()
 describe('getFiatExchangeRate service tests', () => {
   jest.setTimeout(99999999)
 
-  function makeFetchedRates(rates: Record<string, number>): FiatExchangeRates {
+  function makeFetchedRates (rates: Record<string, number>): FiatExchangeRates {
     return {
       timestamp: new Date('2026-03-25T00:00:00.000Z'),
       base: 'USD',

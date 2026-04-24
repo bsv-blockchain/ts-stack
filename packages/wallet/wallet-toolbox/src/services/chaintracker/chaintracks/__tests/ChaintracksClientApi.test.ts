@@ -14,29 +14,29 @@ import {
 } from '../util/blockHeaderUtilities'
 
 type ClientClass = 'ChaintracksSingletonClient' | 'Chaintracks' | 'ChaintracksServiceClient' | undefined
-let clientClass: ClientClass = undefined
+let clientClass: ClientClass
 
 clientClass = 'Chaintracks'
-//clientClass = "ChaintracksSingletonClient"
-//clientClass = "ChaintracksServiceClient"
+// clientClass = "ChaintracksSingletonClient"
+// clientClass = "ChaintracksServiceClient"
 const includeLocalServiceClient = true
 const includeLocalServiceChaintracks = true
 const includeNpmRegistryClient = false
 const includeGcrTestClient = false
-describe(`ChaintracksClientApi tests`, () => {
+describe('ChaintracksClientApi tests', () => {
   jest.setTimeout(999999999)
 
   const chain: Chain = 'main'
 
-  const clients: { client: ChaintracksClientApi; chain: Chain }[] = []
+  const clients: Array<{ client: ChaintracksClientApi, chain: Chain }> = []
 
   let localService: ChaintracksService
   let localServiceStorage: ChaintracksStorageApi
   let localServiceClient: ChaintracksClientApi
   let firstTip: BlockHeader
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -58,11 +58,11 @@ describe(`ChaintracksClientApi tests`, () => {
     }
 
     if (includeGcrTestClient) {
-      const gcr = new ChaintracksServiceClient('test', `https://testnet-chaintracks.babbage.systems`, {})
+      const gcr = new ChaintracksServiceClient('test', 'https://testnet-chaintracks.babbage.systems', {})
       clients.push({ client: gcr, chain: 'test' })
     }
     if (includeGcrTestClient) {
-      const gcr = new ChaintracksServiceClient('main', `https://mainnet-chaintracks.babbage.systems`, {})
+      const gcr = new ChaintracksServiceClient('main', 'https://mainnet-chaintracks.babbage.systems', {})
       clients.push({ client: gcr, chain: 'main' })
     }
 
@@ -119,7 +119,7 @@ describe(`ChaintracksClientApi tests`, () => {
       const partHeaders = await getHeaders(h1, 2)
       expect(partHeaders.length).toBe(1)
 
-      async function getHeaders(h: number, c: number): Promise<BaseBlockHeader[]> {
+      async function getHeaders (h: number, c: number): Promise<BaseBlockHeader[]> {
         const data = asUint8Array(await client.getHeaders(h, c))
         const headers = deserializeBaseBlockHeaders(data)
         return headers
@@ -145,12 +145,12 @@ describe(`ChaintracksClientApi tests`, () => {
     for (const { client, chain } of clients) {
       const header0 = await client.findHeaderForHeight(0)
       expect(header0 !== undefined).toBe(true)
-      if (header0) {
+      if (header0 != null) {
         expect(genesisBuffer(chain)).toEqual(serializeBaseBlockHeader(header0))
       }
 
       const header = await client.findHeaderForHeight(firstTip.height)
-      expect(header && header.height === firstTip.height).toBe(true)
+      expect((header != null) && header.height === firstTip.height).toBe(true)
 
       const missing = await client.findHeaderForHeight(99999999)
       expect(missing === undefined).toBe(true)
@@ -193,6 +193,6 @@ describe(`ChaintracksClientApi tests`, () => {
   */
 })
 
-function makeNpmRegistryClient(chain: Chain) {
+function makeNpmRegistryClient (chain: Chain) {
   return new ChaintracksServiceClient(chain, `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`)
 }

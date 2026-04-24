@@ -5,8 +5,8 @@ import { LiveIngestorWhatsOnChainPoll } from '../LiveIngestorWhatsOnChainPoll'
 describe('LiveIngestorWhatsOnChainPoll tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -22,7 +22,7 @@ describe('LiveIngestorWhatsOnChainPoll tests', () => {
     let count = 0
     for (;;) {
       const h = liveHeaders.shift()
-      if (h) {
+      if (h != null) {
         log += `${h.height} ${h.hash}\n`
         count++
       } else {
@@ -31,7 +31,7 @@ describe('LiveIngestorWhatsOnChainPoll tests', () => {
           log = ''
           break
         }
-        //if (count >= 11) break
+        // if (count >= 11) break
         await wait(100)
       }
     }

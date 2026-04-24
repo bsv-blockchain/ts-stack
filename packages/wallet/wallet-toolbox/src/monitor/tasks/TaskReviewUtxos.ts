@@ -14,7 +14,7 @@ export class TaskReviewUtxos extends WalletMonitorTask {
 
   static checkNow = false
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = 0,
     public userLimit = 10,
@@ -24,18 +24,18 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     super(monitor, TaskReviewUtxos.taskName)
   }
 
-  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (_nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: false
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     TaskReviewUtxos.checkNow = false
     return 'TaskReviewUtxos is disabled; use reviewByIdentityKey instead.\n'
   }
 
-  async reviewByIdentityKey(identityKey: string, mode: 'all' | 'change' = 'all'): Promise<string> {
+  async reviewByIdentityKey (identityKey: string, mode: 'all' | 'change' = 'all'): Promise<string> {
     const tags = ['release', ...(mode === 'all' ? ['all'] : [])]
     const vargs: Validation.ValidListOutputsArgs = {
       basket: specOpInvalidChange,
@@ -69,7 +69,7 @@ export class TaskReviewUtxos extends WalletMonitorTask {
     })
   }
 
-  private toUserLog(
+  private toUserLog (
     user: TableUser,
     outputs: WalletOutput[],
     totalOutputs: number,

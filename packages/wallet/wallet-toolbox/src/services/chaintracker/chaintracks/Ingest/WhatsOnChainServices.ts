@@ -42,7 +42,7 @@ export interface WhatsOnChainServicesOptions {
 }
 
 export class WhatsOnChainServices {
-  static createWhatsOnChainServicesOptions(chain: Chain): WhatsOnChainServicesOptions {
+  static createWhatsOnChainServicesOptions (chain: Chain): WhatsOnChainServicesOptions {
     const options: WhatsOnChainServicesOptions = {
       chain,
       apiKey: '',
@@ -54,14 +54,14 @@ export class WhatsOnChainServices {
     return options
   }
 
-  static chainInfo: (WocChainInfo | undefined)[] = []
-  static chainInfoTime: (Date | undefined)[] = []
+  static chainInfo: Array<WocChainInfo | undefined> = []
+  static chainInfoTime: Array<Date | undefined> = []
   static chainInfoMsecs: number[] = []
 
   chain: Chain
   woc: WhatsOnChain
 
-  constructor(public options: WhatsOnChainServicesOptions) {
+  constructor (public options: WhatsOnChainServicesOptions) {
     const config = {
       apiKey: this.options.apiKey,
       timeout: this.options.timeout,
@@ -73,12 +73,12 @@ export class WhatsOnChainServices {
     this.woc = new WhatsOnChain(this.chain, config)
   }
 
-  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
     const header = await this.woc.getBlockHeaderByHash(hash)
     return header
   }
 
-  async getChainInfo(): Promise<WocChainInfo> {
+  async getChainInfo (): Promise<WocChainInfo> {
     const now = new Date()
     let update = WhatsOnChainServices.chainInfo[this.chain] === undefined
     if (!update && WhatsOnChainServices.chainInfoTime[this.chain] !== undefined) {
@@ -93,11 +93,11 @@ export class WhatsOnChainServices {
     return WhatsOnChainServices.chainInfo[this.chain]
   }
 
-  async getChainTipHeight(): Promise<number> {
+  async getChainTipHeight (): Promise<number> {
     return (await this.getChainInfo()).blocks
   }
 
-  async getChainTipHash(): Promise<string> {
+  async getChainTipHash (): Promise<string> {
     return (await this.getChainInfo()).bestblockhash
   }
 
@@ -105,7 +105,7 @@ export class WhatsOnChainServices {
    * @param fetch
    * @returns returns the last 10 block headers including height, size, chainwork...
    */
-  async getHeaders(fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> {
+  async getHeaders (fetch?: ChaintracksFetchApi): Promise<WocGetHeadersHeader[]> {
     fetch ||= new ChaintracksFetch()
     const headers = await fetch.fetchJson<WocGetHeadersHeader[]>(
       `https://api.whatsonchain.com/v1/bsv/${this.chain}/block/headers`
@@ -113,7 +113,7 @@ export class WhatsOnChainServices {
     return headers
   }
 
-  async getHeaderByteFileLinks(
+  async getHeaderByteFileLinks (
     neededRange: HeightRange,
     fetch?: ChaintracksFetchApi
   ): Promise<GetHeaderByteFileLinksResult[]> {
@@ -122,7 +122,7 @@ export class WhatsOnChainServices {
       `https://api.whatsonchain.com/v1/bsv/${this.chain}/block/headers/resources`
     )
     const r: GetHeaderByteFileLinksResult[] = []
-    let range: HeightRange | undefined = undefined
+    let range: HeightRange | undefined
     for (const link of files.files) {
       const parsed = parseFileLink(link)
       if (parsed === undefined) continue // parse error, return empty result
@@ -133,20 +133,18 @@ export class WhatsOnChainServices {
           // We need this range but don't know maxHeight
           const data = await fetch.download(link)
           range = new HeightRange(fromHeight, fromHeight + data.length / 80 - 1)
-          if (!neededRange.intersect(range).isEmpty)
-            r.push({ sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data })
+          if (!neededRange.intersect(range).isEmpty) { r.push({ sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data }) }
         }
       } else {
         range = new HeightRange(parsed.range.fromHeight, parsed.range.toHeight)
-        if (!neededRange.intersect(range).isEmpty)
-          r.push({ sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data: undefined })
+        if (!neededRange.intersect(range).isEmpty) { r.push({ sourceUrl: parsed.sourceUrl, fileName: parsed.fileName, range, data: undefined }) }
       }
     }
     return r
 
-    function parseFileLink(
+    function parseFileLink (
       file: string
-    ): { range: { fromHeight: number; toHeight: number } | 'latest'; sourceUrl: string; fileName: string } | undefined {
+    ): { range: { fromHeight: number, toHeight: number } | 'latest', sourceUrl: string, fileName: string } | undefined {
       const url = new URL(file)
       const parts = url.pathname.split('/')
       const fileName = parts.pop()
@@ -192,7 +190,7 @@ export interface WocGetHeadersHeader {
   num_tx: number
 }
 
-export function wocGetHeadersHeaderToBlockHeader(h: WocGetHeadersHeader): BlockHeader {
+export function wocGetHeadersHeaderToBlockHeader (h: WocGetHeadersHeader): BlockHeader {
   const bits: number = typeof h.bits === 'string' ? parseInt(h.bits, 16) : h.bits
   if (!h.previousblockhash) {
     h.previousblockhash = '0000000000000000000000000000000000000000000000000000000000000000' // genesis

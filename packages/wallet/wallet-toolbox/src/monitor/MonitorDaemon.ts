@@ -39,18 +39,18 @@ export class MonitorDaemon {
   doneTasks?: Promise<void>
   stopDaemon: boolean = false
 
-  constructor(
+  constructor (
     public args: MonitorDaemonSetup,
     public noRunTasks?: boolean
   ) {
     /* */
   }
 
-  async createSetup(): Promise<void> {
+  async createSetup (): Promise<void> {
     this.setup = { ...this.args }
     const a = this.setup
 
-    if (!a.monitor) {
+    if (a.monitor == null) {
       a.chain ||= 'test'
 
       if (a.sqliteFilename) {
@@ -70,11 +70,11 @@ export class MonitorDaemon {
         }
       }
 
-      if (a.knexConfig) {
+      if (a.knexConfig != null) {
         a.knex = makeKnex(a.knexConfig)
       }
 
-      if (a.knex) {
+      if (a.knex != null) {
         a.storageKnexOptions = {
           knex: a.knex,
           chain: a.chain,
@@ -83,30 +83,29 @@ export class MonitorDaemon {
         }
       }
 
-      if (a.storageKnexOptions) {
+      if (a.storageKnexOptions != null) {
         a.storageProvider = new StorageKnex(a.storageKnexOptions)
       }
 
-      if (a.storageProvider) {
+      if (a.storageProvider != null) {
         await a.storageProvider.makeAvailable()
         const settings = await a.storageProvider.getSettings()
         a.storageManager = new WalletStorageManager(settings.storageIdentityKey, a.storageProvider)
         await a.storageManager.makeAvailable()
-      } else if (!a.storageManager) {
+      } else if (a.storageManager == null) {
         throw new WERR_INVALID_PARAMETER(
           'storageManager',
           'valid or one of mySQLConnection, knexConfig, knex, storageKnexOptions, or storageProvider'
         )
       }
 
-      if (a.servicesOptions) {
-        if (a.servicesOptions.chain != a.chain)
-          throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain')
+      if (a.servicesOptions != null) {
+        if (a.servicesOptions.chain != a.chain) { throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain') }
         a.servicesOptions.chaintracks ||= a.chaintracks
         a.services = new Services(a.servicesOptions)
       }
 
-      if (!a.services) {
+      if (a.services == null) {
         a.services = new Services(a.chain)
       }
 
@@ -123,9 +122,9 @@ export class MonitorDaemon {
     }
   }
 
-  async start(): Promise<void> {
-    if (!this.setup) await this.createSetup()
-    if (!this.setup?.monitor) throw new WERR_INTERNAL('createSetup failed to initialize setup')
+  async start (): Promise<void> {
+    if (this.setup == null) await this.createSetup()
+    if ((this.setup?.monitor) == null) throw new WERR_INTERNAL('createSetup failed to initialize setup')
 
     const { monitor } = this.setup
 
@@ -135,30 +134,29 @@ export class MonitorDaemon {
     }
   }
 
-  async stop(): Promise<void> {
+  async stop (): Promise<void> {
     console.log('start of stop')
 
-    if (!this.setup || (!this.doneTasks && !this.noRunTasks) || !this.doneListening)
-      throw new WERR_INTERNAL('call start or createSetup first')
+    if ((this.setup == null) || ((this.doneTasks == null) && !this.noRunTasks) || (this.doneListening == null)) { throw new WERR_INTERNAL('call start or createSetup first') }
 
     const { monitor } = this.setup
 
     monitor!.stopTasks()
 
-    if (this.doneTasks) await this.doneTasks
+    if (this.doneTasks != null) await this.doneTasks
     this.doneTasks = undefined
     await this.doneListening
     this.doneListening = undefined
   }
 
-  async destroy(): Promise<void> {
-    if (!this.setup) return
-    if (this.doneTasks || this.doneListening) await this.stop()
-    if (this.setup.storageProvider) this.setup.storageProvider.destroy()
+  async destroy (): Promise<void> {
+    if (this.setup == null) return
+    if (this.doneTasks || (this.doneListening != null)) await this.stop()
+    if (this.setup.storageProvider != null) this.setup.storageProvider.destroy()
     this.setup = undefined
   }
 
-  async runDaemon(): Promise<void> {
+  async runDaemon (): Promise<void> {
     this.stopDaemon = false
     for (;;) {
       try {

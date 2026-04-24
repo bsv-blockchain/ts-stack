@@ -9,7 +9,7 @@ export class WalletLogger implements WalletLoggerInterface {
   level?: WalletLoggerLevel
   flushFormat?: 'json'
 
-  constructor(log?: string | WalletLoggerInterface) {
+  constructor (log?: string | WalletLoggerInterface) {
     if (log) {
       const lo = typeof log === 'string' ? JSON.parse(log) : log
       this.indent = lo.indent || 0
@@ -19,14 +19,14 @@ export class WalletLogger implements WalletLoggerInterface {
     }
   }
 
-  private logAny(message?: any): string {
+  private logAny (message?: any): string {
     if (!message) return ''
     if (typeof message === 'string') return message
     if (typeof message === 'object') return JSON.stringify(message)
     return ''
   }
 
-  private toAdd(
+  private toAdd (
     isBegin: boolean,
     isEnd: boolean,
     isError: boolean,
@@ -35,8 +35,8 @@ export class WalletLogger implements WalletLoggerInterface {
   ): WalletLoggerLog {
     let add = ''
     if (message) add += this.logAny(message)
-    if (optionalParams) for (const p of optionalParams) add += this.logAny(p)
-    let log = {
+    if (optionalParams != null) for (const p of optionalParams) add += this.logAny(p)
+    const log = {
       when: Date.now(),
       indent: this.indent,
       isBegin,
@@ -47,31 +47,32 @@ export class WalletLogger implements WalletLoggerInterface {
     return log
   }
 
-  private stampLog(isBegin: boolean, isEnd: boolean, isError: boolean, message?: any, optionalParams?: any[]) {
+  private stampLog (isBegin: boolean, isEnd: boolean, isError: boolean, message?: any, optionalParams?: any[]) {
     const add = this.toAdd(isBegin, isEnd, isError, message, optionalParams)
     this.logs.push(add)
   }
 
-  group(...label: any[]): void {
+  group (...label: any[]): void {
     this.stampLog(true, false, false, undefined, label)
     this.indent++
   }
 
-  groupEnd(): void {
+  groupEnd (): void {
     this.indent--
     if (this.indent < 0) this.indent = 0
     this.stampLog(false, true, false)
   }
 
-  log(message?: any, ...optionalParams: any[]): void {
+  log (message?: any, ...optionalParams: any[]): void {
     this.stampLog(false, false, false, message, optionalParams)
   }
-  error(message?: any, ...optionalParams: any[]): void {
+
+  error (message?: any, ...optionalParams: any[]): void {
     this.stampLog(false, false, true, message, optionalParams)
     this.isError = true
   }
 
-  toWalletLoggerJson(): object {
+  toWalletLoggerJson (): object {
     const json: object = {
       isWalletLoggerJson: true,
       indent: this.indent,
@@ -81,7 +82,7 @@ export class WalletLogger implements WalletLoggerInterface {
     return json
   }
 
-  toLogString(): string {
+  toLogString (): string {
     let log = ''
     if (this.logs.length > 0) {
       const first = this.logs[0]
@@ -107,7 +108,7 @@ export class WalletLogger implements WalletLoggerInterface {
     return log
   }
 
-  flush(): object | undefined {
+  flush (): object | undefined {
     if (this.logs.length > 0) {
       const trace = this.toLogString()
       const output = this.isError ? console.error : console.log
@@ -126,24 +127,24 @@ export class WalletLogger implements WalletLoggerInterface {
     return r
   }
 
-  merge(log: WalletLoggerInterface): void {
-    if (log.logs) {
+  merge (log: WalletLoggerInterface): void {
+    if (log.logs != null) {
       this.logs.push(...log.logs)
     }
   }
 }
 
-export function logWalletError(eu: unknown, logger?: WalletLoggerInterface, label?: string): void {
-  if (!logger) return
+export function logWalletError (eu: unknown, logger?: WalletLoggerInterface, label?: string): void {
+  if (logger == null) return
   logger.error(label || 'WalletError', WalletError.unknownToJson(eu))
 }
 
-export function logCreateActionArgs(args: CreateActionArgs): object {
+export function logCreateActionArgs (args: CreateActionArgs): object {
   const o: any = {
     description: args.description
   }
-  if (args.labels) o.labels = args.labels
-  if (args.inputBEEF) o.inputBEEF = Beef.fromBinary(args.inputBEEF).toLogString()
+  if (args.labels != null) o.labels = args.labels
+  if (args.inputBEEF != null) o.inputBEEF = Beef.fromBinary(args.inputBEEF).toLogString()
   if (args.lockTime !== undefined) o.lockTime = args.lockTime
   if (args.version !== undefined) o.version = args.version
   /*

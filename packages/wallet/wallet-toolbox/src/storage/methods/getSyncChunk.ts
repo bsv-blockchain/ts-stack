@@ -21,7 +21,7 @@ import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_e
  * @param args
  * @returns
  */
-export async function getSyncChunk(storage: StorageReader, args: RequestSyncChunkArgs): Promise<SyncChunk> {
+export async function getSyncChunk (storage: StorageReader, args: RequestSyncChunkArgs): Promise<SyncChunk> {
   const r: SyncChunk = {
     fromStorageIdentityKey: args.fromStorageIdentityKey,
     toStorageIdentityKey: args.toStorageIdentityKey,
@@ -34,7 +34,7 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
   let done = false
 
   const user = verifyTruthy(await storage.findUserByIdentityKey(args.identityKey))
-  if (!args.since || user.updated_at > new Date(args.since)) r.user = user
+  if ((args.since == null) || user.updated_at > new Date(args.since)) r.user = user
 
   const chunkers: ChunkerArgs[] = [
     {
@@ -233,10 +233,9 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
       return
     }
     let { offset, name: oname } = args.offsets[i++]
-    if (a.name !== oname)
-      throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`)
+    if (a.name !== oname) { throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`) }
     let preAddCalled = false
-    for (; !done; ) {
+    for (; !done;) {
       const limit = Math.min(itemCount, Math.max(10, args.maxItems / a.maxDivider))
       if (limit <= 0) break
       const items = await a.findItems(storage, {
@@ -263,7 +262,7 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
     }
   }
 
-  for (; !done; ) {
+  for (; !done;) {
     for (const c of chunkers) {
       await addItems(c)
     }
@@ -272,7 +271,7 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
   return r
 }
 
-type ChunkerArgs = {
+interface ChunkerArgs {
   name: string
   maxDivider: number
   preAdd: () => void
@@ -280,11 +279,11 @@ type ChunkerArgs = {
   findItems: (storage: StorageReader, args: FindForUserSincePagedArgs) => Promise<any[]>
 }
 
-function checkIsDate(v: any) {
+function checkIsDate (v: any) {
   if (!(v instanceof Date)) throw new WERR_INVALID_OPERATION('bad date')
 }
 
-function checkEntityValues(es: object[]) {
+function checkEntityValues (es: object[]) {
   for (const e of es) {
     checkIsDate(e['created_at'])
     checkIsDate(e['updated_at'])

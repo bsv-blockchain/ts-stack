@@ -37,9 +37,9 @@ export interface MockChainUtxoRow {
 }
 
 export class MockChainStorage {
-  constructor(public knex: Knex) {}
+  constructor (public knex: Knex) {}
 
-  async migrate(): Promise<void> {
+  async migrate (): Promise<void> {
     const migrationSource = new MockChainMigrations()
     await this.knex.migrate.latest({
       migrationSource,
@@ -47,7 +47,7 @@ export class MockChainStorage {
     })
   }
 
-  async insertTransaction(txid: string, rawTx: number[]): Promise<void> {
+  async insertTransaction (txid: string, rawTx: number[]): Promise<void> {
     await this.knex('mockchain_transactions').insert({
       txid,
       rawTx: Buffer.from(rawTx),
@@ -56,19 +56,19 @@ export class MockChainStorage {
     })
   }
 
-  async getTransaction(txid: string): Promise<MockChainTransactionRow | undefined> {
-    return this.knex('mockchain_transactions').where({ txid }).first()
+  async getTransaction (txid: string): Promise<MockChainTransactionRow | undefined> {
+    return await this.knex('mockchain_transactions').where({ txid }).first()
   }
 
-  async getUnminedTransactions(): Promise<MockChainTransactionRow[]> {
-    return this.knex('mockchain_transactions').whereNull('blockHeight')
+  async getUnminedTransactions (): Promise<MockChainTransactionRow[]> {
+    return await this.knex('mockchain_transactions').whereNull('blockHeight')
   }
 
-  async setTransactionBlock(txid: string, height: number, index: number): Promise<void> {
+  async setTransactionBlock (txid: string, height: number, index: number): Promise<void> {
     await this.knex('mockchain_transactions').where({ txid }).update({ blockHeight: height, blockIndex: index })
   }
 
-  async insertUtxo(
+  async insertUtxo (
     txid: string,
     vout: number,
     lockingScript: number[],
@@ -89,62 +89,62 @@ export class MockChainStorage {
     })
   }
 
-  async getUtxo(txid: string, vout: number): Promise<MockChainUtxoRow | undefined> {
-    return this.knex('mockchain_utxos').where({ txid, vout }).first()
+  async getUtxo (txid: string, vout: number): Promise<MockChainUtxoRow | undefined> {
+    return await this.knex('mockchain_utxos').where({ txid, vout }).first()
   }
 
-  async getUtxosByScriptHash(scriptHash: string): Promise<MockChainUtxoRow[]> {
-    return this.knex('mockchain_utxos').where({ scriptHash })
+  async getUtxosByScriptHash (scriptHash: string): Promise<MockChainUtxoRow[]> {
+    return await this.knex('mockchain_utxos').where({ scriptHash })
   }
 
-  async markUtxoSpent(txid: string, vout: number, spentByTxid: string): Promise<void> {
+  async markUtxoSpent (txid: string, vout: number, spentByTxid: string): Promise<void> {
     await this.knex('mockchain_utxos').where({ txid, vout }).update({ spentByTxid })
   }
 
-  async insertBlockHeader(header: MockChainBlockHeaderRow): Promise<void> {
+  async insertBlockHeader (header: MockChainBlockHeaderRow): Promise<void> {
     await this.knex('mockchain_block_headers').insert(header)
   }
 
-  async getBlockHeaderByHeight(height: number): Promise<BlockHeader | undefined> {
+  async getBlockHeaderByHeight (height: number): Promise<BlockHeader | undefined> {
     const row = await this.knex('mockchain_block_headers').where({ height }).first()
     return row ? this.rowToBlockHeader(row) : undefined
   }
 
-  async getBlockHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+  async getBlockHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
     const row = await this.knex('mockchain_block_headers').where({ hash }).first()
     return row ? this.rowToBlockHeader(row) : undefined
   }
 
-  async getChainTip(): Promise<BlockHeader | undefined> {
+  async getChainTip (): Promise<BlockHeader | undefined> {
     const row = await this.knex('mockchain_block_headers').orderBy('height', 'desc').first()
     return row ? this.rowToBlockHeader(row) : undefined
   }
 
-  async getTransactionsInBlock(height: number): Promise<MockChainTransactionRow[]> {
-    return this.knex('mockchain_transactions').where({ blockHeight: height }).orderBy('blockIndex', 'asc')
+  async getTransactionsInBlock (height: number): Promise<MockChainTransactionRow[]> {
+    return await this.knex('mockchain_transactions').where({ blockHeight: height }).orderBy('blockIndex', 'asc')
   }
 
-  async deleteBlockHeader(height: number): Promise<void> {
+  async deleteBlockHeader (height: number): Promise<void> {
     await this.knex('mockchain_block_headers').where({ height }).delete()
   }
 
-  async deleteTransaction(txid: string): Promise<void> {
+  async deleteTransaction (txid: string): Promise<void> {
     await this.knex('mockchain_transactions').where({ txid }).delete()
   }
 
-  async deleteUtxosByTxid(txid: string): Promise<void> {
+  async deleteUtxosByTxid (txid: string): Promise<void> {
     await this.knex('mockchain_utxos').where({ txid }).delete()
   }
 
-  async setUtxoBlockHeight(txid: string, blockHeight: number | null): Promise<void> {
+  async setUtxoBlockHeight (txid: string, blockHeight: number | null): Promise<void> {
     await this.knex('mockchain_utxos').where({ txid }).update({ blockHeight })
   }
 
-  async unspendUtxo(txid: string, vout: number): Promise<void> {
+  async unspendUtxo (txid: string, vout: number): Promise<void> {
     await this.knex('mockchain_utxos').where({ txid, vout }).update({ spentByTxid: null })
   }
 
-  private rowToBlockHeader(row: MockChainBlockHeaderRow): BlockHeader {
+  private rowToBlockHeader (row: MockChainBlockHeaderRow): BlockHeader {
     return {
       height: row.height,
       hash: row.hash,

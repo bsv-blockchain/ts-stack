@@ -78,9 +78,9 @@ export const TESTNET_DEFAULT_SETTINGS: WalletSettings = {
 export class WalletSettingsManager {
   kv: LocalKVStore
 
-  constructor(
-    private wallet: WalletInterface,
-    private config: WalletSettingsManagerConfig = {
+  constructor (
+    private readonly wallet: WalletInterface,
+    private readonly config: WalletSettingsManagerConfig = {
       defaultSettings: DEFAULT_SETTINGS
     }
   ) {
@@ -92,7 +92,7 @@ export class WalletSettingsManager {
    *
    * @returns - Wallet settings object
    */
-  async get(): Promise<WalletSettings> {
+  async get (): Promise<WalletSettings> {
     return JSON.parse((await this.kv.get('settings', JSON.stringify(this.config.defaultSettings))) as string)
   }
 
@@ -101,14 +101,14 @@ export class WalletSettingsManager {
    *
    * @param settings - The wallet settings to be stored.
    */
-  async set(settings: WalletSettings): Promise<void> {
+  async set (settings: WalletSettings): Promise<void> {
     await this.kv.set('settings', JSON.stringify(settings))
   }
 
   /**
    * Deletes the user's settings token.
    */
-  async delete(): Promise<void> {
+  async delete (): Promise<void> {
     await this.kv.remove('settings')
   }
 }

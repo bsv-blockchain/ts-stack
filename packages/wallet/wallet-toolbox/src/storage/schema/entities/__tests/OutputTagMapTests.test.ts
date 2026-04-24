@@ -179,9 +179,9 @@ describe('OutputTagMap class method tests', () => {
     const updatedRecord = await ctx.activeStorage.findOutputTagMaps({
       partial: { outputId: 2, outputTagId: 8 }
     })
-    //console.log('Updated Record:', updatedRecord)
-    //console.log('Updated Record isDeleted:', updatedRecord[0].isDeleted)
-    //console.log('Updted Redord length:', updatedRecord.length)
+    // console.log('Updated Record:', updatedRecord)
+    // console.log('Updated Record isDeleted:', updatedRecord[0].isDeleted)
+    // console.log('Updted Redord length:', updatedRecord.length)
 
     // Verify that the database is updated
     expect(updatedRecord.length).toBe(1)

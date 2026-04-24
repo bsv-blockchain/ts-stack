@@ -12,8 +12,8 @@ const rootFolder = './src/services/chaintracker/chaintracks/__tests/data'
 describe('Chaintracks tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -25,8 +25,8 @@ describe('Chaintracks tests', () => {
     const c = new Chaintracks(o)
     await c.makeAvailable()
 
-    let done = false
-    for (; !done; ) {
+    const done = false
+    for (; !done;) {
       await wait(10000)
     }
 
@@ -56,14 +56,14 @@ describe('Chaintracks tests', () => {
     const fs = ChaintracksFs
     const server = new LocalCdnServer(8300, fs.pathJoin(rootFolder, 'export'))
     await server.start()
-    let done = false
-    for (; !done; ) {
+    const done = false
+    for (; !done;) {
       await wait(10000)
     }
     await server.stop()
   })
 
-  async function NoDbBody(chain: Chain, exportHeaders?: boolean) {
+  async function NoDbBody (chain: Chain, exportHeaders?: boolean) {
     const o = createDefaultNoDbChaintracksOptions(chain)
     const c = new Chaintracks(o)
     await c.makeAvailable()
@@ -74,12 +74,12 @@ describe('Chaintracks tests', () => {
 
     if (exportHeaders) {
       const rootFolder = './src/services/chaintracker/chaintracks/__tests/data/export'
-      await c.exportBulkHeaders(rootFolder, ChaintracksFs, `https://cdn.projectbabbage.com/blockheaders`, 100000)
+      await c.exportBulkHeaders(rootFolder, ChaintracksFs, 'https://cdn.projectbabbage.com/blockheaders', 100000)
     }
-    //let done = false
-    //for (; !done; ) {
+    // let done = false
+    // for (; !done; ) {
     await wait(1000)
-    //}
+    // }
 
     await c.destroy()
   }

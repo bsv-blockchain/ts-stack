@@ -22,30 +22,30 @@ export interface WalletServices {
   /**
    * @returns standard `ChainTracker` service which requires `options.chaintracks` be valid.
    */
-  getChainTracker(): Promise<ChainTracker>
+  getChainTracker: () => Promise<ChainTracker>
 
   /**
    * @returns serialized block header for height on active chain
    * @param height
    */
-  getHeaderForHeight(height: number): Promise<number[]>
+  getHeaderForHeight: (height: number) => Promise<number[]>
 
   /**
    * @returns the height of the active chain
    */
-  getHeight(): Promise<number>
+  getHeight: () => Promise<number>
 
   /**
    * Approximate exchange rate US Dollar / BSV, USD / BSV
    *
    * This is the US Dollar price of one BSV
    */
-  getBsvExchangeRate(): Promise<number>
+  getBsvExchangeRate: () => Promise<number>
 
   /**
    * Approximate exchange rate currency per base.
    */
-  getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number>
+  getFiatExchangeRate: (currency: FiatCurrencyCode, base?: FiatCurrencyCode) => Promise<number>
 
   /**
    * Attempts to obtain the raw transaction bytes associated with a 32 byte transaction hash (txid).
@@ -67,7 +67,7 @@ export interface WalletServices {
    * @param txid transaction hash for which raw transaction bytes are requested
    * @param useNext optional, forces skip to next service before starting service requests cycle.
    */
-  getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult>
+  getRawTx: (txid: string, useNext?: boolean) => Promise<GetRawTxResult>
 
   /**
    * Attempts to obtain the merkle proof associated with a 32 byte transaction hash (txid).
@@ -89,7 +89,7 @@ export interface WalletServices {
    * @param txid transaction hash for which proof is requested
    * @param useNext optional, forces skip to next service before starting service requests cycle.
    */
-  getMerklePath(txid: string, useNext?: boolean): Promise<GetMerklePathResult>
+  getMerklePath: (txid: string, useNext?: boolean) => Promise<GetMerklePathResult>
 
   /**
    *
@@ -98,13 +98,13 @@ export interface WalletServices {
    * @param chain
    * @returns
    */
-  postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]>
+  postBeef: (beef: Beef, txids: string[], logger?: WalletLoggerInterface) => Promise<PostBeefResult[]>
 
   /**
    * @param script Output script to be hashed for `getUtxoStatus` default `outputFormat`
    * @returns script hash in 'hashLE' format, which is the default.
    */
-  hashOutputScript(script: string): string
+  hashOutputScript: (script: string) => string
 
   /**
    * For an array of one or more txids, returns for each wether it is a 'known', 'mined', or 'unknown' transaction.
@@ -116,7 +116,7 @@ export interface WalletServices {
    * @param txids
    * @param useNext
    */
-  getStatusForTxids(txids: string[], useNext?: boolean): Promise<GetStatusForTxidsResult>
+  getStatusForTxids: (txids: string[], useNext?: boolean) => Promise<GetStatusForTxidsResult>
 
   /**
    * Calls getUtxoStatus with the hash of the output's lockingScript,
@@ -125,7 +125,7 @@ export interface WalletServices {
    * @param output
    * @returns true if the output appears to currently be spendable.
    */
-  isUtxo(output: TableOutput): Promise<boolean>
+  isUtxo: (output: TableOutput) => Promise<boolean>
 
   /**
    * Attempts to determine the UTXO status of a transaction output.
@@ -142,30 +142,30 @@ export interface WalletServices {
    * @param outpoint if valid, result isUtxo is true only if this txid and vout match an unspent occurance of output script. `${txid}.${vout}` format.
    * @param useNext optional, forces skip to next service before starting service requests cycle.
    */
-  getUtxoStatus(
+  getUtxoStatus: (
     output: string,
     outputFormat?: GetUtxoStatusOutputFormat,
     outpoint?: string,
     useNext?: boolean
-  ): Promise<GetUtxoStatusResult>
+  ) => Promise<GetUtxoStatusResult>
 
-  getScriptHashHistory(
+  getScriptHashHistory: (
     hash: string,
     useNext?: boolean,
     logger?: WalletLoggerInterface
-  ): Promise<GetScriptHashHistoryResult>
+  ) => Promise<GetScriptHashHistoryResult>
 
   /**
    * @returns a block header
    * @param hash block hash
    */
-  hashToHeader(hash: string): Promise<BlockHeader>
+  hashToHeader: (hash: string) => Promise<BlockHeader>
 
   /**
    * @returns whether the locktime value allows the transaction to be mined at the current chain height
    * @param txOrLockTime either a bitcoin locktime value or hex, binary, un-encoded Transaction
    */
-  nLockTimeIsFinal(txOrLockTime: string | number[] | BsvTransaction | number): Promise<boolean>
+  nLockTimeIsFinal: (txOrLockTime: string | number[] | BsvTransaction | number) => Promise<boolean>
 
   /**
    * Constructs a `Beef` for the given `txid` using only external data retrieval services.
@@ -178,13 +178,13 @@ export interface WalletServices {
    *
    * @param txid
    */
-  getBeefForTxid(txid: string): Promise<Beef>
+  getBeefForTxid: (txid: string) => Promise<Beef>
 
   /**
    * @param reset if true, ends current interval and starts a new one.
    * @returns a history of service calls made to the configured services.
    */
-  getServicesCallHistory(reset?: boolean): ServicesCallHistory
+  getServicesCallHistory: (reset?: boolean) => ServicesCallHistory
 }
 
 export type ScriptHashFormat = 'hashLE' | 'hashBE' | 'script'
@@ -622,7 +622,7 @@ export type UpdateFiatExchangeRateService = (
 /**
  * Type for the service call history returned by Services.getServicesCallHistory.
  */
-export type ServicesCallHistory = {
+export interface ServicesCallHistory {
   version: number
   getMerklePath: ServiceCallHistory
   getRawTx: ServiceCallHistory
@@ -654,7 +654,7 @@ export interface ServiceCall {
   /**
    * Error code and message iff success is false and a exception was thrown.
    */
-  error?: { message: string; code: string }
+  error?: { message: string, code: string }
 }
 
 /**

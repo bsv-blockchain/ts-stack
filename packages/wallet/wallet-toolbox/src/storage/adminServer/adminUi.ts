@@ -1,4 +1,4 @@
-export function renderAdminPage(): string {
+export function renderAdminPage (): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

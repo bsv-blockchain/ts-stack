@@ -9,7 +9,7 @@ describe('WalletPermissionsManager - Permission Checks', () => {
 
   beforeEach(() => {
     // Fresh mock wallet before each test
-    underlying = mockUnderlyingWallet() as jest.Mocked<any>
+    underlying = mockUnderlyingWallet()
   })
 
   afterEach(() => {

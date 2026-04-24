@@ -27,7 +27,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
    */
   static checkNow = false
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = 0
   ) {
@@ -37,7 +37,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
   /**
    * Normally triggered by checkNow getting set by new block header found event from chaintracks
    */
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: TaskCheckForProofs.checkNow
       // Check only when checkNow flag is set.
@@ -45,7 +45,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     const countsAsAttempt = TaskCheckForProofs.checkNow
     TaskCheckForProofs.checkNow = false
@@ -67,7 +67,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
       log += `${reqs.length} reqs with status 'callback', 'unmined', 'sending', 'unknown', or 'unconfirmed'\n`
       const r = await getProofs(this, reqs, 2, countsAsAttempt, false, maxAcceptableHeight)
       log += `${r.log}\n`
-      //console.log(log);
+      // console.log(log);
       if (reqs.length < limit) break
       offset += limit
     }
@@ -90,7 +90,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
  * @param reqs
  * @returns reqs partitioned by status
  */
-export async function getProofs(
+export async function getProofs (
   task: WalletMonitorTask,
   reqs: TableProvenTxReq[],
   indent = 0,
@@ -98,10 +98,10 @@ export async function getProofs(
   ignoreStatus = false,
   maxAcceptableHeight: number
 ): Promise<{
-  proven: TableProvenTxReq[]
-  invalid: TableProvenTxReq[]
-  log: string
-}> {
+    proven: TableProvenTxReq[]
+    invalid: TableProvenTxReq[]
+    log: string
+  }> {
   const proven: TableProvenTxReq[] = []
   const invalid: TableProvenTxReq[] = []
 
@@ -143,7 +143,7 @@ export async function getProofs(
     }
 
     if (!reqIsValid) {
-      log += ` rawTx doesn't hash to txid. status => invalid.\n`
+      log += ' rawTx doesn\'t hash to txid. status => invalid.\n'
       req.notified = false
       req.status = 'invalid'
       await req.updateStorageDynamicProperties(task.storage)
@@ -185,14 +185,14 @@ export async function getProofs(
     // one more time.
     //
     r = await task.monitor.services.getMerklePath(req.txid)
-    if (r.header && r.header.height > maxAcceptableHeight) {
+    if ((r.header != null) && r.header.height > maxAcceptableHeight) {
       // Ignore proofs from bleeding edge of new blocks as these are the most often re-orged.
       log += ` ignoring possible proof from very new block at height ${r.header.height} ${r.header.hash}\n`
       continue
     }
     ptx = await EntityProvenTx.fromReq(req, r, countsAsAttempt && req.status !== 'nosend')
 
-    if (ptx) {
+    if (ptx != null) {
       // We have a merklePath proof for the request (and a block header)
       await req.updateStorageDynamicProperties(task.storage)
       await req.refreshFromStorage(task.storage)

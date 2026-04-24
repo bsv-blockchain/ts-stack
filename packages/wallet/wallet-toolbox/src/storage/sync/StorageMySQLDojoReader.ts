@@ -23,6 +23,7 @@ import {
   SyncStatus,
   TrxToken,
   WalletStorageSyncReader
+  , FindCertificatesArgs, FindOutputBasketsArgs, FindOutputsArgs
 } from '../../sdk/WalletStorage.interfaces'
 import { WERR_BAD_REQUEST, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import {
@@ -34,7 +35,6 @@ import {
   verifyOptionalHexString,
   verifyTruthy
 } from '../../utility/utilityHelpers'
-import { FindCertificatesArgs, FindOutputBasketsArgs, FindOutputsArgs } from '../../sdk/WalletStorage.interfaces'
 import { TableTxLabel } from '../schema/tables/TableTxLabel'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableTransaction, transactionColumnsWithoutRawTx } from '../schema/tables/TableTransaction'
@@ -58,18 +58,18 @@ export interface StorageMySQLDojoReaderOptions extends StorageReaderOptions {
 export class StorageMySQLDojoReader extends StorageReader implements WalletStorageSyncReader {
   knex: Knex
 
-  constructor(options: StorageMySQLDojoReaderOptions) {
+  constructor (options: StorageMySQLDojoReaderOptions) {
     super(options)
-    if (!options.knex) throw new WERR_INVALID_PARAMETER('options.knex', `valid`)
+    if (!options.knex) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
   }
 
-  override async destroy(): Promise<void> {
+  override async destroy (): Promise<void> {
     await this.knex?.destroy()
   }
 
   override async transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> {
-    if (trx) return await scope(trx)
+    if (trx != null) return await scope(trx)
 
     return await this.knex.transaction<T>(async knextrx => {
       const trx = knextrx as TrxToken
@@ -77,14 +77,14 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     })
   }
 
-  toDb(trx?: TrxToken) {
+  toDb (trx?: TrxToken) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = !trx ? this.knex : <Knex.Transaction<any, any[]>>trx
+    const db = (trx == null) ? this.knex : trx as Knex.Transaction<any, any[]>
     this.whenLastAccess = new Date()
     return db
   }
 
-  override async readSettings(trx?: TrxToken): Promise<TableSettings> {
+  override async readSettings (trx?: TrxToken): Promise<TableSettings> {
     const d = verifyOne(await this.toDb(trx)('settings'))
     const r: TableSettings = {
       created_at: verifyTruthy(d.created_at),
@@ -95,27 +95,27 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
       dbtype: 'MySQL',
       maxOutputScript: 256
     }
-    if (r.storageName.startsWith('staging') && this.chain !== 'test')
-      throw new WERR_INVALID_PARAMETER('chain', `in aggreement with storage chain ${r.storageName}`)
+    if (r.storageName.startsWith('staging') && this.chain !== 'test') { throw new WERR_INVALID_PARAMETER('chain', `in aggreement with storage chain ${r.storageName}`) }
     this._settings = r
     return r
   }
 
   setupQuery<T extends object>(table: string, args: FindPartialSincePagedArgs<T>): Knex.QueryBuilder {
-    let q = this.toDb(args.trx)<T>(table)
+    const q = this.toDb(args.trx)<T>(table)
     if (args.partial && Object.keys(args.partial).length > 0) q.where(args.partial)
-    if (args.since) q.where('updated_at', '>=', this.validateDateForWhere(args.since))
-    if (args.paged) {
+    if (args.since != null) q.where('updated_at', '>=', this.validateDateForWhere(args.since))
+    if (args.paged != null) {
       q.limit(args.paged.limit)
       q.offset(args.paged.offset || 0)
     }
     return q
   }
 
-  findOutputBasketsQuery(args: FindOutputBasketsArgs): Knex.QueryBuilder {
+  findOutputBasketsQuery (args: FindOutputBasketsArgs): Knex.QueryBuilder {
     return this.setupQuery('output_baskets', args)
   }
-  async findOutputBaskets(args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+
+  async findOutputBaskets (args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     const q = this.findOutputBasketsQuery(args)
     const ds = await q
     const rs: TableOutputBasket[] = []
@@ -134,10 +134,12 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
-  findTxLabelsQuery(args: FindTxLabelsArgs): Knex.QueryBuilder {
+
+  findTxLabelsQuery (args: FindTxLabelsArgs): Knex.QueryBuilder {
     return this.setupQuery('tx_labels', args)
   }
-  async findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
+
+  async findTxLabels (args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
     const q = this.findTxLabelsQuery(args)
     const ds = await q
     const rs: TableTxLabel[] = []
@@ -154,10 +156,12 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
-  findOutputTagsQuery(args: FindOutputTagsArgs): Knex.QueryBuilder {
+
+  findOutputTagsQuery (args: FindOutputTagsArgs): Knex.QueryBuilder {
     return this.setupQuery('output_tags', args)
   }
-  async findOutputTags(args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
+
+  async findOutputTags (args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
     const q = this.findOutputTagsQuery(args)
     const ds = await q
     const rs: TableOutputTag[] = []
@@ -174,25 +178,27 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
-  findTransactionsQuery(args: FindTransactionsArgs, count?: boolean): Knex.QueryBuilder {
-    if (args.partial.rawTx)
-      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. Transactions may not be found by rawTx value.`)
-    if (args.partial.inputBEEF)
+
+  findTransactionsQuery (args: FindTransactionsArgs, count?: boolean): Knex.QueryBuilder {
+    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. Transactions may not be found by rawTx value.') }
+    if (args.partial.inputBEEF != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.inputBEEF',
-        `undefined. Transactions may not be found by inputBEEF value.`
+        'undefined. Transactions may not be found by inputBEEF value.'
       )
+    }
     const q = this.setupQuery('transactions', args)
-    if (args.status && args.status.length > 0) q.whereIn('status', args.status)
-    if (args.from) q.where('created_at', '>=', this.validateDateForWhere(args.from))
-    if (args.to) q.where('created_at', '<', this.validateDateForWhere(args.to))
+    if ((args.status != null) && args.status.length > 0) q.whereIn('status', args.status)
+    if (args.from != null) q.where('created_at', '>=', this.validateDateForWhere(args.from))
+    if (args.to != null) q.where('created_at', '<', this.validateDateForWhere(args.to))
     if (args.noRawTx && !count) {
       const columns = transactionColumnsWithoutRawTx.map(c => `transactions.${c}`)
       q.select(columns)
     }
     return q
   }
-  async findTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> {
+
+  async findTransactions (args: FindTransactionsArgs): Promise<TableTransaction[]> {
     const q = this.findTransactionsQuery(args)
     const ds = await q
     const rs: TableTransaction[] = []
@@ -218,15 +224,18 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['isOutgoing'])
   }
-  findCommissionsQuery(args: FindCommissionsArgs): Knex.QueryBuilder {
-    if (args.partial.lockingScript)
+
+  findCommissionsQuery (args: FindCommissionsArgs): Knex.QueryBuilder {
+    if (args.partial.lockingScript != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.lockingScript',
-        `undefined. Commissions may not be found by lockingScript value.`
+        'undefined. Commissions may not be found by lockingScript value.'
       )
+    }
     return this.setupQuery('commissions', args)
   }
-  async findCommissions(args: FindCommissionsArgs): Promise<TableCommission[]> {
+
+  async findCommissions (args: FindCommissionsArgs): Promise<TableCommission[]> {
     const q = this.findCommissionsQuery(args)
     const ds = await q
     const rs: TableCommission[] = []
@@ -246,16 +255,19 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['isRedeemed'])
   }
-  limitString(s: string, maxLen: number): string {
+
+  limitString (s: string, maxLen: number): string {
     if (s.length > maxLen) s = s.slice(0, maxLen)
     return s
   }
-  findOutputsQuery(args: FindOutputsArgs, count?: boolean): Knex.QueryBuilder {
-    if (args.partial.lockingScript)
+
+  findOutputsQuery (args: FindOutputsArgs, count?: boolean): Knex.QueryBuilder {
+    if (args.partial.lockingScript != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.lockingScript',
-        `undefined. Outputs may not be found by lockingScript value.`
+        'undefined. Outputs may not be found by lockingScript value.'
       )
+    }
     const q = this.setupQuery('outputs', args)
     if (args.noScript && !count) {
       const columns = outputColumnsWithoutLockingScript.map(c => `outputs.${c}`)
@@ -263,7 +275,8 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return q
   }
-  async findOutputs(args: FindOutputsArgs): Promise<TableOutput[]> {
+
+  async findOutputs (args: FindOutputsArgs): Promise<TableOutput[]> {
     const q = this.findOutputsQuery(args)
     const ds = await q
     const rs: TableOutput[] = []
@@ -302,13 +315,15 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['spendable', 'change'])
   }
-  findCertificatesQuery(args: FindCertificatesArgs): Knex.QueryBuilder {
+
+  findCertificatesQuery (args: FindCertificatesArgs): Knex.QueryBuilder {
     const q = this.setupQuery('certificates', args)
-    if (args.certifiers && args.certifiers.length > 0) q.whereIn('certifier', args.certifiers)
-    if (args.types && args.types.length > 0) q.whereIn('type', args.types)
+    if ((args.certifiers != null) && args.certifiers.length > 0) q.whereIn('certifier', args.certifiers)
+    if ((args.types != null) && args.types.length > 0) q.whereIn('type', args.types)
     return q
   }
-  async findCertificates(args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+
+  async findCertificates (args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     const q = this.findCertificatesQuery(args)
     const ds = await q
     const rs: TableCertificate[] = []
@@ -331,10 +346,12 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
-  findCertificateFieldsQuery(args: FindCertificateFieldsArgs): Knex.QueryBuilder {
+
+  findCertificateFieldsQuery (args: FindCertificateFieldsArgs): Knex.QueryBuilder {
     return this.setupQuery('certificate_fields', args)
   }
-  async findCertificateFields(args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
+
+  async findCertificateFields (args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
     const q = this.findCertificateFieldsQuery(args)
     const ds = await q
     const rs: TableCertificateField[] = []
@@ -352,7 +369,8 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs)
   }
-  override async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
+
+  override async findSyncStates (args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const q = this.setupQuery('sync_state', args)
     const ds = await q
     const rs: TableSyncState[] = []
@@ -379,7 +397,8 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     }
     return this.validateEntities(rs, undefined, ['init'])
   }
-  override async findUsers(args: FindUsersArgs): Promise<TableUser[]> {
+
+  override async findUsers (args: FindUsersArgs): Promise<TableUser[]> {
     const q = this.setupQuery('users', args)
     const ds = await q
     const rs: TableUser[] = []
@@ -396,7 +415,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     return this.validateEntities(rs)
   }
 
-  getProvenTxsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getProvenTxsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('proven_txs').where(function () {
       this.whereExists(
@@ -406,14 +425,15 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
           .whereRaw(`proven_txs.provenTxId = transactions.provenTxId and transactions.userId = ${args.userId}`)
       )
     })
-    if (args.paged) {
+    if (args.paged != null) {
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset || 0)
     }
-    if (args.since) q = q.where('updated_at', '>=', args.since)
+    if (args.since != null) q = q.where('updated_at', '>=', args.since)
     return q
   }
-  async getProvenTxsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
+
+  async getProvenTxsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
     const q = this.getProvenTxsForUserQuery(args)
     const ds = await q
     const rs: TableProvenTx[] = []
@@ -442,7 +462,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     return this.validateEntities(rs)
   }
 
-  getProvenTxReqsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getProvenTxReqsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('proven_tx_reqs').where(function () {
       this.whereExists(
@@ -452,15 +472,15 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
           .whereRaw(`proven_tx_reqs.txid = transactions.txid and transactions.userId = ${args.userId}`)
       )
     })
-    if (args.paged) {
+    if (args.paged != null) {
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset || 0)
     }
-    if (args.since) q = q.where('updated_at', '>=', args.since)
+    if (args.since != null) q = q.where('updated_at', '>=', args.since)
     return q
   }
 
-  async getProvenTxReqsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
+  async getProvenTxReqsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
     const q = this.getProvenTxReqsForUserQuery(args)
     const ds = await q
     const rs: TableProvenTxReq[] = []
@@ -485,7 +505,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     return this.validateEntities(rs, undefined, ['notified'])
   }
 
-  getTxLabelMapsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getTxLabelMapsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('tx_labels_map').whereExists(
       k
@@ -493,15 +513,15 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
         .from('tx_labels')
         .whereRaw(`tx_labels.txLabelId = tx_labels_map.txLabelId and tx_labels.userId = ${args.userId}`)
     )
-    if (args.since) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
-    if (args.paged) {
+    if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
+    if (args.paged != null) {
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset || 0)
     }
     return q
   }
 
-  async getTxLabelMapsForUser(args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
+  async getTxLabelMapsForUser (args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
     const q = this.getTxLabelMapsForUserQuery(args)
     const ds = await q
     const rs: TableTxLabelMap[] = []
@@ -518,7 +538,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
 
-  getOutputTagMapsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder {
+  getOutputTagMapsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
     const k = this.toDb(args.trx)
     let q = k('output_tags_map').whereExists(
       k
@@ -526,15 +546,15 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
         .from('output_tags')
         .whereRaw(`output_tags.outputTagId = output_tags_map.outputTagId and output_tags.userId = ${args.userId}`)
     )
-    if (args.since) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
-    if (args.paged) {
+    if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
+    if (args.paged != null) {
       q = q.limit(args.paged.limit)
       q = q.offset(args.paged.offset || 0)
     }
     return q
   }
 
-  async getOutputTagMapsForUser(args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
+  async getOutputTagMapsForUser (args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
     const q = this.getOutputTagMapsForUserQuery(args)
     const ds = await q
     const rs: TableOutputTagMap[] = []
@@ -551,40 +571,51 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
     return this.validateEntities(rs, undefined, ['isDeleted'])
   }
 
-  override countCertificateFields(args: FindCertificateFieldsArgs): Promise<number> {
+  override countCertificateFields (args: FindCertificateFieldsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countCertificates(args: FindCertificatesArgs): Promise<number> {
+
+  override countCertificates (args: FindCertificatesArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countCommissions(args: FindCommissionsArgs): Promise<number> {
+
+  override countCommissions (args: FindCommissionsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countOutputBaskets(args: FindOutputBasketsArgs): Promise<number> {
+
+  override countOutputBaskets (args: FindOutputBasketsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countOutputs(args: FindOutputsArgs): Promise<number> {
+
+  override countOutputs (args: FindOutputsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countOutputTags(args: FindOutputTagsArgs): Promise<number> {
+
+  override countOutputTags (args: FindOutputTagsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countSyncStates(args: FindSyncStatesArgs): Promise<number> {
+
+  override countSyncStates (args: FindSyncStatesArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countTransactions(args: FindTransactionsArgs): Promise<number> {
+
+  override countTransactions (args: FindTransactionsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countTxLabels(args: FindTxLabelsArgs): Promise<number> {
+
+  override countTxLabels (args: FindTxLabelsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override countUsers(args: FindUsersArgs): Promise<number> {
+
+  override countUsers (args: FindUsersArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
-  override findMonitorEvents(args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
+
+  override findMonitorEvents (args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
     throw new Error('Method not implemented.')
   }
-  override countMonitorEvents(args: FindMonitorEventsArgs): Promise<number> {
+
+  override countMonitorEvents (args: FindMonitorEventsArgs): Promise<number> {
     throw new Error('Method not implemented.')
   }
 
@@ -595,12 +626,12 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
   validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[], booleanFields?: string[]): T {
     entity.created_at = this.validateDate(entity.created_at)
     entity.updated_at = this.validateDate(entity.updated_at)
-    if (dateFields) {
+    if (dateFields != null) {
       for (const df of dateFields) {
         if (entity[df]) entity[df] = this.validateDate(entity[df])
       }
     }
-    if (booleanFields) {
+    if (booleanFields != null) {
       for (const df of booleanFields) {
         if (entity[df] !== undefined) entity[df] = !!entity[df]
       }
@@ -629,11 +660,11 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
   }
 }
 
-function deserializeTscMerkleProofNodes(nodes: Buffer): string[] {
+function deserializeTscMerkleProofNodes (nodes: Buffer): string[] {
   if (!Buffer.isBuffer(nodes)) throw new WERR_INTERNAL('Buffer or string expected.')
   const buffer = nodes
   const ns: string[] = []
-  for (let offset = 0; offset < buffer.length; ) {
+  for (let offset = 0; offset < buffer.length;) {
     const flag = buffer[offset++]
     if (flag === 1) ns.push('*')
     else if (flag === 0) {
@@ -660,26 +691,26 @@ type DojoProvenTxReqStatusApi =
   | 'invalid'
   | 'doubleSpend'
 
-function convertReqStatus(status: DojoProvenTxReqStatusApi): ProvenTxReqStatus {
+function convertReqStatus (status: DojoProvenTxReqStatusApi): ProvenTxReqStatus {
   return status
 }
 
 type DojoTransactionStatusApi = 'completed' | 'failed' | 'unprocessed' | 'sending' | 'unproven' | 'unsigned' | 'nosend'
 
-//type TransactionStatus =
+// type TransactionStatus =
 //   'completed' | 'failed' | 'unprocessed' | 'sending' | 'unproven' | 'unsigned' | 'nosend'
 
-function convertTxStatus(status: DojoTransactionStatusApi): TransactionStatus {
+function convertTxStatus (status: DojoTransactionStatusApi): TransactionStatus {
   return status
 }
 
-function nullToUndefined<T>(v: T): T | undefined {
+function nullToUndefined<T> (v: T): T | undefined {
   if (v === null) return undefined
   if (typeof v === 'string') return v.trim() as T
   return v
 }
 
-function verifyOptionalInteger(v: number | null | undefined): number | undefined {
+function verifyOptionalInteger (v: number | null | undefined): number | undefined {
   if (v === undefined || v === null) return undefined
   if (typeof v !== 'number' || !Number.isInteger(v)) throw new WERR_INTERNAL('An integer is required.')
   return v
@@ -687,11 +718,11 @@ function verifyOptionalInteger(v: number | null | undefined): number | undefined
 
 type DojoSyncStatus = 'success' | 'error' | 'identified' | 'updated' | 'unknown'
 
-function convertSyncStatus(status: DojoSyncStatus): SyncStatus {
+function convertSyncStatus (status: DojoSyncStatus): SyncStatus {
   return status
 }
 
-function forceToBase64(s?: string | null): string {
+function forceToBase64 (s?: string | null): string {
   if (!s) return randomBytesBase64(12)
   if (Validation.isHexString(s)) return Utils.toBase64(asArray(s.trim()))
   return s.trim()

@@ -3,7 +3,7 @@ import { Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 
-export async function proveCertificate(
+export async function proveCertificate (
   wallet: Wallet,
   auth: AuthId,
   vargs: Validation.ValidProveCertificateArgs
@@ -25,7 +25,7 @@ export async function proveCertificate(
   }
 
   const lcr = await wallet.storage.listCertificates(lcargs)
-  if (lcr.certificates.length != 1) throw new WERR_INVALID_PARAMETER('args', `a unique certificate match`)
+  if (lcr.certificates.length != 1) throw new WERR_INVALID_PARAMETER('args', 'a unique certificate match')
   const storageCert = lcr.certificates[0]
   const keyringForVerifier = await MasterCertificate.createKeyringForVerifier(
     wallet,

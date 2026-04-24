@@ -86,7 +86,7 @@ export interface MonitorOptions {
  * and potentially that reorgs update proofs that were already received.
  */
 export class Monitor {
-  static createDefaultWalletMonitorOptions(
+  static createDefaultWalletMonitorOptions (
     chain: Chain,
     storage: MonitorStorage,
     services?: Services,
@@ -94,7 +94,7 @@ export class Monitor {
     startupTaskMode: MonitorStartupTaskMode = 'none'
   ): MonitorOptions {
     services ||= new Services(chain)
-    if (!services.options.chaintracks) throw new WERR_INVALID_PARAMETER('services.options.chaintracks', 'valid')
+    if (services.options.chaintracks == null) throw new WERR_INVALID_PARAMETER('services.options.chaintracks', 'valid')
     const o: MonitorOptions = {
       chain,
       services,
@@ -123,7 +123,7 @@ export class Monitor {
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
   onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>
 
-  constructor(options: MonitorOptions) {
+  constructor (options: MonitorOptions) {
     this.options = { ...options }
     this.services = options.services
     this.chain = this.services.chain
@@ -134,7 +134,7 @@ export class Monitor {
     this.onTransactionBroadcasted = options.onTransactionBroadcasted
     this.onTransactionStatusChanged = options.onTransactionStatusChanged
 
-    if (this.chaintracksWithEvents) {
+    if (this.chaintracksWithEvents != null) {
       const c = this.chaintracksWithEvents
       this.reorgSubscriptionPromise = c.subscribeReorgs(this.processReorg.bind(this))
       this.headersSubscriptionPromise = c.subscribeHeaders(this.processHeader.bind(this))
@@ -143,7 +143,7 @@ export class Monitor {
     this.applyStartupTaskMode(options.startupTaskMode || 'none')
   }
 
-  private applyStartupTaskMode(mode: MonitorStartupTaskMode): void {
+  private applyStartupTaskMode (mode: MonitorStartupTaskMode): void {
     switch (mode) {
       case 'default':
         this.addDefaultTasks()
@@ -157,15 +157,15 @@ export class Monitor {
       case 'none':
         break
       default:
-        throw new WERR_INVALID_PARAMETER('startupTaskMode', `'none', 'default', 'multiuser', or 'alltoother'`)
+        throw new WERR_INVALID_PARAMETER('startupTaskMode', '\'none\', \'default\', \'multiuser\', or \'alltoother\'')
     }
   }
 
-  async destroy(): Promise<void> {
-    if (this.chaintracksWithEvents) {
+  async destroy (): Promise<void> {
+    if (this.chaintracksWithEvents != null) {
       const c = this.chaintracksWithEvents
-      if (this.reorgSubscriptionPromise) await c.unsubscribe(await this.reorgSubscriptionPromise)
-      if (this.headersSubscriptionPromise) await c.unsubscribe(await this.headersSubscriptionPromise)
+      if (this.reorgSubscriptionPromise != null) await c.unsubscribe(await this.reorgSubscriptionPromise)
+      if (this.headersSubscriptionPromise != null) await c.unsubscribe(await this.headersSubscriptionPromise)
     }
   }
 
@@ -194,7 +194,7 @@ export class Monitor {
     purgeFailedAge: 5 * Monitor.oneDay
   }
 
-  addAllTasksToOther(): void {
+  addAllTasksToOther (): void {
     this._otherTasks.push(new TaskClock(this))
     this._otherTasks.push(new TaskNewHeader(this))
     this._otherTasks.push(new TaskMonitorCallHistory(this))
@@ -211,15 +211,16 @@ export class Monitor {
     this._otherTasks.push(new TaskReviewProvenTxs(this))
 
     this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
-    //this._otherTasks.push(new TaskSyncWhenIdle(this))
+    // this._otherTasks.push(new TaskSyncWhenIdle(this))
     if (this.chain === 'mock') {
       this._otherTasks.push(new TaskMineBlock(this))
     }
   }
+
   /**
    * Default tasks with settings appropriate for a single user storage
    */
-  addDefaultTasks(): void {
+  addDefaultTasks (): void {
     this._tasks.push(new TaskClock(this))
     this._tasks.push(new TaskNewHeader(this))
     this._tasks.push(new TaskMonitorCallHistory(this))
@@ -245,7 +246,7 @@ export class Monitor {
   /**
    * Tasks appropriate for multi-user storage
    */
-  addMultiUserTasks(): void {
+  addMultiUserTasks (): void {
     this._tasks.push(new TaskClock(this))
     this._tasks.push(new TaskNewHeader(this))
     this._tasks.push(new TaskMonitorCallHistory(this))
@@ -267,28 +268,27 @@ export class Monitor {
     }
   }
 
-  addTask(task: WalletMonitorTask): void {
-    if (this._tasks.some(t => t.name === task.name))
-      throw new WERR_BAD_REQUEST(`task ${task.name} has already been added.`)
+  addTask (task: WalletMonitorTask): void {
+    if (this._tasks.some(t => t.name === task.name)) { throw new WERR_BAD_REQUEST(`task ${task.name} has already been added.`) }
     this._tasks.push(task)
   }
 
-  removeTask(name: string): void {
+  removeTask (name: string): void {
     this._tasks = this._tasks.filter(t => t.name !== name)
   }
 
-  async runTask(name: string): Promise<string> {
+  async runTask (name: string): Promise<string> {
     let task = this._tasks.find(t => t.name === name)
     let log = ''
-    if (!task) task = this._otherTasks.find(t => t.name === name)
-    if (task) {
+    if (task == null) task = this._otherTasks.find(t => t.name === name)
+    if (task != null) {
       await task.asyncSetup()
       log = await task.runTask()
     }
     return log
   }
 
-  async runOnce(): Promise<void> {
+  async runOnce (): Promise<void> {
     if (this._runAsyncSetup) {
       for (const t of this._tasks) {
         try {
@@ -347,7 +347,7 @@ export class Monitor {
   _tasksRunningPromise?: PromiseLike<void>
   resolveCompletion: ((value: void | PromiseLike<void>) => void) | undefined = undefined
 
-  async startTasks(): Promise<void> {
+  async startTasks (): Promise<void> {
     if (this._tasksRunning) throw new WERR_BAD_REQUEST('monitor tasks are already runnining.')
 
     this._tasksRunning = true
@@ -355,20 +355,20 @@ export class Monitor {
       this.resolveCompletion = resolve
     })
 
-    for (; this._tasksRunning; ) {
+    for (; this._tasksRunning;) {
       await this.runOnce()
 
       // console.log(`${new Date().toISOString()} tasks run, waiting...`)
       await wait(this.options.taskRunWaitMsecs)
     }
 
-    if (this.resolveCompletion) {
+    if (this.resolveCompletion != null) {
       this.resolveCompletion()
       this.resolveCompletion = undefined
     }
   }
 
-  async logEvent(event: string, details?: string): Promise<void> {
+  async logEvent (event: string, details?: string): Promise<void> {
     await this.storage.runAsStorageProvider(async sp => {
       await sp.insertMonitorEvent({
         created_at: new Date(),
@@ -380,7 +380,7 @@ export class Monitor {
     })
   }
 
-  stopTasks(): void {
+  stopTasks (): void {
     this._tasksRunning = false
   }
 
@@ -394,7 +394,7 @@ export class Monitor {
    *
    * @param reqs
    */
-  processNewBlockHeader(header: BlockHeader): void {
+  processNewBlockHeader (header: BlockHeader): void {
     const h = header
     this.lastNewHeader = h
     this.lastNewHeaderWhen = new Date()
@@ -410,8 +410,8 @@ export class Monitor {
    *
    * @param broadcastResult
    */
-  callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void {
-    if (this.onTransactionBroadcasted) {
+  callOnBroadcastedTransaction (broadcastResult: ReviewActionResult): void {
+    if (this.onTransactionBroadcasted != null) {
       this.onTransactionBroadcasted(broadcastResult)
     }
   }
@@ -423,8 +423,8 @@ export class Monitor {
    *
    * @param txStatus
    */
-  callOnProvenTransaction(txStatus: ProvenTransactionStatus): void {
-    if (this.onTransactionProven) {
+  callOnProvenTransaction (txStatus: ProvenTransactionStatus): void {
+    if (this.onTransactionProven != null) {
       this.onTransactionProven(txStatus)
     }
   }
@@ -432,8 +432,8 @@ export class Monitor {
   /**
    * Called by TaskArcadeSSE when an SSE status event is received from Arcade.
    */
-  callOnTransactionStatusChanged(txid: string, newStatus: string): void {
-    if (this.onTransactionStatusChanged) {
+  callOnTransactionStatusChanged (txid: string, newStatus: string): void {
+    if (this.onTransactionStatusChanged != null) {
       this.onTransactionStatusChanged(txid, newStatus)
     }
   }
@@ -442,7 +442,7 @@ export class Monitor {
    * Fetch pending transaction status events from Arcade on demand.
    * Call this on app open, balance refresh, transaction list view, etc.
    */
-  async fetchSSEEvents(): Promise<number> {
+  async fetchSSEEvents (): Promise<number> {
     const sseTask = this._tasks.find(t => t.name === TaskArcadeSSE.taskName) as TaskArcadeSSE | undefined
     return (await sseTask?.fetchNow()) ?? 0
   }
@@ -460,8 +460,8 @@ export class Monitor {
    * Coinbase transactions always become invalid.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void {
-    if (deactivatedHeaders) {
+  processReorg (depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void {
+    if (deactivatedHeaders != null) {
       for (const header of deactivatedHeaders) {
         this.deactivatedHeaders.push({
           whenMsecs: Date.now(),
@@ -481,7 +481,7 @@ export class Monitor {
    * @param header
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  processHeader(header: BlockHeader): void {}
+  processHeader (header: BlockHeader): void {}
 }
 
 export interface DeactivedHeader {

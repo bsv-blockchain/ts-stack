@@ -27,7 +27,7 @@ describe('findStaleMerkleRoots test', () => {
   })
 })
 
-function makeProvenTx(provenTxId: number, height: number, merkleRoot: string): TableProvenTx {
+function makeProvenTx (provenTxId: number, height: number, merkleRoot: string): TableProvenTx {
   const now = new Date()
   return {
     created_at: now,

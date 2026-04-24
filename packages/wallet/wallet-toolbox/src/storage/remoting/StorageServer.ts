@@ -27,16 +27,16 @@ export interface WalletStorageServerOptions {
 }
 
 export class StorageServer {
-  private app = express()
-  private port: number
-  private storage: StorageProvider
-  private wallet: Wallet
-  private monetize: boolean
-  private calculateRequestPrice?: (req: Request) => number | Promise<number>
-  private adminIdentityKeys?: string[]
-  private makeLogger?: MakeWalletLogger
+  private readonly app = express()
+  private readonly port: number
+  private readonly storage: StorageProvider
+  private readonly wallet: Wallet
+  private readonly monetize: boolean
+  private readonly calculateRequestPrice?: (req: Request) => number | Promise<number>
+  private readonly adminIdentityKeys?: string[]
+  private readonly makeLogger?: MakeWalletLogger
 
-  constructor(storage: StorageProvider, options: WalletStorageServerOptions) {
+  constructor (storage: StorageProvider, options: WalletStorageServerOptions) {
     this.storage = storage
     this.port = options.port
     this.wallet = options.wallet
@@ -52,7 +52,7 @@ export class StorageServer {
     this.setupRoutes()
   }
 
-  private setupShortReqLogging(): void {
+  private setupShortReqLogging (): void {
     this.app.use((req: Request, res: Response, next: express.NextFunction) => {
       const contentLength = Number(req.headers['content-length'] || 0)
 
@@ -70,8 +70,7 @@ export class StorageServer {
         const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split(
           '/'
         )[0]
-        if (traceContext)
-          logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
+        if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
 
         const chunks: Buffer[] = []
         req.on('data', chunk => chunks.push(Buffer.from(chunk)))
@@ -94,7 +93,7 @@ export class StorageServer {
     })
   }
 
-  private setupRoutes(): void {
+  private setupRoutes (): void {
     this.app.use(express.json({ limit: '30mb' }))
 
     // This allows the API to be used everywhere when CORS is enforced
@@ -112,12 +111,12 @@ export class StorageServer {
       }
     })
 
-    this.app.get(`/robots.txt`, (req: Request, res: Response) => {
+    this.app.get('/robots.txt', (req: Request, res: Response) => {
       res.type('text/plain')
-      res.send(`User-agent: *\nDisallow: /`)
+      res.send('User-agent: *\nDisallow: /')
     })
 
-    this.app.get(`/`, (req: Request, res: Response) => {
+    this.app.get('/', (req: Request, res: Response) => {
       res.type('text/plain')
       res.send(`BRC-100 ${this.wallet.chain}Net Storage Provider.`)
     })
@@ -137,22 +136,21 @@ export class StorageServer {
 
     // A single POST endpoint for JSON-RPC:
     this.app.post('/', async (req: Request, res: Response) => {
-      let { jsonrpc, method, params, id } = req.body
+      const { jsonrpc, method, params, id } = req.body
       // Basic JSON-RPC protocol checks:
       if (jsonrpc !== '2.0' || !method || typeof method !== 'string') {
         return res.status(400).json({ error: { code: -32600, message: 'Invalid Request' } })
       }
 
       const logObj = {
-        source: `StorageServer POST handler`,
+        source: 'StorageServer POST handler',
         method,
         id,
         user: req.auth.identityKey,
         params: JSON.stringify(params || '').slice(0, 256)
       }
       const traceContext = (req.headers['X-Cloud-Trace-Context'] || req.headers['x-cloud-trace-context'])?.split('/')[0]
-      if (traceContext)
-        logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}`
+      if (traceContext) { logObj['logging.googleapis.com/trace'] = `projects/computing-with-integrity/traces/${traceContext}` }
 
       console.log(JSON.stringify(logObj))
 
@@ -179,37 +177,34 @@ export class StorageServer {
               break
             case 'findOrInsertUser':
               {
-                if (params[0] !== req.auth.identityKey)
-                  throw new WERR_UNAUTHORIZED('function may only access authenticated user.')
+                if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated user.') }
               }
               break
             case 'adminStats':
               {
                 // TODO: add check for admin user
-                if (params[0] !== req.auth.identityKey)
-                  throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.')
-                if (!this.adminIdentityKeys || !this.adminIdentityKeys.includes(req.auth.identityKey))
-                  throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.')
+                if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.') }
+                if ((this.adminIdentityKeys == null) || !this.adminIdentityKeys.includes(req.auth.identityKey)) { throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.') }
               }
               break
             case 'processSyncChunk':
               {
                 await this.validateParam0(params, req)
-                //const args: RequestSyncChunkArgs = params[0]
+                // const args: RequestSyncChunkArgs = params[0]
                 const r: SyncChunk = params[1]
-                if (r.certificateFields) r.certificateFields = this.validateEntities(r.certificateFields)
-                if (r.certificates) r.certificates = this.validateEntities(r.certificates)
-                if (r.commissions) r.commissions = this.validateEntities(r.commissions)
-                if (r.outputBaskets) r.outputBaskets = this.validateEntities(r.outputBaskets)
-                if (r.outputTagMaps) r.outputTagMaps = this.validateEntities(r.outputTagMaps)
-                if (r.outputTags) r.outputTags = this.validateEntities(r.outputTags)
-                if (r.outputs) r.outputs = this.validateEntities(r.outputs)
-                if (r.provenTxReqs) r.provenTxReqs = this.validateEntities(r.provenTxReqs)
-                if (r.provenTxs) r.provenTxs = this.validateEntities(r.provenTxs)
-                if (r.transactions) r.transactions = this.validateEntities(r.transactions)
-                if (r.txLabelMaps) r.txLabelMaps = this.validateEntities(r.txLabelMaps)
-                if (r.txLabels) r.txLabels = this.validateEntities(r.txLabels)
-                if (r.user) r.user = this.validateEntity(r.user)
+                if (r.certificateFields != null) r.certificateFields = this.validateEntities(r.certificateFields)
+                if (r.certificates != null) r.certificates = this.validateEntities(r.certificates)
+                if (r.commissions != null) r.commissions = this.validateEntities(r.commissions)
+                if (r.outputBaskets != null) r.outputBaskets = this.validateEntities(r.outputBaskets)
+                if (r.outputTagMaps != null) r.outputTagMaps = this.validateEntities(r.outputTagMaps)
+                if (r.outputTags != null) r.outputTags = this.validateEntities(r.outputTags)
+                if (r.outputs != null) r.outputs = this.validateEntities(r.outputs)
+                if (r.provenTxReqs != null) r.provenTxReqs = this.validateEntities(r.provenTxReqs)
+                if (r.provenTxs != null) r.provenTxs = this.validateEntities(r.provenTxs)
+                if (r.transactions != null) r.transactions = this.validateEntities(r.transactions)
+                if (r.txLabelMaps != null) r.txLabelMaps = this.validateEntities(r.txLabelMaps)
+                if (r.txLabels != null) r.txLabels = this.validateEntities(r.txLabels)
+                if (r.user != null) r.user = this.validateEntity(r.user)
               }
               break
             default:
@@ -221,12 +216,12 @@ export class StorageServer {
 
           // If makeLogger is valid, setup and potentially initialize to return data
           let logger: WalletLoggerInterface | undefined
-          if (this.makeLogger && typeof params[1] === 'object') {
-            logger = this.makeLogger(params[1]['logger'])
-            params[1]['logger'] = logger
+          if ((this.makeLogger != null) && typeof params[1] === 'object') {
+            logger = this.makeLogger(params[1].logger)
+            params[1].logger = logger
             logger.group(`StorageSever ${method}`)
-            const userId = params[0]?.['userId']
-            const identityKey = params[0]?.['identityKey']
+            const userId = params[0]?.userId
+            const identityKey = params[0]?.identityKey
             if (userId) logger.log(`userId: ${userId}`)
             if (identityKey) logger.log(`identityKey: ${identityKey}`)
           }
@@ -234,14 +229,14 @@ export class StorageServer {
           try {
             const result = await (this.storage as any)[method](...(params || []))
 
-            if (logger) {
+            if (logger != null) {
               logger.groupEnd()
               logger.flush?.()
               if (logger.isOrigin) {
                 // Potentially only flush if isOrigin...
-              } else if (logger.logs && typeof result === 'object') {
+              } else if ((logger.logs != null) && typeof result === 'object') {
                 // If not the start of logging, return logged data with result.
-                result['log'] = { logs: logger.logs }
+                result.log = { logs: logger.logs }
               }
             }
 
@@ -279,27 +274,26 @@ export class StorageServer {
     })
   }
 
-  private async validateParam0(params: any, req: Request): Promise<void> {
+  private async validateParam0 (params: any, req: Request): Promise<void> {
     if (typeof params[0] !== 'object' || !params[0]) {
       params = [{}]
     }
-    if (params[0]['identityKey'] && params[0]['identityKey'] !== req.auth.identityKey)
-      throw new WERR_UNAUTHORIZED('identityKey does not match authentiation')
+    if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentiation') }
     // console.log('looking up user with identityKey:', req.auth.identityKey)
     const { user, isNew } = await this.storage.findOrInsertUser(req.auth.identityKey)
     params[0].reqAuthUserId = user.userId
-    if (params[0]['identityKey']) params[0].userId = user.userId
+    if (params[0].identityKey) params[0].userId = user.userId
   }
 
   server: any
 
-  public start(): void {
+  public start (): void {
     this.server = this.app.listen(this.port, () => {
       console.log(`WalletStorageServer listening at http://localhost:${this.port}`)
     })
   }
 
-  public async close(): Promise<void> {
+  public async close (): Promise<void> {
     if (this.server) {
       await this.server.close(() => {
         // console.log('WalletStorageServer closed')
@@ -307,7 +301,7 @@ export class StorageServer {
     }
   }
 
-  validateDate(date: Date | string | number): Date {
+  validateDate (date: Date | string | number): Date {
     let r: Date
     if (date instanceof Date) r = date
     else r = new Date(date)
@@ -321,7 +315,7 @@ export class StorageServer {
   validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T {
     entity.created_at = this.validateDate(entity.created_at)
     entity.updated_at = this.validateDate(entity.updated_at)
-    if (dateFields) {
+    if (dateFields != null) {
       for (const df of dateFields) {
         if (entity[df]) entity[df] = this.validateDate(entity[df])
       }

@@ -1,7 +1,7 @@
 import { FiatCurrencyCode, FiatExchangeRates, WalletServicesOptions } from '../../sdk/WalletServices.interfaces'
 import { WERR_BAD_REQUEST, WERR_MISSING_PARAMETER } from '../../sdk/WERR_errors'
 
-export async function updateChaintracksFiatExchangeRates(
+export async function updateChaintracksFiatExchangeRates (
   targetCurrencies: string[],
   options: WalletServicesOptions
 ): Promise<FiatExchangeRates> {
@@ -17,13 +17,13 @@ export async function updateChaintracksFiatExchangeRates(
     throw new WERR_BAD_REQUEST(`${url} returned status ${r.status}`)
   }
 
-  const rates = <FiatExchangeRates>r.data.value
+  const rates = r.data.value as FiatExchangeRates
   rates.timestamp = new Date(rates.timestamp)
 
   return rates
 }
 
-export async function updateExchangeratesapi(
+export async function updateExchangeratesapi (
   targetCurrencies: string[],
   options: WalletServicesOptions
 ): Promise<FiatExchangeRates> {
@@ -36,9 +36,9 @@ export async function updateExchangeratesapi(
   if (!iorates.success) throw new WERR_BAD_REQUEST(`getExchangeRatesIo returned success ${iorates.success}`)
 
   const base = iorates.base
-  const usdPerBase = base === 'USD' ? 1 : iorates.rates['USD']
+  const usdPerBase = base === 'USD' ? 1 : iorates.rates.USD
   if (!usdPerBase || typeof usdPerBase !== 'number') {
-    throw new WERR_BAD_REQUEST(`getExchangeRatesIo missing rate for 'USD'`)
+    throw new WERR_BAD_REQUEST('getExchangeRatesIo missing rate for \'USD\'')
   }
 
   const r: FiatExchangeRates = {
@@ -72,8 +72,8 @@ export interface ExchangeRatesIoApi {
   rates: Record<string, number>
 }
 
-export async function getExchangeRatesIo(key: string, symbols?: string[]): Promise<ExchangeRatesIoApi> {
-  const list = symbols && symbols.length ? symbols.join(',') : ''
+export async function getExchangeRatesIo (key: string, symbols?: string[]): Promise<ExchangeRatesIoApi> {
+  const list = (symbols != null) && (symbols.length > 0) ? symbols.join(',') : ''
   const symbolsParam = list ? `&symbols=${encodeURIComponent(list)}` : ''
   const url = `https://api.exchangeratesapi.io/v1/latest?access_key=${key}${symbolsParam}`
 
@@ -85,7 +85,7 @@ export async function getExchangeRatesIo(key: string, symbols?: string[]): Promi
     throw new WERR_BAD_REQUEST(`getExchangeRatesIo returned status ${r.status}`)
   }
 
-  const rates = <ExchangeRatesIoApi>r.data
+  const rates = r.data as ExchangeRatesIoApi
 
   return rates
 }

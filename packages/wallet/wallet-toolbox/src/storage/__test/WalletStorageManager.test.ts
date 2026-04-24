@@ -38,7 +38,7 @@ describe('WalletStorageManager tests', () => {
       end: number
     }
     const result: Result[] = []
-    const promises: Promise<Result>[] = []
+    const promises: Array<Promise<Result>> = []
 
     const now = Date.now()
 
@@ -125,7 +125,7 @@ describe('WalletStorageManager tests', () => {
       end: number
     }
     const result: Result[] = []
-    const promises: Promise<Result>[] = []
+    const promises: Array<Promise<Result>> = []
 
     const now = Date.now()
 
@@ -208,17 +208,17 @@ describe('WalletStorageManager tests', () => {
         rootKeyHex: '2'.repeat(64),
         dropAll: true
       })
-      const promises: Promise<number>[] = []
-      const result: { i: number; r: any }[] = []
+      const promises: Array<Promise<number>> = []
+      const result: Array<{ i: number, r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
-      /*** maxI = 6 test PASS ***/
+      /** * maxI = 6 test PASS ***/
       const maxI = 7
 
       const makeWriter2 = async (
         fred: TestWalletNoSetup,
         cr: bsv.CreateActionResult,
         i: number,
-        result: { i: number; r: any }[]
+        result: Array<{ i: number, r: any }>
       ): Promise<number> => {
         logger(`writer${i}`)
         const internalizeArgs: bsv.InternalizeActionArgs = {
@@ -270,6 +270,6 @@ describe('WalletStorageManager tests', () => {
     }
   })
 })
-function logger(s: string) {
+function logger (s: string) {
   process.stdout.write(`${s}\n`)
 }

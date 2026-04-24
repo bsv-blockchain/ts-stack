@@ -266,7 +266,7 @@ describe('Output class method tests', () => {
     expect(updatedRecord[0].type).toBe('p2sh')
 
     // Handle undefined lockingScript gracefully
-    if (updatedRecord[0].lockingScript) {
+    if (updatedRecord[0].lockingScript != null) {
       expect(Buffer.from(updatedRecord[0].lockingScript).toJSON().data).toEqual([4, 5, 6])
     } else {
       throw new Error('lockingScript is undefined')

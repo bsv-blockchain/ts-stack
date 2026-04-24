@@ -2,10 +2,10 @@ import { PublicKey, BigNumber, PrivateKey, Curve, P2PKH, PubKeyHex, CreateAction
 import { TableCommission } from '../schema/tables/TableCommission'
 import { sha256Hash } from '../../utility/utilityHelpers'
 
-export function keyOffsetToHashedSecret(
+export function keyOffsetToHashedSecret (
   pub: PublicKey,
   keyOffset?: string
-): { hashedSecret: BigNumber; keyOffset: string } {
+): { hashedSecret: BigNumber, keyOffset: string } {
   let offset: PrivateKey
   if (keyOffset !== undefined && typeof keyOffset === 'string') {
     if (keyOffset.length === 64) offset = PrivateKey.fromString(keyOffset, 'hex')
@@ -21,7 +21,7 @@ export function keyOffsetToHashedSecret(
   return { hashedSecret: new BigNumber(hashedSecret), keyOffset }
 }
 
-export function offsetPrivKey(privKey: string, keyOffset?: string): { offsetPrivKey: string; keyOffset: string } {
+export function offsetPrivKey (privKey: string, keyOffset?: string): { offsetPrivKey: string, keyOffset: string } {
   const priv = PrivateKey.fromWif(privKey)
 
   const pub = priv.toPublicKey()
@@ -35,7 +35,7 @@ export function offsetPrivKey(privKey: string, keyOffset?: string): { offsetPriv
   return { offsetPrivKey, keyOffset: r.keyOffset }
 }
 
-export function offsetPubKey(pubKey: string, keyOffset?: string): { offsetPubKey: string; keyOffset: string } {
+export function offsetPubKey (pubKey: string, keyOffset?: string): { offsetPubKey: string, keyOffset: string } {
   const pub = PublicKey.fromString(pubKey)
 
   const r = keyOffsetToHashedSecret(pub, keyOffset)
@@ -49,10 +49,10 @@ export function offsetPubKey(pubKey: string, keyOffset?: string): { offsetPubKey
   return { offsetPubKey: offsetPubKey.toString(), keyOffset: r.keyOffset }
 }
 
-export function lockScriptWithKeyOffsetFromPubKey(
+export function lockScriptWithKeyOffsetFromPubKey (
   pubKey: string,
   keyOffset?: string
-): { script: string; keyOffset: string } {
+): { script: string, keyOffset: string } {
   const r = offsetPubKey(pubKey, keyOffset)
 
   const offsetPub = PublicKey.fromString(r.offsetPubKey)
@@ -64,14 +64,14 @@ export function lockScriptWithKeyOffsetFromPubKey(
   return { script, keyOffset: r.keyOffset }
 }
 
-export function createStorageServiceChargeScript(pubKeyHex: PubKeyHex): {
+export function createStorageServiceChargeScript (pubKeyHex: PubKeyHex): {
   script: string
   keyOffset: string
 } {
   return lockScriptWithKeyOffsetFromPubKey(pubKeyHex)
 }
 
-export function redeemServiceCharges(privateKeyWif: string, charges: TableCommission[]): {}[] {
+export function redeemServiceCharges (privateKeyWif: string, charges: TableCommission[]): Array<{}> {
   const priv = PrivateKey.fromWif(privateKeyWif)
   const pub = priv.toPublicKey()
   const p2pkh = new P2PKH()
@@ -82,7 +82,7 @@ export function redeemServiceCharges(privateKeyWif: string, charges: TableCommis
     const { hashedSecret } = keyOffsetToHashedSecret(pub, c.keyOffset)
     const bn = priv.add(hashedSecret).mod(new Curve().n)
     const offsetPrivKey = new PrivateKey(bn)
-    //const unlock = p2pkh.unlock(offsetPrivKey, signOutputs, anyoneCanPay)
+    // const unlock = p2pkh.unlock(offsetPrivKey, signOutputs, anyoneCanPay)
   }
 
   return []

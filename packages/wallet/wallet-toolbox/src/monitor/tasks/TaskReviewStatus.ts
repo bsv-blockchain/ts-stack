@@ -18,7 +18,7 @@ export class TaskReviewStatus extends WalletMonitorTask {
    */
   static checkNow = false
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = 1000 * 60 * 15,
     public agedMsecs = 1000 * 60 * 5
@@ -26,13 +26,13 @@ export class TaskReviewStatus extends WalletMonitorTask {
     super(monitor, TaskReviewStatus.taskName)
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: this.triggerMsecs > 0 && nowMsecsSinceEpoch - this.lastRunMsecsSinceEpoch > this.triggerMsecs
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
 
     const agedLimit = new Date(Date.now() - this.agedMsecs)

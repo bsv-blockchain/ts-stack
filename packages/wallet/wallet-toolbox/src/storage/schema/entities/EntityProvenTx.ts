@@ -25,22 +25,22 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
    * @param rawTx
    * @returns
    */
-  static async fromTxid(txid: string, services: WalletServices, rawTx?: number[]): Promise<ProvenTxFromTxidResult> {
+  static async fromTxid (txid: string, services: WalletServices, rawTx?: number[]): Promise<ProvenTxFromTxidResult> {
     const r: ProvenTxFromTxidResult = { proven: undefined, rawTx }
 
     const chain = services.chain
 
-    if (!r.rawTx) {
+    if (r.rawTx == null) {
       const gr = await services.getRawTx(txid)
-      if (!gr?.rawTx)
-        // Failing to find anything...
-        return r
+      if ((gr?.rawTx) == null)
+      // Failing to find anything...
+      { return r }
       r.rawTx = gr.rawTx!
     }
 
     const gmpr = await services.getMerklePath(txid)
 
-    if (gmpr.merklePath && gmpr.header) {
+    if ((gmpr.merklePath != null) && (gmpr.header != null)) {
       const index = gmpr.merklePath.path[0].find(l => l.hash === txid)?.offset
       if (index !== undefined) {
         const api: TableProvenTx = {
@@ -62,7 +62,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     return r
   }
 
-  constructor(api?: TableProvenTx) {
+  constructor (api?: TableProvenTx) {
     const now = new Date()
     super(
       api || {
@@ -79,94 +79,118 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
       }
     )
   }
-  override updateApi(): void {
+
+  override updateApi (): void {
     /* nothing needed yet... */
   }
 
   /**
    * @returns desirialized `MerklePath` object, value is cached.
    */
-  getMerklePath(): MerklePath {
-    if (!this._mp) this._mp = MerklePath.fromBinary(this.api.merklePath)
+  getMerklePath (): MerklePath {
+    if (this._mp == null) this._mp = MerklePath.fromBinary(this.api.merklePath)
     return this._mp
   }
+
   _mp?: MerklePath
 
-  get provenTxId() {
+  get provenTxId () {
     return this.api.provenTxId
   }
-  set provenTxId(v: number) {
+
+  set provenTxId (v: number) {
     this.api.provenTxId = v
   }
-  get created_at() {
+
+  get created_at () {
     return this.api.created_at
   }
-  set created_at(v: Date) {
+
+  set created_at (v: Date) {
     this.api.created_at = v
   }
-  get updated_at() {
+
+  get updated_at () {
     return this.api.updated_at
   }
-  set updated_at(v: Date) {
+
+  set updated_at (v: Date) {
     this.api.updated_at = v
   }
-  get txid() {
+
+  get txid () {
     return this.api.txid
   }
-  set txid(v: string) {
+
+  set txid (v: string) {
     this.api.txid = v
   }
-  get height() {
+
+  get height () {
     return this.api.height
   }
-  set height(v: number) {
+
+  set height (v: number) {
     this.api.height = v
   }
-  get index() {
+
+  get index () {
     return this.api.index
   }
-  set index(v: number) {
+
+  set index (v: number) {
     this.api.index = v
   }
-  get merklePath() {
+
+  get merklePath () {
     return this.api.merklePath
   }
-  set merklePath(v: number[]) {
+
+  set merklePath (v: number[]) {
     this.api.merklePath = v
   }
-  get rawTx() {
+
+  get rawTx () {
     return this.api.rawTx
   }
-  set rawTx(v: number[]) {
+
+  set rawTx (v: number[]) {
     this.api.rawTx = v
   }
-  get blockHash() {
+
+  get blockHash () {
     return this.api.blockHash
   }
-  set blockHash(v: string) {
+
+  set blockHash (v: string) {
     this.api.blockHash = v
   }
-  get merkleRoot() {
+
+  get merkleRoot () {
     return this.api.merkleRoot
   }
-  set merkleRoot(v: string) {
+
+  set merkleRoot (v: string) {
     this.api.merkleRoot = v
   }
 
-  override get id() {
+  override get id () {
     return this.api.provenTxId
   }
-  override set id(v: number) {
+
+  override set id (v: number) {
     this.api.provenTxId = v
   }
-  override get entityName(): string {
+
+  override get entityName (): string {
     return 'provenTx'
   }
-  override get entityTable(): string {
+
+  override get entityTable (): string {
     return 'proven_txs'
   }
 
-  override equals(ei: TableProvenTx, syncMap?: SyncMap | undefined): boolean {
+  override equals (ei: TableProvenTx, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
     if (
       eo.txid != ei.txid ||
@@ -179,9 +203,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
       // equality does not depend on timestamps.
       // || eo.created_at !== ei.created_at
       // || eo.updated_at !== ei.updated_at
-    )
-      return false
-    if (syncMap) {
+    ) { return false }
+    if (syncMap != null) {
       if (eo.provenTxId !== syncMap.provenTx.idMap[ei.provenTxId]) return false
     } else {
       if (eo.provenTxId !== ei.provenTxId) return false
@@ -189,28 +212,28 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     return true
   }
 
-  static async mergeFind(
+  static async mergeFind (
     storage: EntityStorage,
     userId: number,
     ei: TableProvenTx,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean; eo: EntityProvenTx; eiId: number }> {
+  ): Promise<{ found: boolean, eo: EntityProvenTx, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findProvenTxs({ partial: { txid: ei.txid }, trx }))
     return {
-      found: !!ef,
+      found: !(ef == null),
       eo: new EntityProvenTx(ef || { ...ei }),
       eiId: verifyId(ei.provenTxId)
     }
   }
 
-  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.provenTxId = 0
     // TODO: Since these records are a shared resource, the record must be validated before accepting it...
     this.provenTxId = await storage.insertProvenTx(this.toApi(), trx)
   }
 
-  override async mergeExisting(
+  override async mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableProvenTx,
@@ -240,7 +263,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
    * @param gmpResult
    * @returns
    */
-  static async fromReq(
+  static async fromReq (
     req: EntityProvenTxReq,
     gmpResult: GetMerklePathResult,
     countsAsAttempt: boolean
@@ -254,13 +277,13 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
       req.addHistoryNote(note, true)
     }
 
-    if (!gmpResult.name && !gmpResult.merklePath && !gmpResult.error) {
+    if (!gmpResult.name && (gmpResult.merklePath == null) && (gmpResult.error == null)) {
       // Most likely offline or now services configured.
       // Does not count as a proof attempt.
       return undefined
     }
 
-    if (!gmpResult.merklePath) {
+    if (gmpResult.merklePath == null) {
       if (req.created_at) {
         const ageInMsecs = Date.now() - req.created_at.getTime()
         const ageInMinutes = Math.ceil(ageInMsecs < 1 ? 0 : ageInMsecs / (1000 * 60))
@@ -285,7 +308,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
       try {
         const now = new Date()
         const leaf = proof.path[0].find(leaf => leaf.txid === true && leaf.hash === req.txid)
-        if (!leaf) {
+        if (leaf == null) {
           req.addHistoryNote({ what: 'getMerklePathTxidNotFound' }, true)
           throw new WERR_INTERNAL('merkle path does not contain leaf for txid')
         }

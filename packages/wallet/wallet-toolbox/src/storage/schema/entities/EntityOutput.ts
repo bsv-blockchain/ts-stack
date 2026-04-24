@@ -4,7 +4,7 @@ import { TableOutput } from '../tables/TableOutput'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
 export class EntityOutput extends EntityBase<TableOutput> {
-  constructor(api?: TableOutput) {
+  constructor (api?: TableOutput) {
     const now = new Date()
     super(
       api || {
@@ -37,174 +37,223 @@ export class EntityOutput extends EntityBase<TableOutput> {
     )
   }
 
-  override updateApi(): void {
+  override updateApi (): void {
     /* nothing needed yet... */
   }
 
-  get outputId() {
+  get outputId () {
     return this.api.outputId
   }
-  set outputId(v: number) {
+
+  set outputId (v: number) {
     this.api.outputId = v
   }
-  get created_at() {
+
+  get created_at () {
     return this.api.created_at
   }
-  set created_at(v: Date) {
+
+  set created_at (v: Date) {
     this.api.created_at = v
   }
-  get updated_at() {
+
+  get updated_at () {
     return this.api.updated_at
   }
-  set updated_at(v: Date) {
+
+  set updated_at (v: Date) {
     this.api.updated_at = v
   }
-  get userId() {
+
+  get userId () {
     return this.api.userId
   }
-  set userId(v: number) {
+
+  set userId (v: number) {
     this.api.userId = v
   }
-  get transactionId() {
+
+  get transactionId () {
     return this.api.transactionId
   }
-  set transactionId(v: number) {
+
+  set transactionId (v: number) {
     this.api.transactionId = v
   }
-  get basketId() {
+
+  get basketId () {
     return this.api.basketId
   }
-  set basketId(v: number | undefined) {
+
+  set basketId (v: number | undefined) {
     this.api.basketId = v
   }
-  get spentBy() {
+
+  get spentBy () {
     return this.api.spentBy
   }
-  set spentBy(v: number | undefined) {
+
+  set spentBy (v: number | undefined) {
     this.api.spentBy = v
   }
-  get vout() {
+
+  get vout () {
     return this.api.vout
   }
-  set vout(v: number) {
+
+  set vout (v: number) {
     this.api.vout = v
   }
-  get satoshis() {
+
+  get satoshis () {
     return this.api.satoshis
   }
-  set satoshis(v: number) {
+
+  set satoshis (v: number) {
     this.api.satoshis = v
   }
-  get outputDescription() {
+
+  get outputDescription () {
     return this.api.outputDescription
   }
-  set outputDescription(v: string) {
+
+  set outputDescription (v: string) {
     this.api.outputDescription = v
   }
-  get spendable() {
+
+  get spendable () {
     return this.api.spendable
   }
-  set spendable(v: boolean) {
+
+  set spendable (v: boolean) {
     this.api.spendable = v
   }
-  get change() {
+
+  get change () {
     return this.api.change
   }
-  set change(v: boolean) {
+
+  set change (v: boolean) {
     this.api.change = v
   }
 
-  get txid() {
+  get txid () {
     return this.api.txid
   }
-  set txid(v: string | undefined) {
+
+  set txid (v: string | undefined) {
     this.api.txid = v
   }
-  get type() {
+
+  get type () {
     return this.api.type
   }
-  set type(v: string) {
+
+  set type (v: string) {
     this.api.type = v
   }
-  get providedBy() {
+
+  get providedBy () {
     return this.api.providedBy
   }
-  set providedBy(v: StorageProvidedBy) {
+
+  set providedBy (v: StorageProvidedBy) {
     this.api.providedBy = v
   }
-  get purpose() {
+
+  get purpose () {
     return this.api.purpose
   }
-  set purpose(v: string) {
+
+  set purpose (v: string) {
     this.api.purpose = v
   }
-  get spendingDescription() {
+
+  get spendingDescription () {
     return this.api.spendingDescription
   }
-  set spendingDescription(v: string | undefined) {
+
+  set spendingDescription (v: string | undefined) {
     this.api.spendingDescription = v
   }
-  get derivationPrefix() {
+
+  get derivationPrefix () {
     return this.api.derivationPrefix
   }
-  set derivationPrefix(v: string | undefined) {
+
+  set derivationPrefix (v: string | undefined) {
     this.api.derivationPrefix = v
   }
-  get derivationSuffix() {
+
+  get derivationSuffix () {
     return this.api.derivationSuffix
   }
-  set derivationSuffix(v: string | undefined) {
+
+  set derivationSuffix (v: string | undefined) {
     this.api.derivationSuffix = v
   }
-  get senderIdentityKey() {
+
+  get senderIdentityKey () {
     return this.api.senderIdentityKey
   }
-  set senderIdentityKey(v: string | undefined) {
+
+  set senderIdentityKey (v: string | undefined) {
     this.api.senderIdentityKey = v
   }
-  get customInstructions() {
+
+  get customInstructions () {
     return this.api.customInstructions
   }
-  set customInstructions(v: string | undefined) {
+
+  set customInstructions (v: string | undefined) {
     this.api.customInstructions = v
   }
-  get lockingScript() {
+
+  get lockingScript () {
     return this.api.lockingScript
   }
-  set lockingScript(v: number[] | undefined) {
+
+  set lockingScript (v: number[] | undefined) {
     this.api.lockingScript = v
   }
-  get scriptLength() {
+
+  get scriptLength () {
     return this.api.scriptLength
   }
-  set scriptLength(v: number | undefined) {
+
+  set scriptLength (v: number | undefined) {
     this.api.scriptLength = v
   }
-  get scriptOffset() {
+
+  get scriptOffset () {
     return this.api.scriptOffset
   }
-  set scriptOffset(v: number | undefined) {
+
+  set scriptOffset (v: number | undefined) {
     this.api.scriptOffset = v
   }
 
-  override get id(): number {
+  override get id (): number {
     return this.api.outputId
   }
-  override set id(v: number) {
+
+  override set id (v: number) {
     this.api.outputId = v
   }
-  override get entityName(): string {
+
+  override get entityName (): string {
     return 'output'
   }
-  override get entityTable(): string {
+
+  override get entityTable (): string {
     return 'outputs'
   }
 
-  override equals(ei: TableOutput, syncMap?: SyncMap | undefined): boolean {
+  override equals (ei: TableOutput, syncMap?: SyncMap | undefined): boolean {
     if (
-      this.transactionId !== (syncMap ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) ||
-      this.basketId !== (syncMap && ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : ei.basketId) ||
-      this.spentBy !== (syncMap && ei.spentBy ? syncMap.transaction.idMap[ei.spentBy] : ei.spentBy) ||
+      this.transactionId !== ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) ||
+      this.basketId !== ((syncMap != null) && ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : ei.basketId) ||
+      this.spentBy !== ((syncMap != null) && ei.spentBy ? syncMap.transaction.idMap[ei.spentBy] : ei.spentBy) ||
       this.vout !== ei.vout ||
       this.satoshis !== ei.satoshis ||
       this.spendable !== ei.spendable ||
@@ -222,19 +271,18 @@ export class EntityOutput extends EntityBase<TableOutput> {
       !optionalArraysEqual(this.lockingScript, ei.lockingScript) ||
       this.scriptLength !== ei.scriptLength ||
       this.scriptOffset !== ei.scriptOffset
-    )
-      return false
+    ) { return false }
 
     return true
   }
 
-  static async mergeFind(
+  static async mergeFind (
     storage: EntityStorage,
     userId: number,
     ei: TableOutput,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean; eo: EntityOutput; eiId: number }> {
+  ): Promise<{ found: boolean, eo: EntityOutput, eiId: number }> {
     const transactionId = syncMap.transaction.idMap[ei.transactionId]
     const basketId = ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : null
     const ef = verifyOneOrNone(
@@ -244,13 +292,13 @@ export class EntityOutput extends EntityBase<TableOutput> {
       })
     )
     return {
-      found: !!ef,
+      found: !(ef == null),
       eo: new EntityOutput(ef || { ...ei }),
       eiId: verifyId(ei.outputId)
     }
   }
 
-  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.userId = userId
     this.basketId = this.basketId ? syncMap.outputBasket.idMap[this.basketId] : undefined
     this.transactionId = syncMap.transaction.idMap[this.transactionId]
@@ -259,7 +307,7 @@ export class EntityOutput extends EntityBase<TableOutput> {
     this.outputId = await storage.insertOutput(this.toApi(), trx)
   }
 
-  override async mergeExisting(
+  override async mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableOutput,

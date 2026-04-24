@@ -41,13 +41,13 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * e.g., an HSM or secure enclave. The reason for key usage is passed in
    * to help with user consent, auditing, and access policy checks.
    */
-  private keyGetter: (reason: string) => Promise<PrivateKey>
+  private readonly keyGetter: (reason: string) => Promise<PrivateKey>
 
   /**
    * Time (in ms) for which the obfuscated key remains in memory
    * before being automatically destroyed.
    */
-  private retentionPeriod: number
+  private readonly retentionPeriod: number
 
   /**
    * A list of dynamically generated property names used to store
@@ -71,7 +71,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * A list of decoy property names that remain in memory
    * even after the real key is destroyed (just to cause confusion).
    */
-  private decoyPropNamesRemain: string[] = []
+  private readonly decoyPropNamesRemain: string[] = []
 
   /**
    * Handle to the timer that will remove the key from memory
@@ -90,7 +90,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * @param keyGetter - Asynchronous function that retrieves the PrivateKey from a secure environment.
    * @param retentionPeriod - Time in milliseconds to retain the obfuscated key in memory before zeroizing.
    */
-  constructor(keyGetter: (reason: string) => Promise<PrivateKey>, retentionPeriod = 120_000) {
+  constructor (keyGetter: (reason: string) => Promise<PrivateKey>, retentionPeriod = 120_000) {
     this.keyGetter = keyGetter
     this.retentionPeriod = retentionPeriod
 
@@ -108,19 +108,19 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * and deleting related fields. Also destroys some (but not all) decoy
    * properties to further confuse an attacker.
    */
-  destroyKey(): void {
+  destroyKey (): void {
     try {
       // Zero out real chunk data
       for (const name of this.chunkPropNames) {
         const data: Uint8Array | undefined = (this as any)[name]
-        if (data) {
+        if (data != null) {
           data.fill(0)
         }
         delete (this as any)[name]
       }
       for (const name of this.chunkPadPropNames) {
         const data: Uint8Array | undefined = (this as any)[name]
-        if (data) {
+        if (data != null) {
           data.fill(0)
         }
         delete (this as any)[name]
@@ -129,7 +129,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
       // Destroy some decoys
       for (const name of this.decoyPropNamesDestroy) {
         const data: Uint8Array | undefined = (this as any)[name]
-        if (data) {
+        if (data != null) {
           data.fill(0)
         }
         delete (this as any)[name]
@@ -155,7 +155,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * is cleared and re-set. This ensures the key remains in memory
    * for exactly the desired window after its most recent acquisition.
    */
-  private scheduleKeyDestruction(): void {
+  private scheduleKeyDestruction (): void {
     if (this.destroyTimer) {
       // TODO: Consider a constructor flag to avoid clearing timers for higher security
       clearTimeout(this.destroyTimer)
@@ -170,7 +170,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * This function takes two equal-length byte arrays
    * and returns the XOR combination.
    */
-  private xorBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  private xorBytes (a: Uint8Array, b: Uint8Array): Uint8Array {
     const out = new Uint8Array(a.length)
     for (let i = 0; i < a.length; i++) {
       out[i] = a[i] ^ b[i]
@@ -183,7 +183,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * (mostly equal length; the last chunk picks up leftover bytes
    * if 32 is not evenly divisible).
    */
-  private splitKeyIntoChunks(keyBytes: Uint8Array): Uint8Array[] {
+  private splitKeyIntoChunks (keyBytes: Uint8Array): Uint8Array[] {
     const chunkSize = Math.floor(keyBytes.length / this.CHUNK_COUNT)
     const chunks: Uint8Array[] = []
     let offset = 0
@@ -201,7 +201,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * with their corresponding pads, and returns a single 32-byte
    * Uint8Array representing the raw key.
    */
-  private reassembleKeyFromChunks(): Uint8Array | null {
+  private reassembleKeyFromChunks (): Uint8Array | null {
     try {
       const chunkArrays: Uint8Array[] = []
       for (let i = 0; i < this.chunkPropNames.length; i++) {
@@ -237,7 +237,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
   /**
    * Generates a random property name to store key chunks or decoy data.
    */
-  private generateRandomPropName(): string {
+  private generateRandomPropName (): string {
     // E.g., 8 random hex characters for the property name
     const randomHex = Utils.toHex(Random(4))
     const extraBytes = Random(3)
@@ -249,7 +249,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * Forces a PrivateKey to be represented as exactly 32 bytes, left-padding
    * with zeros if its numeric value has fewer than 32 bytes.
    */
-  private get32ByteRepresentation(privKey: PrivateKey): Uint8Array {
+  private get32ByteRepresentation (privKey: PrivateKey): Uint8Array {
     // The internal "toArray()" can be up to 32 bytes, but sometimes fewer
     // if the numeric value has leading zeros.
     const buf = privKey.toArray()
@@ -272,11 +272,11 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * @param reason - The reason for why the key is needed, passed to keyGetter.
    * @returns The PrivateKey object needed for cryptographic operations.
    */
-  private async getPrivilegedKey(reason: string): Promise<PrivateKey> {
+  private async getPrivilegedKey (reason: string): Promise<PrivateKey> {
     // If we already have chunk properties, try reassemble
     if (this.chunkPropNames.length > 0 && this.chunkPadPropNames.length > 0) {
       const rawKeyBytes = this.reassembleKeyFromChunks()
-      if (rawKeyBytes && rawKeyBytes.length === 32) {
+      if ((rawKeyBytes != null) && rawKeyBytes.length === 32) {
         // Convert 32 raw bytes back to a PrivateKey
         // (Leading zeros are preserved, but PrivateKey() will parse it as a big integer.)
         const hexKey = Utils.toHex([...rawKeyBytes]) // 64 hex chars
@@ -332,43 +332,43 @@ export class PrivilegedKeyManager implements ProtoWallet {
     return fetchedKey
   }
 
-  async getPublicKey(args: GetPublicKeyArgs): Promise<{ publicKey: PubKeyHex }> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).getPublicKey(args)
+  async getPublicKey (args: GetPublicKeyArgs): Promise<{ publicKey: PubKeyHex }> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).getPublicKey(args)
   }
 
-  async revealCounterpartyKeyLinkage(
+  async revealCounterpartyKeyLinkage (
     args: RevealCounterpartyKeyLinkageArgs
   ): Promise<RevealCounterpartyKeyLinkageResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).revealCounterpartyKeyLinkage(
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).revealCounterpartyKeyLinkage(
       args
     )
   }
 
-  async revealSpecificKeyLinkage(args: RevealSpecificKeyLinkageArgs): Promise<RevealSpecificKeyLinkageResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).revealSpecificKeyLinkage(args)
+  async revealSpecificKeyLinkage (args: RevealSpecificKeyLinkageArgs): Promise<RevealSpecificKeyLinkageResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).revealSpecificKeyLinkage(args)
   }
 
-  async encrypt(args: WalletEncryptArgs): Promise<WalletEncryptResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).encrypt(args)
+  async encrypt (args: WalletEncryptArgs): Promise<WalletEncryptResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).encrypt(args)
   }
 
-  async decrypt(args: WalletDecryptArgs): Promise<WalletDecryptResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).decrypt(args)
+  async decrypt (args: WalletDecryptArgs): Promise<WalletDecryptResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).decrypt(args)
   }
 
-  async createHmac(args: CreateHmacArgs): Promise<CreateHmacResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).createHmac(args)
+  async createHmac (args: CreateHmacArgs): Promise<CreateHmacResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).createHmac(args)
   }
 
-  async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).verifyHmac(args)
+  async verifyHmac (args: VerifyHmacArgs): Promise<VerifyHmacResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).verifyHmac(args)
   }
 
-  async createSignature(args: CreateSignatureArgs): Promise<CreateSignatureResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).createSignature(args)
+  async createSignature (args: CreateSignatureArgs): Promise<CreateSignatureResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).createSignature(args)
   }
 
-  async verifySignature(args: VerifySignatureArgs): Promise<VerifySignatureResult> {
-    return new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).verifySignature(args)
+  async verifySignature (args: VerifySignatureArgs): Promise<VerifySignatureResult> {
+    return await new ProtoWallet(await this.getPrivilegedKey(args.privilegedReason as string)).verifySignature(args)
   }
 }

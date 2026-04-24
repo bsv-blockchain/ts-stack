@@ -37,7 +37,7 @@ export class TaskPurge extends WalletMonitorTask {
    */
   static checkNow = false
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public params: TaskPurgeParams,
     public triggerMsecs = 0
@@ -45,7 +45,7 @@ export class TaskPurge extends WalletMonitorTask {
     super(monitor, TaskPurge.taskName)
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskPurge.checkNow ||
@@ -53,7 +53,7 @@ export class TaskPurge extends WalletMonitorTask {
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     TaskPurge.checkNow = false
 

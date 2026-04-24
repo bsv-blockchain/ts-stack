@@ -13,9 +13,9 @@ interface Migration {
 }
 
 interface MigrationSource<TMigrationSpec> {
-  getMigrations(loadExtensions: readonly string[]): Promise<TMigrationSpec[]>
-  getMigrationName(migration: TMigrationSpec): string
-  getMigration(migration: TMigrationSpec): Promise<Migration>
+  getMigrations: (loadExtensions: readonly string[]) => Promise<TMigrationSpec[]>
+  getMigrationName: (migration: TMigrationSpec) => string
+  getMigration: (migration: TMigrationSpec) => Promise<Migration>
 }
 
 export class KnexMigrations implements MigrationSource<string> {
@@ -26,7 +26,7 @@ export class KnexMigrations implements MigrationSource<string> {
    * @param storageName human readable name for this storage instance
    * @param maxOutputScriptLength limit for scripts kept in outputs table, longer scripts will be pulled from rawTx
    */
-  constructor(
+  constructor (
     public chain: Chain,
     public storageName: string,
     public storageIdentityKey: string,
@@ -35,27 +35,29 @@ export class KnexMigrations implements MigrationSource<string> {
     this.migrations = this.setupMigrations(chain, storageName, storageIdentityKey, maxOutputScriptLength)
   }
 
-  async getMigrations(): Promise<string[]> {
+  async getMigrations (): Promise<string[]> {
     return Object.keys(this.migrations).sort((a, b) => a.localeCompare(b))
   }
-  getMigrationName(migration: string) {
+
+  getMigrationName (migration: string) {
     return migration
   }
-  async getMigration(migration: string): Promise<Migration> {
+
+  async getMigration (migration: string): Promise<Migration> {
     return this.migrations[migration]
   }
 
-  async getLatestMigration(): Promise<string> {
+  async getLatestMigration (): Promise<string> {
     const ms = await this.getMigrations()
     return ms[ms.length - 1]
   }
 
-  static async latestMigration(): Promise<string> {
+  static async latestMigration (): Promise<string> {
     const km = new KnexMigrations('test', 'dummy', '1'.repeat(64), 100)
     return await km.getLatestMigration()
   }
 
-  setupMigrations(
+  setupMigrations (
     chain: string,
     storageName: string,
     storageIdentityKey: string,
@@ -74,12 +76,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-10-13-001 add outputs spendable index'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.index('spendable')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.dropIndex('spendable')
         })
@@ -87,7 +89,7 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2026-02-27-001 add listOutputs path indexes'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.index(['userId', 'spendable', 'outputId'], 'idx_outputs_user_spendable_outputid')
           table.index(['userId', 'basketId', 'spendable', 'outputId'], 'idx_outputs_user_basket_spendable_outputid')
@@ -99,7 +101,7 @@ export class KnexMigrations implements MigrationSource<string> {
           table.index(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('tx_labels_map', table => {
           table.dropIndex(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
         })
@@ -114,13 +116,13 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2026-02-27-002 add createAction path indexes'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.index(['userId', 'basketId', 'spendable', 'satoshis'], 'idx_outputs_user_basket_spendable_satoshis')
           table.index(['spentBy'], 'idx_outputs_spentby')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.dropIndex(['spentBy'], 'idx_outputs_spentby')
           table.dropIndex(['userId', 'basketId', 'spendable', 'satoshis'], 'idx_outputs_user_basket_spendable_satoshis')
@@ -129,12 +131,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-10-18-002 add proven_tx_reqs txid index'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {
           table.index('txid')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {
           table.dropIndex('txid')
         })
@@ -142,12 +144,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-10-18-001 add transactions txid index'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('transactions', table => {
           table.index('txid')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('transactions', table => {
           table.dropIndex('txid')
         })
@@ -155,12 +157,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-09-06-001 add proven txs blockHash index'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('proven_txs', table => {
           table.index('blockHash')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('proven_txs', table => {
           table.dropIndex('blockHash')
         })
@@ -168,12 +170,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-05-13-001 add monitor events event index'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('monitor_events', table => {
           table.index('event')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('monitor_events', table => {
           table.dropIndex('event')
         })
@@ -181,7 +183,7 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-03-03-001 descriptions to 2000'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('transactions', table => {
           table.string('description', 2048).alter()
         })
@@ -190,32 +192,32 @@ export class KnexMigrations implements MigrationSource<string> {
           table.string('spendingDescription', 2048).alter()
         })
       },
-      async down(knex) {}
+      async down (knex) {}
     }
 
     migrations['2025-03-01-001 reset req history'] = {
-      async up(knex) {
+      async up (knex) {
         const storage = new StorageKnex({
           ...StorageKnex.defaultOptions(),
-          chain: <Chain>chain,
+          chain: chain as Chain,
           knex
         })
         const settings = await storage.makeAvailable()
-        await knex.raw(`update proven_tx_reqs set history = '{}'`)
+        await knex.raw('update proven_tx_reqs set history = \'{}\'')
       },
-      async down(knex) {
+      async down (knex) {
         // No way back...
       }
     }
 
     migrations['2025-02-28-001 derivations to 200'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.string('derivationPrefix', 200).alter()
           table.string('derivationSuffix', 200).alter()
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('outputs', table => {
           table.string('derivationPrefix', 32).alter()
           table.string('derivationSuffix', 32).alter()
@@ -224,10 +226,10 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-02-22-001 nonNULL activeStorage'] = {
-      async up(knex) {
+      async up (knex) {
         const storage = new StorageKnex({
           ...StorageKnex.defaultOptions(),
-          chain: <Chain>chain,
+          chain: chain as Chain,
           knex
         })
         const settings = await storage.makeAvailable()
@@ -236,7 +238,7 @@ export class KnexMigrations implements MigrationSource<string> {
           table.string('activeStorage').notNullable().alter()
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('users', table => {
           table.string('activeStorage').nullable().alter()
         })
@@ -244,12 +246,12 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2025-01-21-001 add activeStorage to users'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.alterTable('users', table => {
           table.string('activeStorage', 130).nullable().defaultTo(null)
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.alterTable('users', table => {
           table.dropColumn('activeStorage')
         })
@@ -257,7 +259,7 @@ export class KnexMigrations implements MigrationSource<string> {
     }
 
     migrations['2024-12-26-001 initial migration'] = {
-      async up(knex) {
+      async up (knex) {
         const dbtype = await determineDBType(knex)
 
         await knex.schema.createTable('proven_txs', table => {
@@ -482,7 +484,7 @@ export class KnexMigrations implements MigrationSource<string> {
           maxOutputScript: maxOutputScriptLength
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.dropTable('sync_states')
         await knex.schema.dropTable('settings')
         await knex.schema.dropTable('monitor_events')
@@ -509,7 +511,7 @@ export class KnexMigrations implements MigrationSource<string> {
  * @param knex
  * @returns {DBType} connected database engine variant
  */
-export async function determineDBType(knex: Knex<any, any[]>): Promise<DBType> {
+export async function determineDBType (knex: Knex<any, any[]>): Promise<DBType> {
   try {
     const q = `SELECT 
   CASE 
@@ -518,15 +520,15 @@ export async function determineDBType(knex: Knex<any, any[]>): Promise<DBType> {
       ELSE 'Unknown'
   END AS database_type;`
     let r = await knex.raw(q)
-    if (!r[0]['database_type']) r = r[0]
-    if (r['rows']) r = r.rows
+    if (!r[0].database_type) r = r[0]
+    if (r.rows) r = r.rows
     const dbtype: 'SQLite' | 'MySQL' | 'Unknown' = r[0].database_type
-    if (dbtype === 'Unknown') throw new WERR_NOT_IMPLEMENTED(`Attempting to create database on unsuported engine.`)
+    if (dbtype === 'Unknown') throw new WERR_NOT_IMPLEMENTED('Attempting to create database on unsuported engine.')
     return dbtype
   } catch (eu: unknown) {
     const e = WalletError.fromUnknown(eu)
     // Check for SQLite errors from both node-sqlite3 (SQLITE_ERROR) and better-sqlite3 (SqliteError)
     if (e.code === 'SQLITE_ERROR' || e.code === 'SqliteError') return 'SQLite'
-    throw new WERR_NOT_IMPLEMENTED(`Attempting to create database on unsuported engine.`)
+    throw new WERR_NOT_IMPLEMENTED('Attempting to create database on unsuported engine.')
   }
 }

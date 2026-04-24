@@ -10,7 +10,7 @@ describe('ChaintracksFetch tests', () => {
   test('0 fetchJson', async () => {
     const fetch = new ChaintracksFetch()
     const cdnUrl = 'https://cdn.projectbabbage.com/blockheaders/'
-    //const jsonResource = `${cdnUrl}/testNetV2.json`
+    // const jsonResource = `${cdnUrl}/testNetV2.json`
     const jsonResource = `${cdnUrl}/testNetBlockHeaders.json`
     const info: BulkHeaderFilesInfo = await fetch.fetchJson(jsonResource)
     expect(info).toBeDefined()

@@ -44,7 +44,7 @@ export class ArcSSEClient {
   private connected = false
   private connecting = false
 
-  constructor(private readonly options: ArcSSEClientOptions) {
+  constructor (private readonly options: ArcSSEClientOptions) {
     this._lastEventId = options.lastEventId
     let base = options.baseUrl
     while (base.endsWith('/')) {
@@ -53,14 +53,14 @@ export class ArcSSEClient {
     this.url = `${base}/events?callbackToken=${encodeURIComponent(options.callbackToken)}`
   }
 
-  get lastEventId(): string | undefined {
+  get lastEventId (): string | undefined {
     return this._lastEventId
   }
 
   /**
    * Open the SSE connection. Events will be dispatched via onEvent as they arrive.
    */
-  connect(): void {
+  connect (): void {
     if (this.es) {
       console.log(`${TAG} already connected`)
       return
@@ -72,7 +72,7 @@ export class ArcSSEClient {
       'Last-Event-ID': this._lastEventId || '0'
     }
     if (this.options.arcApiKey) {
-      headers['Authorization'] = `Bearer ${this.options.arcApiKey}`
+      headers.Authorization = `Bearer ${this.options.arcApiKey}`
     }
 
     console.log(`${TAG} connecting to ${this.url} (Last-Event-ID: ${headers['Last-Event-ID']})`)
@@ -114,7 +114,7 @@ export class ArcSSEClient {
   }
 
   /** Close the connection and clean up */
-  close(): void {
+  close (): void {
     if (this.es) {
       console.log(`${TAG} closing`)
       this.es.close()
@@ -129,7 +129,7 @@ export class ArcSSEClient {
    * If not connected, opens a new connection with catchup from lastEventId.
    * Returns immediately — events arrive asynchronously via onEvent callback.
    */
-  async fetchEvents(): Promise<number> {
+  async fetchEvents (): Promise<number> {
     if (!this.es && !this.connecting) {
       this.connect()
     } else if (this.es && !this.connected && !this.connecting) {

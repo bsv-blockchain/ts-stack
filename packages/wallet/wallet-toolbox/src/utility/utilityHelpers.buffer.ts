@@ -5,7 +5,7 @@
  * @returns input val if it is a Buffer or new Buffer from string val
  * @publicbody
  */
-export function asBuffer(val: Buffer | string | number[], encoding?: BufferEncoding): Buffer {
+export function asBuffer (val: Buffer | string | number[], encoding?: BufferEncoding): Buffer {
   let b: Buffer
   if (Buffer.isBuffer(val)) b = val
   else if (typeof val === 'string') b = Buffer.from(val, encoding ?? 'hex')
@@ -20,12 +20,12 @@ export function asBuffer(val: Buffer | string | number[], encoding?: BufferEncod
  * @returns input val if it is a string; or if number[], first converted to Buffer then as Buffer; if Buffer encoded using `encoding`
  * @publicbody
  */
-export function asString(val: Buffer | string | number[], encoding?: BufferEncoding): string {
+export function asString (val: Buffer | string | number[], encoding?: BufferEncoding): string {
   if (Array.isArray(val)) val = Buffer.from(val)
   return Buffer.isBuffer(val) ? val.toString(encoding ?? 'hex') : val
 }
 
-export function asArray(val: Buffer | string | number[], encoding?: BufferEncoding): number[] {
+export function asArray (val: Buffer | string | number[], encoding?: BufferEncoding): number[] {
   let a: number[]
   if (Array.isArray(val)) a = val
   else if (Buffer.isBuffer(val)) a = Array.from(val)

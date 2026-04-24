@@ -27,6 +27,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     tipHeaderId: 0,
     hashToHeaderId: new Map<string, number>()
   }
+
   static testData: ChaintracksNoDbData = {
     chain: 'test',
     liveHeaders: new Map<number, LiveBlockHeader>(),
@@ -35,13 +36,13 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     hashToHeaderId: new Map<string, number>()
   }
 
-  constructor(options: ChaintracksStorageNoDbOptions) {
+  constructor (options: ChaintracksStorageNoDbOptions) {
     super(options)
   }
 
-  override async destroy(): Promise<void> {}
+  override async destroy (): Promise<void> {}
 
-  async getData(): Promise<ChaintracksNoDbData> {
+  async getData (): Promise<ChaintracksNoDbData> {
     switch (this.chain) {
       case 'main':
         return ChaintracksStorageNoDb.mainData
@@ -53,7 +54,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     }
   }
 
-  override async deleteLiveBlockHeaders(): Promise<void> {
+  override async deleteLiveBlockHeaders (): Promise<void> {
     const data = await this.getData()
     data.liveHeaders.clear()
     data.maxHeaderId = 0
@@ -61,7 +62,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     data.hashToHeaderId.clear()
   }
 
-  override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> {
+  override async deleteOlderLiveBlockHeaders (maxHeight: number): Promise<number> {
     const data = await this.getData()
     let deletedCount = 0
 
@@ -69,7 +70,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     for (const [headerId, header] of data.liveHeaders) {
       if (header.previousHeaderId) {
         const prevHeader = data.liveHeaders.get(header.previousHeaderId)
-        if (prevHeader && prevHeader.height <= maxHeight) {
+        if ((prevHeader != null) && prevHeader.height <= maxHeight) {
           data.liveHeaders.set(headerId, { ...header, previousHeaderId: null })
         }
       }
@@ -91,7 +92,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     // Update tipHeaderId if necessary
     if (data.liveHeaders.size > 0) {
       const tip = Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
-      data.tipHeaderId = tip ? tip.headerId : 0
+      data.tipHeaderId = (tip != null) ? tip.headerId : 0
     } else {
       data.tipHeaderId = 0
     }
@@ -99,42 +100,42 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     return deletedCount
   }
 
-  override async findChainTipHeader(): Promise<LiveBlockHeader> {
+  override async findChainTipHeader (): Promise<LiveBlockHeader> {
     const data = await this.getData()
     const tip = Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
-    if (!tip) throw new Error('Database contains no active chain tip header.')
+    if (tip == null) throw new Error('Database contains no active chain tip header.')
     return tip
   }
 
-  override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> {
+  override async findChainTipHeaderOrUndefined (): Promise<LiveBlockHeader | undefined> {
     const data = await this.getData()
     return Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
   }
 
-  override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> {
+  override async findLiveHeaderForBlockHash (hash: string): Promise<LiveBlockHeader | null> {
     const data = await this.getData()
     const headerId = data.hashToHeaderId.get(hash)
     return headerId ? data.liveHeaders.get(headerId) || null : null
   }
 
-  override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> {
+  override async findLiveHeaderForHeaderId (headerId: number): Promise<LiveBlockHeader> {
     const data = await this.getData()
     const header = data.liveHeaders.get(headerId)
-    if (!header) throw new Error(`HeaderId ${headerId} not found in live header database.`)
+    if (header == null) throw new Error(`HeaderId ${headerId} not found in live header database.`)
     return header
   }
 
-  override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> {
+  override async findLiveHeaderForHeight (height: number): Promise<LiveBlockHeader | null> {
     const data = await this.getData()
     return Array.from(data.liveHeaders.values()).find(h => h.height === height && h.isActive) || null
   }
 
-  override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> {
+  override async findLiveHeaderForMerkleRoot (merkleRoot: string): Promise<LiveBlockHeader | null> {
     const data = await this.getData()
     return Array.from(data.liveHeaders.values()).find(h => h.merkleRoot === merkleRoot) || null
   }
 
-  override async findLiveHeightRange(): Promise<HeightRange> {
+  override async findLiveHeightRange (): Promise<HeightRange> {
     const data = await this.getData()
     const activeHeaders = Array.from(data.liveHeaders.values()).filter(h => h.isActive)
     if (activeHeaders.length === 0) {
@@ -145,12 +146,12 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     return new HeightRange(minHeight, maxHeight)
   }
 
-  override async findMaxHeaderId(): Promise<number> {
+  override async findMaxHeaderId (): Promise<number> {
     const data = await this.getData()
     return data.maxHeaderId
   }
 
-  override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> {
+  override async liveHeadersForBulk (count: number): Promise<LiveBlockHeader[]> {
     const data = await this.getData()
     return Array.from(data.liveHeaders.values())
       .filter(h => h.isActive)
@@ -158,7 +159,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
       .slice(0, count)
   }
 
-  override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> {
+  override async getLiveHeaders (range: HeightRange): Promise<LiveBlockHeader[]> {
     if (range.isEmpty) return []
     const data = await this.getData()
     const headers = Array.from(data.liveHeaders.values())
@@ -167,7 +168,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     return headers
   }
 
-  override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> {
+  override async insertHeader (header: BlockHeader): Promise<InsertHeaderResult> {
     const data = await this.getData()
 
     const r: InsertHeaderResult = {
@@ -190,15 +191,15 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     }
 
     // Find previous header
-    let oneBack = Array.from(data.liveHeaders.values()).find(h => h.hash === header.previousHash)
+    const oneBack = Array.from(data.liveHeaders.values()).find(h => h.hash === header.previousHash)
 
-    if (!oneBack) {
+    if (oneBack == null) {
       // Check if this is first live header
       const count = data.liveHeaders.size
       if (count === 0) {
         // If this is the first live header, the last bulk header (if there is one) is the previous header.
         const lbf = await this.bulkManager.getLastFile()
-        if (!lbf) throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
+        if (lbf == null) throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
         if (header.previousHash === lbf.lastHash && header.height === lbf.firstHeight + lbf.count) {
           // Valid first live header. Add it.
           const chainWork = addWork(lbf.lastChainWork, convertBitsToWork(header.bits))
@@ -236,7 +237,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
         ? oneBack
         : Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
 
-    if (!r.priorTip) {
+    if (r.priorTip == null) {
       // No active chain tip found. This is a logic error in state of live headers.
       r.noTip = true
       return r
@@ -261,7 +262,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
       let activeAncestor = oneBack
       while (!activeAncestor.isActive) {
         const previousHeader = data.liveHeaders.get(activeAncestor.previousHeaderId!)
-        if (!previousHeader) {
+        if (previousHeader == null) {
           r.noActiveAncestor = true
           return r
         }
@@ -274,7 +275,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
 
       if (activeAncestor.headerId !== oneBack.headerId) {
         let headerToDeactivate = Array.from(data.liveHeaders.values()).find(h => h.isChainTip && h.isActive)
-        while (headerToDeactivate && headerToDeactivate.headerId !== activeAncestor.headerId) {
+        while ((headerToDeactivate != null) && headerToDeactivate.headerId !== activeAncestor.headerId) {
           r.deactivatedHeaders.push(headerToDeactivate)
           data.liveHeaders.set(headerToDeactivate.headerId, { ...headerToDeactivate, isActive: false })
           headerToDeactivate = data.liveHeaders.get(headerToDeactivate.previousHeaderId!)

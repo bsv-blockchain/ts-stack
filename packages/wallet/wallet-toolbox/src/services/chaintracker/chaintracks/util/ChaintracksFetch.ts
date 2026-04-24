@@ -9,9 +9,9 @@ import { wait } from '../../../../utility/utilityHelpers'
 export class ChaintracksFetch implements ChaintracksFetchApi {
   httpClient: HttpClient = defaultHttpClient()
 
-  constructor() {}
+  constructor () {}
 
-  async download(url: string): Promise<Uint8Array> {
+  async download (url: string): Promise<Uint8Array> {
     for (let retry = 0; ; retry++) {
       const response = await fetch(url, {
         method: 'GET',
@@ -58,7 +58,7 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     return json
   }
 
-  pathJoin(baseUrl: string, subpath: string): string {
+  pathJoin (baseUrl: string, subpath: string): string {
     // Ensure the subpath doesn't start with a slash to avoid issues
     const cleanSubpath = subpath.replace(/^\/+/, '')
     if (!baseUrl.endsWith('/')) baseUrl += '/'

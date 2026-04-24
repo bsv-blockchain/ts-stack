@@ -46,7 +46,7 @@ export interface LiveIngestorWhatsOnChainOptions extends LiveIngestorBaseOptions
  * Reports new headers by polling periodically.
  */
 export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
-  static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions {
+  static createLiveIngestorWhatsOnChainOptions (chain: Chain): LiveIngestorWhatsOnChainOptions {
     const options: LiveIngestorWhatsOnChainOptions = {
       ...WhatsOnChainServices.createWhatsOnChainServicesOptions(chain),
       ...LiveIngestorBase.createLiveIngestorBaseOptions(chain),
@@ -59,22 +59,22 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
   woc: WhatsOnChainServices
   done: boolean = false
 
-  constructor(options: LiveIngestorWhatsOnChainOptions) {
+  constructor (options: LiveIngestorWhatsOnChainOptions) {
     super(options)
     this.idleWait = options.idleWait || 100000
     this.woc = new WhatsOnChainServices(options)
   }
 
-  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
     const header = await this.woc.getHeaderByHash(hash)
     return header
   }
 
-  async startListening(liveHeaders: BlockHeader[]): Promise<void> {
+  async startListening (liveHeaders: BlockHeader[]): Promise<void> {
     this.done = false
     let lastHeaders: WocGetHeadersHeader[] = []
 
-    for (; !this.done; ) {
+    for (; !this.done;) {
       const headers = await this.woc.getHeaders()
 
       const newHeaders = headers.filter(h => !lastHeaders.some(lh => lh.hash === h.hash))
@@ -91,14 +91,14 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
         await wait(1000)
       }
     }
-    this.log(`LiveIngestorWhatsOnChainPoll stopped`)
+    this.log('LiveIngestorWhatsOnChainPoll stopped')
   }
 
-  stopListening(): void {
+  stopListening (): void {
     this.done = true
   }
 
-  override async shutdown(): Promise<void> {
+  override async shutdown (): Promise<void> {
     this.stopListening()
   }
 }

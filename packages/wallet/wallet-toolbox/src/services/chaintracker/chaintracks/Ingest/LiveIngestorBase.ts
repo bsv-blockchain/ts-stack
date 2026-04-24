@@ -15,7 +15,7 @@ export interface LiveIngestorBaseOptions {
  *
  */
 export abstract class LiveIngestorBase implements LiveIngestorApi {
-  static createLiveIngestorBaseOptions(chain: Chain) {
+  static createLiveIngestorBaseOptions (chain: Chain) {
     const options: LiveIngestorBaseOptions = {
       chain
     }
@@ -25,7 +25,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
   chain: Chain
   log: (...args: any[]) => void = () => {}
 
-  constructor(options: LiveIngestorBaseOptions) {
+  constructor (options: LiveIngestorBaseOptions) {
     this.chain = options.chain
   }
 
@@ -33,7 +33,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    * Release resources.
    * Override if required.
    */
-  async shutdown(): Promise<void> {}
+  async shutdown (): Promise<void> {}
 
   private storageEngine?: ChaintracksStorageApi
 
@@ -41,7 +41,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    * Allocate resources.
    * @param storage coordinating storage engine.
    */
-  async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> {
+  async setStorage (storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> {
     this.storageEngine = storage
     this.log = log
   }
@@ -50,8 +50,8 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    *
    * @returns coordinating storage engine.
    */
-  storage(): ChaintracksStorageApi {
-    if (!this.storageEngine) throw new Error('storageEngine must be set.')
+  storage (): ChaintracksStorageApi {
+    if (this.storageEngine == null) throw new Error('storageEngine must be set.')
     return this.storageEngine
   }
 
@@ -61,7 +61,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    *
    * @param hash block hash of missing header
    */
-  abstract getHeaderByHash(hash: string): Promise<BlockHeader | undefined>
+  abstract getHeaderByHash (hash: string): Promise<BlockHeader | undefined>
 
   /**
    * Begin retrieving new block headers.
@@ -77,10 +77,10 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    *
    * @param liveHeaders
    */
-  abstract startListening(liveHeaders: BlockHeader[]): Promise<void>
+  abstract startListening (liveHeaders: BlockHeader[]): Promise<void>
 
   /**
    * Causes `startListening` to stop listening for new block headers and return.
    */
-  abstract stopListening(): void
+  abstract stopListening (): void
 }

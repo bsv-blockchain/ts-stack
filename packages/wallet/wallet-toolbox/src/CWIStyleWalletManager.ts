@@ -80,7 +80,7 @@ export const ARGON2ID_DEFAULT_MEMORY_KIB = 131072
 export const ARGON2ID_DEFAULT_PARALLELISM = 1
 export const ARGON2ID_DEFAULT_HASH_LENGTH = 32
 
-function isLikelyDerSignatureField(field: number[]): boolean {
+function isLikelyDerSignatureField (field: number[]): boolean {
   if (!field || field.length < 8 || field.length > 80) {
     return false
   }
@@ -93,7 +93,7 @@ function isLikelyDerSignatureField(field: number[]): boolean {
   return declaredLen === field.length - 2
 }
 
-function stripVerifiedPushDropSignature(fields: number[][], lockingPublicKey: any): number[][] {
+function stripVerifiedPushDropSignature (fields: number[][], lockingPublicKey: any): number[][] {
   if (fields.length <= 11) {
     return fields
   }
@@ -141,7 +141,7 @@ function stripVerifiedPushDropSignature(fields: number[][], lockingPublicKey: an
  * @param hash            Digest algorithm (default "sha512").
  * @returns               Derived key bytes.
  */
-async function pbkdf2NativeOrWasm(
+async function pbkdf2NativeOrWasm (
   passwordBytes: number[],
   salt: number[],
   iterations: number,
@@ -150,13 +150,13 @@ async function pbkdf2NativeOrWasm(
 ): Promise<number[]> {
   // ----- fast-path: WebCrypto (both browser & recent Node expose globalThis.crypto.subtle)
   const subtle = (globalThis as any)?.crypto?.subtle as SubtleCrypto | undefined
-  if (subtle) {
+  if (subtle != null) {
     try {
       const baseKey = await subtle.importKey(
         'raw',
         new Uint8Array(passwordBytes),
         { name: 'PBKDF2' },
-        /*extractable*/ false,
+        /* extractable */ false,
         ['deriveBits']
       )
 
@@ -172,7 +172,7 @@ async function pbkdf2NativeOrWasm(
       )
       return Array.from(new Uint8Array(bits))
     } catch (err) {
-      //console.warn('[pbkdf2] WebCrypto path failed → falling back to JS implementation', err)
+      // console.warn('[pbkdf2] WebCrypto path failed → falling back to JS implementation', err)
       /* fall through */
     }
   }
@@ -200,7 +200,7 @@ async function pbkdf2NativeOrWasm(
  * @param overrideKdf    Optional KDF config to override token/default settings.
  * @returns              Derived password key bytes.
  */
-async function derivePasswordKey(
+async function derivePasswordKey (
   token: Pick<UMPToken, 'passwordSalt' | 'passwordKdf'>,
   passwordBytes: number[],
   overrideKdf?: {
@@ -214,8 +214,8 @@ async function derivePasswordKey(
   const kdf = overrideKdf || token.passwordKdf
 
   // Legacy token or explicit PBKDF2 request
-  if (!kdf || kdf.algorithm === 'pbkdf2-sha512') {
-    return pbkdf2NativeOrWasm(passwordBytes, token.passwordSalt, kdf?.iterations ?? PBKDF2_NUM_ROUNDS, 32, 'sha512')
+  if ((kdf == null) || kdf.algorithm === 'pbkdf2-sha512') {
+    return await pbkdf2NativeOrWasm(passwordBytes, token.passwordSalt, kdf?.iterations ?? PBKDF2_NUM_ROUNDS, 32, 'sha512')
   }
 
   // Argon2id path (UMP v3)
@@ -463,7 +463,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param resolver     A LookupResolver instance for performing overlay queries (ls_users).
    * @param broadcaster  A SHIPBroadcaster instance for sharing new or updated tokens across the `tm_users` overlay.
    */
-  constructor(
+  constructor (
     resolver: LookupResolver = new LookupResolver(),
     broadcaster: SHIPBroadcaster = new SHIPBroadcaster(['tm_users'])
   ) {
@@ -478,7 +478,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param hash The 32-byte SHA-256 hash of the presentation key.
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
-  public async findByPresentationKeyHash(hash: number[]): Promise<UMPToken | undefined> {
+  public async findByPresentationKeyHash (hash: number[]): Promise<UMPToken | undefined> {
     // Query ls_users for the given presentationHash
     const question = {
       service: 'ls_users',
@@ -495,7 +495,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param hash The 32-byte SHA-256 hash of the recovery key.
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
-  public async findByRecoveryKeyHash(hash: number[]): Promise<UMPToken | undefined> {
+  public async findByRecoveryKeyHash (hash: number[]): Promise<UMPToken | undefined> {
     const question = {
       service: 'ls_users',
       query: { recoveryHash: Utils.toHex(hash) }
@@ -516,7 +516,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param oldTokenToConsume Optionally, an existing token to consume/spend in the same transaction.
    * @returns The outpoint of the newly created UMP token (e.g. "abcd1234...ef.0").
    */
-  public async buildAndSend(
+  public async buildAndSend (
     wallet: WalletInterface, // This wallet MUST be the one built for the default profile
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     token: UMPToken,
@@ -537,13 +537,13 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     fields[10] = token.recoveryKeyEncrypted
 
     // Optional field for encrypted profiles
-    if (token.profilesEncrypted) {
+    if (token.profilesEncrypted != null) {
       fields[11] = token.profilesEncrypted
     }
 
     // V3 fields: umpVersion, kdfAlgorithm, kdfParams
-    if (token.umpVersion === 3 && token.passwordKdf) {
-      const versionFieldIndex = token.profilesEncrypted ? 12 : 11
+    if (token.umpVersion === 3 && (token.passwordKdf != null)) {
+      const versionFieldIndex = (token.profilesEncrypted != null) ? 12 : 11
 
       fields[versionFieldIndex] = [token.umpVersion] // Single byte
       fields[versionFieldIndex + 1] = Utils.toArray(token.passwordKdf.algorithm, 'utf8')
@@ -571,17 +571,17 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
       [2, 'admin user management token'], // protocolID
       '1', // keyID
       'self', // counterparty
-      /*forSelf=*/ true,
-      /*includeSignature=*/ true
+      /* forSelf= */ true,
+      /* includeSignature= */ true
     )
 
     // 3) Prepare the createAction call. If oldTokenToConsume is provided, gather the outpoint.
     const inputs: CreateActionInput[] = []
-    let inputToken: { beef: number[]; outputIndex: number } | undefined
+    let inputToken: { beef: number[], outputIndex: number } | undefined
     if (oldTokenToConsume?.currentOutpoint) {
       inputToken = await this.findByOutpoint(oldTokenToConsume.currentOutpoint)
       // If there is no token on the overlay, we can't consume it. Just start over with a new token.
-      if (!inputToken) {
+      if (inputToken == null) {
         oldTokenToConsume = undefined
 
         // Otherwise, add the input
@@ -607,7 +607,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     try {
       createResult = await wallet.createAction(
         {
-          description: oldTokenToConsume ? 'Renew UMP token (consume old, create new)' : 'Create new UMP token',
+          description: (oldTokenToConsume != null) ? 'Renew UMP token (consume old, create new)' : 'Create new UMP token',
           inputs,
           outputs,
           inputBEEF: inputToken?.beef,
@@ -670,13 +670,13 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         },
         adminOriginator
       )
-      finalTxid = signResult.txid || (signResult.tx ? Transaction.fromAtomicBEEF(signResult.tx).id('hex') : '')
+      finalTxid = signResult.txid || ((signResult.tx != null) ? Transaction.fromAtomicBEEF(signResult.tx).id('hex') : '')
       if (!finalTxid) {
         throw new Error('Could not finalize transaction for renewed UMP token.')
       }
       // 6) Broadcast to `tm_users`
       const finalAtomicTx = signResult.tx
-      if (!finalAtomicTx) {
+      if (finalAtomicTx == null) {
         throw new Error('Final transaction data missing after signing renewed UMP token.')
       }
       const broadcastTx = Transaction.fromAtomicBEEF(finalAtomicTx)
@@ -686,12 +686,12 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     } else {
       // Fallback for creating a new token (no input spending)
       const signResult = await wallet.signAction({ reference, spends: {} }, adminOriginator)
-      finalTxid = signResult.txid || (signResult.tx ? Transaction.fromAtomicBEEF(signResult.tx).id('hex') : '')
+      finalTxid = signResult.txid || ((signResult.tx != null) ? Transaction.fromAtomicBEEF(signResult.tx).id('hex') : '')
       if (!finalTxid) {
         throw new Error('Failed to finalize new UMP token transaction.')
       }
       const finalAtomicTx = signResult.tx
-      if (!finalAtomicTx) {
+      if (finalAtomicTx == null) {
         throw new Error('Final transaction data missing after signing new UMP token.')
       }
       const broadcastTx = Transaction.fromAtomicBEEF(finalAtomicTx)
@@ -709,7 +709,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param answer The LookupAnswer returned by a query to ls_users.
    * @returns The parsed UMPToken or `undefined` if none found/decodable.
    */
-  private parseLookupAnswer(answer: LookupAnswer): UMPToken | undefined {
+  private parseLookupAnswer (answer: LookupAnswer): UMPToken | undefined {
     if (answer.type !== 'output-list') {
       return undefined
     }
@@ -732,7 +732,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
       // Parse protocol fields, excluding the trailing PushDrop signature only when
       // it is cryptographically valid for the preceding field payload.
-      let protocolFields = stripVerifiedPushDropSignature(decoded.fields, decoded.lockingPublicKey)
+      const protocolFields = stripVerifiedPushDropSignature(decoded.fields, decoded.lockingPublicKey)
 
       // Detect v3 token metadata in either layout:
       // - with profilesEncrypted present: [0..10]=core, [11]=profiles, [12]=version, [13]=algorithm, [14]=params
@@ -807,7 +807,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param outpoint The outpoint we are searching by
    * @returns The result so that we can use it to unlock the transaction
    */
-  private async findByOutpoint(outpoint: string): Promise<{ beef: number[]; outputIndex: number } | undefined> {
+  private async findByOutpoint (outpoint: string): Promise<{ beef: number[], outputIndex: number } | undefined> {
     const results = await this.resolver.query({
       service: 'ls_users',
       query: {
@@ -817,7 +817,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     if (results.type !== 'output-list') {
       return undefined
     }
-    if (!results.outputs || !results.outputs.length) {
+    if (!results.outputs || (results.outputs.length === 0)) {
       return undefined
     }
     return results.outputs[0]
@@ -838,18 +838,18 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * The domain name of the administrative originator (wallet operator / vendor, or your own).
    */
-  private adminOriginator: OriginatorDomainNameStringUnder250Bytes
+  private readonly adminOriginator: OriginatorDomainNameStringUnder250Bytes
 
   /**
    * The system that locates and publishes UMP tokens on-chain.
    */
-  private UMPTokenInteractor: UMPTokenInteractor
+  private readonly UMPTokenInteractor: UMPTokenInteractor
 
   /**
    * A function called to persist the newly generated recovery key.
    * It should generally trigger a UI prompt where the user is asked to write it down.
    */
-  private recoveryKeySaver: (key: number[]) => Promise<true>
+  private readonly recoveryKeySaver: (key: number[]) => Promise<true>
 
   /**
    * Asks the user to enter their password, for a given reason.
@@ -857,7 +857,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Only resolve with the correct password or reject with an error.
    * Resolving with an incorrect password will throw an error.
    */
-  private passwordRetriever: (
+  private readonly passwordRetriever: (
     reason: string,
     test: (passwordCandidate: string) => boolean | Promise<boolean>
   ) => Promise<string>
@@ -865,7 +865,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Optional function to fund a new Wallet after the new-user flow.
    */
-  private newWalletFunder?: (
+  private readonly newWalletFunder?: (
     presentationKey: number[],
     wallet: WalletInterface, // The default profile wallet
     adminOriginator: OriginatorDomainNameStringUnder250Bytes
@@ -874,7 +874,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Builds the underlying wallet for a specific profile.
    */
-  private walletBuilder: (
+  private readonly walletBuilder: (
     profilePrimaryKey: number[],
     profilePrivilegedKeyManager: PrivilegedKeyManager,
     profileId: number[]
@@ -884,9 +884,9 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Current mode of authentication.
    */
   authenticationMode:
-    | 'presentation-key-and-password'
-    | 'presentation-key-and-recovery-key'
-    | 'recovery-key-and-password' = 'presentation-key-and-password'
+  | 'presentation-key-and-password'
+  | 'presentation-key-and-recovery-key'
+  | 'recovery-key-and-password' = 'presentation-key-and-password'
 
   /**
    * Indicates new user or existing user flow.
@@ -936,7 +936,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * KDF configuration for new UMP tokens. Defaults to Argon2id for v3 tokens.
    */
-  private kdfConfig: Required<KdfConfig>
+  private readonly kdfConfig: Required<KdfConfig>
 
   /**
    * Constructs a new CWIStyleWalletManager.
@@ -950,7 +950,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param stateSnapshot     Optional previously saved state snapshot.
    * @param kdfConfig         Optional KDF configuration for new UMP tokens.
    */
-  constructor(
+  constructor (
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     walletBuilder: (
       profilePrimaryKey: number[],
@@ -992,7 +992,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     // Note: loadSnapshot now returns a promise. We don't await it here,
     // as the constructor must be synchronous. The caller should check
     // `this.authenticated` after construction if a snapshot was provided.
-    if (stateSnapshot) {
+    if (stateSnapshot != null) {
       this.loadSnapshot(stateSnapshot).catch(err => {
         console.error('Failed to load snapshot during construction:', err)
         // Clear potentially partially loaded state
@@ -1006,7 +1006,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Provides the presentation key.
    */
-  async providePresentationKey(key: number[]): Promise<void> {
+  async providePresentationKey (key: number[]): Promise<void> {
     if (this.authenticated) {
       throw new Error('User is already authenticated')
     }
@@ -1017,7 +1017,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     const hash = Hash.sha256(key)
     const token = await this.UMPTokenInteractor.findByPresentationKeyHash(hash)
 
-    if (!token) {
+    if (token == null) {
       // No token found -> New user
       this.authenticationFlow = 'new-user'
       this.presentationKey = key
@@ -1032,7 +1032,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Provides the password.
    */
-  async providePassword(password: string): Promise<void> {
+  async providePassword (password: string): Promise<void> {
     if (this.authenticated) {
       throw new Error('User is already authenticated')
     }
@@ -1042,7 +1042,7 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     if (this.authenticationFlow === 'existing-user') {
       // Existing user flow
-      if (!this.currentUMPToken) {
+      if (this.currentUMPToken == null) {
         throw new Error('Provide presentation or recovery key first.')
       }
       // Use token-driven KDF (legacy PBKDF2 or v3 Argon2id)
@@ -1052,12 +1052,12 @@ export class CWIStyleWalletManager implements WalletInterface {
       let rootPrivilegedKey: number[] | undefined // Only needed for recovery mode
 
       if (this.authenticationMode === 'presentation-key-and-password') {
-        if (!this.presentationKey) throw new Error('No presentation key found!')
+        if (this.presentationKey == null) throw new Error('No presentation key found!')
         const xorKey = this.XOR(this.presentationKey, derivedPasswordKey)
         rootPrimaryKey = new SymmetricKey(xorKey).decrypt(this.currentUMPToken.passwordPresentationPrimary) as number[]
       } else {
         // 'recovery-key-and-password'
-        if (!this.recoveryKey) throw new Error('No recovery key found!')
+        if (this.recoveryKey == null) throw new Error('No recovery key found!')
         const primaryDecryptionKey = this.XOR(this.recoveryKey, derivedPasswordKey)
         rootPrimaryKey = new SymmetricKey(primaryDecryptionKey).decrypt(
           this.currentUMPToken.passwordRecoveryPrimary
@@ -1075,7 +1075,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       if (this.authenticationMode !== 'presentation-key-and-password') {
         throw new Error('New-user flow requires presentation key and password mode.')
       }
-      if (!this.presentationKey) {
+      if (this.presentationKey == null) {
         throw new Error('No presentation key provided for new-user flow.')
       }
 
@@ -1144,7 +1144,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       await this.switchProfile(DEFAULT_PROFILE_ID)
 
       // Fund the *default* wallet if funder provided
-      if (this.newWalletFunder && this.underlying) {
+      if ((this.newWalletFunder != null) && (this.underlying != null)) {
         try {
           await this.newWalletFunder(this.presentationKey, this.underlying, this.adminOriginator)
         } catch (e) {
@@ -1156,7 +1156,7 @@ export class CWIStyleWalletManager implements WalletInterface {
 
       // Publish the new UMP token *after* potentially funding
       // We need the default profile wallet to sign the UMP creation TX
-      if (!this.underlying) {
+      if (this.underlying == null) {
         throw new Error('Default profile wallet not built before attempting to publish UMP token.')
       }
       this.currentUMPToken.currentOutpoint = await this.UMPTokenInteractor.buildAndSend(
@@ -1170,7 +1170,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Provides the recovery key.
    */
-  async provideRecoveryKey(recoveryKey: number[]): Promise<void> {
+  async provideRecoveryKey (recoveryKey: number[]): Promise<void> {
     if (this.authenticated) {
       throw new Error('Already authenticated')
     }
@@ -1185,14 +1185,14 @@ export class CWIStyleWalletManager implements WalletInterface {
       // Wait for password
       const hash = Hash.sha256(recoveryKey)
       const token = await this.UMPTokenInteractor.findByRecoveryKeyHash(hash)
-      if (!token) throw new Error('No user found with this recovery key')
+      if (token == null) throw new Error('No user found with this recovery key')
       this.authenticationFlow = 'existing-user'
       this.recoveryKey = recoveryKey
       this.currentUMPToken = token
     } else {
       // 'presentation-key-and-recovery-key'
-      if (!this.presentationKey) throw new Error('Provide the presentation key first')
-      if (!this.currentUMPToken) throw new Error('Current UMP token not found')
+      if (this.presentationKey == null) throw new Error('Provide the presentation key first')
+      if (this.currentUMPToken == null) throw new Error('Current UMP token not found')
 
       const xorKey = this.XOR(this.presentationKey, recoveryKey)
       const rootPrimaryKey = new SymmetricKey(xorKey).decrypt(
@@ -1217,8 +1217,8 @@ export class CWIStyleWalletManager implements WalletInterface {
    *
    * @returns Encrypted snapshot bytes.
    */
-  saveSnapshot(): number[] {
-    if (!this.rootPrimaryKey || !this.currentUMPToken) {
+  saveSnapshot (): number[] {
+    if ((this.rootPrimaryKey == null) || (this.currentUMPToken == null)) {
       throw new Error('No root primary key or current UMP token set')
     }
 
@@ -1256,7 +1256,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    *
    * @param snapshot Encrypted snapshot bytes.
    */
-  async loadSnapshot(snapshot: number[]): Promise<void> {
+  async loadSnapshot (snapshot: number[]): Promise<void> {
     try {
       const reader = new Utils.Reader(snapshot)
       const version = reader.readUInt8()
@@ -1302,23 +1302,23 @@ export class CWIStyleWalletManager implements WalletInterface {
     }
   }
 
-  async syncUMPToken(): Promise<boolean> {
-    if (!this.authenticated || !this.currentUMPToken || !this.rootPrimaryKey) {
+  async syncUMPToken (): Promise<boolean> {
+    if (!this.authenticated || (this.currentUMPToken == null) || (this.rootPrimaryKey == null)) {
       throw new Error('Wallet not authenticated or missing UMP token.')
     }
 
     const currentToken = this.currentUMPToken
     let refreshed: UMPToken | undefined
 
-    if (currentToken.presentationHash && currentToken.presentationHash.length) {
+    if (currentToken.presentationHash && (currentToken.presentationHash.length > 0)) {
       refreshed = await this.UMPTokenInteractor.findByPresentationKeyHash(currentToken.presentationHash)
     }
 
-    if (!refreshed && currentToken.recoveryHash && currentToken.recoveryHash.length) {
+    if ((refreshed == null) && currentToken.recoveryHash && (currentToken.recoveryHash.length > 0)) {
       refreshed = await this.UMPTokenInteractor.findByRecoveryKeyHash(currentToken.recoveryHash)
     }
 
-    if (!refreshed) {
+    if (refreshed == null) {
       return false
     }
 
@@ -1339,7 +1339,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Destroys the wallet state, clearing keys, tokens, and profiles.
    */
-  destroy(): void {
+  destroy (): void {
     this.underlying = undefined
     this.rootPrivilegedKeyManager = undefined
     this.authenticated = false
@@ -1359,7 +1359,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Lists all available profiles, including the default profile.
    * @returns Array of profile info objects, including an 'active' flag.
    */
-  listProfiles(): Array<{
+  listProfiles (): Array<{
     id: number[]
     name: string
     createdAt: number | null
@@ -1398,8 +1398,8 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param name The desired name for the new profile.
    * @returns The ID of the newly created profile.
    */
-  async addProfile(name: string): Promise<number[]> {
-    if (!this.authenticated || !this.rootPrimaryKey || !this.currentUMPToken || !this.rootPrivilegedKeyManager) {
+  async addProfile (name: string): Promise<number[]> {
+    if (!this.authenticated || (this.rootPrimaryKey == null) || (this.currentUMPToken == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Wallet not fully initialized or authenticated.')
     }
 
@@ -1440,8 +1440,8 @@ export class CWIStyleWalletManager implements WalletInterface {
    *
    * @param profileId The 16-byte ID of the profile to delete.
    */
-  async deleteProfile(profileId: number[]): Promise<void> {
-    if (!this.authenticated || !this.rootPrimaryKey || !this.currentUMPToken || !this.rootPrivilegedKeyManager) {
+  async deleteProfile (profileId: number[]): Promise<void> {
+    if (!this.authenticated || (this.rootPrimaryKey == null) || (this.currentUMPToken == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Wallet not fully initialized or authenticated.')
     }
     if (profileId.every(x => x === 0)) {
@@ -1478,8 +1478,8 @@ export class CWIStyleWalletManager implements WalletInterface {
    *
    * @param profileId The 16-byte ID of the profile to switch to (use DEFAULT_PROFILE_ID for default).
    */
-  async switchProfile(profileId: number[]): Promise<void> {
-    if (!this.authenticated || !this.rootPrimaryKey || !this.rootPrivilegedKeyManager) {
+  async switchProfile (profileId: number[]): Promise<void> {
+    if (!this.authenticated || (this.rootPrimaryKey == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Cannot switch profile: Wallet not authenticated or root keys missing.')
     }
 
@@ -1494,7 +1494,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     } else {
       // Switching to a non-default profile
       const profile = this.profiles.find(p => p.id.every((x, i) => x === profileId[i]))
-      if (!profile) {
+      if (profile == null) {
         throw new Error('Profile not found.')
       }
       profilePrimaryKey = this.XOR(this.rootPrimaryKey, profile.primaryPad)
@@ -1510,7 +1510,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       const rootPrivilegedBytes = rootPrivileged.toArray()
 
       // Apply the profile's pad if applicable
-      const profilePrivilegedBytes = profilePrivilegedPad
+      const profilePrivilegedBytes = (profilePrivilegedPad != null)
         ? this.XOR(rootPrivilegedBytes, profilePrivilegedPad)
         : rootPrivilegedBytes
 
@@ -1530,8 +1530,8 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Changes the user's password. Re-wraps keys and updates the UMP token.
    */
-  async changePassword(newPassword: string): Promise<void> {
-    if (!this.authenticated || !this.currentUMPToken || !this.rootPrimaryKey || !this.rootPrivilegedKeyManager) {
+  async changePassword (newPassword: string): Promise<void> {
+    if (!this.authenticated || (this.currentUMPToken == null) || (this.rootPrimaryKey == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Not authenticated or missing required data.')
     }
 
@@ -1563,18 +1563,18 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Retrieves the current recovery key. Requires privileged access.
    */
-  async getRecoveryKey(): Promise<number[]> {
-    if (!this.authenticated || !this.currentUMPToken || !this.rootPrivilegedKeyManager) {
+  async getRecoveryKey (): Promise<number[]> {
+    if (!this.authenticated || (this.currentUMPToken == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Not authenticated or missing required data.')
     }
-    return this.getFactor('recoveryKey')
+    return await this.getFactor('recoveryKey')
   }
 
   /**
    * Changes the user's recovery key. Prompts user to save the new key.
    */
-  async changeRecoveryKey(): Promise<void> {
-    if (!this.authenticated || !this.currentUMPToken || !this.rootPrimaryKey || !this.rootPrivilegedKeyManager) {
+  async changeRecoveryKey (): Promise<void> {
+    if (!this.authenticated || (this.currentUMPToken == null) || (this.rootPrimaryKey == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Not authenticated or missing required data.')
     }
 
@@ -1601,8 +1601,8 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Changes the user's presentation key.
    */
-  async changePresentationKey(newPresentationKey: number[]): Promise<void> {
-    if (!this.authenticated || !this.currentUMPToken || !this.rootPrimaryKey || !this.rootPrivilegedKeyManager) {
+  async changePresentationKey (newPresentationKey: number[]): Promise<void> {
+    if (!this.authenticated || (this.currentUMPToken == null) || (this.rootPrimaryKey == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error('Not authenticated or missing required data.')
     }
     if (newPresentationKey.length !== 32) {
@@ -1624,7 +1624,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       this.profiles // Preserve profiles
     )
     // Update the temporarily stored key if it was set
-    if (this.presentationKey) {
+    if (this.presentationKey != null) {
       this.presentationKey = newPresentationKey
     }
   }
@@ -1634,7 +1634,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Performs XOR operation on two byte arrays.
    */
-  private XOR(n1: number[], n2: number[]): number[] {
+  private XOR (n1: number[], n2: number[]): number[] {
     if (n1.length !== n2.length) {
       // Provide more context in error
       throw new Error(`XOR length mismatch: ${n1.length} vs ${n2.length}`)
@@ -1653,10 +1653,10 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param getRoot If true and factorName is 'privilegedKey', returns the root privileged key bytes directly.
    * @returns The decrypted key bytes.
    */
-  private async getFactor(
+  private async getFactor (
     factorName: 'passwordKey' | 'presentationKey' | 'recoveryKey' | 'privilegedKey'
   ): Promise<number[]> {
-    if (!this.authenticated || !this.currentUMPToken || !this.rootPrivilegedKeyManager) {
+    if (!this.authenticated || (this.currentUMPToken == null) || (this.rootPrivilegedKeyManager == null)) {
       throw new Error(`Cannot get factor "${factorName}": Wallet not ready.`)
     }
 
@@ -1709,7 +1709,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Recomputes UMP token fields with updated factors and profiles, then publishes the update.
    * This operation requires the *root* privileged key and the *default* profile wallet.
    */
-  private async updateAuthFactors(
+  private async updateAuthFactors (
     passwordSalt: number[],
     passwordKey: number[],
     presentationKey: number[],
@@ -1718,7 +1718,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     rootPrivilegedKey: number[], // Explicitly pass the root key bytes
     profiles?: Profile[] // Pass current/new profiles list
   ): Promise<void> {
-    if (!this.authenticated || !this.rootPrimaryKey || !this.currentUMPToken) {
+    if (!this.authenticated || (this.rootPrimaryKey == null) || (this.currentUMPToken == null)) {
       throw new Error('Wallet is not properly authenticated or missing data for update.')
     }
     // Ensure we have the OLD token to consume
@@ -1738,7 +1738,7 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     // Encrypt profiles if provided
     let profilesEncrypted: number[] | undefined
-    if (profiles && profiles.length > 0) {
+    if ((profiles != null) && profiles.length > 0) {
       const profilesJson = JSON.stringify(profiles)
       const profilesBytes = Utils.toArray(profilesJson, 'utf8')
       profilesEncrypted = new SymmetricKey(rootPrimaryKey).encrypt(profilesBytes) as number[]
@@ -1780,7 +1780,7 @@ export class CWIStyleWalletManager implements WalletInterface {
         })
       ).ciphertext,
       profilesEncrypted, // Add encrypted profiles
-      ...(kdfMetadata
+      ...((kdfMetadata != null)
         ? {
             umpVersion: 3,
             passwordKdf: kdfMetadata
@@ -1800,7 +1800,7 @@ export class CWIStyleWalletManager implements WalletInterface {
       walletToUse = this.underlying
     }
 
-    if (!walletToUse) {
+    if (walletToUse == null) {
       throw new Error('Default profile wallet could not be activated for UMP token update.')
     }
 
@@ -1828,7 +1828,7 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Serializes a UMP token to binary format (Version 3 with KDF metadata, Version 2 with profiles).
    * V3 Layout: [1 byte version=3] + [11 * (varint len + bytes) for standard fields] + [1 byte profile_flag] + [IF flag=1 THEN varint len + profile bytes] + [1 byte kdf_flag] + [IF flag=1 THEN kdf metadata] + [varint len + outpoint bytes]
    */
-  private serializeUMPToken(token: UMPToken): number[] {
+  private serializeUMPToken (token: UMPToken): number[] {
     if (!token.currentOutpoint) {
       throw new Error('Token must have outpoint for serialization')
     }
@@ -1856,7 +1856,7 @@ export class CWIStyleWalletManager implements WalletInterface {
     writeArray(token.recoveryKeyEncrypted) // 10
 
     // Write optional profiles field
-    if (token.profilesEncrypted && token.profilesEncrypted.length > 0) {
+    if ((token.profilesEncrypted != null) && token.profilesEncrypted.length > 0) {
       writer.writeUInt8(1) // Flag indicating profiles present
       writeArray(token.profilesEncrypted)
     } else {
@@ -1901,7 +1901,7 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Deserializes a UMP token from binary format (Handles Version 1, 2, and 3).
    */
-  private deserializeUMPToken(bin: number[]): UMPToken {
+  private deserializeUMPToken (bin: number[]): UMPToken {
     const reader = new Utils.Reader(bin)
     const version = reader.readUInt8()
 
@@ -1998,24 +1998,24 @@ export class CWIStyleWalletManager implements WalletInterface {
    * @param rootPrimaryKey      The user's root primary key (32 bytes).
    * @param ephemeralRootPrivilegedKey Optional root privileged key (e.g., during recovery flows).
    */
-  private async setupRootInfrastructure(
+  private async setupRootInfrastructure (
     rootPrimaryKey: number[],
     ephemeralRootPrivilegedKey?: number[]
   ): Promise<void> {
-    if (!this.currentUMPToken) {
+    if (this.currentUMPToken == null) {
       throw new Error('A UMP token must exist before setting up root infrastructure!')
     }
     this.rootPrimaryKey = rootPrimaryKey
 
     // Store ephemeral key if provided, for one-time use by the manager
-    let oneTimePrivilegedKey: PrivateKey | undefined = ephemeralRootPrivilegedKey
+    let oneTimePrivilegedKey: PrivateKey | undefined = (ephemeralRootPrivilegedKey != null)
       ? new PrivateKey(ephemeralRootPrivilegedKey)
       : undefined
 
     // Create the ROOT PrivilegedKeyManager
     this.rootPrivilegedKeyManager = new PrivilegedKeyManager(async (reason: string) => {
       // 1. Use one-time key if available (for recovery)
-      if (oneTimePrivilegedKey) {
+      if (oneTimePrivilegedKey != null) {
         const tempKey = oneTimePrivilegedKey
         oneTimePrivilegedKey = undefined // Consume it
         return tempKey
@@ -2050,7 +2050,7 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     // Decrypt and load profiles if present in the token
     this.profiles = [] // Clear existing profiles before loading
-    if (this.currentUMPToken.profilesEncrypted && this.currentUMPToken.profilesEncrypted.length > 0) {
+    if ((this.currentUMPToken.profilesEncrypted != null) && this.currentUMPToken.profilesEncrypted.length > 0) {
       try {
         const decryptedProfileBytes = new SymmetricKey(rootPrimaryKey).decrypt(
           this.currentUMPToken.profilesEncrypted
@@ -2078,11 +2078,11 @@ export class CWIStyleWalletManager implements WalletInterface {
    * ---------------------------------------------------------------------------------------
    */
 
-  private checkAuthAndUnderlying(originator?: string): void {
+  private checkAuthAndUnderlying (originator?: string): void {
     if (!this.authenticated) {
       throw new Error('User is not authenticated.')
     }
-    if (!this.underlying) {
+    if (this.underlying == null) {
       // This might happen if authentication succeeded but profile switching failed
       throw new Error('Underlying wallet for the active profile is not initialized.')
     }
@@ -2092,183 +2092,183 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   // Example proxy method (repeat pattern for all others)
-  async getPublicKey(
+  async getPublicKey (
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.getPublicKey(args, originator)
+    return await this.underlying!.getPublicKey(args, originator)
   }
 
-  async revealCounterpartyKeyLinkage(
+  async revealCounterpartyKeyLinkage (
     args: RevealCounterpartyKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.revealCounterpartyKeyLinkage(args, originator)
+    return await this.underlying!.revealCounterpartyKeyLinkage(args, originator)
   }
 
-  async revealSpecificKeyLinkage(
+  async revealSpecificKeyLinkage (
     args: RevealSpecificKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.revealSpecificKeyLinkage(args, originator)
+    return await this.underlying!.revealSpecificKeyLinkage(args, originator)
   }
 
-  async encrypt(
+  async encrypt (
     args: WalletEncryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletEncryptResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.encrypt(args, originator)
+    return await this.underlying!.encrypt(args, originator)
   }
 
-  async decrypt(
+  async decrypt (
     args: WalletDecryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletDecryptResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.decrypt(args, originator)
+    return await this.underlying!.decrypt(args, originator)
   }
 
-  async createHmac(
+  async createHmac (
     args: CreateHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateHmacResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.createHmac(args, originator)
+    return await this.underlying!.createHmac(args, originator)
   }
 
-  async verifyHmac(
+  async verifyHmac (
     args: VerifyHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifyHmacResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.verifyHmac(args, originator)
+    return await this.underlying!.verifyHmac(args, originator)
   }
 
-  async createSignature(
+  async createSignature (
     args: CreateSignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.createSignature(args, originator)
+    return await this.underlying!.createSignature(args, originator)
   }
 
-  async verifySignature(
+  async verifySignature (
     args: VerifySignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.verifySignature(args, originator)
+    return await this.underlying!.verifySignature(args, originator)
   }
 
-  async createAction(
+  async createAction (
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.createAction(args, originator)
+    return await this.underlying!.createAction(args, originator)
   }
 
-  async signAction(
+  async signAction (
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.signAction(args, originator)
+    return await this.underlying!.signAction(args, originator)
   }
 
-  async abortAction(
+  async abortAction (
     args: AbortActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AbortActionResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.abortAction(args, originator)
+    return await this.underlying!.abortAction(args, originator)
   }
 
-  async listActions(
+  async listActions (
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.listActions(args, originator)
+    return await this.underlying!.listActions(args, originator)
   }
 
-  async internalizeAction(
+  async internalizeAction (
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.internalizeAction(args, originator)
+    return await this.underlying!.internalizeAction(args, originator)
   }
 
-  async listOutputs(
+  async listOutputs (
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.listOutputs(args, originator)
+    return await this.underlying!.listOutputs(args, originator)
   }
 
-  async relinquishOutput(
+  async relinquishOutput (
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.relinquishOutput(args, originator)
+    return await this.underlying!.relinquishOutput(args, originator)
   }
 
-  async acquireCertificate(
+  async acquireCertificate (
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.acquireCertificate(args, originator)
+    return await this.underlying!.acquireCertificate(args, originator)
   }
 
-  async listCertificates(
+  async listCertificates (
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.listCertificates(args, originator)
+    return await this.underlying!.listCertificates(args, originator)
   }
 
-  async proveCertificate(
+  async proveCertificate (
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.proveCertificate(args, originator)
+    return await this.underlying!.proveCertificate(args, originator)
   }
 
-  async relinquishCertificate(
+  async relinquishCertificate (
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.relinquishCertificate(args, originator)
+    return await this.underlying!.relinquishCertificate(args, originator)
   }
 
-  async discoverByIdentityKey(
+  async discoverByIdentityKey (
     args: DiscoverByIdentityKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.discoverByIdentityKey(args, originator)
+    return await this.underlying!.discoverByIdentityKey(args, originator)
   }
 
-  async discoverByAttributes(
+  async discoverByAttributes (
     args: DiscoverByAttributesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.discoverByAttributes(args, originator)
+    return await this.underlying!.discoverByAttributes(args, originator)
   }
 
-  async isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+  async isAuthenticated (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
     if (!this.authenticated) {
       throw new Error('User is not authenticated.')
     }
@@ -2278,39 +2278,39 @@ export class CWIStyleWalletManager implements WalletInterface {
     return { authenticated: true }
   }
 
-  async waitForAuthentication(
+  async waitForAuthentication (
     _: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AuthenticatedResult> {
     if (originator === this.adminOriginator) {
       throw new Error('External applications are not allowed to use the admin originator.')
     }
-    while (!this.authenticated || !this.underlying) {
+    while (!this.authenticated || (this.underlying == null)) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
     return await this.underlying.waitForAuthentication({}, originator)
   }
 
-  async getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
+  async getHeight (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.getHeight({}, originator)
+    return await this.underlying!.getHeight({}, originator)
   }
 
-  async getHeaderForHeight(
+  async getHeaderForHeight (
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.getHeaderForHeight(args, originator)
+    return await this.underlying!.getHeaderForHeight(args, originator)
   }
 
-  async getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+  async getNetwork (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.getNetwork({}, originator)
+    return await this.underlying!.getNetwork({}, originator)
   }
 
-  async getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+  async getVersion (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
     this.checkAuthAndUnderlying(originator)
-    return this.underlying!.getVersion({}, originator)
+    return await this.underlying!.getVersion({}, originator)
   }
 }

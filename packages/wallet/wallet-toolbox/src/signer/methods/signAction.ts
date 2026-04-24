@@ -12,11 +12,10 @@ export interface SignActionResultX extends SignActionResult {
   notDelayedResults?: ReviewActionResult[]
 }
 
-export async function signAction(wallet: Wallet, auth: AuthId, args: SignActionArgs): Promise<SignActionResultX> {
+export async function signAction (wallet: Wallet, auth: AuthId, args: SignActionArgs): Promise<SignActionResultX> {
   const prior = wallet.pendingSignActions[args.reference]
-  if (!prior)
-    throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.')
-  if (!prior.dcr.inputBeef) throw new WERR_INTERNAL('prior.dcr.inputBeef must be valid')
+  if (!prior) { throw new WERR_NOT_IMPLEMENTED('recovery of out-of-session signAction reference data is not yet implemented.') }
+  if (prior.dcr.inputBeef == null) throw new WERR_INTERNAL('prior.dcr.inputBeef must be valid')
 
   const vargs = mergePriorOptions(prior.args, args)
 
@@ -40,13 +39,12 @@ export async function signAction(wallet: Wallet, auth: AuthId, args: SignActionA
   return r
 }
 
-function mergePriorOptions(
+function mergePriorOptions (
   caVargs: Validation.ValidCreateActionArgs,
   saArgs: SignActionArgs
 ): Validation.ValidSignActionArgs {
   const saOptions = (saArgs.options ||= {})
-  if (saOptions.acceptDelayedBroadcast === undefined)
-    saOptions.acceptDelayedBroadcast = caVargs.options.acceptDelayedBroadcast
+  if (saOptions.acceptDelayedBroadcast === undefined) { saOptions.acceptDelayedBroadcast = caVargs.options.acceptDelayedBroadcast }
   if (saOptions.returnTXIDOnly === undefined) saOptions.returnTXIDOnly = caVargs.options.returnTXIDOnly
   if (saOptions.noSend === undefined) saOptions.noSend = caVargs.options.noSend
   if (saOptions.sendWith === undefined) saOptions.sendWith = caVargs.options.sendWith

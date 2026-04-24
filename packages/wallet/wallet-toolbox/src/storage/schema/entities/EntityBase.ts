@@ -6,24 +6,24 @@ export type EntityStorage = StorageProvider
 export abstract class EntityBase<T> {
   api: T
 
-  constructor(api: T) {
+  constructor (api: T) {
     this.api = api
   }
 
   /**
    * Standard property for entity database Id
    */
-  abstract get id(): number
+  abstract get id (): number
 
   /**
    * Name of derived entity class
    */
-  abstract get entityName(): string
+  abstract get entityName (): string
 
   /**
    * Schema table name of entity
    */
-  abstract get entityTable(): string
+  abstract get entityTable (): string
 
   /**
    * On construction, an entity may decode properties of the `api` object,
@@ -34,7 +34,7 @@ export abstract class EntityBase<T> {
    *
    * Used by the `toApi` method to return an updated `api` object.
    */
-  abstract updateApi(): void
+  abstract updateApi (): void
 
   /**
    * Tests for equality or 'merge' / 'convergent' equality if syncMap is provided.
@@ -44,7 +44,7 @@ export abstract class EntityBase<T> {
    * @param ei
    * @param syncMap
    */
-  abstract equals(ei: T, syncMap?: SyncMap): boolean
+  abstract equals (ei: T, syncMap?: SyncMap): boolean
 
   /**
    * Perform a 'merge' / 'convergent' equality migration of state
@@ -54,7 +54,7 @@ export abstract class EntityBase<T> {
    * @param userId local userId
    * @param syncMap
    */
-  abstract mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void>
+  abstract mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void>
 
   /**
    * Perform a 'merge' / 'convergent' equality migration of state
@@ -64,7 +64,7 @@ export abstract class EntityBase<T> {
    * @param syncMap
    * @returns true iff entity state changed and was updated to storage
    */
-  abstract mergeExisting(
+  abstract mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: T,
@@ -80,7 +80,7 @@ export abstract class EntityBase<T> {
    *
    * @returns The underlying Api object with any entity decoded properties updated.
    */
-  toApi(): T {
+  toApi (): T {
     this.updateApi()
     return this.api
   }
@@ -125,7 +125,7 @@ export interface SyncMap {
   commission: EntitySyncMap
 }
 
-export function createSyncMap(): SyncMap {
+export function createSyncMap (): SyncMap {
   const r: SyncMap = {
     provenTx: {
       entityName: 'provenTx',

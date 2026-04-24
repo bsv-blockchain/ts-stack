@@ -17,8 +17,8 @@ describe('WhatsOnChainServices tests', () => {
   const options = WhatsOnChainServices.createWhatsOnChainServicesOptions(chain)
   const woc = new WhatsOnChainServices(options)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -36,7 +36,7 @@ describe('WhatsOnChainServices tests', () => {
   })
 
   const stopOldListenersToken: StopListenerToken = { stop: undefined }
-  function stopOldListener() {
+  function stopOldListener () {
     stopOldListenersToken.stop?.()
   }
 
@@ -46,7 +46,7 @@ describe('WhatsOnChainServices tests', () => {
     expect(height > 600000).toBe(true)
 
     const headersOld: BlockHeader[] = []
-    const errorsOld: { code: number; message: string }[] = []
+    const errorsOld: Array<{ code: number, message: string }> = []
     const okOld = await WocHeadersBulkListener(
       height - 4,
       height,
@@ -71,9 +71,9 @@ describe('WhatsOnChainServices tests', () => {
     expect(height > 600000).toBe(true)
 
     // Comment out this line to just wait for next new header...
-    //setTimeout(() => woc.stopNewListener(), 5000)
+    // setTimeout(() => woc.stopNewListener(), 5000)
     const headersNew: BlockHeader[] = []
-    const errorsNew: { code: number; message: string }[] = []
+    const errorsNew: Array<{ code: number, message: string }> = []
     const eh: EnqueueHandler = h => {
       headersNew.push(h)
       if (headersNew.length >= 1) stopNewListenersToken.stop?.()
@@ -92,30 +92,30 @@ describe('WhatsOnChainServices tests', () => {
   test('2 get latest header bytes', async () => {
     const fetch = new ChaintracksFetch()
 
-    //for (;;) {
-    const bytes = await fetch.download(`https://api.whatsonchain.com/v1/bsv/main/block/headers/latest`)
+    // for (;;) {
+    const bytes = await fetch.download('https://api.whatsonchain.com/v1/bsv/main/block/headers/latest')
     console.log(`headers: ${bytes.length / 80}`)
-    const latest = await fetch.download(`https://api.whatsonchain.com/v1/bsv/main/block/headers/latest?count=1`)
+    const latest = await fetch.download('https://api.whatsonchain.com/v1/bsv/main/block/headers/latest?count=1')
     const bh = deserializeBlockHeader(latest, 0, 0)
     console.log(`latest hash: ${bh.hash} at ${new Date().toISOString()}`)
     //  await wait(60 * 1000)
-    //}
+    // }
   })
 
   test('3 get headers', async () => {
     const fetch = new ChaintracksFetch()
 
-    //for (;;) {
+    // for (;;) {
     const headers = await fetch.fetchJson<WocGetHeadersHeader[]>(
-      `https://api.whatsonchain.com/v1/bsv/main/block/headers`
+      'https://api.whatsonchain.com/v1/bsv/main/block/headers'
     )
     let log = ''
     for (const h of headers) {
       log += `${h.height} ${h.hash} ${h.confirmations} ${h.nTx}\n`
     }
     console.log(`${new Date().toISOString()}\n${log}`)
-    //await wait(60 * 1000)
-    //}
+    // await wait(60 * 1000)
+    // }
   })
 
   test('4 get header byte file links', async () => {

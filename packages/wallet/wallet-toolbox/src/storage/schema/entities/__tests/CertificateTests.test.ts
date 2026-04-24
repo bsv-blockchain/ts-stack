@@ -100,7 +100,7 @@ describe('Certificate class method tests', () => {
       expect(entity1.equals(entity2.toApi())).toBe(false)
 
       // Test each mismatched field individually
-      const mismatchedEntities: Partial<TableCertificate>[] = [
+      const mismatchedEntities: Array<Partial<TableCertificate>> = [
         { type: 'differentType' },
         { subject: 'differentSubject' },
         { serialNumber: 'differentSerialNumber' },

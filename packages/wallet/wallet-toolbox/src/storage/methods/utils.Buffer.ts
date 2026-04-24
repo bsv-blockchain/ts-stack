@@ -3,7 +3,7 @@
  * @returns new buffer with byte order reversed.
  * @publicbody
  */
-export function swapByteOrder(buffer: Buffer): Buffer {
+export function swapByteOrder (buffer: Buffer): Buffer {
   return Buffer.from(buffer).reverse()
 }
 
@@ -13,7 +13,7 @@ export function swapByteOrder(buffer: Buffer): Buffer {
  * @returns four byte buffer with Uint32 number encoded
  * @publicbody
  */
-export function convertUint32ToBuffer(num: number, littleEndian = true): Buffer {
+export function convertUint32ToBuffer (num: number, littleEndian = true): Buffer {
   const arr = new ArrayBuffer(4)
   const view = new DataView(arr)
   view.setUint32(0, num, littleEndian) // byteOffset = 0
@@ -26,7 +26,7 @@ export function convertUint32ToBuffer(num: number, littleEndian = true): Buffer 
  * @returns a number value in the Uint32 value range
  * @publicbody
  */
-export function convertBufferToUint32(buffer: Buffer, littleEndian = true): number {
+export function convertBufferToUint32 (buffer: Buffer, littleEndian = true): number {
   const arr = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
   const view = new DataView(arr)
   return view.getUint32(0, littleEndian)

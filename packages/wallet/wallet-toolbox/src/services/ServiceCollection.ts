@@ -5,7 +5,7 @@ const MAX_RESET_COUNTS = 32
 const MAX_CALL_HISTORY = 32
 
 export class ServiceCollection<T> {
-  services: { name: string; service: T }[]
+  services: Array<{ name: string, service: T }>
   _index: number
 
   /**
@@ -14,45 +14,45 @@ export class ServiceCollection<T> {
   readonly since: Date
   _historyByProvider: Record<string, ProviderCallHistory> = {}
 
-  constructor(
+  constructor (
     public serviceName: string,
-    services?: { name: string; service: T }[]
+    services?: Array<{ name: string, service: T }>
   ) {
     this.services = services || []
     this._index = 0
     this.since = new Date()
   }
 
-  add(s: { name: string; service: T }): ServiceCollection<T> {
+  add (s: { name: string, service: T }): ServiceCollection<T> {
     this.services.push(s)
     return this
   }
 
-  remove(name: string): void {
+  remove (name: string): void {
     this.services = this.services.filter(s => s.name !== name)
   }
 
-  get name() {
+  get name () {
     return this.services[this._index].name
   }
 
-  get service() {
+  get service () {
     return this.services[this._index].service
   }
 
-  getServiceToCall(i: number): ServiceToCall<T> {
+  getServiceToCall (i: number): ServiceToCall<T> {
     const name = this.services[i].name
     const service = this.services[i].service
     const call = { name, when: new Date(), msecs: 0, success: false, result: undefined, error: undefined }
     return { serviceName: this.serviceName, providerName: name, service, call }
   }
 
-  get serviceToCall(): ServiceToCall<T> {
+  get serviceToCall (): ServiceToCall<T> {
     return this.getServiceToCall(this._index)
   }
 
-  get allServicesToCall(): ServiceToCall<T>[] {
-    const all: ServiceToCall<T>[] = []
+  get allServicesToCall (): Array<ServiceToCall<T>> {
+    const all: Array<ServiceToCall<T>> = []
     for (let i = 0; i < this.services.length; i++) {
       all.push(this.getServiceToCall(i))
     }
@@ -63,7 +63,7 @@ export class ServiceCollection<T> {
    * Used to de-prioritize a service call by moving it to the end of the list.
    * @param stc
    */
-  moveServiceToLast(stc: ServiceToCall<T>) {
+  moveServiceToLast (stc: ServiceToCall<T>) {
     const index = this.services.findIndex(s => s.name === stc.providerName)
     if (index !== -1) {
       const [service] = this.services.splice(index, 1)
@@ -71,37 +71,38 @@ export class ServiceCollection<T> {
     }
   }
 
-  get allServices() {
+  get allServices () {
     return this.services.map(x => x.service)
   }
 
-  get count() {
+  get count () {
     return this.services.length
   }
-  get index() {
+
+  get index () {
     return this._index
   }
 
-  reset() {
+  reset () {
     this._index = 0
   }
 
-  next(): number {
+  next (): number {
     this._index = (this._index + 1) % this.count
     return this._index
   }
 
-  clone(): ServiceCollection<T> {
+  clone (): ServiceCollection<T> {
     return new ServiceCollection(this.serviceName, [...this.services])
   }
 
-  _addServiceCall(providerName: string, call: ServiceCall): ProviderCallHistory {
+  _addServiceCall (providerName: string, call: ServiceCall): ProviderCallHistory {
     const now = new Date()
     let h = this._historyByProvider[providerName]
     if (!h) {
       h = {
         serviceName: this.serviceName,
-        providerName: providerName,
+        providerName,
         calls: [],
         totalCounts: { success: 0, failure: 0, error: 0, since: this.since, until: now },
         resetCounts: [{ success: 0, failure: 0, error: 0, since: this.since, until: now }]
@@ -115,13 +116,13 @@ export class ServiceCollection<T> {
     return h
   }
 
-  getDuration(since: Date | string): number {
+  getDuration (since: Date | string): number {
     const now = new Date()
     if (typeof since === 'string') since = new Date(since)
     return now.getTime() - since.getTime()
   }
 
-  addServiceCallSuccess(stc: ServiceToCall<T>, result?: string): void {
+  addServiceCallSuccess (stc: ServiceToCall<T>, result?: string): void {
     const call = stc.call
     call.success = true
     call.result = result
@@ -132,7 +133,7 @@ export class ServiceCollection<T> {
     h.resetCounts[0].success++
   }
 
-  addServiceCallFailure(stc: ServiceToCall<T>, result?: string): void {
+  addServiceCallFailure (stc: ServiceToCall<T>, result?: string): void {
     const call = stc.call
     call.success = false
     call.result = result
@@ -143,7 +144,7 @@ export class ServiceCollection<T> {
     h.resetCounts[0].failure++
   }
 
-  addServiceCallError(stc: ServiceToCall<T>, error: WalletError): void {
+  addServiceCallError (stc: ServiceToCall<T>, error: WalletError): void {
     const call = stc.call
     call.success = false
     call.result = undefined
@@ -159,7 +160,7 @@ export class ServiceCollection<T> {
   /**
    * @returns A copy of current service call history
    */
-  getServiceCallHistory(reset?: boolean): ServiceCallHistory {
+  getServiceCallHistory (reset?: boolean): ServiceCallHistory {
     const now = new Date()
     const history: ServiceCallHistory = { serviceName: this.serviceName, historyByProvider: {} }
     for (const name of Object.keys(this._historyByProvider)) {
@@ -172,7 +173,7 @@ export class ServiceCollection<T> {
           msecs: c.msecs,
           success: c.success,
           result: c.result,
-          error: c.error ? { message: c.error.message, code: c.error.code } : undefined
+          error: (c.error != null) ? { message: c.error.message, code: c.error.code } : undefined
         })),
         totalCounts: {
           success: h.totalCounts.success,
@@ -213,7 +214,7 @@ export class ServiceCollection<T> {
     }
     return history
 
-    function dateToString(d: Date | string): string {
+    function dateToString (d: Date | string): string {
       return typeof d === 'string' ? d : d.toISOString()
     }
   }
@@ -237,7 +238,7 @@ export interface ServiceCall {
   /**
    * Error code and message iff success is false and a exception was thrown.
    */
-  error?: { message: string; code: string }
+  error?: { message: string, code: string }
 }
 
 export interface ServiceToCall<T> {

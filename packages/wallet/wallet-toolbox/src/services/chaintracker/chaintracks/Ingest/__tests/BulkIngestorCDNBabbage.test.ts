@@ -14,8 +14,8 @@ const fetch = new ChaintracksFetch()
 describe('BulkIngestorCDNBabbage tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -39,7 +39,7 @@ describe('BulkIngestorCDNBabbage tests', () => {
   })
 })
 
-async function testUpdateLocalCache(chain: Chain, test: string) {
+async function testUpdateLocalCache (chain: Chain, test: string) {
   const bulkCDNOptions = BulkIngestorCDNBabbage.createBulkIngestorCDNBabbageOptions(chain, fetch)
 
   const cdn = new BulkIngestorCDNBabbage(bulkCDNOptions)

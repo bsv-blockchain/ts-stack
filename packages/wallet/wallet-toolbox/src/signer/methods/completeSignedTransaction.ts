@@ -5,39 +5,41 @@ import { asBsvSdkScript } from '../../utility/utilityHelpers'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 import { WalletError } from '../../sdk/WalletError'
 
-export async function completeSignedTransaction(
+export async function completeSignedTransaction (
   prior: PendingSignAction,
   spends: Record<number, SignActionSpend>,
   wallet: Wallet
 ): Promise<Transaction> {
-  /////////////////////
+  /// //////////////////
   // Insert the user provided unlocking scripts from "spends" arg
-  /////////////////////
+  /// //////////////////
   for (const [key, spend] of Object.entries(spends)) {
     const vin = Number(key)
     const createInput = prior.args.inputs[vin]
     const input = prior.tx.inputs[vin]
-    if (!createInput || !input || createInput.unlockingScript || !Number.isInteger(createInput.unlockingScriptLength))
+    if (!createInput || !input || createInput.unlockingScript || !Number.isInteger(createInput.unlockingScriptLength)) {
       throw new WERR_INVALID_PARAMETER(
         'args',
-        `spend does not correspond to prior input with valid unlockingScriptLength.`
+        'spend does not correspond to prior input with valid unlockingScriptLength.'
       )
-    if (spend.unlockingScript.length / 2 > createInput.unlockingScriptLength!)
+    }
+    if (spend.unlockingScript.length / 2 > createInput.unlockingScriptLength) {
       throw new WERR_INVALID_PARAMETER(
         'args',
         `spend unlockingScript length ${spend.unlockingScript.length} exceeds expected length ${createInput.unlockingScriptLength}`
       )
+    }
     input.unlockingScript = asBsvSdkScript(spend.unlockingScript)
     if (spend.sequenceNumber !== undefined) input.sequence = spend.sequenceNumber
   }
 
   const results = {
-    sdk: <SignActionResult>{}
+    sdk: {} as SignActionResult
   }
 
-  /////////////////////
+  /// //////////////////
   // Insert SABPPP unlock templates for wallet signed inputs
-  /////////////////////
+  /// //////////////////
   for (const pdi of prior.pdi) {
     const sabppp = new ScriptTemplateBRC29({
       derivationPrefix: pdi.derivationPrefix,
@@ -54,9 +56,9 @@ export async function completeSignedTransaction(
     input.unlockingScriptTemplate = unlockTemplate
   }
 
-  /////////////////////
+  /// //////////////////
   // Sign wallet signed inputs making transaction fully valid.
-  /////////////////////
+  /// //////////////////
   await prior.tx.sign()
 
   return prior.tx
@@ -67,16 +69,16 @@ export async function completeSignedTransaction(
  * @param beef Must contain transactions for txid and all its inputs.
  * @throws WERR_INVALID_PARAMETER if any unlocking script is invalid, if sourceTXID is invalid, if beef doesn't contain required transactions.
  */
-export function verifyUnlockScripts(txid: string, beef: Beef): void {
+export function verifyUnlockScripts (txid: string, beef: Beef): void {
   const tx = beef.findTxid(txid)?.tx
-  if (!tx) throw new WERR_INVALID_PARAMETER(`txid`, `contained in beef, txid ${txid}`)
+  if (tx == null) throw new WERR_INVALID_PARAMETER('txid', `contained in beef, txid ${txid}`)
 
   for (let i = 0; i < tx.inputs.length; i++) {
     const input = tx.inputs[i]
-    if (!input.sourceTXID) throw new WERR_INVALID_PARAMETER(`inputs[${i}].sourceTXID`, `valid`)
-    if (!input.unlockingScript) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockingScript`, `valid`)
+    if (!input.sourceTXID) throw new WERR_INVALID_PARAMETER(`inputs[${i}].sourceTXID`, 'valid')
+    if (input.unlockingScript == null) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockingScript`, 'valid')
     input.sourceTransaction = beef.findTxid(input.sourceTXID)?.tx
-    if (!input.sourceTransaction) {
+    if (input.sourceTransaction == null) {
       // The beef doesn't contain all the source transactions only if advanced features
       // such as knownTxids are used.
       // Skip unlock script checks.
@@ -108,7 +110,7 @@ export function verifyUnlockScripts(txid: string, beef: Beef): void {
     try {
       const spendValid = spend.validate()
 
-      if (!spendValid) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, `valid`)
+      if (!spendValid) throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, 'valid')
     } catch (eu: unknown) {
       const e = WalletError.fromUnknown(eu)
       throw new WERR_INVALID_PARAMETER(`inputs[${i}].unlockScript`, `valid. ${e.message}`)

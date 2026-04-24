@@ -5,7 +5,7 @@ import { StopListenerToken, WocHeadersLiveListener } from './WhatsOnChainIngesto
 import { EnqueueHandler, ErrorHandler, WhatsOnChainServices } from './WhatsOnChainServices'
 
 export class LiveIngestorWhatsOnChainWs extends LiveIngestorBase {
-  static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions {
+  static createLiveIngestorWhatsOnChainOptions (chain: Chain): LiveIngestorWhatsOnChainOptions {
     const options: LiveIngestorWhatsOnChainOptions = {
       ...WhatsOnChainServices.createWhatsOnChainServicesOptions(chain),
       ...LiveIngestorBase.createLiveIngestorBaseOptions(chain),
@@ -18,19 +18,19 @@ export class LiveIngestorWhatsOnChainWs extends LiveIngestorBase {
   woc: WhatsOnChainServices
   stopNewListenersToken: StopListenerToken = { stop: undefined }
 
-  constructor(options: LiveIngestorWhatsOnChainOptions) {
+  constructor (options: LiveIngestorWhatsOnChainOptions) {
     super(options)
     this.idleWait = options.idleWait || 100000
     this.woc = new WhatsOnChainServices(options)
   }
 
-  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
     const header = await this.woc.getHeaderByHash(hash)
     return header
   }
 
-  async startListening(liveHeaders: BlockHeader[]): Promise<void> {
-    const errors: { code: number; message: string; count: number }[] = []
+  async startListening (liveHeaders: BlockHeader[]): Promise<void> {
+    const errors: Array<{ code: number, message: string, count: number }> = []
     const enqueue: EnqueueHandler = header => {
       liveHeaders.push(header)
     }
@@ -60,7 +60,7 @@ export class LiveIngestorWhatsOnChainWs extends LiveIngestorBase {
     }
   }
 
-  stopListening(): void {
+  stopListening (): void {
     this.stopNewListenersToken.stop?.()
   }
 }

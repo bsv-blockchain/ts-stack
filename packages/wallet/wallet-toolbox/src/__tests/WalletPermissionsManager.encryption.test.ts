@@ -59,7 +59,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
 
       // Underlying decrypt mock returns { plaintext: [42, 42] } by default
       // which would become "**" if using our ASCII interpretation
-      ;(underlying.decrypt as any).mockResolvedValueOnce({
+      ;(underlying.decrypt).mockResolvedValueOnce({
         plaintext: [72, 105] // 'Hi'
       })
 
@@ -87,7 +87,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Make underlying.decrypt() throw an error to simulate failure
-      ;(underlying.decrypt as any).mockImplementationOnce(() => {
+      ;(underlying.decrypt).mockImplementationOnce(() => {
         throw new Error('Decryption error')
       })
 
@@ -150,7 +150,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       //    to return the "encrypted" data that the manager gave it.
       //    But the manager doesn't store that data in the underlying wallet mock automatically.
       //    We'll just pretend that the wallet returns some data, and ensure the manager tries to decrypt it.
-      ;(underlying.listActions as any).mockResolvedValueOnce({
+      ;(underlying.listActions).mockResolvedValueOnce({
         totalActions: 1,
         actions: [
           {
@@ -174,7 +174,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Also mock decrypt calls to simulate a correct round-trip
-      const decryptMock = underlying.decrypt as any
+      const decryptMock = underlying.decrypt
       decryptMock.mockResolvedValueOnce({
         plaintext: Array.from(actionDescription).map(c => c.charCodeAt(0))
       })
@@ -239,7 +239,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       expect(underlying.encrypt).not.toHaveBeenCalled()
 
       // Simulate that the wallet actually stored them in plaintext and is returning them as-is
-      ;(underlying.listActions as any).mockResolvedValue({
+      ;(underlying.listActions).mockResolvedValue({
         totalActions: 1,
         actions: [
           {
@@ -306,7 +306,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Suppose we have an output with custom instructions that was stored encrypted
-      ;(underlying.listOutputs as any).mockResolvedValue({
+      ;(underlying.listOutputs).mockResolvedValue({
         totalOutputs: 1,
         outputs: [
           {
@@ -321,7 +321,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
 
       const originalInstr = 'Please do not reveal this data.'
       // We'll mock decrypt() to interpret 'fake-encrypted-instructions-string' as a success
-      ;(underlying.decrypt as any).mockResolvedValueOnce({
+      ;(underlying.decrypt).mockResolvedValueOnce({
         plaintext: Array.from(originalInstr).map(ch => ch.charCodeAt(0))
       })
 
@@ -379,7 +379,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       manager.bindCallback('onBasketAccessRequested', x => {
         manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       })
-      ;(underlying.listOutputs as any).mockResolvedValue({
+      ;(underlying.listOutputs).mockResolvedValue({
         totalOutputs: 1,
         outputs: [
           {
@@ -393,7 +393,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       // Force an error from decrypt
-      ;(underlying.decrypt as any).mockImplementationOnce(() => {
+      ;(underlying.decrypt).mockImplementationOnce(() => {
         throw new Error('Failed to decrypt')
       })
 

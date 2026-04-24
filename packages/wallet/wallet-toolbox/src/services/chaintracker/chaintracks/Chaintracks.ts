@@ -18,7 +18,7 @@ import { WalletError } from '../../../sdk/WalletError'
 import { CWIStyleWalletManager } from '../../../CWIStyleWalletManager'
 
 export class Chaintracks implements ChaintracksManagementApi {
-  static createOptions(chain: Chain): ChaintracksOptions {
+  static createOptions (chain: Chain): ChaintracksOptions {
     return {
       chain,
       storage: undefined,
@@ -37,15 +37,15 @@ export class Chaintracks implements ChaintracksManagementApi {
   readonly readonly: boolean
 
   // Collection of all long running "threads": main thread (liveHeaders consumer / monitor) and each live header ingestor.
-  private promises: Promise<void>[] = []
+  private readonly promises: Array<Promise<void>> = []
 
-  private callbacks: { header: (HeaderListener | null)[]; reorg: (ReorgListener | null)[] } = { header: [], reorg: [] }
-  private storage: ChaintracksStorageApi
-  private bulkIngestors: BulkIngestorApi[]
-  private liveIngestors: LiveIngestorApi[]
+  private readonly callbacks: { header: Array<HeaderListener | null>, reorg: Array<ReorgListener | null> } = { header: [], reorg: [] }
+  private readonly storage: ChaintracksStorageApi
+  private readonly bulkIngestors: BulkIngestorApi[]
+  private readonly liveIngestors: LiveIngestorApi[]
 
-  private baseHeaders: BaseBlockHeader[] = []
-  private liveHeaders: BlockHeader[] = []
+  private readonly baseHeaders: BaseBlockHeader[] = []
+  private readonly liveHeaders: BlockHeader[] = []
   private addLiveRecursionLimit = 11
 
   private available = false
@@ -56,16 +56,14 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   private lastPresentHeight = 0
   private lastPresentHeightMsecs = 0
-  private lastPresentHeightMaxAge = 60 * 1000 // 1 minute, in milliseconds
+  private readonly lastPresentHeightMaxAge = 60 * 1000 // 1 minute, in milliseconds
 
-  private lock = new SingleWriterMultiReaderLock()
+  private readonly lock = new SingleWriterMultiReaderLock()
 
-  constructor(public options: ChaintracksOptions) {
-    if (!options.storage) throw new Error('storage is required.')
-    if (!options.bulkIngestors || options.bulkIngestors.length < 1)
-      throw new Error('At least one bulk ingestor is required.')
-    if (!options.liveIngestors || options.liveIngestors.length < 1)
-      throw new Error('At least one live ingestor is required.')
+  constructor (public options: ChaintracksOptions) {
+    if (options.storage == null) throw new Error('storage is required.')
+    if (!options.bulkIngestors || options.bulkIngestors.length < 1) { throw new Error('At least one bulk ingestor is required.') }
+    if (!options.liveIngestors || options.liveIngestors.length < 1) { throw new Error('At least one live ingestor is required.') }
     this.chain = options.chain
     this.readonly = options.readonly
     this.storage = options.storage
@@ -74,13 +72,13 @@ export class Chaintracks implements ChaintracksManagementApi {
 
     this.addLiveRecursionLimit = options.addLiveRecursionLimit
 
-    if (options.logging) this.log = options.logging
+    if (options.logging != null) this.log = options.logging
     this.storage.log = this.log
 
     this.log(`New ChaintracksBase Instance Constructed ${options.chain}Net`)
   }
 
-  async getChain(): Promise<Chain> {
+  async getChain (): Promise<Chain> {
     return this.chain
   }
 
@@ -88,7 +86,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    * Caches and returns most recently sourced value if less than one minute old.
    * @returns the current externally available chain height (via bulk ingestors).
    */
-  async getPresentHeight(): Promise<number> {
+  async getPresentHeight (): Promise<number> {
     const now = Date.now()
     if (this.lastPresentHeight && now - this.lastPresentHeightMsecs < this.lastPresentHeightMaxAge) {
       return this.lastPresentHeight
@@ -102,30 +100,30 @@ export class Chaintracks implements ChaintracksManagementApi {
         console.error(uerr)
       }
     }
-    const presentHeight = presentHeights.length ? Math.max(...presentHeights) : undefined
+    const presentHeight = (presentHeights.length > 0) ? Math.max(...presentHeights) : undefined
     if (!presentHeight) throw new Error('At least one bulk ingestor must implement getPresentHeight.')
     this.lastPresentHeight = presentHeight
     this.lastPresentHeightMsecs = now
     return presentHeight
   }
 
-  async currentHeight(): Promise<number> {
+  async currentHeight (): Promise<number> {
     return await this.getPresentHeight()
   }
 
-  async subscribeHeaders(listener: HeaderListener): Promise<string> {
+  async subscribeHeaders (listener: HeaderListener): Promise<string> {
     const ID = randomBytesBase64(8)
     this.callbacks.header[ID] = listener
     return ID
   }
 
-  async subscribeReorgs(listener: ReorgListener): Promise<string> {
+  async subscribeReorgs (listener: ReorgListener): Promise<string> {
     const ID = randomBytesBase64(8)
     this.callbacks.reorg[ID] = listener
     return ID
   }
 
-  async unsubscribe(subscriptionId: string): Promise<boolean> {
+  async unsubscribe (subscriptionId: string): Promise<boolean> {
     let success = true
     if (this.callbacks.header[subscriptionId]) delete this.callbacks.header[subscriptionId]
     else if (this.callbacks.reorg[subscriptionId]) delete this.callbacks.reorg[subscriptionId]
@@ -142,7 +140,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * @param header
    */
-  async addHeader(header: BaseBlockHeader): Promise<void> {
+  async addHeader (header: BaseBlockHeader): Promise<void> {
     this.baseHeaders.push(header)
   }
 
@@ -155,7 +153,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * @returns when available for client requests
    */
-  async makeAvailable(): Promise<void> {
+  async makeAvailable (): Promise<void> {
     if (this.available) return
     await this.lock.withWriteLock(async () => {
       // Only the first call proceeds to initialize...
@@ -172,19 +170,19 @@ export class Chaintracks implements ChaintracksManagementApi {
       this.promises.push(this.mainThreadShiftLiveHeaders())
 
       // Wait for the main thread to finish initial sync.
-      while (!this.available && !this.startupError) {
+      while (!this.available && (this.startupError == null)) {
         await wait(100)
       }
 
-      if (this.startupError) throw this.startupError
+      if (this.startupError != null) throw this.startupError
     })
   }
 
-  async startPromises(): Promise<void> {
-    if (this.promises.length > 0 || this.stopMainThread !== true) return
+  async startPromises (): Promise<void> {
+    if (this.promises.length > 0 || !this.stopMainThread) return
   }
 
-  async destroy(): Promise<void> {
+  async destroy (): Promise<void> {
     if (!this.available) return
     await this.lock.withWriteLock(async () => {
       if (!this.available || this.stopMainThread) return
@@ -200,51 +198,51 @@ export class Chaintracks implements ChaintracksManagementApi {
     })
   }
 
-  async listening(): Promise<void> {
-    return this.makeAvailable()
+  async listening (): Promise<void> {
+    return await this.makeAvailable()
   }
 
-  async isListening(): Promise<boolean> {
+  async isListening (): Promise<boolean> {
     return this.available
   }
 
-  async isSynchronized(): Promise<boolean> {
+  async isSynchronized (): Promise<boolean> {
     await this.makeAvailable()
     // TODO add synchronized flag... false while bulksyncing...
     return true
   }
 
-  async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
+  async findHeaderForHeight (height: number): Promise<BlockHeader | undefined> {
     await this.makeAvailable()
-    return this.lock.withReadLock(async () => this.findHeaderForHeightNoLock(height))
+    return await this.lock.withReadLock(async () => await this.findHeaderForHeightNoLock(height))
   }
 
-  private async findHeaderForHeightNoLock(height: number): Promise<BlockHeader | undefined> {
+  private async findHeaderForHeightNoLock (height: number): Promise<BlockHeader | undefined> {
     return await this.storage.findHeaderForHeightOrUndefined(height)
   }
 
-  async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
+  async findHeaderForBlockHash (hash: string): Promise<BlockHeader | undefined> {
     await this.makeAvailable()
-    return this.lock.withReadLock(async () => this.findHeaderForBlockHashNoLock(hash))
+    return await this.lock.withReadLock(async () => await this.findHeaderForBlockHashNoLock(hash))
   }
 
-  private async findHeaderForBlockHashNoLock(hash: string): Promise<BlockHeader | undefined> {
+  private async findHeaderForBlockHashNoLock (hash: string): Promise<BlockHeader | undefined> {
     return (await this.storage.findLiveHeaderForBlockHash(hash)) || undefined
   }
 
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
     const r = await this.findHeaderForHeight(height)
-    if (!r) return false
+    if (r == null) return false
     const isValid = root === r.merkleRoot
     return isValid
   }
 
-  async getInfo(): Promise<ChaintracksInfoApi> {
+  async getInfo (): Promise<ChaintracksInfoApi> {
     await this.makeAvailable()
-    return this.lock.withReadLock(async () => this.getInfoNoLock())
+    return await this.lock.withReadLock(async () => await this.getInfoNoLock())
   }
 
-  private async getInfoNoLock(): Promise<ChaintracksInfoApi> {
+  private async getInfoNoLock (): Promise<ChaintracksInfoApi> {
     const liveRange = await this.storage.findLiveHeightRange()
     const info: ChaintracksInfoApi = {
       chain: this.chain,
@@ -258,28 +256,28 @@ export class Chaintracks implements ChaintracksManagementApi {
     return info
   }
 
-  async getHeaders(height: number, count: number): Promise<string> {
+  async getHeaders (height: number, count: number): Promise<string> {
     await this.makeAvailable()
-    return this.lock.withReadLock(async () => asString(await this.storage.getHeadersUint8Array(height, count)))
+    return await this.lock.withReadLock(async () => asString(await this.storage.getHeadersUint8Array(height, count)))
   }
 
-  async findChainTipHeader(): Promise<BlockHeader> {
+  async findChainTipHeader (): Promise<BlockHeader> {
     await this.makeAvailable()
-    return this.lock.withReadLock(async () => await this.storage.findChainTipHeader())
+    return await this.lock.withReadLock(async () => await this.storage.findChainTipHeader())
   }
 
-  async findChainTipHash(): Promise<string> {
+  async findChainTipHash (): Promise<string> {
     await this.makeAvailable()
-    return this.lock.withReadLock(async () => await this.storage.findChainTipHash())
+    return await this.lock.withReadLock(async () => await this.storage.findChainTipHash())
   }
 
-  async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | undefined> {
+  async findLiveHeaderForBlockHash (hash: string): Promise<LiveBlockHeader | undefined> {
     await this.makeAvailable()
     const header = await this.lock.withReadLock(async () => await this.storage.findLiveHeaderForBlockHash(hash))
     return header || undefined
   }
 
-  async findChainWorkForBlockHash(hash: string): Promise<string | undefined> {
+  async findChainWorkForBlockHash (hash: string): Promise<string | undefined> {
     const header = await this.findLiveHeaderForBlockHash(hash)
     return header?.chainWork
   }
@@ -287,11 +285,11 @@ export class Chaintracks implements ChaintracksManagementApi {
   /**
    * @returns true iff all headers from height zero through current chainTipHeader height can be retreived and form a valid chain.
    */
-  async validate(): Promise<boolean> {
+  async validate (): Promise<boolean> {
     let h = await this.findChainTipHeader()
     while (h.height > 0) {
       const hp = await this.findHeaderForHeight(h.height - 1)
-      if (!hp || hp.hash !== h.previousHash) throw new Error(`validation fails at height ${h.height}`)
+      if ((hp == null) || hp.hash !== h.previousHash) throw new Error(`validation fails at height ${h.height}`)
       h = hp
       if (10000 * Math.floor(h.height / 10000) === h.height) this.log(`height ${h.height}`)
     }
@@ -299,7 +297,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     return true
   }
 
-  async exportBulkHeaders(
+  async exportBulkHeaders (
     toFolder: string,
     toFs: ChaintracksFsApi,
     sourceUrl?: string,
@@ -311,15 +309,15 @@ export class Chaintracks implements ChaintracksManagementApi {
     await bulk.exportHeadersToFs(toFs, toHeadersPerFile, toFolder, sourceUrl, maxHeight)
   }
 
-  async startListening(): Promise<void> {
+  async startListening (): Promise<void> {
     this.makeAvailable()
   }
 
-  private async syncBulkStorage(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
+  private async syncBulkStorage (presentHeight: number, initialRanges: HeightRanges): Promise<void> {
     await this.lock.withWriteLock(async () => await this.syncBulkStorageNoLock(presentHeight, initialRanges))
   }
 
-  private async syncBulkStorageNoLock(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
+  private async syncBulkStorageNoLock (presentHeight: number, initialRanges: HeightRanges): Promise<void> {
     let newLiveHeaders: BlockHeader[] = []
 
     let before = initialRanges
@@ -359,11 +357,11 @@ export class Chaintracks implements ChaintracksManagementApi {
           const e = (bulkSyncError = WalletError.fromUnknown(eu))
           this.log(`bulk sync error: ${e.message}`)
           if (!this.available)
-            // During initial startup, bulk ingestors must be available.
-            break
+          // During initial startup, bulk ingestors must be available.
+          { break }
         }
       }
-      if (!this.available && bulkSyncError && !roundHadSuccess) {
+      if (!this.available && (bulkSyncError != null) && !roundHadSuccess) {
         this.startupError = bulkSyncError
         break
       }
@@ -381,7 +379,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       }
     }
 
-    if (!this.startupError) {
+    if (this.startupError == null) {
       this.liveHeaders.unshift(...newLiveHeaders)
 
       added = after.bulk.above(initialRanges.bulk)
@@ -395,19 +393,19 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
   }
 
-  private async getMissingBlockHeader(hash: string): Promise<BlockHeader | undefined> {
+  private async getMissingBlockHeader (hash: string): Promise<BlockHeader | undefined> {
     for (const live of this.liveIngestors) {
       const header = await live.getHeaderByHash(hash)
-      if (header) return header
+      if (header != null) return header
     }
     return undefined
   }
 
-  private invalidInsertHeaderResult(ihr: InsertHeaderResult): boolean {
+  private invalidInsertHeaderResult (ihr: InsertHeaderResult): boolean {
     return ihr.noActiveAncestor || ihr.noTip || ihr.badPrev
   }
 
-  private async addLiveHeader(header: BlockHeader): Promise<InsertHeaderResult> {
+  private async addLiveHeader (header: BlockHeader): Promise<InsertHeaderResult> {
     validateHeaderFormat(header)
     validateAgainstDirtyHashes(header.hash)
 
@@ -421,7 +419,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       // If a new active chaintip has been added, notify subscribed event listeners...
       for (const id in this.callbacks.header) {
         const addListener = this.callbacks.header[id]
-        if (addListener) {
+        if (addListener != null) {
           try {
             addListener(header)
           } catch {
@@ -430,11 +428,11 @@ export class Chaintracks implements ChaintracksManagementApi {
         }
       }
 
-      if (ihr.reorgDepth > 0 && ihr.priorTip) {
+      if (ihr.reorgDepth > 0 && (ihr.priorTip != null)) {
         // If the new header was also a reorg, notify subscribed event listeners...
         for (const id in this.callbacks.reorg) {
           const reorgListener = this.callbacks.reorg[id]
-          if (reorgListener) {
+          if (reorgListener != null) {
             try {
               const priorTip: BlockHeader = { ...ihr.priorTip }
               const deactivated: BlockHeader[] = ihr.deactivatedHeaders.map(lbh => ({ ...lbh }))
@@ -462,7 +460,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    *
    * Periodically CDN bulk ingestor is invoked to check if incremental headers can be migrated to CDN backed files.
    */
-  private async mainThreadShiftLiveHeaders(): Promise<void> {
+  private async mainThreadShiftLiveHeaders (): Promise<void> {
     this.stopMainThread = false
     let lastSyncCheck = Date.now()
     let lastBulkSync = Date.now()
@@ -497,25 +495,24 @@ export class Chaintracks implements ChaintracksManagementApi {
           // Bring bulk storage up-to-date and (re-)initialize liveHeaders
           lastBulkSync = now
           if (this.available)
-            // Once available, initial write lock is released, take a new one to update bulk storage.
-            await this.syncBulkStorage(presentHeight, before)
-          else
-            // While still not available, the makeAvailable write lock is held.
-            await this.syncBulkStorageNoLock(presentHeight, before)
-          if (this.startupError) throw this.startupError
+          // Once available, initial write lock is released, take a new one to update bulk storage.
+          { await this.syncBulkStorage(presentHeight, before) } else
+          // While still not available, the makeAvailable write lock is held.
+          { await this.syncBulkStorageNoLock(presentHeight, before) }
+          if (this.startupError != null) throw this.startupError
         }
 
         let count = 0
         let liveHeaderDupes = 0
         let needSyncCheck = false
 
-        for (; !needSyncCheck && !this.stopMainThread; ) {
+        for (; !needSyncCheck && !this.stopMainThread;) {
           let header = this.liveHeaders.shift()
-          if (header) {
+          if (header != null) {
             // Process a "live" block header...
             let recursions = this.addLiveRecursionLimit
-            for (; !needSyncCheck && !this.stopMainThread; ) {
-              //console.log(`Processing liveHeader: height: ${header.height} hash: ${header.hash} ${new Date().toISOString()}`)
+            for (; !needSyncCheck && !this.stopMainThread;) {
+              // console.log(`Processing liveHeader: height: ${header.height} hash: ${header.hash} ${new Date().toISOString()}`)
               const ihr = await this.addLiveHeader(header)
               if (this.invalidInsertHeaderResult(ihr)) {
                 this.log(`Ignoring liveHeader ${header.height} ${header.hash} due to invalid insert result.`)
@@ -531,7 +528,7 @@ export class Chaintracks implements ChaintracksManagementApi {
                 } else {
                   const hash = header.previousHash
                   const prevHeader = await this.getMissingBlockHeader(hash)
-                  if (!prevHeader) {
+                  if (prevHeader == null) {
                     this.log(
                       `Ignoring liveHeader ${header.height} ${header.hash} failed to find previous header by hash ${asString(hash)}`
                     )
@@ -543,10 +540,11 @@ export class Chaintracks implements ChaintracksManagementApi {
                   }
                 }
               } else {
-                if (this.subscriberCallbacksEnabled)
+                if (this.subscriberCallbacksEnabled) {
                   this.log(
                     `addLiveHeader ${header.height}${ihr.added ? ' added' : ''}${ihr.dupe ? ' dupe' : ''}${ihr.isActiveTip ? ' isActiveTip' : ''}${ihr.reorgDepth ? ' reorg depth ' + ihr.reorgDepth : ''}${ihr.noPrev ? ' noPrev' : ''}${ihr.noActiveAncestor || ihr.noTip || ihr.badPrev ? ' error' : ''}`
                   )
+                }
                 if (ihr.dupe) {
                   liveHeaderDupes++
                 }
@@ -560,9 +558,9 @@ export class Chaintracks implements ChaintracksManagementApi {
           } else {
             // There are no liveHeaders currently to process, check the out-of-band baseHeaders channel (`addHeader` method called by a client).
             const bheader = this.baseHeaders.shift()
-            if (bheader) {
+            if (bheader != null) {
               const prev = await this.storage.findLiveHeaderForBlockHash(bheader.previousHash)
-              if (!prev) {
+              if (prev == null) {
                 // Ignoring attempt to add a baseHeader with unknown previous hash, no attempt made to find previous header(s).
                 this.log(`Ignoring header with unknown previousHash ${bheader.previousHash} in live storage.`)
                 // Does not trigger a re-sync.
@@ -576,10 +574,11 @@ export class Chaintracks implements ChaintracksManagementApi {
                 if (this.invalidInsertHeaderResult(ihr)) {
                   this.log(`Ignoring invalid baseHeader ${header.height} ${header.hash}.`)
                 } else {
-                  if (this.subscriberCallbacksEnabled)
+                  if (this.subscriberCallbacksEnabled) {
                     this.log(
                       `addBaseHeader ${header.height}${ihr.added ? ' added' : ''}${ihr.dupe ? ' dupe' : ''}${ihr.isActiveTip ? ' isActiveTip' : ''}${ihr.reorgDepth ? ' reorg depth ' + ihr.reorgDepth : ''}${ihr.noPrev ? ' noPrev' : ''}${ihr.noActiveAncestor || ihr.noTip || ihr.badPrev ? ' error' : ''}`
                     )
+                  }
                   // baseHeader was successfully added.
                   if (ihr.added) {
                     count++

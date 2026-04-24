@@ -1,11 +1,11 @@
 import { TaskReviewProvenTxs } from '../TaskReviewProvenTxs'
 import { HeightRange } from '../../../services/chaintracker/chaintracks/util/HeightRange'
 
-function makeMonitor(options: {
+function makeMonitor (options: {
   tipHeight: number
-  headersByHeight?: Record<number, { height: number; merkleRoot: string; hash: string } | undefined>
+  headersByHeight?: Record<number, { height: number, merkleRoot: string, hash: string } | undefined>
   staleRootsByHeight?: Record<number, string[]>
-  reproveResultsByHeightRoot?: Record<string, { updated: any[]; unchanged: any[]; unavailable: any[]; log: string }>
+  reproveResultsByHeightRoot?: Record<string, { updated: any[], unchanged: any[], unavailable: any[], log: string }>
   monitorEvents?: Array<{ details?: string }>
   reviewResult?: {
     log: string
@@ -31,7 +31,7 @@ function makeMonitor(options: {
   const runAsStorageProvider = jest.fn(async (fn: any) => await fn({ findStaleMerkleRoots }))
   const reproveHeightMerkleRoot = jest.fn(async (height: number, staleRoot: string) => {
     return (
-      options.reproveResultsByHeightRoot?.[`${height}:${staleRoot}`] || {
+      (options.reproveResultsByHeightRoot?.[`${height}:${staleRoot}`]) || {
         log: `  reproved ${height}:${staleRoot}\n`,
         updated: [],
         unchanged: [],

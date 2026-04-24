@@ -16,7 +16,7 @@ describe('MonitorDaemon tests', () => {
     await test0Body('test')
   })
 
-  async function test0Body(chain: Chain) {
+  async function test0Body (chain: Chain) {
     const env = _tu.getEnv(chain)
 
     const servicesOptions = Services.createDefaultOptions(chain)

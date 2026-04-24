@@ -8,7 +8,7 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TransactionStatus } from '../../sdk/types'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 
-export async function listOutputsIdb(
+export async function listOutputsIdb (
   storage: StorageIdb,
   auth: AuthId,
   vargs: Validation.ValidListOutputsArgs,
@@ -38,7 +38,7 @@ export async function listOutputsIdb(
 
   let { specOp, basket, tags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
 
-  let basketId: number | undefined = undefined
+  let basketId: number | undefined
   const basketsById: Record<number, TableOutputBasket> = {}
   if (basket) {
     const baskets = await storage.findOutputBaskets({
@@ -49,19 +49,19 @@ export async function listOutputsIdb(
       return r
     }
     basketId = baskets[0].basketId!
-    basketsById[basketId!] = baskets[0]
+    basketsById[basketId] = baskets[0]
   }
 
   const specOpTags: string[] = []
-  if (specOp && specOp.tagsParamsCount) {
+  if ((specOp != null) && specOp.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
   }
-  if (specOp && specOp.tagsToIntercept) {
+  if ((specOp != null) && (specOp.tagsToIntercept != null)) {
     // Pull out tags used by current specOp
     const ts = tags
     tags = []
     for (const t of ts) {
-      if (specOp.tagsToIntercept.length === 0 || specOp.tagsToIntercept.indexOf(t) >= 0) {
+      if (specOp.tagsToIntercept.length === 0 || specOp.tagsToIntercept.includes(t)) {
         specOpTags.push(t)
         if (t === 'all') {
           basketId = undefined
@@ -72,12 +72,12 @@ export async function listOutputsIdb(
     }
   }
 
-  if (specOp && specOp.resultFromTags) {
+  if ((specOp != null) && (specOp.resultFromTags != null)) {
     const r = await specOp.resultFromTags(storage, auth, vargs, specOpTags)
     return r
   }
 
-  let tagIds: number[] = []
+  const tagIds: number[] = []
   if (tags && tags.length > 0) {
     await storage.filterOutputTags({ partial: { userId, isDeleted: false } }, ot => {
       if (tags.includes(ot.tag)) {
@@ -88,12 +88,12 @@ export async function listOutputsIdb(
 
   const isQueryModeAll = vargs.tagQueryMode === 'all'
   if (isQueryModeAll && tagIds.length < tags.length)
-    // all the required tags don't exist, impossible to satisfy.
-    return r
+  // all the required tags don't exist, impossible to satisfy.
+  { return r }
 
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0)
-    // any and only non-existing labels, impossible to satisfy.
-    return r
+  // any and only non-existing labels, impossible to satisfy.
+  { return r }
 
   const noTags = tagIds.length === 0
   const includeSpent = false
@@ -109,7 +109,7 @@ export async function listOutputsIdb(
     txStatus: stati,
     noScript: true
   }
-  if (!specOp || !specOp.ignoreLimit) args.paged = { limit, offset }
+  if ((specOp == null) || !specOp.ignoreLimit) args.paged = { limit, offset }
 
   let outputs = await storage.findOutputs(args, tagIds, isQueryModeAll)
   if (outputs.length === vargs.limit) {
@@ -119,9 +119,9 @@ export async function listOutputsIdb(
     r.totalOutputs = outputs.length
   }
 
-  if (specOp) {
-    if (specOp.filterOutputs) outputs = await specOp.filterOutputs(storage, auth, vargs, specOpTags, outputs)
-    if (specOp.resultFromOutputs) {
+  if (specOp != null) {
+    if (specOp.filterOutputs != null) outputs = await specOp.filterOutputs(storage, auth, vargs, specOpTags, outputs)
+    if (specOp.resultFromOutputs != null) {
       const r = await specOp.resultFromOutputs(storage, auth, vargs, specOpTags, outputs)
       return r
     }
@@ -164,12 +164,12 @@ export async function listOutputsIdb(
       outpoint: `${o.txid}.${o.vout}`
     }
     r.outputs.push(wo)
-    //if (vargs.includeBasket && o.basketId) {
+    // if (vargs.includeBasket && o.basketId) {
     //    if (!basketsById[o.basketId]) {
     //        basketsById[o.basketId] = verifyTruthy(await dsk.findOutputBasketId(o.basketId!, trx))
     //    }
     //    wo.basket = basketsById[o.basketId].name
-    //}
+    // }
     if (vargs.includeCustomInstructions && o.customInstructions) wo.customInstructions = o.customInstructions
     if (vargs.includeLabels && o.txid) {
       if (labelsByTxid[o.txid] === undefined) {
@@ -182,9 +182,9 @@ export async function listOutputsIdb(
     }
     if (vargs.includeLockingScripts) {
       await storage.validateOutputScript(o)
-      if (o.lockingScript) wo.lockingScript = asString(o.lockingScript)
+      if (o.lockingScript != null) wo.lockingScript = asString(o.lockingScript)
     }
-    if (vargs.includeTransactions && !beef.findTxid(o.txid!)) {
+    if (vargs.includeTransactions && (beef.findTxid(o.txid!) == null)) {
       await storage.getValidBeefForKnownTxid(o.txid!, beef, undefined, vargs.knownTxids)
     }
   }

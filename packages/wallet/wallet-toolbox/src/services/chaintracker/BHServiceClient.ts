@@ -31,7 +31,7 @@ export class BHServiceClient implements ChaintracksServiceClient {
   options: ChaintracksServiceClientOptions
   apiKey: string
 
-  constructor(chain: Chain, url: string, apiKey: string) {
+  constructor (chain: Chain, url: string, apiKey: string) {
     this.bhs = new BlockHeadersService(url, { apiKey })
     this.cache = {}
     this.chain = chain
@@ -40,11 +40,11 @@ export class BHServiceClient implements ChaintracksServiceClient {
     this.apiKey = apiKey
   }
 
-  async currentHeight(): Promise<number> {
+  async currentHeight (): Promise<number> {
     return await this.bhs.currentHeight()
   }
 
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
     const cachedRoot = this.cache[height]
     if (cachedRoot) {
       return cachedRoot === root
@@ -54,14 +54,14 @@ export class BHServiceClient implements ChaintracksServiceClient {
     return isValid
   }
 
-  async getPresentHeight(): Promise<number> {
+  async getPresentHeight (): Promise<number> {
     return await this.bhs.currentHeight()
   }
 
-  async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
+  async findHeaderForHeight (height: number): Promise<BlockHeader | undefined> {
     const response = await this.getJsonOrUndefined<BHSHeader[]>(`/api/v1/chain/header/byHeight?height=${height}`)
     const header = response?.[0]
-    if (!header) return undefined
+    if (header == null) return undefined
     const formatted: BlockHeader = {
       version: header.version,
       previousHash: header.prevBlockHash,
@@ -75,9 +75,9 @@ export class BHServiceClient implements ChaintracksServiceClient {
     return formatted
   }
 
-  async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
+  async findHeaderForBlockHash (hash: string): Promise<BlockHeader | undefined> {
     const response = await this.getJsonOrUndefined<BHSHeaderState>(`/api/v1/chain/header/state/${hash}`)
-    if (!response?.header) return undefined
+    if ((response?.header) == null) return undefined
     const formatted: BlockHeader = {
       version: response.header.version,
       previousHash: response.header.prevBlockHash,
@@ -91,11 +91,11 @@ export class BHServiceClient implements ChaintracksServiceClient {
     return formatted
   }
 
-  async getHeaders(height: number, count: number): Promise<string> {
+  async getHeaders (height: number, count: number): Promise<string> {
     const response = await this.getJsonOrUndefined<BHSHeader[]>(
       `/api/v1/chain/header/byHeight?height=${height}&count=${count}`
     )
-    if (!response) return ''
+    if (response == null) return ''
     if (response.length < count) throw new Error('Cannot retrieve enough headers')
     const headers = response.map(response => {
       const header: BaseBlockHeader = {
@@ -111,11 +111,11 @@ export class BHServiceClient implements ChaintracksServiceClient {
     return headers.reduce((str: string, arr: number[]) => str + Utils.toHex(arr), '')
   }
 
-  async findChainWorkForBlockHash(hash: string): Promise<string | undefined> {
+  async findChainWorkForBlockHash (hash: string): Promise<string | undefined> {
     throw new Error('Not implemented')
   }
 
-  async findChainTipHeader(): Promise<BlockHeader> {
+  async findChainTipHeader (): Promise<BlockHeader> {
     const response = await this.getJson<BHSHeaderState>('/api/v1/chain/tip/longest')
     const formatted: BlockHeader = {
       version: response.header.version,
@@ -131,12 +131,12 @@ export class BHServiceClient implements ChaintracksServiceClient {
   }
 
   async getJsonOrUndefined<T>(path: string): Promise<T | undefined> {
-    let e: Error | undefined = undefined
+    let e: Error | undefined
     for (let retry = 0; retry < 3; retry++) {
       try {
         const r = await fetch(`${this.serviceUrl}${path}`, { headers: { Authorization: `Bearer ${this.apiKey}` } })
         if (r.status !== 200) throw new Error(JSON.stringify(r))
-        const v = <T>await r.json()
+        const v = await r.json() as T
         if (!v) return undefined
         return v
       } catch (eu: unknown) {
@@ -144,7 +144,7 @@ export class BHServiceClient implements ChaintracksServiceClient {
       }
       if (e && e.name !== 'ECONNRESET') break
     }
-    if (e) throw e
+    if (e != null) throw e
   }
 
   async getJson<T>(path: string): Promise<T> {
@@ -161,52 +161,55 @@ export class BHServiceClient implements ChaintracksServiceClient {
     throw new Error('Not implemented')
   }
 
-  async addHeader(header: any): Promise<void> {
+  async addHeader (header: any): Promise<void> {
     throw new Error('Not implemented')
   }
 
-  async findHeaderForMerkleRoot(merkleRoot: string, height?: number): Promise<undefined> {
+  async findHeaderForMerkleRoot (merkleRoot: string, height?: number): Promise<undefined> {
     throw new Error('Not implemented')
   }
 
-  async startListening(): Promise<void> {
+  async startListening (): Promise<void> {
     throw new Error('Not implemented')
   }
 
-  async listening(): Promise<void> {
+  async listening (): Promise<void> {
     throw new Error('Not implemented')
   }
 
-  async isSynchronized(): Promise<boolean> {
+  async isSynchronized (): Promise<boolean> {
     throw new Error('Not implemented')
   }
 
-  async getChain(): Promise<Chain> {
+  async getChain (): Promise<Chain> {
     return this.chain
   }
 
-  async isListening(): Promise<boolean> {
+  async isListening (): Promise<boolean> {
     throw new Error('Not implemented')
   }
 
-  async getChainTipHeader(): Promise<BlockHeader> {
+  async getChainTipHeader (): Promise<BlockHeader> {
     throw new Error('Not implemented')
   }
 
-  async findChainTipHash(): Promise<string> {
+  async findChainTipHash (): Promise<string> {
     throw new Error('Not implemented')
   }
 
-  async subscribeHeaders(listener: HeaderListener): Promise<string> {
+  async subscribeHeaders (listener: HeaderListener): Promise<string> {
     throw new Error('Method not implemented.')
   }
-  async subscribeReorgs(listener: ReorgListener): Promise<string> {
+
+  async subscribeReorgs (listener: ReorgListener): Promise<string> {
     throw new Error('Method not implemented.')
   }
-  async unsubscribe(subscriptionId: string): Promise<boolean> {
+
+  async unsubscribe (subscriptionId: string): Promise<boolean> {
     throw new Error('Method not implemented.')
   }
-  async getInfo(): Promise<ChaintracksInfoApi> {
+
+  async getInfo (): Promise<ChaintracksInfoApi> {
     throw new Error('Method not implemented.')
   }
 }

@@ -8,7 +8,7 @@ import { Utils } from '@bsv/sdk'
  * @returns hex encoded string representation of val.
  * @publicbody
  */
-export function asString(
+export function asString (
   val: string | number[] | Uint8Array,
   enc?: 'hex' | 'utf8' | 'base64',
   returnEnc?: 'hex' | 'utf8' | 'base64'
@@ -19,7 +19,7 @@ export function asString(
     if (enc === returnEnc) return val
     val = asUint8Array(val, enc)
   }
-  let v = Array.isArray(val) ? val : Array.from(val)
+  const v = Array.isArray(val) ? val : Array.from(val)
   switch (returnEnc) {
     case 'utf8':
       return Utils.toUTF8(v)
@@ -36,11 +36,11 @@ export function asString(
  * @returns number[] array of byte values representation of val.
  * @publicbody
  */
-export function asArray(val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8' | 'base64'): number[] {
+export function asArray (val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8' | 'base64'): number[] {
   if (Array.isArray(val)) return val
   if (typeof val !== 'string') return Array.from(val)
   enc ||= 'hex'
-  let a: number[] = Utils.toArray(val, enc)
+  const a: number[] = Utils.toArray(val, enc)
   return a
 }
 
@@ -51,10 +51,10 @@ export function asArray(val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8
  * @returns Uint8Array representation of val.
  * @publicbody
  */
-export function asUint8Array(val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8' | 'base64'): Uint8Array {
+export function asUint8Array (val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8' | 'base64'): Uint8Array {
   if (Array.isArray(val)) return Uint8Array.from(val)
   if (typeof val !== 'string') return val
   enc ||= 'hex'
-  let a: number[] = Utils.toArray(val, enc)
+  const a: number[] = Utils.toArray(val, enc)
   return Uint8Array.from(a)
 }

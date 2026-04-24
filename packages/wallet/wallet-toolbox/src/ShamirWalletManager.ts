@@ -70,16 +70,16 @@ export interface ShamirWalletManagerConfig {
 export type ShareStorageCallback = (shares: string[], threshold: number, totalShares: number) => Promise<boolean>
 
 export class ShamirWalletManager {
-  private config: ShamirWalletManagerConfig
-  private wabClient: WABClient
-  private entropyCollector: EntropyCollector
+  private readonly config: ShamirWalletManagerConfig
+  private readonly wabClient: WABClient
+  private readonly entropyCollector: EntropyCollector
   private privateKey?: PrivateKey
   private underlying?: WalletInterface
   private userIdHash?: string
   private readonly threshold: number
   private readonly totalShares: number
 
-  constructor(config: ShamirWalletManagerConfig) {
+  constructor (config: ShamirWalletManagerConfig) {
     this.config = config
     this.wabClient = new WABClient(config.wabServerUrl)
     this.entropyCollector = new EntropyCollector()
@@ -110,21 +110,21 @@ export class ShamirWalletManager {
   /**
    * Get the configured threshold
    */
-  getThreshold(): number {
+  getThreshold (): number {
     return this.threshold
   }
 
   /**
    * Get the configured total shares
    */
-  getTotalShares(): number {
+  getTotalShares (): number {
     return this.totalShares
   }
 
   /**
    * Reset the entropy collector (e.g., if user wants to start over)
    */
-  resetEntropy(): void {
+  resetEntropy (): void {
     this.entropyCollector.reset()
   }
 
@@ -132,21 +132,21 @@ export class ShamirWalletManager {
    * Add a mouse movement sample for entropy collection
    * Call this from your UI's mousemove handler
    */
-  addMouseEntropy(x: number, y: number) {
+  addMouseEntropy (x: number, y: number) {
     return this.entropyCollector.addMouseSample(x, y)
   }
 
   /**
    * Check if enough entropy has been collected
    */
-  hasEnoughEntropy(): boolean {
+  hasEnoughEntropy (): boolean {
     return this.entropyCollector.isComplete()
   }
 
   /**
    * Get entropy collection progress
    */
-  getEntropyProgress() {
+  getEntropyProgress () {
     return this.entropyCollector.getProgress()
   }
 
@@ -154,7 +154,7 @@ export class ShamirWalletManager {
    * Collect entropy from browser mouse movements
    * Convenience method that sets up event listeners automatically
    */
-  async collectEntropyFromBrowser(element?: EventTarget, onProgress?: EntropyProgressCallback): Promise<void> {
+  async collectEntropyFromBrowser (element?: EventTarget, onProgress?: EntropyProgressCallback): Promise<void> {
     await this.entropyCollector.collectFromBrowser(element, onProgress)
   }
 
@@ -162,7 +162,7 @@ export class ShamirWalletManager {
    * Generate a user ID hash from a private key
    * This is used to identify the user on the WAB server without revealing the key
    */
-  private generateUserIdHash(privateKey: PrivateKey): string {
+  private generateUserIdHash (privateKey: PrivateKey): string {
     const publicKey = privateKey.toPublicKey().toString()
     const hash = Hash.sha256(Utils.toArray(publicKey, 'utf8'))
     return Utils.toHex(hash)
@@ -181,8 +181,8 @@ export class ShamirWalletManager {
    * @param onUserSharesReady Callback when user shares are ready - return true to confirm saved
    * @returns Result containing user shares (server share already stored)
    */
-  async createNewWallet(
-    authPayload: { phoneNumber?: string; email?: string; otp: string },
+  async createNewWallet (
+    authPayload: { phoneNumber?: string, email?: string, otp: string },
     onUserSharesReady: ShareStorageCallback
   ): Promise<CreateShamirWalletResult> {
     // 1. Generate private key from entropy (mixed with CSPRNG)
@@ -234,7 +234,7 @@ export class ShamirWalletManager {
    * Start OTP verification for share retrieval
    * Call this before recoverWithSharesBC
    */
-  async startOTPVerification(payload: { phoneNumber?: string; email?: string }): Promise<void> {
+  async startOTPVerification (payload: { phoneNumber?: string, email?: string }): Promise<void> {
     if (!this.userIdHash) {
       throw new Error('User ID hash not set. Call setUserIdHash first for recovery.')
     }
@@ -250,7 +250,7 @@ export class ShamirWalletManager {
    * Set the user ID hash for recovery operations
    * This can be computed from Share A or C (both contain the same threshold/integrity)
    */
-  setUserIdHash(userIdHash: string): void {
+  setUserIdHash (userIdHash: string): void {
     this.userIdHash = userIdHash
   }
 
@@ -261,9 +261,9 @@ export class ShamirWalletManager {
    * @param userShares Array of user-held shares (need threshold-1 shares)
    * @param authPayload Contains OTP code and auth method data
    */
-  async recoverWithServerShare(
+  async recoverWithServerShare (
     userShares: string[],
-    authPayload: { phoneNumber?: string; email?: string; otp: string }
+    authPayload: { phoneNumber?: string, email?: string, otp: string }
   ): Promise<PrivateKey> {
     // Validate share formats
     for (const share of userShares) {
@@ -311,7 +311,7 @@ export class ShamirWalletManager {
    *
    * @param userShares Array of user-held shares (need at least threshold shares)
    */
-  async recoverWithUserShares(userShares: string[]): Promise<PrivateKey> {
+  async recoverWithUserShares (userShares: string[]): Promise<PrivateKey> {
     if (userShares.length < 2) {
       throw new Error('Need at least 2 shares to recover')
     }
@@ -340,7 +340,7 @@ export class ShamirWalletManager {
   /**
    * Extract threshold from a share (format: x.y.threshold.integrity)
    */
-  private getThresholdFromShare(share: string): number {
+  private getThresholdFromShare (share: string): number {
     const parts = share.split('.')
     if (parts.length !== 4) {
       throw new Error('Invalid share format')
@@ -355,8 +355,8 @@ export class ShamirWalletManager {
   /**
    * Build the underlying wallet after key recovery
    */
-  async buildWallet(): Promise<WalletInterface> {
-    if (!this.privateKey) {
+  async buildWallet (): Promise<WalletInterface> {
+    if (this.privateKey == null) {
       throw new Error('No private key available. Create or recover wallet first.')
     }
 
@@ -371,8 +371,8 @@ export class ShamirWalletManager {
   /**
    * Get the underlying wallet (must call buildWallet first)
    */
-  getWallet(): WalletInterface {
-    if (!this.underlying) {
+  getWallet (): WalletInterface {
+    if (this.underlying == null) {
       throw new Error('Wallet not built. Call buildWallet first.')
     }
     return this.underlying
@@ -385,8 +385,8 @@ export class ShamirWalletManager {
    * @param authPayload Contains OTP code and auth method data
    * @param onUserSharesReady Callback when new user shares are ready
    */
-  async rotateKeys(
-    authPayload: { phoneNumber?: string; email?: string; otp: string },
+  async rotateKeys (
+    authPayload: { phoneNumber?: string, email?: string, otp: string },
     onUserSharesReady: ShareStorageCallback
   ): Promise<CreateShamirWalletResult> {
     if (!this.userIdHash) {
@@ -445,7 +445,7 @@ export class ShamirWalletManager {
    * Validate Shamir share format
    * Expected format: x.y.threshold.integrity (4 dot-separated parts)
    */
-  private validateShareFormat(share: string): void {
+  private validateShareFormat (share: string): void {
     const parts = share.split('.')
     if (parts.length !== 4) {
       throw new Error(`Invalid share format. Expected 4 dot-separated parts, got ${parts.length}`)
@@ -460,14 +460,14 @@ export class ShamirWalletManager {
   /**
    * Check if the manager has a loaded private key
    */
-  hasPrivateKey(): boolean {
+  hasPrivateKey (): boolean {
     return this.privateKey !== undefined
   }
 
   /**
    * Get the user ID hash (for display or storage)
    */
-  getUserIdHash(): string | undefined {
+  getUserIdHash (): string | undefined {
     return this.userIdHash
   }
 
@@ -480,7 +480,7 @@ export class ShamirWalletManager {
    *
    * @param authPayload Contains OTP code and auth method data
    */
-  async deleteAccount(authPayload: { phoneNumber?: string; email?: string; otp: string }): Promise<void> {
+  async deleteAccount (authPayload: { phoneNumber?: string, email?: string, otp: string }): Promise<void> {
     if (!this.userIdHash) {
       throw new Error('User ID hash not set. Cannot delete account.')
     }

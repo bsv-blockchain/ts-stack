@@ -6,7 +6,7 @@ import { BulkFileDataManager, BulkFileDataManagerOptions } from './util/BulkFile
 import { ChaintracksStorageIdb, ChaintracksStorageIdbOptions } from './Storage/ChaintracksStorageIdb'
 import { buildChaintracksOptionsWithIngestors } from './configureChaintracksIngestors'
 
-export function createDefaultIdbChaintracksOptions(
+export function createDefaultIdbChaintracksOptions (
   chain: Chain,
   whatsonchainApiKey: string = '',
   maxPerFile: number = 100000,

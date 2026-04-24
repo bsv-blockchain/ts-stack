@@ -1,19 +1,19 @@
 import { SingleWriterMultiReaderLock } from '../SingleWriterMultiReaderLock'
 
 class TestLock {
-  private lock: SingleWriterMultiReaderLock = new SingleWriterMultiReaderLock()
+  private readonly lock: SingleWriterMultiReaderLock = new SingleWriterMultiReaderLock()
   private value: number = 0
 
-  async readValue(): Promise<number> {
-    return this.lock.withReadLock(async () => {
+  async readValue (): Promise<number> {
+    return await this.lock.withReadLock(async () => {
       // Simulate some read delay
       await new Promise(resolve => setTimeout(resolve, 10))
       return this.value
     })
   }
 
-  async writeValue(newValue: number): Promise<number> {
-    return this.lock.withWriteLock(async () => {
+  async writeValue (newValue: number): Promise<number> {
+    return await this.lock.withWriteLock(async () => {
       // Simulate some write delay
       await new Promise(resolve => setTimeout(resolve, 50))
       this.value = newValue
@@ -21,8 +21,8 @@ class TestLock {
     })
   }
 
-  async test(): Promise<number[]> {
-    const promises: Promise<number>[] = []
+  async test (): Promise<number[]> {
+    const promises: Array<Promise<number>> = []
     const readCount = 3
     for (let i = 0; i < readCount; i++) promises.push(this.readValue())
     promises.push(this.writeValue(42))

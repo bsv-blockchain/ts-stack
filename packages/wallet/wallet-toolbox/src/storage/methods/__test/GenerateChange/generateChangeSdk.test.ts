@@ -137,8 +137,8 @@ describe('generateChange tests', () => {
 
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
 
-    expectToThrowWERR(sdk.WERR_INSUFFICIENT_FUNDS, () =>
-      generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+    expectToThrowWERR(sdk.WERR_INSUFFICIENT_FUNDS, async () =>
+      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
     )
   })
 
@@ -155,8 +155,8 @@ describe('generateChange tests', () => {
 
     const { allocateChangeInput, releaseChangeInput } = generateChangeSdkMakeStorage(availableChange)
 
-    expectToThrowWERR(sdk.WERR_INSUFFICIENT_FUNDS, () =>
-      generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
+    expectToThrowWERR(sdk.WERR_INSUFFICIENT_FUNDS, async () =>
+      await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
     )
   })
 
@@ -292,7 +292,7 @@ describe('generateChange tests', () => {
     const { allocateChangeInput, releaseChangeInput, getLog } = generateChangeSdkMakeStorage(availableChange)
 
     const r = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput)
-    //console.log(getLog())
+    // console.log(getLog())
     expect(JSON.stringify(r)).toBe(
       '{"allocatedChangeInputs":[{"satoshis":6323,"outputId":15005,"spendable":false}],"changeOutputs":[{"satoshis":1597,"lockingScriptLength":25},{"satoshis":1837,"lockingScriptLength":25},{"satoshis":1925,"lockingScriptLength":25},{"satoshis":1019,"lockingScriptLength":25},{"satoshis":1178,"lockingScriptLength":25}],"size":411,"fee":1,"satsPerKb":2}'
     )
@@ -1158,7 +1158,7 @@ describe('generateChange tests', () => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function expectToThrowWERR<R>(expectedClass: new (...args: any[]) => any, fn: () => Promise<R>): Promise<void> {
+async function expectToThrowWERR<R> (expectedClass: new (...args: any[]) => any, fn: () => Promise<R>): Promise<void> {
   try {
     await fn()
   } catch (eu: unknown) {
@@ -1170,7 +1170,7 @@ async function expectToThrowWERR<R>(expectedClass: new (...args: any[]) => any, 
   throw new Error(`${expectedClass.name} was not thrown`)
 }
 
-function makeTransaction(params: GenerateChangeSdkParams, results: GenerateChangeSdkResult): BsvTransaction {
+function makeTransaction (params: GenerateChangeSdkParams, results: GenerateChangeSdkResult): BsvTransaction {
   const tx = new BsvTransaction()
   for (const i of params.fixedInputs) {
     tx.inputs.push({
@@ -1201,7 +1201,7 @@ function makeTransaction(params: GenerateChangeSdkParams, results: GenerateChang
   return tx
 }
 
-function expectTransactionSize(params: GenerateChangeSdkParams, results: GenerateChangeSdkResult) {
+function expectTransactionSize (params: GenerateChangeSdkParams, results: GenerateChangeSdkResult) {
   const tx = makeTransaction(params, results)
   const size = tx.toBinary().length
   if (size !== results.size) throw new sdk.WERR_INTERNAL(`expectTransaction actual ${size} expected ${results.size}`)

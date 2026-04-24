@@ -44,24 +44,24 @@ describe('BulkFileDataManager tests', () => {
   })
 
   afterAll(async () => {
-    if (server349) {
+    if (server349 != null) {
       await server349.stop()
     }
-    if (server379) {
+    if (server379 != null) {
       await server379.stop()
     }
-    if (server399) {
+    if (server399 != null) {
       await server399.stop()
     }
-    if (server402) {
+    if (server402 != null) {
       await server402.stop()
     }
-    if (server499) {
+    if (server499 != null) {
       await server499.stop()
     }
   })
 
-  async function test0Body(manager: BulkFileDataManager) {
+  async function test0Body (manager: BulkFileDataManager) {
     // Verify the default options and minimum expected files from default CDN
     expect(manager.chain).toBe(chain)
     expect(manager.maxPerFile).toBe(100000)
@@ -85,7 +85,7 @@ describe('BulkFileDataManager tests', () => {
     if (!runSlowTests) return
     const options = BulkFileDataManager.createDefaultOptions(chain)
     const manager = new BulkFileDataManager(options)
-    const storage = await setupStorageKnex(manager, `BulkFileDataManager.test_0a`, false)
+    const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_0a', false)
 
     await test0Body(manager)
 
@@ -96,14 +96,14 @@ describe('BulkFileDataManager tests', () => {
     if (!runSlowTests) return
     const options = BulkFileDataManager.createDefaultOptions(chain)
     const manager = new BulkFileDataManager(options)
-    const storage = await setupStorageKnex(manager, `BulkFileDataManager.test_0b`, true)
+    const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_0b', true)
 
     await test0Body(manager)
 
     await storage.destroy()
   })
 
-  async function test1Body(manager: BulkFileDataManager, minCount: number) {
+  async function test1Body (manager: BulkFileDataManager, minCount: number) {
     // Verify header retrieval from different heights and data caching
     expect(countDatas(manager)).toBe(minCount)
     let h0 = await manager.findHeaderForHeightOrUndefined(0)
@@ -154,7 +154,7 @@ describe('BulkFileDataManager tests', () => {
     if (!runSlowTests) return
     const options = BulkFileDataManager.createDefaultOptions(chain)
     const manager = new BulkFileDataManager(options)
-    const storage = await setupStorageKnex(manager, `BulkFileDataManager.test_1a`, true)
+    const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_1a', true)
 
     await test1Body(manager, 2)
 
@@ -182,7 +182,7 @@ describe('BulkFileDataManager tests', () => {
     }
   })
 
-  async function test4Body(manager: BulkFileDataManager, maxCount: number) {
+  async function test4Body (manager: BulkFileDataManager, maxCount: number) {
     expect(countDatas(manager)).toBe(2)
     const range = await manager.getHeightRange()
     expect(range.maxHeight).toBe(349)
@@ -216,14 +216,14 @@ describe('BulkFileDataManager tests', () => {
 
   test('4a add two incremental chunks overwrite by CDN', async () => {
     const manager = await setupManagerOnLocalServer(server349!)
-    const storage = await setupStorageKnex(manager, `BulkFileDataManager.test_4a`, true)
+    const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_4a', true)
 
     await test4Body(manager, 2)
 
     await storage.destroy()
   })
 
-  async function test5Body(manager: BulkFileDataManager, maxCount: number) {
+  async function test5Body (manager: BulkFileDataManager, maxCount: number) {
     expect(countDatas(manager)).toBe(2)
     await updateFromLocalServer(manager, server379!)
     await manager.ReValidate()
@@ -250,14 +250,14 @@ describe('BulkFileDataManager tests', () => {
 
   test('5a add CDN incremental CDN incremental', async () => {
     const manager = await setupManagerOnLocalServer(server349!)
-    const storage = await setupStorageKnex(manager, `BulkFileDataManager.test_5a`, true)
+    const storage = await setupStorageKnex(manager, 'BulkFileDataManager.test_5a', true)
 
     await test5Body(manager, 2)
 
     await storage.destroy()
   })
 
-  async function setupStorageKnex(
+  async function setupStorageKnex (
     manager: BulkFileDataManager,
     filename: string,
     deleteSqliteFile: boolean
@@ -282,7 +282,7 @@ describe('BulkFileDataManager tests', () => {
     return storage
   }
 
-  async function setupManagerOnLocalServer(server: LocalCdnServer) {
+  async function setupManagerOnLocalServer (server: LocalCdnServer) {
     const options = BulkFileDataManager.createDefaultOptions(chain)
     options.fromKnownSourceUrl = undefined
     const manager = new BulkFileDataManager(options)
@@ -291,14 +291,14 @@ describe('BulkFileDataManager tests', () => {
   }
 })
 
-async function updateFromLocalServer(manager: BulkFileDataManager, server: LocalCdnServer) {
+async function updateFromLocalServer (manager: BulkFileDataManager, server: LocalCdnServer) {
   await manager.updateFromUrl(`http://localhost:${server.port}/blockheaders`)
 }
 
-function countDatas(manager: BulkFileDataManager): number {
+function countDatas (manager: BulkFileDataManager): number {
   let count = 0
   for (const file of manager['bfds'] as BulkHeaderFileInfo[]) {
-    if (file.data) count += 1
+    if (file.data != null) count += 1
   }
   return count
 }

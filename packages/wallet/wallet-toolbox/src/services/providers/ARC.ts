@@ -30,7 +30,7 @@ export interface ArcConfig {
   headers?: Record<string, string>
 }
 
-function defaultDeploymentId(): string {
+function defaultDeploymentId (): string {
   return `ts-sdk-${Utils.toHex(Random(16))}`
 }
 
@@ -53,16 +53,16 @@ export class ARC {
    * @param {string} URL - The URL endpoint for the ARC API.
    * @param {ArcConfig} config - Configuration options for the ARC broadcaster.
    */
-  constructor(URL: string, config?: ArcConfig, name?: string)
+  constructor (URL: string, config?: ArcConfig, name?: string)
   /**
    * Constructs an instance of the ARC broadcaster.
    *
    * @param {string} URL - The URL endpoint for the ARC API.
    * @param {string} apiKey - The API key used for authorization with the ARC API.
    */
-  constructor(URL: string, apiKey?: string, name?: string)
+  constructor (URL: string, apiKey?: string, name?: string)
 
-  constructor(URL: string, config?: string | ArcConfig, name?: string) {
+  constructor (URL: string, config?: string | ArcConfig, name?: string) {
     this.name = name ?? 'ARC'
     this.URL = URL
     if (typeof config === 'string') {
@@ -86,7 +86,7 @@ export class ARC {
   /**
    * Constructs a dictionary of the default & supplied request headers.
    */
-  private requestHeaders(): Record<string, string> {
+  private requestHeaders (): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'XDeployment-ID': this.deploymentId
@@ -126,9 +126,9 @@ export class ARC {
    * @param txids
    * @returns
    */
-  async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
+  async postRawTx (rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
     let txid = Utils.toHex(doubleSha256BE(Utils.toArray(rawTx, 'hex')))
-    if (txids) {
+    if (txids != null) {
       txid = txids.slice(-1)[0]
     } else {
       txids = [txid]
@@ -210,7 +210,7 @@ export class ARC {
           }
         } else if (d && typeof d === 'object') {
           ed.more = d
-          ed.detail = d['detail']
+          ed.detail = d.detail
           if (typeof ed.detail !== 'string') ed.detail = undefined
           if (ed.detail) {
             n.detail = ed.detail
@@ -244,7 +244,7 @@ export class ARC {
    * @param txids
    * @returns
    */
-  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
+  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult> {
     const r: PostBeefResult = {
       name: this.name,
       status: 'success',
@@ -317,7 +317,7 @@ export class ARC {
    * @param txid
    * @returns
    */
-  async getTxData(txid: string): Promise<ArcMinerGetTxData> {
+  async getTxData (txid: string): Promise<ArcMinerGetTxData> {
     const requestOptions: HttpClientRequestOptions = {
       method: 'GET',
       headers: this.requestHeaders()

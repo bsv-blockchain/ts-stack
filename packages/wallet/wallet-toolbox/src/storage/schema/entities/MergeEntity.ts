@@ -11,7 +11,7 @@ import { EntityTimeStamp } from '../../../sdk/types'
 export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>> {
   idMap: Record<number, number>
 
-  constructor(
+  constructor (
     public stateArray: API[] | undefined,
     public find: (
       storage: EntityStorage,
@@ -19,14 +19,14 @@ export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>
       ei: API,
       syncMap: SyncMap,
       trx?: TrxToken
-    ) => Promise<{ found: boolean; eo: DE; eiId: number }>,
+    ) => Promise<{ found: boolean, eo: DE, eiId: number }>,
     /** id map for primary id of API and DE object. */
     public esm: EntitySyncMap
   ) {
     this.idMap = esm.idMap
   }
 
-  updateSyncMap(map: Record<number, number>, inId: number, outId: number) {
+  updateSyncMap (map: Record<number, number>, inId: number, outId: number) {
     const i = verifyId(inId)
     const o = verifyId(outId)
     if (map[i] === undefined) {
@@ -37,16 +37,16 @@ export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>
   /**
    * @param since date of current sync chunk
    */
-  async merge(
+  async merge (
     since: Date | undefined,
     storage: EntityStorage,
     userId: number,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ inserts: number; updates: number }> {
-    let inserts = 0,
-      updates = 0
-    if (!this.stateArray) return { inserts, updates }
+  ): Promise<{ inserts: number, updates: number }> {
+    let inserts = 0
+    let updates = 0
+    if (this.stateArray == null) return { inserts, updates }
     for (const ei of this.stateArray) {
       this.esm.maxUpdated_at = maxDate(this.esm.maxUpdated_at, ei.updated_at)
       /**

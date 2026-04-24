@@ -1,6 +1,6 @@
 import { Knex } from 'knex'
 import { ChaintracksKnexMigrations } from './ChaintracksKnexMigrations'
-import { InsertHeaderResult, ChaintracksStorageBaseOptions } from '../Api/ChaintracksStorageApi'
+import { InsertHeaderResult, ChaintracksStorageBaseOptions, ChaintracksStorageBulkFileApi } from '../Api/ChaintracksStorageApi'
 import { ChaintracksStorageBase } from './ChaintracksStorageBase'
 import { LiveBlockHeader } from '../Api/BlockHeaderApi'
 import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
@@ -9,7 +9,6 @@ import { verifyOneOrNone } from '../../../../utility/utilityHelpers'
 import { DBType } from '../../../../storage/StorageReader'
 import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 import { HeightRange } from '../util/HeightRange'
-import { ChaintracksStorageBulkFileApi } from '../Api/ChaintracksStorageApi'
 import { Chain } from '../../../../sdk/types'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
 import { determineDBType } from '../../../../storage/schema/KnexMigrations'
@@ -28,7 +27,7 @@ export interface ChaintracksStorageKnexOptions extends ChaintracksStorageBaseOpt
  * Also see `chaintracksStorageMemory` which leverages Knex support for an in memory database.
  */
 export class ChaintracksStorageKnex extends ChaintracksStorageBase implements ChaintracksStorageBulkFileApi {
-  static createStorageKnexOptions(chain: Chain, knex?: Knex): ChaintracksStorageKnexOptions {
+  static createStorageKnexOptions (chain: Chain, knex?: Knex): ChaintracksStorageKnexOptions {
     const options: ChaintracksStorageKnexOptions = {
       ...ChaintracksStorageBase.createStorageBaseOptions(chain),
       knex
@@ -39,20 +38,20 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
   knex: Knex
   _dbtype?: DBType
   bulkFilesTableName: string = 'bulk_files'
-  headerTableName: string = `live_headers`
+  headerTableName: string = 'live_headers'
 
-  constructor(options: ChaintracksStorageKnexOptions) {
+  constructor (options: ChaintracksStorageKnexOptions) {
     super(options)
-    if (!options.knex) throw new Error('The knex options property is required.')
+    if (options.knex == null) throw new Error('The knex options property is required.')
     this.knex = options.knex
   }
 
-  get dbtype(): DBType {
+  get dbtype (): DBType {
     if (!this._dbtype) throw new WERR_INVALID_OPERATION('must call makeAvailable first')
     return this._dbtype
   }
 
-  override async shutdown(): Promise<void> {
+  override async shutdown (): Promise<void> {
     try {
       await this.knex.destroy()
     } catch {
@@ -60,7 +59,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     }
   }
 
-  override async makeAvailable(): Promise<void> {
+  override async makeAvailable (): Promise<void> {
     if (this.isAvailable && this.hasMigrated) return
     // Not a base class policy, but we want to ensure migrations are run before getting to business.
     if (!this.hasMigrated) {
@@ -74,13 +73,13 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     }
   }
 
-  override async migrateLatest(): Promise<void> {
+  override async migrateLatest (): Promise<void> {
     if (this.hasMigrated) return
     await this.knex.migrate.latest({ migrationSource: new ChaintracksKnexMigrations(this.chain) })
     await super.migrateLatest()
   }
 
-  override async dropAllData(): Promise<void> {
+  override async dropAllData (): Promise<void> {
     // Only using migrations to migrate down, don't need valid properties for settings table.
     const config = {
       migrationSource: new ChaintracksKnexMigrations('test')
@@ -90,7 +89,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
       try {
         const r = await this.knex.migrate.down(config)
         if (!r) {
-          console.error(`Migration returned falsy result await this.knex.migrate.down(config)`)
+          console.error('Migration returned falsy result await this.knex.migrate.down(config)')
           break
         }
       } catch (eu: unknown) {
@@ -101,66 +100,68 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     await super.dropAllData()
   }
 
-  override async destroy(): Promise<void> {
+  override async destroy (): Promise<void> {
     await this.knex.destroy()
   }
 
-  override async findLiveHeightRange(): Promise<HeightRange> {
+  override async findLiveHeightRange (): Promise<HeightRange> {
     return new HeightRange(
       ((await this.knex(this.headerTableName).where({ isActive: true }).min('height as v')).pop()?.v as number) || 0,
       ((await this.knex(this.headerTableName).where({ isActive: true }).max('height as v')).pop()?.v as number) || -1
     )
   }
 
-  override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> {
-    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ headerId: headerId })
+  override async findLiveHeaderForHeaderId (headerId: number): Promise<LiveBlockHeader> {
+    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ headerId })
     if (!header) throw new Error(`HeaderId ${headerId} not found in live header database.`)
     return header
   }
 
-  override async findChainTipHeader(): Promise<LiveBlockHeader> {
+  override async findChainTipHeader (): Promise<LiveBlockHeader> {
     const [tip] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ isActive: true, isChainTip: true })
     if (!tip) throw new Error('Database contains no active chain tip header.')
     return tip
   }
 
-  override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> {
+  override async findChainTipHeaderOrUndefined (): Promise<LiveBlockHeader | undefined> {
     const [tip] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ isActive: true, isChainTip: true })
     return tip
   }
 
-  async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> {
-    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ height: height, isActive: true })
-    return header ? header : null
+  async findLiveHeaderForHeight (height: number): Promise<LiveBlockHeader | null> {
+    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ height, isActive: true })
+    return header || null
   }
 
-  async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> {
-    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ hash: hash })
-    const result = header ? header : null
+  async findLiveHeaderForBlockHash (hash: string): Promise<LiveBlockHeader | null> {
+    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ hash })
+    const result = header || null
     return result
   }
 
-  async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> {
-    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ merkleRoot: merkleRoot })
+  async findLiveHeaderForMerkleRoot (merkleRoot: string): Promise<LiveBlockHeader | null> {
+    const [header] = await this.knex<LiveBlockHeader>(this.headerTableName).where({ merkleRoot })
     return header
   }
 
-  async deleteBulkFile(fileId: number): Promise<number> {
-    const count = await this.knex(this.bulkFilesTableName).where({ fileId: fileId }).del()
+  async deleteBulkFile (fileId: number): Promise<number> {
+    const count = await this.knex(this.bulkFilesTableName).where({ fileId }).del()
     return count
   }
 
-  async insertBulkFile(file: BulkHeaderFileInfo): Promise<number> {
+  async insertBulkFile (file: BulkHeaderFileInfo): Promise<number> {
     if (!file.fileId) delete file.fileId
     const [id] = await this.knex(this.bulkFilesTableName).insert(file)
     file.fileId = id
     return id
   }
-  async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number> {
-    const n = await this.knex(this.bulkFilesTableName).where({ fileId: fileId }).update(file)
+
+  async updateBulkFile (fileId: number, file: BulkHeaderFileInfo): Promise<number> {
+    const n = await this.knex(this.bulkFilesTableName).where({ fileId }).update(file)
     return n
   }
-  async getBulkFiles(): Promise<BulkHeaderFileInfo[]> {
+
+  async getBulkFiles (): Promise<BulkHeaderFileInfo[]> {
     const files = await this.knex<BulkHeaderFileInfo>(this.bulkFilesTableName)
       .select(
         'fileId',
@@ -180,26 +181,26 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     return files
   }
 
-  dbTypeSubstring(source: string, fromOffset: number, forLength?: number) {
+  dbTypeSubstring (source: string, fromOffset: number, forLength?: number) {
     if (this.dbtype === 'MySQL') return `substring(${source} from ${fromOffset} for ${forLength!})`
     return `substr(${source}, ${fromOffset}, ${forLength})`
   }
 
-  async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> {
+  async getBulkFileData (fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> {
     await this.makeAvailable()
     if (!Number.isInteger(fileId)) throw new WERR_INVALID_PARAMETER('fileId', 'a valid, integer bulk_files fileId')
-    let data: Uint8Array | undefined = undefined
+    let data: Uint8Array | undefined
     if (Number.isInteger(offset) && Number.isInteger(length)) {
-      let rs: { data: Buffer | null }[] = await this.knex.raw(
+      let rs: Array<{ data: Buffer | null }> = await this.knex.raw(
         `select ${this.dbTypeSubstring('data', offset! + 1, length)} as data from ${this.bulkFilesTableName} where fileId = '${fileId}'`
       )
-      if (this.dbtype === 'MySQL') rs = (rs as unknown as { data: Buffer | null }[][])[0]
+      if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ data: Buffer | null }>>)[0]
       const r = verifyOneOrNone(rs)
-      if (r && r.data) {
+      if ((r != null) && (r.data != null)) {
         data = Uint8Array.from(r.data)
       }
     } else {
-      const r = verifyOneOrNone(await this.knex(this.bulkFilesTableName).where({ fileId: fileId }).select('data'))
+      const r = verifyOneOrNone(await this.knex(this.bulkFilesTableName).where({ fileId }).select('data'))
       if (r.data) data = Uint8Array.from(r.data)
     }
     return data
@@ -209,7 +210,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
    * @param header Header to attempt to add to live storage.
    * @returns details of conditions found attempting to insert header
    */
-  async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> {
+  async insertHeader (header: BlockHeader): Promise<InsertHeaderResult> {
     const table = this.headerTableName
 
     const r: InsertHeaderResult = {
@@ -238,7 +239,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
       }
 
       // This is the existing previous header to the one being inserted...
-      let [oneBack] = await trx<LiveBlockHeader>(table).where({ hash: header.previousHash })
+      const [oneBack] = await trx<LiveBlockHeader>(table).where({ hash: header.previousHash })
 
       if (!oneBack) {
         // Check if this is first live header...
@@ -247,7 +248,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
         if (count === 0) {
           // If this is the first live header, the last bulk header (if there is one) is the previous header.
           const lbf = await this.bulkManager.getLastFile()
-          if (!lbf) throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
+          if (lbf == null) throw new WERR_INVALID_OPERATION('bulk headers must exist before first live header can be added')
           if (header.previousHash === lbf.lastHash && header.height === lbf.firstHeight + lbf.count) {
             // Valid first live header. Add it.
             const chainWork = addWork(lbf.lastChainWork, convertBitsToWork(header.bits))
@@ -320,8 +321,8 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
         }
 
         if (!(oneBack.isActive && oneBack.isChainTip))
-          // If this is the new active chain tip, and oneBack was not, this is a reorg.
-          r.reorgDepth = Math.min(r.priorTip.height, header.height) - activeAncestor.height
+        // If this is the new active chain tip, and oneBack was not, this is a reorg.
+        { r.reorgDepth = Math.min(r.priorTip.height, header.height) - activeAncestor.height }
 
         if (activeAncestor.headerId !== oneBack.headerId) {
           // Deactivate headers from the current active chain tip up to but excluding our activeAncestor:
@@ -365,13 +366,13 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     return r
   }
 
-  async findMaxHeaderId(): Promise<number> {
+  async findMaxHeaderId (): Promise<number> {
     return ((await this.knex(this.headerTableName).max('headerId as v')).pop()?.v as number) || -1
-    //const [resultrow] = await this.knex(this.headerTableName).max('headerId as maxHeaderId')
-    //return resultrow?.maxHeaderId || 0
+    // const [resultrow] = await this.knex(this.headerTableName).max('headerId as maxHeaderId')
+    // return resultrow?.maxHeaderId || 0
   }
 
-  override async deleteLiveBlockHeaders(): Promise<void> {
+  override async deleteLiveBlockHeaders (): Promise<void> {
     const table = this.headerTableName
     await this.knex.transaction(async trx => {
       await trx<LiveBlockHeader>(table).update({ previousHeaderId: null })
@@ -379,15 +380,15 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     })
   }
 
-  override async deleteBulkBlockHeaders(): Promise<void> {
+  override async deleteBulkBlockHeaders (): Promise<void> {
     const table = this.bulkFilesTableName
     await this.knex.transaction(async trx => {
       await trx<BulkHeaderFileInfo>(table).del()
     })
   }
 
-  async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> {
-    return this.knex.transaction(async trx => {
+  async deleteOlderLiveBlockHeaders (maxHeight: number): Promise<number> {
+    return await this.knex.transaction(async trx => {
       try {
         const tableName = this.headerTableName
         await trx(tableName)
@@ -409,7 +410,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     })
   }
 
-  async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> {
+  async getLiveHeaders (range: HeightRange): Promise<LiveBlockHeader[]> {
     const headers = await this.knex<LiveBlockHeader>(this.headerTableName)
       .where({ isActive: true })
       .andWhere('height', '>=', range.minHeight)
@@ -418,7 +419,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     return headers
   }
 
-  concatSerializedHeaders(bufs: number[][]): number[] {
+  concatSerializedHeaders (bufs: number[][]): number[] {
     const r: number[] = [bufs.length * 80]
     for (const bh of bufs) {
       for (const b of bh) {
@@ -428,7 +429,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     return r
   }
 
-  async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> {
+  async liveHeadersForBulk (count: number): Promise<LiveBlockHeader[]> {
     const headers = await this.knex<LiveBlockHeader>(this.headerTableName)
       .where({ isActive: true })
       .limit(count)

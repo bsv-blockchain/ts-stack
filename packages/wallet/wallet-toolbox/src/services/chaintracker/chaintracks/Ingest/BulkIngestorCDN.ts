@@ -2,8 +2,7 @@ import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 import { BulkIngestorBaseOptions } from '../Api/BulkIngestorApi'
 import { BulkIngestorBase } from './BulkIngestorBase'
-import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
-import { BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
+import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
 import { HeightRange, HeightRanges } from '../util/HeightRange'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { WalletError, WERR_INVALID_PARAMETER } from '../../../../sdk'
@@ -38,7 +37,7 @@ export class BulkIngestorCDN extends BulkIngestorBase {
    * @param localCachePath defaults to './data/bulk_cdn_headers/'
    * @returns
    */
-  static createBulkIngestorCDNOptions(
+  static createBulkIngestorCDNOptions (
     chain: Chain,
     cdnUrl: string,
     fetch: ChaintracksFetchApi,
@@ -63,7 +62,7 @@ export class BulkIngestorCDN extends BulkIngestorBase {
   selectedFiles: BulkHeaderFileInfo[] | undefined
   currentRange: HeightRange | undefined
 
-  constructor(options: BulkIngestorCDNOptions) {
+  constructor (options: BulkIngestorCDNOptions) {
     super(options)
     if (!options.jsonResource) throw new Error('The jsonResource options property is required.')
     if (!options.cdnUrl) throw new Error('The cdnUrl options property is required.')
@@ -74,11 +73,11 @@ export class BulkIngestorCDN extends BulkIngestorBase {
     this.maxPerFile = options.maxPerFile
   }
 
-  override async getPresentHeight(): Promise<number | undefined> {
+  override async getPresentHeight (): Promise<number | undefined> {
     return undefined
   }
 
-  getJsonHttpHeaders(): Record<string, string> {
+  getJsonHttpHeaders (): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json'
     }
@@ -115,7 +114,7 @@ export class BulkIngestorCDN extends BulkIngestorBase {
    * @param priorLiveHeaders
    * @returns
    */
-  async fetchHeaders(
+  async fetchHeaders (
     before: HeightRanges,
     fetchRange: HeightRange,
     bulkRange: HeightRange,
@@ -127,7 +126,7 @@ export class BulkIngestorCDN extends BulkIngestorBase {
 
     const url = toUrl(this.jsonResource)
     this.availableBulkFiles = await this.fetch.fetchJson(url)
-    if (!this.availableBulkFiles) {
+    if (this.availableBulkFiles == null) {
       throw new WERR_INVALID_PARAMETER(
         `${this.jsonResource}`,
         `a valid BulkHeaderFilesInfo JSON resource available from ${url}`
@@ -140,10 +139,10 @@ export class BulkIngestorCDN extends BulkIngestorBase {
     )
     for (const bf of this.selectedFiles) {
       if (!bf.fileHash) {
-        throw new WERR_INVALID_PARAMETER(`fileHash`, `valid for alll files in ${this.jsonResource} from ${url}`)
+        throw new WERR_INVALID_PARAMETER('fileHash', `valid for alll files in ${this.jsonResource} from ${url}`)
       }
       if (!bf.chain || bf.chain !== this.chain) {
-        throw new WERR_INVALID_PARAMETER(`chain`, `"${this.chain}" for all files in ${this.jsonResource} from ${url}`)
+        throw new WERR_INVALID_PARAMETER('chain', `"${this.chain}" for all files in ${this.jsonResource} from ${url}`)
       }
       if (!bf.sourceUrl || bf.sourceUrl !== this.cdnUrl) bf.sourceUrl = this.cdnUrl
     }

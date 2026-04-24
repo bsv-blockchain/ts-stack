@@ -10,7 +10,7 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { WERR_INTERNAL } from '../../sdk'
 
-export async function listOutputs(
+export async function listOutputs (
   dsk: StorageKnex,
   auth: AuthId,
   vargs: Validation.ValidListOutputsArgs,
@@ -47,7 +47,7 @@ export async function listOutputs(
 
   let { specOp, basket, tags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
 
-  let basketId: number | undefined = undefined
+  let basketId: number | undefined
   const basketsById: Record<number, TableOutputBasket> = {}
   if (basket) {
     const baskets = await dsk.findOutputBaskets({
@@ -59,20 +59,20 @@ export async function listOutputs(
       return r
     }
     basketId = baskets[0].basketId!
-    basketsById[basketId!] = baskets[0]
+    basketsById[basketId] = baskets[0]
   }
 
   let tagIds: number[] = []
   const specOpTags: string[] = []
-  if (specOp && specOp.tagsParamsCount) {
+  if ((specOp != null) && specOp.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
   }
-  if (specOp && specOp.tagsToIntercept) {
+  if ((specOp != null) && (specOp.tagsToIntercept != null)) {
     // Pull out tags used by current specOp
     const ts = tags
     tags = []
     for (const t of ts) {
-      if (specOp.tagsToIntercept.length === 0 || specOp.tagsToIntercept.indexOf(t) >= 0) {
+      if (specOp.tagsToIntercept.length === 0 || specOp.tagsToIntercept.includes(t)) {
         specOpTags.push(t)
         if (t === 'all') {
           basketId = undefined
@@ -83,7 +83,7 @@ export async function listOutputs(
     }
   }
 
-  if (specOp && specOp.resultFromTags) {
+  if ((specOp != null) && (specOp.resultFromTags != null)) {
     const r = await specOp.resultFromTags(dsk, auth, vargs, specOpTags)
     return r
   }
@@ -91,24 +91,24 @@ export async function listOutputs(
   if (tags && tags.length > 0) {
     const q = k<TableOutputTag>('output_tags')
       .where({
-        userId: userId,
+        userId,
         isDeleted: false
       })
       .whereNotNull('outputTagId')
       .whereIn('tag', tags)
       .select('outputTagId')
     const r = await q
-    tagIds = r.map(r => r.outputTagId!)
+    tagIds = r.map(r => r.outputTagId)
   }
 
   const isQueryModeAll = vargs.tagQueryMode === 'all'
   if (isQueryModeAll && tagIds.length < tags.length)
-    // all the required tags don't exist, impossible to satisfy.
-    return r
+  // all the required tags don't exist, impossible to satisfy.
+  { return r }
 
   if (!isQueryModeAll && tagIds.length === 0 && tags.length > 0)
-    // any and only non-existing tags, impossible to satisfy.
-    return r
+  // any and only non-existing tags, impossible to satisfy.
+  { return r }
 
   let columns: string[] = [
     'outputId',
@@ -122,11 +122,10 @@ export async function listOutputs(
     'outputDescription',
     'spendingDescription'
   ]
-  if (vargs.includeLockingScripts || specOp?.includeOutputScripts)
-    columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset']
+  if (vargs.includeLockingScripts || specOp?.includeOutputScripts) { columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset'] }
 
   const noTags = tagIds.length === 0
-  const includeSpent = specOp && specOp.includeSpent ? specOp.includeSpent : false
+  const includeSpent = (specOp != null) && specOp.includeSpent ? specOp.includeSpent : false
 
   const txStatusAllowed = ['completed', 'unproven', 'nosend', 'sending']
   const outputColumns = columns.map(c => `o.${c} as ${c}`)
@@ -187,14 +186,14 @@ export async function listOutputs(
       applyBaseFilters(q)
       q.sum('o.satoshis as totalSatoshis')
       const rsum = await q.first()
-      r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
+      r.totalOutputs = Number(rsum ? rsum.totalSatoshis || 0 : 0)
       return r
     } else {
       columns = ['outputId', 'basketId', 'spendable', 'satoshis']
       const q = makeWithTagsQuery()
       q.sum('o.satoshis as totalSatoshis')
       const rsum = await q.first()
-      r.totalOutputs = Number(rsum ? rsum['totalSatoshis'] || 0 : 0)
+      r.totalOutputs = Number(rsum ? rsum.totalSatoshis || 0 : 0)
       return r
     }
   }
@@ -202,15 +201,15 @@ export async function listOutputs(
   const { q, qcount } = noTags ? makeWithoutTagsQueries() : makeWithTagsQueries()
 
   // Sort order when limit and offset are possible must be ascending for determinism.
-  if (!specOp || !specOp.ignoreLimit) q.limit(limit).offset(offset)
+  if ((specOp == null) || !specOp.ignoreLimit) q.limit(limit).offset(offset)
 
   q.orderBy('o.outputId', orderBy)
 
   let outputs: TableOutput[] = await q
 
-  if (specOp) {
-    if (specOp.filterOutputs) outputs = await specOp.filterOutputs(dsk, auth, vargs, specOpTags, outputs)
-    if (specOp.resultFromOutputs) {
+  if (specOp != null) {
+    if (specOp.filterOutputs != null) outputs = await specOp.filterOutputs(dsk, auth, vargs, specOpTags, outputs)
+    if (specOp.resultFromOutputs != null) {
       const r = await specOp.resultFromOutputs(dsk, auth, vargs, specOpTags, outputs)
       return r
     }
@@ -218,7 +217,7 @@ export async function listOutputs(
 
   if (!limit || outputs.length < limit) r.totalOutputs = outputs.length
   else {
-    const total = verifyOne(await qcount)['total']
+    const total = verifyOne(await qcount).total
     r.totalOutputs = Number(total)
   }
 
@@ -296,20 +295,20 @@ export async function listOutputs(
       outpoint: `${o.txid}.${o.vout}`
     }
     r.outputs.push(wo)
-    //if (vargs.includeBasket && o.basketId) {
+    // if (vargs.includeBasket && o.basketId) {
     //    if (!basketsById[o.basketId]) {
     //        basketsById[o.basketId] = verifyTruthy(await dsk.findOutputBasketId(o.basketId!, trx))
     //    }
     //    wo.basket = basketsById[o.basketId].name
-    //}
+    // }
     if (vargs.includeCustomInstructions && o.customInstructions) wo.customInstructions = o.customInstructions
     if (vargs.includeLabels && o.transactionId !== undefined) wo.labels = labelsByTransactionId[o.transactionId] || []
     if (vargs.includeTags && o.outputId !== undefined) wo.tags = tagsByOutputId[o.outputId] || []
     if (vargs.includeLockingScripts) {
       await dsk.validateOutputScript(o, trx)
-      if (o.lockingScript) wo.lockingScript = asString(o.lockingScript)
+      if (o.lockingScript != null) wo.lockingScript = asString(o.lockingScript)
     }
-    if (vargs.includeTransactions && !beef.findTxid(o.txid!)) {
+    if (vargs.includeTransactions && (beef.findTxid(o.txid!) == null)) {
       await dsk.getValidBeefForKnownTxid(o.txid!, beef, undefined, vargs.knownTxids, trx)
     }
   }

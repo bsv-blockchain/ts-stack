@@ -64,7 +64,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   dbName: string
   db?: IDBPDatabase<StorageIdbSchema>
 
-  constructor(options: StorageIdbOptions) {
+  constructor (options: StorageIdbOptions) {
     super(options)
     this.dbName = `wallet-toolbox-${this.chain}net`
   }
@@ -80,7 +80,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    * @param storageIdentityKey
    * @returns
    */
-  async migrate(storageName: string, storageIdentityKey: string): Promise<string> {
+  async migrate (storageName: string, storageIdentityKey: string): Promise<string> {
     const db = await this.verifyDB(storageName, storageIdentityKey)
     return db.version.toString()
   }
@@ -95,8 +95,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    *
    * @returns
    */
-  async verifyDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
-    if (this.db) return this.db
+  async verifyDB (storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
+    if (this.db != null) return this.db
     this.db = await this.initDB(storageName, storageIdentityKey)
     this._settings = (await this.db.getAll('settings'))[0]
     this.whenLastAccess = new Date()
@@ -107,16 +107,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    * Convert the standard optional `TrxToken` parameter into either a direct knex database instance,
    * or a Knex.Transaction as appropriate.
    */
-  toDbTrx(
+  toDbTrx (
     stores: string[],
     mode: 'readonly' | 'readwrite',
     trx?: TrxToken
   ): IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'> {
-    if (trx) {
+    if (trx != null) {
       const t = trx as IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'>
       return t
     } else {
-      if (!this.db) throw new Error('not initialized')
+      if (this.db == null) throw new Error('not initialized')
       const db = this.db
       const trx = db.transaction(stores || this.allStores, mode || 'readwrite')
       this.whenLastAccess = new Date()
@@ -133,16 +133,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    *
    * @param trx
    */
-  async readSettings(trx?: TrxToken): Promise<TableSettings> {
+  async readSettings (trx?: TrxToken): Promise<TableSettings> {
     await this.verifyDB()
     return this._settings!
   }
 
-  async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
+  async initDB (storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
     const db = await openDB<StorageIdbSchema>(this.dbName, 1, {
-      upgrade(db, oldVersion, newVersion, transaction) {
+      upgrade (db, oldVersion, newVersion, transaction) {
         if (!db.objectStoreNames.contains('proven_txs')) {
           // proven_txs object store
           const provenTxsStore = db.createObjectStore('proven_txs', {
@@ -323,11 +323,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   // StorageProvider abstract methods
   //
 
-  async reviewStatus(args: { agedLimit: Date; trx?: TrxToken }): Promise<{ log: string }> {
+  async reviewStatus (args: { agedLimit: Date, trx?: TrxToken }): Promise<{ log: string }> {
     return await reviewStatusIdb(this, args)
   }
 
-  async purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
+  async purgeData (params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
     return await purgeDataIdb(this, params, trx)
   }
 
@@ -349,7 +349,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    * @param transactionId
    * @returns next funding output to add to transaction or undefined if there are none.
    */
-  async allocateChangeInput(
+  async allocateChangeInput (
     userId: number,
     basketId: number,
     targetSatoshis: number,
@@ -368,7 +368,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       }
       const outputs = await this.findOutputs(args)
       let output: TableOutput | undefined
-      let scores: { output: TableOutput; score: number }[] = []
+      let scores: Array<{ output: TableOutput, score: number }> = []
       for (const o of outputs) {
         if (exactSatoshis && o.satoshis === exactSatoshis) {
           output = o
@@ -377,12 +377,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         const score = o.satoshis - targetSatoshis
         scores.push({ output: o, score })
       }
-      if (!output) {
+      if (output == null) {
         // sort scores increasing by score property
         scores = scores.sort((a, b) => a.score - b.score)
         // find the first score that is greater than or equal to 0
         const o = scores.find(s => s.score >= 0)
-        if (o) {
+        if (o != null) {
           // stage 2 satisfied (minimally funded)
           output = o.output
         } else if (scores.length > 0) {
@@ -393,7 +393,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           output = undefined
         }
       }
-      if (output) {
+      if (output != null) {
         // mark output as spent by transactionId
         await this.updateOutput(output.outputId, { spendable: false, spentBy: transactionId }, dbTrx)
       }
@@ -403,17 +403,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
   }
 
-  async getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
+  async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
     const r: ProvenOrRawTx = {
       proven: undefined,
       rawTx: undefined,
       inputBEEF: undefined
     }
 
-    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid: txid }, trx }))
-    if (!r.proven) {
-      const req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid: txid }, trx }))
-      if (req && ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'].includes(req.status)) {
+    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
+    if (r.proven == null) {
+      const req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
+      if ((req != null) && ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'].includes(req.status)) {
         r.rawTx = req.rawTx
         r.inputBEEF = req.inputBEEF
       }
@@ -422,7 +422,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return r
   }
 
-  async getRawTxOfKnownValidTransaction(
+  async getRawTxOfKnownValidTransaction (
     txid?: string,
     offset?: number,
     length?: number,
@@ -431,17 +431,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (!txid) return undefined
     if (!this.isAvailable()) await this.makeAvailable()
 
-    let rawTx: number[] | undefined = undefined
+    let rawTx: number[] | undefined
     const r = await this.getProvenOrRawTx(txid, trx)
-    if (r.proven) rawTx = r.proven.rawTx
+    if (r.proven != null) rawTx = r.proven.rawTx
     else rawTx = r.rawTx
-    if (rawTx && offset !== undefined && length !== undefined && Number.isInteger(offset) && Number.isInteger(length)) {
+    if ((rawTx != null) && offset !== undefined && length !== undefined && Number.isInteger(offset) && Number.isInteger(length)) {
       rawTx = rawTx.slice(offset, offset + length)
     }
     return rawTx
   }
 
-  async getLabelsForTransactionId(transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]> {
+  async getLabelsForTransactionId (transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]> {
     const maps = await this.findTxLabelMaps({ partial: { transactionId, isDeleted: false }, trx })
     const labelIds = maps.map(m => m.txLabelId)
     const labels: TableTxLabel[] = []
@@ -452,7 +452,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return labels
   }
 
-  async getTagsForOutputId(outputId: number, trx?: TrxToken): Promise<TableOutputTag[]> {
+  async getTagsForOutputId (outputId: number, trx?: TrxToken): Promise<TableOutputTag[]> {
     const maps = await this.findOutputTagMaps({ partial: { outputId, isDeleted: false }, trx })
     const tagIds = maps.map(m => m.outputTagId)
     const tags: TableOutputTag[] = []
@@ -463,17 +463,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return tags
   }
 
-  async listActions(auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
+  async listActions (auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
     if (!auth.userId) throw new WERR_UNAUTHORIZED()
     return await listActionsIdb(this, auth, vargs)
   }
 
-  async listOutputs(auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
+  async listOutputs (auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
     if (!auth.userId) throw new WERR_UNAUTHORIZED()
     return await listOutputsIdb(this, auth, vargs)
   }
 
-  async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> {
+  async countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     const txStatus: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) txStatus.push('sending')
     const args: FindOutputsArgs = { partial: { userId, basketId }, txStatus }
@@ -484,23 +484,25 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return count
   }
 
-  async findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+  async findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     if (!auth.userId || (args.partial.userId && args.partial.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
     args.partial.userId = auth.userId
     return await this.findCertificates(args)
   }
-  async findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+
+  async findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     if (!auth.userId || (args.partial.userId && args.partial.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
     args.partial.userId = auth.userId
     return await this.findOutputBaskets(args)
   }
-  async findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
+
+  async findOutputsAuth (auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
     if (!auth.userId || (args.partial.userId && args.partial.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
     args.partial.userId = auth.userId
     return await this.findOutputs(args)
   }
 
-  async insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number> {
+  async insertCertificateAuth (auth: AuthId, certificate: TableCertificateX): Promise<number> {
     if (!auth.userId || (certificate.userId && certificate.userId !== auth.userId)) throw new WERR_UNAUTHORIZED()
     certificate.userId = auth.userId
     return await this.insertCertificate(certificate)
@@ -510,11 +512,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   // StorageReaderWriter abstract methods
   //
 
-  async dropAllData(): Promise<void> {
+  async dropAllData (): Promise<void> {
     await deleteDB(this.dbName)
   }
 
-  async filterOutputTagMaps(
+  async filterOutputTagMaps (
     args: FindOutputTagMapsArgs,
     filtered: (v: TableOutputTagMap) => void,
     userId?: number
@@ -524,10 +526,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     let count = 0
     const dbTrx = this.toDbTrx(['output_tags_map', 'output_tags'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', 'outputTagId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', 'outputId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', 'outputTagId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags_map', 'outputId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.outputTagId !== undefined) {
       cursor = await dbTrx.objectStore('output_tags_map').index('outputTagId').openCursor(args.partial.outputTagId)
     } else if (args.partial?.outputId !== undefined) {
@@ -536,18 +538,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('output_tags_map').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
-      if (args.tagIds && !args.tagIds.includes(r.outputTagId)) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
+      if ((args.tagIds != null) && !args.tagIds.includes(r.outputTagId)) continue
       if (args.partial) {
         if (args.partial.outputTagId && r.outputTagId !== args.partial.outputTagId) continue
         if (args.partial.outputId && r.outputId !== args.partial.outputId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
       if (userId !== undefined && r.txid) {
@@ -562,10 +564,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findOutputTagMaps(args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
+  async findOutputTagMaps (args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
     const results: TableOutputTagMap[] = []
     await this.filterOutputTagMaps(args, r => {
       results.push(this.validateEntity(r))
@@ -573,30 +575,30 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async filterProvenTxReqs(
+  async filterProvenTxReqs (
     args: FindProvenTxReqsArgs,
     filtered: (v: TableProvenTxReq) => void,
     userId?: number
   ): Promise<void> {
-    if (args.partial.rawTx)
-      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. ProvenTxReqs may not be found by rawTx value.`)
-    if (args.partial.inputBEEF)
+    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxReqs may not be found by rawTx value.') }
+    if (args.partial.inputBEEF != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.inputBEEF',
-        `undefined. ProvenTxReqs may not be found by inputBEEF value.`
+        'undefined. ProvenTxReqs may not be found by inputBEEF value.'
       )
+    }
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['proven_tx_reqs', 'transactions'], 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'provenTxId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'txid', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'status', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'batch', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'provenTxId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'txid', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'status', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_tx_reqs', 'batch', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.provenTxReqId) {
       cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor(args.partial.provenTxReqId, direction)
     } else if (args.partial?.provenTxId !== undefined) {
@@ -614,17 +616,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('proven_tx_reqs').openCursor(null, direction)
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.provenTxReqId && r.provenTxReqId !== args.partial.provenTxReqId) continue
         if (args.partial.provenTxId && r.provenTxId !== args.partial.provenTxId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.status && r.status !== args.partial.status) continue
         if (args.partial.attempts !== undefined && r.attempts !== args.partial.attempts) continue
         if (args.partial.notified !== undefined && r.notified !== args.partial.notified) continue
@@ -633,8 +635,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (args.partial.history && r.history !== args.partial.history) continue
         if (args.partial.notify && r.notify !== args.partial.notify) continue
       }
-      if (args.status && args.status.length > 0 && !args.status.includes(r.status)) continue
-      if (args.txids && args.txids.length > 0 && !args.txids.includes(r.txid)) continue
+      if ((args.status != null) && args.status.length > 0 && !args.status.includes(r.status)) continue
+      if ((args.txids != null) && args.txids.length > 0 && !args.txids.includes(r.txid)) continue
       if (userId !== undefined && r.txid) {
         const count = await this.countTransactions({ partial: { userId, txid: r.txid }, trx: dbTrx })
         if (count === 0) continue
@@ -647,10 +649,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+  async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
     const results: TableProvenTxReq[] = []
     await this.filterProvenTxReqs(args, r => {
       results.push(this.validateEntity(r))
@@ -658,23 +660,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async filterProvenTxs(args: FindProvenTxsArgs, filtered: (v: TableProvenTx) => void, userId?: number): Promise<void> {
-    if (args.partial.rawTx)
-      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. ProvenTxs may not be found by rawTx value.`)
-    if (args.partial.merklePath)
+  async filterProvenTxs (args: FindProvenTxsArgs, filtered: (v: TableProvenTx) => void, userId?: number): Promise<void> {
+    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxs may not be found by rawTx value.') }
+    if (args.partial.merklePath != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.merklePath',
-        `undefined. ProvenTxs may not be found by merklePath value.`
+        'undefined. ProvenTxs may not be found by merklePath value.'
       )
+    }
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['proven_txs', 'transactions'], 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_txs', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_txs', 'txid', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_txs', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'proven_txs', 'txid', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.provenTxId) {
       cursor = await dbTrx.objectStore('proven_txs').openCursor(args.partial.provenTxId, direction)
     } else if (args.partial?.txid !== undefined) {
@@ -683,16 +685,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('proven_txs').openCursor(null, direction)
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.provenTxId && r.provenTxId !== args.partial.provenTxId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.txid && r.txid !== args.partial.txid) continue
         if (args.partial.height !== undefined && r.height !== args.partial.height) continue
         if (args.partial.index !== undefined && r.index !== args.partial.index) continue
@@ -711,10 +713,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
+  async findProvenTxs (args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     const results: TableProvenTx[] = []
     await this.filterProvenTxs(args, r => {
       results.push(this.validateEntity(r))
@@ -722,7 +724,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async filterTxLabelMaps(
+  async filterTxLabelMaps (
     args: FindTxLabelMapsArgs,
     filtered: (v: TableTxLabelMap) => void,
     userId?: number
@@ -732,10 +734,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     let count = 0
     const dbTrx = this.toDbTrx(['tx_labels_map', 'tx_labels'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', 'transactionId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', 'txLabelId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', 'transactionId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels_map', 'txLabelId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.transactionId !== undefined) {
       cursor = await dbTrx.objectStore('tx_labels_map').index('transactionId').openCursor(args.partial.transactionId)
     } else if (args.partial?.txLabelId !== undefined) {
@@ -744,17 +746,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('tx_labels_map').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.txLabelId && r.txLabelId !== args.partial.txLabelId) continue
         if (args.partial.transactionId && r.transactionId !== args.partial.transactionId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
       if (userId !== undefined) {
@@ -769,10 +771,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
+  async findTxLabelMaps (args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
     const results: TableTxLabelMap[] = []
     await this.filterTxLabelMaps(args, r => {
       results.push(this.validateEntity(r))
@@ -780,28 +782,31 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async countOutputTagMaps(args: FindOutputTagMapsArgs): Promise<number> {
+  async countOutputTagMaps (args: FindOutputTagMapsArgs): Promise<number> {
     let count = 0
     await this.filterOutputTagMaps(args, () => {
       count++
     })
     return count
   }
-  async countProvenTxReqs(args: FindProvenTxReqsArgs): Promise<number> {
+
+  async countProvenTxReqs (args: FindProvenTxReqsArgs): Promise<number> {
     let count = 0
     await this.filterProvenTxReqs(args, () => {
       count++
     })
     return count
   }
-  async countProvenTxs(args: FindProvenTxsArgs): Promise<number> {
+
+  async countProvenTxs (args: FindProvenTxsArgs): Promise<number> {
     let count = 0
     await this.filterProvenTxs(args, () => {
       count++
     })
     return count
   }
-  async countTxLabelMaps(args: FindTxLabelMapsArgs): Promise<number> {
+
+  async countTxLabelMaps (args: FindTxLabelMapsArgs): Promise<number> {
     let count = 0
     await this.filterTxLabelMaps(args, () => {
       count++
@@ -809,7 +814,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return count
   }
 
-  async insertCertificate(certificate: TableCertificateX, trx?: TrxToken): Promise<number> {
+  async insertCertificate (certificate: TableCertificateX, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(certificate, trx, undefined, ['isDeleted'])
     const fields = e.fields
     if (e.fields) delete e.fields
@@ -829,23 +834,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         }
       }
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return certificate.certificateId
   }
 
-  async insertCertificateField(certificateField: TableCertificateField, trx?: TrxToken): Promise<void> {
+  async insertCertificateField (certificateField: TableCertificateField, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(certificateField, trx)
     const dbTrx = this.toDbTrx(['certificate_fields'], 'readwrite', trx)
     const store = dbTrx.objectStore('certificate_fields')
     try {
       await store.add!(e)
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
   }
 
-  async insertCommission(commission: TableCommission, trx?: TrxToken): Promise<number> {
+  async insertCommission (commission: TableCommission, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(commission, trx)
     if (e.commissionId === 0) delete e.commissionId
     const dbTrx = this.toDbTrx(['commissions'], 'readwrite', trx)
@@ -854,11 +859,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       commission.commissionId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return commission.commissionId
   }
-  async insertMonitorEvent(event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
+
+  async insertMonitorEvent (event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(event, trx)
     if (e.id === 0) delete e.id
     const dbTrx = this.toDbTrx(['monitor_events'], 'readwrite', trx)
@@ -867,11 +873,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       event.id = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return event.id
   }
-  async insertOutput(output: TableOutput, trx?: TrxToken): Promise<number> {
+
+  async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(output, trx)
     if (e.outputId === 0) delete e.outputId
     const dbTrx = this.toDbTrx(['outputs'], 'readwrite', trx)
@@ -880,11 +887,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       output.outputId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return output.outputId
   }
-  async insertOutputBasket(basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
+
+  async insertOutputBasket (basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(basket, trx, undefined, ['isDeleted'])
     if (e.basketId === 0) delete e.basketId
     const dbTrx = this.toDbTrx(['output_baskets'], 'readwrite', trx)
@@ -893,11 +901,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       basket.basketId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return basket.basketId
   }
-  async insertOutputTag(tag: TableOutputTag, trx?: TrxToken): Promise<number> {
+
+  async insertOutputTag (tag: TableOutputTag, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tag, trx, undefined, ['isDeleted'])
     if (e.outputTagId === 0) delete e.outputTagId
     const dbTrx = this.toDbTrx(['output_tags'], 'readwrite', trx)
@@ -906,21 +915,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       tag.outputTagId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return tag.outputTagId
   }
-  async insertOutputTagMap(tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
+
+  async insertOutputTagMap (tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(tagMap, trx, undefined, ['isDeleted'])
     const dbTrx = this.toDbTrx(['output_tags_map'], 'readwrite', trx)
     const store = dbTrx.objectStore('output_tags_map')
     try {
       await store.add!(e)
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
   }
-  async insertProvenTx(tx: TableProvenTx, trx?: TrxToken): Promise<number> {
+
+  async insertProvenTx (tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxId === 0) delete e.provenTxId
     const dbTrx = this.toDbTrx(['proven_txs'], 'readwrite', trx)
@@ -929,11 +940,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       tx.provenTxId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return tx.provenTxId
   }
-  async insertProvenTxReq(tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
+
+  async insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
     const dbTrx = this.toDbTrx(['proven_tx_reqs'], 'readwrite', trx)
@@ -942,11 +954,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       tx.provenTxReqId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return tx.provenTxReqId
   }
-  async insertSyncState(syncState: TableSyncState, trx?: TrxToken): Promise<number> {
+
+  async insertSyncState (syncState: TableSyncState, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(syncState, trx, ['when'], ['init'])
     if (e.syncStateId === 0) delete e.syncStateId
     const dbTrx = this.toDbTrx(['sync_states'], 'readwrite', trx)
@@ -955,11 +968,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       syncState.syncStateId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return syncState.syncStateId
   }
-  async insertTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> {
+
+  async insertTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.transactionId === 0) delete e.transactionId
     const dbTrx = this.toDbTrx(['transactions'], 'readwrite', trx)
@@ -968,11 +982,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       tx.transactionId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return tx.transactionId
   }
-  async insertTxLabel(label: TableTxLabel, trx?: TrxToken): Promise<number> {
+
+  async insertTxLabel (label: TableTxLabel, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(label, trx, undefined, ['isDeleted'])
     if (e.txLabelId === 0) delete e.txLabelId
     const dbTrx = this.toDbTrx(['tx_labels'], 'readwrite', trx)
@@ -981,21 +996,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       label.txLabelId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return label.txLabelId
   }
-  async insertTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
+
+  async insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
     const dbTrx = this.toDbTrx(['tx_labels_map'], 'readwrite', trx)
     const store = dbTrx.objectStore('tx_labels_map')
     try {
       await store.add!(e)
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
   }
-  async insertUser(user: TableUser, trx?: TrxToken): Promise<number> {
+
+  async insertUser (user: TableUser, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(user, trx)
     if (e.userId === 0) delete e.userId
     const dbTrx = this.toDbTrx(['users'], 'readwrite', trx)
@@ -1004,7 +1021,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const id = Number(await store.add!(e))
       user.userId = id
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return user.userId
   }
@@ -1017,7 +1034,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     trx?: TrxToken
   ): Promise<number> {
     if (update[keyProp] !== undefined && (Array.isArray(id) || update[keyProp] !== id)) {
-      throw new WERR_INVALID_PARAMETER(`update.${keyProp}`, `undefined`)
+      throw new WERR_INVALID_PARAMETER(`update.${keyProp}`, 'undefined')
     }
     const u = this.validatePartialForUpdate(update)
     const dbTrx = this.toDbTrx([storeName], 'readwrite', trx)
@@ -1035,23 +1052,22 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (uid !== i) throw new WERR_INTERNAL(`updated id ${uid} does not match original ${id}`)
       }
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
     return 1
   }
 
   async updateIdbKey<T>(
-    key: (number | string)[],
+    key: Array<number | string>,
     update: Partial<T>,
     keyProps: string[],
     storeName: string,
     trx?: TrxToken
   ): Promise<number> {
-    if (key.length !== keyProps.length)
-      throw new WERR_INTERNAL(`key.length ${key.length} !== keyProps.length ${keyProps.length}`)
+    if (key.length !== keyProps.length) { throw new WERR_INTERNAL(`key.length ${key.length} !== keyProps.length ${keyProps.length}`) }
     for (let i = 0; i < key.length; i++) {
       if (update[keyProps[i]] !== undefined && update[keyProps[i]] !== key[i]) {
-        throw new WERR_INVALID_PARAMETER(`update.${keyProps[i]}`, `undefined`)
+        throw new WERR_INVALID_PARAMETER(`update.${keyProps[i]}`, 'undefined')
       }
     }
     const u = this.validatePartialForUpdate(update)
@@ -1059,11 +1075,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const store = dbTrx.objectStore(storeName)
     try {
       const e = await store.get(key)
-      if (!e)
+      if (!e) {
         throw new WERR_INVALID_PARAMETER(
           'key',
           `an existing record to update ${keyProps.join(',')} ${key.join(',')} not found`
         )
+      }
       const v: T = {
         ...e,
         ...u
@@ -1073,23 +1090,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (uid[i] !== key[i]) throw new WERR_INTERNAL(`updated key ${uid[i]} does not match original ${key[i]}`)
       }
     } finally {
-      if (!trx) await dbTrx.done
+      if (trx == null) await dbTrx.done
     }
 
     return 1
   }
 
-  async updateCertificate(id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'certificateId', 'certificates', trx)
+  async updateCertificate (id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'certificateId', 'certificates', trx)
   }
 
-  async updateCertificateField(
+  async updateCertificateField (
     certificateId: number,
     fieldName: string,
     update: Partial<TableCertificateField>,
     trx?: TrxToken
   ): Promise<number> {
-    return this.updateIdbKey(
+    return await this.updateIdbKey(
       [certificateId, fieldName],
       update,
       ['certificateId', 'fieldName'],
@@ -1098,62 +1115,74 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     )
   }
 
-  async updateCommission(id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'commissionId', 'commissions', trx)
+  async updateCommission (id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'commissionId', 'commissions', trx)
   }
-  async updateMonitorEvent(id: number, update: Partial<TableMonitorEvent>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'id', 'monitor_events', trx)
+
+  async updateMonitorEvent (id: number, update: Partial<TableMonitorEvent>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'id', 'monitor_events', trx)
   }
-  async updateOutput(id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'outputId', 'outputs', trx)
+
+  async updateOutput (id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'outputId', 'outputs', trx)
   }
-  async updateOutputBasket(id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'basketId', 'output_baskets', trx)
+
+  async updateOutputBasket (id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'basketId', 'output_baskets', trx)
   }
-  async updateOutputTag(id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'outputTagId', 'output_tags', trx)
+
+  async updateOutputTag (id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'outputTagId', 'output_tags', trx)
   }
-  async updateProvenTx(id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'provenTxId', 'proven_txs', trx)
+
+  async updateProvenTx (id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'provenTxId', 'proven_txs', trx)
   }
-  async updateProvenTxReq(id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'provenTxReqId', 'proven_tx_reqs', trx)
+
+  async updateProvenTxReq (id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'provenTxReqId', 'proven_tx_reqs', trx)
   }
-  async updateSyncState(id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'syncStateId', 'sync_states', trx)
+
+  async updateSyncState (id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'syncStateId', 'sync_states', trx)
   }
-  async updateTransaction(id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'transactionId', 'transactions', trx)
+
+  async updateTransaction (id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'transactionId', 'transactions', trx)
   }
-  async updateTxLabel(id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'txLabelId', 'tx_labels', trx)
+
+  async updateTxLabel (id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'txLabelId', 'tx_labels', trx)
   }
-  async updateUser(id: number, update: Partial<TableUser>, trx?: TrxToken): Promise<number> {
-    return this.updateIdb(id, update, 'userId', 'users', trx)
+
+  async updateUser (id: number, update: Partial<TableUser>, trx?: TrxToken): Promise<number> {
+    return await this.updateIdb(id, update, 'userId', 'users', trx)
   }
-  async updateOutputTagMap(
+
+  async updateOutputTagMap (
     outputId: number,
     tagId: number,
     update: Partial<TableOutputTagMap>,
     trx?: TrxToken
   ): Promise<number> {
-    return this.updateIdbKey([tagId, outputId], update, ['outputTagId', 'outputId'], 'output_tags_map', trx)
+    return await this.updateIdbKey([tagId, outputId], update, ['outputTagId', 'outputId'], 'output_tags_map', trx)
   }
-  async updateTxLabelMap(
+
+  async updateTxLabelMap (
     transactionId: number,
     txLabelId: number,
     update: Partial<TableTxLabelMap>,
     trx?: TrxToken
   ): Promise<number> {
-    return this.updateIdbKey([txLabelId, transactionId], update, ['txLabelId', 'transactionId'], 'tx_labels_map', trx)
+    return await this.updateIdbKey([txLabelId, transactionId], update, ['txLabelId', 'transactionId'], 'tx_labels_map', trx)
   }
 
   //
   // StorageReader abstract methods
   //
 
-  async destroy(): Promise<void> {
-    if (this.db) {
+  async destroy (): Promise<void> {
+    if (this.db != null) {
       this.db.close()
     }
     this.db = undefined
@@ -1184,7 +1213,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    * @returns
    */
   async transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> {
-    if (trx) return await scope(trx)
+    if (trx != null) return await scope(trx)
 
     const stores = this.allStores
 
@@ -1202,7 +1231,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
   }
 
-  async filterCertificateFields(
+  async filterCertificateFields (
     args: FindCertificateFieldsArgs,
     filtered: (v: TableCertificateField) => void
   ): Promise<void> {
@@ -1211,10 +1240,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     let count = 0
     const dbTrx = this.toDbTrx(['certificate_fields'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificate_fields', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificate_fields', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificate_fields', 'certificateId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificate_fields', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificate_fields', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificate_fields', 'certificateId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.certificateId !== undefined) {
       cursor = await dbTrx
         .objectStore('certificate_fields')
@@ -1226,17 +1255,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('certificate_fields').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.userId && r.userId !== args.partial.userId) continue
         if (args.partial.certificateId && r.certificateId !== args.partial.certificateId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.fieldName && r.fieldName !== args.partial.fieldName) continue
         if (args.partial.fieldValue && r.fieldValue !== args.partial.fieldValue) continue
         if (args.partial.masterKey && r.masterKey !== args.partial.masterKey) continue
@@ -1249,10 +1278,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findCertificateFields(args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
+  async findCertificateFields (args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
     const result: TableCertificateField[] = []
     await this.filterCertificateFields(args, r => {
       result.push(this.validateEntity(r))
@@ -1260,22 +1289,22 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterCertificates(args: FindCertificatesArgs, filtered: (v: TableCertificateX) => void): Promise<void> {
+  async filterCertificates (args: FindCertificatesArgs, filtered: (v: TableCertificateX) => void): Promise<void> {
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['certificates'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificates', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificates', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<
-          StorageIdbSchema,
-          string[],
-          'certificates',
-          'userId_type_certifier_serialNumber',
-          'readwrite' | 'readonly'
-        >
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificates', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'certificates', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<
+    StorageIdbSchema,
+    string[],
+    'certificates',
+    'userId_type_certifier_serialNumber',
+    'readwrite' | 'readonly'
+    >
+    | null
     if (args.partial?.certificateId) {
       cursor = await dbTrx.objectStore('certificates').openCursor(args.partial.certificateId)
     } else if (args.partial?.userId !== undefined) {
@@ -1291,19 +1320,19 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('certificates').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
-      if (args.certifiers && !args.certifiers.includes(r.certifier)) continue
-      if (args.types && !args.types.includes(r.type)) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
+      if ((args.certifiers != null) && !args.certifiers.includes(r.certifier)) continue
+      if ((args.types != null) && !args.types.includes(r.type)) continue
       if (args.partial) {
         if (args.partial.userId && r.userId !== args.partial.userId) continue
         if (args.partial.certificateId && r.certificateId !== args.partial.certificateId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.type && r.type !== args.partial.type) continue
         if (args.partial.serialNumber && r.serialNumber !== args.partial.serialNumber) continue
         if (args.partial.certifier && r.certifier !== args.partial.certifier) continue
@@ -1321,10 +1350,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findCertificates(args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+  async findCertificates (args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     const result: TableCertificateX[] = []
     await this.filterCertificates(args, r => {
       result.push(this.validateEntity(r))
@@ -1338,21 +1367,22 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterCommissions(args: FindCommissionsArgs, filtered: (v: TableCommission) => void): Promise<void> {
-    if (args.partial.lockingScript)
+  async filterCommissions (args: FindCommissionsArgs, filtered: (v: TableCommission) => void): Promise<void> {
+    if (args.partial.lockingScript != null) {
       throw new WERR_INVALID_PARAMETER(
         'partial.lockingScript',
-        `undefined. Commissions may not be found by lockingScript value.`
+        'undefined. Commissions may not be found by lockingScript value.'
       )
+    }
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['commissions'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'commissions', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'commissions', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'commissions', 'transactionId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'commissions', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'commissions', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'commissions', 'transactionId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.commissionId) {
       cursor = await dbTrx.objectStore('commissions').openCursor(args.partial.commissionId)
     } else if (args.partial?.userId !== undefined) {
@@ -1363,18 +1393,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('commissions').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.commissionId && r.commissionId !== args.partial.commissionId) continue
         if (args.partial.transactionId && r.transactionId !== args.partial.transactionId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.satoshis !== undefined && r.satoshis !== args.partial.satoshis) continue
         if (args.partial.keyOffset && r.keyOffset !== args.partial.keyOffset) continue
         if (args.partial.isRedeemed !== undefined && r.isRedeemed !== args.partial.isRedeemed) continue
@@ -1387,10 +1417,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findCommissions(args: FindCommissionsArgs): Promise<TableCommission[]> {
+  async findCommissions (args: FindCommissionsArgs): Promise<TableCommission[]> {
     const result: TableCommission[] = []
     await this.filterCommissions(args, r => {
       result.push(this.validateEntity(r))
@@ -1398,17 +1428,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterMonitorEvents(args: FindMonitorEventsArgs, filtered: (v: TableMonitorEvent) => void): Promise<void> {
+  async filterMonitorEvents (args: FindMonitorEventsArgs, filtered: (v: TableMonitorEvent) => void): Promise<void> {
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['monitor_events'], 'readonly', args.trx)
     let cursor: IDBPCursorWithValue<
-      StorageIdbSchema,
-      string[],
-      'monitor_events',
-      unknown,
-      'readwrite' | 'readonly'
+    StorageIdbSchema,
+    string[],
+    'monitor_events',
+    unknown,
+    'readwrite' | 'readonly'
     > | null
     if (args.partial?.id) {
       cursor = await dbTrx.objectStore('monitor_events').openCursor(args.partial.id)
@@ -1416,16 +1446,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('monitor_events').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.id && r.id !== args.partial.id) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.event && r.event !== args.partial.event) continue
         if (args.partial.details && r.details !== args.partial.details) continue
       }
@@ -1437,10 +1467,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findMonitorEvents(args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
+  async findMonitorEvents (args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
     const result: TableMonitorEvent[] = []
     await this.filterMonitorEvents(args, r => {
       result.push(this.validateEntity(r))
@@ -1448,16 +1478,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterOutputBaskets(args: FindOutputBasketsArgs, filtered: (v: TableOutputBasket) => void): Promise<void> {
+  async filterOutputBaskets (args: FindOutputBasketsArgs, filtered: (v: TableOutputBasket) => void): Promise<void> {
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['output_baskets'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_baskets', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_baskets', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_baskets', 'name_userId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_baskets', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_baskets', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_baskets', 'name_userId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.basketId) {
       cursor = await dbTrx.objectStore('output_baskets').openCursor(args.partial.basketId)
     } else if (args.partial?.userId !== undefined) {
@@ -1473,28 +1503,26 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('output_baskets').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.basketId && r.basketId !== args.partial.basketId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.name && r.name !== args.partial.name) continue
         if (
           args.partial.numberOfDesiredUTXOs !== undefined &&
           r.numberOfDesiredUTXOs !== args.partial.numberOfDesiredUTXOs
-        )
-          continue
+        ) { continue }
         if (
           args.partial.minimumDesiredUTXOValue !== undefined &&
           r.numberOfDesiredSatoshis !== args.partial.minimumDesiredUTXOValue
-        )
-          continue
+        ) { continue }
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
       if (skipped < offset) {
@@ -1505,10 +1533,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findOutputBaskets(args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+  async findOutputBaskets (args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     const result: TableOutputBasket[] = []
     await this.filterOutputBaskets(args, r => {
       result.push(this.validateEntity(r))
@@ -1516,7 +1544,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterOutputs(
+  async filterOutputs (
     args: FindOutputsArgs,
     filtered: (v: TableOutput) => void,
     tagIds?: number[],
@@ -1524,36 +1552,37 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   ): Promise<void> {
     // args.txStatus
     // args.noScript
-    if (args.partial.lockingScript)
+    if (args.partial.lockingScript != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.lockingScript',
-        `undefined. Outputs may not be found by lockingScript value.`
+        'undefined. Outputs may not be found by lockingScript value.'
       )
+    }
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const stores = ['outputs']
-    if (tagIds && tagIds.length > 0) {
+    if ((tagIds != null) && tagIds.length > 0) {
       stores.push('output_tags_map')
     }
-    if (args.txStatus) {
+    if (args.txStatus != null) {
       stores.push('transactions')
     }
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<
-          StorageIdbSchema,
-          string[],
-          'outputs',
-          'transactionId_vout_userId',
-          'readwrite' | 'readonly'
-        >
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'transactionId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'basketId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'spentBy', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<
+    StorageIdbSchema,
+    string[],
+    'outputs',
+    'transactionId_vout_userId',
+    'readwrite' | 'readonly'
+    >
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'transactionId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'basketId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'outputs', 'spentBy', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.outputId) {
       cursor = await dbTrx.objectStore('outputs').openCursor(args.partial.outputId)
     } else if (args.partial?.userId !== undefined) {
@@ -1575,19 +1604,19 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('outputs').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.outputId && r.outputId !== args.partial.outputId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
         if (args.partial.transactionId && r.transactionId !== args.partial.transactionId) continue
         if (args.partial.basketId && r.basketId !== args.partial.basketId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.spendable !== undefined && r.spendable !== args.partial.spendable) continue
         if (args.partial.change !== undefined && r.change !== args.partial.change) continue
         if (args.partial.outputDescription && r.outputDescription !== args.partial.outputDescription) continue
@@ -1614,7 +1643,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         })
         if (count === 0) continue
       }
-      if (tagIds && tagIds.length > 0) {
+      if ((tagIds != null) && tagIds.length > 0) {
         let ids = [...tagIds]
         await this.filterOutputTagMaps({ partial: { outputId: r.outputId }, trx: dbTrx }, tm => {
           if (ids.length > 0) {
@@ -1641,10 +1670,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findOutputs(args: FindOutputsArgs, tagIds?: number[], isQueryModeAll?: boolean): Promise<TableOutput[]> {
+  async findOutputs (args: FindOutputsArgs, tagIds?: number[], isQueryModeAll?: boolean): Promise<TableOutput[]> {
     const results: TableOutput[] = []
     await this.filterOutputs(
       args,
@@ -1664,16 +1693,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async filterOutputTags(args: FindOutputTagsArgs, filtered: (v: TableOutputTag) => void): Promise<void> {
+  async filterOutputTags (args: FindOutputTagsArgs, filtered: (v: TableOutputTag) => void): Promise<void> {
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['output_tags'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags', 'tag_userId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'output_tags', 'tag_userId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.outputTagId) {
       cursor = await dbTrx.objectStore('output_tags').openCursor(args.partial.outputTagId)
     } else if (args.partial?.userId !== undefined) {
@@ -1689,17 +1718,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('output_tags').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.outputTagId && r.outputTagId !== args.partial.outputTagId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.tag && r.tag !== args.partial.tag) continue
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
@@ -1711,10 +1740,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findOutputTags(args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
+  async findOutputTags (args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
     const result: TableOutputTag[] = []
     await this.filterOutputTags(args, r => {
       result.push(this.validateEntity(r))
@@ -1722,22 +1751,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterSyncStates(args: FindSyncStatesArgs, filtered: (v: TableSyncState) => void): Promise<void> {
-    if (args.partial.syncMap)
+  async filterSyncStates (args: FindSyncStatesArgs, filtered: (v: TableSyncState) => void): Promise<void> {
+    if (args.partial.syncMap) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.syncMap',
-        `undefined. SyncStates may not be found by syncMap value.`
+        'undefined. SyncStates may not be found by syncMap value.'
       )
+    }
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['sync_states'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', 'refNum', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', 'status', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', 'refNum', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'sync_states', 'status', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.syncStateId) {
       cursor = await dbTrx.objectStore('sync_states').openCursor(args.partial.syncStateId)
     } else if (args.partial?.userId !== undefined) {
@@ -1750,23 +1780,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('sync_states').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.syncStateId && r.syncStateId !== args.partial.syncStateId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.storageIdentityKey && r.storageIdentityKey !== args.partial.storageIdentityKey) continue
         if (args.partial.storageName && r.storageName !== args.partial.storageName) continue
         if (args.partial.status && r.status !== args.partial.status) continue
         if (args.partial.init !== undefined && r.init !== args.partial.init) continue
         if (args.partial.refNum !== undefined && r.refNum !== args.partial.refNum) continue
-        if (args.partial.when && r.when?.getTime() !== args.partial.when.getTime()) continue
+        if ((args.partial.when != null) && r.when?.getTime() !== args.partial.when.getTime()) continue
         if (args.partial.satoshis !== undefined && r.satoshis !== args.partial.satoshis) continue
         if (args.partial.errorLocal && r.errorLocale !== args.partial.errorLocal) continue
         if (args.partial.errorOther && r.errorOther !== args.partial.errorOther) continue
@@ -1779,10 +1809,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
+  async findSyncStates (args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     const result: TableSyncState[] = []
     await this.filterSyncStates(args, r => {
       result.push(this.validateEntity(r))
@@ -1790,36 +1820,36 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterTransactions(
+  async filterTransactions (
     args: FindTransactionsArgs,
     filtered: (v: TableTransaction) => void,
     labelIds?: number[],
     isQueryModeAll?: boolean
   ): Promise<void> {
-    if (args.partial.rawTx)
-      throw new WERR_INVALID_PARAMETER('args.partial.rawTx', `undefined. Transactions may not be found by rawTx value.`)
-    if (args.partial.inputBEEF)
+    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. Transactions may not be found by rawTx value.') }
+    if (args.partial.inputBEEF != null) {
       throw new WERR_INVALID_PARAMETER(
         'args.partial.inputBEEF',
-        `undefined. Transactions may not be found by inputBEEF value.`
+        'undefined. Transactions may not be found by inputBEEF value.'
       )
+    }
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const stores = ['transactions']
-    if (labelIds && labelIds.length > 0) {
+    if ((labelIds != null) && labelIds.length > 0) {
       stores.push('tx_labels_map')
     }
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'status', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'status_userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'provenTxId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'reference', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'status', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'status_userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'provenTxId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'transactions', 'reference', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.transactionId) {
       cursor = await dbTrx.objectStore('transactions').openCursor(args.partial.transactionId, direction)
     } else if (args.partial?.userId !== undefined) {
@@ -1844,20 +1874,20 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('transactions').openCursor(null, direction)
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
-      if (args.from && r.created_at.getTime() < args.from.getTime()) continue
-      if (args.to && r.created_at.getTime() >= args.to.getTime()) continue
-      if (args.status && !args.status.includes(r.status)) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
+      if ((args.from != null) && r.created_at.getTime() < args.from.getTime()) continue
+      if ((args.to != null) && r.created_at.getTime() >= args.to.getTime()) continue
+      if ((args.status != null) && !args.status.includes(r.status)) continue
       if (args.partial) {
         if (args.partial.transactionId && r.transactionId !== args.partial.transactionId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.provenTxId && r.provenTxId !== args.partial.provenTxId) continue
         if (args.partial.status && r.status !== args.partial.status) continue
         if (args.partial.reference && r.reference !== args.partial.reference) continue
@@ -1868,7 +1898,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         if (args.partial.lockTime !== undefined && r.lockTime !== args.partial.lockTime) continue
         if (args.partial.txid && r.txid !== args.partial.txid) continue
       }
-      if (labelIds && labelIds.length > 0) {
+      if ((labelIds != null) && labelIds.length > 0) {
         let ids = [...labelIds]
         await this.filterTxLabelMaps({ partial: { transactionId: r.transactionId }, trx: dbTrx }, lm => {
           if (ids.length > 0) {
@@ -1892,10 +1922,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findTransactions(
+  async findTransactions (
     args: FindTransactionsArgs,
     labelIds?: number[],
     isQueryModeAll?: boolean
@@ -1920,16 +1950,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async filterTxLabels(args: FindTxLabelsArgs, filtered: (v: TableTxLabel) => void): Promise<void> {
+  async filterTxLabels (args: FindTxLabelsArgs, filtered: (v: TableTxLabel) => void): Promise<void> {
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['tx_labels'], 'readonly', args.trx)
     let cursor:
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels', unknown, 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels', 'userId', 'readwrite' | 'readonly'>
-      | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels', 'label_userId', 'readwrite' | 'readonly'>
-      | null
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels', unknown, 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels', 'userId', 'readwrite' | 'readonly'>
+    | IDBPCursorWithValue<StorageIdbSchema, string[], 'tx_labels', 'label_userId', 'readwrite' | 'readonly'>
+    | null
     if (args.partial?.txLabelId) {
       cursor = await dbTrx.objectStore('tx_labels').openCursor(args.partial.txLabelId)
     } else if (args.partial?.userId !== undefined) {
@@ -1945,17 +1975,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       cursor = await dbTrx.objectStore('tx_labels').openCursor()
     }
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.txLabelId && r.txLabelId !== args.partial.txLabelId) continue
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.label && r.label !== args.partial.label) continue
         if (args.partial.isDeleted !== undefined && r.isDeleted !== args.partial.isDeleted) continue
       }
@@ -1967,10 +1997,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
+  async findTxLabels (args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
     const result: TableTxLabel[] = []
     await this.filterTxLabels(args, r => {
       result.push(this.validateEntity(r))
@@ -1978,23 +2008,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async filterUsers(args: FindUsersArgs, filtered: (v: TableUser) => void): Promise<void> {
+  async filterUsers (args: FindUsersArgs, filtered: (v: TableUser) => void): Promise<void> {
     const offset = args.paged?.offset || 0
     let skipped = 0
     let count = 0
     const dbTrx = this.toDbTrx(['users'], 'readonly', args.trx)
     let cursor = await dbTrx.objectStore('users').openCursor()
     let firstTime = true
-    while (cursor) {
+    while (cursor != null) {
       if (!firstTime) cursor = await cursor.continue()
-      if (!cursor) break
+      if (cursor == null) break
       firstTime = false
       const r = cursor.value
-      if (args.since && args.since > r.updated_at) continue
+      if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
         if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if (args.partial.created_at && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if (args.partial.updated_at && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
+        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
+        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
         if (args.partial.identityKey && r.identityKey !== args.partial.identityKey) continue
         if (args.partial.activeStorage && r.activeStorage !== args.partial.activeStorage) continue
       }
@@ -2006,10 +2036,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       count++
       if (args.paged?.limit && count >= args.paged.limit) break
     }
-    if (!args.trx) await dbTrx.done
+    if (args.trx == null) await dbTrx.done
   }
 
-  async findUsers(args: FindUsersArgs): Promise<TableUser[]> {
+  async findUsers (args: FindUsersArgs): Promise<TableUser[]> {
     const result: TableUser[] = []
     await this.filterUsers(args, r => {
       result.push(this.validateEntity(r))
@@ -2017,42 +2047,47 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  async countCertificateFields(args: FindCertificateFieldsArgs): Promise<number> {
+  async countCertificateFields (args: FindCertificateFieldsArgs): Promise<number> {
     let count = 0
     await this.filterCertificateFields(args, () => {
       count++
     })
     return count
   }
-  async countCertificates(args: FindCertificatesArgs): Promise<number> {
+
+  async countCertificates (args: FindCertificatesArgs): Promise<number> {
     let count = 0
     await this.filterCertificates(args, () => {
       count++
     })
     return count
   }
-  async countCommissions(args: FindCommissionsArgs): Promise<number> {
+
+  async countCommissions (args: FindCommissionsArgs): Promise<number> {
     let count = 0
     await this.filterCommissions(args, () => {
       count++
     })
     return count
   }
-  async countMonitorEvents(args: FindMonitorEventsArgs): Promise<number> {
+
+  async countMonitorEvents (args: FindMonitorEventsArgs): Promise<number> {
     let count = 0
     await this.filterMonitorEvents(args, () => {
       count++
     })
     return count
   }
-  async countOutputBaskets(args: FindOutputBasketsArgs): Promise<number> {
+
+  async countOutputBaskets (args: FindOutputBasketsArgs): Promise<number> {
     let count = 0
     await this.filterOutputBaskets(args, () => {
       count++
     })
     return count
   }
-  async countOutputs(args: FindOutputsArgs, tagIds?: number[], isQueryModeAll?: boolean): Promise<number> {
+
+  async countOutputs (args: FindOutputsArgs, tagIds?: number[], isQueryModeAll?: boolean): Promise<number> {
     let count = 0
     await this.filterOutputs(
       { ...args, noScript: true },
@@ -2064,21 +2099,24 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     )
     return count
   }
-  async countOutputTags(args: FindOutputTagsArgs): Promise<number> {
+
+  async countOutputTags (args: FindOutputTagsArgs): Promise<number> {
     let count = 0
     await this.filterOutputTags(args, () => {
       count++
     })
     return count
   }
-  async countSyncStates(args: FindSyncStatesArgs): Promise<number> {
+
+  async countSyncStates (args: FindSyncStatesArgs): Promise<number> {
     let count = 0
     await this.filterSyncStates(args, () => {
       count++
     })
     return count
   }
-  async countTransactions(args: FindTransactionsArgs, labelIds?: number[], isQueryModeAll?: boolean): Promise<number> {
+
+  async countTransactions (args: FindTransactionsArgs, labelIds?: number[], isQueryModeAll?: boolean): Promise<number> {
     let count = 0
     await this.filterTransactions(
       { ...args, noRawTx: true },
@@ -2090,14 +2128,16 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     )
     return count
   }
-  async countTxLabels(args: FindTxLabelsArgs): Promise<number> {
+
+  async countTxLabels (args: FindTxLabelsArgs): Promise<number> {
     let count = 0
     await this.filterTxLabels(args, () => {
       count++
     })
     return count
   }
-  async countUsers(args: FindUsersArgs): Promise<number> {
+
+  async countUsers (args: FindUsersArgs): Promise<number> {
     let count = 0
     await this.filterUsers(args, () => {
       count++
@@ -2105,7 +2145,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return count
   }
 
-  async getProvenTxsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
+  async getProvenTxsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
     const results: TableProvenTx[] = []
     const fargs: FindProvenTxsArgs = {
       partial: {},
@@ -2123,7 +2163,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async getProvenTxReqsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
+  async getProvenTxReqsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
     const results: TableProvenTxReq[] = []
     const fargs: FindProvenTxReqsArgs = {
       partial: {},
@@ -2141,7 +2181,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async getTxLabelMapsForUser(args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
+  async getTxLabelMapsForUser (args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
     const results: TableTxLabelMap[] = []
     const fargs: FindTxLabelMapsArgs = {
       partial: {},
@@ -2159,7 +2199,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async getOutputTagMapsForUser(args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
+  async getOutputTagMapsForUser (args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
     const results: TableOutputTagMap[] = []
     const fargs: FindOutputTagMapsArgs = {
       partial: {},
@@ -2177,8 +2217,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  async verifyReadyForDatabaseAccess(trx?: TrxToken): Promise<DBType> {
-    if (!this._settings) {
+  async verifyReadyForDatabaseAccess (trx?: TrxToken): Promise<DBType> {
+    if (this._settings == null) {
       this._settings = await this.readSettings()
     }
 
@@ -2192,12 +2232,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[], booleanFields?: string[]): T {
     entity.created_at = this.validateDate(entity.created_at)
     entity.updated_at = this.validateDate(entity.updated_at)
-    if (dateFields) {
+    if (dateFields != null) {
       for (const df of dateFields) {
         if (entity[df]) entity[df] = this.validateDate(entity[df])
       }
     }
-    if (booleanFields) {
+    if (booleanFields != null) {
       for (const df of booleanFields) {
         if (entity[df] !== undefined) entity[df] = !!entity[df]
       }
@@ -2224,6 +2264,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     return entities
   }
+
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process the update template for entities being updated.
@@ -2240,14 +2281,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     if (!v.created_at) delete v.created_at
     if (!v.updated_at) v.updated_at = this.validateEntityDate(new Date())
 
-    if (dateFields) {
+    if (dateFields != null) {
       for (const df of dateFields) {
         if (v[df]) v[df] = this.validateOptionalEntityDate(v[df])
       }
     }
-    if (booleanFields) {
+    if (booleanFields != null) {
       for (const df of booleanFields) {
-        if (update[df] !== undefined) update[df] = !!update[df] ? 1 : 0
+        if (update[df] !== undefined) update[df] = update[df] ? 1 : 0
       }
     }
     for (const key of Object.keys(v)) {
@@ -2278,14 +2319,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     v.updated_at = this.validateOptionalEntityDate(v.updated_at, true)!
     if (!v.created_at) delete v.created_at
     if (!v.updated_at) delete v.updated_at
-    if (dateFields) {
+    if (dateFields != null) {
       for (const df of dateFields) {
         if (v[df]) v[df] = this.validateOptionalEntityDate(v[df])
       }
     }
-    if (booleanFields) {
+    if (booleanFields != null) {
       for (const df of booleanFields) {
-        if (entity[df] !== undefined) entity[df] = !!entity[df] ? 1 : 0
+        if (entity[df] !== undefined) entity[df] = entity[df] ? 1 : 0
       }
     }
     for (const key of Object.keys(v)) {
@@ -2300,18 +2341,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return v
   }
 
-  async validateRawTransaction(t: TableTransaction, trx?: TrxToken): Promise<void> {
+  async validateRawTransaction (t: TableTransaction, trx?: TrxToken): Promise<void> {
     // if there is no txid or there is a rawTransaction return what we have.
     if (t.rawTx || !t.txid) return
 
     // rawTransaction is missing, see if we moved it ...
 
     const rawTx = await this.getRawTxOfKnownValidTransaction(t.txid, undefined, undefined, trx)
-    if (!rawTx) return
+    if (rawTx == null) return
     t.rawTx = rawTx
   }
 
-  async adminStats(adminIdentityKey: string): Promise<StorageAdminStats> {
+  async adminStats (adminIdentityKey: string): Promise<StorageAdminStats> {
     throw new Error('Method intentionally not implemented for personal storage.')
   }
 }

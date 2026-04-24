@@ -27,25 +27,24 @@ export interface ScriptTemplateParamsBRC29 {
 export class ScriptTemplateBRC29 implements ScriptTemplate {
   p2pkh: P2PKH
 
-  constructor(public params: ScriptTemplateParamsBRC29) {
+  constructor (public params: ScriptTemplateParamsBRC29) {
     this.p2pkh = new P2PKH()
 
     verifyTruthy(params.derivationPrefix)
     verifyTruthy(params.derivationSuffix)
   }
 
-  getKeyID() {
+  getKeyID () {
     return `${this.params.derivationPrefix} ${this.params.derivationSuffix}`
   }
 
-  getKeyDeriver(privKey: PrivateKey | HexString): KeyDeriverApi {
+  getKeyDeriver (privKey: PrivateKey | HexString): KeyDeriverApi {
     if (typeof privKey === 'string') privKey = PrivateKey.fromHex(privKey)
-    if (!this.params.keyDeriver || this.params.keyDeriver.rootKey.toHex() !== privKey.toHex())
-      return new CachedKeyDeriver(privKey)
+    if (!this.params.keyDeriver || this.params.keyDeriver.rootKey.toHex() !== privKey.toHex()) { return new CachedKeyDeriver(privKey) }
     return this.params.keyDeriver
   }
 
-  lock(lockerPrivKey: string, unlockerPubKey: string): LockingScript {
+  lock (lockerPrivKey: string, unlockerPubKey: string): LockingScript {
     const address = this.getKeyDeriver(lockerPrivKey)
       .derivePublicKey(brc29ProtocolID, this.getKeyID(), unlockerPubKey, false)
       .toAddress()
@@ -53,7 +52,7 @@ export class ScriptTemplateBRC29 implements ScriptTemplate {
     return r
   }
 
-  unlock(
+  unlock (
     unlockerPrivKey: string,
     lockerPubKey: string,
     sourceSatoshis?: number,

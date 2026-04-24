@@ -9,10 +9,10 @@ import {
 } from '@bsv/sdk'
 
 export interface CertOpsWallet {
-  getPublicKey(
+  getPublicKey: (
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<GetPublicKeyResult>
-  encrypt(args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletEncryptResult>
-  decrypt(args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletDecryptResult>
+  ) => Promise<GetPublicKeyResult>
+  encrypt: (args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletEncryptResult>
+  decrypt: (args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletDecryptResult>
 }

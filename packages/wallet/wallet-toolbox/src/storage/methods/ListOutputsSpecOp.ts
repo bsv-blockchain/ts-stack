@@ -50,12 +50,12 @@ export interface ListOutputsSpecOp {
 
 const INVALID_CHANGE_MAX_CONCURRENCY = 12
 
-async function runWithConcurrency<T>(
+async function runWithConcurrency<T> (
   values: T[],
   maxConcurrency: number,
   worker: (value: T) => Promise<void>
 ): Promise<void> {
-  const active: Promise<void>[] = []
+  const active: Array<Promise<void>> = []
   for (const value of values) {
     const task = worker(value).finally(() => {
       const i = active.indexOf(task)
@@ -108,7 +108,7 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
           if (!o.basketId) return // only care about outputs assigned to baskets.
           await s.validateOutputScript(o)
           let ok: boolean | undefined = false
-          if (o.lockingScript && o.lockingScript.length > 0) {
+          if ((o.lockingScript != null) && o.lockingScript.length > 0) {
             ok = await services.isUtxo(o)
           } else {
             ok = undefined
@@ -118,7 +118,7 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
           }
         })
         const filteredOutputs = outputs.filter(o => invalidOutputIds.has(o.outputId))
-        if (specOpTags.indexOf('release') >= 0) {
+        if (specOpTags.includes('release')) {
           await runWithConcurrency(filteredOutputs, INVALID_CHANGE_MAX_CONCURRENCY, async o => {
             await s.updateOutput(o.outputId, { spendable: false })
             o.spendable = false
@@ -136,8 +136,7 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         vargs: Validation.ValidListOutputsArgs,
         specOpTags: string[]
       ): Promise<ListOutputsResult> => {
-        if (specOpTags.length !== 2)
-          throw new WERR_INVALID_PARAMETER('numberOfDesiredUTXOs and minimumDesiredUTXOValue', 'valid')
+        if (specOpTags.length !== 2) { throw new WERR_INVALID_PARAMETER('numberOfDesiredUTXOs and minimumDesiredUTXOValue', 'valid') }
         const numberOfDesiredUTXOs: number = verifyInteger(Number(specOpTags[0]))
         const minimumDesiredUTXOValue: number = verifyInteger(Number(specOpTags[1]))
         const basket = verifyOne(
@@ -177,8 +176,8 @@ const getTagToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
   }
 }
 
-let _basketSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
-let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
+let _basketSpecOps: Record<string, ListOutputsSpecOp> | undefined
+let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined
 
 /**
  * Check basket and tags arguments passed to listOutputs to determine if they trigger a special operation execution mode.
@@ -186,10 +185,10 @@ let _tagSpecOps: Record<string, ListOutputsSpecOp> | undefined = undefined
  * @param tags
  * @returns
  */
-export function getListOutputsSpecOp(
+export function getListOutputsSpecOp (
   basket: string,
   tags: string[]
-): { specOp: ListOutputsSpecOp | undefined; basket?: string; tags: string[] } {
+): { specOp: ListOutputsSpecOp | undefined, basket?: string, tags: string[] } {
   let specOp: ListOutputsSpecOp | undefined
   if (basket) {
     if (_basketSpecOps === undefined) {

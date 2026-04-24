@@ -8,7 +8,7 @@ export class LocalCdnServer {
   app: express.Application
   server?: http.Server
 
-  constructor(
+  constructor (
     public port: number,
     public folder: string
   ) {
@@ -18,7 +18,7 @@ export class LocalCdnServer {
     }
   }
 
-  async start() {
+  async start () {
     this.app = express()
     this.server = http.createServer(this.app)
 
@@ -31,7 +31,7 @@ export class LocalCdnServer {
     // List all files in the directory
     this.app.get('/files', (req, res) => {
       fs.readdir(this.folder, (err, files) => {
-        if (err) {
+        if (err != null) {
           return res.status(500).json({ error: 'Unable to read directory' })
         }
         res.json({ files })
@@ -69,7 +69,7 @@ export class LocalCdnServer {
     })
   }
 
-  async stop() {
+  async stop () {
     await this.server?.close()
   }
 }

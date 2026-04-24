@@ -16,11 +16,11 @@ import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.int
  * @param bufferSize Optional read buffer size to use. Defaults to 80,000 bytes. Currently ignored.
  * @returns `{hash, length}` where `hash` is base64 string form of file hash and `length` is file length in bytes.
  */
-export async function sha256HashOfBinaryFile(
+export async function sha256HashOfBinaryFile (
   fs: ChaintracksFsApi,
   filepath: string,
   bufferSize = 80000
-): Promise<{ hash: string; length: number }> {
+): Promise<{ hash: string, length: number }> {
   const sha256 = new Hash.SHA256()
   const bytes = await fs.readFile(filepath)
   const length = bytes.length
@@ -36,7 +36,7 @@ export async function sha256HashOfBinaryFile(
  * @param fetch Optional ChaintracksFetchApi instance for fetching data.
  * @returns Validated BulkHeaderFileInfo with `validated` set to true.
  */
-export async function validateBulkFileData(
+export async function validateBulkFileData (
   bf: BulkHeaderFileInfo,
   prevHash: string,
   prevChainWork: string,
@@ -44,25 +44,24 @@ export async function validateBulkFileData(
 ): Promise<BulkHeaderFileInfo> {
   const vbf = { ...bf }
 
-  if (!vbf.data && vbf.sourceUrl && fetch) {
+  if ((vbf.data == null) && vbf.sourceUrl && (fetch != null)) {
     const url = fetch.pathJoin(vbf.sourceUrl, vbf.fileName)
     vbf.data = await fetch.download(url)
   }
 
-  if (!vbf.data) throw new WERR_INVALID_OPERATION(`bulk file ${vbf.fileName} data is unavailable`)
+  if (vbf.data == null) throw new WERR_INVALID_OPERATION(`bulk file ${vbf.fileName} data is unavailable`)
 
-  if (vbf.count <= 0)
-    throw new WERR_INVALID_PARAMETER('bf.count', `expected count to be greater than 0, but got ${vbf.count}`)
+  if (vbf.count <= 0) { throw new WERR_INVALID_PARAMETER('bf.count', `expected count to be greater than 0, but got ${vbf.count}`) }
 
-  if (vbf.data.length !== vbf.count * 80)
+  if (vbf.data.length !== vbf.count * 80) {
     throw new WERR_INVALID_PARAMETER(
       'bf.data',
       `bulk file ${vbf.fileName} data length ${vbf.data.length} does not match expected count ${vbf.count}`
     )
+  }
 
   vbf.fileHash = asString(Hash.sha256(asArray(vbf.data)), 'base64')
-  if (bf.fileHash && bf.fileHash !== vbf.fileHash)
-    throw new WERR_INVALID_PARAMETER('bf.fileHash', `expected ${bf.fileHash} but got ${vbf.fileHash}`)
+  if (bf.fileHash && bf.fileHash !== vbf.fileHash) { throw new WERR_INVALID_PARAMETER('bf.fileHash', `expected ${bf.fileHash} but got ${vbf.fileHash}`) }
 
   if (!isKnownValidBulkHeaderFile(vbf)) {
     const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(vbf.data, prevHash, 0, undefined, prevChainWork)
@@ -86,13 +85,13 @@ export async function validateBulkFileData(
  * @param count Optional number of headers to validate. Validates to end of buffer if missing.
  * @returns Header hash of last header validated or previousHash if there where none.
  */
-export function validateBufferOfHeaders(
+export function validateBufferOfHeaders (
   buffer: Uint8Array,
   previousHash: string,
   offset = 0,
   count = -1,
   previousChainWork?: string
-): { lastHeaderHash: string; lastChainWork: string | undefined } {
+): { lastHeaderHash: string, lastChainWork: string | undefined } {
   if (count < 0) count = Math.floor((buffer.length - offset) / 80)
   count = Math.max(0, count)
   let lastHeaderHash = previousHash
@@ -109,8 +108,7 @@ export function validateBufferOfHeaders(
     const header = buffer.slice(headerStart, headerEnd)
     const h = deserializeBaseBlockHeader(header)
     const hashPrev = asString(header.slice(4, 36).reverse())
-    if (lastHeaderHash !== hashPrev)
-      throw { message: `header ${i} invalid previousHash ${lastHeaderHash} vs ${hashPrev}` }
+    if (lastHeaderHash !== hashPrev) { throw { message: `header ${i} invalid previousHash ${lastHeaderHash} vs ${hashPrev}` } }
     lastHeaderHash = asString(doubleSha256BE(header))
     validateAgainstDirtyHashes(lastHeaderHash)
     if (lastChainWork) {
@@ -125,7 +123,7 @@ export function validateBufferOfHeaders(
  * @param buffer
  * @param chain
  */
-export function validateGenesisHeader(buffer: Uint8Array, chain: Chain): void {
+export function validateGenesisHeader (buffer: Uint8Array, chain: Chain): void {
   const header = buffer.slice(0, 80)
   const h = deserializeBlockHeader(header, 0, 0)
   const gh = genesisHeader(chain)
@@ -147,14 +145,14 @@ export function validateGenesisHeader(buffer: Uint8Array, chain: Chain): void {
  * @param work chainWork as a BigNumber
  * @returns Converted chainWork value from BN to hex string of 32 bytes.
  */
-export function workBNtoBuffer(work: BigNumber): string {
+export function workBNtoBuffer (work: BigNumber): string {
   return work.toString(16).padStart(64, '0')
 }
 
 /**
  * Returns true if work1 is more work (greater than) work2
  */
-export function isMoreWork(work1: string, work2: string): boolean {
+export function isMoreWork (work1: string, work2: string): boolean {
   return new BigNumber(asArray(work1), 16).gt(new BigNumber(asArray(work2), 16))
 }
 
@@ -162,7 +160,7 @@ export function isMoreWork(work1: string, work2: string): boolean {
  * Add two Buffer encoded chainwork values
  * @returns Sum of work1 + work2 as Buffer encoded chainWork value
  */
-export function addWork(work1: string, work2: string): string {
+export function addWork (work1: string, work2: string): string {
   const sum = new BigNumber(work1, 16).add(new BigNumber(work2, 16))
   return workBNtoBuffer(sum)
 }
@@ -171,7 +169,7 @@ export function addWork(work1: string, work2: string): string {
  * Subtract Buffer encoded chainwork values
  * @returns work1 - work2 as Buffer encoded chainWork value
  */
-export function subWork(work1: string, work2: string): string {
+export function subWork (work1: string, work2: string): string {
   const sum = new BigNumber(work1, 16).sub(new BigNumber(work2, 16))
   return workBNtoBuffer(sum)
 }
@@ -181,7 +179,7 @@ export function subWork(work1: string, work2: string): string {
  * @param bits number or converted from Buffer using `readUint32LE`
  * @returns 32 byte Buffer with "target" value
  */
-export function convertBitsToTarget(bits: number | number[]): BigNumber {
+export function convertBitsToTarget (bits: number | number[]): BigNumber {
   if (Array.isArray(bits)) bits = readUInt32LE(bits, 0)
 
   const shift = (bits >> 24) & 0xff
@@ -202,7 +200,7 @@ export function convertBitsToTarget(bits: number | number[]): BigNumber {
  * @param bits number or converted from Buffer using `readUint32LE`
  * @returns 32 byte Buffer with "chainWork" value
  */
-export function convertBitsToWork(bits: number | number[]): string {
+export function convertBitsToWork (bits: number | number[]): string {
   const target = convertBitsToTarget(bits)
 
   // convert target to work
@@ -211,7 +209,7 @@ export function convertBitsToWork(bits: number | number[]): string {
   return work.toString(16).padStart(64, '0')
 }
 
-export function deserializeBaseBlockHeaders(
+export function deserializeBaseBlockHeaders (
   buffer: number[] | Uint8Array,
   offset = 0,
   count?: number | undefined
@@ -224,7 +222,7 @@ export function deserializeBaseBlockHeaders(
   return headers
 }
 
-export function deserializeBlockHeaders(
+export function deserializeBlockHeaders (
   firstHeight: number,
   buffer: number[] | Uint8Array,
   offset = 0,
@@ -256,7 +254,7 @@ export function deserializeBlockHeaders(
  *
  * @returns true if the header is correctly formatted
  */
-export function validateHeaderFormat(header: BlockHeader): void {
+export function validateHeaderFormat (header: BlockHeader): void {
   const ALLOWED_KEYS = {
     version: true,
     previousHash: true,
@@ -381,7 +379,7 @@ export function validateHeaderFormat(header: BlockHeader): void {
  *
  * @returns true if the header is valid
  */
-export function validateHeaderDifficulty(hash: Buffer, bits: number) {
+export function validateHeaderDifficulty (hash: Buffer, bits: number) {
   const hashBN = new BigNumber(asArray(hash))
 
   const target = convertBitsToTarget(bits)
@@ -401,7 +399,7 @@ export function validateHeaderDifficulty(hash: Buffer, bits: number) {
  * @returns doule sha256 hash of header bytes reversed
  * @publicbody
  */
-export function blockHash(header: BaseBlockHeader | number[] | Uint8Array): string {
+export function blockHash (header: BaseBlockHeader | number[] | Uint8Array): string {
   const a = !Array.isArray(header) && !(header instanceof Uint8Array) ? serializeBaseBlockHeader(header) : header
   if (a.length !== 80) throw new Error('Block header must be 80 bytes long.')
   return asString(doubleSha256BE(a))
@@ -415,7 +413,7 @@ export function blockHash(header: BaseBlockHeader | number[] | Uint8Array): stri
  * @returns 80 byte Buffer
  * @publicbody
  */
-export function serializeBaseBlockHeader(header: BaseBlockHeader, buffer?: number[], offset?: number): number[] {
+export function serializeBaseBlockHeader (header: BaseBlockHeader, buffer?: number[], offset?: number): number[] {
   const writer = new Utils.Writer()
   writer.writeUInt32LE(header.version)
   writer.write(asArray(header.previousHash).reverse())
@@ -424,7 +422,7 @@ export function serializeBaseBlockHeader(header: BaseBlockHeader, buffer?: numbe
   writer.writeUInt32LE(header.bits)
   writer.writeUInt32LE(header.nonce)
   const data = writer.toArray()
-  if (buffer) {
+  if (buffer != null) {
     offset ||= 0
     for (let i = 0; i < data.length; i++) {
       if (offset + i >= buffer.length) {
@@ -436,7 +434,7 @@ export function serializeBaseBlockHeader(header: BaseBlockHeader, buffer?: numbe
   return data
 }
 
-export function serializeBaseBlockHeaders(headers: BlockHeader[]): Uint8Array {
+export function serializeBaseBlockHeaders (headers: BlockHeader[]): Uint8Array {
   const data = new Uint8Array(headers.length * 80)
   let i = -1
   for (const header of headers) {
@@ -451,7 +449,7 @@ export function serializeBaseBlockHeaders(headers: BlockHeader[]): Uint8Array {
  * Deserialize a BaseBlockHeader from an 80 byte buffer
  * @publicbody
  */
-export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset = 0): BaseBlockHeader {
+export function deserializeBaseBlockHeader (buffer: number[] | Uint8Array, offset = 0): BaseBlockHeader {
   const reader = Utils.ReaderUint8Array.makeReader(buffer, offset)
   const header: BaseBlockHeader = {
     version: reader.readUInt32LE(),
@@ -464,7 +462,7 @@ export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset
   return header
 }
 
-export function deserializeBlockHeader(buffer: number[] | Uint8Array, offset = 0, height: number): BlockHeader {
+export function deserializeBlockHeader (buffer: number[] | Uint8Array, offset = 0, height: number): BlockHeader {
   const base = deserializeBaseBlockHeader(buffer, offset)
   const header: BlockHeader = {
     ...base,
@@ -478,7 +476,7 @@ export function deserializeBlockHeader(buffer: number[] | Uint8Array, offset = 0
  * Returns the genesis block for the specified chain.
  * @publicbody
  */
-export function genesisHeader(chain: Chain): BlockHeader {
+export function genesisHeader (chain: Chain): BlockHeader {
   switch (chain) {
     case 'main':
       return {
@@ -504,7 +502,7 @@ export function genesisHeader(chain: Chain): BlockHeader {
         hash: '000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943'
       }
     case 'mock':
-      throw new Error(`genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.`)
+      throw new Error('genesisHeader does not support \'mock\' chain. Mock chain generates its own genesis block.')
   }
 }
 
@@ -512,7 +510,7 @@ export function genesisHeader(chain: Chain): BlockHeader {
  * Returns the genesis block for the specified chain.
  * @publicbody
  */
-export function genesisBuffer(chain: Chain): number[] {
+export function genesisBuffer (chain: Chain): number[] {
   return serializeBaseBlockHeader(genesisHeader(chain))
 }
 
@@ -521,7 +519,7 @@ export function genesisBuffer(chain: Chain): number[] {
  * @returns new buffer with byte order reversed.
  * @publicbody
  */
-export function swapByteOrder(buffer: number[]): number[] {
+export function swapByteOrder (buffer: number[]): number[] {
   return buffer.slice().reverse()
 }
 
@@ -531,7 +529,7 @@ export function swapByteOrder(buffer: number[]): number[] {
  * @returns four byte buffer with Uint32 number encoded
  * @publicbody
  */
-export function convertUint32ToBuffer(n: number, littleEndian = true): number[] {
+export function convertUint32ToBuffer (n: number, littleEndian = true): number[] {
   const a = [
     n & 0xff, // lowest byte
     (n >> 8) & 0xff,
@@ -541,7 +539,7 @@ export function convertUint32ToBuffer(n: number, littleEndian = true): number[] 
   return littleEndian ? a : a.reverse()
 }
 
-export function writeUInt32LE(n: number, a: number[] | Uint8Array, offset: number): number {
+export function writeUInt32LE (n: number, a: number[] | Uint8Array, offset: number): number {
   a[offset++] = n & 0xff // lowest byte
   a[offset++] = (n >> 8) & 0xff
   a[offset++] = (n >> 16) & 0xff
@@ -549,7 +547,7 @@ export function writeUInt32LE(n: number, a: number[] | Uint8Array, offset: numbe
   return offset
 }
 
-export function writeUInt32BE(n: number, a: number[] | Uint8Array, offset: number): number {
+export function writeUInt32BE (n: number, a: number[] | Uint8Array, offset: number): number {
   a[offset++] = (n >> 24) & 0xff // highest byte
   a[offset++] = (n >> 16) & 0xff
   a[offset++] = (n >> 8) & 0xff
@@ -557,11 +555,11 @@ export function writeUInt32BE(n: number, a: number[] | Uint8Array, offset: numbe
   return offset
 }
 
-export function readUInt32LE(a: number[] | Uint8Array, offset: number): number {
+export function readUInt32LE (a: number[] | Uint8Array, offset: number): number {
   return a[offset++] | (a[offset++] << 8) | (a[offset++] << 16) | (a[offset++] << 24)
 }
 
-export function readUInt32BE(a: number[] | Uint8Array, offset: number): number {
+export function readUInt32BE (a: number[] | Uint8Array, offset: number): number {
   return (a[offset++] << 24) | (a[offset++] << 16) | (a[offset++] << 8) | a[offset++]
 }
 
@@ -571,7 +569,7 @@ export function readUInt32BE(a: number[] | Uint8Array, offset: number): number {
  * @returns a number value in the Uint32 value range
  * @publicbody
  */
-export function convertBufferToUint32(buffer: number[] | Uint8Array, littleEndian = true): number {
+export function convertBufferToUint32 (buffer: number[] | Uint8Array, littleEndian = true): number {
   const a = littleEndian ? buffer : buffer.slice().reverse()
   const n = a[0] | (a[1] << 8) | (a[2] << 16) | (a[3] << 24)
   return n

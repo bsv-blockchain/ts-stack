@@ -14,7 +14,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * @param localCachePath defaults to './data/ingest_headers/'
    * @returns
    */
-  static createBulkIngestorBaseOptions(chain: Chain) {
+  static createBulkIngestorBaseOptions (chain: Chain) {
     const options: BulkIngestorBaseOptions = {
       chain,
       jsonResource: `${chain}NetBlockHeaders.json`
@@ -26,7 +26,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
   jsonFilename: string
   log: (...args: any[]) => void = () => {}
 
-  constructor(options: BulkIngestorBaseOptions) {
+  constructor (options: BulkIngestorBaseOptions) {
     if (!options.jsonResource) throw new Error('The jsonFilename options property is required.')
     this.chain = options.chain
     this.jsonFilename = options.jsonResource
@@ -34,19 +34,19 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
 
   private storageEngine: ChaintracksStorageBase | undefined
 
-  async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
+  async setStorage (storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
     this.storageEngine = storage
     this.log = log
   }
 
-  async shutdown(): Promise<void> {}
+  async shutdown (): Promise<void> {}
 
-  storageOrUndefined(): ChaintracksStorageApi | undefined {
+  storageOrUndefined (): ChaintracksStorageApi | undefined {
     return this.storageEngine
   }
 
-  storage(): ChaintracksStorageBase {
-    if (!this.storageEngine) throw new Error('storageEngine must be set.')
+  storage (): ChaintracksStorageBase {
+    if (this.storageEngine == null) throw new Error('storageEngine must be set.')
     return this.storageEngine
   }
 
@@ -59,7 +59,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * At least one derived BulkIngestor must override this method to provide the current height of the active chain tip.
    * @returns undefined unless overridden
    */
-  async getPresentHeight(): Promise<number | undefined> {
+  async getPresentHeight (): Promise<number | undefined> {
     return undefined
   }
 
@@ -76,7 +76,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * @param priorLiveHeaders any headers accumulated by prior bulk ingestor(s) that are too recent for bulk storage.
    * @returns new live headers: headers in fetchRange but not in bulkRange
    */
-  abstract fetchHeaders(
+  abstract fetchHeaders (
     before: HeightRanges,
     fetchRange: HeightRange,
     bulkRange: HeightRange,
@@ -93,7 +93,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * @param priorLiveHeaders any headers accumulated by prior bulk ingestor(s) that are too recent for bulk storage.
    * @returns updated priorLiveHeaders including any accumulated by this ingestor
    */
-  async synchronize(
+  async synchronize (
     presentHeight: number,
     before: HeightRanges,
     priorLiveHeaders: BlockHeader[]

@@ -33,7 +33,7 @@ export abstract class AuthMethodInteractor {
   /**
    * Shared POST helper for auth endpoints.
    */
-  private async postAuth<T extends { success: boolean; message?: string }>(
+  private async postAuth<T extends { success: boolean, message?: string }>(
     serverUrl: string,
     endpoint: string,
     presentationKey: string,
@@ -53,24 +53,24 @@ export abstract class AuthMethodInteractor {
       return { success: false, message: `HTTP error ${res.status}` } as T
     }
 
-    return res.json()
+    return await res.json()
   }
 
   /**
    * Start the flow (e.g. request an OTP or create a session).
    */
-  public async startAuth(serverUrl: string, presentationKey: string, payload: AuthPayload): Promise<StartAuthResponse> {
-    return this.postAuth<StartAuthResponse>(serverUrl, 'start', presentationKey, payload)
+  public async startAuth (serverUrl: string, presentationKey: string, payload: AuthPayload): Promise<StartAuthResponse> {
+    return await this.postAuth<StartAuthResponse>(serverUrl, 'start', presentationKey, payload)
   }
 
   /**
    * Complete the flow (e.g. confirm OTP).
    */
-  public async completeAuth(
+  public async completeAuth (
     serverUrl: string,
     presentationKey: string,
     payload: AuthPayload
   ): Promise<CompleteAuthResponse> {
-    return this.postAuth<CompleteAuthResponse>(serverUrl, 'complete', presentationKey, payload)
+    return await this.postAuth<CompleteAuthResponse>(serverUrl, 'complete', presentationKey, payload)
   }
 }

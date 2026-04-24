@@ -27,14 +27,14 @@ export class TaskNewHeader extends WalletMonitorTask {
   queuedHeader?: BlockHeader
   queuedHeaderWhen?: Date
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = 1 * Monitor.oneMinute
   ) {
     super(monitor, TaskNewHeader.taskName)
   }
 
-  async getHeader(): Promise<BlockHeader> {
+  async getHeader (): Promise<BlockHeader> {
     return await this.monitor.chaintracks.findChainTipHeader()
   }
 
@@ -51,19 +51,19 @@ export class TaskNewHeader extends WalletMonitorTask {
    * and sometimes which block. In the case of coinbase transactions, a transaction may
    * also fail after a reorg.
    */
-  override async asyncSetup(): Promise<void> {}
+  override async asyncSetup (): Promise<void> {}
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     const run = true
     return { run }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     const oldHeader = this.header
     this.header = await this.getHeader()
     let isNew = true
-    if (!oldHeader) {
+    if (oldHeader == null) {
       log = `first header: ${this.header.height} ${this.header.hash}`
     } else if (oldHeader.height > this.header.height) {
       log = `old header: ${this.header.height} vs ${oldHeader.height}`
@@ -81,7 +81,7 @@ export class TaskNewHeader extends WalletMonitorTask {
     if (isNew) {
       this.queuedHeader = this.header
       this.queuedHeaderWhen = new Date()
-    } else if (this.queuedHeader) {
+    } else if (this.queuedHeader != null) {
       // Only process new block header if it has remained the chain tip for a full cycle
       const delay = (new Date().getTime() - this.queuedHeaderWhen!.getTime()) / 1000 // seconds
       log = `process header: ${this.header.height} ${this.header.hash} delayed ${delay.toFixed(1)} secs`

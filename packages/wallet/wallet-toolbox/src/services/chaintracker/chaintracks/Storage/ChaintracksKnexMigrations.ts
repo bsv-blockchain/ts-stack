@@ -8,48 +8,48 @@ interface Migration {
 }
 
 interface MigrationSource<TMigrationSpec> {
-  getMigrations(loadExtensions: readonly string[]): Promise<TMigrationSpec[]>
-  getMigrationName(migration: TMigrationSpec): string
-  getMigration(migration: TMigrationSpec): Promise<Migration>
+  getMigrations: (loadExtensions: readonly string[]) => Promise<TMigrationSpec[]>
+  getMigrationName: (migration: TMigrationSpec) => string
+  getMigration: (migration: TMigrationSpec) => Promise<Migration>
 }
 
 export class ChaintracksKnexMigrations implements MigrationSource<string> {
   migrations: Record<string, Migration> = {}
 
-  constructor(public chain: Chain) {
+  constructor (public chain: Chain) {
     this.migrations = this.setupMigrations()
   }
 
-  async getMigrations(): Promise<string[]> {
+  async getMigrations (): Promise<string[]> {
     return Object.keys(this.migrations).sort((a, b) => a.localeCompare(b))
   }
 
-  getMigrationName(migration: string) {
+  getMigrationName (migration: string) {
     return migration
   }
 
-  async getMigration(migration: string): Promise<Migration> {
+  async getMigration (migration: string): Promise<Migration> {
     return this.migrations[migration]
   }
 
-  async getLatestMigration(): Promise<string> {
+  async getLatestMigration (): Promise<string> {
     const ms = await this.getMigrations()
     return ms[ms.length - 1]
   }
 
-  static async latestMigration(): Promise<string> {
+  static async latestMigration (): Promise<string> {
     const km = new ChaintracksKnexMigrations('test')
     return await km.getLatestMigration()
   }
 
-  setupMigrations(): Record<string, Migration> {
+  setupMigrations (): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
 
-    const liveHeadersTableName = `live_headers`
-    const bulkFilesTableName = `bulk_files`
+    const liveHeadersTableName = 'live_headers'
+    const bulkFilesTableName = 'bulk_files'
 
     migrations['2025-06-28-001 initial migration'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.createTable(liveHeadersTableName, table => {
           table.increments('headerId')
           table.integer('previousHeaderId').unsigned().references('headerId').inTable(liveHeadersTableName)
@@ -93,7 +93,7 @@ export class ChaintracksKnexMigrations implements MigrationSource<string> {
           table.index(['firstHeight', 'chain'])
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.dropTable(liveHeadersTableName)
         await knex.schema.dropTable(bulkFilesTableName)
       }

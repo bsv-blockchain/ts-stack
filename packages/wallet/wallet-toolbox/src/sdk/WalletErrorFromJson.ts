@@ -24,7 +24,7 @@ import {
  * @param json
  * @returns a WalletError derived error object, typically for re-throw.
  */
-export function WalletErrorFromJson(json: object): WalletError {
+export function WalletErrorFromJson (json: object): WalletError {
   let e: WalletError
   const obj = json as any
   switch (obj.name) {

@@ -135,7 +135,7 @@ describe('Commission class method tests', () => {
       const entity1 = new EntityCommission(initialData)
 
       // Create mismatched entities and test each condition
-      const mismatchedEntities: Partial<TableCommission>[] = [
+      const mismatchedEntities: Array<Partial<TableCommission>> = [
         { isRedeemed: true },
         { transactionId: transactionId2 }, // Requires valid transaction
         { keyOffset: 'offset456' },

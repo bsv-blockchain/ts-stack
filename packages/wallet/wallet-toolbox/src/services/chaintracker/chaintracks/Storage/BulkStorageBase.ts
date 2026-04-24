@@ -6,8 +6,7 @@ import { ChaintracksStorageBase } from './ChaintracksStorageBase'
 
 import { HeightRange } from '../util/HeightRange'
 import { BulkFilesReader } from '../util/BulkFilesReader'
-import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
-import { BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
+import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
 
 import { addWork, convertBitsToWork, deserializeBlockHeaders, genesisBuffer } from '../util/blockHeaderUtilities'
 import { Chain } from '../../../../sdk/types'
@@ -17,7 +16,7 @@ import { Utils } from '@bsv/sdk'
 import { asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
 
 export abstract class BulkStorageBase implements BulkStorageApi {
-  static createBulkStorageBaseOptions(chain: Chain, fs: ChaintracksFsApi): BulkStorageBaseOptions {
+  static createBulkStorageBaseOptions (chain: Chain, fs: ChaintracksFsApi): BulkStorageBaseOptions {
     const options: BulkStorageBaseOptions = {
       chain,
       fs
@@ -29,49 +28,49 @@ export abstract class BulkStorageBase implements BulkStorageApi {
   fs: ChaintracksFsApi
   log: (...args: any[]) => void = () => {}
 
-  constructor(options: BulkStorageBaseOptions) {
+  constructor (options: BulkStorageBaseOptions) {
     this.chain = options.chain
     this.fs = options.fs
   }
 
-  async shutdown(): Promise<void> {}
+  async shutdown (): Promise<void> {}
 
-  abstract appendHeaders(minHeight: number, count: number, newBulkHeaders: Uint8Array): Promise<void>
-  abstract getMaxHeight(): Promise<number>
-  abstract headersToBuffer(height: number, count: number): Promise<Uint8Array>
-  abstract findHeaderForHeightOrUndefined(height: number): Promise<BlockHeader | undefined>
+  abstract appendHeaders (minHeight: number, count: number, newBulkHeaders: Uint8Array): Promise<void>
+  abstract getMaxHeight (): Promise<number>
+  abstract headersToBuffer (height: number, count: number): Promise<Uint8Array>
+  abstract findHeaderForHeightOrUndefined (height: number): Promise<BlockHeader | undefined>
 
-  async findHeaderForHeight(height: number): Promise<BlockHeader> {
+  async findHeaderForHeight (height: number): Promise<BlockHeader> {
     const header = await this.findHeaderForHeightOrUndefined(height)
-    if (!header) throw new Error(`No header found for height ${height}`)
+    if (header == null) throw new Error(`No header found for height ${height}`)
     return header
   }
 
-  async getHeightRange(): Promise<HeightRange> {
+  async getHeightRange (): Promise<HeightRange> {
     return new HeightRange(0, await this.getMaxHeight())
   }
 
-  async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {}
+  async setStorage (storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {}
 
-  async exportBulkHeaders(rootFolder: string, jsonFilename: string, maxPerFile: number): Promise<void> {
+  async exportBulkHeaders (rootFolder: string, jsonFilename: string, maxPerFile: number): Promise<void> {
     const info: BulkHeaderFilesInfo = {
-      rootFolder: rootFolder,
-      jsonFilename: jsonFilename,
+      rootFolder,
+      jsonFilename,
       files: [],
       headersPerFile: maxPerFile
     }
     const maxHeight = await this.getMaxHeight()
     const baseFilename = jsonFilename.slice(0, -5) // remove ".json"
-    let prevHash = '00'.repeat(32)
-    let prevChainWork = '00'.repeat(32)
+    const prevHash = '00'.repeat(32)
+    const prevChainWork = '00'.repeat(32)
     for (let height = 0; height <= maxHeight; height += maxPerFile) {
       const count = Math.min(maxPerFile, maxHeight - height + 1)
-      let file: BulkHeaderFileInfo = {
+      const file: BulkHeaderFileInfo = {
         fileName: `${baseFilename}_${info.files.length}.headers`,
         firstHeight: height,
-        prevHash: prevHash,
-        prevChainWork: prevChainWork,
-        count: count,
+        prevHash,
+        prevChainWork,
+        count,
         lastHash: null,
         fileHash: null,
         lastChainWork: ''

@@ -5,20 +5,20 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 export class TaskMonitorCallHistory extends WalletMonitorTask {
   static taskName = 'MonitorCallHistory'
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 12
   ) {
     super(monitor, TaskMonitorCallHistory.taskName)
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: nowMsecsSinceEpoch > this.lastRunMsecsSinceEpoch + this.triggerMsecs
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     const r = await this.monitor.services.getServicesCallHistory(true)
     const log = JSON.stringify(r)
     return log

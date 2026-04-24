@@ -4,7 +4,7 @@
  * @param lineToAdd Content to add to line.
  * @returns undefined or log extended by time stamped `lineToAdd` and new line.
  */
-export function stampLog(log: string | undefined | { log?: string }, lineToAdd: string): string | undefined {
+export function stampLog (log: string | undefined | { log?: string }, lineToAdd: string): string | undefined {
   const add = `${new Date().toISOString()} ${lineToAdd}\n`
   if (typeof log === 'object' && typeof log.log === 'string') return (log.log = log.log + add)
   if (typeof log === 'string') return log + add
@@ -18,15 +18,15 @@ export function stampLog(log: string | undefined | { log?: string }, lineToAdd: 
  * @param log Each logged event starts with ISO time stamp, space, rest of line, terminated by `\n`.
  * @returns reformated multi-line event log
  */
-export function stampLogFormat(log?: string): string {
+export function stampLogFormat (log?: string): string {
   if (typeof log !== 'string') return ''
   const logLines = log.split('\n')
-  const data: {
+  const data: Array<{
     when: number
     rest: string
     delta: number
     newClock: boolean
-  }[] = []
+  }> = []
   let last = 0
   const newClocks: number[] = []
   for (const line of logLines) {
@@ -35,7 +35,7 @@ export function stampLogFormat(log?: string): string {
       const when = new Date(line.substring(0, spaceAt)).getTime()
       const rest = line.substring(spaceAt + 1)
       const delta = when - (last || when)
-      const newClock = rest.indexOf('**NETWORK**') > -1
+      const newClock = rest.includes('**NETWORK**')
       if (newClock) newClocks.push(data.length)
       data.push({ when, rest, delta, newClock })
       last = when

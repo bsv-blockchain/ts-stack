@@ -24,7 +24,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
    */
   static checkNow = false
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = Monitor.oneDay * 1
   ) {
@@ -34,7 +34,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
   /**
    * Normally triggered by checkNow getting set by new block header found event from chaintracks
    */
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskCheckNoSends.checkNow ||
@@ -42,7 +42,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     const countsAsAttempt = TaskCheckNoSends.checkNow
     TaskCheckNoSends.checkNow = false
@@ -64,7 +64,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       log += `${reqs.length} reqs with status 'nosend'\n`
       const r = await getProofs(this, reqs, 2, countsAsAttempt, false, maxAcceptableHeight)
       log += `${r.log}\n`
-      //console.log(log);
+      // console.log(log);
       if (reqs.length < limit) break
       offset += limit
     }

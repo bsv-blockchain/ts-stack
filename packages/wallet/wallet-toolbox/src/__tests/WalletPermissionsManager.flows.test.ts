@@ -11,7 +11,7 @@ jest.mock('@bsv/sdk', () => MockedBSV_SDK)
  * We do this so we can reliably test the request flow (i.e., that it truly initiates
  * a new permission request if no token is found).
  */
-function mockNoTokensFound(manager: WalletPermissionsManager) {
+function mockNoTokensFound (manager: WalletPermissionsManager) {
   jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(undefined)
   jest.spyOn(manager as any, 'findBasketToken').mockResolvedValue(undefined)
   jest.spyOn(manager as any, 'findCertificateToken').mockResolvedValue(undefined)

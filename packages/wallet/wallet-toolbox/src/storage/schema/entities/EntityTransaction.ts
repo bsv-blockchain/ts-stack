@@ -12,8 +12,8 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
    * @returns @bsv/sdk Transaction object from parsed rawTx.
    * If rawTx is undefined, returns undefined.
    */
-  getBsvTx(): BsvTransaction | undefined {
-    if (!this.rawTx) return undefined
+  getBsvTx (): BsvTransaction | undefined {
+    if (this.rawTx == null) return undefined
     return BsvTransaction.fromBinary(this.rawTx)
   }
 
@@ -21,9 +21,9 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
    * @returns array of @bsv/sdk TransactionInput objects from parsed rawTx.
    * If rawTx is undefined, an empty array is returned.
    */
-  getBsvTxIns(): TransactionInput[] {
+  getBsvTxIns (): TransactionInput[] {
     const tx = this.getBsvTx()
-    if (!tx) return []
+    if (tx == null) return []
     return tx.inputs
   }
 
@@ -32,14 +32,14 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
    * Uses both spentBy and rawTx inputs (if available) to locate inputs from among user's outputs.
    * Not all transaction inputs correspond to prior storage outputs.
    */
-  async getInputs(storage: EntityStorage, trx?: TrxToken): Promise<TableOutput[]> {
+  async getInputs (storage: EntityStorage, trx?: TrxToken): Promise<TableOutput[]> {
     const inputs = await storage.findOutputs({
       partial: { userId: this.userId, spentBy: this.id },
       trx
     })
     // Merge "inputs" by spentBy and userId
     for (const input of this.getBsvTxIns()) {
-      //console.log(`getInputs of ${this.id}: ${input.txid()} ${input.txOutNum}`)
+      // console.log(`getInputs of ${this.id}: ${input.txid()} ${input.txOutNum}`)
       const pso = verifyOneOrNone(
         await storage.findOutputs({
           partial: {
@@ -50,12 +50,12 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
           trx
         })
       )
-      if (pso && !inputs.some(i => i.outputId === pso.outputId)) inputs.push(pso)
+      if ((pso != null) && !inputs.some(i => i.outputId === pso.outputId)) inputs.push(pso)
     }
     return inputs
   }
 
-  constructor(api?: TableTransaction) {
+  constructor (api?: TableTransaction) {
     const now = new Date()
     super(
       api || {
@@ -75,141 +75,158 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
     )
   }
 
-  override updateApi(): void {
+  override updateApi (): void {
     /* nothing needed yet... */
   }
 
-  get transactionId() {
+  get transactionId () {
     return this.api.transactionId
   }
-  set transactionId(v: number) {
+
+  set transactionId (v: number) {
     this.api.transactionId = v
   }
 
-  get created_at() {
+  get created_at () {
     return this.api.created_at
   }
-  set created_at(v: Date) {
+
+  set created_at (v: Date) {
     this.api.created_at = v
   }
 
-  get updated_at() {
+  get updated_at () {
     return this.api.updated_at
   }
-  set updated_at(v: Date) {
+
+  set updated_at (v: Date) {
     this.api.updated_at = v
   }
 
-  get version() {
+  get version () {
     return this.api.version
   }
-  set version(v: number | undefined) {
+
+  set version (v: number | undefined) {
     this.api.version = v
   }
 
-  get lockTime() {
+  get lockTime () {
     return this.api.lockTime
   }
-  set lockTime(v: number | undefined) {
+
+  set lockTime (v: number | undefined) {
     this.api.lockTime = v
   }
 
-  get isOutgoing() {
+  get isOutgoing () {
     return this.api.isOutgoing
   }
-  set isOutgoing(v: boolean) {
+
+  set isOutgoing (v: boolean) {
     this.api.isOutgoing = v
   }
 
-  get status() {
+  get status () {
     return this.api.status
   }
-  set status(v: TransactionStatus) {
+
+  set status (v: TransactionStatus) {
     this.api.status = v
   }
 
-  get userId() {
+  get userId () {
     return this.api.userId
   }
-  set userId(v: number) {
+
+  set userId (v: number) {
     this.api.userId = v
   }
 
-  get provenTxId() {
+  get provenTxId () {
     return this.api.provenTxId
   }
-  set provenTxId(v: number | undefined) {
+
+  set provenTxId (v: number | undefined) {
     this.api.provenTxId = v
   }
 
-  get satoshis() {
+  get satoshis () {
     return this.api.satoshis
   }
-  set satoshis(v: number) {
+
+  set satoshis (v: number) {
     this.api.satoshis = v
   }
 
-  get txid() {
+  get txid () {
     return this.api.txid
   }
-  set txid(v: string | undefined) {
+
+  set txid (v: string | undefined) {
     this.api.txid = v
   }
 
-  get reference() {
+  get reference () {
     return this.api.reference
   }
-  set reference(v: string) {
+
+  set reference (v: string) {
     this.api.reference = v
   }
 
-  get inputBEEF() {
+  get inputBEEF () {
     return this.api.inputBEEF
   }
-  set inputBEEF(v: number[] | undefined) {
+
+  set inputBEEF (v: number[] | undefined) {
     this.api.inputBEEF = v
   }
 
-  get description() {
+  get description () {
     return this.api.description
   }
-  set description(v: string) {
+
+  set description (v: string) {
     this.api.description = v
   }
 
-  get rawTx() {
+  get rawTx () {
     return this.api.rawTx
   }
-  set rawTx(v: number[] | undefined) {
+
+  set rawTx (v: number[] | undefined) {
     this.api.rawTx = v
   }
 
   // Extended (computed / dependent entity) Properties
-  //get labels() { return this.api.labels }
-  //set labels(v: string[] | undefined) { this.api.labels = v }
+  // get labels() { return this.api.labels }
+  // set labels(v: string[] | undefined) { this.api.labels = v }
 
-  override get id(): number {
+  override get id (): number {
     return this.api.transactionId
   }
-  override set id(v: number) {
+
+  override set id (v: number) {
     this.api.transactionId = v
   }
-  override get entityName(): string {
+
+  override get entityName (): string {
     return 'transaction'
   }
-  override get entityTable(): string {
+
+  override get entityTable (): string {
     return 'transactions'
   }
 
-  override equals(ei: TableTransaction, syncMap?: SyncMap | undefined): boolean {
+  override equals (ei: TableTransaction, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
 
     // Properties that are never updated
     if (
-      eo.transactionId !== (syncMap ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) ||
+      eo.transactionId !== ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) ||
       eo.reference !== ei.reference
-    )
-      return false
+    ) { return false }
 
     if (
       eo.version !== ei.version ||
@@ -221,25 +238,23 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
       eo.description !== ei.description ||
       !optionalArraysEqual(eo.rawTx, ei.rawTx) ||
       !optionalArraysEqual(eo.inputBEEF, ei.inputBEEF)
-    )
-      return false
+    ) { return false }
 
     if (
       !eo.provenTxId !== !ei.provenTxId ||
-      (ei.provenTxId && eo.provenTxId !== (syncMap ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
-    )
-      return false
+      (ei.provenTxId && eo.provenTxId !== ((syncMap != null) ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
+    ) { return false }
 
     return true
   }
 
-  static async mergeFind(
+  static async mergeFind (
     storage: EntityStorage,
     userId: number,
     ei: TableTransaction,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean; eo: EntityTransaction; eiId: number }> {
+  ): Promise<{ found: boolean, eo: EntityTransaction, eiId: number }> {
     const ef = verifyOneOrNone(
       await storage.findTransactions({
         partial: { reference: ei.reference, userId },
@@ -247,20 +262,20 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
       })
     )
     return {
-      found: !!ef,
+      found: !(ef == null),
       eo: new EntityTransaction(ef || { ...ei }),
       eiId: verifyId(ei.transactionId)
     }
   }
 
-  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     if (this.provenTxId) this.provenTxId = syncMap.provenTx.idMap[this.provenTxId]
     this.userId = userId
     this.transactionId = 0
     this.transactionId = await storage.insertTransaction(this.toApi(), trx)
   }
 
-  override async mergeExisting(
+  override async mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableTransaction,
@@ -292,7 +307,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
     return wasMerged
   }
 
-  async getProvenTx(storage: EntityStorage, trx?: TrxToken): Promise<EntityProvenTx | undefined> {
+  async getProvenTx (storage: EntityStorage, trx?: TrxToken): Promise<EntityProvenTx | undefined> {
     if (!this.provenTxId) return undefined
     const p = verifyOneOrNone(
       await storage.findProvenTxs({
@@ -300,7 +315,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
         trx
       })
     )
-    if (!p) return undefined
+    if (p == null) return undefined
     return new EntityProvenTx(p)
   }
 }

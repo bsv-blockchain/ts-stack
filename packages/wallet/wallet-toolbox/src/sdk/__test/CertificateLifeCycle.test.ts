@@ -96,21 +96,21 @@ describe('CertificateLifeCycle tests', () => {
     )
 
     const r4 = await veriCert.decryptFields(verifierWallet)
-    expect(r4['name']).toBe('Alice')
-    expect(r4['email']).toBe('alice@example.com')
-    expect(r4['organization']).not.toBe('Example Corp')
+    expect(r4.name).toBe('Alice')
+    expect(r4.email).toBe('alice@example.com')
+    expect(r4.organization).not.toBe('Example Corp')
   })
 })
 
-function makeSampleCert(
+function makeSampleCert (
   subjectRootKeyHex?: string,
   certifierKeyHex?: string,
   verifierKeyHex?: string
 ): {
-  cert: WalletCertificate
-  subject: PrivateKey
-  certifier: PrivateKey
-} {
+    cert: WalletCertificate
+    subject: PrivateKey
+    certifier: PrivateKey
+  } {
   const subject = subjectRootKeyHex ? PrivateKey.fromString(subjectRootKeyHex) : PrivateKey.fromRandom()
   const certifier = certifierKeyHex ? PrivateKey.fromString(certifierKeyHex) : PrivateKey.fromRandom()
   const verifier = verifierKeyHex ? PrivateKey.fromString(verifierKeyHex) : PrivateKey.fromRandom()

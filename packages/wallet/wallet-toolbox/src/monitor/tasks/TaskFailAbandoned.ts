@@ -13,20 +13,20 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 export class TaskFailAbandoned extends WalletMonitorTask {
   static taskName = 'FailAbandoned'
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = 1000 * 60 * 5
   ) {
     super(monitor, TaskFailAbandoned.taskName)
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: nowMsecsSinceEpoch > this.lastRunMsecsSinceEpoch + this.triggerMsecs
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     let log = ''
     const limit = 100
     let offset = 0

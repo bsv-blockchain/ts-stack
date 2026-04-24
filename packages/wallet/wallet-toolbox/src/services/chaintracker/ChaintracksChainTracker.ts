@@ -16,7 +16,7 @@ export class ChaintracksChainTracker implements ChainTracker {
   cache: Record<number, string>
   options: ChaintracksChainTrackerOptions
 
-  constructor(chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions) {
+  constructor (chain?: Chain, chaintracks?: ChaintracksClientApi, options?: ChaintracksChainTrackerOptions) {
     chain ||= 'main'
     this.chaintracks =
       chaintracks ?? new ChaintracksServiceClient(chain, `https://${chain}net-chaintracks.babbage.systems`)
@@ -24,11 +24,11 @@ export class ChaintracksChainTracker implements ChainTracker {
     this.options = options || {}
   }
 
-  async currentHeight(): Promise<number> {
+  async currentHeight (): Promise<number> {
     return await this.chaintracks.getPresentHeight()
   }
 
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
     const cachedRoot = this.cache[height]
     if (cachedRoot) {
       return cachedRoot === root
@@ -38,13 +38,13 @@ export class ChaintracksChainTracker implements ChainTracker {
 
     const retries = this.options.maxRetries || 3
 
-    let error: WalletError | undefined = undefined
+    let error: WalletError | undefined
 
     for (let tryCount = 1; tryCount <= retries; tryCount++) {
       try {
         header = await this.chaintracks.findHeaderForHeight(height)
 
-        if (!header) {
+        if (header == null) {
           return false
         }
 
@@ -58,7 +58,7 @@ export class ChaintracksChainTracker implements ChainTracker {
       }
     }
 
-    if (!header) throw new WERR_INTERNAL('no header should have returned false or thrown an error.')
+    if (header == null) throw new WERR_INTERNAL('no header should have returned false or thrown an error.')
 
     this.cache[height] = header.merkleRoot
 

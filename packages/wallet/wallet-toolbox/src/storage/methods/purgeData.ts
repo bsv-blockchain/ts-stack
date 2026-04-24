@@ -9,7 +9,7 @@ import { TableOutputTagMap } from '../schema/tables/TableOutputTagMap'
 import { TableTxLabelMap } from '../schema/tables/TableTxLabelMap'
 import { TableCommission } from '../schema/tables/TableCommission'
 
-export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
+export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
   const r: PurgeResults = { count: 0, log: '' }
   const defaultAge = 1000 * 60 * 60 * 24 * 14
 
@@ -94,11 +94,12 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
       .where('updated_at', '<', before)
       .where('status', 'invalid')
     const invalidReqIds = invalidReqs.map(o => o.provenTxReqId)
-    if (invalidReqIds.length > 0)
+    if (invalidReqIds.length > 0) {
       qs.push({
         log: 'invalid proven_tx_reqs deleted',
         q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', invalidReqIds).delete()
       })
+    }
 
     const doubleSpendReqs = await storage
       .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
@@ -106,11 +107,12 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
       .where('updated_at', '<', before)
       .where('status', 'doubleSpend')
     const doubleSpendReqIds = doubleSpendReqs.map(o => o.provenTxReqId)
-    if (doubleSpendReqIds.length > 0)
+    if (doubleSpendReqIds.length > 0) {
       qs.push({
         log: 'doubleSpend proven_tx_reqs deleted',
         q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', doubleSpendReqIds).delete()
       })
+    }
 
     for (const q of qs) await runPurgeQuery(q)
   }
@@ -135,19 +137,19 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
     const proofTxids: Record<string, boolean> = {}
     for (const btx of beef.txs) proofTxids[btx.txid] = true
 
-    let qs: PurgeQuery[] = []
+    const qs: PurgeQuery[] = []
 
     const spentTxsQ = storage
       .toDb(trx)<TableTransaction>('transactions')
       .where('updated_at', '<', before)
       .where('status', 'completed')
       .whereRaw(
-        `not exists(select outputId from outputs as o where o.transactionId = transactions.transactionId and o.spendable = 1)`
+        'not exists(select outputId from outputs as o where o.transactionId = transactions.transactionId and o.spendable = 1)'
       )
     const txs: TableTransaction[] = await spentTxsQ
     // Save any spent txid still needed to prove a utxo:
     const nptxs = txs.filter(t => !proofTxids[t.txid || ''])
-    let spentTxIds = nptxs.map(tx => tx.transactionId)
+    const spentTxIds = nptxs.map(tx => tx.transactionId)
 
     if (spentTxIds.length > 0) {
       const update: Partial<TableOutput> = {
@@ -175,10 +177,10 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
     q: storage
       .toDb(trx)('proven_txs')
       .whereRaw(
-        `not exists(select * from transactions as t where t.txid = proven_txs.txid or t.provenTxId = proven_txs.provenTxId)`
+        'not exists(select * from transactions as t where t.txid = proven_txs.txid or t.provenTxId = proven_txs.provenTxId)'
       )
       .whereRaw(
-        `not exists(select * from proven_tx_reqs as r where r.txid = proven_txs.txid or r.provenTxId = proven_txs.provenTxId)`
+        'not exists(select * from proven_tx_reqs as r where r.txid = proven_txs.txid or r.provenTxId = proven_txs.provenTxId)'
       )
       .delete()
   })
@@ -186,7 +188,7 @@ export async function purgeData(storage: StorageKnex, params: PurgeParams, trx?:
 
   return r
 
-  async function deleteTransactions(
+  async function deleteTransactions (
     transactionIds: number[],
     qs: PurgeQuery[],
     reason: string,
@@ -243,7 +245,7 @@ interface PurgeQuery {
   log: string
 }
 
-function toSqlWhereDate(d: Date): string {
+function toSqlWhereDate (d: Date): string {
   let s = d.toISOString()
   s = s.replace('T', ' ')
   s = s.replace('Z', '')

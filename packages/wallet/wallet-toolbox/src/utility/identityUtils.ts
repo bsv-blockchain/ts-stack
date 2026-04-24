@@ -53,7 +53,7 @@ export const transformVerifiableCertificatesWithTrust = (
     // Lookup and cache certifier details from trustSettings.
     if (!certifierCache[certifier]) {
       const found = trustSettings.trustedCertifiers.find(x => x.identityKey === certifier)
-      if (!found) return // Skip this certificate if its certifier is not trusted.
+      if (found == null) return // Skip this certificate if its certifier is not trusted.
       certifierCache[certifier] = found
     }
 

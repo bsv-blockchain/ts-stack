@@ -18,7 +18,7 @@ export class WalletError extends Error implements WalletErrorObject {
   // Facilitates detection of Error objects from non-error return values.
   isError: true = true
 
-  constructor(
+  constructor (
     name: string,
     message: string,
     stack?: string,
@@ -32,20 +32,22 @@ export class WalletError extends Error implements WalletErrorObject {
   /**
    * Error class compatible accessor for  `code`.
    */
-  get code(): ErrorCodeString10To40Bytes {
+  get code (): ErrorCodeString10To40Bytes {
     return this.name
   }
-  set code(v: ErrorCodeString10To40Bytes) {
+
+  set code (v: ErrorCodeString10To40Bytes) {
     this.name = v
   }
 
   /**
    * Error class compatible accessor for `description`.
    */
-  get description(): ErrorDescriptionString20To200Bytes {
+  get description (): ErrorDescriptionString20To200Bytes {
     return this.message
   }
-  set description(v: ErrorDescriptionString20To200Bytes) {
+
+  set description (v: ErrorDescriptionString20To200Bytes) {
     this.message = v
   }
 
@@ -53,7 +55,7 @@ export class WalletError extends Error implements WalletErrorObject {
    * Recovers all public fields from WalletError derived error classes and relevant Error derived errors.
    *
    */
-  static fromUnknown(err: unknown): WalletError {
+  static fromUnknown (err: unknown): WalletError {
     if (err instanceof WalletError) return err
     let name = 'WERR_UNKNOWN'
     let message = typeof err === 'string' ? err : typeof err === 'number' ? err.toString() : ''
@@ -75,8 +77,7 @@ export class WalletError extends Error implements WalletErrorObject {
     const e = new WalletError(name, message, stack, Object.keys(details).length > 0 ? details : undefined)
     if (err !== null && typeof err === 'object') {
       for (const [key, value] of Object.entries(err)) {
-        if (key !== 'walletError' && typeof value !== 'string' && typeof value !== 'number' && !Array.isArray(value))
-          continue
+        if (key !== 'walletError' && typeof value !== 'string' && typeof value !== 'number' && !Array.isArray(value)) { continue }
         switch (key) {
           case 'walletError':
             e[key] = WalletError.fromUnknown(value)
@@ -109,7 +110,7 @@ export class WalletError extends Error implements WalletErrorObject {
   /**
    * @returns standard HTTP error status object with status property set to 'error'.
    */
-  asStatus(): { status: string; code: string; description: string } {
+  asStatus (): { status: string, code: string, description: string } {
     return {
       status: 'error',
       code: this.name,
@@ -126,7 +127,7 @@ export class WalletError extends Error implements WalletErrorObject {
    *
    * @returns stringified JSON representation of the WalletError.
    */
-  protected toJson(): string {
+  protected toJson (): string {
     const e = new WalletError(this.name, this.message)
     const json = JSON.stringify({
       isError: true,
@@ -144,7 +145,7 @@ export class WalletError extends Error implements WalletErrorObject {
    * @param error
    * @returns stringified JSON representation of the error such that it can be desirialized to a WalletError.
    */
-  static unknownToJson(error: unknown | WalletError): string {
+  static unknownToJson (error: unknown | WalletError): string {
     let json: string | undefined
     let e: WalletError | undefined
     const t = typeof error

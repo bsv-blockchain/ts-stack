@@ -15,9 +15,9 @@ import { StorageIdb } from '../StorageIdb'
  * @param args
  * @returns
  */
-export async function reviewStatusIdb(
+export async function reviewStatusIdb (
   storage: StorageIdb,
-  args: { agedLimit: Date; trx?: sdk.TrxToken }
+  args: { agedLimit: Date, trx?: sdk.TrxToken }
 ): Promise<{ log: string }> {
   const r: { log: string } = { log: '' }
 

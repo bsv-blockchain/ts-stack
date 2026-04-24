@@ -78,15 +78,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   commissionPubKeyHex?: PubKeyHex
   maxRecursionDepth?: number
 
-  static defaultOptions() {
+  static defaultOptions () {
     return {
-      feeModel: <StorageFeeModel>{ model: 'sat/kb', value: 1 },
+      feeModel: { model: 'sat/kb', value: 1 } as StorageFeeModel,
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined
     }
   }
 
-  static createStorageBaseOptions(chain: Chain): StorageProviderOptions {
+  static createStorageBaseOptions (chain: Chain): StorageProviderOptions {
     const options: StorageProviderOptions = {
       ...StorageProvider.defaultOptions(),
       chain
@@ -94,7 +94,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return options
   }
 
-  constructor(options: StorageProviderOptions) {
+  constructor (options: StorageProviderOptions) {
     super(options)
     this.feeModel = options.feeModel
     this.commissionPubKeyHex = options.commissionPubKeyHex
@@ -102,11 +102,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.maxRecursionDepth = 12
   }
 
-  abstract reviewStatus(args: { agedLimit: Date; trx?: TrxToken }): Promise<{ log: string }>
+  abstract reviewStatus (args: { agedLimit: Date, trx?: TrxToken }): Promise<{ log: string }>
 
-  abstract purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults>
+  abstract purgeData (params: PurgeParams, trx?: TrxToken): Promise<PurgeResults>
 
-  abstract allocateChangeInput(
+  abstract allocateChangeInput (
     userId: number,
     basketId: number,
     targetSatoshis: number,
@@ -115,23 +115,23 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     transactionId: number
   ): Promise<TableOutput | undefined>
 
-  abstract getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx>
-  abstract getRawTxOfKnownValidTransaction(
+  abstract getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx>
+  abstract getRawTxOfKnownValidTransaction (
     txid?: string,
     offset?: number,
     length?: number,
     trx?: TrxToken
   ): Promise<number[] | undefined>
 
-  abstract getLabelsForTransactionId(transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]>
-  abstract getTagsForOutputId(outputId: number, trx?: TrxToken): Promise<TableOutputTag[]>
+  abstract getLabelsForTransactionId (transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]>
+  abstract getTagsForOutputId (outputId: number, trx?: TrxToken): Promise<TableOutputTag[]>
 
-  abstract listActions(auth: AuthId, args: Validation.ValidListActionsArgs): Promise<ListActionsResult>
-  abstract listOutputs(auth: AuthId, args: Validation.ValidListOutputsArgs): Promise<ListOutputsResult>
+  abstract listActions (auth: AuthId, args: Validation.ValidListActionsArgs): Promise<ListActionsResult>
+  abstract listOutputs (auth: AuthId, args: Validation.ValidListOutputsArgs): Promise<ListOutputsResult>
 
-  abstract countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number>
+  abstract countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number>
 
-  async findOutputsByIds(outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
+  async findOutputsByIds (outputIds: number[], trx?: TrxToken): Promise<Record<number, TableOutput>> {
     const byId: Record<number, TableOutput> = {}
     for (const outputId of outputIds) {
       const o = verifyOneOrNone(await this.findOutputs({ partial: { outputId }, trx }))
@@ -140,16 +140,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return byId
   }
 
-  async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> {
+  async findStaleMerkleRoots (args: FindStaleMerkleRootsArgs): Promise<string[]> {
     let provenTxs = await this.findProvenTxs({ partial: { height: args.height } })
     provenTxs = provenTxs.filter(ptx => ptx.merkleRoot !== args.merkleRoot)
-    let roots = Array.from(new Set(provenTxs.map(ptx => ptx.merkleRoot)))
+    const roots = Array.from(new Set(provenTxs.map(ptx => ptx.merkleRoot)))
     return roots
   }
 
-  async findOutputsByOutpoints(
+  async findOutputsByOutpoints (
     userId: number,
-    outpoints: Array<{ txid: string; vout: number }>,
+    outpoints: Array<{ txid: string, vout: number }>,
     trx?: TrxToken
   ): Promise<Record<string, TableOutput>> {
     const byOutpoint: Record<string, TableOutput> = {}
@@ -160,7 +160,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return byOutpoint
   }
 
-  async findOrInsertOutputBasketsBulk(
+  async findOrInsertOutputBasketsBulk (
     userId: number,
     names: string[],
     trx?: TrxToken
@@ -170,7 +170,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return byName
   }
 
-  async findOrInsertOutputTagsBulk(
+  async findOrInsertOutputTagsBulk (
     userId: number,
     tags: string[],
     trx?: TrxToken
@@ -180,7 +180,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return byTag
   }
 
-  async sumSpendableSatoshisInBasket(
+  async sumSpendableSatoshisInBasket (
     userId: number,
     basketId: number,
     excludeSending: boolean,
@@ -197,14 +197,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return rows.reduce((a, r) => a + Number(r.satoshis || 0), 0)
   }
 
-  abstract findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]>
-  abstract findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]>
-  abstract findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]>
-  abstract insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number>
+  abstract findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]>
+  abstract findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]>
+  abstract findOutputsAuth (auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]>
+  abstract insertCertificateAuth (auth: AuthId, certificate: TableCertificateX): Promise<number>
 
-  abstract adminStats(adminIdentityKey: string): Promise<AdminStatsResult>
+  abstract adminStats (adminIdentityKey: string): Promise<AdminStatsResult>
 
-  async recentlyActiveUsers(limit = 50, trx?: TrxToken): Promise<TableUser[]> {
+  async recentlyActiveUsers (limit = 50, trx?: TrxToken): Promise<TableUser[]> {
     const outputs = await this.findOutputs({
       partial: {},
       noScript: true,
@@ -216,7 +216,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (output.userId === undefined) continue
       const createdAt = this.validateDate(output.created_at)
       const prior = latestByUserId.get(output.userId)
-      if (!prior || createdAt > prior) {
+      if ((prior == null) || createdAt > prior) {
         latestByUserId.set(output.userId, createdAt)
       }
     }
@@ -226,28 +226,29 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       .slice(0, limit)
       .map(([userId]) => userId)
 
-    const users = await Promise.all(sortedUserIds.map(userId => this.findUserById(userId, trx)))
-    return users.filter((user): user is TableUser => !!user)
+    const users = await Promise.all(sortedUserIds.map(async userId => await this.findUserById(userId, trx)))
+    return users.filter((user): user is TableUser => !(user == null))
   }
 
-  override isStorageProvider(): boolean {
+  override isStorageProvider (): boolean {
     return true
   }
 
-  setServices(v: WalletServices) {
+  setServices (v: WalletServices) {
     this._services = v
   }
-  getServices(): WalletServices {
-    if (!this._services) throw new WERR_INVALID_OPERATION('Must setServices first.')
+
+  getServices (): WalletServices {
+    if (this._services == null) throw new WERR_INVALID_OPERATION('Must setServices first.')
     return this._services
   }
 
-  async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
+  async abortAction (auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
     if (!auth.userId) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
 
     const userId = auth.userId
     let reference: string | undefined = args.reference
-    let txid: string | undefined = undefined
+    let txid: string | undefined
 
     const r = await this.transaction(async trx => {
       let tx = verifyOneOrNone(
@@ -257,7 +258,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           trx
         })
       )
-      if (!tx && args.reference.length === 64) {
+      if ((tx == null) && args.reference.length === 64) {
         // reference may also be a txid
         txid = reference
         reference = undefined
@@ -270,15 +271,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         )
       }
       const unAbortableStatus: TransactionStatus[] = ['completed', 'failed', 'sending', 'unproven']
-      if (!tx || !tx.isOutgoing || -1 < unAbortableStatus.findIndex(s => s === tx.status))
+      if ((tx == null) || !tx.isOutgoing || unAbortableStatus.findIndex(s => s === tx.status) > -1) {
         throw new WERR_INVALID_PARAMETER(
           'reference',
           'an inprocess, outgoing action that has not been signed and shared to the network.'
         )
+      }
       await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
       if (tx.txid) {
         const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
-        if (req) {
+        if (req != null) {
           req.addHistoryNote({ what: 'abortAction', reference: args.reference })
           req.status = 'invalid'
           await req.updateStorageDynamicProperties(this, trx)
@@ -292,7 +294,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return r
   }
 
-  async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
+  async internalizeAction (auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
     return await internalizeAction(this, auth, args)
   }
 
@@ -305,7 +307,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * @param knownTxids
    * @param trx
    */
-  async getReqsAndBeefToShareWithWorld(
+  async getReqsAndBeefToShareWithWorld (
     txids: string[],
     knownTxids: string[],
     trx?: TrxToken
@@ -327,23 +329,23 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       r.details.push(d)
       try {
         d.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
-        if (d.proven) d.status = 'alreadySent'
+        if (d.proven != null) d.status = 'alreadySent'
         else {
           const alreadySentStatus = ['unmined', 'callback', 'unconfirmed', 'completed']
           const readyToSendStatus = ['sending', 'unsent', 'nosend', 'unprocessed']
           const errorStatus = ['unknown', 'nonfinal', 'invalid', 'doubleSpend']
 
           d.req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
-          if (!d.req) {
+          if (d.req == null) {
             d.status = 'error'
             d.error = `ERR_UNKNOWN_TXID: ${txid} was not found.`
-          } else if (errorStatus.indexOf(d.req.status) > -1) {
+          } else if (errorStatus.includes(d.req.status)) {
             d.status = 'error'
             d.error = `ERR_INVALID_PARAMETER: ${txid} is not ready to send.`
-          } else if (alreadySentStatus.indexOf(d.req.status) > -1) {
+          } else if (alreadySentStatus.includes(d.req.status)) {
             d.status = 'alreadySent'
-          } else if (readyToSendStatus.indexOf(d.req.status) > -1) {
-            if (!d.req.rawTx || !d.req.inputBEEF) {
+          } else if (readyToSendStatus.includes(d.req.status)) {
+            if (!d.req.rawTx || (d.req.inputBEEF == null)) {
               d.status = 'error'
               d.error = `ERR_INTERNAL: ${txid} req is missing rawTx or beef.`
             } else d.status = 'readyToSend'
@@ -364,23 +366,23 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return r
   }
 
-  async mergeReqToBeefToShareExternally(
+  async mergeReqToBeefToShareExternally (
     req: TableProvenTxReq,
     mergeToBeef: Beef,
     knownTxids: string[],
     trx?: TrxToken
   ): Promise<void> {
     const { rawTx, inputBEEF: beef } = req
-    if (!rawTx || !beef) throw new WERR_INTERNAL(`req rawTx and beef must be valid.`)
+    if (!rawTx || (beef == null)) throw new WERR_INTERNAL('req rawTx and beef must be valid.')
     mergeToBeef.mergeRawTx(asArray(rawTx))
     mergeToBeef.mergeBeef(asArray(beef))
     const tx = Transaction.fromBinary(asArray(rawTx))
     for (const input of tx.inputs) {
-      if (!input.sourceTXID) throw new WERR_INTERNAL(`req all transaction inputs must have valid sourceTXID`)
+      if (!input.sourceTXID) throw new WERR_INTERNAL('req all transaction inputs must have valid sourceTXID')
       const txid = input.sourceTXID
       const btx = mergeToBeef.findTxid(txid)
-      if (!btx) {
-        if (knownTxids && knownTxids.indexOf(txid) > -1) mergeToBeef.mergeTxidOnly(txid)
+      if (btx == null) {
+        if (knownTxids && knownTxids.includes(txid)) mergeToBeef.mergeTxidOnly(txid)
         else await this.getValidBeefForKnownTxid(txid, mergeToBeef, undefined, knownTxids, trx)
       }
     }
@@ -400,22 +402,22 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * @param trx
    * @returns
    */
-  async getProvenOrReq(txid: string, newReq?: TableProvenTxReq, trx?: TrxToken): Promise<StorageProvenOrReq> {
-    if (newReq && txid !== newReq.txid) throw new WERR_INVALID_PARAMETER('newReq', `same txid`)
+  async getProvenOrReq (txid: string, newReq?: TableProvenTxReq, trx?: TrxToken): Promise<StorageProvenOrReq> {
+    if ((newReq != null) && txid !== newReq.txid) throw new WERR_INVALID_PARAMETER('newReq', 'same txid')
 
     const r: StorageProvenOrReq = { proven: undefined, req: undefined }
 
     r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
-    if (r.proven) return r
+    if (r.proven != null) return r
 
     for (let retry = 0; ; retry++) {
       try {
         r.req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
-        if (!r.req && !newReq) break
-        if (!r.req && newReq) {
+        if ((r.req == null) && (newReq == null)) break
+        if ((r.req == null) && (newReq != null)) {
           await this.insertProvenTxReq(newReq, trx)
         }
-        if (r.req && newReq) {
+        if ((r.req != null) && (newReq != null)) {
           // Merge history and notify into existing
           const req1 = new EntityProvenTxReq(r.req)
           req1.mergeHistory(newReq, undefined, true)
@@ -431,7 +433,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return r
   }
 
-  async updateTransactionsStatus(transactionIds: number[], status: TransactionStatus, trx?: TrxToken): Promise<void> {
+  async updateTransactionsStatus (transactionIds: number[], status: TransactionStatus, trx?: TrxToken): Promise<void> {
     await this.transaction(async trx => {
       for (const id of transactionIds) {
         await this.updateTransactionStatus(status, id, undefined, undefined, trx)
@@ -450,15 +452,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * @param reference
    * @param trx
    */
-  async updateTransactionStatus(
+  async updateTransactionStatus (
     status: TransactionStatus,
     transactionId?: number,
     userId?: number,
     reference?: string,
     trx?: TrxToken
   ): Promise<void> {
-    if (!transactionId && !(userId && reference))
-      throw new WERR_MISSING_PARAMETER('either transactionId or userId and reference')
+    if (!transactionId && !(userId && reference)) { throw new WERR_MISSING_PARAMETER('either transactionId or userId and reference') }
 
     await this.transaction(async trx => {
       const where: Partial<TableTransaction> = {}
@@ -468,16 +469,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
       const tx = verifyOne(await this.findTransactions({ partial: where, noRawTx: true, trx }))
 
-      //if (tx.status === status)
+      // if (tx.status === status)
       // no change required. Assume inputs and outputs spendable and spentBy are valid for status.
-      //return
+      // return
 
       // Once completed, this method cannot be used to "uncomplete" transaction.
-      if ((status !== 'completed' && tx.status === 'completed') || tx.provenTxId)
-        throw new WERR_INVALID_OPERATION('The status of a "completed" transaction cannot be changed.')
+      if ((status !== 'completed' && tx.status === 'completed') || tx.provenTxId) { throw new WERR_INVALID_OPERATION('The status of a "completed" transaction cannot be changed.') }
       // It is not possible to un-fail a transaction. Information is lost and not recoverable.
-      if (status !== 'failed' && tx.status === 'failed')
-        throw new WERR_INVALID_OPERATION(`A "failed" transaction may not be un-failed by this method.`)
+      if (status !== 'failed' && tx.status === 'failed') { throw new WERR_INVALID_OPERATION('A "failed" transaction may not be un-failed by this method.') }
 
       switch (status) {
         case 'failed':
@@ -508,16 +507,17 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     }, trx)
   }
 
-  async createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
+  async createAction (auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (!auth.userId) throw new WERR_UNAUTHORIZED()
     return await createAction(this, auth, args)
   }
-  async processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
+
+  async processAction (auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
     if (!auth.userId) throw new WERR_UNAUTHORIZED()
     return await processAction(this, auth, args)
   }
 
-  async attemptToPostReqsToNetwork(
+  async attemptToPostReqsToNetwork (
     reqs: EntityProvenTxReq[],
     trx?: TrxToken,
     logger?: WalletLoggerInterface
@@ -525,11 +525,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await attemptToPostReqsToNetwork(this, reqs, trx, logger)
   }
 
-  async listCertificates(auth: AuthId, args: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+  async listCertificates (auth: AuthId, args: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
     return await listCertificates(this, auth, args)
   }
 
-  async verifyKnownValidTransaction(txid: string, trx?: TrxToken): Promise<boolean> {
+  async verifyKnownValidTransaction (txid: string, trx?: TrxToken): Promise<boolean> {
     const { proven, rawTx } = await this.getProvenOrRawTx(txid, trx)
     return proven != undefined || rawTx != undefined
   }
@@ -548,7 +548,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * @param requiredLevels
    * @returns
    */
-  async getValidBeefForKnownTxid(
+  async getValidBeefForKnownTxid (
     txid: string,
     mergeToBeef?: Beef,
     trustSelf?: TrustSelf,
@@ -557,11 +557,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     requiredLevels?: number
   ): Promise<Beef> {
     const beef = await this.getValidBeefForTxid(txid, mergeToBeef, trustSelf, knownTxids, trx, requiredLevels)
-    if (!beef) throw new WERR_INVALID_PARAMETER('txid', `known to storage. ${txid} is not known.`)
+    if (beef == null) throw new WERR_INVALID_PARAMETER('txid', `known to storage. ${txid} is not known.`)
     return beef
   }
 
-  async getValidBeefForTxid(
+  async getValidBeefForTxid (
     txid: string,
     mergeToBeef?: Beef,
     trustSelf?: TrustSelf,
@@ -574,14 +574,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const beef = mergeToBeef || new Beef()
 
     const r = await this.getProvenOrRawTx(txid, trx)
-    if (r.proven) {
+    if (r.proven != null) {
       if (requiredLevels) {
         r.rawTx = r.proven.rawTx
       } else {
         if (trustSelf === 'known') beef.mergeTxidOnly(txid)
         else {
           const mp = new EntityProvenTx(r.proven).getMerklePath()
-          if (chainTracker) {
+          if (chainTracker != null) {
             const root = mp.computeRoot()
             const isValid = await chainTracker.isValidRootForHeight(root, r.proven.height)
             if (!isValid) {
@@ -593,7 +593,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
               r.proven = undefined
             }
           }
-          if (r.proven) {
+          if (r.proven != null) {
             // If we still like this proof, merge it and return
             beef.mergeRawTx(r.proven.rawTx)
             beef.mergeBump(mp)
@@ -603,37 +603,35 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       }
     }
 
-    if (!r.rawTx) return undefined
+    if (r.rawTx == null) return undefined
 
     if (trustSelf === 'known') {
       beef.mergeTxidOnly(txid)
     } else {
       beef.mergeRawTx(r.rawTx)
-      if (r.inputBEEF) beef.mergeBeef(r.inputBEEF)
+      if (r.inputBEEF != null) beef.mergeBeef(r.inputBEEF)
       const tx = Transaction.fromBinary(r.rawTx)
       if (requiredLevels) requiredLevels--
       for (const input of tx.inputs) {
         const btx = beef.findTxid(input.sourceTXID!)
-        if (!btx) {
-          if (!requiredLevels && knownTxids && knownTxids.indexOf(input.sourceTXID!) > -1)
-            beef.mergeTxidOnly(input.sourceTXID!)
-          else await this.getValidBeefForKnownTxid(input.sourceTXID!, beef, trustSelf, knownTxids, trx, requiredLevels)
+        if (btx == null) {
+          if (!requiredLevels && (knownTxids != null) && knownTxids.includes(input.sourceTXID!)) { beef.mergeTxidOnly(input.sourceTXID!) } else await this.getValidBeefForKnownTxid(input.sourceTXID!, beef, trustSelf, knownTxids, trx, requiredLevels)
         }
       }
     }
     return beef
   }
 
-  async getBeefForTransaction(txid: string, options: StorageGetBeefOptions): Promise<Beef> {
+  async getBeefForTransaction (txid: string, options: StorageGetBeefOptions): Promise<Beef> {
     const beef = await getBeefForTransaction(this, txid, options)
     return beef
   }
 
-  async findMonitorEventById(id: number, trx?: TrxToken): Promise<TableMonitorEvent | undefined> {
+  async findMonitorEventById (id: number, trx?: TrxToken): Promise<TableMonitorEvent | undefined> {
     return verifyOneOrNone(await this.findMonitorEvents({ partial: { id }, trx }))
   }
 
-  async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
+  async relinquishCertificate (auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
     const vargs = Validation.validateRelinquishCertificateArgs(args)
     const cert = verifyOne(
       await this.findCertificates({
@@ -649,14 +647,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     })
   }
 
-  async relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
+  async relinquishOutput (auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
     const vargs = Validation.validateRelinquishOutputArgs(args)
     const { txid, vout } = Validation.parseWalletOutpoint(vargs.output)
     const output = verifyOne(await this.findOutputs({ partial: { txid, vout } }))
     return await this.updateOutput(output.outputId, { basketId: undefined })
   }
 
-  async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
+  async processSyncChunk (args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
     const user = verifyTruthy(await this.findUserByIdentityKey(args.identityKey))
     const ss = new EntitySyncState(
       verifyOne(
@@ -685,7 +683,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    *
    * Alterations of "typically" to handle:
    */
-  async updateProvenTxReqWithNewProvenTx(
+  async updateProvenTxReqWithNewProvenTx (
     args: UpdateProvenTxReqWithNewProvenTxArgs
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
     const req = await EntityProvenTxReq.fromStorageId(this, args.provenTxReqId)
@@ -755,7 +753,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    *
    * @returns object with invalidSpendableOutputs array. A good result is an empty array.
    */
-  async confirmSpendableOutputs(): Promise<{
+  async confirmSpendableOutputs (): Promise<{
     invalidSpendableOutputs: TableOutput[]
   }> {
     const invalidSpendableOutputs: TableOutput[] = []
@@ -774,7 +772,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         const oid = verifyId(o.outputId)
         if (o.spendable) {
           let ok = false
-          if (o.lockingScript && o.lockingScript.length > 0) {
+          if ((o.lockingScript != null) && o.lockingScript.length > 0) {
             const hash = services.hashOutputScript(asString(o.lockingScript))
             const r = await services.getUtxoStatus(hash, undefined, `${o.txid}.${o.vout}`)
             if (r.isUtxo === true) ok = true
@@ -786,25 +784,25 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return { invalidSpendableOutputs }
   }
 
-  async updateProvenTxReqDynamics(
+  async updateProvenTxReqDynamics (
     id: number,
     update: Partial<TableProvenTxReqDynamics>,
     trx?: TrxToken
   ): Promise<number> {
     const partial: Partial<TableProvenTxReq> = {}
-    if (update['updated_at']) partial['updated_at'] = update['updated_at']
-    if (update['provenTxId']) partial['provenTxId'] = update['provenTxId']
-    if (update['status']) partial['status'] = update['status']
-    if (Number.isInteger(update['attempts'])) partial['attempts'] = update['attempts']
-    if (update['notified'] !== undefined) partial['notified'] = update['notified']
-    if (update['batch']) partial['batch'] = update['batch']
-    if (update['history']) partial['history'] = update['history']
-    if (update['notify']) partial['notify'] = update['notify']
+    if (update.updated_at != null) partial.updated_at = update.updated_at
+    if (update.provenTxId) partial.provenTxId = update.provenTxId
+    if (update.status) partial.status = update.status
+    if (Number.isInteger(update.attempts)) partial.attempts = update.attempts
+    if (update.notified !== undefined) partial.notified = update.notified
+    if (update.batch) partial.batch = update.batch
+    if (update.history) partial.history = update.history
+    if (update.notify) partial.notify = update.notify
 
     return await this.updateProvenTxReq(id, partial, trx)
   }
 
-  async extendOutput(
+  async extendOutput (
     o: TableOutput,
     includeBasket = false,
     includeTags = false,
@@ -818,16 +816,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return o
   }
 
-  async validateOutputScript(o: TableOutput, trx?: TrxToken): Promise<void> {
+  async validateOutputScript (o: TableOutput, trx?: TrxToken): Promise<void> {
     // without offset and length values return what we have (make no changes)
     if (!o.scriptLength || !o.scriptOffset || !o.txid) return
     // if there is an outputScript and its length is the expected length return what we have.
-    if (o.lockingScript && o.lockingScript.length === o.scriptLength) return
+    if ((o.lockingScript != null) && o.lockingScript.length === o.scriptLength) return
 
     // outputScript is missing or has incorrect length...
 
     const script = await this.getRawTxOfKnownValidTransaction(o.txid, o.scriptOffset, o.scriptLength, trx)
-    if (!script) return
+    if (script == null) return
     o.lockingScript = script
   }
 }
@@ -848,13 +846,13 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
   commissionPubKeyHex?: PubKeyHex
 }
 
-export function validateStorageFeeModel(v?: StorageFeeModel): StorageFeeModel {
+export function validateStorageFeeModel (v?: StorageFeeModel): StorageFeeModel {
   const r: StorageFeeModel = {
     model: 'sat/kb',
     value: 1
   }
   if (typeof v === 'object') {
-    if (v.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('StorageFeeModel.model', `"sat/kb"`)
+    if (v.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('StorageFeeModel.model', '"sat/kb"')
     if (typeof v.value === 'number') {
       r.value = v.value
     }

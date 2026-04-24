@@ -26,7 +26,7 @@ export interface ChaintracksServiceOptions {
 }
 
 export class ChaintracksService {
-  static createChaintracksServiceOptions(chain: Chain): ChaintracksServiceOptions {
+  static createChaintracksServiceOptions (chain: Chain): ChaintracksServiceOptions {
     const options: ChaintracksServiceOptions = {
       chain,
       routingPrefix: ''
@@ -41,7 +41,7 @@ export class ChaintracksService {
   services: Services
   server?: Server<typeof IncomingMessage, typeof ServerResponse>
 
-  constructor(options: ChaintracksServiceOptions) {
+  constructor (options: ChaintracksServiceOptions) {
     this.options = { ...options }
     this.port = options.port
     this.chain = options.chain
@@ -57,12 +57,12 @@ export class ChaintracksService {
     }
   }
 
-  async stopJsonRpcServer(): Promise<void> {
+  async stopJsonRpcServer (): Promise<void> {
     this.server?.close()
     await this.chaintracks?.destroy()
   }
 
-  async startJsonRpcServer(port?: number): Promise<void> {
+  async startJsonRpcServer (port?: number): Promise<void> {
     await this.chaintracks.makeAvailable()
 
     port ||= this.port || 3011
@@ -86,12 +86,12 @@ export class ChaintracksService {
       }
     })
 
-    app.get(`/robots.txt`, (req: Request, res: Response) => {
+    app.get('/robots.txt', (req: Request, res: Response) => {
       res.type('text/plain')
-      res.send(`User-agent: *\nDisallow: /`)
+      res.send('User-agent: *\nDisallow: /')
     })
 
-    app.get(`/`, (req: Request, res: Response) => {
+    app.get('/', (req: Request, res: Response) => {
       res.type('text/plain')
       res.send(`Chaintracks ${this.chain}Net Block Header Service`)
     })
@@ -105,7 +105,7 @@ export class ChaintracksService {
     }
 
     const appGetVoid = (path: string, action: (q: any) => Promise<void>, noCache = false) => {
-      app['get'](this.options.routingPrefix + path, async (req, res) => {
+      app.get(this.options.routingPrefix + path, async (req, res) => {
         if (noCache) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
           res.setHeader('Pragma', 'no-cache')
@@ -122,7 +122,7 @@ export class ChaintracksService {
     }
 
     const appGet = <T>(path: string, action: (q: any) => Promise<T>, noCache = false) => {
-      app['get'](this.options.routingPrefix + path, async (req, res) => {
+      app.get(this.options.routingPrefix + path, async (req, res) => {
         if (noCache) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
           res.setHeader('Pragma', 'no-cache')
@@ -140,10 +140,10 @@ export class ChaintracksService {
     }
 
     const appPostVoid = <T>(path: string, action: (p: T) => Promise<void>) => {
-      app['post'](this.options.routingPrefix + path, async (req, res) => {
+      app.post(this.options.routingPrefix + path, async (req, res) => {
         try {
           console.log(`request POST ${path}`)
-          await action(<T>req.body)
+          await action(req.body as T)
           res.status(200).json({ status: 'success' })
         } catch (err) {
           handleErr(err, res)

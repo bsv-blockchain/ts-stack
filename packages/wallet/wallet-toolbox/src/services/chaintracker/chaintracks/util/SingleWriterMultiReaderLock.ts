@@ -5,10 +5,10 @@
 export class SingleWriterMultiReaderLock {
   private readers: number = 0
   private writerActive: boolean = false
-  private readerQueue: Array<() => void> = []
-  private writerQueue: Array<() => void> = []
+  private readonly readerQueue: Array<() => void> = []
+  private readonly writerQueue: Array<() => void> = []
 
-  private checkQueues(): void {
+  private checkQueues (): void {
     if (this.writerActive || this.readers > 0) return
     if (this.writerQueue.length > 0) {
       // If there are waiting writers and no active readers or writers, start the next writer

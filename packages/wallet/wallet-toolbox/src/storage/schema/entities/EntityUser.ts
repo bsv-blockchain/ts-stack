@@ -5,7 +5,7 @@ import { TableUser } from '../tables/TableUser'
 import { WERR_INTERNAL } from '../../../sdk/WERR_errors'
 
 export class EntityUser extends EntityBase<TableUser> {
-  constructor(api?: TableUser) {
+  constructor (api?: TableUser) {
     const now = new Date()
     super(
       api || {
@@ -18,80 +18,95 @@ export class EntityUser extends EntityBase<TableUser> {
     )
   }
 
-  override updateApi(): void {
+  override updateApi (): void {
     /* nothing needed yet... */
   }
 
-  get userId() {
+  get userId () {
     return this.api.userId
   }
-  set userId(v: number) {
+
+  set userId (v: number) {
     this.api.userId = v
   }
-  get created_at() {
+
+  get created_at () {
     return this.api.created_at
   }
-  set created_at(v: Date) {
+
+  set created_at (v: Date) {
     this.api.created_at = v
   }
-  get updated_at() {
+
+  get updated_at () {
     return this.api.updated_at
   }
-  set updated_at(v: Date) {
+
+  set updated_at (v: Date) {
     this.api.updated_at = v
   }
-  get identityKey() {
+
+  get identityKey () {
     return this.api.identityKey
   }
-  set identityKey(v: string) {
+
+  set identityKey (v: string) {
     this.api.identityKey = v
   }
-  get activeStorage() {
+
+  get activeStorage () {
     return this.api.activeStorage
   }
-  set activeStorage(v: string) {
+
+  set activeStorage (v: string) {
     this.api.activeStorage = v
   }
 
-  override get id(): number {
+  override get id (): number {
     return this.api.userId
   }
-  override set id(v: number) {
+
+  override set id (v: number) {
     this.api.userId = v
   }
-  override get entityName(): string {
+
+  override get entityName (): string {
     return 'user'
   }
-  override get entityTable(): string {
+
+  override get entityTable (): string {
     return 'users'
   }
 
-  override equals(ei: TableUser, syncMap?: SyncMap | undefined): boolean {
+  override equals (ei: TableUser, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
     if (eo.identityKey != ei.identityKey || eo.activeStorage != ei.activeStorage) return false
-    if (!syncMap) {
+    if (syncMap == null) {
       /** */
     }
     return true
   }
-  static async mergeFind(
+
+  static async mergeFind (
     storage: EntityStorage,
     userId: number,
     ei: TableUser,
     trx?: TrxToken
-  ): Promise<{ found: boolean; eo: EntityUser; eiId: number }> {
+  ): Promise<{ found: boolean, eo: EntityUser, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findUsers({ partial: { identityKey: ei.identityKey }, trx }))
-    if (ef && ef.userId != userId) throw new WERR_INTERNAL('logic error, userIds don not match.')
+    if ((ef != null) && ef.userId != userId) throw new WERR_INTERNAL('logic error, userIds don not match.')
     return {
-      found: !!ef,
+      found: !(ef == null),
       eo: new EntityUser(ef || { ...ei }),
       eiId: verifyId(ei.userId)
     }
   }
-  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     throw new WERR_INTERNAL('a sync chunk merge must never create a new user')
   }
-  override async mergeExisting(
+
+  override async mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableUser,

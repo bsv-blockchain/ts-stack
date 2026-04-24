@@ -30,7 +30,7 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
  * 2. Targetting a previously "custom" non-change output converts it into a change output. This alters the transaction's `amount`, and the wallet balance.
  *
  */
-export async function internalizeAction(
+export async function internalizeAction (
   wallet: Wallet,
   auth: AuthId,
   args: InternalizeActionArgs
@@ -41,8 +41,7 @@ export async function internalizeAction(
   const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
 
   for (const o of vargs.outputs) {
-    if (o.outputIndex < 0 || o.outputIndex >= tx.outputs.length)
-      throw new WERR_INVALID_PARAMETER('outputIndex', `a valid output index in range 0 to ${tx.outputs.length - 1}`)
+    if (o.outputIndex < 0 || o.outputIndex >= tx.outputs.length) { throw new WERR_INVALID_PARAMETER('outputIndex', `a valid output index in range 0 to ${tx.outputs.length - 1}`) }
     switch (o.protocol) {
       case 'basket insertion':
         setupBasketInsertionForOutput(o, vargs)
@@ -59,20 +58,19 @@ export async function internalizeAction(
 
   return r
 
-  function setupWalletPaymentForOutput(o: InternalizeOutput, dargs: Validation.ValidInternalizeActionArgs) {
+  function setupWalletPaymentForOutput (o: InternalizeOutput, dargs: Validation.ValidInternalizeActionArgs) {
     const p = o.paymentRemittance
     const output = tx.outputs[o.outputIndex]
-    if (!p) throw new WERR_INVALID_PARAMETER('paymentRemittance', `valid for protocol ${o.protocol}`)
+    if (p == null) throw new WERR_INVALID_PARAMETER('paymentRemittance', `valid for protocol ${o.protocol}`)
 
     const keyID = `${p.derivationPrefix} ${p.derivationSuffix}`
 
-    const privKey = wallet.keyDeriver!.derivePrivateKey(brc29ProtocolID, keyID, p.senderIdentityKey)
+    const privKey = wallet.keyDeriver.derivePrivateKey(brc29ProtocolID, keyID, p.senderIdentityKey)
     const expectedLockScript = new P2PKH().lock(privKey.toAddress())
-    if (output.lockingScript.toHex() !== expectedLockScript.toHex())
-      throw new WERR_INVALID_PARAMETER('paymentRemittance', `locked by script conforming to BRC-29`)
+    if (output.lockingScript.toHex() !== expectedLockScript.toHex()) { throw new WERR_INVALID_PARAMETER('paymentRemittance', 'locked by script conforming to BRC-29') }
   }
 
-  function setupBasketInsertionForOutput(o: InternalizeOutput, dargs: Validation.ValidInternalizeActionArgs) {
+  function setupBasketInsertionForOutput (o: InternalizeOutput, dargs: Validation.ValidInternalizeActionArgs) {
     /*
     No additional validations...
     */
@@ -85,7 +83,7 @@ export async function internalizeAction(
    * 1. That the transaction has been broadcast. (Is known to the network).
    * 2. That the proofs are for the same block as recorded in the wallet's configured storage in the event of a reorg.
    */
-  async function validateAtomicBeef() {
+  async function validateAtomicBeef () {
     const ab = Beef.fromBinary(vargs.tx)
 
     // TODO: Add support for known txids...which would speed up processing by avoiding a network call,
@@ -98,7 +96,7 @@ export async function internalizeAction(
     }
     const txid = ab.atomicTxid
     const btx = ab.findTxid(txid)
-    if (!btx) throw new WERR_INVALID_PARAMETER('tx', `valid AtomicBEEF with newest txid of ${txid}`)
+    if (btx == null) throw new WERR_INVALID_PARAMETER('tx', `valid AtomicBEEF with newest txid of ${txid}`)
     const tx = btx.tx!
 
     return { ab, tx, txid }

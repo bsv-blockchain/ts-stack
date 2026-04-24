@@ -145,7 +145,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
 
       underlying.encrypt.mockClear()
 
-      const fields: number[][] = await privateManager().buildPushdropFields(request, expiry, /*amount=*/ 10000)
+      const fields: number[][] = await privateManager().buildPushdropFields(request, expiry, /* amount= */ 10000)
 
       // For DSAP: domain + authorizedAmount (2 fields)
       expect(underlying.encrypt).toHaveBeenCalledTimes(2)
@@ -236,7 +236,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       const key = (manager as any).buildRequestKey(request)
       ;(manager as any).activeRequests.set(key, {
         request,
-        pending: [{ resolve() {}, reject() {} }]
+        pending: [{ resolve () {}, reject () {} }]
       })
 
       underlying.createAction.mockClear()
@@ -272,7 +272,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       const key = (manager as any).buildRequestKey(request)
       ;(manager as any).activeRequests.set(key, {
         request,
-        pending: [{ resolve() {}, reject() {} }]
+        pending: [{ resolve () {}, reject () {} }]
       })
 
       underlying.createAction.mockClear()
@@ -305,7 +305,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       const key = (manager as any).buildRequestKey(request)
       ;(manager as any).activeRequests.set(key, {
         request,
-        pending: [{ resolve() {}, reject() {} }]
+        pending: [{ resolve () {}, reject () {} }]
       })
 
       underlying.createAction.mockClear()
@@ -369,7 +369,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       const key = (manager as any).buildRequestKey(request)
       ;(manager as any).activeRequests.set(key, {
         request,
-        pending: [{ resolve() {}, reject() {} }]
+        pending: [{ resolve () {}, reject () {} }]
       })
 
       // Clear the mock calls, then renew with ephemeral=false
@@ -419,7 +419,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       const key = (manager as any).buildRequestKey(request)
       ;(manager as any).activeRequests.set(key, {
         request,
-        pending: [{ resolve() {}, reject() {} }]
+        pending: [{ resolve () {}, reject () {} }]
       })
 
       underlying.createAction.mockClear()

@@ -23,7 +23,7 @@ import { WalletStorageManager } from '../../WalletStorageManager'
 /**
  * Shared setup: create MySQL storage and test wallet for commission redemption tests.
  */
-async function createRedemptionTestContext() {
+async function createRedemptionTestContext () {
   const env = _tu.getEnv('main')
   if (!env.devKeys[env.commissionsIdentity]) {
     throw new Error('No dev key for commissions identity')
@@ -32,7 +32,7 @@ async function createRedemptionTestContext() {
   const knex = Setup.createMySQLKnex(process.env.MAIN_CLOUD_MYSQL_CONNECTION!)
   const storage = new StorageKnex({
     chain: env.chain,
-    knex: knex,
+    knex,
     commissionSatoshis: 0,
     commissionPubKeyHex: undefined,
     feeModel: { model: 'sat/kb', value: 1 }
@@ -50,7 +50,7 @@ async function createRedemptionTestContext() {
 }
 
 /** Attempt to add a single proven commission as a transaction input. */
-async function tryAddCommissionInput(
+async function tryAddCommissionInput (
   comm: TableCommission,
   storage: StorageKnex,
   beef: Beef,
@@ -74,12 +74,12 @@ async function tryAddCommissionInput(
 }
 
 /** Collect a full quota of unredeemed commission inputs for redemption. */
-async function collectCommissionInputs(
+async function collectCommissionInputs (
   storage: StorageKnex,
   fca: FindCommissionsArgs,
   beef: Beef,
   chainTracker: Awaited<ReturnType<Services['getChainTracker']>>
-): Promise<{ comms: TableCommission[]; inputs: CreateActionInput[] }> {
+): Promise<{ comms: TableCommission[], inputs: CreateActionInput[] }> {
   const comms: TableCommission[] = []
   const inputs: CreateActionInput[] = []
   while (comms.length < fca.paged!.limit) {
@@ -95,7 +95,7 @@ async function collectCommissionInputs(
 }
 
 /** Sign commission inputs and broadcast the redemption transaction. */
-async function signAndBroadcastRedemption(
+async function signAndBroadcastRedemption (
   setup: TestWalletOnly,
   storage: StorageKnex,
   env: ReturnType<typeof _tu.getEnv>,
@@ -118,7 +118,7 @@ async function signAndBroadcastRedemption(
   const st = car.signableTransaction!
   expect(st.reference).toBeTruthy()
   const atomicBeef = Beef.fromBinary(st.tx)
-  const txid = atomicBeef.txs[atomicBeef.txs.length - 1].txid!
+  const txid = atomicBeef.txs[atomicBeef.txs.length - 1].txid
   const tx = atomicBeef.findTransactionForSigning(txid)!
 
   const priv = PrivateKey.fromHex(env.devKeys[env.commissionsIdentity])
@@ -165,7 +165,7 @@ async function signAndBroadcastRedemption(
  * Core redemption loop shared by both test variants.
  * Collects unredeemed commissions, creates and signs a transaction, then broadcasts.
  */
-async function runRedemptionLoop(
+async function runRedemptionLoop (
   storage: StorageKnex,
   setup: TestWalletOnly,
   env: ReturnType<typeof _tu.getEnv>,

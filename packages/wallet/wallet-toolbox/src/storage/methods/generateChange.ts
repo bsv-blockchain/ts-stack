@@ -50,7 +50,7 @@ export interface GenerateChangeSdkResult {
  * @param params
  * @returns
  */
-export async function generateChangeSdk(
+export async function generateChangeSdk (
   params: GenerateChangeSdkParams,
   allocateChangeInput: (
     targetSatoshis: number,
@@ -211,7 +211,7 @@ export async function generateChangeSdk(
     const releaseAllocatedChangeInputs = async (): Promise<void> => {
       while (r.allocatedChangeInputs.length > 0) {
         const i = r.allocatedChangeInputs.pop()
-        if (i) {
+        if (i != null) {
           await releaseChangeInput(i.outputId)
         }
       }
@@ -252,7 +252,7 @@ export async function generateChangeSdk(
       const attemptToFundTransaction = async (): Promise<boolean> => {
         if (feeExcess() > 0) return true
 
-        let exactSatoshis: number | undefined = undefined
+        let exactSatoshis: number | undefined
         if (!hasTargetNetCount && r.changeOutputs.length === 0) {
           exactSatoshis = -feeExcess(1)
         }
@@ -264,7 +264,7 @@ export async function generateChangeSdk(
 
         const allocatedChangeInput = await allocateChangeInput(targetSatoshis, exactSatoshis)
 
-        if (!allocatedChangeInput) {
+        if (allocatedChangeInput == null) {
           // Unable to add another funding change input
           return false
         }
@@ -292,8 +292,8 @@ export async function generateChangeSdk(
           r.changeOutputs.pop()
         }
         if (feeExcess() < 0)
-          // Not enough available funding even if no change outputs
-          break
+        // Not enough available funding even if no change outputs
+        { break }
         // At this point we have a funded transaction, but there may be change outputs that are each costing as change input,
         // resulting in pointless churn of change outputs.
         // And remove change inputs that funded only a single change output (along with that output)...
@@ -407,10 +407,10 @@ export async function generateChangeSdk(
   }
 }
 
-export function validateGenerateChangeSdkResult(
+export function validateGenerateChangeSdkResult (
   params: GenerateChangeSdkParams,
   r: GenerateChangeSdkResult
-): { ok: boolean; log: string } {
+): { ok: boolean, log: string } {
   let ok = true
   let log = ''
   const sumIn =
@@ -435,7 +435,7 @@ export function validateGenerateChangeSdkResult(
   return { ok, log }
 }
 
-function logGenerateChangeSdkParams(params: GenerateChangeSdkParams, eu?: unknown) {
+function logGenerateChangeSdkParams (params: GenerateChangeSdkParams, eu?: unknown) {
   let s = JSON.stringify(params)
   console.log(`generateChangeSdk params length ${s.length}${eu ? ` error: ${eu}` : ''}`)
   let i = -1
@@ -522,7 +522,7 @@ export interface ValidateGenerateChangeSdkParamsResult {
   hasMaxPossibleOutput?: number
 }
 
-export function validateGenerateChangeSdkParams(
+export function validateGenerateChangeSdkParams (
   params: GenerateChangeSdkParams
 ): ValidateGenerateChangeSdkParamsResult {
   if (!Array.isArray(params.fixedInputs)) throw new WERR_INVALID_PARAMETER('fixedInputs', 'an array of objects')
@@ -539,25 +539,26 @@ export function validateGenerateChangeSdkParams(
     Validation.validateSatoshis(x.satoshis, `fixedOutputs[${i}].satoshis`)
     Validation.validateInteger(x.lockingScriptLength, `fixedOutputs[${i}].lockingScriptLength`, undefined, 0)
     if (x.satoshis === maxPossibleSatoshis) {
-      if (r.hasMaxPossibleOutput !== undefined)
+      if (r.hasMaxPossibleOutput !== undefined) {
         throw new WERR_INVALID_PARAMETER(
           `fixedOutputs[${i}].satoshis`,
-          `valid satoshis amount. Only one 'maxPossibleSatoshis' output allowed.`
+          'valid satoshis amount. Only one \'maxPossibleSatoshis\' output allowed.'
         )
+      }
       r.hasMaxPossibleOutput = i
     }
   })
 
   params.feeModel = validateStorageFeeModel(params.feeModel)
-  if (params.feeModel.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('feeModel.model', `'sat/kb'`)
+  if (params.feeModel.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('feeModel.model', '\'sat/kb\'')
 
-  Validation.validateOptionalInteger(params.targetNetCount, `targetNetCount`)
+  Validation.validateOptionalInteger(params.targetNetCount, 'targetNetCount')
 
   Validation.validateSatoshis(params.changeFirstSatoshis, 'changeFirstSatoshis', 1)
   Validation.validateSatoshis(params.changeInitialSatoshis, 'changeInitialSatoshis', 1)
 
-  Validation.validateInteger(params.changeLockingScriptLength, `changeLockingScriptLength`)
-  Validation.validateInteger(params.changeUnlockingScriptLength, `changeUnlockingScriptLength`)
+  Validation.validateInteger(params.changeLockingScriptLength, 'changeLockingScriptLength')
+  Validation.validateInteger(params.changeUnlockingScriptLength, 'changeUnlockingScriptLength')
 
   return r
 }
@@ -566,7 +567,7 @@ export interface GenerateChangeSdkStorageChange extends GenerateChangeSdkChangeI
   spendable: boolean
 }
 
-export function generateChangeSdkMakeStorage(availableChange: GenerateChangeSdkChangeInput[]): {
+export function generateChangeSdkMakeStorage (availableChange: GenerateChangeSdkChangeInput[]): {
   allocateChangeInput: (
     targetSatoshis: number,
     exactSatoshis?: number
@@ -609,26 +610,26 @@ export function generateChangeSdkMakeStorage(availableChange: GenerateChangeSdkC
 
     if (exactSatoshis !== undefined) {
       const exact = change.find(c => c.spendable && c.satoshis === exactSatoshis)
-      if (exact) return allocate(exact)
+      if (exact != null) return allocate(exact)
     }
     const over = change.find(c => c.spendable && c.satoshis >= targetSatoshis)
-    if (over) return allocate(over)
-    let under: GenerateChangeSdkStorageChange | undefined = undefined
+    if (over != null) return allocate(over)
+    let under: GenerateChangeSdkStorageChange | undefined
     for (let i = change.length - 1; i >= 0; i--) {
       if (change[i].spendable) {
         under = change[i]
         break
       }
     }
-    if (under) return allocate(under)
-    log += `\n`
+    if (under != null) return allocate(under)
+    log += '\n'
     return undefined
   }
 
   const releaseChangeInput = async (outputId: number): Promise<void> => {
     log += `release id ${outputId}\n`
     const c = change.find(x => x.outputId === outputId)
-    if (!c) throw new WERR_INTERNAL(`unknown outputId ${outputId}`)
+    if (c == null) throw new WERR_INTERNAL(`unknown outputId ${outputId}`)
     if (c.spendable) throw new WERR_INTERNAL(`release of spendable outputId ${outputId}`)
     c.spendable = true
   }

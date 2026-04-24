@@ -128,7 +128,7 @@ describe('CertificateField class method tests', () => {
       const entity1 = new EntityCertificateField(initialData)
 
       // Create mismatched entities and test each condition
-      const mismatchedEntities: Partial<TableCertificateField>[] = [
+      const mismatchedEntities: Array<Partial<TableCertificateField>> = [
         { certificateId: certificateId2 }, // Requires valid certificate
         { fieldName: 'field2' },
         { fieldValue: 'value2' },

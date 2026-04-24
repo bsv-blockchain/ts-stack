@@ -5,26 +5,26 @@ import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
 
 class FakeEventSource {
   static instances: FakeEventSource[] = []
-  private listeners: Record<string, ((e: any) => void)[]> = {}
+  private listeners: Record<string, Array<(e: any) => void>> = {}
   closed = false
 
-  constructor(
+  constructor (
     public url: string,
     public opts: any
   ) {
     FakeEventSource.instances.push(this)
   }
 
-  addEventListener(type: string, fn: (e: any) => void): void {
+  addEventListener (type: string, fn: (e: any) => void): void {
     if (!this.listeners[type]) this.listeners[type] = []
     this.listeners[type].push(fn)
   }
 
-  emit(type: string, event: any = {}): void {
+  emit (type: string, event: any = {}): void {
     for (const fn of this.listeners[type] ?? []) fn(event)
   }
 
-  close(): void {
+  close (): void {
     this.closed = true
   }
 }
@@ -32,7 +32,7 @@ class FakeEventSource {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Build a minimal TableProvenTxReq API object that EntityProvenTxReq can parse */
-function makeReqApi(status: string, txid = 'txid1'): any {
+function makeReqApi (status: string, txid = 'txid1'): any {
   const now = new Date()
   return {
     provenTxReqId: 1,
@@ -48,7 +48,7 @@ function makeReqApi(status: string, txid = 'txid1'): any {
   }
 }
 
-function makeStorageWithReqs(reqApis: any[]): any {
+function makeStorageWithReqs (reqApis: any[]): any {
   const sp = {
     updateProvenTxReqDynamics: jest.fn().mockResolvedValue(undefined),
     updateTransactionsStatus: jest.fn().mockResolvedValue(undefined)
@@ -60,12 +60,12 @@ function makeStorageWithReqs(reqApis: any[]): any {
   }
 }
 
-function makeEmptyStorage(): any {
+function makeEmptyStorage (): any {
   return makeStorageWithReqs([])
 }
 
 /** Build a minimal Monitor stub */
-function makeMonitor(
+function makeMonitor (
   overrides: {
     callbackToken?: string | null
     arcUrl?: string
@@ -219,7 +219,7 @@ describe('TaskArcadeSSE', () => {
   // ── SSE status → ProvenTxReq transitions ──────────────────────────────
 
   describe('SSE status → ProvenTxReq transitions', () => {
-    async function runWithStatus(txStatus: string, reqStatus: string): Promise<{ log: string; monitor: any }> {
+    async function runWithStatus (txStatus: string, reqStatus: string): Promise<{ log: string, monitor: any }> {
       FakeEventSource.instances = []
       const reqApi = makeReqApi(reqStatus)
       const storage = makeStorageWithReqs([reqApi])

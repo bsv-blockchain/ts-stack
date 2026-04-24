@@ -6,10 +6,10 @@ export interface TscMerkleProofApi {
   nodes: string[]
 }
 
-export function convertProofToMerklePath(txid: string, proof: TscMerkleProofApi): MerklePath {
+export function convertProofToMerklePath (txid: string, proof: TscMerkleProofApi): MerklePath {
   const blockHeight = proof.height
   const treeHeight = proof.nodes.length
-  type Leaf = {
+  interface Leaf {
     offset: number
     hash?: string
     txid?: boolean

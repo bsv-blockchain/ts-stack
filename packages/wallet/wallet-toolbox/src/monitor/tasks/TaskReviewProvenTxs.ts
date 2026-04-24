@@ -37,7 +37,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
 
   triggerNextMsecs: number
 
-  constructor(
+  constructor (
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 10,
     public maxHeightsPerRun = 100,
@@ -48,7 +48,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
-  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskReviewProvenTxs.checkNow ||
@@ -56,7 +56,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     TaskReviewProvenTxs.checkNow = false
 
     const chaintracks = this.monitor.chaintracksWithEvents || this.monitor.chaintracks
@@ -86,7 +86,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     } satisfies ReviewProvenTxsCheckpoint)
   }
 
-  async reviewHeightRange(range: HeightRange): Promise<ReviewHeightRangeResult> {
+  async reviewHeightRange (range: HeightRange): Promise<ReviewHeightRangeResult> {
     const result: ReviewHeightRangeResult = {
       log: '',
       reviewedHeights: 0,
@@ -109,7 +109,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       result.reviewedHeights++
 
       const header = await chaintracks.findHeaderForHeight(height)
-      if (!header) {
+      if (header == null) {
         result.log += `  height ${height} canonical header unavailable\n`
         continue
       }
@@ -135,7 +135,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     return result
   }
 
-  async getLastReviewedHeight(): Promise<number | undefined> {
+  async getLastReviewedHeight (): Promise<number | undefined> {
     let events: Array<{ details?: string }> = []
     await this.storage.runAsStorageProvider(async sp => {
       events = await sp.findMonitorEvents({
@@ -157,7 +157,7 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
       }
     }
 
-    let lastReviewedHeight: number | undefined = undefined
+    let lastReviewedHeight: number | undefined
     await this.storage.runAsStorageProvider(async sp => {
       // Start at height of first proven tx when it appears...
       const ptxs = await sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false })

@@ -1,14 +1,14 @@
 import { Utils as SdkUtils } from '@bsv/sdk'
 
 export interface TxScriptOffsets {
-  inputs: { vin: number; offset: number; length: number }[]
-  outputs: { vout: number; offset: number; length: number }[]
+  inputs: Array<{ vin: number, offset: number, length: number }>
+  outputs: Array<{ vout: number, offset: number, length: number }>
 }
 
-export function parseTxScriptOffsets(rawTx: number[]): TxScriptOffsets {
+export function parseTxScriptOffsets (rawTx: number[]): TxScriptOffsets {
   const br = new SdkUtils.Reader(rawTx)
-  const inputs: { vin: number; offset: number; length: number }[] = []
-  const outputs: { vout: number; offset: number; length: number }[] = []
+  const inputs: Array<{ vin: number, offset: number, length: number }> = []
+  const outputs: Array<{ vout: number, offset: number, length: number }> = []
 
   br.pos += 4 // version
   const inputsLength = br.readVarIntNum()

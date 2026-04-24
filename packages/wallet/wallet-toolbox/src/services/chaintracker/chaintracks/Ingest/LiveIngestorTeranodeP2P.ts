@@ -14,23 +14,23 @@ export interface LiveIngestorTeranodeP2POptions extends LiveIngestorBaseOptions 
 }
 
 export class LiveIngestorTeranodeP2P extends LiveIngestorBase {
-  static createLiveIngestorTeranodeP2POptions(chain: Chain): LiveIngestorTeranodeP2POptions {
+  static createLiveIngestorTeranodeP2POptions (chain: Chain): LiveIngestorTeranodeP2POptions {
     const options: LiveIngestorTeranodeP2POptions = {
       ...LiveIngestorBase.createLiveIngestorBaseOptions(chain)
     }
     return options
   }
 
-  constructor(options: LiveIngestorTeranodeP2POptions) {
+  constructor (options: LiveIngestorTeranodeP2POptions) {
     super(options)
   }
 
-  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
     return undefined
   }
 
-  async startListening(liveHeaders: BlockHeader[]): Promise<void> {
-    const errors: { code: number; message: string; count: number }[] = []
+  async startListening (liveHeaders: BlockHeader[]): Promise<void> {
+    const errors: Array<{ code: number, message: string, count: number }> = []
     const enqueue: EnqueueHandler = header => {
       liveHeaders.push(header)
     }
@@ -53,7 +53,7 @@ export class LiveIngestorTeranodeP2P extends LiveIngestorBase {
     }
   }
 
-  stopListening(): void {
-    //this.woc?.stopNewListener()
+  stopListening (): void {
+    // this.woc?.stopNewListener()
   }
 }

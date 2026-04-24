@@ -7,7 +7,7 @@ describe('ARC tests', () => {
   const envMain = _tu.getEnv('main')
   test('11 post to TAAL for timeout', async () => {
     const httpClient = defaultHttpClient()
-    const url = `https://arc.taal.com/v1/tx`
+    const url = 'https://arc.taal.com/v1/tx'
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -41,12 +41,12 @@ describe('ARC tests', () => {
 
   test('12 post to GorillaPool for timeout', async () => {
     const httpClient = defaultHttpClient()
-    const url = `https://arc.gorillapool.io/v1/tx`
+    const url = 'https://arc.gorillapool.io/v1/tx'
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'XDeployment-ID': 'wallet-toolbox-test11'
-      //Authorization: `Bearer ${envMain.gorillaPoolApiKey}`
+      // Authorization: `Bearer ${envMain.gorillaPoolApiKey}`
     }
 
     const requestOptions: HttpClientRequestOptions = {

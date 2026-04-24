@@ -1,6 +1,6 @@
 import { TaskReviewDoubleSpends } from '../TaskReviewDoubleSpends'
 
-function makeReq(provenTxReqId: number, txid: string, updatedAt: Date): any {
+function makeReq (provenTxReqId: number, txid: string, updatedAt: Date): any {
   const now = new Date()
   return {
     provenTxReqId,
@@ -15,7 +15,7 @@ function makeReq(provenTxReqId: number, txid: string, updatedAt: Date): any {
   }
 }
 
-function makeMonitor(
+function makeMonitor (
   statusByTxid: Record<string, string>,
   reqs: any[],
   monitorEvents: Array<{ details?: string }> = []

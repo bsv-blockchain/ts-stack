@@ -10,19 +10,19 @@ import { asBsvSdkScript, verifyTruthy } from '../../utility/utilityHelpers'
 import { KeyPair } from '../../sdk/types'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 
-export function buildSignableTransaction(
+export function buildSignableTransaction (
   dctr: StorageCreateActionResult,
   args: Validation.ValidCreateActionArgs,
   wallet: Wallet
 ): {
-  tx: Transaction
-  amount: number
-  pdi: PendingStorageInput[]
-  log: string
-} {
+    tx: Transaction
+    amount: number
+    pdi: PendingStorageInput[]
+    log: string
+  } {
   const changeKeys = wallet.getClientChangeKeyPair()
 
-  const inputBeef = args.inputBEEF ? Beef.fromBinary(args.inputBEEF) : undefined
+  const inputBeef = (args.inputBEEF != null) ? Beef.fromBinary(args.inputBEEF) : undefined
 
   const { inputs: storageInputs, outputs: storageOutputs } = dctr
 
@@ -40,14 +40,13 @@ export function buildSignableTransaction(
     voutToIndex[vout] = i
   }
 
-  //////////////
+  /// ///////////
   // Add OUTPUTS
-  /////////////
+  /// //////////
   for (let vout = 0; vout < storageOutputs.length; vout++) {
     const i = voutToIndex[vout]
     const out = storageOutputs[i]
-    if (vout !== out.vout)
-      throw new WERR_INVALID_PARAMETER('output.vout', `equal to array index. ${out.vout} !== ${vout}`)
+    if (vout !== out.vout) { throw new WERR_INVALID_PARAMETER('output.vout', `equal to array index. ${out.vout} !== ${vout}`) }
 
     const change = out.providedBy === 'storage' && out.purpose === 'change'
 
@@ -73,13 +72,13 @@ export function buildSignableTransaction(
     tx.addOutput(output)
   }
 
-  //////////////
+  /// ///////////
   // Merge and sort INPUTS info by vin order.
-  /////////////
-  const inputs: {
+  /// //////////
+  const inputs: Array<{
     argsInput: Validation.ValidCreateActionInput | undefined
     storageInput: StorageCreateTransactionSdkInput
-  }[] = []
+  }> = []
   for (const storageInput of storageInputs) {
     const argsInput =
       storageInput.vin !== undefined && storageInput.vin < args.inputs.length
@@ -88,18 +87,18 @@ export function buildSignableTransaction(
     inputs.push({ argsInput, storageInput })
   }
   inputs.sort((a, b) =>
-    a.storageInput.vin! < b.storageInput.vin! ? -1 : a.storageInput.vin! === b.storageInput.vin! ? 0 : 1
+    a.storageInput.vin < b.storageInput.vin ? -1 : a.storageInput.vin === b.storageInput.vin ? 0 : 1
   )
 
   const pendingStorageInputs: PendingStorageInput[] = []
 
-  //////////////
+  /// ///////////
   // Add INPUTS
-  /////////////
+  /// //////////
   let totalChangeInputs = 0
   for (const { storageInput, argsInput } of inputs) {
     // Two types of inputs are handled: user specified wth/without unlockingScript and storage specified using SABPPP template.
-    if (argsInput) {
+    if (argsInput != null) {
       // Type 1: User supplied input, with or without an explicit unlockingScript.
       // If without, signAction must be used to provide the actual unlockScript.
       const hasUnlock = typeof argsInput.unlockingScript === 'string'
@@ -117,11 +116,12 @@ export function buildSignableTransaction(
       tx.addInput(inputToAdd)
     } else {
       // Type2: SABPPP protocol inputs which are signed using ScriptTemplateBRC29.
-      if (storageInput.type !== 'P2PKH')
+      if (storageInput.type !== 'P2PKH') {
         throw new WERR_INVALID_PARAMETER(
           'type',
           `vin ${storageInput.vin}, "${storageInput.type}" is not a supported unlocking script type.`
         )
+      }
 
       pendingStorageInputs.push({
         vin: tx.inputs.length,
@@ -135,7 +135,7 @@ export function buildSignableTransaction(
       const inputToAdd: TransactionInput = {
         sourceTXID: storageInput.sourceTxid,
         sourceOutputIndex: storageInput.sourceVout,
-        sourceTransaction: storageInput.sourceTransaction
+        sourceTransaction: (storageInput.sourceTransaction != null)
           ? Transaction.fromBinary(storageInput.sourceTransaction)
           : undefined,
         unlockingScript: new Script(),
@@ -164,7 +164,7 @@ export function buildSignableTransaction(
 /**
  * Derive a change output locking script
  */
-export function makeChangeLock(
+export function makeChangeLock (
   out: StorageCreateTransactionSdkOutput,
   dctr: StorageCreateActionResult,
   args: Validation.ValidCreateActionArgs,

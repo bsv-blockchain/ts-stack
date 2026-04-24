@@ -14,7 +14,7 @@ export class BulkIngestorWhatsOnChainWs extends BulkIngestorBase {
    * @param localCachePath defaults to './data/ingest_whatsonchain_headers'
    * @returns
    */
-  static createBulkIngestorWhatsOnChainOptions(chain: Chain): BulkIngestorWhatsOnChainOptions {
+  static createBulkIngestorWhatsOnChainOptions (chain: Chain): BulkIngestorWhatsOnChainOptions {
     const options: BulkIngestorWhatsOnChainOptions = {
       ...WhatsOnChainServices.createWhatsOnChainServicesOptions(chain),
       ...BulkIngestorBase.createBulkIngestorBaseOptions(chain),
@@ -27,26 +27,26 @@ export class BulkIngestorWhatsOnChainWs extends BulkIngestorBase {
   woc: WhatsOnChainServices
   stopOldListenersToken: StopListenerToken = { stop: undefined }
 
-  constructor(options: BulkIngestorWhatsOnChainOptions) {
+  constructor (options: BulkIngestorWhatsOnChainOptions) {
     super(options)
     this.idleWait = options.idleWait || 5000
     this.woc = new WhatsOnChainServices(options)
   }
 
-  override async getPresentHeight(): Promise<number | undefined> {
+  override async getPresentHeight (): Promise<number | undefined> {
     const presentHeight = await this.woc.getChainTipHeight()
     logger(`presentHeight=${presentHeight}`)
     return presentHeight
   }
 
-  async fetchHeaders(
+  async fetchHeaders (
     before: HeightRanges,
     fetchRange: HeightRange,
     bulkRange: HeightRange,
     priorLiveHeaders: BlockHeader[]
   ): Promise<BlockHeader[]> {
     const oldHeaders: BlockHeader[] = []
-    const errors: { code: number; message: string; count: number }[] = []
+    const errors: Array<{ code: number, message: string, count: number }> = []
     const enqueue: EnqueueHandler = header => {
       oldHeaders.push(header)
     }

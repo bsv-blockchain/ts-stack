@@ -78,11 +78,11 @@ describe('ProvenTx class method tests', () => {
             header: {
               version: 1,
               previousHash: 'prev-hash',
-              merkleRoot: merkleRoot,
+              merkleRoot,
               time: 1610000000,
               bits: 123456,
               nonce: 78910,
-              height: height,
+              height,
               hash: blockHash
             },
             name: 'mock-service'
@@ -91,13 +91,13 @@ describe('ProvenTx class method tests', () => {
         throw new Error('Unexpected txid')
       },
 
-      getChainTracker: () =>
-        Promise.resolve({
+      getChainTracker: async () =>
+        await Promise.resolve({
           isValidRootForHeight: async (root: string, height: number) => true,
           currentHeight: async () => height
         }),
 
-      getHeaderForHeight: async () => Promise.resolve([1, 2, 3, 4]),
+      getHeaderForHeight: async () => await Promise.resolve([1, 2, 3, 4]),
       getHeight: async () => height,
       getBsvExchangeRate: async () => 0,
       getFiatExchangeRate: async () => 1,
@@ -127,11 +127,11 @@ describe('ProvenTx class method tests', () => {
       hashToHeader: async () => ({
         version: 1,
         previousHash: 'prev-hash',
-        merkleRoot: merkleRoot,
+        merkleRoot,
         time: 1610000000,
         bits: 123456,
         nonce: 78910,
-        height: height,
+        height,
         hash: blockHash
       }),
       nLockTimeIsFinal: async () => true,

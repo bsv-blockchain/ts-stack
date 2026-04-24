@@ -13,83 +13,83 @@ import { AuthMethodInteractor } from './auth-method-interactors/AuthMethodIntera
 import { PrivateKey } from '@bsv/sdk'
 
 export class WABClient {
-  constructor(private serverUrl: string) {}
+  constructor (private readonly serverUrl: string) {}
 
   /**
    * Return the WAB server info
    */
-  public async getInfo() {
+  public async getInfo () {
     const res = await fetch(`${this.serverUrl}/info`)
-    return res.json()
+    return await res.json()
   }
 
   /**
    * Generate a random 256-bit presentation key as a hex string (client side).
    */
-  public generateRandomPresentationKey(): string {
+  public generateRandomPresentationKey (): string {
     return PrivateKey.fromRandom().toHex()
   }
 
   /**
    * Start an Auth Method flow
    */
-  public async startAuthMethod(authMethod: AuthMethodInteractor, presentationKey: string, payload: any) {
-    return authMethod.startAuth(this.serverUrl, presentationKey, payload)
+  public async startAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any) {
+    return await authMethod.startAuth(this.serverUrl, presentationKey, payload)
   }
 
   /**
    * Complete an Auth Method flow
    */
-  public async completeAuthMethod(authMethod: AuthMethodInteractor, presentationKey: string, payload: any) {
-    return authMethod.completeAuth(this.serverUrl, presentationKey, payload)
+  public async completeAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any) {
+    return await authMethod.completeAuth(this.serverUrl, presentationKey, payload)
   }
 
   /**
    * List user-linked methods
    */
-  public async listLinkedMethods(presentationKey: string) {
+  public async listLinkedMethods (presentationKey: string) {
     const res = await fetch(`${this.serverUrl}/user/linkedMethods`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ presentationKey })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
    * Unlink a given Auth Method by ID
    */
-  public async unlinkMethod(presentationKey: string, authMethodId: number) {
+  public async unlinkMethod (presentationKey: string, authMethodId: number) {
     const res = await fetch(`${this.serverUrl}/user/unlinkMethod`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ presentationKey, authMethodId })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
    * Request faucet
    */
-  public async requestFaucet(presentationKey: string) {
+  public async requestFaucet (presentationKey: string) {
     const res = await fetch(`${this.serverUrl}/faucet/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ presentationKey })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
    * Delete user
    */
-  public async deleteUser(presentationKey: string) {
+  public async deleteUser (presentationKey: string) {
     const res = await fetch(`${this.serverUrl}/user/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ presentationKey })
     })
-    return res.json()
+    return await res.json()
   }
 
   // ============================================================
@@ -104,11 +104,11 @@ export class WABClient {
    * @param userIdHash SHA256 hash of the user's identity key
    * @param payload Auth method specific data (e.g., { phoneNumber: "+1..." })
    */
-  public async startShareAuth(
+  public async startShareAuth (
     methodType: string,
     userIdHash: string,
     payload: any
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean, message: string }> {
     const res = await fetch(`${this.serverUrl}/auth/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -118,7 +118,7 @@ export class WABClient {
         payload
       })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
@@ -130,12 +130,12 @@ export class WABClient {
    * @param shareB The Shamir share to store (format: x.y.threshold.integrity)
    * @param userIdHash SHA256 hash of the user's identity key
    */
-  public async storeShare(
+  public async storeShare (
     methodType: string,
     payload: any,
     shareB: string,
     userIdHash: string
-  ): Promise<{ success: boolean; message: string; userId?: number }> {
+  ): Promise<{ success: boolean, message: string, userId?: number }> {
     const res = await fetch(`${this.serverUrl}/share/store`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -146,7 +146,7 @@ export class WABClient {
         userIdHash
       })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
@@ -157,11 +157,11 @@ export class WABClient {
    * @param payload Contains the OTP code and auth method specific data
    * @param userIdHash SHA256 hash of the user's identity key
    */
-  public async retrieveShare(
+  public async retrieveShare (
     methodType: string,
     payload: any,
     userIdHash: string
-  ): Promise<{ success: boolean; shareB?: string; message: string }> {
+  ): Promise<{ success: boolean, shareB?: string, message: string }> {
     const res = await fetch(`${this.serverUrl}/share/retrieve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -171,7 +171,7 @@ export class WABClient {
         userIdHash
       })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
@@ -183,12 +183,12 @@ export class WABClient {
    * @param userIdHash SHA256 hash of the user's identity key
    * @param newShareB The new Shamir share to store
    */
-  public async updateShare(
+  public async updateShare (
     methodType: string,
     payload: any,
     userIdHash: string,
     newShareB: string
-  ): Promise<{ success: boolean; message: string; shareVersion?: number }> {
+  ): Promise<{ success: boolean, message: string, shareVersion?: number }> {
     const res = await fetch(`${this.serverUrl}/share/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -199,7 +199,7 @@ export class WABClient {
         newShareB
       })
     })
-    return res.json()
+    return await res.json()
   }
 
   /**
@@ -210,11 +210,11 @@ export class WABClient {
    * @param payload Contains the OTP code and auth method specific data
    * @param userIdHash SHA256 hash of the user's identity key
    */
-  public async deleteShamirUser(
+  public async deleteShamirUser (
     methodType: string,
     payload: any,
     userIdHash: string
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean, message: string }> {
     const res = await fetch(`${this.serverUrl}/share/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -224,6 +224,6 @@ export class WABClient {
         userIdHash
       })
     })
-    return res.json()
+    return await res.json()
   }
 }

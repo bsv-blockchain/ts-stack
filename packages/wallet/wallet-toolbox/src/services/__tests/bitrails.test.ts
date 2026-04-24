@@ -4,8 +4,8 @@ import { Bitails, BitailsMerkleProof } from '../providers/Bitails'
 describe('bitrails tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -32,7 +32,7 @@ describe('bitrails tests', () => {
       '243fb25b94b5ef2f8554cd10d105005f51ff543d8b7a498c4e46ed304c3da24a'
     ]) {
       const mp = await bitails.getMerklePath(txid, services)
-      if (mp.merklePath) {
+      if (mp.merklePath != null) {
         const root = mp.merklePath.computeRoot(txid)
         expect(root).toBe(proof2merkleRoot)
       }

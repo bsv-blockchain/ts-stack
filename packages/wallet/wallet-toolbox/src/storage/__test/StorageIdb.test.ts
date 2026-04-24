@@ -11,7 +11,7 @@ describe('StorageIdb tests', () => {
   test('0', async () => {
     const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions('main')
     const storage = new StorageIdb(options)
-    const r = await storage.migrate('storageIdbTest', `42`.repeat(32))
+    const r = await storage.migrate('storageIdbTest', '42'.repeat(32))
     const db = storage.db!
     expect(db).toBeTruthy()
   })

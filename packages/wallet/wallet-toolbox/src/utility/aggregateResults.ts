@@ -18,7 +18,7 @@ export const aggregateActionResults = async (
     const txid = ar.txid
 
     const d = postToNetworkResult.details.find(d => d.txid === txid)
-    if (!d) throw new WERR_INTERNAL(`missing details for ${txid}`)
+    if (d == null) throw new WERR_INTERNAL(`missing details for ${txid}`)
 
     const arNdr: ReviewActionResult = { txid: d.txid, status: 'success', competingTxs: d.competingTxs }
     switch (d.status) {
@@ -30,7 +30,7 @@ export const aggregateActionResults = async (
         // confirmed double spend.
         ar.status = 'failed'
         arNdr.status = 'doubleSpend'
-        if (d.competingTxs) arNdr.competingBeef = await createMergedBeefOfTxids(d.competingTxs, storage)
+        if (d.competingTxs != null) arNdr.competingBeef = await createMergedBeefOfTxids(d.competingTxs, storage)
         break
       case 'serviceError':
         // services might improve
@@ -55,7 +55,7 @@ export const aggregateActionResults = async (
   return { swr, rar }
 }
 
-async function createMergedBeefOfTxids(txids: string[], storage: StorageProvider): Promise<number[]> {
+async function createMergedBeefOfTxids (txids: string[], storage: StorageProvider): Promise<number[]> {
   const beef = new Beef()
   const options: StorageGetBeefOptions = {
     mergeToBeef: beef,

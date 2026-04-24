@@ -41,7 +41,7 @@ export abstract class SetupClient {
    *
    * @publicbody
    */
-  static async createWallet(args: SetupClientWalletArgs): Promise<SetupWallet> {
+  static async createWallet (args: SetupClientWalletArgs): Promise<SetupWallet> {
     const chain = args.chain
     const rootKey = PrivateKey.fromHex(args.rootKeyHex)
     const identityKey = rootKey.toPublicKey().toString()
@@ -53,7 +53,7 @@ export abstract class SetupClient {
     const services = new Services(serviceOptions)
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, 'default')
     const monitor = new Monitor(monopts)
-    const privilegedKeyManager = args.privilegedKeyGetter
+    const privilegedKeyManager = (args.privilegedKeyGetter != null)
       ? new PrivilegedKeyManager(args.privilegedKeyGetter)
       : undefined
     const wallet = new Wallet({
@@ -85,7 +85,7 @@ export abstract class SetupClient {
    * @param args.storageUrl - Optional. `StorageClient` and `chain` compatible endpoint URL.
    * @param args.privilegedKeyGetter - Optional. Method that will return the privileged `PrivateKey`, on demand.
    */
-  static async createWalletClientNoEnv(args: {
+  static async createWalletClientNoEnv (args: {
     chain: Chain
     rootKeyHex: string
     storageUrl?: string
@@ -97,7 +97,7 @@ export abstract class SetupClient {
     const keyDeriver = new CachedKeyDeriver(rootKey)
     const storage = new WalletStorageManager(keyDeriver.identityKey)
     const services = new Services(chain)
-    const privilegedKeyManager = args.privilegedKeyGetter
+    const privilegedKeyManager = (args.privilegedKeyGetter != null)
       ? new PrivilegedKeyManager(args.privilegedKeyGetter)
       : undefined
     const wallet = new Wallet({
@@ -116,7 +116,7 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static async createWalletClient(args: SetupClientWalletClientArgs): Promise<SetupWalletClient> {
+  static async createWalletClient (args: SetupClientWalletClientArgs): Promise<SetupWalletClient> {
     const wo = await SetupClient.createWallet(args)
 
     const endpointUrl = args.endpointUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
@@ -133,7 +133,7 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static getKeyPair(priv?: string | PrivateKey): KeyPairAddress {
+  static getKeyPair (priv?: string | PrivateKey): KeyPairAddress {
     if (priv === undefined) priv = PrivateKey.fromRandom()
     else if (typeof priv === 'string') priv = new PrivateKey(priv, 'hex')
 
@@ -145,7 +145,7 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static getLockP2PKH(address: string): LockingScript {
+  static getLockP2PKH (address: string): LockingScript {
     const p2pkh = new P2PKH()
     const lock = p2pkh.lock(address)
     return lock
@@ -154,7 +154,7 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static getUnlockP2PKH(priv: PrivateKey, satoshis: number): ScriptTemplateUnlock {
+  static getUnlockP2PKH (priv: PrivateKey, satoshis: number): ScriptTemplateUnlock {
     const p2pkh = new P2PKH()
     const lock = SetupClient.getLockP2PKH(SetupClient.getKeyPair(priv).address)
     // Prepare to pay with SIGHASH_ALL and without ANYONE_CAN_PAY.
@@ -169,14 +169,14 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static createP2PKHOutputs(
-    outputs: {
+  static createP2PKHOutputs (
+    outputs: Array<{
       address: string
       satoshis: number
       outputDescription?: string
       basket?: string
       tags?: string[]
-    }[]
+    }>
   ): CreateActionOutput[] {
     const os: CreateActionOutput[] = []
     const count = outputs.length
@@ -196,24 +196,24 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static async createP2PKHOutputsAction(
+  static async createP2PKHOutputsAction (
     wallet: WalletInterface,
-    outputs: {
+    outputs: Array<{
       address: string
       satoshis: number
       outputDescription?: string
       basket?: string
       tags?: string[]
-    }[],
+    }>,
     options?: CreateActionOptions
   ): Promise<{
-    cr: CreateActionResult
-    outpoints: string[] | undefined
-  }> {
+      cr: CreateActionResult
+      outpoints: string[] | undefined
+    }> {
     const os = SetupClient.createP2PKHOutputs(outputs)
 
     const createArgs: CreateActionArgs = {
-      description: `createP2PKHOutputs`,
+      description: 'createP2PKHOutputs',
       outputs: os,
       options: {
         ...options,
@@ -236,13 +236,13 @@ export abstract class SetupClient {
   /**
    * @publicbody
    */
-  static async fundWalletFromP2PKHOutpoints(
+  static async fundWalletFromP2PKHOutpoints (
     wallet: WalletInterface,
     outpoints: string[],
     p2pkhKey: KeyPairAddress,
     inputBEEF?: BEEF
-  ): Promise<{ outpoint: string; txid?: string; success: boolean; error?: string }[]> {
-    return _fundWalletFromP2PKHOutpoints(
+  ): Promise<Array<{ outpoint: string, txid?: string, success: boolean, error?: string }>> {
+    return await _fundWalletFromP2PKHOutpoints(
       wallet,
       outpoints,
       p2pkhKey,
@@ -260,7 +260,7 @@ export abstract class SetupClient {
    *
    * @publicbody
    */
-  static async createWalletIdb(args: SetupWalletIdbArgs): Promise<SetupWalletIdb> {
+  static async createWalletIdb (args: SetupWalletIdbArgs): Promise<SetupWalletIdb> {
     const wo = await SetupClient.createWallet(args)
     const activeStorage = await SetupClient.createStorageIdb(args)
     await wo.storage.addWalletStorageProvider(activeStorage)
@@ -277,7 +277,7 @@ export abstract class SetupClient {
   /**
    * @returns {StorageIdb} - `Knex` based storage provider for a wallet. May be used for either active storage or backup storage.
    */
-  static async createStorageIdb(args: SetupWalletIdbArgs): Promise<StorageIdb> {
+  static async createStorageIdb (args: SetupWalletIdbArgs): Promise<StorageIdb> {
     const storage = new StorageIdb({
       chain: args.chain,
       commissionSatoshis: 0,

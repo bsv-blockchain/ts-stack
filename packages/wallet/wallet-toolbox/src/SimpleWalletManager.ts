@@ -91,14 +91,14 @@ export class SimpleWalletManager implements WalletInterface {
   /**
    * The domain name of the administrative originator (wallet operator / vendor, or your own).
    */
-  private adminOriginator: OriginatorDomainNameStringUnder250Bytes
+  private readonly adminOriginator: OriginatorDomainNameStringUnder250Bytes
 
   /**
    * A function that, given the user's primary key and privileged key manager,
    * returns a new `WalletInterface` instance that handles the actual signing,
    * encryption, transaction building, etc.
    */
-  private walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>
+  private readonly walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>
 
   /**
    * The underlying wallet instance that is built once authenticated.
@@ -125,7 +125,7 @@ export class SimpleWalletManager implements WalletInterface {
    *                        If the snapshot contains a primary key, it will be loaded immediately
    *                        (though you will still need to provide a privileged key manager to authenticate).
    */
-  constructor(
+  constructor (
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>,
     stateSnapshot?: number[]
@@ -134,7 +134,7 @@ export class SimpleWalletManager implements WalletInterface {
     this.adminOriginator = adminOriginator
     this.walletBuilder = walletBuilder
 
-    if (stateSnapshot) {
+    if (stateSnapshot != null) {
       this.loadSnapshot(stateSnapshot)
     }
   }
@@ -146,7 +146,7 @@ export class SimpleWalletManager implements WalletInterface {
    *
    * @param key A 32-byte primary key.
    */
-  async providePrimaryKey(key: number[]): Promise<void> {
+  async providePrimaryKey (key: number[]): Promise<void> {
     this.primaryKey = key
     await this.tryBuildUnderlying()
   }
@@ -158,7 +158,7 @@ export class SimpleWalletManager implements WalletInterface {
    *
    * @param manager An instance of `PrivilegedKeyManager`.
    */
-  async providePrivilegedKeyManager(manager: PrivilegedKeyManager): Promise<void> {
+  async providePrivilegedKeyManager (manager: PrivilegedKeyManager): Promise<void> {
     this.underlyingPrivilegedKeyManager = manager
     await this.tryBuildUnderlying()
   }
@@ -167,11 +167,11 @@ export class SimpleWalletManager implements WalletInterface {
    * Internal method that checks if we have both the primary key and privileged manager.
    * If so, we build the underlying wallet instance and become authenticated.
    */
-  private async tryBuildUnderlying(): Promise<void> {
+  private async tryBuildUnderlying (): Promise<void> {
     if (this.authenticated) {
       throw new Error('The user is already authenticated.')
     }
-    if (!this.primaryKey || !this.underlyingPrivilegedKeyManager) {
+    if ((this.primaryKey == null) || (this.underlyingPrivilegedKeyManager == null)) {
       return
     }
     // Build the underlying wallet:
@@ -184,7 +184,7 @@ export class SimpleWalletManager implements WalletInterface {
    *
    * This clears the primary key, the privileged key manager, and the `authenticated` flag.
    */
-  destroy(): void {
+  destroy (): void {
     this.underlying = undefined
     this.underlyingPrivilegedKeyManager = undefined
     this.authenticated = false
@@ -207,8 +207,8 @@ export class SimpleWalletManager implements WalletInterface {
    * @returns A byte array representing the encrypted snapshot.
    * @throws {Error} if no primary key is currently set.
    */
-  saveSnapshot(): number[] {
-    if (!this.primaryKey) {
+  saveSnapshot (): number[] {
+    if (this.primaryKey == null) {
       throw new Error('No primary key is set; cannot save snapshot.')
     }
 
@@ -244,7 +244,7 @@ export class SimpleWalletManager implements WalletInterface {
    * @param snapshot A byte array that was previously returned by `saveSnapshot`.
    * @throws {Error} If the snapshot format is invalid or decryption fails.
    */
-  async loadSnapshot(snapshot: number[]): Promise<void> {
+  async loadSnapshot (snapshot: number[]): Promise<void> {
     try {
       const reader = new Utils.Reader(snapshot)
 
@@ -286,7 +286,7 @@ export class SimpleWalletManager implements WalletInterface {
    * @param originator The originator domain, which must not be the admin originator.
    * @throws If not authenticated, or if the originator is the admin.
    */
-  async isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+  async isAuthenticated (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
     this.ensureCanCall(originator)
     return { authenticated: true }
   }
@@ -299,7 +299,7 @@ export class SimpleWalletManager implements WalletInterface {
    * @param originator The originator domain, which must not be the admin originator.
    * @throws If the originator is the admin.
    */
-  async waitForAuthentication(
+  async waitForAuthentication (
     _: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AuthenticatedResult> {
@@ -312,210 +312,210 @@ export class SimpleWalletManager implements WalletInterface {
     return { authenticated: true }
   }
 
-  async getPublicKey(
+  async getPublicKey (
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.getPublicKey(args, originator)
+    return await this.underlying!.getPublicKey(args, originator)
   }
 
-  async revealCounterpartyKeyLinkage(
+  async revealCounterpartyKeyLinkage (
     args: RevealCounterpartyKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.revealCounterpartyKeyLinkage(args, originator)
+    return await this.underlying!.revealCounterpartyKeyLinkage(args, originator)
   }
 
-  async revealSpecificKeyLinkage(
+  async revealSpecificKeyLinkage (
     args: RevealSpecificKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.revealSpecificKeyLinkage(args, originator)
+    return await this.underlying!.revealSpecificKeyLinkage(args, originator)
   }
 
-  async encrypt(
+  async encrypt (
     args: WalletEncryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletEncryptResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.encrypt(args, originator)
+    return await this.underlying!.encrypt(args, originator)
   }
 
-  async decrypt(
+  async decrypt (
     args: WalletDecryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletDecryptResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.decrypt(args, originator)
+    return await this.underlying!.decrypt(args, originator)
   }
 
-  async createHmac(
+  async createHmac (
     args: CreateHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateHmacResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.createHmac(args, originator)
+    return await this.underlying!.createHmac(args, originator)
   }
 
-  async verifyHmac(
+  async verifyHmac (
     args: VerifyHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifyHmacResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.verifyHmac(args, originator)
+    return await this.underlying!.verifyHmac(args, originator)
   }
 
-  async createSignature(
+  async createSignature (
     args: CreateSignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.createSignature(args, originator)
+    return await this.underlying!.createSignature(args, originator)
   }
 
-  async verifySignature(
+  async verifySignature (
     args: VerifySignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.verifySignature(args, originator)
+    return await this.underlying!.verifySignature(args, originator)
   }
 
-  async createAction(
+  async createAction (
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.createAction(args, originator)
+    return await this.underlying!.createAction(args, originator)
   }
 
-  async signAction(
+  async signAction (
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.signAction(args, originator)
+    return await this.underlying!.signAction(args, originator)
   }
 
-  async abortAction(
+  async abortAction (
     args: AbortActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AbortActionResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.abortAction(args, originator)
+    return await this.underlying!.abortAction(args, originator)
   }
 
-  async listActions(
+  async listActions (
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.listActions(args, originator)
+    return await this.underlying!.listActions(args, originator)
   }
 
-  async internalizeAction(
+  async internalizeAction (
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.internalizeAction(args, originator)
+    return await this.underlying!.internalizeAction(args, originator)
   }
 
-  async listOutputs(
+  async listOutputs (
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.listOutputs(args, originator)
+    return await this.underlying!.listOutputs(args, originator)
   }
 
-  async relinquishOutput(
+  async relinquishOutput (
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.relinquishOutput(args, originator)
+    return await this.underlying!.relinquishOutput(args, originator)
   }
 
-  async acquireCertificate(
+  async acquireCertificate (
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.acquireCertificate(args, originator)
+    return await this.underlying!.acquireCertificate(args, originator)
   }
 
-  async listCertificates(
+  async listCertificates (
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.listCertificates(args, originator)
+    return await this.underlying!.listCertificates(args, originator)
   }
 
-  async proveCertificate(
+  async proveCertificate (
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.proveCertificate(args, originator)
+    return await this.underlying!.proveCertificate(args, originator)
   }
 
-  async relinquishCertificate(
+  async relinquishCertificate (
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.relinquishCertificate(args, originator)
+    return await this.underlying!.relinquishCertificate(args, originator)
   }
 
-  async discoverByIdentityKey(
+  async discoverByIdentityKey (
     args: DiscoverByIdentityKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.discoverByIdentityKey(args, originator)
+    return await this.underlying!.discoverByIdentityKey(args, originator)
   }
 
-  async discoverByAttributes(
+  async discoverByAttributes (
     args: DiscoverByAttributesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.discoverByAttributes(args, originator)
+    return await this.underlying!.discoverByAttributes(args, originator)
   }
 
-  async getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
+  async getHeight (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.getHeight({}, originator)
+    return await this.underlying!.getHeight({}, originator)
   }
 
-  async getHeaderForHeight(
+  async getHeaderForHeight (
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.getHeaderForHeight(args, originator)
+    return await this.underlying!.getHeaderForHeight(args, originator)
   }
 
-  async getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+  async getNetwork (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.getNetwork({}, originator)
+    return await this.underlying!.getNetwork({}, originator)
   }
 
-  async getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+  async getVersion (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
     this.ensureCanCall(originator)
-    return this.underlying!.getVersion({}, originator)
+    return await this.underlying!.getVersion({}, originator)
   }
 
   /**
    * A small helper that throws if the user is not authenticated or if the
    * provided originator is the admin (which is not permitted externally).
    */
-  private ensureCanCall(originator?: OriginatorDomainNameStringUnder250Bytes) {
+  private ensureCanCall (originator?: OriginatorDomainNameStringUnder250Bytes) {
     if (originator === this.adminOriginator) {
       throw new Error('External applications cannot use the admin originator.')
     }

@@ -11,7 +11,7 @@ import { wait } from '../../utility/utilityHelpers'
  *
  * @param reqs
  */
-export async function attemptToPostReqsToNetwork(
+export async function attemptToPostReqsToNetwork (
   storage: StorageProvider,
   reqs: EntityProvenTxReq[],
   trx?: sdk.TrxToken,
@@ -20,7 +20,7 @@ export async function attemptToPostReqsToNetwork(
   // initialize results, validate reqs ready to post, txids are of the transactions in the beef that we care about.
 
   const { r, vreqs, txids } = await validateReqsAndMergeBeefs(storage, reqs, trx)
-  logger?.log(`validated request and merged beefs`)
+  logger?.log('validated request and merged beefs')
 
   const services = storage.getServices()
 
@@ -38,11 +38,11 @@ export async function attemptToPostReqsToNetwork(
   return r
 }
 
-async function validateReqsAndMergeBeefs(
+async function validateReqsAndMergeBeefs (
   storage: StorageProvider,
   reqs: EntityProvenTxReq[],
   trx?: sdk.TrxToken
-): Promise<{ r: PostReqsToNetworkResult; vreqs: PostReqsToNetworkDetails[]; txids: string[] }> {
+): Promise<{ r: PostReqsToNetworkResult, vreqs: PostReqsToNetworkDetails[], txids: string[] }> {
   const r: PostReqsToNetworkResult = {
     status: 'success',
     beef: new Beef(),
@@ -55,8 +55,8 @@ async function validateReqsAndMergeBeefs(
   for (const req of reqs) {
     try {
       const noRawTx = !req.rawTx
-      const noTxIds = !req.notify.transactionIds || req.notify.transactionIds.length < 1
-      const noInputBEEF = !req.inputBEEF
+      const noTxIds = (req.notify.transactionIds == null) || req.notify.transactionIds.length < 1
+      const noInputBEEF = req.inputBEEF == null
       if (noRawTx || noTxIds || noInputBEEF) {
         // This should have happened earlier...
         req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqFailed', noRawTx, noTxIds, noInputBEEF })
@@ -83,7 +83,7 @@ async function validateReqsAndMergeBeefs(
   return { r, vreqs, txids: vreqs.map(r => r.txid) }
 }
 
-async function transferNotesToReqHistories(
+async function transferNotesToReqHistories (
   txids: string[],
   vreqs: PostReqsToNetworkDetails[],
   pbrs: sdk.PostBeefResult[],
@@ -92,12 +92,12 @@ async function transferNotesToReqHistories(
 ): Promise<void> {
   for (const txid of txids) {
     const vreq = vreqs.find(r => r.txid === txid)
-    if (!vreq) throw new sdk.WERR_INTERNAL()
+    if (vreq == null) throw new sdk.WERR_INTERNAL()
     const notes: sdk.ReqHistoryNote[] = []
     for (const pbr of pbrs) {
       notes.push(...(pbr.notes || []))
       const r = pbr.txidResults.find(tr => tr.txid === txid)
-      if (r) notes.push(...(r.notes || []))
+      if (r != null) notes.push(...(r.notes || []))
     }
     for (const n of notes) {
       vreq.req.addHistoryNote(n)
@@ -121,7 +121,7 @@ async function transferNotesToReqHistories(
  * @param storage
  * @returns
  */
-function aggregatePostBeefResultsByTxid(
+function aggregatePostBeefResultsByTxid (
   txids: string[],
   vreqs: PostReqsToNetworkDetails[],
   pbrs: sdk.PostBeefResult[]
@@ -144,12 +144,12 @@ function aggregatePostBeefResultsByTxid(
     r[txid] = ar
     for (const pbr of pbrs) {
       const tr = pbr.txidResults.find(tr => tr.txid === txid)
-      if (tr) {
+      if (tr != null) {
         ar.txidResults.push(tr)
         if (tr.status === 'success') ar.successCount++
         else if (tr.doubleSpend) {
           ar.doubleSpendCount++
-          if (tr.competingTxs) {
+          if (tr.competingTxs != null) {
             ar.competingTxs = [...tr.competingTxs]
           }
         } else if (tr.serviceError) ar.serviceErrorCount++
@@ -188,7 +188,7 @@ function aggregatePostBeefResultsByTxid(
  * @param services if valid, doubleSpend results will be verified (but only if not within a trx. e.g. trx must be undefined)
  * @param trx
  */
-async function updateReqsFromAggregateResults(
+async function updateReqsFromAggregateResults (
   txids: string[],
   r: PostReqsToNetworkResult,
   apbrs: Record<string, AggregatePostBeefTxResult>,
@@ -216,14 +216,14 @@ async function updateReqsFromAggregateResults(
       serviceErrorCount
     }
 
-    if (['completed', 'unmined'].indexOf(req.status) >= 0)
-      // However it happened, don't degrade status if it is somehow already beyond broadcast stage
-      continue
+    if (['completed', 'unmined'].includes(req.status))
+    // However it happened, don't degrade status if it is somehow already beyond broadcast stage
+    { continue }
 
-    if (ar.status === 'doubleSpend' && services && !trx) await confirmDoubleSpend(ar, r.beef, storage, services, logger)
+    if (ar.status === 'doubleSpend' && (services != null) && (trx == null)) await confirmDoubleSpend(ar, r.beef, storage, services, logger)
 
-    let newReqStatus: sdk.ProvenTxReqStatus | undefined = undefined
-    let newTxStatus: sdk.TransactionStatus | undefined = undefined
+    let newReqStatus: sdk.ProvenTxReqStatus | undefined
+    let newTxStatus: sdk.TransactionStatus | undefined
     switch (ar.status) {
       case 'success':
         newReqStatus = 'unmined'
@@ -257,7 +257,7 @@ async function updateReqsFromAggregateResults(
 
     if (newTxStatus) {
       const ids = req.notify.transactionIds
-      if (ids) {
+      if (ids != null) {
         // Also set generated outputs to spendable false and consumed input outputs to spendable true (and clears their spentBy).
         await storage.updateTransactionsStatus(ids, newTxStatus, trx)
       }
@@ -283,7 +283,7 @@ async function updateReqsFromAggregateResults(
  * @param storage
  * @param services
  */
-async function confirmDoubleSpend(
+async function confirmDoubleSpend (
   ar: AggregatePostBeefTxResult,
   beef: Beef,
   storage: StorageProvider,
@@ -297,7 +297,7 @@ async function confirmDoubleSpend(
 
   for (let retry = 0; retry < 3; retry++) {
     const gsr = await services.getStatusForTxids([req.txid])
-    note[`getStatus${retry}`] = `${gsr.status}${gsr.error ? `${gsr.error.code}` : ''},${gsr.results[0]?.status}`
+    note[`getStatus${retry}`] = `${gsr.status}${(gsr.error != null) ? `${gsr.error.code}` : ''},${gsr.results[0]?.status}`
     if (gsr.status === 'success' && gsr.results[0].status !== 'unknown') {
       known = true
       break
@@ -316,10 +316,10 @@ async function confirmDoubleSpend(
     const competingTxids = new Set(ar.competingTxs)
     for (const input of tx.inputs) {
       const sourceTx = beef.findTxid(input.sourceTXID!)?.tx
-      if (!sourceTx) {
-        let s = note['missingSourceTx'] || ''
+      if (sourceTx == null) {
+        let s = note.missingSourceTx || ''
         s += input.sourceTXID! + ' '
-        note['missingSourceTx'] = s
+        note.missingSourceTx = s
       } else {
         const lockingScript = sourceTx.outputs[input.sourceOutputIndex].lockingScript.toHex()
         const hash = services.hashOutputScript(lockingScript)

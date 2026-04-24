@@ -3,7 +3,7 @@ import { Wallet } from '../../Wallet'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { TableCertificateX } from '../../storage/schema/tables/TableCertificate'
 
-export async function acquireDirectCertificate(
+export async function acquireDirectCertificate (
   wallet: Wallet,
   auth: AuthId,
   vargs: Validation.ValidAcquireDirectCertificateArgs

@@ -40,7 +40,7 @@ import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
 export class Services implements WalletServices {
   static readonly getStatusForTxidsBatchLimit = 20
 
-  static createDefaultOptions(chain: Chain): WalletServicesOptions {
+  static createDefaultOptions (chain: Chain): WalletServicesOptions {
     return createDefaultWalletServicesOptions(chain)
   }
 
@@ -60,11 +60,11 @@ export class Services implements WalletServices {
 
   chain: Chain
 
-  constructor(optionsOrChain: Chain | WalletServicesOptions) {
+  constructor (optionsOrChain: Chain | WalletServicesOptions) {
     this.chain = typeof optionsOrChain === 'string' ? optionsOrChain : optionsOrChain.chain
 
     if (this.chain === 'mock') {
-      throw new WERR_INVALID_PARAMETER('chain', `'main', 'test', or 'teratest'. Use MockServices for 'mock' chain.`)
+      throw new WERR_INVALID_PARAMETER('chain', '\'main\', \'test\', or \'teratest\'. Use MockServices for \'mock\' chain.')
     }
 
     this.options = typeof optionsOrChain === 'string' ? Services.createDefaultOptions(this.chain) : optionsOrChain
@@ -82,59 +82,59 @@ export class Services implements WalletServices {
       this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
     }
 
-    //prettier-ignore
+    // prettier-ignore
     this.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath')
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getMerklePath.bind(this.whatsonchain) })
-    if (hasBitails && this.bitails) {
+    if (hasBitails && (this.bitails != null)) {
       this.getMerklePathServices.add({ name: 'Bitails', service: this.bitails.getMerklePath.bind(this.bitails) })
     }
 
-    //prettier-ignore
+    // prettier-ignore
     this.getRawTxServices = new ServiceCollection<GetRawTxService>('getRawTx')
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getRawTxResult.bind(this.whatsonchain) })
 
     this.postBeefServices = new ServiceCollection<PostBeefService>('postBeef')
-    if (this.arcGorillaPool) {
-      //prettier-ignore
+    if (this.arcGorillaPool != null) {
+      // prettier-ignore
       this.postBeefServices.add({ name: 'GorillaPoolArcBeef', service: this.arcGorillaPool.postBeef.bind(this.arcGorillaPool) })
     }
-    //prettier-ignore
+    // prettier-ignore
     this.postBeefServices
       .add({ name: 'TaalArcBeef', service: this.arcTaal.postBeef.bind(this.arcTaal) })
-    if (hasBitails && this.bitails) {
+    if (hasBitails && (this.bitails != null)) {
       this.postBeefServices.add({ name: 'Bitails', service: this.bitails.postBeef.bind(this.bitails) })
     }
-    //prettier-ignore
+    // prettier-ignore
     this.postBeefServices
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.postBeef.bind(this.whatsonchain) })
-      ;
 
-    //prettier-ignore
+    // prettier-ignore
     this.getUtxoStatusServices = new ServiceCollection<GetUtxoStatusService>('getUtxoStatus')
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getUtxoStatus.bind(this.whatsonchain) })
 
-    //prettier-ignore
+    // prettier-ignore
     this.getStatusForTxidsServices = new ServiceCollection<GetStatusForTxidsService>('getStatusForTxids')
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getStatusForTxids.bind(this.whatsonchain) })
 
-    //prettier-ignore
+    // prettier-ignore
     this.getScriptHashHistoryServices = new ServiceCollection<GetScriptHashHistoryService>('getScriptHashHistory')
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getScriptHashHistory.bind(this.whatsonchain) })
 
-    //prettier-ignore
-    this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate');
+    // prettier-ignore
+    this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate')
     if (this.options.exchangeratesapiKey)
-      // If the api key for paid service is set, only use that sesrvice.
-      this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi })
-    else
-      // Otherwise use the chaintracks service
+    // If the api key for paid service is set, only use that sesrvice.
+    { this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi }) } else
+    // Otherwise use the chaintracks service
+    {
       this.updateFiatExchangeRateServices.add({
         name: 'ChaintracksFiatRates',
         service: updateChaintracksFiatExchangeRates
       })
+    }
   }
 
-  getServicesCallHistory(reset?: boolean): ServicesCallHistory {
+  getServicesCallHistory (reset?: boolean): ServicesCallHistory {
     return {
       version: 2,
       getMerklePath: this.getMerklePathServices.getServiceCallHistory(reset),
@@ -147,13 +147,12 @@ export class Services implements WalletServices {
     }
   }
 
-  async getChainTracker(): Promise<ChainTracker> {
-    if (!this.options.chaintracks)
-      throw new WERR_INVALID_PARAMETER('options.chaintracks', `valid to enable 'getChainTracker' service.`)
+  async getChainTracker (): Promise<ChainTracker> {
+    if (this.options.chaintracks == null) { throw new WERR_INVALID_PARAMETER('options.chaintracks', 'valid to enable \'getChainTracker\' service.') }
     return new ChaintracksChainTracker(this.chain, this.options.chaintracks)
   }
 
-  async getBsvExchangeRate(): Promise<number> {
+  async getBsvExchangeRate (): Promise<number> {
     this.options.bsvExchangeRate = await this.whatsonchain.updateBsvExchangeRate(
       this.options.bsvExchangeRate,
       this.options.bsvUpdateMsecs
@@ -161,7 +160,7 @@ export class Services implements WalletServices {
     return this.options.bsvExchangeRate.rate
   }
 
-  async getFiatExchangeRate(currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> {
+  async getFiatExchangeRate (currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> {
     base ||= 'USD'
     if (currency === base) return 1
 
@@ -180,7 +179,7 @@ export class Services implements WalletServices {
     return c / b
   }
 
-  async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {
+  async getFiatExchangeRates (targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {
     await this.updateFiatExchangeRates(targetCurrencies, this.options.fiatUpdateMsecs)
 
     const stored = this.options.fiatExchangeRates
@@ -200,20 +199,23 @@ export class Services implements WalletServices {
     }
   }
 
-  get getProofsCount() {
+  get getProofsCount () {
     return this.getMerklePathServices.count
   }
-  get getRawTxsCount() {
+
+  get getRawTxsCount () {
     return this.getRawTxServices.count
   }
-  get postBeefServicesCount() {
+
+  get postBeefServicesCount () {
     return this.postBeefServices.count
   }
-  get getUtxoStatsCount() {
+
+  get getUtxoStatsCount () {
     return this.getUtxoStatusServices.count
   }
 
-  async getStatusForTxids(txids: string[], useNext?: boolean): Promise<GetStatusForTxidsResult> {
+  async getStatusForTxids (txids: string[], useNext?: boolean): Promise<GetStatusForTxidsResult> {
     const services = this.getStatusForTxidsServices
     if (useNext) services.next()
 
@@ -233,7 +235,7 @@ export class Services implements WalletServices {
           r0 = r
           break
         } else {
-          if (r.error) services.addServiceCallError(stc, r.error)
+          if (r.error != null) services.addServiceCallError(stc, r.error)
           else services.addServiceCallFailure(stc)
         }
       } catch (eu: unknown) {
@@ -246,7 +248,7 @@ export class Services implements WalletServices {
     return r0
   }
 
-  private async getStatusForTxidsBatched(
+  private async getStatusForTxidsBatched (
     stc: ServiceToCall<GetStatusForTxidsService>,
     txids: string[]
   ): Promise<GetStatusForTxidsResult> {
@@ -259,7 +261,7 @@ export class Services implements WalletServices {
       if (r.status !== 'success') {
         return r
       }
-      if (!error && r.error) error = r.error
+      if ((error == null) && (r.error != null)) error = r.error
       results.push(...r.results)
     }
 
@@ -275,13 +277,13 @@ export class Services implements WalletServices {
    * @param script Output script to be hashed for `getUtxoStatus` default `outputFormat`
    * @returns script hash in 'hashLE' format, which is the default.
    */
-  hashOutputScript(script: string): string {
+  hashOutputScript (script: string): string {
     const hash = Utils.toHex(sha256Hash(Utils.toArray(script, 'hex')))
     return hash
   }
 
-  async isUtxo(output: TableOutput): Promise<boolean> {
-    if (!output.lockingScript) {
+  async isUtxo (output: TableOutput): Promise<boolean> {
+    if (output.lockingScript == null) {
       throw new WERR_INVALID_PARAMETER('output.lockingScript', 'validated by storage provider validateOutputScript.')
     }
     const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
@@ -289,7 +291,7 @@ export class Services implements WalletServices {
     return or.isUtxo === true
   }
 
-  async getUtxoStatus(
+  async getUtxoStatus (
     output: string,
     outputFormat?: GetUtxoStatusOutputFormat,
     outpoint?: string,
@@ -306,7 +308,7 @@ export class Services implements WalletServices {
       details: []
     }
 
-    logger?.group(`services getUtxoStatus`)
+    logger?.group('services getUtxoStatus')
     for (let retry = 0; retry < 2; retry++) {
       for (let tries = 0; tries < services.count; tries++) {
         const stc = services.serviceToCall
@@ -318,7 +320,7 @@ export class Services implements WalletServices {
             r0 = r
             break
           } else {
-            if (r.error) services.addServiceCallError(stc, r.error)
+            if (r.error != null) services.addServiceCallError(stc, r.error)
             else services.addServiceCallFailure(stc)
           }
         } catch (eu: unknown) {
@@ -334,7 +336,7 @@ export class Services implements WalletServices {
     return r0
   }
 
-  async getScriptHashHistory(
+  async getScriptHashHistory (
     hash: string,
     useNext?: boolean,
     logger?: WalletLoggerInterface
@@ -349,7 +351,7 @@ export class Services implements WalletServices {
       history: []
     }
 
-    logger?.group(`services getScriptHashHistory`)
+    logger?.group('services getScriptHashHistory')
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
@@ -359,7 +361,7 @@ export class Services implements WalletServices {
           r0 = r
           break
         } else {
-          if (r.error) services.addServiceCallError(stc, r.error)
+          if (r.error != null) services.addServiceCallError(stc, r.error)
           else services.addServiceCallFailure(stc)
         }
       } catch (eu: unknown) {
@@ -394,12 +396,12 @@ export class Services implements WalletServices {
    * @param chain
    * @returns
    */
-  async postBeef(beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]> {
+  async postBeef (beef: Beef, txids: string[], logger?: WalletLoggerInterface): Promise<PostBeefResult[]> {
     let rs: PostBeefResult[] = []
     const services = this.postBeefServices
     const stcs = services.allServicesToCall
     const softTimeoutMs = this.getPostBeefSoftTimeoutMs(beef)
-    logger?.group(`services postBeef`)
+    logger?.group('services postBeef')
     switch (this.postBeefMode) {
       case 'UntilSuccess':
         {
@@ -430,7 +432,7 @@ export class Services implements WalletServices {
     logger?.groupEnd()
     return rs
 
-    async function callService(stc: ServiceToCall<PostBeefService>, timeoutMs?: number) {
+    async function callService (stc: ServiceToCall<PostBeefService>, timeoutMs?: number) {
       const callPromise = stc.service(beef, txids)
       let r: PostBeefResult
       if (!timeoutMs || timeoutMs <= 0) {
@@ -444,7 +446,7 @@ export class Services implements WalletServices {
           )
         })
         r = await Promise.race([callPromise, timeoutPromise])
-        if (timeoutHandle) clearTimeout(timeoutHandle)
+        if (timeoutHandle != null) clearTimeout(timeoutHandle)
         // Avoid unhandled rejection after timeout race wins.
         void callPromise.catch(() => undefined)
       }
@@ -452,7 +454,7 @@ export class Services implements WalletServices {
       if (r.status === 'success') {
         services.addServiceCallSuccess(stc)
       } else {
-        if (r.error) {
+        if (r.error != null) {
           services.addServiceCallError(stc, r.error)
         } else {
           services.addServiceCallFailure(stc)
@@ -461,7 +463,7 @@ export class Services implements WalletServices {
       return r
     }
 
-    function makeServiceTimeoutResult(providerName: string, txids: string[], timeoutMs: number): PostBeefResult {
+    function makeServiceTimeoutResult (providerName: string, txids: string[], timeoutMs: number): PostBeefResult {
       return {
         name: providerName,
         status: 'error',
@@ -476,7 +478,7 @@ export class Services implements WalletServices {
     }
   }
 
-  private getPostBeefSoftTimeoutMs(beef: Beef): number {
+  private getPostBeefSoftTimeoutMs (beef: Beef): number {
     const baseMs = Math.max(0, this.postBeefUntilSuccessSoftTimeoutMs)
     const perKbMs = Math.max(0, this.postBeefUntilSuccessSoftTimeoutPerKbMs)
     const maxMs = Math.max(baseMs, this.postBeefUntilSuccessSoftTimeoutMaxMs)
@@ -487,7 +489,7 @@ export class Services implements WalletServices {
     return Math.min(maxMs, baseMs + extraMs)
   }
 
-  async getRawTx(txid: string, useNext?: boolean): Promise<GetRawTxResult> {
+  async getRawTx (txid: string, useNext?: boolean): Promise<GetRawTxResult> {
     const services = this.getRawTxServices
     if (useNext) services.next()
 
@@ -497,8 +499,8 @@ export class Services implements WalletServices {
       const stc = services.serviceToCall
       try {
         const r = await stc.service(txid, this.chain)
-        if (r.rawTx) {
-          const hash = asString(doubleSha256BE(r.rawTx!))
+        if (r.rawTx != null) {
+          const hash = asString(doubleSha256BE(r.rawTx))
           // Confirm transaction hash matches txid
           if (hash === asString(txid)) {
             // If we have a match, call it done.
@@ -512,13 +514,13 @@ export class Services implements WalletServices {
           r.rawTx = undefined
         }
 
-        if (r.error) services.addServiceCallError(stc, r.error)
-        else if (!r.rawTx) services.addServiceCallSuccess(stc, `not found`)
+        if (r.error != null) services.addServiceCallError(stc, r.error)
+        else if (!r.rawTx) services.addServiceCallSuccess(stc, 'not found')
         else services.addServiceCallFailure(stc)
 
-        if (r.error && !r0.error && !r0.rawTx)
-          // If we have an error and didn't before...
-          r0.error = r.error
+        if ((r.error != null) && (r0.error == null) && (r0.rawTx == null))
+        // If we have an error and didn't before...
+        { r0.error = r.error }
       } catch (eu: unknown) {
         const e = WalletError.fromUnknown(eu)
         services.addServiceCallError(stc, e)
@@ -529,8 +531,7 @@ export class Services implements WalletServices {
   }
 
   async invokeChaintracksWithRetry<R>(method: () => Promise<R>): Promise<R> {
-    if (!this.options.chaintracks)
-      throw new WERR_INVALID_PARAMETER('options.chaintracks', 'valid for this service operation.')
+    if (this.options.chaintracks == null) { throw new WERR_INVALID_PARAMETER('options.chaintracks', 'valid for this service operation.') }
     for (let retry = 0; retry < 3; retry++) {
       try {
         const r: R = await method()
@@ -543,49 +544,49 @@ export class Services implements WalletServices {
     throw new WERR_INVALID_OPERATION('hashToHeader service unavailable')
   }
 
-  async getHeaderForHeight(height: number): Promise<number[]> {
+  async getHeaderForHeight (height: number): Promise<number[]> {
     const method = async () => {
       const header = await this.options.chaintracks!.findHeaderForHeight(height)
-      if (!header) throw new WERR_INVALID_PARAMETER('hash', `valid height '${height}' on mined chain ${this.chain}`)
+      if (header == null) throw new WERR_INVALID_PARAMETER('hash', `valid height '${height}' on mined chain ${this.chain}`)
       return toBinaryBaseBlockHeader(header)
     }
-    return this.invokeChaintracksWithRetry(method)
+    return await this.invokeChaintracksWithRetry(method)
   }
 
-  async getHeight(): Promise<number> {
+  async getHeight (): Promise<number> {
     const method = async () => {
       return await this.options.chaintracks!.currentHeight()
     }
-    return this.invokeChaintracksWithRetry(method)
+    return await this.invokeChaintracksWithRetry(method)
   }
 
-  async hashToHeader(hash: string): Promise<BlockHeader> {
+  async hashToHeader (hash: string): Promise<BlockHeader> {
     const method = async () => {
       const header = await this.options.chaintracks!.findHeaderForBlockHash(hash)
       return header
     }
     let header = await this.invokeChaintracksWithRetry(method)
-    if (!header) {
+    if (header == null) {
       header = await this.whatsonchain.getBlockHeaderByHash(hash)
     }
-    if (!header) throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${hash}' on mined chain ${this.chain}`)
+    if (header == null) throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${hash}' on mined chain ${this.chain}`)
     return header
   }
 
-  async getMerklePath(txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> {
+  async getMerklePath (txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> {
     const services = this.getMerklePathServices
     if (useNext) services.next()
 
     const r0: GetMerklePathResult = { notes: [] }
 
-    logger?.group(`services getMerklePath`)
+    logger?.group('services getMerklePath')
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
         const r = await stc.service(txid, this)
-        if (r.notes) r0.notes!.push(...r.notes)
+        if (r.notes != null) r0.notes!.push(...r.notes)
         if (!r0.name) r0.name = r.name
-        if (r.merklePath) {
+        if (r.merklePath != null) {
           logger?.log(`${stc.providerName} has merklePath`)
           // If we have a proof, call it done.
           r0.merklePath = r.merklePath
@@ -598,10 +599,10 @@ export class Services implements WalletServices {
           logger?.log(`${stc.providerName} no merklePath`)
         }
 
-        if (r.error) services.addServiceCallError(stc, r.error)
+        if (r.error != null) services.addServiceCallError(stc, r.error)
         else services.addServiceCallFailure(stc)
 
-        if (r.error && !r0.error) {
+        if ((r.error != null) && (r0.error == null)) {
           // If we have an error and didn't before...
           r0.error = r.error
         }
@@ -614,7 +615,7 @@ export class Services implements WalletServices {
     return r0
   }
 
-  async updateFiatExchangeRates(
+  async updateFiatExchangeRates (
     targetCurrencies: FiatCurrencyCode[],
     updateMsecs?: number
   ): Promise<FiatExchangeRates> {
@@ -672,7 +673,7 @@ export class Services implements WalletServices {
       services.next()
     }
 
-    if (!fetched) {
+    if (fetched == null) {
       if (stored && Object.keys(storedRates).length > 0) {
         return stored
       }
@@ -708,7 +709,7 @@ export class Services implements WalletServices {
     return this.options.fiatExchangeRates
   }
 
-  async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean> {
+  async nLockTimeIsFinal (tx: string | number[] | BsvTransaction | number): Promise<boolean> {
     const MAXINT = 0xffffffff
     const BLOCK_LIMIT = 500000000
 
@@ -741,13 +742,13 @@ export class Services implements WalletServices {
     return nLockTime < height
   }
 
-  async getBeefForTxid(txid: string): Promise<Beef> {
+  async getBeefForTxid (txid: string): Promise<Beef> {
     const beef = await getBeefForTxid(this, txid)
     return beef
   }
 }
 
-export function validateScriptHash(output: string, outputFormat?: GetUtxoStatusOutputFormat): string {
+export function validateScriptHash (output: string, outputFormat?: GetUtxoStatusOutputFormat): string {
   let b = asArray(output)
   if (!outputFormat) {
     if (b.length === 32) outputFormat = 'hashLE'
@@ -776,7 +777,7 @@ export function validateScriptHash(output: string, outputFormat?: GetUtxoStatusO
  * @returns 80 byte array
  * @publicbody
  */
-export function toBinaryBaseBlockHeader(header: BaseBlockHeader): number[] {
+export function toBinaryBaseBlockHeader (header: BaseBlockHeader): number[] {
   const writer = new Utils.Writer()
   writer.writeUInt32LE(header.version)
   writer.writeReverse(asArray(header.previousHash))

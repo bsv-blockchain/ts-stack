@@ -14,7 +14,7 @@ import { buildChaintracksOptionsWithIngestors } from './configureChaintracksInge
  * @param rootFolder defaults to "./data/"
  * @returns
  */
-export function createDefaultKnexChaintracksOptions(
+export function createDefaultKnexChaintracksOptions (
   chain: Chain,
   rootFolder: string = './data/',
   knexConfig?: Knex.Config,
@@ -40,7 +40,7 @@ export function createDefaultKnexChaintracksOptions(
   }
   const bulkFileDataManager = new BulkFileDataManager(bfo)
 
-  if (!knexConfig) {
+  if (knexConfig == null) {
     knexConfig = {
       client: 'better-sqlite3',
       connection: { filename: ChaintracksFs.pathJoin(rootFolder, `${chain}Net_chaintracks.sqlite`) },

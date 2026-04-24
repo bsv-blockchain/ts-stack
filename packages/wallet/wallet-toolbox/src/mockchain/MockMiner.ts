@@ -10,7 +10,7 @@ import { BlockHeader } from '../sdk/WalletServices.interfaces'
  * Creates a coinbase transaction for the given block height.
  * Uses OP_TRUE (0x51) as the output script so anyone can spend it.
  */
-export function createCoinbaseTransaction(height: number): Transaction {
+export function createCoinbaseTransaction (height: number): Transaction {
   const tx = new Transaction()
 
   // BIP34: height in scriptSig
@@ -53,10 +53,10 @@ export class MockMiner {
    * Mine a new block containing all unmined transactions.
    * Returns the new block header.
    */
-  async mineBlock(storage: MockChainStorage): Promise<BlockHeader> {
+  async mineBlock (storage: MockChainStorage): Promise<BlockHeader> {
     const tip = await storage.getChainTip()
-    const newHeight = tip ? tip.height + 1 : 0
-    const previousHash = tip ? tip.hash : '00'.repeat(32)
+    const newHeight = (tip != null) ? tip.height + 1 : 0
+    const previousHash = (tip != null) ? tip.hash : '00'.repeat(32)
 
     const unminedTxs = await storage.getUnminedTransactions()
 

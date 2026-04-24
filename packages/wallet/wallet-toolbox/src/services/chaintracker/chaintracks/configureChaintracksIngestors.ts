@@ -25,7 +25,7 @@ export interface ChaintracksIngestorParams {
  *
  * The caller is responsible for providing the storage implementation.
  */
-export function buildChaintracksOptionsWithIngestors(
+export function buildChaintracksOptionsWithIngestors (
   params: ChaintracksIngestorParams,
   storage: ChaintracksOptions['storage']
 ): ChaintracksOptions {

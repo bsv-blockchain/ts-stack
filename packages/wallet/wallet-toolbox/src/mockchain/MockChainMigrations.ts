@@ -6,33 +6,35 @@ interface Migration {
 }
 
 interface MigrationSource<TMigrationSpec> {
-  getMigrations(loadExtensions: readonly string[]): Promise<TMigrationSpec[]>
-  getMigrationName(migration: TMigrationSpec): string
-  getMigration(migration: TMigrationSpec): Promise<Migration>
+  getMigrations: (loadExtensions: readonly string[]) => Promise<TMigrationSpec[]>
+  getMigrationName: (migration: TMigrationSpec) => string
+  getMigration: (migration: TMigrationSpec) => Promise<Migration>
 }
 
 export class MockChainMigrations implements MigrationSource<string> {
   migrations: Record<string, Migration> = {}
 
-  constructor() {
+  constructor () {
     this.migrations = this.setupMigrations()
   }
 
-  async getMigrations(): Promise<string[]> {
+  async getMigrations (): Promise<string[]> {
     return Object.keys(this.migrations).sort((a, b) => a.localeCompare(b))
   }
-  getMigrationName(migration: string) {
+
+  getMigrationName (migration: string) {
     return migration
   }
-  async getMigration(migration: string): Promise<Migration> {
+
+  async getMigration (migration: string): Promise<Migration> {
     return this.migrations[migration]
   }
 
-  setupMigrations(): Record<string, Migration> {
+  setupMigrations (): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
 
     migrations['2026-01-01-001 initial mockchain tables'] = {
-      async up(knex) {
+      async up (knex) {
         await knex.schema.createTable('mockchain_block_headers', table => {
           table.integer('height').primary()
           table.string('hash', 64).notNullable().unique()
@@ -70,7 +72,7 @@ export class MockChainMigrations implements MigrationSource<string> {
           table.index('spentByTxid')
         })
       },
-      async down(knex) {
+      async down (knex) {
         await knex.schema.dropTableIfExists('mockchain_utxos')
         await knex.schema.dropTableIfExists('mockchain_transactions')
         await knex.schema.dropTableIfExists('mockchain_block_headers')

@@ -190,14 +190,14 @@ describe('WalletError tests', () => {
     const werr = new WERR_NOT_ACTIVE()
     expect(werr.name).toBe('WERR_NOT_ACTIVE')
     expect(werr.message).toBe(
-      `WalletStorageManager is not accessing user's active storage or there are conflicting active stores configured.`
+      'WalletStorageManager is not accessing user\'s active storage or there are conflicting active stores configured.'
     )
 
     const json = WalletError.unknownToJson(werr)
     const werr2 = WalletErrorFromJson(JSON.parse(json))
     expect(werr2.name).toBe('WERR_NOT_ACTIVE')
     expect(werr2.message).toBe(
-      `WalletStorageManager is not accessing user's active storage or there are conflicting active stores configured.`
+      'WalletStorageManager is not accessing user\'s active storage or there are conflicting active stores configured.'
     )
   })
 
@@ -205,7 +205,7 @@ describe('WalletError tests', () => {
     const werr = new WERR_INVALID_PUBLIC_KEY('invalidkey123', 'mainnet')
     expect(werr.name).toBe('WERR_INVALID_PUBLIC_KEY')
     expect(werr.message).toBe('The provided public key "invalidkey123" is invalid or malformed.')
-    expect((werr as WERR_INVALID_PUBLIC_KEY).key).toBe('invalidkey123')
+    expect((werr).key).toBe('invalidkey123')
 
     const json = WalletError.unknownToJson(werr)
     const parsedJson = JSON.parse(json)
@@ -219,7 +219,7 @@ describe('WalletError tests', () => {
     const werr = new WERR_INVALID_PUBLIC_KEY('invalidkey123', 'testnet')
     expect(werr.name).toBe('WERR_INVALID_PUBLIC_KEY')
     expect(werr.message).toBe('The provided public key is invalid or malformed.')
-    expect((werr as WERR_INVALID_PUBLIC_KEY).key).toBe('invalidkey123')
+    expect((werr).key).toBe('invalidkey123')
 
     const json = WalletError.unknownToJson(werr)
     const parsedJson = JSON.parse(json)

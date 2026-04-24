@@ -7,7 +7,7 @@ import { asArray, asString } from '../utility/utilityHelpers.noBuffer'
  * Returns the root as a big-endian hex string (reversed byte order from the
  * natural double-SHA256 result, matching the standard block header format).
  */
-export function computeMerkleRoot(txids: string[]): string {
+export function computeMerkleRoot (txids: string[]): string {
   if (txids.length === 0) {
     throw new Error('Cannot compute merkle root of empty txid list')
   }
@@ -35,7 +35,7 @@ export function computeMerkleRoot(txids: string[]): string {
  * Compute the MerklePath for a target transaction at `targetIndex` within a block at `blockHeight`.
  * `txids` is the ordered list of all txids in the block (big-endian hex).
  */
-export function computeMerklePath(txids: string[], targetIndex: number, blockHeight: number): MerklePath {
+export function computeMerklePath (txids: string[], targetIndex: number, blockHeight: number): MerklePath {
   if (txids.length === 0) {
     throw new Error('Cannot compute merkle path of empty txid list')
   }
@@ -43,7 +43,7 @@ export function computeMerklePath(txids: string[], targetIndex: number, blockHei
     throw new Error(`targetIndex ${targetIndex} out of range [0, ${txids.length})`)
   }
 
-  type Leaf = {
+  interface Leaf {
     offset: number
     hash?: string
     txid?: boolean
@@ -52,7 +52,7 @@ export function computeMerklePath(txids: string[], targetIndex: number, blockHei
 
   // For a single tx, the root IS the txid; path has one level with just the txid leaf
   if (txids.length === 1) {
-    type Leaf = { offset: number; hash?: string; txid?: boolean; duplicate?: boolean }
+    interface Leaf { offset: number, hash?: string, txid?: boolean, duplicate?: boolean }
     const path: Leaf[][] = [[{ offset: 0, hash: txids[0], txid: true }]]
     return new MerklePath(blockHeight, path)
   }

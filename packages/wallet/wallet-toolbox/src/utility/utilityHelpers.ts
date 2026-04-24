@@ -1,15 +1,14 @@
-import { HexString, PubKeyHex, WalletNetwork } from '@bsv/sdk'
-import { Beef, Hash, PrivateKey, PublicKey, Random, Script, Transaction, Utils } from '@bsv/sdk'
+import { HexString, PubKeyHex, WalletNetwork, Beef, Hash, PrivateKey, PublicKey, Random, Script, Transaction, Utils } from '@bsv/sdk'
 import { Chain } from '../sdk/types'
 import { asArray } from './utilityHelpers.noBuffer'
 import { CertOpsWallet } from '../sdk/CertOpsWallet'
 import { WERR_BAD_REQUEST, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 
-export async function getIdentityKey(wallet: CertOpsWallet): Promise<PubKeyHex> {
+export async function getIdentityKey (wallet: CertOpsWallet): Promise<PubKeyHex> {
   return (await wallet.getPublicKey({ identityKey: true })).publicKey
 }
 
-export function toWalletNetwork(chain: Chain): WalletNetwork {
+export function toWalletNetwork (chain: Chain): WalletNetwork {
   switch (chain) {
     case 'main':
       return 'mainnet'
@@ -24,7 +23,7 @@ export function toWalletNetwork(chain: Chain): WalletNetwork {
  * Maps a Chain to a network preset suitable for LookupResolver / SHIPBroadcaster.
  * Unlike `toWalletNetwork`, this returns `'local'` for `mock` chain.
  */
-export function toLookupNetworkPreset(chain: Chain): 'mainnet' | 'testnet' | 'local' {
+export function toLookupNetworkPreset (chain: Chain): 'mainnet' | 'testnet' | 'local' {
   switch (chain) {
     case 'main':
       return 'mainnet'
@@ -36,7 +35,7 @@ export function toLookupNetworkPreset(chain: Chain): 'mainnet' | 'testnet' | 'lo
   }
 }
 
-export function makeAtomicBeef(tx: Transaction, beef: number[] | Beef): number[] {
+export function makeAtomicBeef (tx: Transaction, beef: number[] | Beef): number[] {
   if (Array.isArray(beef)) beef = Beef.fromBinary(beef)
   beef.mergeTransaction(tx)
   return beef.toBinaryAtomic(tx.id('hex'))
@@ -47,7 +46,7 @@ export function makeAtomicBeef(tx: Transaction, beef: number[] | Beef): number[]
  * If tx is already a Transaction, just return it.
  * @publicbody
  */
-export function asBsvSdkTx(tx: HexString | number[] | Transaction): Transaction {
+export function asBsvSdkTx (tx: HexString | number[] | Transaction): Transaction {
   if (Array.isArray(tx)) {
     tx = Transaction.fromBinary(tx)
   } else if (typeof tx === 'string') {
@@ -61,7 +60,7 @@ export function asBsvSdkTx(tx: HexString | number[] | Transaction): Transaction 
  * If script is already a Script, just return it.
  * @publicbody
  */
-export function asBsvSdkScript(script: HexString | number[] | Script): Script {
+export function asBsvSdkScript (script: HexString | number[] | Script): Script {
   if (Array.isArray(script)) {
     script = Script.fromBinary(script)
   } else if (typeof script === 'string') {
@@ -74,7 +73,7 @@ export function asBsvSdkScript(script: HexString | number[] | Script): Script {
  * @param privKey bitcoin private key in 32 byte hex string form
  * @returns @bsv/sdk PrivateKey
  */
-export function asBsvSdkPrivateKey(privKey: string): PrivateKey {
+export function asBsvSdkPrivateKey (privKey: string): PrivateKey {
   return PrivateKey.fromString(privKey, 'hex')
 }
 
@@ -82,7 +81,7 @@ export function asBsvSdkPrivateKey(privKey: string): PrivateKey {
  * @param pubKey bitcoin public key in standard compressed key hex string form
  * @returns @bsv/sdk PublicKey
  */
-export function asBsvSdkPublickKey(pubKey: string): PublicKey {
+export function asBsvSdkPublickKey (pubKey: string): PublicKey {
   return PublicKey.fromString(pubKey)
 }
 
@@ -91,7 +90,7 @@ export function asBsvSdkPublickKey(pubKey: string): PublicKey {
  *
  * Verifies that a possibly optional value has a value.
  */
-export function verifyTruthy<T>(v: T | null | undefined, description?: string): T {
+export function verifyTruthy<T> (v: T | null | undefined, description?: string): T {
   if (!v) throw new WERR_INTERNAL(description ?? 'A truthy value is required.')
   return v
 }
@@ -101,7 +100,7 @@ export function verifyTruthy<T>(v: T | null | undefined, description?: string): 
  *
  * Verifies that a hex string is trimmed and lower case.
  */
-export function verifyHexString(v: string): string {
+export function verifyHexString (v: string): string {
   if (typeof v !== 'string') throw new WERR_INTERNAL('A string is required.')
   v = v.trim().toLowerCase()
   return v
@@ -112,7 +111,7 @@ export function verifyHexString(v: string): string {
  *
  * Verifies that an optional or null hex string is undefined or a trimmed lowercase string.
  */
-export function verifyOptionalHexString(v?: string | null): string | undefined {
+export function verifyOptionalHexString (v?: string | null): string | undefined {
   if (!v) return undefined
   return verifyHexString(v)
 }
@@ -122,7 +121,7 @@ export function verifyOptionalHexString(v?: string | null): string | undefined {
  *
  * Verifies that an optional or null number has a numeric value.
  */
-export function verifyNumber(v: number | null | undefined): number {
+export function verifyNumber (v: number | null | undefined): number {
   if (typeof v !== 'number') throw new WERR_INTERNAL('A number is required.')
   return v
 }
@@ -132,7 +131,7 @@ export function verifyNumber(v: number | null | undefined): number {
  *
  * Verifies that an optional or null number has a numeric value.
  */
-export function verifyInteger(v: number | null | undefined): number {
+export function verifyInteger (v: number | null | undefined): number {
   if (typeof v !== 'number' || !Number.isInteger(v)) throw new WERR_INTERNAL('An integer is required.')
   return v
 }
@@ -142,9 +141,9 @@ export function verifyInteger(v: number | null | undefined): number {
  *
  * Verifies that a database record identifier is an integer greater than zero.
  */
-export function verifyId(id: number | undefined | null): number {
+export function verifyId (id: number | undefined | null): number {
   id = verifyInteger(id)
-  if (id < 1) throw new WERR_INTERNAL(`id must be valid integer greater than zero.`)
+  if (id < 1) throw new WERR_INTERNAL('id must be valid integer greater than zero.')
   return id
 }
 
@@ -155,7 +154,7 @@ export function verifyId(id: number | undefined | null): number {
  *
  * @returns results[0] or undefined if length is zero.
  */
-export function verifyOneOrNone<T>(results: T[]): T | undefined {
+export function verifyOneOrNone<T> (results: T[]): T | undefined {
   if (results.length > 1) throw new WERR_BAD_REQUEST('Result must be unique.')
   return results[0]
 }
@@ -167,7 +166,7 @@ export function verifyOneOrNone<T>(results: T[]): T | undefined {
  *
  * @returns results[0].
  */
-export function verifyOne<T>(results: T[], errorDescrition?: string): T {
+export function verifyOne<T> (results: T[], errorDescrition?: string): T {
   if (results.length !== 1) throw new WERR_BAD_REQUEST(errorDescrition ?? 'Result must exist and be unique.')
   return results[0]
 }
@@ -178,40 +177,40 @@ export function verifyOne<T>(results: T[], errorDescrition?: string): T {
  * Must be greater than zero and less than 2 minutes (120,000 msecs)
  * @publicbody
  */
-export function wait(msecs: number): Promise<void> {
+export async function wait (msecs: number): Promise<void> {
   const MIN_WAIT = 0
   const MAX_WAIT = 2 * 60 * 1000 // maximum allowed wait in ms (2 minutes)
   if (typeof msecs !== 'number' || !Number.isFinite(msecs) || isNaN(msecs) || msecs < MIN_WAIT || msecs > MAX_WAIT) {
     throw new WERR_INVALID_PARAMETER('msecs', `a number between ${MIN_WAIT} and ${MAX_WAIT} msecs, not ${msecs}.`)
   }
-  return new Promise(resolve => setTimeout(resolve, msecs))
+  return await new Promise(resolve => setTimeout(resolve, msecs))
 }
 
 /**
  * @returns count cryptographically secure random bytes as array of bytes
  */
-export function randomBytes(count: number): number[] {
+export function randomBytes (count: number): number[] {
   return Random(count)
 }
 
 /**
  * @returns count cryptographically secure random bytes as hex encoded string
  */
-export function randomBytesHex(count: number): string {
+export function randomBytesHex (count: number): string {
   return Utils.toHex(Random(count))
 }
 
 /**
  * @returns count cryptographically secure random bytes as base64 encoded string
  */
-export function randomBytesBase64(count: number): string {
+export function randomBytesBase64 (count: number): string {
   return Utils.toBase64(Random(count))
 }
 
-export function validateSecondsSinceEpoch(time: number): Date {
+export function validateSecondsSinceEpoch (time: number): Date {
   const date = new Date(time * 1000)
   if (date.getTime() / 1000 !== time || time < 1600000000 || time > 100000000000) {
-    throw new WERR_INVALID_PARAMETER('time', `valid "since epoch" unix time`)
+    throw new WERR_INVALID_PARAMETER('time', 'valid "since epoch" unix time')
   }
   return date
 }
@@ -222,7 +221,7 @@ export function validateSecondsSinceEpoch(time: number): Date {
  * @param arr2
  * @returns
  */
-export function arraysEqual(arr1: Number[], arr2: Number[]) {
+export function arraysEqual (arr1: Number[], arr2: Number[]) {
   if (arr1.length !== arr2.length) return false
   for (let i = 0; i < arr1.length; i++) {
     if (arr1[i] !== arr2[i]) return false
@@ -230,19 +229,19 @@ export function arraysEqual(arr1: Number[], arr2: Number[]) {
   return true
 }
 
-export function optionalArraysEqual(arr1?: Number[], arr2?: Number[]) {
-  if (!arr1 && !arr2) return true
-  if (!arr1 || !arr2) return false
+export function optionalArraysEqual (arr1?: Number[], arr2?: Number[]) {
+  if ((arr1 == null) && (arr2 == null)) return true
+  if ((arr1 == null) || (arr2 == null)) return false
   return arraysEqual(arr1, arr2)
 }
 
-export function maxDate(d1?: Date, d2?: Date): Date | undefined {
-  if (d1 && d2) {
+export function maxDate (d1?: Date, d2?: Date): Date | undefined {
+  if ((d1 != null) && (d2 != null)) {
     if (d1 > d2) return d1
     return d2
   }
-  if (d1) return d1
-  if (d2) return d2
+  if (d1 != null) return d1
+  if (d2 != null) return d2
   return undefined
 }
 
@@ -251,7 +250,7 @@ export function maxDate(d1?: Date, d2?: Date): Date | undefined {
  * @returns sha256 hash of buffer contents.
  * @publicbody
  */
-export function sha256Hash(data: number[] | Uint8Array): number[] {
+export function sha256Hash (data: number[] | Uint8Array): number[] {
   if (!Array.isArray(data)) {
     data = asArray(data)
   }
@@ -265,7 +264,7 @@ export function sha256Hash(data: number[] | Uint8Array): number[] {
  * @returns double sha256 hash of data, byte 0 of hash first.
  * @publicbody
  */
-export function doubleSha256LE(data: number[] | Uint8Array): number[] {
+export function doubleSha256LE (data: number[] | Uint8Array): number[] {
   if (!Array.isArray(data)) {
     data = asArray(data)
   }
@@ -280,7 +279,7 @@ export function doubleSha256LE(data: number[] | Uint8Array): number[] {
  * @returns reversed (big-endian) double sha256 hash of data, byte 31 of hash first.
  * @publicbody
  */
-export function doubleSha256BE(data: number[] | Uint8Array): number[] {
+export function doubleSha256BE (data: number[] | Uint8Array): number[] {
   return doubleSha256LE(data).reverse()
 }
 

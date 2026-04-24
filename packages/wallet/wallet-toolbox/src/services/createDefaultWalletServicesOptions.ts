@@ -4,7 +4,7 @@ import { randomBytesHex } from '../utility/utilityHelpers'
 import { ChaintracksClientApi } from './chaintracker/chaintracks/Api/ChaintracksClientApi'
 import { ChaintracksServiceClient } from './chaintracker/chaintracks/ChaintracksServiceClient'
 
-export function createDefaultWalletServicesOptions(
+export function createDefaultWalletServicesOptions (
   chain: Chain,
   arcCallbackUrl?: string,
   arcCallbackToken?: string,
@@ -15,16 +15,16 @@ export function createDefaultWalletServicesOptions(
   chaintracks?: ChaintracksClientApi
 ): WalletServicesOptions {
   if (chain === 'mock') {
-    throw new Error(`createDefaultWalletServicesOptions does not support 'mock' chain. Use MockServices directly.`)
+    throw new Error('createDefaultWalletServicesOptions does not support \'mock\' chain. Use MockServices directly.')
   }
 
   deploymentId ||= `wallet-toolbox-${randomBytesHex(16)}`
 
-  //const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
+  // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
   const chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
   // The mainnet endpoint is always used since these are fiat exchange rates,
   // independent of the chain being used.
-  const chaintracksFiatExchangeRatesUrl = `https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates`
+  const chaintracksFiatExchangeRatesUrl = 'https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates'
 
   chaintracks ||= new ChaintracksServiceClient(chain, chaintracksUrl)
 
@@ -75,7 +75,7 @@ export function createDefaultWalletServicesOptions(
   return o
 }
 
-export function arcDefaultUrl(chain: Chain): string {
+export function arcDefaultUrl (chain: Chain): string {
   switch (chain) {
     case 'main':
       return 'https://arc.taal.com'
@@ -88,6 +88,6 @@ export function arcDefaultUrl(chain: Chain): string {
   }
 }
 
-export function arcGorillaPoolUrl(chain: Chain): string | undefined {
+export function arcGorillaPoolUrl (chain: Chain): string | undefined {
   return chain === 'main' ? 'https://arc.gorillapool.io' : undefined
 }

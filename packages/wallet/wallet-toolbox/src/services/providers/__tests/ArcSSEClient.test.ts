@@ -6,33 +6,33 @@ class FakeEventSource {
 
   url: string
   opts: any
-  private listeners: Record<string, ((event: any) => void)[]> = {}
+  private listeners: Record<string, Array<(event: any) => void>> = {}
   closed = false
 
-  constructor(url: string, opts: any) {
+  constructor (url: string, opts: any) {
     this.url = url
     this.opts = opts
     FakeEventSource.instances.push(this)
   }
 
-  addEventListener(type: string, fn: (event: any) => void): void {
+  addEventListener (type: string, fn: (event: any) => void): void {
     if (!this.listeners[type]) this.listeners[type] = []
     this.listeners[type].push(fn)
   }
 
   /** Helper used by tests to simulate an incoming server event */
-  emit(type: string, event: any = {}): void {
+  emit (type: string, event: any = {}): void {
     for (const fn of this.listeners[type] ?? []) {
       fn(event)
     }
   }
 
-  close(): void {
+  close (): void {
     this.closed = true
   }
 }
 
-function makeClient(overrides: Partial<ArcSSEClientOptions> = {}): {
+function makeClient (overrides: Partial<ArcSSEClientOptions> = {}): {
   client: ArcSSEClient
   events: ArcSSEEvent[]
   errors: Error[]

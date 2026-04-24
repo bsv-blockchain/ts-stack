@@ -16,9 +16,9 @@ import { TableOutput } from '../schema/tables/TableOutput'
  * @param args
  * @returns
  */
-export async function reviewStatus(
+export async function reviewStatus (
   storage: StorageKnex,
-  args: { agedLimit: Date; trx?: TrxToken }
+  args: { agedLimit: Date, trx?: TrxToken }
 ): Promise<{ log: string }> {
   const r: { log: string } = { log: '' }
 
@@ -41,7 +41,7 @@ export async function reviewStatus(
   const qs: ReviewStatusQuery[] = []
 
   qs.push({
-    log: `transactions updated to status of 'failed' where provenTxReq with matching txid is 'invalid'`,
+    log: 'transactions updated to status of \'failed\' where provenTxReq with matching txid is \'invalid\'',
     /*
         UPDATE transactions SET status = 'failed'
         WHERE exists(select 1 from proven_tx_reqs as r where transactions.txid = r.txid and r.status = 'invalid')
@@ -52,12 +52,12 @@ export async function reviewStatus(
       .whereExists(function () {
         this.select(k.raw(1))
           .from('proven_tx_reqs as r')
-          .whereRaw(`transactions.txid = r.txid and r.status = 'invalid'`)
+          .whereRaw('transactions.txid = r.txid and r.status = \'invalid\'')
       })
   })
 
   qs.push({
-    log: `outputs updated to spendable where spentBy is a transaction with status 'failed'`,
+    log: 'outputs updated to spendable where spentBy is a transaction with status \'failed\'',
     /*
         UPDATE outputs SET spentBy = null, spendable = 1
         where exists(select 1 from transactions as t where outputs.spentBy = t.transactionId and t.status = 'failed')
@@ -67,12 +67,12 @@ export async function reviewStatus(
       .whereExists(function () {
         this.select(k.raw(1))
           .from('transactions as t')
-          .whereRaw(`outputs.spentBy = t.transactionId and t.status = 'failed'`)
+          .whereRaw('outputs.spentBy = t.transactionId and t.status = \'failed\'')
       })
   })
 
   qs.push({
-    log: `transactions updated with provenTxId and status of 'completed' where provenTx with matching txid exists`,
+    log: 'transactions updated with provenTxId and status of \'completed\' where provenTx with matching txid exists',
     /*
         UPDATE transactions SET status = 'completed', provenTxId = p.provenTxId
         FROM proven_txs p

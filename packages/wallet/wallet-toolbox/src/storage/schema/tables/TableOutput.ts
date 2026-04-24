@@ -60,5 +60,5 @@ export const outputColumnsWithoutLockingScript = [
   'spendingDescription',
   'scriptLength',
   'scriptOffset'
-  //'lockingScript',
+  // 'lockingScript',
 ]

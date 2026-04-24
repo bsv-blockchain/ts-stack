@@ -10,8 +10,8 @@ import { LiveBlockHeader } from '../../Api/BlockHeaderApi'
 describe('ChaintracksStorageIdb tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -73,7 +73,7 @@ describe('ChaintracksStorageIdb tests', () => {
     expect(h2!.headerId).toBe(2)
 
     const h3 = await storage.findLiveHeaderForHeaderId(3)
-    expect(h3!.headerId).toBe(3)
+    expect(h3.headerId).toBe(3)
 
     const h4 = await storage.findLiveHeaderForHeight(4 + ranges.bulk.maxHeight)
     expect(h4!.headerId).toBe(4)

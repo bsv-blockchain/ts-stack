@@ -180,11 +180,11 @@ describe('Transaction class method tests', () => {
       const outputs = await activeStorage.findOutputs({
         partial: { spentBy: tx.transactionId }
       })
-      //console.log('Inserted Outputs:', outputs)
+      // console.log('Inserted Outputs:', outputs)
 
       // Get inputs from the transaction
       const inputs = await tx.getInputs(activeStorage)
-      //console.log('Transaction Inputs:', inputs)
+      // console.log('Transaction Inputs:', inputs)
 
       // Validate the inputs
       expect(inputs).toHaveLength(2)
@@ -483,8 +483,8 @@ describe('Transaction class method tests', () => {
 
       // Step 4: Query the inputs from storage individually
       const inputs = await Promise.all(
-        rawTxInputs.map(input =>
-          activeStorage.findOutputs({
+        rawTxInputs.map(async input =>
+          await activeStorage.findOutputs({
             partial: {
               transactionId: tx.transactionId,
               vout: input.sourceOutputIndex

@@ -46,7 +46,7 @@ import {
 } from '../../index.client'
 import { StorageProvider } from '../../storage/StorageProvider'
 
-export async function getBeefForTxid(services: Services, txid: string): Promise<Beef> {
+export async function getBeefForTxid (services: Services, txid: string): Promise<Beef> {
   const storage = new ServicesOnlyStorageProvider(services)
   const beef = await storage.getBeefForTxid(txid)
   return beef
@@ -62,7 +62,7 @@ export async function getBeefForTxid(services: Services, txid: string): Promise<
 class ServicesOnlyStorageProvider extends StorageProvider {
   gbo: StorageGetBeefOptions
 
-  constructor(services: Services) {
+  constructor (services: Services) {
     const o = StorageProvider.createStorageBaseOptions(services.chain)
     super(o)
     this.setServices(services)
@@ -73,19 +73,21 @@ class ServicesOnlyStorageProvider extends StorageProvider {
     }
   }
 
-  async getBeefForTxid(txid: string): Promise<Beef> {
+  async getBeefForTxid (txid: string): Promise<Beef> {
     const beef = await this.getBeefForTransaction(txid, this.gbo)
     return beef
   }
 
   nip = new Error('Method not implemented.')
-  override reviewStatus(args: { agedLimit: Date; trx?: TrxToken }): Promise<{ log: string }> {
+  override reviewStatus (args: { agedLimit: Date, trx?: TrxToken }): Promise<{ log: string }> {
     throw this.nip
   }
-  override purgeData(params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
+
+  override purgeData (params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
     throw this.nip
   }
-  override allocateChangeInput(
+
+  override allocateChangeInput (
     userId: number,
     basketId: number,
     targetSatoshis: number,
@@ -95,10 +97,12 @@ class ServicesOnlyStorageProvider extends StorageProvider {
   ): Promise<TableOutput | undefined> {
     throw this.nip
   }
-  override getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
+
+  override getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
     throw this.nip
   }
-  override getRawTxOfKnownValidTransaction(
+
+  override getRawTxOfKnownValidTransaction (
     txid?: string,
     offset?: number,
     length?: number,
@@ -106,112 +110,148 @@ class ServicesOnlyStorageProvider extends StorageProvider {
   ): Promise<number[] | undefined> {
     throw this.nip
   }
-  override getLabelsForTransactionId(transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]> {
+
+  override getLabelsForTransactionId (transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]> {
     throw this.nip
   }
-  override getTagsForOutputId(outputId: number, trx?: TrxToken): Promise<TableOutputTag[]> {
+
+  override getTagsForOutputId (outputId: number, trx?: TrxToken): Promise<TableOutputTag[]> {
     throw this.nip
   }
-  override listActions(auth: AuthId, args: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
+
+  override listActions (auth: AuthId, args: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
     throw this.nip
   }
-  override listOutputs(auth: AuthId, args: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
+
+  override listOutputs (auth: AuthId, args: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
     throw this.nip
   }
-  override countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> {
+
+  override countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     throw this.nip
   }
-  override findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+
+  override findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     throw this.nip
   }
-  override findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+
+  override findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     throw this.nip
   }
-  override findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
+
+  override findOutputsAuth (auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
     throw this.nip
   }
-  override insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number> {
+
+  override insertCertificateAuth (auth: AuthId, certificate: TableCertificateX): Promise<number> {
     throw this.nip
   }
-  override dropAllData(): Promise<void> {
+
+  override dropAllData (): Promise<void> {
     throw this.nip
   }
-  override migrate(storageName: string, storageIdentityKey: string): Promise<string> {
+
+  override migrate (storageName: string, storageIdentityKey: string): Promise<string> {
     throw this.nip
   }
-  override findOutputTagMaps(args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
+
+  override findOutputTagMaps (args: FindOutputTagMapsArgs): Promise<TableOutputTagMap[]> {
     throw this.nip
   }
-  override findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+
+  override findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
     throw this.nip
   }
-  override findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
+
+  override findProvenTxs (args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     throw this.nip
   }
-  override findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
+
+  override findTxLabelMaps (args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
     throw this.nip
   }
-  override countOutputTagMaps(args: FindOutputTagMapsArgs): Promise<number> {
+
+  override countOutputTagMaps (args: FindOutputTagMapsArgs): Promise<number> {
     throw this.nip
   }
-  override countProvenTxReqs(args: FindProvenTxReqsArgs): Promise<number> {
+
+  override countProvenTxReqs (args: FindProvenTxReqsArgs): Promise<number> {
     throw this.nip
   }
-  override countProvenTxs(args: FindProvenTxsArgs): Promise<number> {
+
+  override countProvenTxs (args: FindProvenTxsArgs): Promise<number> {
     throw this.nip
   }
-  override countTxLabelMaps(args: FindTxLabelMapsArgs): Promise<number> {
+
+  override countTxLabelMaps (args: FindTxLabelMapsArgs): Promise<number> {
     throw this.nip
   }
-  override insertCertificate(certificate: TableCertificate, trx?: TrxToken): Promise<number> {
+
+  override insertCertificate (certificate: TableCertificate, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertCertificateField(certificateField: TableCertificateField, trx?: TrxToken): Promise<void> {
+
+  override insertCertificateField (certificateField: TableCertificateField, trx?: TrxToken): Promise<void> {
     throw this.nip
   }
-  override insertCommission(commission: TableCommission, trx?: TrxToken): Promise<number> {
+
+  override insertCommission (commission: TableCommission, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertMonitorEvent(event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
+
+  override insertMonitorEvent (event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertOutput(output: TableOutput, trx?: TrxToken): Promise<number> {
+
+  override insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertOutputBasket(basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
+
+  override insertOutputBasket (basket: TableOutputBasket, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertOutputTag(tag: TableOutputTag, trx?: TrxToken): Promise<number> {
+
+  override insertOutputTag (tag: TableOutputTag, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertOutputTagMap(tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
+
+  override insertOutputTagMap (tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
     throw this.nip
   }
-  override insertProvenTx(tx: TableProvenTx, trx?: TrxToken): Promise<number> {
+
+  override insertProvenTx (tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertProvenTxReq(tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
+
+  override insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertSyncState(syncState: TableSyncState, trx?: TrxToken): Promise<number> {
+
+  override insertSyncState (syncState: TableSyncState, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> {
+
+  override insertTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertTxLabel(label: TableTxLabel, trx?: TrxToken): Promise<number> {
+
+  override insertTxLabel (label: TableTxLabel, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override insertTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
+
+  override insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     throw this.nip
   }
-  override insertUser(user: TableUser, trx?: TrxToken): Promise<number> {
+
+  override insertUser (user: TableUser, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateCertificate(id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> {
+
+  override updateCertificate (id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateCertificateField(
+
+  override updateCertificateField (
     certificateId: number,
     fieldName: string,
     update: Partial<TableCertificateField>,
@@ -219,22 +259,28 @@ class ServicesOnlyStorageProvider extends StorageProvider {
   ): Promise<number> {
     throw this.nip
   }
-  override updateCommission(id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
+
+  override updateCommission (id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateMonitorEvent(id: number, update: Partial<TableMonitorEvent>, trx?: TrxToken): Promise<number> {
+
+  override updateMonitorEvent (id: number, update: Partial<TableMonitorEvent>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateOutput(id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
+
+  override updateOutput (id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateOutputBasket(id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
+
+  override updateOutputBasket (id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateOutputTag(id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> {
+
+  override updateOutputTag (id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateOutputTagMap(
+
+  override updateOutputTagMap (
     outputId: number,
     tagId: number,
     update: Partial<TableOutputTagMap>,
@@ -242,30 +288,36 @@ class ServicesOnlyStorageProvider extends StorageProvider {
   ): Promise<number> {
     throw this.nip
   }
-  override updateProvenTx(id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
+
+  override updateProvenTx (id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateProvenTxReq(
+
+  override updateProvenTxReq (
     id: number | number[],
     update: Partial<TableProvenTxReq>,
     trx?: TrxToken
   ): Promise<number> {
     throw this.nip
   }
-  override updateSyncState(id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
+
+  override updateSyncState (id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateTransaction(
+
+  override updateTransaction (
     id: number | number[],
     update: Partial<TableTransaction>,
     trx?: TrxToken
   ): Promise<number> {
     throw this.nip
   }
-  override updateTxLabel(id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
+
+  override updateTxLabel (id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override updateTxLabelMap(
+
+  override updateTxLabelMap (
     transactionId: number,
     txLabelId: number,
     update: Partial<TableTxLabelMap>,
@@ -273,97 +325,128 @@ class ServicesOnlyStorageProvider extends StorageProvider {
   ): Promise<number> {
     throw this.nip
   }
-  override updateUser(id: number, update: Partial<TableUser>, trx?: TrxToken): Promise<number> {
+
+  override updateUser (id: number, update: Partial<TableUser>, trx?: TrxToken): Promise<number> {
     throw this.nip
   }
-  override destroy(): Promise<void> {
+
+  override destroy (): Promise<void> {
     throw this.nip
   }
+
   override transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> {
     throw this.nip
   }
-  override readSettings(trx?: TrxToken): Promise<TableSettings> {
+
+  override readSettings (trx?: TrxToken): Promise<TableSettings> {
     throw this.nip
   }
-  override findCertificateFields(args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
+
+  override findCertificateFields (args: FindCertificateFieldsArgs): Promise<TableCertificateField[]> {
     throw this.nip
   }
-  override findCertificates(args: FindCertificatesArgs): Promise<TableCertificateX[]> {
+
+  override findCertificates (args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     throw this.nip
   }
-  override findCommissions(args: FindCommissionsArgs): Promise<TableCommission[]> {
+
+  override findCommissions (args: FindCommissionsArgs): Promise<TableCommission[]> {
     throw this.nip
   }
-  override findMonitorEvents(args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
+
+  override findMonitorEvents (args: FindMonitorEventsArgs): Promise<TableMonitorEvent[]> {
     throw this.nip
   }
-  override findOutputBaskets(args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
+
+  override findOutputBaskets (args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     throw this.nip
   }
-  override findOutputs(args: FindOutputsArgs): Promise<TableOutput[]> {
+
+  override findOutputs (args: FindOutputsArgs): Promise<TableOutput[]> {
     throw this.nip
   }
-  override findOutputTags(args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
+
+  override findOutputTags (args: FindOutputTagsArgs): Promise<TableOutputTag[]> {
     throw this.nip
   }
-  override findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> {
+
+  override findSyncStates (args: FindSyncStatesArgs): Promise<TableSyncState[]> {
     throw this.nip
   }
-  override findTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> {
+
+  override findTransactions (args: FindTransactionsArgs): Promise<TableTransaction[]> {
     throw this.nip
   }
-  override findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
+
+  override findTxLabels (args: FindTxLabelsArgs): Promise<TableTxLabel[]> {
     throw this.nip
   }
-  override findUsers(args: FindUsersArgs): Promise<TableUser[]> {
+
+  override findUsers (args: FindUsersArgs): Promise<TableUser[]> {
     throw this.nip
   }
-  override countCertificateFields(args: FindCertificateFieldsArgs): Promise<number> {
+
+  override countCertificateFields (args: FindCertificateFieldsArgs): Promise<number> {
     throw this.nip
   }
-  override countCertificates(args: FindCertificatesArgs): Promise<number> {
+
+  override countCertificates (args: FindCertificatesArgs): Promise<number> {
     throw this.nip
   }
-  override countCommissions(args: FindCommissionsArgs): Promise<number> {
+
+  override countCommissions (args: FindCommissionsArgs): Promise<number> {
     throw this.nip
   }
-  override countMonitorEvents(args: FindMonitorEventsArgs): Promise<number> {
+
+  override countMonitorEvents (args: FindMonitorEventsArgs): Promise<number> {
     throw this.nip
   }
-  override countOutputBaskets(args: FindOutputBasketsArgs): Promise<number> {
+
+  override countOutputBaskets (args: FindOutputBasketsArgs): Promise<number> {
     throw this.nip
   }
-  override countOutputs(args: FindOutputsArgs): Promise<number> {
+
+  override countOutputs (args: FindOutputsArgs): Promise<number> {
     throw this.nip
   }
-  override countOutputTags(args: FindOutputTagsArgs): Promise<number> {
+
+  override countOutputTags (args: FindOutputTagsArgs): Promise<number> {
     throw this.nip
   }
-  override countSyncStates(args: FindSyncStatesArgs): Promise<number> {
+
+  override countSyncStates (args: FindSyncStatesArgs): Promise<number> {
     throw this.nip
   }
-  override countTransactions(args: FindTransactionsArgs): Promise<number> {
+
+  override countTransactions (args: FindTransactionsArgs): Promise<number> {
     throw this.nip
   }
-  override countTxLabels(args: FindTxLabelsArgs): Promise<number> {
+
+  override countTxLabels (args: FindTxLabelsArgs): Promise<number> {
     throw this.nip
   }
-  override countUsers(args: FindUsersArgs): Promise<number> {
+
+  override countUsers (args: FindUsersArgs): Promise<number> {
     throw this.nip
   }
-  override getProvenTxsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
+
+  override getProvenTxsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
     throw this.nip
   }
-  override getProvenTxReqsForUser(args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
+
+  override getProvenTxReqsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
     throw this.nip
   }
-  override getTxLabelMapsForUser(args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
+
+  override getTxLabelMapsForUser (args: FindForUserSincePagedArgs): Promise<TableTxLabelMap[]> {
     throw this.nip
   }
-  override getOutputTagMapsForUser(args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
+
+  override getOutputTagMapsForUser (args: FindForUserSincePagedArgs): Promise<TableOutputTagMap[]> {
     throw this.nip
   }
-  override adminStats(adminIdentityKey: string): Promise<StorageAdminStats> {
+
+  override adminStats (adminIdentityKey: string): Promise<StorageAdminStats> {
     throw this.nip
   }
 }

@@ -22,7 +22,7 @@ export const dirtyHashes = {
 /**
  * Throws Error if blockHash is in the dirtyHashes list.
  */
-export function validateAgainstDirtyHashes(blockHash: string): void {
+export function validateAgainstDirtyHashes (blockHash: string): void {
   if (dirtyHashes[blockHash]) {
     throw new Error(`Not adding a header with a dirty hash: ${dirtyHashes[blockHash]}`)
   }

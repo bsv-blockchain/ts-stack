@@ -1,7 +1,7 @@
 import { TaskReviewUtxos } from '../TaskReviewUtxos'
 import { specOpInvalidChange } from '../../../sdk'
 
-function makeUser(userId: number, identityKey = `key-${userId}`): any {
+function makeUser (userId: number, identityKey = `key-${userId}`): any {
   const now = new Date()
   return {
     created_at: now,
@@ -12,11 +12,11 @@ function makeUser(userId: number, identityKey = `key-${userId}`): any {
   }
 }
 
-function makeOutput(outpoint: string, satoshis: number, spendable: boolean): any {
+function makeOutput (outpoint: string, satoshis: number, spendable: boolean): any {
   return { outpoint, satoshis, spendable }
 }
 
-function makeMonitor(users: any[], outputsByUserId: Record<number, any[]>) {
+function makeMonitor (users: any[], outputsByUserId: Record<number, any[]>) {
   const findUsers = jest.fn().mockResolvedValue(users)
   const listOutputs = jest.fn(async (auth: any) => {
     const outputs = outputsByUserId[auth.userId] ?? []

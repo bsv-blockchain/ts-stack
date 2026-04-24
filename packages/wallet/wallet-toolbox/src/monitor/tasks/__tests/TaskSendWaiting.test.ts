@@ -1,6 +1,6 @@
 import { TaskSendWaiting } from '../TaskSendWaiting'
 
-function makeReq(provenTxReqId: number, txid: string, updatedAt: Date, batch?: string) {
+function makeReq (provenTxReqId: number, txid: string, updatedAt: Date, batch?: string) {
   const now = new Date()
   return {
     provenTxReqId,
@@ -16,7 +16,7 @@ function makeReq(provenTxReqId: number, txid: string, updatedAt: Date, batch?: s
   }
 }
 
-function makeMonitor(reqs: any[]) {
+function makeMonitor (reqs: any[]) {
   const findProvenTxReqs = jest.fn(async ({ paged, partial, status }: any) => {
     let filtered = reqs
     if (partial?.batch) filtered = filtered.filter(req => req.batch === partial.batch)

@@ -15,7 +15,7 @@ import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 
-export async function listActionsIdb(
+export async function listActionsIdb (
   storage: StorageIdb,
   auth: AuthId,
   vargs: Validation.ValidListActionsArgs
@@ -38,7 +38,7 @@ export async function listActionsIdb(
   const createdAtFrom = actionTimeFrom !== undefined ? new Date(actionTimeFrom) : undefined
   const createdAtTo = actionTimeTo !== undefined ? new Date(actionTimeTo) : undefined
 
-  let specOp: ListActionsSpecOp | undefined = undefined
+  let specOp: ListActionsSpecOp | undefined
   let specOpLabels: string[] = []
   let labels: string[] = []
   for (const label of ordinaryLabelsPreSpecOp) {
@@ -49,14 +49,14 @@ export async function listActionsIdb(
     }
   }
   if (specOp?.labelsToIntercept !== undefined) {
-    const intercept = specOp.labelsToIntercept!
+    const intercept = specOp.labelsToIntercept
     const labels2 = labels
     labels = []
     if (intercept.length === 0) {
       specOpLabels = labels2
     }
     for (const label of labels2) {
-      if (intercept.indexOf(label) >= 0) {
+      if (intercept.includes(label)) {
         specOpLabels.push(label)
       } else {
         labels.push(label)
@@ -64,7 +64,7 @@ export async function listActionsIdb(
     }
   }
 
-  let labelIds: number[] = []
+  const labelIds: number[] = []
   if (labels.length > 0) {
     await storage.filterTxLabels({ partial: { userId: auth.userId, isDeleted: false } }, tl => {
       if (labels.includes(tl.label)) {
@@ -75,14 +75,14 @@ export async function listActionsIdb(
 
   const isQueryModeAll = vargs.labelQueryMode === 'all'
   if (isQueryModeAll && labelIds.length < labels.length)
-    // all the required labels don't exist, impossible to satisfy.
-    return r
+  // all the required labels don't exist, impossible to satisfy.
+  { return r }
 
   if (!isQueryModeAll && labelIds.length === 0 && labels.length > 0)
-    // any and only non-existing labels, impossible to satisfy.
-    return r
+  // any and only non-existing labels, impossible to satisfy.
+  { return r }
 
-  const stati: TransactionStatus[] = specOp?.setStatusFilter
+  const stati: TransactionStatus[] = ((specOp?.setStatusFilter) != null)
     ? specOp.setStatusFilter()
     : ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
 
@@ -110,7 +110,7 @@ export async function listActionsIdb(
     r.totalActions = (offset || 0) + txs.length
   }
 
-  if (specOp?.postProcess) {
+  if ((specOp?.postProcess) != null) {
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs)
   }
 
@@ -118,7 +118,7 @@ export async function listActionsIdb(
     const wtx: WalletAction = {
       txid: tx.txid || '',
       satoshis: tx.satoshis || 0,
-      status: <ActionStatus>tx.status!,
+      status: tx.status as ActionStatus,
       isOutgoing: !!tx.isOutgoing,
       description: tx.description || '',
       version: tx.version || 0,
@@ -130,8 +130,8 @@ export async function listActionsIdb(
   if (vargs.includeLabels || vargs.includeInputs || vargs.includeOutputs) {
     await Promise.all(
       txs.map(async (tx, i) => {
-        //let i = -1
-        //for (const tx of txs) {
+        // let i = -1
+        // for (const tx of txs) {
         //    i++
         const action = r.actions[i]
         if (vargs.includeLabels) {
@@ -172,8 +172,8 @@ export async function listActionsIdb(
           action.inputs = []
           if (inputs.length > 0) {
             const rawTx = await storage.getRawTxOfKnownValidTransaction(tx.txid)
-            let bsvTx: BsvTransaction | undefined = undefined
-            if (rawTx) {
+            let bsvTx: BsvTransaction | undefined
+            if (rawTx != null) {
               bsvTx = BsvTransaction.fromBinary(rawTx)
             }
             for (const o of inputs) {
@@ -195,7 +195,7 @@ export async function listActionsIdb(
             }
           }
         }
-        //}
+        // }
       })
     )
   }

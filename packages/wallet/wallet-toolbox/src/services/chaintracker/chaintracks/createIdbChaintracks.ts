@@ -5,7 +5,7 @@ import { ChaintracksFetchApi } from './Api/ChaintracksFetchApi'
 import { ChaintracksStorageIdb } from './Storage/ChaintracksStorageIdb'
 import { createDefaultIdbChaintracksOptions } from './createDefaultIdbChaintracksOptions'
 
-export async function createIdbChaintracks(
+export async function createIdbChaintracks (
   chain: Chain,
   whatsonchainApiKey: string = '',
   maxPerFile: number = 100000,
@@ -18,13 +18,13 @@ export async function createIdbChaintracks(
   batchInsertLimit: number = 400,
   addLiveRecursionLimit: number = 36
 ): Promise<{
-  chain: Chain
-  maxPerFile: number
-  fetch: ChaintracksFetchApi
-  storage: ChaintracksStorageIdb
-  chaintracks: Chaintracks
-  available: Promise<void>
-}> {
+    chain: Chain
+    maxPerFile: number
+    fetch: ChaintracksFetchApi
+    storage: ChaintracksStorageIdb
+    chaintracks: Chaintracks
+    available: Promise<void>
+  }> {
   try {
     fetch ||= new ChaintracksFetch()
 

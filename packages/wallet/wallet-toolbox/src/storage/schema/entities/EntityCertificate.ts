@@ -5,7 +5,7 @@ import { TableCertificate } from '../tables/TableCertificate'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
 export class EntityCertificate extends EntityBase<TableCertificate> {
-  constructor(api?: TableCertificate) {
+  constructor (api?: TableCertificate) {
     const now = new Date()
     super(
       api || {
@@ -25,100 +25,126 @@ export class EntityCertificate extends EntityBase<TableCertificate> {
     )
   }
 
-  override updateApi(): void {
+  override updateApi (): void {
     /* nothing needed yet... */
   }
 
-  get certificateId() {
+  get certificateId () {
     return this.api.certificateId
   }
-  set certificateId(v: number) {
+
+  set certificateId (v: number) {
     this.api.certificateId = v
   }
-  get created_at() {
+
+  get created_at () {
     return this.api.created_at
   }
-  set created_at(v: Date) {
+
+  set created_at (v: Date) {
     this.api.created_at = v
   }
-  get updated_at() {
+
+  get updated_at () {
     return this.api.updated_at
   }
-  set updated_at(v: Date) {
+
+  set updated_at (v: Date) {
     this.api.updated_at = v
   }
-  get userId() {
+
+  get userId () {
     return this.api.userId
   }
-  set userId(v: number) {
+
+  set userId (v: number) {
     this.api.userId = v
   }
-  get type() {
+
+  get type () {
     return this.api.type
   }
-  set type(v: string) {
+
+  set type (v: string) {
     this.api.type = v
   }
-  get subject() {
+
+  get subject () {
     return this.api.subject
   }
-  set subject(v: string) {
+
+  set subject (v: string) {
     this.api.subject = v
   }
-  get verifier() {
+
+  get verifier () {
     return this.api.verifier
   }
-  set verifier(v: string | undefined) {
+
+  set verifier (v: string | undefined) {
     this.api.verifier = v
   }
-  get serialNumber() {
+
+  get serialNumber () {
     return this.api.serialNumber
   }
-  set serialNumber(v: string) {
+
+  set serialNumber (v: string) {
     this.api.serialNumber = v
   }
-  get certifier() {
+
+  get certifier () {
     return this.api.certifier
   }
-  set certifier(v: string) {
+
+  set certifier (v: string) {
     this.api.certifier = v
   }
-  get revocationOutpoint() {
+
+  get revocationOutpoint () {
     return this.api.revocationOutpoint
   }
-  set revocationOutpoint(v: string) {
+
+  set revocationOutpoint (v: string) {
     this.api.revocationOutpoint = v
   }
-  get signature() {
+
+  get signature () {
     return this.api.signature
   }
-  set signature(v: string) {
+
+  set signature (v: string) {
     this.api.signature = v
   }
-  get isDeleted() {
+
+  get isDeleted () {
     return this.api.isDeleted
   }
-  set isDeleted(v: boolean) {
+
+  set isDeleted (v: boolean) {
     this.api.isDeleted = v
   }
 
-  //get fields() { return this.api.fields }
-  //set fields(v: Record<string, string> | undefined) { this.api.fields = v }
+  // get fields() { return this.api.fields }
+  // set fields(v: Record<string, string> | undefined) { this.api.fields = v }
 
-  override get id(): number {
+  override get id (): number {
     return this.api.certificateId
   }
-  override set id(v: number) {
+
+  override set id (v: number) {
     this.api.certificateId = v
   }
-  override get entityName(): string {
+
+  override get entityName (): string {
     return 'certificate'
   }
-  override get entityTable(): string {
+
+  override get entityTable (): string {
     return 'certificates'
   }
 
-  override equals(ei: TableCertificate, syncMap?: SyncMap): boolean {
+  override equals (ei: TableCertificate, syncMap?: SyncMap): boolean {
     if (
       this.type !== ei.type ||
       this.subject !== ei.subject ||
@@ -127,19 +153,18 @@ export class EntityCertificate extends EntityBase<TableCertificate> {
       this.signature !== ei.signature ||
       this.verifier !== ei.verifier ||
       this.isDeleted !== ei.isDeleted
-    )
-      return false
+    ) { return false }
 
     return true
   }
 
-  static async mergeFind(
+  static async mergeFind (
     storage: EntityStorage,
     userId: number,
     ei: TableCertificate,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean; eo: EntityCertificate; eiId: number }> {
+  ): Promise<{ found: boolean, eo: EntityCertificate, eiId: number }> {
     const ef = verifyOneOrNone(
       await storage.findCertificates({
         partial: {
@@ -151,19 +176,19 @@ export class EntityCertificate extends EntityBase<TableCertificate> {
       })
     )
     return {
-      found: !!ef,
+      found: !(ef == null),
       eo: new EntityCertificate(ef || { ...ei }),
       eiId: verifyId(ei.certificateId)
     }
   }
 
-  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.userId = userId
     this.certificateId = 0
     this.certificateId = await storage.insertCertificate(this.toApi(), trx)
   }
 
-  override async mergeExisting(
+  override async mergeExisting (
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableCertificate,

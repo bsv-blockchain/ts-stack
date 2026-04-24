@@ -5,7 +5,7 @@ import { ChaintracksFetchApi } from './Api/ChaintracksFetchApi'
 import { ChaintracksStorageNoDb } from './Storage/ChaintracksStorageNoDb'
 import { createDefaultNoDbChaintracksOptions } from './createDefaultNoDbChaintracksOptions'
 
-export async function createNoDbChaintracks(
+export async function createNoDbChaintracks (
   chain: Chain,
   whatsonchainApiKey: string = '',
   maxPerFile: number = 100000,
@@ -18,13 +18,13 @@ export async function createNoDbChaintracks(
   batchInsertLimit: number = 400,
   addLiveRecursionLimit: number = 36
 ): Promise<{
-  chain: Chain
-  maxPerFile: number
-  fetch: ChaintracksFetchApi
-  storage: ChaintracksStorageNoDb
-  chaintracks: Chaintracks
-  available: Promise<void>
-}> {
+    chain: Chain
+    maxPerFile: number
+    fetch: ChaintracksFetchApi
+    storage: ChaintracksStorageNoDb
+    chaintracks: Chaintracks
+    available: Promise<void>
+  }> {
   try {
     fetch ||= new ChaintracksFetch()
 

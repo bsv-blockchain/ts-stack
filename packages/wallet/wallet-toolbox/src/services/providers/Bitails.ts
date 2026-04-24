@@ -21,15 +21,15 @@ export class Bitails {
   readonly URL: string
   readonly httpClient: HttpClient
 
-  constructor(chain: Chain = 'main', config: BitailsConfig = {}) {
+  constructor (chain: Chain = 'main', config: BitailsConfig = {}) {
     const { apiKey, httpClient } = config
     this.chain = chain
     switch (chain) {
       case 'main':
-        this.URL = `https://api.bitails.io/`
+        this.URL = 'https://api.bitails.io/'
         break
       case 'test':
-        this.URL = `https://test-api.bitails.io/`
+        this.URL = 'https://test-api.bitails.io/'
         break
       default:
         throw new Error(`Bitails does not support '${chain}' chain.`)
@@ -38,7 +38,7 @@ export class Bitails {
     this.apiKey = apiKey ?? ''
   }
 
-  getHttpHeaders(): Record<string, string> {
+  getHttpHeaders (): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json'
     }
@@ -59,7 +59,7 @@ export class Bitails {
    * @param txids
    * @returns
    */
-  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
+  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult> {
     const nn = () => ({
       name: 'BitailsPostBeef',
       when: new Date().toISOString()
@@ -88,7 +88,7 @@ export class Bitails {
    * @param txids Array of txids for transactions in raws for which results are requested, remaining raws are supporting only.
    * @returns
    */
-  async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult> {
+  async postRaws (raws: HexString[], txids?: string[]): Promise<PostBeefResult> {
     const r: PostBeefResult = {
       name: 'BitailsPostRaws',
       status: 'success',
@@ -102,7 +102,7 @@ export class Bitails {
       const txid = Utils.toHex(doubleSha256BE(Utils.toArray(raw, 'hex')))
       // Results aren't always identified by txid.
       rawTxids.push(txid)
-      if (!txids || txids.indexOf(txid) >= 0) {
+      if ((txids == null) || txids.includes(txid)) {
         r.txidResults.push({
           txid,
           status: 'success',
@@ -113,9 +113,9 @@ export class Bitails {
 
     const headers = this.getHttpHeaders()
     headers['Content-Type'] = 'application/json'
-    //headers['Accept'] = 'text/json'
+    // headers['Accept'] = 'text/json'
 
-    const data = { raws: raws }
+    const data = { raws }
     const requestOptions = {
       method: 'POST',
       headers,
@@ -161,7 +161,7 @@ export class Bitails {
             for (const rt of r.txidResults) {
               const btr = btrs.find(btr => btr.txid! === rt.txid)!
               const txid = rt.txid
-              if (btr.error) {
+              if (btr.error != null) {
                 // code: -25, message: 'missing-inputs'
                 // code: -27, message: 'already-in-mempool'
                 const { code, message } = btr.error
@@ -206,7 +206,7 @@ export class Bitails {
    * @param services
    * @returns
    */
-  async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> {
+  async getMerklePath (txid: string, services: WalletServices): Promise<GetMerklePathResult> {
     const r: GetMerklePathResult = { name: 'BitailsTsc', notes: [] }
 
     const url = `${this.URL}tx/${txid}/proof/tsc`

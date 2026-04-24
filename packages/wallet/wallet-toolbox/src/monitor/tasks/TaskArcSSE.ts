@@ -16,13 +16,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   static taskName = 'ArcadeSSE'
 
   sseClient: ArcSSEClient | null = null
-  private pendingEvents: ArcSSEEvent[] = []
+  private readonly pendingEvents: ArcSSEEvent[] = []
 
-  constructor(monitor: Monitor) {
+  constructor (monitor: Monitor) {
     super(monitor, TaskArcadeSSE.taskName)
   }
 
-  override async asyncSetup(): Promise<void> {
+  override async asyncSetup (): Promise<void> {
     const callbackToken = this.monitor.options.callbackToken
     if (!callbackToken) {
       console.log('[TaskArcadeSSE] no callbackToken configured — SSE disabled')
@@ -75,11 +75,11 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     this.sseClient.connect()
   }
 
-  trigger(_nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger (_nowMsecsSinceEpoch: number): { run: boolean } {
     return { run: this.pendingEvents.length > 0 }
   }
 
-  async runTask(): Promise<string> {
+  async runTask (): Promise<string> {
     const events = this.pendingEvents.splice(0)
     if (events.length === 0) return ''
 
@@ -90,12 +90,12 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     return log
   }
 
-  async fetchNow(): Promise<number> {
-    if (!this.sseClient) return 0
+  async fetchNow (): Promise<number> {
+    if (this.sseClient == null) return 0
     return await this.sseClient.fetchEvents()
   }
 
-  private async processStatusEvent(event: ArcSSEEvent): Promise<string> {
+  private async processStatusEvent (event: ArcSSEEvent): Promise<string> {
     let log = `SSE: txid=${event.txid} status=${event.txStatus}\n`
 
     const reqs = await this.storage.findProvenTxReqs({
@@ -103,7 +103,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     })
 
     if (reqs.length === 0) {
-      log += `  No matching ProvenTxReq\n`
+      log += '  No matching ProvenTxReq\n'
       return log
     }
 
@@ -130,7 +130,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
             req.addHistoryNote(note)
             await req.updateStorageDynamicProperties(this.storage)
             const ids = req.notify.transactionIds
-            if (ids) {
+            if (ids != null) {
               await this.storage.runAsStorageProvider(async sp => {
                 await sp.updateTransactionsStatus(ids, 'unproven')
               })
@@ -154,7 +154,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
           const ids = req.notify.transactionIds
-          if (ids) {
+          if (ids != null) {
             await this.storage.runAsStorageProvider(async sp => {
               await sp.updateTransactionsStatus(ids, 'failed')
             })
@@ -168,7 +168,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
           const ids = req.notify.transactionIds
-          if (ids) {
+          if (ids != null) {
             await this.storage.runAsStorageProvider(async sp => {
               await sp.updateTransactionsStatus(ids, 'failed')
             })
@@ -192,7 +192,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
    * Fetch the merklePath from Arcade's GET /tx/{txid} endpoint and
    * create a ProvenTx record, completing the transaction.
    */
-  private async fetchProofFromArcade(req: EntityProvenTxReq): Promise<string> {
+  private async fetchProofFromArcade (req: EntityProvenTxReq): Promise<string> {
     const arcUrl = (this.monitor.services as Services).options?.arcUrl
     const txid = req.txid
     let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from Arcade\n`
@@ -201,7 +201,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       const fetchHeaders: Record<string, string> = {}
       const apiKey = (this.monitor.services as Services).options?.arcConfig?.apiKey
       if (apiKey) {
-        fetchHeaders['Authorization'] = `Bearer ${apiKey}`
+        fetchHeaders.Authorization = `Bearer ${apiKey}`
       }
       const response = await fetch(`${arcUrl}/tx/${txid}`, { headers: fetchHeaders })
       if (!response.ok) {
@@ -223,8 +223,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
       // Find the leaf to get the tx index
       const leaf = merklePath.path[0].find(l => l.txid === true && l.hash === txid)
-      if (!leaf) {
-        log += `    merklePath does not contain leaf for txid\n`
+      if (leaf == null) {
+        log += '    merklePath does not contain leaf for txid\n'
         return log
       }
 
@@ -241,7 +241,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         height,
         index: leaf.offset,
         merklePath: merklePath.toBinary(),
-        rawTx: req.rawTx!,
+        rawTx: req.rawTx,
         merkleRoot,
         blockHash
       })

@@ -12,8 +12,8 @@ import 'fake-indexeddb/auto'
 describe('createIdbChaintracks tests', () => {
   jest.setTimeout(99999999)
 
-  let logSpy: jest.SpyInstance,
-    capturedLogs: string[] = []
+  let logSpy: jest.SpyInstance
+  const capturedLogs: string[] = []
   beforeAll(async () => {
     logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
@@ -58,10 +58,10 @@ describe('createIdbChaintracks tests', () => {
   })
 })
 
-function countDatas(manager: BulkFileDataManager): number {
+function countDatas (manager: BulkFileDataManager): number {
   let count = 0
   for (const file of manager['bfds'] as BulkHeaderFileInfo[]) {
-    if (file.data) count += 1
+    if (file.data != null) count += 1
   }
   return count
 }

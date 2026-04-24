@@ -325,7 +325,7 @@ describe('ProvenTxReq class method tests', () => {
     const terminalStatuses: sdk.ProvenTxReqStatus[] = sdk.ProvenTxReqTerminalStatus
 
     // Test cases for valid and invalid statuses
-    const testCases: { status: sdk.ProvenTxReqStatus; expected: boolean }[] = [
+    const testCases: Array<{ status: sdk.ProvenTxReqStatus, expected: boolean }> = [
       { status: terminalStatuses[0] || 'completed', expected: true }, // Use the first valid terminal status
       { status: terminalStatuses[1] || 'doubleSpend', expected: true }, // Use another valid terminal status
       { status: 'nonExistentStatus' as sdk.ProvenTxReqStatus, expected: false } // A status that is not in the terminal statuses

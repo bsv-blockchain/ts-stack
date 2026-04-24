@@ -34,7 +34,7 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { TableCommission } from '../schema/tables/TableCommission'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 
-export async function processAction(
+export async function processAction (
   storage: StorageProvider,
   auth: AuthId,
   args: StorageProcessActionArgs
@@ -52,9 +52,9 @@ export async function processAction(
 
   if (args.isNewTx) {
     const vargs = await validateCommitNewTxToStorageArgs(storage, userId, args)
-    logger?.log(`validated new tx updates to storage`)
+    logger?.log('validated new tx updates to storage')
     ;({ req } = await commitNewTxToStorage(storage, userId, vargs))
-    logger?.log(`committed new tx updates to storage `)
+    logger?.log('committed new tx updates to storage ')
     if (!req) throw new WERR_INTERNAL()
     // Add the new txid to sendWith unless there are no others to send and the noSend option is set.
     if (args.isNoSend && !args.isSendWith) {
@@ -126,18 +126,18 @@ export interface PostBeefResultForTxidApi {
  * @param isDelayed
  * @param r Optional. Ignores txids and allows ProvenTxReqs and merged beef to be passed in.
  */
-export async function shareReqsWithWorld(
+export async function shareReqsWithWorld (
   storage: StorageProvider,
   userId: number,
   txids: string[],
   isDelayed: boolean,
   r?: GetReqsAndBeefResult,
   logger?: WalletLoggerInterface
-): Promise<{ swr: SendWithResult[]; ndr: ReviewActionResult[] | undefined }> {
-  let swr: SendWithResult[] = []
-  let ndr: ReviewActionResult[] | undefined = undefined
+): Promise<{ swr: SendWithResult[], ndr: ReviewActionResult[] | undefined }> {
+  const swr: SendWithResult[] = []
+  const ndr: ReviewActionResult[] | undefined = undefined
 
-  if (!r && txids.length < 1) return { swr, ndr }
+  if ((r == null) && txids.length < 1) return { swr, ndr }
 
   // Collect what we know about these sendWith transaction txids from storage.
   r ||= await storage.getReqsAndBeefToShareWithWorld(txids, [])
@@ -148,7 +148,7 @@ export async function shareReqsWithWorld(
     if (getReq.status === 'alreadySent') status = 'unproven'
     else if (getReq.status === 'readyToSend') {
       status = 'sending'
-      readyToSendReqs.push(new EntityProvenTxReq(getReq.req!))
+      readyToSendReqs.push(new EntityProvenTxReq(getReq.req))
     }
     swr.push({
       txid: getReq.txid,
@@ -166,9 +166,9 @@ export async function shareReqsWithWorld(
     const beefIsValid = await r.beef.verify(await storage.getServices().getChainTracker())
     if (!beefIsValid) {
       logger?.error(`VERIFY FALSE BEEF: ${r.beef.toLogString()}`)
-      throw new WERR_INTERNAL(`merged Beef failed validation.`)
+      throw new WERR_INTERNAL('merged Beef failed validation.')
     }
-    logger?.log(`beef is valid`)
+    logger?.log('beef is valid')
   }
 
   // Set req batch property for the reqs being sent
@@ -232,26 +232,24 @@ interface ValidCommitNewTxToStorageArgs {
   beef: Beef
 
   req: EntityProvenTxReq
-  outputUpdates: { id: number; update: Partial<TableOutput> }[]
+  outputUpdates: Array<{ id: number, update: Partial<TableOutput> }>
   transactionUpdate: Partial<TableTransaction>
   postStatus?: ReqTxStatus
 }
 
-async function validateCommitNewTxToStorageArgs(
+async function validateCommitNewTxToStorageArgs (
   storage: StorageProvider,
   userId: number,
   params: StorageProcessActionArgs
 ): Promise<ValidCommitNewTxToStorageArgs> {
-  if (!params.reference || !params.txid || !params.rawTx)
-    throw new WERR_INVALID_OPERATION('One or more expected params are undefined.')
+  if (!params.reference || !params.txid || (params.rawTx == null)) { throw new WERR_INVALID_OPERATION('One or more expected params are undefined.') }
   let tx: BsvTransaction
   try {
     tx = BsvTransaction.fromBinary(params.rawTx)
   } catch (e: unknown) {
     throw new WERR_INVALID_OPERATION('Parsing serialized transaction failed.')
   }
-  if (params.txid !== tx.id('hex'))
-    throw new WERR_INVALID_OPERATION(`Hash of serialized transaction doesn't match expected txid`)
+  if (params.txid !== tx.id('hex')) { throw new WERR_INVALID_OPERATION('Hash of serialized transaction doesn\'t match expected txid') }
   if (!(await storage.getServices()).nLockTimeIsFinal(tx)) {
     throw new WERR_INVALID_OPERATION(`This transaction is not final.
          Ensure that the transaction meets the rules for being a finalized
@@ -264,12 +262,11 @@ async function validateCommitNewTxToStorageArgs(
     })
   )
   if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
-  if (!transaction.inputBEEF) throw new WERR_INVALID_OPERATION()
+  if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
   const beef = Beef.fromBinary(asArray(transaction.inputBEEF))
   // TODO: Could check beef validates transaction inputs...
   // Transaction must have unsigned or unprocessed status
-  if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed')
-    throw new WERR_INVALID_OPERATION(`invalid transaction status ${transaction.status}`)
+  if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed') { throw new WERR_INVALID_OPERATION(`invalid transaction status ${transaction.status}`) }
   const transactionId = verifyId(transaction.transactionId)
   const outputOutputs = await storage.findOutputs({
     partial: { userId, transactionId }
@@ -281,12 +278,11 @@ async function validateCommitNewTxToStorageArgs(
   const commission = verifyOneOrNone(await storage.findCommissions({ partial: { transactionId, userId } }))
   if (storage.commissionSatoshis > 0) {
     // A commission is required...
-    if (!commission) throw new WERR_INTERNAL()
+    if (commission == null) throw new WERR_INTERNAL()
     const commissionValid = tx.outputs.some(
-      x => x.satoshis === commission.satoshis && x.lockingScript.toHex() === asString(commission.lockingScript!)
+      x => x.satoshis === commission.satoshis && x.lockingScript.toHex() === asString(commission.lockingScript)
     )
-    if (!commissionValid)
-      throw new WERR_INVALID_OPERATION('Transaction did not include an output to cover service fee.')
+    if (!commissionValid) { throw new WERR_INVALID_OPERATION('Transaction did not include an output to cover service fee.') }
   }
 
   const req = EntityProvenTxReq.fromTxid(params.txid, params.rawTx, transaction.inputBEEF)
@@ -304,7 +300,7 @@ async function validateCommitNewTxToStorageArgs(
   // isNoSend                  noSend      noSend
   // !isNoSend && isDelayed    unsent      unprocessed
   // !isNoSend && !isDelayed   unprocessed unprocessed          sending/unmined     sending/unproven      This is the only case that sends immediately.
-  let postStatus: ReqTxStatus | undefined = undefined
+  let postStatus: ReqTxStatus | undefined
   let status: ReqTxStatus
   if (params.isNoSend && !params.isSendWith) status = { req: 'nosend', tx: 'nosend' }
   else if (!params.isNoSend && params.isDelayed) status = { req: 'unsent', tx: 'unprocessed' }
@@ -349,14 +345,16 @@ async function validateCommitNewTxToStorageArgs(
     const vout = verifyInteger(o.vout)
     const offset = vargs.txScriptOffsets.outputs[vout]
     const rawTxScript = asString(vargs.rawTx.slice(offset.offset, offset.offset + offset.length))
-    if (o.lockingScript && rawTxScript !== asString(o.lockingScript))
+    if ((o.lockingScript != null) && rawTxScript !== asString(o.lockingScript)) {
       throw new WERR_INVALID_OPERATION(
         `rawTx output locking script for vout ${vout} not equal to expected output script.`
       )
-    if (tx.outputs[vout].lockingScript.toHex() !== rawTxScript)
+    }
+    if (tx.outputs[vout].lockingScript.toHex() !== rawTxScript) {
       throw new WERR_INVALID_OPERATION(
         `parsed transaction output locking script for vout ${vout} not equal to expected output script.`
       )
+    }
     const update: Partial<TableOutput> = {
       txid: vargs.txid,
       spendable: true, // spendability is gated by transaction status. Remains true until the output is spent.
@@ -364,9 +362,9 @@ async function validateCommitNewTxToStorageArgs(
       scriptOffset: offset.offset
     }
     if (offset.length > (await storage.getSettings()).maxOutputScript)
-      // Remove long lockingScript data from outputs table, will be read from rawTx in proven_tx or proven_tx_reqs tables.
-      update.lockingScript = undefined
-    vargs.outputUpdates.push({ id: o.outputId!, update })
+    // Remove long lockingScript data from outputs table, will be read from rawTx in proven_tx or proven_tx_reqs tables.
+    { update.lockingScript = undefined }
+    vargs.outputUpdates.push({ id: o.outputId, update })
   }
 
   return vargs
@@ -377,44 +375,44 @@ export interface CommitNewTxResults {
   log?: string
 }
 
-async function commitNewTxToStorage(
+async function commitNewTxToStorage (
   storage: StorageProvider,
   userId: number,
   vargs: ValidCommitNewTxToStorageArgs
 ): Promise<CommitNewTxResults> {
   let log = vargs.log
 
-  log = stampLog(log, `start storage commitNewTxToStorage`)
+  log = stampLog(log, 'start storage commitNewTxToStorage')
 
   let req: EntityProvenTxReq | undefined
 
   await storage.transaction(async trx => {
-    log = stampLog(log, `... storage commitNewTxToStorage storage transaction start`)
+    log = stampLog(log, '... storage commitNewTxToStorage storage transaction start')
 
     // Create initial 'nosend' proven_tx_req record to store signed, valid rawTx and input beef
     req = await vargs.req.insertOrMerge(storage, trx)
 
-    log = stampLog(log, `... storage commitNewTxToStorage req inserted`)
+    log = stampLog(log, '... storage commitNewTxToStorage req inserted')
 
     for (const ou of vargs.outputUpdates) {
       await storage.updateOutput(ou.id, ou.update, trx)
     }
 
-    log = stampLog(log, `... storage commitNewTxToStorage outputs updated`)
+    log = stampLog(log, '... storage commitNewTxToStorage outputs updated')
 
     await storage.updateTransaction(vargs.transactionId, vargs.transactionUpdate, trx)
 
-    log = stampLog(log, `... storage commitNewTxToStorage storage transaction end`)
+    log = stampLog(log, '... storage commitNewTxToStorage storage transaction end')
   })
 
-  log = stampLog(log, `... storage commitNewTxToStorage storage transaction await done`)
+  log = stampLog(log, '... storage commitNewTxToStorage storage transaction await done')
 
   const r: CommitNewTxResults = {
     req: verifyTruthy(req),
     log
   }
 
-  log = stampLog(log, `end storage commitNewTxToStorage`)
+  log = stampLog(log, 'end storage commitNewTxToStorage')
 
   return r
 }

@@ -16,7 +16,7 @@ export interface HeightRanges {
  * Operations support integrating contiguous batches of headers,
  */
 export class HeightRange implements HeightRangeApi {
-  constructor(
+  constructor (
     public minHeight: number,
     public maxHeight: number
   ) {}
@@ -30,7 +30,7 @@ export class HeightRange implements HeightRangeApi {
   /**
    * @returns true iff minHeight is greater than maxHeight.
    */
-  get isEmpty() {
+  get isEmpty () {
     return this.minHeight > this.maxHeight
   }
 
@@ -38,7 +38,7 @@ export class HeightRange implements HeightRangeApi {
    * @param headers an array of objects with a non-negative integer `height` property.
    * @returns range of height values from the given headers, or the empty range if there are no headers.
    */
-  static from(headers: BlockHeader[]): HeightRange {
+  static from (headers: BlockHeader[]): HeightRange {
     if (headers.length === 0) return HeightRange.empty
     const minHeight = headers.reduce((min, h) => Math.min(min, h.height), headers[0].height)
     const maxHeight = headers.reduce((max, h) => Math.max(max, h.height), headers[0].height)
@@ -48,14 +48,14 @@ export class HeightRange implements HeightRangeApi {
   /**
    * @returns the number of heights in the range, or 0 if the range is empty.
    */
-  get length() {
+  get length () {
     return Math.max(0, this.maxHeight - this.minHeight + 1)
   }
 
   /**
    * @returns an easy to read string representation of the height range.
    */
-  toString(): string {
+  toString (): string {
     return this.isEmpty ? '<empty>' : `${this.minHeight}-${this.maxHeight}`
   }
 
@@ -63,7 +63,7 @@ export class HeightRange implements HeightRangeApi {
    * @param range HeightRange or single height value.
    * @returns true if `range` is entirely within this range.
    */
-  contains(range: HeightRange | number) {
+  contains (range: HeightRange | number) {
     if (typeof range === 'number') {
       return this.minHeight <= range && this.maxHeight >= range
     }
@@ -79,9 +79,9 @@ export class HeightRange implements HeightRangeApi {
    * @param range
    * @returns
    */
-  intersect(range: HeightRange) {
-    //if (this.isEmpty || range.isEmpty) return HeightRange.empty
-    //if (this.maxHeight < range.minHeight || this.minHeight > range.maxHeight) return HeightRange.empty
+  intersect (range: HeightRange) {
+    // if (this.isEmpty || range.isEmpty) return HeightRange.empty
+    // if (this.maxHeight < range.minHeight || this.minHeight > range.maxHeight) return HeightRange.empty
     const r = new HeightRange(Math.max(this.minHeight, range.minHeight), Math.min(this.maxHeight, range.maxHeight))
     return r
   }
@@ -96,11 +96,10 @@ export class HeightRange implements HeightRangeApi {
    * @param range
    * @returns
    */
-  union(range: HeightRange) {
+  union (range: HeightRange) {
     if (this.isEmpty) return range.copy()
     if (range.isEmpty) return this.copy()
-    if (this.maxHeight + 1 < range.minHeight || range.maxHeight + 1 < this.minHeight)
-      throw new Error('Union of ranges with a gap between them is not supported.')
+    if (this.maxHeight + 1 < range.minHeight || range.maxHeight + 1 < this.minHeight) { throw new Error('Union of ranges with a gap between them is not supported.') }
     return new HeightRange(Math.min(this.minHeight, range.minHeight), Math.max(this.maxHeight, range.maxHeight))
   }
 
@@ -112,22 +111,21 @@ export class HeightRange implements HeightRangeApi {
    * @param range
    * @returns
    */
-  subtract(range: HeightRange) {
+  subtract (range: HeightRange) {
     if (this.isEmpty || range.isEmpty) return this.copy()
-    if (this.minHeight < range.minHeight && this.maxHeight > range.maxHeight)
-      throw new Error('Subtraction of range that creates two disjoint ranges is not supported.')
+    if (this.minHeight < range.minHeight && this.maxHeight > range.maxHeight) { throw new Error('Subtraction of range that creates two disjoint ranges is not supported.') }
     if (range.maxHeight < this.minHeight || range.minHeight > this.maxHeight)
-      // Leave untouched. Subtracted is either all lower or all higher.
-      return this.copy()
+    // Leave untouched. Subtracted is either all lower or all higher.
+    { return this.copy() }
     if (range.minHeight <= this.minHeight && range.maxHeight < this.maxHeight)
-      // Remove a chunk on the low side.
-      return new HeightRange(range.maxHeight + 1, this.maxHeight)
+    // Remove a chunk on the low side.
+    { return new HeightRange(range.maxHeight + 1, this.maxHeight) }
     if (range.minHeight <= this.minHeight && range.maxHeight >= this.maxHeight)
-      // Remove the whole thing
-      return new HeightRange(this.minHeight, this.minHeight - 1) // empty
+    // Remove the whole thing
+    { return new HeightRange(this.minHeight, this.minHeight - 1) } // empty
     if (range.minHeight <= this.maxHeight && range.maxHeight >= this.maxHeight)
-      // Remove a chunk on the high side.
-      return new HeightRange(this.minHeight, range.minHeight - 1)
+    // Remove a chunk on the high side.
+    { return new HeightRange(this.minHeight, range.minHeight - 1) }
     throw new Error('All cases should have been handled :-) .')
   }
 
@@ -139,7 +137,7 @@ export class HeightRange implements HeightRangeApi {
    *
    * This returns the portion of this range that is strictly above `range`.
    */
-  above(range: HeightRange) {
+  above (range: HeightRange) {
     if (range.isEmpty || this.isEmpty) return this.copy()
     return new HeightRange(range.maxHeight + 1, this.maxHeight)
   }
@@ -147,7 +145,7 @@ export class HeightRange implements HeightRangeApi {
   /**
    * Return a copy of this range.
    */
-  copy(): HeightRange {
+  copy (): HeightRange {
     return new HeightRange(this.minHeight, this.maxHeight)
   }
 }
