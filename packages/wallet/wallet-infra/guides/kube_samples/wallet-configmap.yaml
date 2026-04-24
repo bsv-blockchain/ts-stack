@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wallet-config
+
+data:
+  NODE_ENV: "production"
+  HTTP_PORT: "8080"
+  BSV_NETWORK: "main"
+  ENABLE_NGINX: "false"

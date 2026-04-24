@@ -1,0 +1,47 @@
+{
+  "name": "wallet-infra",
+  "version": "2.0.4",
+  "type": "module",
+  "description": "UTXO Management Server",
+  "author": "BSV Blockchain Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bitcoin-sv/wallet-infra.git"
+  },
+  "keywords": [
+    "BSV",
+    "Blockchain",
+    "Bitcoin",
+    "Wallet",
+    "Infrastructure"
+  ],
+  "main": "./out/src/index.js",
+  "types": "./out/src/index.d.ts",
+  "files": [
+    "out/src",
+    "src"
+  ],
+  "scripts": {
+    "start": "node out/src/index.js",
+    "lint": "prettier --write 'src/**/*.ts' --log-level silent",
+    "build": "tsc --build",
+    "prepublish": "npm run lint"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "prettier": "^3.4.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@bsv/payment-express-middleware": "^2.0.2",
+    "@bsv/sdk": "^2.0.13",
+    "@bsv/wallet-toolbox": "^2.1.22",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "knex": "^3.1.0",
+    "mysql2": "^3.12.0"
+  }
+}

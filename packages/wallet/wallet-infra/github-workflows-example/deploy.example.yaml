@@ -1,0 +1,51 @@
+name: Deployment
+on:
+  push:
+    branches:
+      - master
+      - production
+
+env:
+  CURRENT_BRANCH: ${{ github.ref_name =='production' && 'production' || 'master' }}
+  GCR_HOST: us.gcr.io
+  GOOGLE_PROJECT_ID: <> # Fill in your Google Cloud project ID
+  GCR_IMAGE_NAME: utxo-management-server
+
+jobs:
+  build:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - uses: RafikFarhad/push-to-gcr-github-action@v4.1
+        with:
+          gcloud_service_key: ${{ secrets.DOCKER_REGISTRY_PUSH_KEY }}
+          registry: ${{ env.GCR_HOST }}
+          project_id: ${{ env.GOOGLE_PROJECT_ID }}
+          image_name: ${{ env.GCR_IMAGE_NAME }}
+          image_tag: latest,${{ env.CURRENT_BRANCH }}-${{ github.sha }}
+      - name: "Create service description file"
+        run: "./scripts/mkenv.sh service.${{ env.CURRENT_BRANCH }}.yaml"
+        env:
+          IMAGE: "${{ env.GCR_HOST }}/${{ env.GOOGLE_PROJECT_ID }}/${{ env.GCR_IMAGE_NAME }}:${{ env.CURRENT_BRANCH }}-${{ github.sha }}"
+          SERVICE: ${{ env.CURRENT_BRANCH =='production' && 'prod-ums' || 'staging-ums' }}
+          BSV_NETWORK: ${{                env.CURRENT_BRANCH =='production' && secrets.PROD_BSV_NETWORK || secrets.STAGING_BSV_NETWORK }}
+          KNEX_DB_CONNECTION: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_KNEX_DB_CONNECTION || secrets.STAGING_KNEX_DB_CONNECTION }}
+          SERVER_PRIVATE_KEY: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_SERVER_PRIVATE_KEY || secrets.STAGING_SERVER_PRIVATE_KEY }}
+          TAAL_API_KEY: ${{    env.CURRENT_BRANCH =='production' && secrets.PROD_TAAL_API_KEY || secrets.STAGING_TAAL_API_KEY }}
+          COMMISSION_FEE: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_COMMISSION_FEE || secrets.STAGING_COMMISSION_FEE }}
+          COMMISSION_PUBLIC_KEY: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_COMMISSION_PUBLIC_KEY || secrets.STAGING_COMMISSION_PUBLIC_KEY }}
+          FEE_MODEL: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_FEE_MODEL || secrets.STAGING_FEE_MODEL }}
+      - uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.gcp_deploy_creds }}
+      - uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          metadata: "service.${{ env.CURRENT_BRANCH }}.yaml"
+          region: us-west1
+      - name: Set Min Instances and Enable CPU Boost
+        run: |
+          gcloud run services update ${{ env.CURRENT_BRANCH =='production' && 'prod-ums' || 'staging-ums' }} --min-instances=1 --cpu-boost --region=us-west1

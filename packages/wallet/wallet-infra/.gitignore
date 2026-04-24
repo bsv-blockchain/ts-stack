@@ -1,0 +1,11 @@
+node_modules
+.env
+yarn-error.log
+functions
+yarn.lock
+.DS_Store
+.idea
+out
+env.yaml
+test.env.yaml
+main.env.yaml
