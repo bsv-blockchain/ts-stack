@@ -1236,6 +1236,9 @@ importers:
       '@bsv/overlay-express':
         specifier: ^2.2.0
         version: 2.2.0(gcp-metadata@8.1.2)(mysql2@3.22.2(@types/node@24.12.2))(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
       '@bsv/sdk':
         specifier: ^2.0.13
         version: 2.0.13

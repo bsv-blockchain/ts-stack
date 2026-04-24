@@ -1,41 +1,43 @@
 import { WalletAdvertiser } from '@bsv/overlay-discovery-services'
 import OverlayExpress from '@bsv/overlay-express'
-import ProtoMapTopicManager from './services/protomap/ProtoMapTopicManager'
-import ProtoMapLookupService from './services/protomap/ProtoMapLookupServiceFactory'
-import CertMapTopicManager from './services/certmap/CertMapTopicManager'
-import CertMapLookupService from './services/certmap/CertMapLookupServiceFactory'
-import BasketMapTopicManager from './services/basketmap/BasketMapTopicManager'
-import BasketMapLookupService from './services/basketmap/BasketMapLookupServiceFactory'
-import UHRPTopicManager from './services/uhrp/UHRPTopicManager'
-import UHRPLookupService from './services/uhrp/UHRPLookupServiceFactory'
-import IdentityTopicManager from './services/identity/IdentityTopicManager'
-import IdentityLookupService from './services/identity/IdentityLookupServiceFactory'
-import MessageBoxTopicManager from './services/message-box/MessageBoxTopicManager'
-import MessageBoxLookupService from './services/message-box/MessageBoxLookupService'
-import UMPTopicManager from './services/ump/UMPTopicManager'
-import UMPLookupService from './services/ump/UMPLookupServiceFactory'
-import HelloWorldTopicManager from './services/hello/HelloWorldTopicManager'
-import HelloWorldLookupService from './services/hello/HelloWorldLookupServiceFactory'
-import SlackThreadTopicManager from './services/slackthreads/SlackThreadsTopicManager'
-import SlackThreadLookupService from './services/slackthreads/SlackThreadsLookupServiceFactory'
-import DesktopIntegrityTopicManager from './services/desktopintegrity/DesktopIntegrityTopicManager'
-import DesktopIntegrityLookupService from './services/desktopintegrity/DesktopIntegrityLookupServiceFactory'
-import FractionalizeTopicManager from './services/fractionalize/FractionalizeTopicManager'
-import FractionalizeLookupService from './services/fractionalize/FractionalizeLookupServiceFactory'
-import SupplyChainTopicManager from './services/supplychain/SupplyChainTopicManager'
-import SupplyChainLookupService from './services/supplychain/SupplyChainLookupServiceFactory'
-import MonsterBattleTopicManager from './services/monsterbattle/MonsterBattleTopicManager'
-import MonsterBattleLookupService from './services/monsterbattle/MonsterBattleLookupServiceFactory'
-import AnyTopicManager from './services/any/AnyTopicManager'
-import AnyLookupService from './services/any/AnyLookupServiceFactory'
-import AppsTopicManager from './services/apps/AppsTopicManager'
-import AppsLookupService from './services/apps/AppsLookupServiceFactory'
-import DIDTopicManager from './services/did/DIDTopicManager'
-import DIDLookupService from './services/did/DIDLookupServiceFactory'
-import WalletConfigTopicManager from './services/walletconfig/WalletConfigTopicManager'
-import WalletConfigLookupService from './services/walletconfig/WalletConfigLookupServiceFactory'
-import TokenDemoTopicManager from './services/utility-tokens/TokenDemoTopicManager'
-import TokenDemoLookupService from './services/utility-tokens/TokenDemoLookupServiceFactory'
+import {
+    ProtoMapTopicManager,
+    createProtoMapLookupService,
+    CertMapTopicManager,
+    createCertMapLookupService,
+    BasketMapTopicManager,
+    createBasketMapLookupService,
+    UHRPTopicManager,
+    createUHRPLookupService,
+    IdentityTopicManager,
+    createIdentityLookupService,
+    MessageBoxTopicManager,
+    createMessageBoxLookupService,
+    UMPTopicManager,
+    createUMPLookupService,
+    HelloWorldTopicManager,
+    createHelloWorldLookupService,
+    SlackThreadsTopicManager,
+    createSlackThreadsLookupService,
+    DesktopIntegrityTopicManager,
+    createDesktopIntegrityLookupService,
+    FractionalizeTopicManager,
+    createFractionalizeLookupService,
+    SupplyChainTopicManager,
+    createSupplyChainLookupService,
+    MonsterBattleTopicManager,
+    createMonsterBattleLookupService,
+    AnyTopicManager,
+    createAnyLookupService,
+    AppsTopicManager,
+    createAppsLookupService,
+    DIDTopicManager,
+    createDIDLookupService,
+    WalletConfigTopicManager,
+    createWalletConfigLookupService,
+    TokenDemoTopicManager,
+    createTokenDemoLookupService,
+} from '@bsv/overlay-topics'
 
 import { config } from 'dotenv'
 import packageJson from '../package.json'
@@ -55,7 +57,7 @@ const main = async () => {
 
         // Provide the HTTPS URL where your node is available on the internet
         process.env.HOSTING_URL!,
-        
+
         // Provide an adminToken to enable the admin API
         process.env.ADMIN_TOKEN!
     )
@@ -88,78 +90,78 @@ const main = async () => {
     // Here, you will configure the overlay topic managers and lookup services you want.
     // - Topic managers decide what outputs can go in your overlay
     // - Lookup services help people find things in your overlay
-    
+
     // Protocols
     server.configureTopicManager('tm_protomap', new ProtoMapTopicManager())
-    server.configureLookupServiceWithMongo('ls_protomap', ProtoMapLookupService)
+    server.configureLookupServiceWithMongo('ls_protomap', createProtoMapLookupService)
 
     // Certificates
     server.configureTopicManager('tm_certmap', new CertMapTopicManager())
-    server.configureLookupServiceWithMongo('ls_certmap', CertMapLookupService)
+    server.configureLookupServiceWithMongo('ls_certmap', createCertMapLookupService)
 
     // Baskets
     server.configureTopicManager('tm_basketmap', new BasketMapTopicManager())
-    server.configureLookupServiceWithMongo('ls_basketmap', BasketMapLookupService)
+    server.configureLookupServiceWithMongo('ls_basketmap', createBasketMapLookupService)
 
     // UHRP
     server.configureTopicManager('tm_uhrp', new UHRPTopicManager())
-    server.configureLookupServiceWithMongo('ls_uhrp', UHRPLookupService)
+    server.configureLookupServiceWithMongo('ls_uhrp', createUHRPLookupService)
 
     // Identity
     server.configureTopicManager('tm_identity', new IdentityTopicManager())
-    server.configureLookupServiceWithMongo('ls_identity', IdentityLookupService)
+    server.configureLookupServiceWithMongo('ls_identity', createIdentityLookupService)
 
     // MessageBox
     server.configureTopicManager('tm_messagebox', new MessageBoxTopicManager())
-    server.configureLookupServiceWithMongo('ls_messagebox', MessageBoxLookupService)
+    server.configureLookupServiceWithMongo('ls_messagebox', createMessageBoxLookupService)
 
     // UMP
     server.configureTopicManager('tm_users', new UMPTopicManager())
-    server.configureLookupServiceWithMongo('ls_users', UMPLookupService)
+    server.configureLookupServiceWithMongo('ls_users', createUMPLookupService)
 
     // HelloWorld
     server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
-    server.configureLookupServiceWithMongo('ls_helloworld', HelloWorldLookupService)
+    server.configureLookupServiceWithMongo('ls_helloworld', createHelloWorldLookupService)
 
     // SlackThread
-    server.configureTopicManager('tm_slackthread', new SlackThreadTopicManager())
-    server.configureLookupServiceWithMongo('ls_slackthread', SlackThreadLookupService)
+    server.configureTopicManager('tm_slackthread', new SlackThreadsTopicManager())
+    server.configureLookupServiceWithMongo('ls_slackthread', createSlackThreadsLookupService)
 
     // DesktopIntegrity
     server.configureTopicManager('tm_desktopintegrity', new DesktopIntegrityTopicManager())
-    server.configureLookupServiceWithMongo('ls_desktopintegrity', DesktopIntegrityLookupService)
+    server.configureLookupServiceWithMongo('ls_desktopintegrity', createDesktopIntegrityLookupService)
 
     // Fractionalize
     server.configureTopicManager('tm_fractionalize', new FractionalizeTopicManager())
-    server.configureLookupServiceWithMongo('ls_fractionalize', FractionalizeLookupService)
+    server.configureLookupServiceWithMongo('ls_fractionalize', createFractionalizeLookupService)
 
     // SupplyChain
     server.configureTopicManager('tm_supplychain', new SupplyChainTopicManager())
-    server.configureLookupServiceWithMongo('ls_supplychain', SupplyChainLookupService)
+    server.configureLookupServiceWithMongo('ls_supplychain', createSupplyChainLookupService)
 
     // MonsterBattle
     server.configureTopicManager('tm_monsterbattle', new MonsterBattleTopicManager())
-    server.configureLookupServiceWithMongo('ls_monsterbattle', MonsterBattleLookupService)
+    server.configureLookupServiceWithMongo('ls_monsterbattle', createMonsterBattleLookupService)
 
     // Any
     server.configureTopicManager('tm_anytx', new AnyTopicManager())
-    server.configureLookupServiceWithMongo('ls_anytx', AnyLookupService)
+    server.configureLookupServiceWithMongo('ls_anytx', createAnyLookupService)
 
     // Apps
     server.configureTopicManager('tm_apps', new AppsTopicManager())
-    server.configureLookupServiceWithMongo('ls_apps', AppsLookupService)
+    server.configureLookupServiceWithMongo('ls_apps', createAppsLookupService)
 
     // DID
     server.configureTopicManager('tm_did', new DIDTopicManager())
-    server.configureLookupServiceWithMongo('ls_did', DIDLookupService)
+    server.configureLookupServiceWithMongo('ls_did', createDIDLookupService)
 
     // WalletConfig
     server.configureTopicManager('tm_walletconfig', new WalletConfigTopicManager())
-    server.configureLookupServiceWithMongo('ls_walletconfig', WalletConfigLookupService)
+    server.configureLookupServiceWithMongo('ls_walletconfig', createWalletConfigLookupService)
 
     // TokenDemo
     server.configureTopicManager('tm_tokendemo', new TokenDemoTopicManager())
-    server.configureLookupServiceWithMongo('ls_tokendemo', TokenDemoLookupService)
+    server.configureLookupServiceWithMongo('ls_tokendemo', createTokenDemoLookupService)
 
     // For simple local deployments, sync can be disabled.
     server.configureEnableGASPSync(process.env?.GASP_ENABLED === 'true')
