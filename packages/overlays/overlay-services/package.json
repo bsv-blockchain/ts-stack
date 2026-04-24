@@ -1,0 +1,80 @@
+{
+  "name": "@bsv/overlay",
+  "version": "2.0.2",
+  "type": "module",
+  "description": "BSV Blockchain Overlay Services Engine",
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "docs",
+    "mod.ts",
+    "LICENSE.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/mod.d.ts",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./*.ts": {
+      "types": "./dist/types/src/*.d.ts",
+      "import": "./dist/esm/src/*.js",
+      "require": "./dist/cjs/src/*.js"
+    },
+    "./storage": {
+      "import": "./dist/esm/src/storage/index.js",
+      "require": "./dist/cjs/src/storage/index.js",
+      "types": "./dist/types/src/storage/index.d.ts"
+    },
+    "./storage/*": {
+      "import": "./dist/esm/src/storage/*.js",
+      "require": "./dist/cjs/src/storage/*.js",
+      "types": "./dist/types/src/storage/*.d.ts"
+    }
+  },
+  "scripts": {
+    "test": "npm run build && jest",
+    "test:watch": "npm run build && jest --watch",
+    "test:coverage": "npm run build && jest --coverage",
+    "lint": "ts-standard --fix src/**/*.ts",
+    "lint:ci": "ts-standard src/**/*.ts",
+    "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "dev": "tsc -b -w",
+    "prepublish": "npm run build",
+    "doc": "ts2md --inputFilename=mod.ts --outputFilename=docs/API.md --filenameSubstring=API --firstHeadingLevel=1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/overlay-services.git"
+  },
+  "keywords": [
+    "BSV",
+    "Blockchain",
+    "Overlay",
+    "Bitcoin",
+    "SV"
+  ],
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "bugs": {
+    "url": "https://github.com/bitcoin-sv/overlay-services/issues"
+  },
+  "homepage": "https://github.com/bitcoin-sv/overlay-services#readme",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "ts-standard": "^12.0.2",
+    "ts2md": "^0.2.0",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@bsv/gasp": "^1.2.2",
+    "@bsv/sdk": "^2.0.4",
+    "knex": "^3.1.0"
+  }
+}

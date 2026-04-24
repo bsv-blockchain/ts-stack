@@ -1,0 +1,171 @@
+import { GraphNode, OverlayGASPStorage } from '../GASP/OverlayGASPStorage'
+import { Transaction, MerklePath } from '@bsv/sdk'
+import { GASPNode } from '@bsv/gasp'
+
+describe('OverlayGASPStorage', () => {
+  let overlayStorage: OverlayGASPStorage
+  let mockEngine: any
+
+  beforeEach(() => {
+    mockEngine = { storage: { findOutput: jest.fn(() => undefined), findUTXOsForTopic: jest.fn() }, managers: {} }
+    overlayStorage = new OverlayGASPStorage('test-topic', mockEngine)
+  })
+
+  describe('appendToGraph', () => {
+    it('should append a new node to an empty graph', async () => {
+      const mockTx = {
+        rawTx: '001122',
+        outputIndex: 0,
+        graphID: 'txid123.0'
+      }
+
+      // Use actual Transaction implementation
+      const parsedTx = Transaction.fromHex(mockTx.rawTx)
+
+      await overlayStorage.appendToGraph(mockTx)
+
+      expect(Object.keys(overlayStorage.temporaryGraphNodeRefs).length).toBe(1)
+      expect(overlayStorage.temporaryGraphNodeRefs['txid123.0'].txid).toBe(parsedTx.id('hex'))
+    })
+
+    it('throws error when max nodes are exceeded', async () => {
+      overlayStorage.maxNodesInGraph = 1
+      const graphNode: GraphNode = { txid: 'txid123', children: [], rawTx: '', graphID: 'txid4321.2', outputIndex: 0 }
+      overlayStorage.temporaryGraphNodeRefs['txid123.0'] = graphNode
+
+      const mockTx = {
+        rawTx: '334455',
+        outputIndex: 1,
+        graphID: 'txid234.1'
+      }
+
+      await expect(overlayStorage.appendToGraph(mockTx)).rejects.toThrow('The max number of nodes in transaction graph has been reached!')
+    })
+  })
+
+  describe('findKnownUTXOs', () => {
+    it('should return known UTXOs since a given timestamp', async () => {
+      const mockUTXOs = [{ txid: 'txid1', outputIndex: 0, score: 0 }, { txid: 'txid2', outputIndex: 1, score: 0 }]
+      mockEngine.storage.findUTXOsForTopic.mockResolvedValue(mockUTXOs)
+
+      const result = await overlayStorage.findKnownUTXOs(1234567890)
+
+      expect(result).toEqual([
+        { txid: 'txid1', outputIndex: 0, score: 0 },
+        { txid: 'txid2', outputIndex: 1, score: 0 }
+      ])
+      expect(mockEngine.storage.findUTXOsForTopic).toHaveBeenCalledWith('test-topic', 1234567890)
+    })
+
+    it('should handle errors correctly', async () => {
+      mockEngine.storage.findUTXOsForTopic.mockRejectedValue(new Error('Database error'))
+
+      await expect(overlayStorage.findKnownUTXOs(1234567890)).rejects.toThrow('Database error')
+    })
+  })
+
+  describe('hydrateGASPNode', () => {
+    it('should throw an error if no output is found', async () => {
+      await expect(overlayStorage.hydrateGASPNode('graphID', 'txid', 0, false)).rejects.toThrow('No matching output found!')
+    })
+    // TODO: Further test coverage
+  })
+
+  describe('findNeededInputs', () => {
+    // TODO: Write more complicated test cases
+    it('should return inputs needed for further verification when no proof is present', async () => {
+      const mockTx: GASPNode = {
+        rawTx: '001122',
+        proof: undefined,
+        graphID: 'txid123.0',
+        outputIndex: 0
+      }
+
+      const parsedTx = {
+        inputs: [{ sourceTXID: 'inputTxid1', sourceOutputIndex: 0 }],
+        toBEEF: jest.fn(),
+        id: jest.fn().mockReturnValue('txid123')
+      }
+      Transaction.fromHex = jest.fn().mockReturnValue(parsedTx)
+
+      const result = await overlayStorage.findNeededInputs(mockTx)
+
+      expect(result).toEqual({
+        requestedInputs: { 'inputTxid1.0': { metadata: false } }
+      })
+    })
+
+    it('should return inputs needed for further verification when proof is present', async () => {
+      const mockTx: GASPNode = {
+        rawTx: '001122',
+        proof: 'someproof',
+        graphID: 'txid123.0',
+        outputIndex: 0
+      }
+
+      const parsedTx = {
+        inputs: [{ sourceTXID: 'neededTxid', sourceOutputIndex: 1 }],
+        toBEEF: jest.fn(),
+        id: jest.fn().mockReturnValue('txid123'),
+        merklePath: {}
+      }
+      Transaction.fromHex = jest.fn().mockReturnValue(parsedTx)
+      MerklePath.fromHex = jest.fn().mockReturnValue(parsedTx.merklePath)
+
+      mockEngine.managers['test-topic'] = {
+        identifyAdmissibleOutputs: jest.fn().mockResolvedValue({
+          outputsToAdmit: []
+        }),
+        identifyNeededInputs: jest.fn().mockResolvedValue([{ txid: 'neededTxid', outputIndex: 1 }])
+      }
+
+      const result = await overlayStorage.findNeededInputs(mockTx)
+
+      expect(result).toEqual({
+        requestedInputs: { 'neededTxid.1': { metadata: false } }
+      })
+    })
+  })
+
+  describe('discardGraph', () => {
+    it('should discard the graph and its nodes', async () => {
+      const graphNode1: GraphNode = {
+        txid: 'txid123',
+        graphID: 'txid123.0',
+        rawTx: 'rawTxData',
+        outputIndex: 0,
+        children: [],
+        parent: undefined
+      }
+      overlayStorage.temporaryGraphNodeRefs['txid123.0'] = graphNode1
+
+      const parentNode: GraphNode = {
+        txid: 'txid123',
+        graphID: 'txid123.0',
+        rawTx: 'rawTxData',
+        outputIndex: 0,
+        children: []
+      }
+      const graphNode2: GraphNode = {
+        txid: 'txid124',
+        graphID: 'txid123.0',
+        rawTx: 'rawTxData',
+        outputIndex: 1,
+        children: [],
+        parent: parentNode
+      }
+      overlayStorage.temporaryGraphNodeRefs['txid124.0'] = graphNode2
+
+      await overlayStorage.discardGraph('txid123.0')
+
+      expect(overlayStorage.temporaryGraphNodeRefs['txid123.0']).toBeUndefined()
+      expect(overlayStorage.temporaryGraphNodeRefs['txid124.0']).toBeUndefined()
+    })
+  })
+
+  it('should handle non-existent graphID', async () => {
+    await overlayStorage.discardGraph('nonexistent.0')
+
+    expect(Object.keys(overlayStorage.temporaryGraphNodeRefs).length).toBe(0)
+  })
+})
