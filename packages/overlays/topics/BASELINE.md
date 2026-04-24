@@ -10,16 +10,17 @@
 |-------|--------|
 | TypeScript | ✅ passes (`tsc --noEmit`) |
 | Lint | ⚠️ not yet run (ts-standard) |
-| Tests | ❌ none (Tier 2, future work) |
+| Tests | ✅ 40 passing (4 suites: any, hello, did, apps) |
 
 ## Coverage
 
 | Metric | Value |
 |--------|-------|
-| Statements | N/A (no tests) |
-| Branches | N/A |
-| Functions | N/A |
-| Lines | N/A |
+| Test suites | 4 passing |
+| Tests | 40 passing |
+| Topics with TM tests | any, hello, did, apps |
+| Topics with LS tests | any, hello (MongoMemoryServer) |
+| Topics pending tests | identity, kvstore, basketmap, certmap, protomap, ump, uhrp, fractionalize, desktopintegrity, message-box, monsterbattle, slackthreads, supplychain, utility-tokens, walletconfig |
 
 ## Packages
 
@@ -64,7 +65,8 @@
 
 ## Migration gate
 
-- [ ] All 19 topic pairs have at least one integration test
+- [x] any, hello, did, apps — TopicManager + LookupService tested
+- [ ] Remaining 15 topic pairs need at least one integration test
 - [ ] Build passes on CI
 - [ ] overlay-express-examples imports cleanly (done ✅)
 - [ ] All *-services packages re-export from this package (done ✅)
