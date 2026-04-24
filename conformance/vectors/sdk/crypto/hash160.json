@@ -67,6 +67,16 @@
       "input": { "message": "Bitcoin", "encoding": "utf8" },
       "expected": { "hash160": "024f9137e731852f3570492545d6efb85cbcdf49" },
       "tags": ["happy-path"]
+    },
+    {
+      "id": "sdk.crypto.hash160.8",
+      "description": "Hash160 of compressed pubkey for privkey=4",
+      "input": {
+        "pubkey": "02e493dbf1c10d80f3581e4904930b1404cc6c13900ee0758474fa94abe8c4cd13",
+        "encoding": "hex"
+      },
+      "expected": { "hash160": "c42e7ef92fdb603af844d064faad95db9bcdfd3d" },
+      "tags": ["happy-path", "p2pkh"]
     }
   ]
 }

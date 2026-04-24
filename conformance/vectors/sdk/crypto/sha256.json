@@ -90,6 +90,20 @@
       "input": { "message": "0000000000000000", "encoding": "hex" },
       "expected": { "hash": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc" },
       "tags": ["happy-path", "binary", "edge-case"]
+    },
+    {
+      "id": "sdk.crypto.sha256.13",
+      "description": "SHA-256 of ASCII string 'BSV'",
+      "input": { "message": "BSV", "encoding": "utf8" },
+      "expected": { "hash": "6c080e27dedb22dd1850901075c94cfc2c0c5c7d762ff4070871260a71263ad4" },
+      "tags": ["happy-path"]
+    },
+    {
+      "id": "sdk.crypto.sha256.14",
+      "description": "SHA-256 of 16 0xff bytes",
+      "input": { "message": "ffffffffffffffffffffffffffffffff", "encoding": "hex" },
+      "expected": { "hash": "5ac6a5945f16500911219129984ba8b387a06f24fe383ce4e81a73294065461b" },
+      "tags": ["happy-path", "binary", "edge-case"]
     }
   ]
 }
