@@ -34,7 +34,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 |---------|-----|
 | [wallet-toolbox](packages/wallet/wallet-toolbox) | [@bsv/wallet-toolbox](https://www.npmjs.com/package/@bsv/wallet-toolbox) |
 | [wallet-toolbox-examples](packages/wallet/wallet-toolbox-examples) | [@bsv/wallet-toolbox-examples](https://www.npmjs.com/package/@bsv/wallet-toolbox-examples) |
-| [wallet-infra](packages/wallet/wallet-infra) | `wallet-infra` |
+| [wallet-infra](packages/wallet/wallet-infra) | `@bsv/wallet-infra` *(private)* |
 | [ts-wallet-relay](packages/wallet/ts-wallet-relay) | [@bsv/wallet-relay](https://www.npmjs.com/package/@bsv/wallet-relay) |
 | [btms](packages/wallet/btms) | [@bsv/btms](https://www.npmjs.com/package/@bsv/btms) |
 | [btms-permission-module](packages/wallet/btms-permission-module) | [@bsv/btms-permission-module](https://www.npmjs.com/package/@bsv/btms-permission-module) |
@@ -51,18 +51,18 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 |---------|-----|
 | [overlay-services](packages/overlays/overlay-services) | [@bsv/overlay](https://www.npmjs.com/package/@bsv/overlay) |
 | [overlay-express](packages/overlays/overlay-express) | [@bsv/overlay-express](https://www.npmjs.com/package/@bsv/overlay-express) |
-| [overlay-express-examples](packages/overlays/overlay-express-examples) | `overlay-express-examples` |
+| [overlay-express-examples](packages/overlays/overlay-express-examples) | `@bsv/overlay-express-examples` *(private)* |
 | [overlay-discovery-services](packages/overlays/overlay-discovery-services) | [@bsv/overlay-discovery-services](https://www.npmjs.com/package/@bsv/overlay-discovery-services) |
 | [gasp-core](packages/overlays/gasp-core) | [@bsv/gasp](https://www.npmjs.com/package/@bsv/gasp) |
 | [storage-server](packages/overlays/storage-server) | [@bsv/uhrp-storage-server](https://www.npmjs.com/package/@bsv/uhrp-storage-server) |
-| [lite-storage-server](packages/overlays/lite-storage-server) | — |
+| [lite-storage-server](packages/overlays/lite-storage-server) | `@bsv/uhrp-lite` *(private)* |
 | [kvstore-services](packages/overlays/kvstore-services) | [@bsv/kvstore-overlay-services](https://www.npmjs.com/package/@bsv/kvstore-overlay-services) |
-| [ump-services](packages/overlays/ump-services) | — |
+| [ump-services](packages/overlays/ump-services) | `@bsv/ump-services` *(private)* |
 | [apps-overlay-services](packages/overlays/apps-overlay-services) | [@bsv/apps-overlay-services](https://www.npmjs.com/package/@bsv/apps-overlay-services) |
-| [registry-services](packages/overlays/registry-services) | — |
-| [uhrp-services](packages/overlays/uhrp-services) | — |
-| [did-services](packages/overlays/did-services) | — |
-| [identity-services](packages/overlays/identity-services) | — |
+| [registry-services](packages/overlays/registry-services) | `@bsv/registry-services` *(private)* |
+| [uhrp-services](packages/overlays/uhrp-services) | `@bsv/uhrp-services` *(private)* |
+| [did-services](packages/overlays/did-services) | `@bsv/did-services` *(private)* |
+| [identity-services](packages/overlays/identity-services) | `@bsv/identity-services` *(private)* |
 | [did-client](packages/overlays/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 | [btms-backend](packages/overlays/btms-backend) | `@bsv/btms-backend` *(private)* |
 
