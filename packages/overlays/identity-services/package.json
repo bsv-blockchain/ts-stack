@@ -1,0 +1,24 @@
+{
+  "name": "@bsv/identity-services",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standard BSV project structure",
+  "scripts": {
+    "lars": "lars",
+    "cars": "cars",
+    "lars:config": "lars config",
+    "start": "lars start",
+    "build": "cars build 1",
+    "deploy": "cars deploy now 1",
+    "test": "npm --prefix backend test",
+    "test:watch": "npm --prefix backend run test:watch",
+    "test:coverage": "npm --prefix backend run test:coverage"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "devDependencies": {
+    "@bsv/cars-cli": "^1.2.9",
+    "@bsv/lars": "^1.5.8"
+  }
+}
