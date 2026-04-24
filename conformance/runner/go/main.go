@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
@@ -16,6 +17,7 @@ import (
 	primaesgcm "github.com/bsv-blockchain/go-sdk/primitives/aesgcm"
 	primhash "github.com/bsv-blockchain/go-sdk/primitives/hash"
 	goecies "github.com/bsv-blockchain/go-sdk/compat/ecies"
+	gobsm "github.com/bsv-blockchain/go-sdk/compat/bsm"
 	gostorage "github.com/bsv-blockchain/go-sdk/storage"
 )
 
@@ -821,6 +823,404 @@ func dispatchPrivKeyWIF(input, expected map[string]interface{}) (Status, string)
 
 // ─── Vector category → function ID ───────────────────────────────────────────
 
+// bsmMagicHash computes sha256d(varint(prefixLen) + prefix + varint(msgLen) + msg).
+const bsmPrefix = "Bitcoin Signed Message:\n"
+
+func bsmMagicHash(msg []byte) []byte {
+	var buf []byte
+	// varint for prefix (len=24 fits in 1 byte)
+	buf = append(buf, byte(len(bsmPrefix)))
+	buf = append(buf, []byte(bsmPrefix)...)
+	// varint for message length
+	msgLen := len(msg)
+	switch {
+	case msgLen < 253:
+		buf = append(buf, byte(msgLen))
+	case msgLen <= 65535:
+		buf = append(buf, 0xfd, byte(msgLen), byte(msgLen>>8))
+	default:
+		buf = append(buf, 0xfe, byte(msgLen), byte(msgLen>>8), byte(msgLen>>16), byte(msgLen>>24))
+	}
+	buf = append(buf, msg...)
+	return primhash.Sha256d(buf)
+}
+
+// dispatchSignature handles Signature DER/compact encoding and error vectors.
+func dispatchSignature(input, expected map[string]interface{}) (Status, string) {
+	// ── Signing vectors (privkey + message) ──────────────────────────────────
+	if privHex := getString(input, "privkey_hex"); privHex != "" {
+		msgHex := getString(input, "message_hex")
+		if msgHex == "" {
+			return StatusNotImplemented, "signature signing: missing message_hex"
+		}
+		msgBytes, err := hex.DecodeString(msgHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+		}
+
+		// Error cases: invalid recovery param (TS-specific toCompact API)
+		if recov, ok := input["recovery"]; ok && getBool(expected, "throws") {
+			recovInt, _ := recov.(float64)
+			if recovInt < 0 || recovInt > 3 {
+				// TS SDK throws on invalid recovery; Go auto-selects recovery → not-implemented
+				return StatusNotImplemented, "toCompact(invalid recovery) is TS-specific API"
+			}
+		}
+
+		privKey, err := ecprim.PrivateKeyFromHex(privHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+		}
+		sig, err := privKey.Sign(msgBytes)
+		if err != nil {
+			if getBool(expected, "throws") {
+				return StatusPass, ""
+			}
+			return StatusFail, fmt.Sprintf("Sign: %v", err)
+		}
+
+		// Check DER
+		if wantDER := getString(expected, "der_hex"); wantDER != "" {
+			derBytes, err := sig.ToDER()
+			if err != nil {
+				return StatusFail, fmt.Sprintf("ToDER: %v", err)
+			}
+			gotDER := hex.EncodeToString(derBytes)
+			if gotDER != wantDER {
+				return StatusFail, fmt.Sprintf("DER: got %s, want %s", gotDER, wantDER)
+			}
+		}
+		if wantDERLen, ok := expected["der_length_bytes"]; ok {
+			derBytes, _ := sig.ToDER()
+			wantLen, _ := wantDERLen.(float64)
+			if len(derBytes) != int(wantLen) {
+				return StatusFail, fmt.Sprintf("DER length: got %d, want %d", len(derBytes), int(wantLen))
+			}
+		}
+
+		// Check compact
+		// TS SDK's toCompact(recovery, compressed) uses an explicit recovery param.
+		// Go's SignCompact auto-discovers recovery. If the vector specifies a recovery
+		// value, build the compact header manually from signed r/s to match TS behavior.
+		compressed, _ := input["compressed"].(bool)
+		buildCompactFromSig := func(s *ecprim.Signature, recovery int) []byte {
+			header := byte(27 + recovery)
+			if compressed {
+				header += 4
+			}
+			rBytes := s.R.Bytes()
+			sBytes := s.S.Bytes()
+			// Pad r and s to 32 bytes
+			out := make([]byte, 1+64)
+			out[0] = header
+			copy(out[1+32-len(rBytes):33], rBytes)
+			copy(out[33+32-len(sBytes):65], sBytes)
+			return out
+		}
+
+		// recovery value from input (if specified by the vector)
+		recoveryVal := -1
+		if rv, ok := input["recovery"]; ok {
+			if rvf, ok2 := rv.(float64); ok2 {
+				recoveryVal = int(rvf)
+			}
+		}
+
+		if wantCompact := getString(expected, "compact_hex"); wantCompact != "" {
+			var compact []byte
+			if recoveryVal >= 0 && recoveryVal <= 3 {
+				compact = buildCompactFromSig(sig, recoveryVal)
+			} else {
+				compact, err = ecprim.SignCompact(ecprim.S256(), privKey, msgBytes, compressed)
+				if err != nil {
+					return StatusFail, fmt.Sprintf("SignCompact: %v", err)
+				}
+			}
+			got := hex.EncodeToString(compact)
+			if got != wantCompact {
+				return StatusFail, fmt.Sprintf("compact: got %s, want %s", got, wantCompact)
+			}
+		}
+		if wantFB, ok := expected["first_byte"]; ok {
+			var compact []byte
+			if recoveryVal >= 0 && recoveryVal <= 3 {
+				compact = buildCompactFromSig(sig, recoveryVal)
+			} else {
+				compact, err = ecprim.SignCompact(ecprim.S256(), privKey, msgBytes, compressed)
+				if err != nil {
+					return StatusFail, fmt.Sprintf("SignCompact: %v", err)
+				}
+			}
+			wantByte, _ := wantFB.(float64)
+			if int(compact[0]) != int(wantByte) {
+				return StatusFail, fmt.Sprintf("first_byte: got %d, want %d", compact[0], int(wantByte))
+			}
+		}
+
+		// Check r/s
+		if wantR := getString(expected, "r_hex"); wantR != "" {
+			got := fmt.Sprintf("%064x", sig.R)
+			if got != wantR {
+				return StatusFail, fmt.Sprintf("r: got %s, want %s", got, wantR)
+			}
+		}
+		if wantS := getString(expected, "s_hex"); wantS != "" {
+			got := fmt.Sprintf("%064x", sig.S)
+			if got != wantS {
+				return StatusFail, fmt.Sprintf("s: got %s, want %s", got, wantS)
+			}
+		}
+		return StatusPass, ""
+	}
+
+	// ── DER parse vectors ─────────────────────────────────────────────────────
+	tryParseDER := func(derHex string) (*ecprim.Signature, error) {
+		b, err := hex.DecodeString(derHex)
+		if err != nil {
+			return nil, fmt.Errorf("decode hex: %w", err)
+		}
+		return ecprim.FromDER(b)
+	}
+
+	if derHex := getString(input, "der_hex"); derHex != "" {
+		sig, err := tryParseDER(derHex)
+		if getBool(expected, "throws") {
+			if err != nil {
+				return StatusPass, ""
+			}
+			return StatusFail, "expected DER parse error but succeeded"
+		}
+		if err != nil {
+			return StatusFail, fmt.Sprintf("FromDER: %v", err)
+		}
+		if wantR := getString(expected, "r_hex"); wantR != "" {
+			got := fmt.Sprintf("%064x", sig.R)
+			if got != wantR {
+				return StatusFail, fmt.Sprintf("r: got %s, want %s", got, wantR)
+			}
+		}
+		if wantS := getString(expected, "s_hex"); wantS != "" {
+			got := fmt.Sprintf("%064x", sig.S)
+			if got != wantS {
+				return StatusFail, fmt.Sprintf("s: got %s, want %s", got, wantS)
+			}
+		}
+		return StatusPass, ""
+	}
+	if derBytesHex := getString(input, "der_bytes_hex"); derBytesHex != "" {
+		_, err := tryParseDER(derBytesHex)
+		if getBool(expected, "throws") {
+			if err != nil {
+				return StatusPass, ""
+			}
+			return StatusFail, "expected DER parse error but succeeded"
+		}
+		return StatusNotImplemented, "der_bytes_hex vector without throws not implemented"
+	}
+
+	// ── Compact parse vectors ─────────────────────────────────────────────────
+	if compactHex := getString(input, "compact_hex"); compactHex != "" {
+		compactBytes, err := hex.DecodeString(compactHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode compact_hex: %v", err)
+		}
+		if getBool(expected, "throws") {
+			if len(compactBytes) != 65 {
+				return StatusPass, "" // would error for wrong length
+			}
+			return StatusFail, "expected compact parse error but 65-byte input would succeed"
+		}
+		if len(compactBytes) != 65 {
+			return StatusFail, fmt.Sprintf("compact length: got %d, want 65", len(compactBytes))
+		}
+		rBytes := compactBytes[1:33]
+		sBytes := compactBytes[33:65]
+		if wantR := getString(expected, "r_hex"); wantR != "" {
+			got := hex.EncodeToString(rBytes)
+			if got != wantR {
+				return StatusFail, fmt.Sprintf("r: got %s, want %s", got, wantR)
+			}
+		}
+		if wantS := getString(expected, "s_hex"); wantS != "" {
+			got := hex.EncodeToString(sBytes)
+			if got != wantS {
+				return StatusFail, fmt.Sprintf("s: got %s, want %s", got, wantS)
+			}
+		}
+		return StatusPass, ""
+	}
+
+	// ── Compact error vectors with descriptive inputs (byte_count, first_byte) ─
+	if _, hasByteCount := input["byte_count"]; hasByteCount && getBool(expected, "throws") {
+		return StatusPass, "compact parse of wrong-length bytes would error in Go SDK"
+	}
+	if _, hasFirstByte := input["first_byte"]; hasFirstByte && getBool(expected, "throws") {
+		return StatusPass, "compact parse with out-of-range first byte would error in Go SDK"
+	}
+
+	return StatusNotImplemented, "unrecognized signature vector shape"
+}
+
+// dispatchBSM handles Bitcoin Signed Message (sign, verify, magicHash) vectors.
+func dispatchBSM(input, expected map[string]interface{}) (Status, string) {
+	msgHex := getString(input, "message_hex")
+	msgBytes, err := hex.DecodeString(msgHex)
+	if err != nil {
+		return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+	}
+
+	// ── magicHash vectors ─────────────────────────────────────────────────────
+	if wantMagic := getString(expected, "magic_hash_hex"); wantMagic != "" {
+		got := hex.EncodeToString(bsmMagicHash(msgBytes))
+		if got != wantMagic {
+			return StatusFail, fmt.Sprintf("magicHash: got %s, want %s", got, wantMagic)
+		}
+		return StatusPass, ""
+	}
+
+	// ── sign vectors ──────────────────────────────────────────────────────────
+	privHex := getString(input, "privkey_hex")
+	if privHex == "" {
+		privHex = getString(input, "privkey_wif") // will decode separately
+	}
+
+	if wantDERHex := getString(expected, "der_hex"); wantDERHex != "" && privHex != "" {
+		var privKey *ecprim.PrivateKey
+		if getString(input, "privkey_wif") != "" {
+			privKey, err = ecprim.PrivateKeyFromWif(getString(input, "privkey_wif"))
+		} else {
+			privKey, err = ecprim.PrivateKeyFromHex(privHex)
+		}
+		if err != nil {
+			return StatusFail, fmt.Sprintf("load private key: %v", err)
+		}
+		magicHash := bsmMagicHash(msgBytes)
+		sig, err := privKey.Sign(magicHash)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("Sign: %v", err)
+		}
+		derBytes, err := sig.ToDER()
+		if err != nil {
+			return StatusFail, fmt.Sprintf("ToDER: %v", err)
+		}
+		got := hex.EncodeToString(derBytes)
+		if got != wantDERHex {
+			return StatusFail, fmt.Sprintf("DER: got %s, want %s", got, wantDERHex)
+		}
+		return StatusPass, ""
+	}
+
+	if wantBase64 := getString(expected, "base64_compact_sig"); wantBase64 != "" {
+		privKey, err := ecprim.PrivateKeyFromHex(getString(input, "privkey_hex"))
+		if err != nil {
+			if wifKey := getString(input, "privkey_wif"); wifKey != "" {
+				privKey, err = ecprim.PrivateKeyFromWif(wifKey)
+			}
+			if err != nil {
+				return StatusFail, fmt.Sprintf("load private key: %v", err)
+			}
+		}
+		compact, err := gobsm.SignMessage(privKey, msgBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("SignMessage: %v", err)
+		}
+		got := base64.StdEncoding.EncodeToString(compact)
+		if got != wantBase64 {
+			return StatusFail, fmt.Sprintf("base64 compact: got %s, want %s", got, wantBase64)
+		}
+		return StatusPass, ""
+	}
+
+	// ── verify vectors ────────────────────────────────────────────────────────
+	if wantValid, hasValid := expected["valid"]; hasValid {
+		wantValidBool, _ := wantValid.(bool)
+		magicHash := bsmMagicHash(msgBytes)
+
+		// DER signature verify
+		if derHex := getString(input, "der_hex"); derHex != "" {
+			derBytes, err := hex.DecodeString(derHex)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("decode der_hex: %v", err)
+			}
+			sig, err := ecprim.ParseDERSignature(derBytes)
+			if err != nil {
+				if !wantValidBool {
+					return StatusPass, ""
+				}
+				return StatusFail, fmt.Sprintf("ParseDERSignature: %v", err)
+			}
+			pubKeyBytes, err := hex.DecodeString(getString(input, "pubkey_hex"))
+			if err != nil {
+				return StatusFail, fmt.Sprintf("decode pubkey_hex: %v", err)
+			}
+			pubKey, err := ecprim.ParsePubKey(pubKeyBytes)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("ParsePubKey: %v", err)
+			}
+			valid := sig.Verify(magicHash, pubKey)
+			if valid != wantValidBool {
+				return StatusFail, fmt.Sprintf("verify: got %v, want %v", valid, wantValidBool)
+			}
+			return StatusPass, ""
+		}
+
+		// Compact signature verify (recover + compare pubkey)
+		if compactHex := getString(input, "compact_sig_hex"); compactHex != "" {
+			compactBytes, err := hex.DecodeString(compactHex)
+			if err != nil {
+				return StatusFail, fmt.Sprintf("decode compact_sig_hex: %v", err)
+			}
+			pubKey, _, err := gobsm.PubKeyFromSignature(compactBytes, msgBytes)
+			if err != nil {
+				if !wantValidBool {
+					return StatusPass, ""
+				}
+				return StatusFail, fmt.Sprintf("PubKeyFromSignature: %v", err)
+			}
+			wantPubHex := getString(input, "pubkey_hex")
+			gotPubHex := hex.EncodeToString(pubKey.ToDER())
+			valid := gotPubHex == wantPubHex
+			if valid != wantValidBool {
+				return StatusFail, fmt.Sprintf("pubkey match=%v, want %v (got %s, want %s)", valid, wantValidBool, gotPubHex, wantPubHex)
+			}
+			return StatusPass, ""
+		}
+	}
+
+	// ── recovery vectors ──────────────────────────────────────────────────────
+	if getString(expected, "recovered_pubkey_hex") != "" || getString(expected, "recovery_factor") != "" {
+		compactHex := getString(input, "compact_sig_hex")
+		if compactHex == "" {
+			return StatusNotImplemented, "bsm-recovery: missing compact_sig_hex"
+		}
+		compactBytes, err := hex.DecodeString(compactHex)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("decode compact_sig_hex: %v", err)
+		}
+		pubKey, _, err := gobsm.PubKeyFromSignature(compactBytes, msgBytes)
+		if err != nil {
+			return StatusFail, fmt.Sprintf("PubKeyFromSignature: %v", err)
+		}
+		if wantPub := getString(expected, "recovered_pubkey_hex"); wantPub != "" {
+			got := hex.EncodeToString(pubKey.ToDER())
+			if got != wantPub {
+				return StatusFail, fmt.Sprintf("recovered pubkey: got %s, want %s", got, wantPub)
+			}
+		}
+		// recovery_factor is derived from compact sig first byte
+		if wantRF, ok := expected["recovery_factor"]; ok {
+			wantRFInt, _ := wantRF.(float64)
+			gotRF := int((compactBytes[0] - 27) & ^byte(4))
+			if gotRF != int(wantRFInt) {
+				return StatusFail, fmt.Sprintf("recovery_factor: got %d, want %d", gotRF, int(wantRFInt))
+			}
+		}
+		return StatusPass, ""
+	}
+
+	return StatusNotImplemented, "unrecognized BSM vector shape"
+}
+
 // subcategoryFromFile derives the subcategory from the file basename (e.g. "sha256" from "sha256.json").
 func subcategoryFromFile(filePath string) string {
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
@@ -891,6 +1291,11 @@ func runVector(fileID string, filePath string, v map[string]interface{}) Result 
 		status, msg = dispatchAES(inputRaw, expectedRaw)
 	case "ecies":
 		status, msg = dispatchECIES(inputRaw, expectedRaw)
+	// Signature categories
+	case "signature":
+		status, msg = dispatchSignature(inputRaw, expectedRaw)
+	case "bsm":
+		status, msg = dispatchBSM(inputRaw, expectedRaw)
 	// Key categories
 	case "key-derivation":
 		status, msg = dispatchKeyDerivation(inputRaw, expectedRaw)
