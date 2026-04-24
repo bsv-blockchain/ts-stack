@@ -1,0 +1,78 @@
+# ChaintracksService with Bulk Headers CDN
+#
+# Quick Start:
+#   docker compose up -d
+#
+# Services:
+#   - ChaintracksService API: http://localhost:3011
+#   - Bulk Headers CDN: http://localhost:3012
+#
+# Configuration:
+#   Copy .env.docker to .env and customize if needed
+#
+# Documentation:
+#   See DOCKER.md and README.md for complete information
+
+services:
+  chaintracks-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chaintracks-server
+    restart: unless-stopped
+    ports:
+      - "3011:3011"  # ChaintracksService
+      - "3012:3012"  # CDN Server
+    environment:
+      # Chain configuration
+      - CHAIN=main
+      - PORT=3011
+
+      # WhatsOnChain API Key (optional but recommended)
+      # Get your key at: https://whatsonchain.com/
+      - WHATSONCHAIN_API_KEY=${WHATSONCHAIN_API_KEY:-}
+
+      # Source CDN - Where to download headers FROM if local files don't exist
+      - SOURCE_CDN_URL=${SOURCE_CDN_URL:-https://cdn.projectbabbage.com/blockheaders/}
+
+      # Bulk Headers CDN - Enable hosting
+      - ENABLE_BULK_HEADERS_CDN=${ENABLE_BULK_HEADERS_CDN:-true}
+
+      # CDN Host URL - Public URL where YOUR CDN is accessible
+      # Change this to your domain in production
+      - CDN_HOST_URL=${CDN_HOST_URL:-http://localhost:3012}
+
+      # Bulk headers storage path
+      - BULK_HEADERS_PATH=/app/public/headers
+
+      # Auto-export interval (67 hours = 400 blocks)
+      - BULK_HEADERS_AUTO_EXPORT_INTERVAL=${BULK_HEADERS_AUTO_EXPORT_INTERVAL:-240000000}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+    volumes:
+      # Persist bulk headers across container restarts
+      - bulk-headers:/app/public/headers
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3011/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+volumes:
+  # Named volume to persist bulk headers
+  bulk-headers:
+    driver: local
