@@ -10,17 +10,17 @@
 |-------|--------|
 | TypeScript | ✅ passes (`tsc --noEmit`) |
 | Lint | ⚠️ not yet run (ts-standard) |
-| Tests | ✅ 40 passing (4 suites: any, hello, did, apps) |
+| Tests | ✅ 189 passing, 1 skipped (19 suites: all 19 topic pairs) |
 
 ## Coverage
 
 | Metric | Value |
 |--------|-------|
-| Test suites | 4 passing |
-| Tests | 40 passing |
-| Topics with TM tests | any, hello, did, apps |
-| Topics with LS tests | any, hello (MongoMemoryServer) |
-| Topics pending tests | identity, kvstore, basketmap, certmap, protomap, ump, uhrp, fractionalize, desktopintegrity, message-box, monsterbattle, slackthreads, supplychain, utility-tokens, walletconfig |
+| Test suites | 19 passing |
+| Tests | 189 passing, 1 skipped |
+| Topics with TM tests | all 19 topic pairs |
+| Topics with LS tests | any, hello, uhrp, walletconfig, message-box, basketmap, protomap, certmap, identity, kvstore, ump, fractionalize, supplychain, slackthreads (MongoMemoryServer) |
+| Topics pending tests | none |
 
 ## Packages
 
@@ -65,8 +65,11 @@
 
 ## Migration gate
 
-- [x] any, hello, did, apps — TopicManager + LookupService tested
-- [ ] Remaining 15 topic pairs need at least one integration test
+- [x] any, hello, did, apps — tested
+- [x] uhrp, walletconfig, message-box, basketmap, protomap, certmap — tested
+- [x] identity, kvstore, ump, fractionalize, supplychain, slackthreads — tested
+- [x] desktopintegrity, monsterbattle, utility-tokens — tested
+- [x] All 19 topic pairs have at least one integration test
 - [ ] Build passes on CI
-- [ ] overlay-express-examples imports cleanly (done ✅)
-- [ ] All *-services packages re-export from this package (done ✅)
+- [x] overlay-express-examples imports cleanly
+- [x] All *-services packages re-export from this package
