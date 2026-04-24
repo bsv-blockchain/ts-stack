@@ -1,0 +1,76 @@
+{
+    "notes": [
+        {
+            "what": "status",
+            "status_was": "unknown",
+            "status_now": "unsent",
+            "when": "2025-03-07T20:34:13.168Z"
+        },
+        {
+            "name": "BitailsPostBeef",
+            "when": "2025-03-07T20:34:25.565Z",
+            "what": "postBeef"
+        },
+        {
+            "name": "ARCpostBeef",
+            "when": "2025-03-07T20:34:25.568Z",
+            "what": "postBeefV2ToV1"
+        },
+        {
+            "name": "BitailsPostBeef",
+            "when": "2025-03-07T20:34:26.070Z",
+            "beef": "0100beef01fe65631900020200009df812619ae232d2363d91516ab3e811211192933526bbc2aee71b54ccb236d10102462876eec65d9aa26d957421c5cc8dd9119b61177242b9dd814fb190fd0a361801010076a3297928f6841bcb656e91225540e87c65f67d8ec12bc768d7656eb7561b3d02010000000159617a9d17562f7c9765e5dfa6a9a393aa2809ca6166a3d7a31c09efcc5070141f0000006a47304402200a528145a67ba1879b88a093cb711f79f04413a81d5678f314302e36a7f59e43022010bc4bb3c2574052c50bbdc8a05c31fb39e69280656b34f5dc22e2ceadc3bb4a412102fd4200bf389d16479b3d06f97fee0752f2c3b9dc29fb3ddce2b327d851b8902bffffffff0204000000000000001976a9140df1a69c834bb7d9bb5b2b7d6a34e5a401db3e1688ac01000000000000001976a91423f2562a8092ed24eddc77c74387b44c561692a188ac0000000001000100000001462876eec65d9aa26d957421c5cc8dd9119b61177242b9dd814fb190fd0a3618000000006a47304402204183bbfdcf11d50907b91f5e70ea8f81228501ce84e24af75c8d984682d094dc022029caa8f7e5acb4990bbeafee523a3c4a99b78e98b9e5c41349147b099679d4ae412103b76389eea6494c2c30443cba9d59b9dba05fb04e467bc94272629615b87a429fffffffff0202000000000000001976a91476d851e59fcb4ee0ebe6947496db3a393b08e49c88ac01000000000000001976a91423f2562a8092ed24eddc77c74387b44c561692a188ac0000000000",
+            "txids": "f71d25fccb76f619ee2604cd9b5a684f31389a482f6f1bb0bfb2a07610c7681d",
+            "what": "postBeefError"
+        },
+        {
+            "name": "BitailsPostRawTx",
+            "when": "2025-03-07T20:34:26.070Z",
+            "raws": "0100000001462876eec65d9aa26d957421c5cc8dd9119b61177242b9dd814fb190fd0a3618000000006a47304402204183bbfdcf11d50907b91f5e70ea8f81228501ce84e24af75c8d984682d094dc022029caa8f7e5acb4990bbeafee523a3c4a99b78e98b9e5c41349147b099679d4ae412103b76389eea6494c2c30443cba9d59b9dba05fb04e467bc94272629615b87a429fffffffff0202000000000000001976a91476d851e59fcb4ee0ebe6947496db3a393b08e49c88ac01000000000000001976a91423f2562a8092ed24eddc77c74387b44c561692a188ac00000000",
+            "txids": "f71d25fccb76f619ee2604cd9b5a684f31389a482f6f1bb0bfb2a07610c7681d",
+            "url": "https://test-api.bitails.io/tx/broadcast/multi",
+            "what": "postRawsError",
+            "txid": "f71d25fccb76f619ee2604cd9b5a684f31389a482f6f1bb0bfb2a07610c7681d",
+            "code": -25,
+            "message": "missing-inputs"
+        },
+        {
+            "name": "WoCpostBeef",
+            "when": "2025-03-07T20:34:26.086Z",
+            "beef": "0100beef01fe65631900020200009df812619ae232d2363d91516ab3e811211192933526bbc2aee71b54ccb236d10102462876eec65d9aa26d957421c5cc8dd9119b61177242b9dd814fb190fd0a361801010076a3297928f6841bcb656e91225540e87c65f67d8ec12bc768d7656eb7561b3d02010000000159617a9d17562f7c9765e5dfa6a9a393aa2809ca6166a3d7a31c09efcc5070141f0000006a47304402200a528145a67ba1879b88a093cb711f79f04413a81d5678f314302e36a7f59e43022010bc4bb3c2574052c50bbdc8a05c31fb39e69280656b34f5dc22e2ceadc3bb4a412102fd4200bf389d16479b3d06f97fee0752f2c3b9dc29fb3ddce2b327d851b8902bffffffff0204000000000000001976a9140df1a69c834bb7d9bb5b2b7d6a34e5a401db3e1688ac01000000000000001976a91423f2562a8092ed24eddc77c74387b44c561692a188ac0000000001000100000001462876eec65d9aa26d957421c5cc8dd9119b61177242b9dd814fb190fd0a3618000000006a47304402204183bbfdcf11d50907b91f5e70ea8f81228501ce84e24af75c8d984682d094dc022029caa8f7e5acb4990bbeafee523a3c4a99b78e98b9e5c41349147b099679d4ae412103b76389eea6494c2c30443cba9d59b9dba05fb04e467bc94272629615b87a429fffffffff0202000000000000001976a91476d851e59fcb4ee0ebe6947496db3a393b08e49c88ac01000000000000001976a91423f2562a8092ed24eddc77c74387b44c561692a188ac0000000000",
+            "txids": "f71d25fccb76f619ee2604cd9b5a684f31389a482f6f1bb0bfb2a07610c7681d",
+            "what": "postBeefError"
+        },
+        {
+            "name": "WoCpostRawTx",
+            "when": "2025-03-07T20:34:26.086Z",
+            "rawTx": "0100000001462876eec65d9aa26d957421c5cc8dd9119b61177242b9dd814fb190fd0a3618000000006a47304402204183bbfdcf11d50907b91f5e70ea8f81228501ce84e24af75c8d984682d094dc022029caa8f7e5acb4990bbeafee523a3c4a99b78e98b9e5c41349147b099679d4ae412103b76389eea6494c2c30443cba9d59b9dba05fb04e467bc94272629615b87a429fffffffff0202000000000000001976a91476d851e59fcb4ee0ebe6947496db3a393b08e49c88ac01000000000000001976a91423f2562a8092ed24eddc77c74387b44c561692a188ac00000000",
+            "txid": "f71d25fccb76f619ee2604cd9b5a684f31389a482f6f1bb0bfb2a07610c7681d",
+            "url": "https://api.whatsonchain.com/v1/bsv/test/tx/raw",
+            "what": "postRawTxError",
+            "data": "unexpected response code 500: Missing inputs",
+            "statusText": "unexpected response code 500: Missing inputs",
+            "status": "unexpected response code 500: Missing inputs"
+        },
+        {
+            "name": "ARCv1tx",
+            "when": "2025-03-07T20:34:31.157Z",
+            "txid": "f71d25fccb76f619ee2604cd9b5a684f31389a482f6f1bb0bfb2a07610c7681d",
+            "extraInfo": "",
+            "txStatus": "SEEN_IN_ORPHAN_MEMPOOL",
+            "what": "postRawTxSuccess"
+        },
+        {
+            "what": "postToNetwork",
+            "name": "ARC",
+            "status": "success",
+            "when": "2025-03-07T20:34:31.168Z"
+        },
+        {
+            "what": "status",
+            "status_was": "unsent",
+            "status_now": "unmined",
+            "when": "2025-03-07T20:34:31.168Z"
+        }
+    ]
+}

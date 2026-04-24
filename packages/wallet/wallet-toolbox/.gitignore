@@ -1,0 +1,48 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+node_modules
+
+# dependencies
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.env
+.env.mine
+
+tmp
+.eslintrc.json
+
+/dist
+
+out
+out-client
+test.db
+backup_*.sqlite
+backup-*.sqlite
+test/wallet/support/reqhistory.sqlite
+
+node_modules
+src/services/chaintracker/chaintracks/__tests/data/*.sqlite
+src/services/chaintracker/chaintracks/__tests/data/export*
+
+*.tgz
+file:memdb_*
+walletLiveTestData.sqlite
+.zed

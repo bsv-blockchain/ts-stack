@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "rootDir": ".", // Include both src and test directories
+    "outDir": "./client/out",
+    "target": "es2018",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "declaration": true,
+    "declarationMap": true,
+    "noImplicitOverride": true
+  },
+  "files": [
+    "src/index.client.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "out",
+    "client/out",
+    "mobile/out",
+    "__tests"
+  ]
+}

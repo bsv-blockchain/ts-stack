@@ -1,0 +1,44 @@
+{
+  "options": [
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/setup.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "Setup",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/monitor.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "monitor",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/services.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "services",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.ts",
+      "outputFilename": "docs/storage.md",
+      "firstHeadingLevel": 2,
+      "filenameSubString": "src/storage",
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/index.client.ts",
+      "outputFilename": "docs/client.md",
+      "firstHeadingLevel": 2,
+      "noDetailsSummary": true
+    },
+    {
+      "inputFilename": "src/Wallet.ts",
+      "outputFilename": "docs/wallet.md",
+      "firstHeadingLevel": 2,
+      "noDetailsSummary": true
+    }
+  ]
+}

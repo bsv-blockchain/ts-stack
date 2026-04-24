@@ -1,0 +1,288 @@
+import { WalletClient, ListOutputsArgs } from '@bsv/sdk'
+import { sdk, verifyOne } from '../../../src'
+import {
+  specOpInvalidChange,
+  specOpSetWalletChangeParams,
+  specOpThrowReviewActions,
+  specOpWalletBalance
+} from '../../../src/sdk'
+import { _tu, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
+
+describe('specOps tests', () => {
+  jest.setTimeout(99999999)
+
+  test('00', () => {})
+  if (_tu.noTestEnv('test')) return
+  if (_tu.noTestEnv('main')) return
+
+  test('0 wallet balance specOp', async () => {
+    const tcs: ListOutputsArgs[] = [
+      // Custom basket with tag
+      { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
+      // Custom basket without tag
+      { basket: 'test-output' },
+      // Default basket without tag
+      { basket: 'default' }
+    ]
+
+    const setup = await createSetup('test')
+    for (const tc of tcs) {
+      tc.limit = 10000
+      tc.offset = 0
+      const r = await setup.wallet.listOutputs(tc)
+      const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
+
+      const tc1 =
+        tc.basket === 'default'
+          ? { ...tc, basket: specOpWalletBalance }
+          : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
+      const r1 = await setup.wallet.listOutputs(tc1)
+
+      expect(r1.totalOutputs).toBe(sum)
+    }
+    await setup.wallet.destroy()
+  })
+
+  test('0aa storage balance specOp', async () => {
+    const tcs: ListOutputsArgs[] = [
+      // Default basket without tag
+      { basket: 'default' },
+      // Custom basket with tag
+      { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
+      // Custom basket without tag
+      { basket: 'test-output' }
+    ]
+
+    const s = await _tu.createMainReviewSetup()
+    const auth: sdk.AuthId = { userId: 88, identityKey: s.env.identityKey! }
+    for (const tc of tcs) {
+      const vtc = sdk.Validation.validateListOutputsArgs(tc)
+      vtc.limit = 10000
+      vtc.offset = 0
+      const r = await s.storage.listOutputs(auth, vtc)
+      const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
+
+      const tc1 =
+        tc.basket === 'default'
+          ? { ...tc, basket: specOpWalletBalance }
+          : { ...tc, tags: [...(tc.tags || []), specOpWalletBalance] }
+      const vtc1 = sdk.Validation.validateListOutputsArgs(tc1)
+      const r1 = await s.storage.listOutputs(auth, vtc1)
+
+      expect(r1.totalOutputs).toBe(sum)
+    }
+    await s.storage.destroy()
+  })
+
+  test('0a wallet balance method', async () => {
+    const setup = await createSetup('test')
+
+    const tcs: (ListOutputsArgs | undefined)[] = [
+      undefined,
+      // Default basket without tag
+      { basket: 'default' },
+      // Custom basket with tag
+      { basket: 'test-output', tags: ['test-output'], tagQueryMode: 'all' },
+      // Custom basket without tag
+      { basket: 'test-output' }
+    ]
+    for (const tc of tcs) {
+      const args = tc || { basket: 'default' }
+      args.limit = 10000
+      args.offset = 0
+      const r = await setup.wallet.listOutputs(args)
+      const sum = r.outputs.reduce((acc, o) => acc + o.satoshis, 0)
+
+      const sum2 = await setup.wallet.balance(tc)
+      expect(sum2).toBe(sum)
+
+      if (tc !== undefined) {
+        const sum3 = (await setup.wallet.listOutputs({ ...tc, basket: 'balance ' + tc.basket })).totalOutputs
+        expect(sum3).toBe(sum)
+      }
+    }
+    await setup.wallet.destroy()
+  })
+
+  test('0b wallet balanceAndUtxos method', async () => {
+    const setup = await createSetup('test')
+
+    const r = await setup.wallet.balanceAndUtxos('default')
+
+    expect(r.total > 0).toBe(true)
+    expect(r.utxos.length === 0).toBe(true)
+
+    await setup.wallet.destroy()
+  })
+
+  test('1 wallet invalid change outputs specOp', async () => {
+    const setup = await createSetup('test')
+
+    const r = await setup.wallet.listOutputs({
+      basket: specOpInvalidChange
+      //tags: ['release', 'all']
+    })
+
+    expect(r.totalOutputs).toBe(0)
+    expect(r.outputs.length).toBe(0)
+
+    await setup.wallet.destroy()
+  })
+
+  test('1a wallet reviewSpendableOutputs method', async () => {
+    const setup = await createSetup('test')
+
+    const r = await setup.wallet.reviewSpendableOutputs(false, false, {})
+
+    expect(r.totalOutputs).toBe(0)
+    expect(r.outputs.length).toBe(0)
+
+    await setup.wallet.destroy()
+  })
+
+  test('2 update default basket params specOp', async () => {
+    const setup = await createSetup('test')
+
+    const before = verifyOne(
+      await setup.activeStorage.findOutputBaskets({
+        partial: { userId: setup.userId, name: 'default' }
+      })
+    )
+
+    const r = await setup.wallet.listOutputs({
+      basket: specOpSetWalletChangeParams,
+      tags: ['33', '6']
+    })
+
+    const after = verifyOne(
+      await setup.activeStorage.findOutputBaskets({
+        partial: { userId: setup.userId, name: 'default' }
+      })
+    )
+
+    expect(r.totalOutputs).toBe(0)
+    expect(r.outputs.length).toBe(0)
+    expect(after.minimumDesiredUTXOValue).toBe(6)
+    expect(after.numberOfDesiredUTXOs).toBe(33)
+
+    // Restore original values...
+    await setup.wallet.listOutputs({
+      basket: specOpSetWalletChangeParams,
+      tags: [before.numberOfDesiredUTXOs.toString(), before.minimumDesiredUTXOValue.toString()]
+    })
+
+    await setup.wallet.destroy()
+  })
+
+  test('2a update default basket params specOp', async () => {
+    const setup = await createSetup('test')
+
+    const before = verifyOne(
+      await setup.activeStorage.findOutputBaskets({
+        partial: { userId: setup.userId, name: 'default' }
+      })
+    )
+
+    await setup.wallet.setWalletChangeParams(33, 6)
+
+    const after = verifyOne(
+      await setup.activeStorage.findOutputBaskets({
+        partial: { userId: setup.userId, name: 'default' }
+      })
+    )
+
+    expect(after.minimumDesiredUTXOValue).toBe(6)
+    expect(after.numberOfDesiredUTXOs).toBe(33)
+
+    // Restore original values...
+    await setup.wallet.setWalletChangeParams(before.numberOfDesiredUTXOs, before.minimumDesiredUTXOValue)
+
+    await setup.wallet.destroy()
+  })
+
+  test('3 wallet listNoSendActions method', async () => {
+    const setup = await createSetup('test')
+
+    const r = await setup.wallet.listNoSendActions({
+      labels: [
+        // 'abort'
+      ]
+    })
+
+    expect(r.totalActions).toBeGreaterThanOrEqual(0)
+    expect(r.actions.length).toBe(r.totalActions)
+
+    await setup.wallet.destroy()
+  })
+
+  test('4 wallet listFailedActions method', async () => {
+    const setup = await createSetup('test')
+
+    const r = await setup.wallet.listFailedActions({
+      labels: [
+        // 'unfail'
+      ],
+      limit: 1000
+    })
+
+    expect(r.totalActions).toBeGreaterThanOrEqual(0)
+    expect(r.actions.length).toBe(r.totalActions)
+
+    await setup.wallet.destroy()
+  })
+
+  test('5 Wallet specOpThrowReviewActions', async () => {
+    const setup = await createSetup('test')
+
+    try {
+      const r = await setup.wallet.createAction({
+        labels: [specOpThrowReviewActions],
+        description: 'must throw'
+      })
+      expect(true).toBe(false)
+    } catch (eu: unknown) {
+      const e = sdk.WalletError.fromUnknown(eu) as sdk.WERR_REVIEW_ACTIONS
+      expect(e.code).toBe('WERR_REVIEW_ACTIONS')
+      expect(e.reviewActionResults).toBeTruthy()
+    }
+
+    await setup.wallet.destroy()
+  })
+
+  test('6 WalletClient specOpThrowReviewActions', async () => {
+    const wallet = new WalletClient(undefined, '6.specOps.man.test')
+
+    try {
+      const r = await wallet.createAction({
+        labels: [specOpThrowReviewActions],
+        description: 'must throw'
+      })
+      expect(true).toBe(false)
+    } catch (eu: unknown) {
+      const e = sdk.WalletError.fromUnknown(eu) as sdk.WERR_REVIEW_ACTIONS
+      expect(e.code).toBe('WERR_REVIEW_ACTIONS')
+      expect(e.reviewActionResults).toBeTruthy()
+    }
+  })
+})
+
+async function createSetup(chain: sdk.Chain): Promise<TestWalletNoSetup> {
+  const env = _tu.getEnv(chain)
+  const identityKey = chain === 'test' ? env.testIdentityKey : env.identityKey
+  const filePath = chain === 'test' ? env.testFilePath : env.filePath
+  if (!identityKey) throw new sdk.WERR_INVALID_PARAMETER('identityKey', 'valid for chain ' + chain)
+  if (!filePath) throw new sdk.WERR_INVALID_PARAMETER('filePath', 'valid for chain ' + chain)
+
+  const setup = await _tu.createTestWallet({
+    chain,
+    rootKeyHex: env.devKeys[identityKey],
+    filePath,
+    setActiveClient: false,
+    addLocalBackup: false,
+    useMySQLConnectionForClient: false
+  })
+
+  console.log(`ACTIVE STORAGE: ${setup.storage.getActiveStoreName()}`)
+
+  return setup
+}

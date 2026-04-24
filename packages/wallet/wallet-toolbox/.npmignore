@@ -1,0 +1,59 @@
+# Test files and data
+test/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+__tests__/
+coverage/
+
+# Development files
+src/
+tsconfig.json
+tsconfig.*.json
+ts2md.json
+.gitignore
+.git/
+.github/
+
+# Build artifacts that shouldn't be published
+out/test/
+out-client/
+dist/
+client/node_modules/
+mobile/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment and config
+.env
+.env.*
+.eslintrc.json
+prettier.config.js
+
+# Documentation generation
+syncVersions.js
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+backup_*.sqlite
+backup-*.sqlite
+
+# Temporary files
+tmp/
+temp/
+*.log
+
+# Keep only what's needed for the package
+# The package should only include:
+# - out/src/ (compiled JS and type definitions)
+# - README.md
+# - license.md
+# - package.json

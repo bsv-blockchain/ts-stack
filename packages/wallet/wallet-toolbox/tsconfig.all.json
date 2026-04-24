@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "rootDir": ".", // Include both src and test directories
+    "outDir": "./out",
+    "target": "es2018",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "noImplicitOverride": true
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "out",
+    "client/out",
+    "mobile/out"
+  ]
+}
