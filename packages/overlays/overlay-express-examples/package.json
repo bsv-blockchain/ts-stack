@@ -1,0 +1,35 @@
+{
+  "name": "overlay-express-examples",
+  "version": "2.1.6",
+  "description": "Run the overlay infrastructure for distributed applications.",
+  "homepage": "https://github.com/bsv-blockchain/overlay-express-examples#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/overlay-express-examples/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://sirdeggen@github.com/bsv-blockchain/overlay-express-examples.git"
+  },
+  "license": "Open BSV",
+  "author": "BSV Association",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@bsv/overlay": "^2.0.2",
+    "@bsv/overlay-discovery-services": "^2.0.2",
+    "@bsv/overlay-express": "^2.2.0",
+    "@bsv/sdk": "^2.0.13",
+    "dotenv": "^17.2.4",
+    "mongodb": "^7.1.0",
+    "mysql2": "^3.16.3"
+  }
+}

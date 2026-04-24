@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -o deploy/
+    kompose.version: 1.34.0 (cbf2835db)
+  labels:
+    io.kompose.service: app
+  name: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: app
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -o deploy/
+        kompose.version: 1.34.0 (cbf2835db)
+      labels:
+        io.kompose.service: app
+    spec:
+      containers:
+        - args:
+            - npm
+            - run
+            - start
+          env:
+            - name: KNEX_URL
+              value: mysql://appuser:apppass@mysql:3306/appdb
+            - name: MONGO_URL
+              value: mongodb://root:example@mongodb:27017
+            - name: SERVER_PRIVATE_KEY
+              value: ""
+            - name: ARC_API_KEY
+              value: ""
+            - name: HOSTING_URL
+              value: ""
+            - name: ADMIN_TOKEN
+              value: ""
+          image: docker.io/bsvb/overlay-example:latest
+          name: overlay
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+      restartPolicy: Always
