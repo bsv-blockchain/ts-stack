@@ -1,0 +1,16 @@
+{
+  "name": "@bsv/ts-stack",
+  "private": true,
+  "description": "BSV TypeScript monorepo — SDK, Wallet, Network, Overlay, Messaging, Middleware, Helpers",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
