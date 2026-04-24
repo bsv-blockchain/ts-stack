@@ -9,15 +9,15 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | Domain | Path | Packages |
 |--------|------|----------|
 | **SDK** | `packages/sdk/` | 2 |
-| **Wallet** | `packages/wallet/` | 6 |
+| **Wallet** | `packages/wallet/` | 7 |
 | **Network** | `packages/network/` | 2 |
-| **Overlays** | `packages/overlays/` | 15 |
+| **Overlays** | `packages/overlays/` | 16 |
 | **Messaging** | `packages/messaging/` | 5 |
 | **Middleware** | `packages/middleware/` | 3 |
 | **Helpers** | `packages/helpers/` | 4 |
 | **Conformance** | `conformance/` | 1 runner |
 
-**37 packages** + conformance runner across 7 domains.
+**39 packages** + conformance runner across 7 domains.
 
 ---
 
@@ -36,7 +36,8 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [wallet-toolbox-examples](packages/wallet/wallet-toolbox-examples) | [@bsv/wallet-toolbox-examples](https://www.npmjs.com/package/@bsv/wallet-toolbox-examples) |
 | [wallet-infra](packages/wallet/wallet-infra) | `wallet-infra` |
 | [ts-wallet-relay](packages/wallet/ts-wallet-relay) | [@bsv/wallet-relay](https://www.npmjs.com/package/@bsv/wallet-relay) |
-| [btms](packages/wallet/btms) | `@bsv/btms` *(private)* |
+| [btms](packages/wallet/btms) | [@bsv/btms](https://www.npmjs.com/package/@bsv/btms) |
+| [btms-permission-module](packages/wallet/btms-permission-module) | [@bsv/btms-permission-module](https://www.npmjs.com/package/@bsv/btms-permission-module) |
 | [wab](packages/wallet/wab) | `@bsv/wab-server` *(private)* |
 
 ### Network — `packages/network/`
@@ -63,6 +64,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [did-services](packages/overlays/did-services) | — |
 | [identity-services](packages/overlays/identity-services) | — |
 | [did-client](packages/overlays/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
+| [btms-backend](packages/overlays/btms-backend) | `@bsv/btms-backend` *(private)* |
 
 ### Messaging — `packages/messaging/`
 | Package | npm |
