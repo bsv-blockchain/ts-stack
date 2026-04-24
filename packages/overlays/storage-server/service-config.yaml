@@ -1,0 +1,37 @@
+Creating staging
+Appending environment variables to staging
+        - name: NODE_ENV
+          value: ""
+        - name: PRICE_PER_GB_MO
+          value: ""
+        - name: MIN_HOSTING_MINUTES
+          value: ""
+        - name: HOSTING_DOMAIN
+          value: ""
+        - name: ADMIN_TOKEN
+          value: ""
+        - name: SERVER_PRIVATE_KEY
+          value: ""
+        - name: GCP_STORAGE_CREDS
+          value: ""
+        - name: GCP_PROJECT_ID
+          value: ""
+        - name: GCP_BUCKET_NAME
+          value: ""
+        - name: HTTP_PORT
+          value: ""
+Built! Contents of staging:
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: 
+spec:
+  template:
+    spec:
+      timeoutSeconds: 3540
+      containers:
+      - image: 
+        ports:
+        - name: h2c
+          containerPort: 8080
+        env:

@@ -1,0 +1,140 @@
+name: Deployment
+
+on:
+  push:
+    branches:
+      - master
+      - production
+  workflow_dispatch:
+
+env:
+  CURRENT_BRANCH: ${{ github.ref_name == 'production' && 'production' || 'master' }}
+
+jobs:
+  build:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'production' && 'production' || 'staging' }}
+    env:
+      GCR_HOST: ${{ secrets.GCR_HOST }}
+      GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
+      GCR_IMAGE_NAME: ${{ secrets.GCR_IMAGE_NAME }}
+      GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+    steps:
+      - name: Debug secrets presence (production)
+        if: ${{ github.ref_name == 'production' }}
+        run: |
+          echo "ENV=production"
+          echo "ADMIN_TOKEN set? ${{ secrets.ADMIN_TOKEN != '' }}"
+          echo "BSV_NETWORK set? ${{ secrets.BSV_NETWORK != '' }}"
+          echo "GCP_BUCKET_NAME set? ${{ secrets.GCP_BUCKET_NAME != '' }}"
+          echo "GCR_HOST set? ${{ secrets.GCR_HOST != '' }}"
+          echo "GOOGLE_PROJECT_ID set? ${{ secrets.GOOGLE_PROJECT_ID != '' }}"
+          echo "GCR_IMAGE_NAME set? ${{ secrets.GCR_IMAGE_NAME != '' }}"
+          echo "NODE_ENV set? ${{ secrets.NODE_ENV != '' }}"
+          echo "HOSTING_DOMAIN set? ${{ secrets.HOSTING_DOMAIN != '' }}"
+          echo "PRICE_PER_GB_MO set? ${{ secrets.PRICE_PER_GB_MO != '' }}"
+          echo "GCP_STORAGE_CREDS set? ${{ secrets.GCP_STORAGE_CREDS != '' }}"
+          echo "GCR_PUSH_KEY set? ${{ secrets.GCR_PUSH_KEY != '' }}"
+          echo "SERVER_PRIVATE_KEY set? ${{ secrets.SERVER_PRIVATE_KEY != '' }}"
+          echo "MIN_HOSTING_MINUTES set? ${{ secrets.MIN_HOSTING_MINUTES != '' }}"
+          echo "WALLET_STORAGE_URL set? ${{ secrets.WALLET_STORAGE_URL != '' }}"
+          echo "HTTP_PORT set? ${{ secrets.HTTP_PORT != '' }}"
+
+      - name: Debug secrets presence (staging)
+        if: ${{ github.ref_name != 'production' }}
+        run: |
+          echo "ENV=staging"
+          echo "ADMIN_TOKEN set? ${{ secrets.ADMIN_TOKEN != '' }}"
+          echo "BSV_NETWORK set? ${{ secrets.BSV_NETWORK != '' }}"
+          echo "GCP_BUCKET_NAME set? ${{ secrets.GCP_BUCKET_NAME != '' }}"
+          echo "GCR_HOST set? ${{ secrets.GCR_HOST != '' }}"
+          echo "GOOGLE_PROJECT_ID set? ${{ secrets.GOOGLE_PROJECT_ID != '' }}"
+          echo "GCR_IMAGE_NAME set? ${{ secrets.GCR_IMAGE_NAME != '' }}"
+          echo "NODE_ENV set? ${{ secrets.NODE_ENV != '' }}"
+          echo "HOSTING_DOMAIN set? ${{ secrets.HOSTING_DOMAIN != '' }}"
+          echo "PRICE_PER_GB_MO set? ${{ secrets.PRICE_PER_GB_MO != '' }}"
+          echo "GCP_STORAGE_CREDS set? ${{ secrets.GCP_STORAGE_CREDS != '' }}"
+          echo "GCR_PUSH_KEY set? ${{ secrets.GCR_PUSH_KEY != '' }}"
+          echo "SERVER_PRIVATE_KEY set? ${{ secrets.SERVER_PRIVATE_KEY != '' }}"
+          echo "MIN_HOSTING_MINUTES set? ${{ secrets.MIN_HOSTING_MINUTES != '' }}"
+          echo "WALLET_STORAGE_URL set? ${{ secrets.WALLET_STORAGE_URL != '' }}"
+          echo "HTTP_PORT set? ${{ secrets.HTTP_PORT != '' }}"
+
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_PASSWORD != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_PASSWORD }}
+
+      - uses: actions/checkout@v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCR_PUSH_KEY }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker Auth for GCR
+        run: gcloud auth configure-docker ${{ env.GCR_HOST }} --quiet
+
+      - name: Build and Push Docker Image to GCR
+        run: |
+          IMAGE_BASE="${{ env.GCR_HOST }}/${{ env.GOOGLE_PROJECT_ID }}/${{ env.GCR_IMAGE_NAME }}"
+          IMAGE_TAG="${{ env.CURRENT_BRANCH }}-${{ github.sha }}"
+          docker build \
+            -t "${IMAGE_BASE}:latest" \
+            -t "${IMAGE_BASE}:${IMAGE_TAG}" \
+            .
+          docker push "${IMAGE_BASE}:latest"
+          docker push "${IMAGE_BASE}:${IMAGE_TAG}"
+
+      - name: "Create service description file"
+        run: "./scripts/mkenv.sh service.${{ env.CURRENT_BRANCH }}.yaml ./notifier/${{ env.CURRENT_BRANCH == 'production' && 'prod' || 'staging' }}.functions.env.yaml"
+        env:
+          IMAGE: "${{ env.GCR_HOST }}/${{ env.GOOGLE_PROJECT_ID }}/${{ env.GCR_IMAGE_NAME }}:${{ env.CURRENT_BRANCH }}-${{ github.sha }}"
+          SERVICE: ${{ env.CURRENT_BRANCH == 'production' && 'prod-uhrp' || 'staging-uhrp' }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+          HOSTING_DOMAIN: ${{ secrets.HOSTING_DOMAIN }}
+          PRICE_PER_GB_MO: ${{ secrets.PRICE_PER_GB_MO }}
+          GCP_STORAGE_CREDS: ${{ secrets.GCP_STORAGE_CREDS }}
+          GCP_BUCKET_NAME: ${{ env.GCP_BUCKET_NAME }}
+          GCP_PROJECT_ID: ${{ env.GOOGLE_PROJECT_ID }}
+          SERVER_PRIVATE_KEY: ${{ secrets.SERVER_PRIVATE_KEY }}
+          MIN_HOSTING_MINUTES: ${{ secrets.MIN_HOSTING_MINUTES }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          WALLET_STORAGE_URL: ${{ secrets.WALLET_STORAGE_URL }}
+          BSV_NETWORK: ${{ secrets.BSV_NETWORK }}
+          HTTP_PORT: ${{ secrets.HTTP_PORT }}
+
+      - name: "Authenticate with GCP"
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_STORAGE_CREDS }}
+      - name: "Determine bucket region from Cloud Storage"
+        id: bucket
+        run: |
+          REGION=$(gcloud storage buckets describe gs://$GCP_BUCKET_NAME --format='value(location)' | tr '[:upper:]' '[:lower:]')
+          echo "Bucket $GCP_BUCKET_NAME is in region: $REGION"
+          echo "region=$REGION" >> "$GITHUB_OUTPUT"
+      - uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          metadata: "service.${{ env.CURRENT_BRANCH }}.yaml"
+          region: ${{ steps.bucket.outputs.region }}
+      - name: "Deploy the notifier function"
+        run: |
+          cd notifier 
+          ./deploy${{ env.CURRENT_BRANCH == 'production' && 'Prod' || 'Staging' }}.sh "$GCP_BUCKET_NAME"
+      - name: Allow public (allUsers) to invoke the service
+        run: |
+          gcloud run services add-iam-policy-binding ${{ env.CURRENT_BRANCH == 'production' && 'prod-uhrp' || 'staging-uhrp' }} \
+            --region ${{ steps.bucket.outputs.region }} \
+            --platform managed \
+            --member="allUsers" \
+            --role="roles/run.invoker"

@@ -1,0 +1,59 @@
+{
+  "name": "@bsv/uhrp-storage-server",
+  "version": "0.2.1",
+  "main": "./out/src/index.js",
+  "types": "./out/src/index.d.ts",
+  "files": [
+    "out/src",
+    "src"
+  ],
+  "repository": "https://github.com/bitcoin-sv/uhrp-storage-server",
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "dependencies": {
+    "@bsv/auth-express-middleware": "^2.0.4",
+    "@bsv/payment-express-middleware": "^2.0.1",
+    "@bsv/sdk": "^2.0.7",
+    "@bsv/wallet-toolbox": "^2.1.5",
+    "@bsv/wallet-toolbox-client": "^2.1.5",
+    "@bugsnag/js": "^7.14.1",
+    "@bugsnag/plugin-express": "^7.14.0",
+    "@google-cloud/storage": "^7.19.0",
+    "axios": "^1.11.0",
+    "body-parser": "^1.20.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.18.2",
+    "prettyjson": "^1.2.5",
+    "semver": "^7.7.2"
+  },
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register src/index.ts\"",
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "standard --fix .",
+    "secrets:staging": "ts-node scripts/sync-secrets.ts --env staging --create-env",
+    "secrets:prod": "ts-node scripts/sync-secrets.ts --env prod --create-env"
+  },
+  "overrides": {
+    "teeny-request": {
+      "http-proxy-agent": "^7.0.0"
+    }
+  },
+  "devDependencies": {
+    "@types/body-parser": "^1.19.5",
+    "@types/ejs": "^3.1.5",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.13.10",
+    "@types/prettyjson": "^0.0.33",
+    "ejs": "^3.1.6",
+    "jest": "^30.0.5",
+    "nodemon": "^3.1.10",
+    "standard": "^16.0.4",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  }
+}

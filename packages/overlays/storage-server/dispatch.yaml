@@ -1,0 +1,5 @@
+dispatch:
+  - url: "staging-uhrp.babbage.systems/*"
+    service: staging
+  - url: "uhrp.babbage.systems/*"
+    service: default

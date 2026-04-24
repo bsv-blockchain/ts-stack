@@ -1,0 +1,16 @@
+{
+  "name": "notifier",
+  "version": "1.0.0",
+  "description": "This is a simple Google Cloud Function that is triggered whenever a new object is finalized in the Cloud Storage bucket.",
+  "main": "notifier.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "dependencies": {
+    "@google-cloud/storage": "^5.16.1",
+    "axios": "^0.24.0",
+    "uhrp-url": "^0.1.3"
+  }
+}

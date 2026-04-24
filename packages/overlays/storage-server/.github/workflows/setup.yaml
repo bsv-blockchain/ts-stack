@@ -1,0 +1,244 @@
+name: Setup GCP (Bootstrap)
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Target environment (staging or production)"
+        type: choice
+        required: true
+        options: [staging, production]
+        default: staging
+      region:
+        description: "GCP region (e.g., us-west1)"
+        required: true
+        default: us-west1
+
+permissions:
+  contents: write
+  id-token: write
+  actions: write
+
+env:
+  ENV_NAME: ${{ github.event.inputs.env }} # staging | production
+  REGION: ${{ github.event.inputs.region }} # e.g., us-west1
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.env }}
+    env:
+      GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
+      GCR_HOST: ${{ secrets.GCR_HOST }}
+      GCR_IMAGE_NAME: ${{ secrets.GCR_IMAGE_NAME }}
+      GCP_BUCKET_NAME: ${{ secrets.GCP_BUCKET_NAME }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----- load env-scoped config secrets (unchanged from your deploy) -----
+      - name: Load environment config
+        run: |
+          echo "PROJECT_ID=${{ env.GOOGLE_PROJECT_ID }}" >> $GITHUB_ENV
+          echo "BUCKET_NAME=${{ env.GCP_BUCKET_NAME }}" >> $GITHUB_ENV
+          echo "GCR_HOST=${{ env.GCR_HOST }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ env.GCR_IMAGE_NAME }}" >> $GITHUB_ENV
+
+      # ----- authenticate with bootstrap owner key -----
+      - name: Write bootstrap key
+        run: |
+          echo '${{ secrets.GCP_BOOTSTRAP_KEY }}' > $RUNNER_TEMP/bootstrap.json
+
+      - name: Auth to GCP (bootstrap)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_BOOTSTRAP_KEY }}
+      - name: Fill PROJECT_ID from auth context (fallback)
+        run: |
+          if [ -z "$PROJECT_ID" ]; then
+            if [ -n "$CLOUDSDK_CORE_PROJECT" ]; then
+              echo "PROJECT_ID=$CLOUDSDK_CORE_PROJECT" >> $GITHUB_ENV
+            elif [ -n "$GOOGLE_CLOUD_PROJECT" ]; then
+              echo "PROJECT_ID=$GOOGLE_CLOUD_PROJECT" >> $GITHUB_ENV
+            elif [ -n "$GCP_PROJECT" ]; then
+              echo "PROJECT_ID=$GCP_PROJECT" >> $GITHUB_ENV
+            fi
+          fi
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GOOGLE_PROJECT_ID }}
+
+      - name: Select token for GitHub API
+        run: |
+          if [ -n "${{ secrets.GH_ADMIN_TOKEN }}" ]; then
+            echo "GH_TOKEN=${{ secrets.GH_ADMIN_TOKEN }}" >> $GITHUB_ENV
+          else
+            echo "GH_TOKEN=${{ github.token }}" >> $GITHUB_ENV
+          fi
+
+      - name: Ensure GitHub CLI is installed
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y gh
+          fi
+          gh --version
+
+      - name: Ensure GitHub environments exist
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+        run: |
+          for ENV in staging production; do
+            gh api -X PUT "repos/${{ github.repository }}/environments/$ENV" >/dev/null || true
+          done
+
+      - name: Set gcloud project
+        run: |
+          gcloud config set project "$PROJECT_ID"
+          gcloud config set run/region "${{ env.REGION }}"
+
+      # ----- enable all required APIs (idempotent) -----
+      - name: Enable required APIs
+        run: |
+          gcloud services enable \
+            run.googleapis.com \
+            cloudfunctions.googleapis.com \
+            logging.googleapis.com \
+            pubsub.googleapis.com \
+            eventarc.googleapis.com \
+            artifactregistry.googleapis.com \
+            cloudbuild.googleapis.com \
+            serviceusage.googleapis.com \
+            cloudresourcemanager.googleapis.com \
+            iam.googleapis.com \
+            compute.googleapis.com
+
+      # ----- create bucket if missing + optional CORS -----
+      - name: Create or update GCS bucket (Autoclass ON, Soft delete OFF)
+        run: |
+          set -e
+          if gcloud storage buckets describe "gs://$BUCKET_NAME" >/dev/null 2>&1; then
+            echo "Bucket exists; updating settings…"
+            gcloud storage buckets update "gs://$BUCKET_NAME" --enable-autoclass
+            gcloud storage buckets update "gs://$BUCKET_NAME" --clear-soft-delete
+            gcloud storage buckets update "gs://$BUCKET_NAME" --no-public-access-prevention
+          else
+            echo "Creating bucket gs://$BUCKET_NAME in $PROJECT_ID ($REGION)…"
+            gcloud storage buckets create "gs://$BUCKET_NAME" \
+              --project="$PROJECT_ID" \
+              --location="$REGION" \
+              --uniform-bucket-level-access \
+              --enable-autoclass \
+              --no-public-access-prevention
+            gcloud storage buckets update "gs://$BUCKET_NAME" --clear-soft-delete
+            gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
+              --member="allUsers" \
+              --role="roles/storage.objectViewer"
+          fi
+
+          # Apply CORS only if the bucket is accessible in this project
+          if [ -f bucket-cors-config.json ]; then
+            if gcloud storage buckets describe "gs://$BUCKET_NAME" >/dev/null 2>&1; then
+              gsutil cors set bucket-cors-config.json "gs://$BUCKET_NAME"
+            else
+              echo "Skipping CORS: bucket gs://$BUCKET_NAME is not accessible in project $PROJECT_ID."
+            fi
+          fi
+
+      # ----- eventarc identity + IAM plumbing -----
+      - name: Ensure Eventarc service identity exists
+        run: |
+          gcloud beta services identity create --service=eventarc.googleapis.com || true
+          PROJECT_NUM=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+          echo "PROJECT_NUM=$PROJECT_NUM" >> $GITHUB_ENV
+          echo "EVENTARC_SA=service-${PROJECT_NUM}@gcp-sa-eventarc.iam.gserviceaccount.com" >> $GITHUB_ENV
+          echo "PROJECT_SA=service-${PROJECT_NUM}@gs-project-accounts.iam.gserviceaccount.com" >> $GITHUB_ENV
+
+      - name: Grant Eventarc SA read access to bucket
+        if: env.BUCKET_NAME != ''
+        run: |
+          gcloud storage buckets add-iam-policy-binding "gs://$BUCKET_NAME" \
+            --member="serviceAccount:${EVENTARC_SA}" \
+            --role="roles/storage.legacyBucketReader" || true
+
+      - name: Allow GS Project SA to publish to Pub/Sub
+        run: |
+          gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+            --member="serviceAccount:${PROJECT_SA}" \
+            --role="roles/pubsub.publisher" || true
+
+      # ----- create deployer SA + find default compute SA -----
+      - name: Create uhrp-github-deployer service account
+        run: |
+          SA_NAME="uhrp-github-deployer"
+          SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+          if ! gcloud iam service-accounts describe "$SA_EMAIL" >/dev/null 2>&1; then
+            gcloud iam service-accounts create "$SA_NAME" --display-name="UHRP GitHub Deployer"
+          fi
+          echo "DEPLOYER_SA=$SA_EMAIL" >> $GITHUB_ENV
+
+      - name: Discover Default Compute Engine service account
+        run: |
+          COMPUTE_SA="$(gcloud iam service-accounts list --format='value(email)' \
+            --filter='email~compute@developer.gserviceaccount.com')"
+          if [ -z "$COMPUTE_SA" ]; then
+            echo "Default Compute Engine SA not found." >&2
+            exit 1
+          fi
+          echo "COMPUTE_SA=$COMPUTE_SA" >> $GITHUB_ENV
+
+      # ----- assign roles (idempotent) -----
+      - name: Assign roles to Deploy SA
+        run: |
+          for ROLE in \
+            roles/run.admin \
+            roles/cloudfunctions.admin \
+            roles/cloudbuild.builds.editor \
+            roles/artifactregistry.admin \
+            roles/storage.objectAdmin \
+            roles/iam.serviceAccountUser
+          do
+            gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+              --member="serviceAccount:${DEPLOYER_SA}" \
+              --role="$ROLE" || true
+          done
+
+      - name: Assign roles to Default Compute SA
+        run: |
+          for ROLE in \
+            roles/artifactregistry.admin \
+            roles/storage.bucketViewer \
+            roles/cloudfunctions.admin \
+            roles/run.admin \
+            roles/eventarc.admin \
+            roles/logging.logWriter \
+            roles/iam.serviceAccountAdmin \
+            roles/iam.serviceAccountUser \
+            roles/storage.objectAdmin
+          do
+            gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+              --member="serviceAccount:${COMPUTE_SA}" \
+              --role="$ROLE" || true
+          done
+
+      # ----- create Artifact Registry repo from repo/image -----
+      - name: Create Artifact Registry repository
+        if: env.IMAGE_NAME != ''
+        run: |
+          REPO_NAME="$(echo "$IMAGE_NAME" | cut -d'/' -f1)"   # repo/image → repo
+          if ! gcloud artifacts repositories describe "$REPO_NAME" --location="${{ env.REGION }}" >/dev/null 2>&1; then
+            gcloud artifacts repositories create "$REPO_NAME" \
+              --repository-format=docker \
+              --location="${{ env.REGION }}"
+          else
+            echo "Repo '$REPO_NAME' already exists in ${{ env.REGION }}."
+          fi
+
+      - name: Summary
+        run: |
+          echo "Bootstrap complete for project: $PROJECT_ID"
+          echo "Deployer SA: $DEPLOYER_SA"
+          echo "Default Compute SA: $COMPUTE_SA"

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>UHRP Server</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 1em;
+    }
+
+    .main {
+      max-width: min(1440px, 100vw);
+      margin: auto;
+      word-wrap: break-word;
+    }
+
+    .method {
+      background-color: lime;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+
+<body>
+  <div class='main'>
+    <h1>UHRP Server</h1>
+    <p>
+      Reference UHRP storage host implementation, allowing network participants to upload and download files with
+      on-chain validation
+    </p>
+    <ul>
+      <li>Advertises content availability with the UHRP Overlay Network</li>
+      <li>Upload and download content with the TypeScript SDK</li>
+      <li>Easily embed chain-backed content into apps with React components</li>
+    </ul>
+    <h2>Client Libraries</h2>
+    <p>
+      If you use TypeScript/JavaScript, you should check out <a href='https://github.com/bitcoin-sv/ts-sdk'>Storage
+        Uploader</a> for a simple wrapper around this
+      API.
+    </p>
+    <p>
+      <a href='https://github.com/bitcoin-sv/ts-sdk'>Storage Downloader</a> is also useful for downloading content that
+      is
+      hosted on the UHRP Overlay Network generally.
+    </p>
+    <h2>API Errors</h2>
+    <p>
+      Errors are sent back with appropriate HTTP status codes. The status field of the response object will be "error"
+      in these cases. The object will also contain a machine-readable code field and a human-readable description field.
+    </p>
+    <h2>Endpoint Documentation</h2>
+    <% for (let i in routes) { %>
+      <h3>
+        <b class='method'>
+          <%= routes[i].type %>
+        </b>
+        <%= HOSTING_DOMAIN %>
+          <%= routes[i].path %>
+      </h3>
+      <p>
+        <%= routes[i].summary %>
+      </p>
+      <% if (typeof routes[i].parameters==='object' ) { %>
+        <h4>Parameters</h4>
+        <ul>
+          <% Object.entries(routes[i].parameters).forEach(([k, v])=> { %>
+            <li><b>
+                <%= k %>
+              </b>: <%= v %>
+            </li>
+            <% }) %>
+        </ul>
+        <% } %>
+          <% if (typeof routes[i].exampleResponse==='object' ) { %>
+            <h4>Example Response</h4>
+            <pre><%= JSON.stringify(routes[i].exampleResponse, null, 2) %></pre>
+            <% } %>
+              <% } %>
+  </div>
+</body>
+
+</html>
