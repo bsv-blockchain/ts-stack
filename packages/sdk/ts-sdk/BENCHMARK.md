@@ -3,6 +3,8 @@
 > Baselines not yet captured. Run benchmark suite to populate numbers column.
 > Per MBGA §1.5: performance regression is a CI failure once baselines exist.
 
+> Coverage baseline captured: Stmts 66.57%, Branch 59.53%, Funcs 74.16%, Lines 66.68% (2026-04-24)
+
 ## Hot Paths (Tier 0)
 
 | Operation | Function | Module | Baseline (ops/sec) | Notes |

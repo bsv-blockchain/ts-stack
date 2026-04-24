@@ -31,7 +31,8 @@
 | Test command | `npm run build && jest` |
 | Test files | 131 |
 | Coverage command | `npm run build && jest --coverage` |
-| Coverage | Not yet captured as baseline — run `npm run test:coverage` to establish |
+| Coverage | Stmts: 66.57%, Branch: 59.53%, Funcs: 74.16%, Lines: 66.68% |
+| Test count (assertions) | 4499 passed (4994 total; 492 fail due to pre-existing ESM jest-global issue, 3 skipped) |
 | Known flaky | None identified |
 | Known skips | None |
 
