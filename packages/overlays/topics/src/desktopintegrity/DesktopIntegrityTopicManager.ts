@@ -1,0 +1,53 @@
+import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
+import { Transaction, OP } from '@bsv/sdk'
+
+export default class DesktopIntegrityTopicManager implements TopicManager {
+  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+    const outputsToAdmit: number[] = []
+
+    try {
+      const parsedTx = Transaction.fromBEEF(beef)
+
+      if (!Array.isArray(parsedTx.outputs) || parsedTx.outputs.length === 0) {
+        throw new Error('Missing parameter: outputs')
+      }
+
+      for (const [index, output] of parsedTx.outputs.entries()) {
+        try {
+          if (output.lockingScript.chunks.length !== 2) throw new Error('Invalid locking script')
+          if (output.lockingScript.chunks[0].op !== OP.OP_FALSE) throw new Error('Invalid locking script')
+          if (output.lockingScript.chunks[1].op !== OP.OP_RETURN) throw new Error('Invalid locking script')
+          outputsToAdmit.push(index)
+        } catch (err) {
+          console.error(`Error processing output ${index}:`, err)
+        }
+      }
+
+      if (outputsToAdmit.length === 0) throw new Error('DesktopIntegrity topic manager: no outputs admitted!')
+      console.log(`Admitted ${outputsToAdmit.length} DesktopIntegrity output(s)!`)
+    } catch (err) {
+      if (outputsToAdmit.length === 0 && (!previousCoins || previousCoins.length === 0)) {
+        console.error('Error identifying admissible outputs:', err)
+      }
+    }
+
+    return { outputsToAdmit, coinsToRetain: [] }
+  }
+
+  async getDocumentation(): Promise<string> {
+    return 'DesktopIntegrity Topic Manager: saves hashes of files and integrity off-chain values.'
+  }
+
+  async getMetaData(): Promise<{
+    name: string
+    shortDescription: string
+    iconURL?: string
+    version?: string
+    informationURL?: string
+  }> {
+    return {
+      name: 'DesktopIntegrity Topic Manager',
+      shortDescription: 'Saves hashes of files and integrity off-chain values'
+    }
+  }
+}

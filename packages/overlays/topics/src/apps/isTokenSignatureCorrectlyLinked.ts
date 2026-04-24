@@ -1,0 +1,31 @@
+import { PublicKey, ProtoWallet, PubKeyHex, WalletProtocol } from '@bsv/sdk'
+
+export const isTokenSignatureCorrectlyLinked = async (
+  lockingPublicKey: PublicKey,
+  publisher: PubKeyHex,
+  fields: number[][]
+): Promise<boolean> => {
+  const signature = fields.pop() as number[]
+  const protocolID: WalletProtocol = [1, 'metanet apps']
+  const data = fields.reduce((a, e) => [...a, ...e], [])
+  const anyoneWallet = new ProtoWallet('anyone')
+  try {
+    const { valid } = await anyoneWallet.verifySignature({
+      data,
+      signature,
+      counterparty: publisher,
+      protocolID,
+      keyID: '1'
+    })
+    if (!valid) return false
+  } catch (e) {
+    return false
+  }
+
+  const { publicKey: expectedLockingPublicKey } = await anyoneWallet.getPublicKey({
+    counterparty: publisher,
+    protocolID,
+    keyID: '1'
+  })
+  return expectedLockingPublicKey === lockingPublicKey.toString()
+}
