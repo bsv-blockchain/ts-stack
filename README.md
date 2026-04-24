@@ -14,10 +14,10 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | **Overlays** | `packages/overlays/` | 16 |
 | **Messaging** | `packages/messaging/` | 5 |
 | **Middleware** | `packages/middleware/` | 3 |
-| **Helpers** | `packages/helpers/` | 4 |
+| **Helpers** | `packages/helpers/` | 5 |
 | **Conformance** | `conformance/` | 1 runner |
 
-**39 packages** + conformance runner across 7 domains.
+**40 packages** + conformance runner across 7 domains.
 
 ---
 
@@ -89,6 +89,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [ts-paymail](packages/helpers/ts-paymail) | [@bsv/paymail](https://www.npmjs.com/package/@bsv/paymail) |
 | [bsv-wallet-helper](packages/helpers/bsv-wallet-helper) | [@bsv/wallet-helper](https://www.npmjs.com/package/@bsv/wallet-helper) |
 | [amountinator](packages/helpers/amountinator) | [@bsv/amountinator](https://www.npmjs.com/package/@bsv/amountinator) |
+| [fund-metanet](packages/helpers/fund-metanet) | `@bsv/fund-metanet` *(private)* |
 
 ---
 
