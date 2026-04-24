@@ -1,0 +1,277 @@
+{
+  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "id": "sdk.scripts.evaluation",
+  "name": "Script parsing, encoding and evaluation",
+  "brc": "BRC-14",
+  "version": "1.0.0",
+  "reference_impl": "packages/sdk/ts-sdk/src/script/Script.ts",
+  "parity_class": "scripts",
+  "vectors": [
+    {
+      "id": "script-001",
+      "description": "OP_0 opcode — single-byte script hex 0x00",
+      "input": {
+        "hex": "00"
+      },
+      "expected": {
+        "chunks_count": 1,
+        "chunk_0_op": 0,
+        "note": "Script.test.ts fromHex — OP.OP_0 is buf[0]=0; Script.fromHex parses to 1 chunk with op===0"
+      },
+      "tags": ["parse", "opcode", "op_0"]
+    },
+    {
+      "id": "script-002",
+      "description": "OP_CHECKMULTISIG opcode — single-byte script hex 0xae",
+      "input": {
+        "hex": "ae"
+      },
+      "expected": {
+        "chunks_count": 1,
+        "chunk_0_op": 174,
+        "note": "Script.test.ts fromBinary — OP.OP_CHECKMULTISIG=0xae=174; parsed to 1 chunk"
+      },
+      "tags": ["parse", "opcode", "op_checkmultisig"]
+    },
+    {
+      "id": "script-003",
+      "description": "3-byte data push — script bytes [0x03, 0x01, 0x02, 0x03]",
+      "input": {
+        "binary": [3, 1, 2, 3]
+      },
+      "expected": {
+        "chunks_count": 1,
+        "chunk_0_data": [1, 2, 3],
+        "note": "Script.test.ts fromBinary — [3, 1, 2, 3] parses to 1 data chunk containing [1,2,3]"
+      },
+      "tags": ["parse", "data-push"]
+    },
+    {
+      "id": "script-004",
+      "description": "P2PKH locking script — standard 25-byte script for a zero pubkey hash",
+      "input": {
+        "type": "P2PKH_lock",
+        "pubkey_hash_hex": "0000000000000000000000000000000000000000"
+      },
+      "expected": {
+        "hex": "76a9140000000000000000000000000000000000000000088ac",
+        "asm_prefix": "OP_DUP OP_HASH160",
+        "asm_suffix": "OP_EQUALVERIFY OP_CHECKSIG",
+        "byte_length": 25,
+        "note": "LockingUnlockingScript.test.ts — OP_DUP=0x76, OP_HASH160=0xa9, PUSH20=0x14, OP_EQUALVERIFY=0x88, OP_CHECKSIG=0xac"
+      },
+      "tags": ["p2pkh", "locking-script", "template"]
+    },
+    {
+      "id": "script-005",
+      "description": "OP_1 script — minimal push of value 1",
+      "input": {
+        "hex": "51"
+      },
+      "expected": {
+        "hex_roundtrip": "51",
+        "note": "script.valid.vectors.ts — '51' is OP_1; Script.fromHex('51').toHex() === '51'"
+      },
+      "tags": ["parse", "roundtrip", "op_1"]
+    },
+    {
+      "id": "script-006",
+      "description": "scriptSig 5152 / scriptPubKey 52885187 — valid P2SH,STRICTENC evaluation",
+      "input": {
+        "script_sig_hex": "5152",
+        "script_pubkey_hex": "52885187",
+        "flags": ["P2SH", "STRICTENC"]
+      },
+      "expected": {
+        "valid": true,
+        "note": "script.valid.vectors.ts — ['5152', '52885187', 'P2SH,STRICTENC'] is a valid script pair"
+      },
+      "tags": ["evaluation", "p2sh", "strictenc"]
+    },
+    {
+      "id": "script-007",
+      "description": "Script evaluation — empty scriptSig with scriptPubKey 740087 (OP_TUCK OP_TOALTSTACK OP_NOP) — valid",
+      "input": {
+        "script_sig_hex": "",
+        "script_pubkey_hex": "740087",
+        "flags": ["P2SH", "STRICTENC"]
+      },
+      "expected": {
+        "valid": true,
+        "note": "script.valid.vectors.ts first vector ['', '740087', 'P2SH,STRICTENC']"
+      },
+      "tags": ["evaluation", "altstack", "nop"]
+    },
+    {
+      "id": "script-008",
+      "description": "fromHex throws for odd-length hex string",
+      "input": {
+        "hex": "abc"
+      },
+      "expected": {
+        "throws": true,
+        "note": "Script.additional.test.ts: Script.fromHex('abc') throws for odd-length input"
+      },
+      "tags": ["parse", "negative", "validation"]
+    },
+    {
+      "id": "script-009",
+      "description": "fromHex throws for non-hex characters",
+      "input": {
+        "hex": "gggg"
+      },
+      "expected": {
+        "throws": true,
+        "note": "Script.additional.test.ts: Script.fromHex('gggg') throws for non-hex input"
+      },
+      "tags": ["parse", "negative", "validation"]
+    },
+    {
+      "id": "script-010",
+      "description": "OP_PUSHDATA1 — script with 76-byte data push uses OP_PUSHDATA1 encoding",
+      "input": {
+        "data_length_bytes": 76,
+        "data_fill_byte": "0x01"
+      },
+      "expected": {
+        "chunk_0_op": 76,
+        "note": "Script.additional.test.ts writeBin: 76-byte data → OP_PUSHDATA1 (0x4c=76)"
+      },
+      "tags": ["parse", "pushdata1", "encoding"]
+    },
+    {
+      "id": "script-011",
+      "description": "OP_PUSHDATA2 — script with 256-byte data push uses OP_PUSHDATA2 encoding",
+      "input": {
+        "data_length_bytes": 256,
+        "data_fill_byte": "0x02"
+      },
+      "expected": {
+        "chunk_0_op": 77,
+        "note": "Script.additional.test.ts writeBin: 256-byte data → OP_PUSHDATA2 (0x4d=77)"
+      },
+      "tags": ["parse", "pushdata2", "encoding"]
+    },
+    {
+      "id": "script-012",
+      "description": "OP_PUSHDATA1 with 0 bytes of data — empty payload",
+      "input": {
+        "binary": [76]
+      },
+      "expected": {
+        "chunks_count": 1,
+        "chunk_0_data": [],
+        "note": "Script.test.ts fromBinary — OP_PUSHDATA1 (76) with no length byte → empty data chunk"
+      },
+      "tags": ["parse", "pushdata1", "boundary"]
+    },
+    {
+      "id": "script-013",
+      "description": "OP_PUSHDATA2 with 3 bytes of data — [77, 3, 0, 1, 2, 3]",
+      "input": {
+        "binary": [77, 3, 0, 1, 2, 3]
+      },
+      "expected": {
+        "chunks_count": 1,
+        "chunk_0_data": [1, 2, 3],
+        "note": "Script.test.ts fromBinary — OP_PUSHDATA2 with LE length 3"
+      },
+      "tags": ["parse", "pushdata2"]
+    },
+    {
+      "id": "script-014",
+      "description": "OP_PUSHDATA4 with 3 bytes of data — [78, 3, 0, 0, 0, 1, 2, 3]",
+      "input": {
+        "binary": [78, 3, 0, 0, 0, 1, 2, 3]
+      },
+      "expected": {
+        "chunks_count": 1,
+        "chunk_0_data": [1, 2, 3],
+        "note": "Script.test.ts fromBinary — OP_PUSHDATA4 (78) with 4-byte LE length"
+      },
+      "tags": ["parse", "pushdata4"]
+    },
+    {
+      "id": "script-015",
+      "description": "writeBn(0) produces OP_0",
+      "input": {
+        "operation": "writeBn",
+        "value": 0
+      },
+      "expected": {
+        "chunk_0_op": 0,
+        "note": "Script.additional.test.ts writeBn: BigNumber(0) → OP_0 (opcode 0)"
+      },
+      "tags": ["encode", "bn", "op_0"]
+    },
+    {
+      "id": "script-016",
+      "description": "writeBn(-1) produces OP_1NEGATE",
+      "input": {
+        "operation": "writeBn",
+        "value": -1
+      },
+      "expected": {
+        "chunk_0_op": 79,
+        "note": "Script.additional.test.ts writeBn: BigNumber(-1) → OP_1NEGATE (0x4f=79)"
+      },
+      "tags": ["encode", "bn", "op_1negate"]
+    },
+    {
+      "id": "script-017",
+      "description": "writeBn(1..16) produces OP_1..OP_16",
+      "input": {
+        "operation": "writeBn_range",
+        "values": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+      },
+      "expected": {
+        "opcodes": [81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96],
+        "note": "Script.additional.test.ts writeBn: 1→OP_1(81), 16→OP_16(96); OP_1+n-1"
+      },
+      "tags": ["encode", "bn", "op_1_to_16"]
+    },
+    {
+      "id": "script-018",
+      "description": "writeScript appends all chunks from another script",
+      "input": {
+        "script_asm": "OP_1 OP_2",
+        "append_asm": "OP_3"
+      },
+      "expected": {
+        "result_asm": "OP_1 OP_2 OP_3",
+        "note": "Script.additional.test.ts writeScript: s1.writeScript(s2) concatenates chunks"
+      },
+      "tags": ["encode", "write-script"]
+    },
+    {
+      "id": "script-019",
+      "description": "setChunkOpCode replaces opcode at given index",
+      "input": {
+        "script_asm": "OP_1 OP_2 OP_3",
+        "index": 1,
+        "new_op": 97
+      },
+      "expected": {
+        "chunk_1_op": 97,
+        "note": "Script.additional.test.ts setChunkOpCode: script.setChunkOpCode(1, OP.OP_NOP); chunks[1].op === OP_NOP(97)"
+      },
+      "tags": ["mutate", "set-chunk"]
+    },
+    {
+      "id": "script-020",
+      "description": "findAndDelete removes PUSHDATA1-encoded chunks matching target",
+      "input": {
+        "operation": "findAndDelete",
+        "data_length_bytes": 76,
+        "fill_byte": "0xab",
+        "source_has_trailing_op1": true
+      },
+      "expected": {
+        "remaining_chunks_count": 1,
+        "remaining_chunk_0_op": 81,
+        "note": "Script.additional.test.ts findAndDelete: removes 2 PUSHDATA1 chunks; OP_1 remains"
+      },
+      "tags": ["find-and-delete", "pushdata1"]
+    }
+  ]
+}

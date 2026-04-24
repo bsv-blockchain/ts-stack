@@ -5,7 +5,9 @@
   "description": "BSV ts-stack conformance test vector runner",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-vm-modules src/runner.js",
+    "test": "node src/runner.js",
+    "validate": "node src/runner.js --validate-only",
+    "report": "node src/runner.js --report conformance/reports/results.xml",
     "build": "echo 'no build step'"
   },
   "devDependencies": {
