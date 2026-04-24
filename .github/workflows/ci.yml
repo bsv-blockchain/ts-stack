@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check cross-package version references
+        run: node scripts/check-versions.mjs
+
       - name: Build all packages
         run: pnpm -r run build
 
