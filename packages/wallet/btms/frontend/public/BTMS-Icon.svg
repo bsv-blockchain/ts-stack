@@ -1,0 +1,19 @@
+<svg width="725" height="725" viewBox="0 0 725 725" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="725" height="725" rx="40" fill="black"/>
+<path d="M439 397.583C439 400.56 437.355 403.145 434.848 404.477L372.965 439.257C371.712 440.197 370.145 440.667 368.5 440.667C366.855 440.667 365.288 440.197 364.035 439.257L302.152 404.477C299.645 403.145 298 400.56 298 397.583V327.083C298 324.107 299.645 321.522 302.152 320.19L364.035 285.41C365.288 284.47 366.855 284 368.5 284C370.145 284 371.712 284.47 372.965 285.41L434.848 320.19C437.355 321.522 439 324.107 439 327.083V397.583ZM368.5 300.842L321.813 327.083L368.5 353.325L415.187 327.083L368.5 300.842ZM313.667 392.962L360.667 419.438V366.877L313.667 340.478V392.962ZM423.333 392.962V340.478L376.333 366.877V419.438L423.333 392.962Z" fill="white"/>
+<circle cx="369" cy="362" r="117" stroke="white" stroke-width="10"/>
+<circle cx="368.5" cy="362.5" r="155.5" stroke="white" stroke-width="10"/>
+<circle cx="369" cy="362" r="240" stroke="white" stroke-width="6" stroke-dasharray="30 30"/>
+<line x1="363.5" y1="203" x2="363.5" y2="124" stroke="white" stroke-width="5"/>
+<circle cx="362.5" cy="118.5" r="13.5" fill="white"/>
+<line x1="495.232" y1="268.553" x2="551.094" y2="212.691" stroke="white" stroke-width="5"/>
+<circle cx="554.276" cy="208.092" r="13.5" transform="rotate(45 554.276 208.092)" fill="white"/>
+<line y1="-2.5" x2="79" y2="-2.5" transform="matrix(-0.707107 -0.707107 -0.707107 0.707107 247.368 267.32)" stroke="white" stroke-width="5"/>
+<circle cx="13.5" cy="13.5" r="13.5" transform="matrix(-0.707107 0.707107 0.707107 0.707107 190.092 186)" fill="white"/>
+<line y1="-2.5" x2="79" y2="-2.5" transform="matrix(-4.37115e-08 1 1 4.37115e-08 366 519.32)" stroke="white" stroke-width="5"/>
+<circle cx="13.5" cy="13.5" r="13.5" transform="matrix(1 0 0 -1 349 617.32)" fill="white"/>
+<line y1="-2.5" x2="79" y2="-2.5" transform="matrix(0.707107 0.707107 0.707107 -0.707107 497 452)" stroke="white" stroke-width="5"/>
+<circle cx="13.5" cy="13.5" r="13.5" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 554.276 533.32)" fill="white"/>
+<line x1="237.136" y1="452.768" x2="181.274" y2="508.629" stroke="white" stroke-width="5"/>
+<circle cx="178.092" cy="513.228" r="13.5" transform="rotate(-135 178.092 513.228)" fill="white"/>
+</svg>

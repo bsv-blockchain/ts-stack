@@ -1,0 +1,8 @@
+node_modules
+out
+dist
+tsconfig.tsbuildinfo
+*.tgz
+dist
+local-data
+.DS_Store

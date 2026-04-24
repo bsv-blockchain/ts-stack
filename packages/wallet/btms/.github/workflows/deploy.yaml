@@ -1,0 +1,27 @@
+name: Deployment
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install CARS globally
+        run: npm i -g @bsv/cars-cli@latest
+
+      - name: Build artifact
+        run: cars build 1
+
+      - name: Release artifact
+        run: cars release now 1 --key "${{ secrets.CARS_PRIVATE_KEY }}"

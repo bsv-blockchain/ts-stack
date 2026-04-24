@@ -1,0 +1,21 @@
+{
+    "name": "@bsv/btms-project",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Basic Token Management System project root",
+    "scripts": {
+        "lars": "lars",
+        "cars": "cars",
+        "lars:config": "lars config",
+        "start": "lars start",
+        "build": "cars build 1",
+        "deploy": "cars deploy now 1"
+    },
+    "keywords": [],
+    "author": "Peer-to-peer Privacy Systems Research LLC",
+    "license": "Open BSV License",
+    "devDependencies": {
+        "@bsv/cars-cli": "^1.2.9",
+        "@bsv/lars": "^1.5.8"
+    }
+}

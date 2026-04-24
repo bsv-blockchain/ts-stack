@@ -1,0 +1,37 @@
+{
+  "name": "@bsv/btms-permission-module",
+  "version": "1.0.1",
+  "description": "BTMS Permission Module for wallet integration",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "btms",
+    "tokens",
+    "permissions",
+    "wallet"
+  ],
+  "author": "BSV Blockchain Association",
+  "license": "Open BSV",
+  "peerDependencies": {
+    "@bsv/btms": ">=1.0.0",
+    "@bsv/sdk": ">=2.0.3",
+    "@bsv/wallet-toolbox-client": ">=2.0.16"
+  },
+  "devDependencies": {
+    "@bsv/btms": "^1.0.0",
+    "@bsv/sdk": "^2.0.3",
+    "@bsv/wallet-toolbox-client": "^2.0.16",
+    "typescript": "^5.2.2"
+  }
+}

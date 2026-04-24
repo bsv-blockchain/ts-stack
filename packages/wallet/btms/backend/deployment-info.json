@@ -1,0 +1,33 @@
+{
+  "schema": "bsv-app",
+  "schemaVersion": "1.0",
+  "topicManagers": {
+    "tm_btms": "./src/topic-managers/BTMSTopicManager.ts"
+  },
+  "lookupServices": {
+    "ls_btms": {
+      "serviceFactory": "./src/lookup-services/BTMSLookupServiceFactory.ts",
+      "hydrateWith": "mongo"
+    }
+  },
+  "configs": [
+    {
+      "name": "Local LARS",
+      "network": "mainnet",
+      "provider": "LARS",
+      "run": [
+        "backend"
+      ]
+    },
+    {
+      "name": "BTMS",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "",
+      "network": "mainnet",
+      "deploy": [
+        "backend"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        registry-url: 'https://registry.npmjs.org'
+    - run: npm ci
+    - run: npm run lint:ci --if-present
+    - run: npm run test:coverage --if-present
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+  publish:
+    name: Publish
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+          node-version: '24'
+          scope: '@bsv'
+          registry-url: 'https://registry.npmjs.org'
+    - run: npm ci
+    - run: npm run build
+- name: Publish packages
+  run: |
+    for pkg in core permission-module permission-module-ui; do
+      (
+        cd "$pkg" &&
+        npm ci &&
+        PKG_NAME=$(node -p "require('./package.json').name") &&
+        PKG_VERSION=$(node -p "require('./package.json').version") &&
+        if npm view "${PKG_NAME}@${PKG_VERSION}" >/dev/null 2>&1; then
+          echo "Skipping ${PKG_NAME}@${PKG_VERSION} - already published"
+        else
+          echo "Publishing ${PKG_NAME}@${PKG_VERSION}"
+          npm publish --access public
+        fi
+      )
+    done
