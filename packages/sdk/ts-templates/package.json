@@ -1,0 +1,66 @@
+{
+  "name": "@bsv/templates",
+  "version": "1.4.0",
+  "type": "module",
+  "description": "BSV Blockchain Script Templates",
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "mod.ts",
+    "LICENSE.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/mod.d.ts",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./*.ts": {
+      "types": "./dist/types/src/*.d.ts",
+      "import": "./dist/esm/src/*.js",
+      "require": "./dist/cjs/src/*.js"
+    }
+  },
+  "scripts": {
+    "test": "npm run build && jest",
+    "test:watch": "npm run build && jest --watch",
+    "test:coverage": "npm run build && jest --coverage",
+    "lint": "ts-standard --fix 'src/**/*.ts'",
+    "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "dev": "tsc -b -w",
+    "prepublish": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-templates.git"
+  },
+  "keywords": [
+    "BSV",
+    "Blockchain",
+    "Script",
+    "Templates",
+    "Bitcoin",
+    "SV"
+  ],
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-templates/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-templates#readme",
+  "devDependencies": {
+    "@bsv/wallet-toolbox": "^1.6.23",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "ts-standard": "^12.0.2",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@bsv/sdk": "^1.7.6"
+  }
+}
