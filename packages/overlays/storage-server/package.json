@@ -49,10 +49,10 @@
     "@types/node": "^22.13.10",
     "@types/prettyjson": "^0.0.33",
     "ejs": "^3.1.6",
-    "jest": "^30.0.5",
+    "jest": "^30.3.0",
     "nodemon": "^3.1.10",
     "standard": "^16.0.4",
-    "ts-jest": "^29.4.0",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   }

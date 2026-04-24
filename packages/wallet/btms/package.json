@@ -41,9 +41,9 @@
     "url": "https://github.com/bsv-blockchain/btms"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.1",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "ts-standard": "^12.0.2",
     "ts2md": "^0.2.0",
     "typescript": "^5.2.2"
