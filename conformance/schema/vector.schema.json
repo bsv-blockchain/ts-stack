@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bsv-blockchain.github.io/ts-stack/conformance/schema/vector.schema.json",
+  "title": "BSV Conformance Vector File",
+  "description": "Schema for cross-language conformance test vector files",
+  "type": "object",
+  "required": ["id", "name", "version", "reference_impl", "parity_class", "vectors"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)*$",
+      "description": "Stable dot-separated identifier, e.g. sdk.crypto.ecdsa"
+    },
+    "name": { "type": "string" },
+    "brc": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Related BRC numbers, e.g. ['BRC-42']"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "reference_impl": { "type": "string", "description": "e.g. ts-sdk@2.0.14" },
+    "parity_class": {
+      "type": "string",
+      "enum": ["required", "intended", "best-effort", "unsupported"]
+    },
+    "vectors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "input", "expected"],
+        "properties": {
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "input": { "type": "object" },
+          "expected": { "type": "object" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "skip": { "type": "boolean", "description": "If true, skip in CI" },
+          "skip_reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

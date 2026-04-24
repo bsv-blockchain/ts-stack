@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "description": "BSV cross-language conformance vector corpus",
+  "domains": ["sdk", "wallet", "overlay", "messaging", "broadcast", "auth"],
+  "brc_coverage": {
+    "BRC-42": ["sdk.keys.key-derivation"],
+    "BRC-31": [],
+    "BRC-29": [],
+    "BRC-100": []
+  },
+  "stats": {
+    "total_files": 0,
+    "total_vectors": 0,
+    "last_updated": "2026-04-24"
+  }
+}
