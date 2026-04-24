@@ -1,0 +1,121 @@
+{
+  "name": "@bsv/paymail",
+  "version": "2.3.0",
+  "description": "BSV Paymail library",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "type": "module",
+  "files": [
+    "dist",
+    "src",
+    "docs"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/mod.d.ts",
+      "browser": "./dist/esm/mod.browser.js",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./*.ts": {
+      "types": "./dist/types/src/*.d.ts",
+      "import": "./dist/esm/src/*.js",
+      "require": "./dist/cjs/src/*.js"
+    },
+    "./client": {
+      "import": "./dist/esm/src/paymailClient/index.js",
+      "require": "./dist/cjs/src/paymailClient/index.js",
+      "types": "./dist/types/src/paymailClient/index.d.ts"
+    },
+    "./client/*": {
+      "import": "./dist/esm/src/paymailClient/*.js",
+      "require": "./dist/cjs/src/paymailClient/*.js",
+      "types": "./dist/types/src/paymailClient/*.d.ts"
+    },
+    "./capability": {
+      "import": "./dist/esm/src/capability/index.js",
+      "require": "./dist/cjs/src/capability/index.js",
+      "types": "./dist/types/src/capability/index.d.ts"
+    },
+    "./capability/*": {
+      "import": "./dist/esm/src/capability/*.js",
+      "require": "./dist/cjs/src/capability/*.js",
+      "types": "./dist/types/src/capability/*.d.ts"
+    },
+    "./router": {
+      "import": "./dist/esm/src/paymailRouter/index.js",
+      "require": "./dist/cjs/src/paymailRouter/index.js",
+      "types": "./dist/types/src/paymailRouter/index.d.ts"
+    },
+    "./router/*": {
+      "import": "./dist/esm/src/paymailRouter/*.js",
+      "require": "./dist/cjs/src/paymailRouter/*.js",
+      "types": "./dist/types/src/paymailRouter/*.d.ts"
+    },
+    "./errors": {
+      "import": "./dist/esm/src/errors/index.js",
+      "require": "./dist/cjs/src/errors/index.js",
+      "types": "./dist/types/src/errors/index.d.ts"
+    },
+    "./errors/*": {
+      "import": "./dist/esm/src/errors/*.js",
+      "require": "./dist/cjs/src/errors/*.js",
+      "types": "./dist/types/src/errors/*.d.ts"
+    }
+  },
+  "scripts": {
+    "test": "npm run build && jest --testTimeout=15000",
+    "test:watch": "npm run build && jest --watch",
+    "test:coverage": "npm run build && jest --coverage",
+    "lint": "ts-standard --fix 'src/**/*.ts'",
+    "ex-lint": "ts-standard --fix 'docs/examples/**/*.ts'",
+    "docs-lint": "ts-standard --fix 'docs/**/*.ts'",
+    "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "dev": "tsc -b -w",
+    "prepublish": "npm run build",
+    "build:example": "npm run build && npm link && cd docs/examples && npm i && npm link @bsv/paymail && tsc -p tsconfig.json",
+    "start:example:server": "npm run build:example && cd docs/examples && npm run server",
+    "example:getProfile": "npm run build:example && cd docs/examples && npm run getProfile",
+    "example:sendP2P": "npm run build:example && cd docs/examples && npm run sendP2P",
+    "doc": "ts2md --inputFilename=src/capability/index.ts --outputFilename=docs/capability.md --filenameSubString=capability --firstHeadingLevel=1 && ts2md --inputFilename=src/paymailClient/paymailClient.ts --outputFilename=docs/paymailClient.md --filenameSubString=paymailClient --firstHeadingLevel=1 && npx ts2md --inputFilename=src/paymailRouter/paymailRouter.ts --outputFilename=docs/paymailRouter.md --filenameSubString=paymailRouter --firstHeadingLevel=1"
+  },
+  "author": "BSV Blockchain Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-paymail/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-paymail#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-paymail.git"
+  },
+  "keywords": [
+    "BSV",
+    "Blockchain",
+    "SDK",
+    "Bitcoin",
+    "SV",
+    "Paymail"
+  ],
+  "dependencies": {
+    "@bsv/sdk": "^2.0.5",
+    "@types/jest": "^30.0.0",
+    "cross-fetch": "^4.1.0",
+    "express": "^5.1.0",
+    "jest": "^30.1.3",
+    "joi": "^18.0.1",
+    "node-fetch": "^3",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.1",
+    "ts2md": "^0.2.8",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "ts-standard": "^12.0.2"
+  }
+}
