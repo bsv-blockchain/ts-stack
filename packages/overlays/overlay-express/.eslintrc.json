@@ -1,0 +1,11 @@
+{
+  "extends": ["standard-with-typescript"],
+  "parserOptions": {
+    "project": "./tsconfig.eslint.json"
+  },
+  "rules": {
+    "@typescript-eslint/prefer-nullish-coalescing": "off",
+    "@typescript-eslint/strict-boolean-expressions": "off",
+    "no-useless-escape": "off"
+  }
+}
