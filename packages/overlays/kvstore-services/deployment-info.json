@@ -1,0 +1,53 @@
+{
+  "schema": "bsv-app",
+  "schemaVersion": "1.0",
+  "topicManagers": {
+    "tm_kvstore": "./backend/src/KVStoreTopicManager.ts"
+  },
+  "lookupServices": {
+    "ls_kvstore": {
+      "serviceFactory": "./backend/src/KVStoreLookupServiceFactory.ts",
+      "hydrateWith": "mongo"
+    }
+  },
+  "configs": [
+    {
+      "name": "Local LARS",
+      "network": "mainnet",
+      "provider": "LARS",
+      "run": [
+        "backend"
+      ]
+    },
+    {
+      "name": "Babbage",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "2b63ed8575c49054dd0ac65c61e7e6c6",
+      "network": "mainnet",
+      "deploy": [
+        "backend"
+      ]
+    },
+    {
+      "name": "Babbage testnet",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "136860c08976264275a009403759e6ad",
+      "network": "testnet",
+      "deploy": [
+        "backend"
+      ]
+    },
+    {
+      "name": "club",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.metanet.club",
+      "projectID": "463a5e81e29fe79f94d3381b7a42d6be",
+      "network": "mainnet",
+      "deploy": [
+        "backend"
+      ]
+    }
+  ]
+}
