@@ -1,0 +1,43 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      bsv-workspace:
+        # Cross-workspace @bsv/* bumps handled by sync-versions script, not Dependabot
+        exclude-patterns:
+          - "@bsv/*"
+      dev-tooling:
+        patterns:
+          - "typescript"
+          - "ts-standard"
+          - "jest"
+          - "ts-jest"
+          - "@types/*"
+    ignore:
+      # Workspace packages managed internally
+      - dependency-name: "@bsv/sdk"
+      - dependency-name: "@bsv/wallet-toolbox"
+      - dependency-name: "@bsv/overlay"
+      - dependency-name: "@bsv/overlay-express"
+      - dependency-name: "@bsv/auth-express-middleware"
+      - dependency-name: "@bsv/payment-express-middleware"
+      - dependency-name: "@bsv/authsocket"
+      - dependency-name: "@bsv/authsocket-client"
+      - dependency-name: "@bsv/message-box-client"
+      - dependency-name: "@bsv/paymail"
+      - dependency-name: "@bsv/simple"
+      - dependency-name: "@bsv/wallet-helper"
+      - dependency-name: "@bsv/amountinator"
+      - dependency-name: "@bsv/templates"
+      - dependency-name: "@bsv/gasp"
+      - dependency-name: "@bsv/402-pay"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
