@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@bsv/payment-express-middleware": "^2.0.2",
-    "@bsv/sdk": "^2.0.13",
+    "@bsv/sdk": "^2.0.14",
     "@bsv/wallet-toolbox": "^2.1.22",
     "body-parser": "^1.20.2",
     "dotenv": "^16.3.1",

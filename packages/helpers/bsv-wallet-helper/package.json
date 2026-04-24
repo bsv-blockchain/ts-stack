@@ -32,8 +32,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@bsv/sdk": "2.0.13",
-    "@bsv/wallet-toolbox-client": "^2.1.19"
+    "@bsv/sdk": "^2.0.14",
+    "@bsv/wallet-toolbox-client": "^2.1.18"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

@@ -44,10 +44,10 @@
   "author": "Deggen <d.kellenschwiler@bsvassociation.org>",
   "license": "SEE LICENSE IN LICENSE",
   "peerDependencies": {
-    "@bsv/sdk": ">=2.0.0"
+    "@bsv/sdk": "^2.0.14"
   },
   "devDependencies": {
-    "@bsv/sdk": "^2.0.13",
+    "@bsv/sdk": "^2.0.14",
     "@types/node": "^20.14.0",
     "typescript": "^5.5.0",
     "vitest": "^4.1.3"

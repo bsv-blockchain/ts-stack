@@ -54,8 +54,8 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
-    "@bsv/auth-express-middleware": "^2.0.4",
-    "@bsv/payment-express-middleware": "^2.0.1",
+    "@bsv/auth-express-middleware": "^2.0.5",
+    "@bsv/payment-express-middleware": "^2.0.2",
     "@eslint/js": "^9.20.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.13.2",
@@ -83,6 +83,6 @@
   },
   "dependencies": {
     "@bsv/authsocket-client": "^2.0.2",
-    "@bsv/sdk": "^2.0.13"
+    "@bsv/sdk": "^2.0.14"
   }
 }

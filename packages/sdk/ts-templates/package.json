@@ -52,7 +52,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-templates#readme",
   "devDependencies": {
-    "@bsv/wallet-toolbox": "^1.6.23",
+    "@bsv/wallet-toolbox": "^2.1.22",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",
@@ -61,6 +61,6 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@bsv/sdk": "^1.7.6"
+    "@bsv/sdk": "^2.0.14"
   }
 }

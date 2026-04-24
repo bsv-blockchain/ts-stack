@@ -54,12 +54,12 @@
   },
   "homepage": "https://github.com/bsv-blockchain/authsocket#readme",
   "dependencies": {
-    "@bsv/sdk": "^2.0.1",
+    "@bsv/sdk": "^2.0.14",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
-    "@bsv/authsocket-client": "^1.0.13",
-    "@bsv/message-box-client": "^1.1.10",
+    "@bsv/authsocket-client": "^2.0.2",
+    "@bsv/message-box-client": "^2.1.1",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
