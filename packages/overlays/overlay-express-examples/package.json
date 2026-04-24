@@ -1,5 +1,6 @@
 {
-  "name": "overlay-express-examples",
+  "name": "@bsv/overlay-express-examples",
+  "private": true,
   "version": "2.1.6",
   "description": "Run the overlay infrastructure for distributed applications.",
   "homepage": "https://github.com/bsv-blockchain/overlay-express-examples#readme",

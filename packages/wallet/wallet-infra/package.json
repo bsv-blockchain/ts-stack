@@ -1,5 +1,6 @@
 {
-  "name": "wallet-infra",
+  "name": "@bsv/wallet-infra",
+  "private": true,
   "version": "2.0.4",
   "type": "module",
   "description": "UTXO Management Server",

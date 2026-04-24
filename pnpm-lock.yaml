@@ -1569,22 +1569,7 @@ importers:
         specifier: ^5.2.2
         version: 5.9.3
 
-  packages/wallet/btms-permission-module:
-    devDependencies:
-      '@bsv/btms':
-        specifier: ^1.0.0
-        version: 1.0.1(@bsv/sdk@2.0.14)
-      '@bsv/sdk':
-        specifier: ^2.0.3
-        version: 2.0.14
-      '@bsv/wallet-toolbox-client':
-        specifier: ^2.0.16
-        version: 2.1.22
-      typescript:
-        specifier: ^5.2.2
-        version: 5.9.3
-
-  packages/wallet/btms/btms-core-tmp:
+  packages/wallet/btms:
     dependencies:
       '@bsv/sdk':
         specifier: ^2.0.3
@@ -1605,6 +1590,21 @@ importers:
       ts2md:
         specifier: ^0.2.0
         version: 0.2.8
+      typescript:
+        specifier: ^5.2.2
+        version: 5.9.3
+
+  packages/wallet/btms-permission-module:
+    devDependencies:
+      '@bsv/btms':
+        specifier: ^1.0.0
+        version: 1.0.1(@bsv/sdk@2.0.14)
+      '@bsv/sdk':
+        specifier: ^2.0.3
+        version: 2.0.14
+      '@bsv/wallet-toolbox-client':
+        specifier: ^2.0.16
+        version: 2.1.22
       typescript:
         specifier: ^5.2.2
         version: 5.9.3

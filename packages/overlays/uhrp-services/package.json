@@ -1,5 +1,5 @@
 {
-  "name": "@bsv/project",
+  "name": "@bsv/uhrp-services",
   "private": true,
   "version": "1.0.0",
   "description": "Standard BSV project structure",
