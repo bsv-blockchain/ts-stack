@@ -1,0 +1,38 @@
+{
+  "name": "@bsv/amountinator",
+  "version": "2.0.1",
+  "description": "Currency amount conversion",
+  "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
+  "license": "Open BSV License",
+  "main": "./out/src/index.js",
+  "types": "./out/src/index.d.ts",
+  "files": [
+    "out"
+  ],
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "build": "tsc --build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/amountinator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/amountinator/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/amountinator#readme",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
+    "@bsv/sdk": "^2.0.4",
+    "@bsv/wallet-toolbox-client": "^2.0.21"
+  }
+}
