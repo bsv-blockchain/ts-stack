@@ -1,0 +1,58 @@
+version: '3.8'
+services:
+  ## Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8080:8080"
+      - 9229:9229
+    command: node --inspect=0.0.0.0 ./out/src/index.js
+    environment:
+      HOSTING_DOMAIN: 'http://localhost:8080'
+      PORT: 8080
+      SERVER_PRIVATE_KEY: 'f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18' # EXAMPLE TEST KEY
+      KNEX_DB_CLIENT: mysql
+      KNEX_DB_CONNECTION: '{"port":3306,"host":"backend-mysql","user":"root","password":"test","database":"messagebox-backend"}'
+      NODE_ENV: development
+      WALLET_STORAGE_URL: 'https://storage.babbage.systems'
+    depends_on:
+      backend-mysql:
+        condition: service_healthy
+
+  ## Backend database
+  backend-mysql:
+    image: "mysql:8.0"
+    platform: linux/amd64
+    hostname: 'backend-mysql'
+    command: 'mysqld --default-authentication-plugin=mysql_native_password --sync_binlog=0 --innodb_doublewrite=OFF  --innodb-flush-log-at-trx-commit=0 --innodb-flush-method=nosync'
+    restart: always
+    volumes:
+      - './data/backend-mysql-data:/var/lib/mysql'
+    environment:
+      MYSQL_HOST: "127.0.0.1"
+      MYSQL_TCP_PORT: 3306
+      MYSQL_ROOT_PASSWORD: "test"
+      MYSQL_DATABASE: "messagebox-backend"
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", 'mysqladmin ping']
+      interval: 10s
+      timeout: 2s
+      retries: 10
+
+  # Optional: PHPMyAdmin for DB browsing
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    links:
+      - backend-mysql
+    environment:
+      PMA_HOST: backend-mysql
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+    restart: always
+    ports:
+      - 3003:80

@@ -1,0 +1,64 @@
+name: Deployment
+on:
+  push:
+    branches:
+      - master
+      - production
+
+env:
+  CURRENT_BRANCH: ${{ github.ref_name == 'production' && 'production' || 'master' }}
+  GCR_HOST: us.gcr.io
+  GOOGLE_PROJECT_ID: example-project-id
+  GCR_IMAGE_NAME: messagebox-server
+
+jobs:
+  build:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Push Docker Image to GCR
+        uses: RafikFarhad/push-to-gcr-github-action@v4.1
+        with:
+          gcloud_service_key: ${{ secrets.DOCKER_REGISTRY_PUSH_KEY }}
+          registry: ${{ env.GCR_HOST }}
+          project_id: ${{ env.GOOGLE_PROJECT_ID }}
+          image_name: ${{ env.GCR_IMAGE_NAME }}
+          image_tag: latest,${{ env.CURRENT_BRANCH }}-${{ github.sha }}
+
+      - name: Create Service Description File
+        run: ./scripts/mkenv.sh service.${{ env.CURRENT_BRANCH }}.yaml
+        env:
+          IMAGE: "${{ env.GCR_HOST }}/${{ env.GOOGLE_PROJECT_ID }}/${{ env.GCR_IMAGE_NAME }}:${{ env.CURRENT_BRANCH }}-${{ github.sha }}"
+          SERVICE: ${{ env.CURRENT_BRANCH == 'production' && 'prod-messagebox-server' || 'staging-messagebox-server' }}
+          BSV_NETWORK: ${{ env.CURRENT_BRANCH == 'production' && 'mainnet' || 'testnet' }}
+          NODE_ENV: ${{ env.CURRENT_BRANCH =='production' && 'production' || 'staging' }}
+          WALLET_STORAGE_URL: ${{ env.CURRENT_BRANCH == 'production' && secrets.PROD_WALLET_STORAGE_URL || secrets.STAGING_WALLET_STORAGE_URL }}
+          SERVER_PRIVATE_KEY: ${{ env.CURRENT_BRANCH == 'production' && secrets.PROD_SERVER_PRIVATE_KEY || secrets.STAGING_SERVER_PRIVATE_KEY }}
+          KNEX_DB_CONNECTION: ${{ env.CURRENT_BRANCH == 'production' && secrets.PROD_KNEX_DB_CONNECTION || secrets.STAGING_KNEX_DB_CONNECTION }}
+          LOGGING_ENABLED: ${{ env.CURRENT_BRANCH == 'production' && secrets.PROD_LOGGING_ENABLED || secrets.STAGING_LOGGING_ENABLED }}
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.gcp_deploy_creds }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          metadata: "service.${{ env.CURRENT_BRANCH }}.yaml"
+          region: us-west1
+
+      - name: Set Min Instances and Enable CPU Boost
+        run: |
+          gcloud run services update ${{ env.CURRENT_BRANCH == 'production' && 'prod-storage' || 'staging-storage' }} \
+            --min-instances=1 --cpu-boost --region=us-west1
