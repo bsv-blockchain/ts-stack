@@ -1,0 +1,53 @@
+{
+  "name": "@bsv/wallet-helper",
+  "version": "0.0.6",
+  "description": "",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bsv-blockchain/bsv-wallet-helper.git"
+  },
+  "scripts": {
+    "test": "jest",
+    "lint:ci-disabled": "ts-standard src/**/*.ts",
+    "lint": "ts-standard --fix src/**/*.ts",
+    "test:watch": "jest --watch",
+    "test:coverage-disabled": "jest --coverage",
+    "build": "tsup"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@bsv/sdk": "2.0.13",
+    "@bsv/wallet-toolbox-client": "^2.1.19"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-standard": "^12.0.2",
+    "tslib": "^2.8.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  },
+  "ts-standard": {
+    "project": "tsconfig.eslint.json",
+    "ignore": [
+      "dist"
+    ]
+  }
+}
