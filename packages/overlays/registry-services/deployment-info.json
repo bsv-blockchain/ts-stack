@@ -1,0 +1,54 @@
+{
+  "schema": "bsv-app",
+  "schemaVersion": "1.0",
+  "topicManagers": {
+    "tm_basketmap": "./backend/src/basketmap-services/src/BasketMapTopicManager.ts",
+    "tm_certmap": "./backend/src/certmap-services/src/CertMapTopicManager.ts",
+    "tm_protomap": "./backend/src/protomap-services/src/ProtoMapTopicManager.ts"
+  },
+  "lookupServices": {
+    "ls_basketmap": {
+      "serviceFactory": "./backend/src/basketmap-services/src/BasketMapLookupServiceFactory.ts",
+      "hydrateWith": "mongo"
+    },
+    "ls_certmap": {
+      "serviceFactory": "./backend/src/certmap-services/src/CertMapLookupServiceFactory.ts",
+      "hydrateWith": "mongo"
+    },
+    "ls_protomap": {
+      "serviceFactory": "./backend/src/protomap-services/src/ProtoMapLookupServiceFactory.ts",
+      "hydrateWith": "mongo"
+    }
+  },
+  "configs": [
+    {
+      "name": "Local LARS",
+      "network": "mainnet",
+      "provider": "LARS",
+      "run": [
+        "backend"
+      ]
+    },
+    {},
+    {
+      "name": "Babbage",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "e3703603a3fe9f2dde54a73a7d7f1612",
+      "network": "mainnet",
+      "deploy": [
+        "backend"
+      ]
+    },
+    {
+      "name": "Babbage Testnet",
+      "provider": "CARS",
+      "CARSCloudURL": "https://cars.babbage.systems",
+      "projectID": "393368e32296610cd8e55ad4b6037c20",
+      "network": "testnet",
+      "deploy": [
+        "backend"
+      ]
+    }
+  ]
+}
