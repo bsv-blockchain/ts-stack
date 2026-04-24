@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write   # for npm provenance
+      id-token: write   # required for npm OIDC provenance
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +33,11 @@ jobs:
         run: pnpm -r run build
 
       - name: Publish changed packages
-        run: pnpm -r --filter='...[origin/main]' publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # No token needed — npm authenticates via GitHub OIDC.
+        # Each package must have this repo configured as a trusted publisher
+        # on npmjs.org: package settings → Publishing → Add trusted publisher
+        #   Owner: bsv-blockchain
+        #   Repository: ts-stack
+        #   Workflow: release.yml
+        #   Environment: (leave blank)
+        run: pnpm -r --filter='...[origin/main]' publish --access public --no-git-checks --provenance
