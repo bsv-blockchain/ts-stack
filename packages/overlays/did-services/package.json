@@ -1,21 +1,24 @@
 {
   "name": "@bsv/did-services",
-  "private": true,
   "version": "1.0.0",
-  "description": "Standard BSV project structure",
-  "scripts": {
-    "lars": "lars",
-    "cars": "cars",
-    "lars:config": "lars config",
-    "start": "lars start",
-    "build": "cars build 1",
-    "deploy": "cars deploy now 1"
+  "description": "BSV DID overlay services — re-exports from @bsv/overlay-topics",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "SEE LICENSE IN LICENSE.txt",
+  "scripts": {
+    "build": "echo 'No build needed — re-exports from @bsv/overlay-topics'",
+    "lint": "ts-standard src/**/*.ts"
+  },
+  "dependencies": {
+    "@bsv/overlay-topics": "workspace:*"
+  },
   "devDependencies": {
-    "@bsv/cars-cli": "^1.2.9",
-    "@bsv/lars": "^1.5.8"
-  }
+    "ts-standard": "^12.0.0",
+    "typescript": "^5.8.3"
+  },
+  "license": "Open BSV",
+  "author": "BSV Blockchain Association",
+  "private": true
 }

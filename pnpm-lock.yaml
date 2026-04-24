@@ -748,49 +748,16 @@ importers:
         version: 5.9.3
 
   packages/overlays/apps-overlay-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/apps-overlay-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^2.0.2
-        version: 2.0.3
-      '@bsv/sdk':
-        specifier: ^2.0.7
-        version: 2.0.14
-      knex:
-        specifier: ^3.1.0
-        version: 3.2.9(better-sqlite3@12.9.0)(mysql2@3.22.2(@types/node@20.19.39))(sqlite3@5.1.7)
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/btms-backend:
@@ -898,49 +865,16 @@ importers:
         version: 6.0.1(webpack@5.106.2)
 
   packages/overlays/did-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/did-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^2.0.2
-        version: 2.0.3
-      '@bsv/sdk':
-        specifier: ^2.0.5
-        version: 2.0.14
-      knex:
-        specifier: ^3.1.0
-        version: 3.2.9(better-sqlite3@12.9.0)(mysql2@3.22.2(@types/node@20.19.39))(sqlite3@5.1.7)
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/gasp-core:
@@ -972,101 +906,29 @@ importers:
         version: 5.9.3
 
   packages/overlays/identity-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/identity-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^2.0.2
-        version: 2.0.3
-      '@bsv/sdk':
-        specifier: ^2.0.5
-        version: 2.0.14
-      knex:
-        specifier: ^3.1.0
-        version: 3.2.9(better-sqlite3@12.9.0)(mysql2@3.22.2(@types/node@20.19.39))(sqlite3@5.1.7)
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/kvstore-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/kvstore-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^2.0.2
-        version: 2.0.3
-      '@bsv/sdk':
-        specifier: ^2.0.13
-        version: 2.0.14
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.39
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@20.19.39)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@20.19.39)(typescript@5.9.3))
-      mongodb-memory-server:
-        specifier: ^9.1.3
-        version: 9.5.0
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@20.19.39)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@20.19.39)(typescript@5.9.3)))(typescript@5.9.3)
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.19.39)(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/lite-storage-server:
@@ -1294,46 +1156,16 @@ importers:
         version: 5.9.3
 
   packages/overlays/registry-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.7
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/registry-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^0.5.2
-        version: 0.5.4
-      '@bsv/sdk':
-        specifier: ^1.9.1
-        version: 1.10.4
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/storage-server:
@@ -1456,92 +1288,29 @@ importers:
         version: 5.9.3
 
   packages/overlays/uhrp-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/uhrp-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^2.0.2
-        version: 2.0.3
-      '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
-      knex:
-        specifier: ^3.1.0
-        version: 3.2.9(better-sqlite3@12.9.0)(mysql2@3.22.2(@types/node@20.19.39))(sqlite3@5.1.7)
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/ump-services:
-    devDependencies:
-      '@bsv/cars-cli':
-        specifier: ^1.2.9
-        version: 1.2.9(@types/node@22.19.17)
-      '@bsv/lars':
-        specifier: ^1.5.8
-        version: 1.5.8(@types/node@22.19.17)
-
-  packages/overlays/ump-services/backend:
     dependencies:
-      '@bsv/overlay':
-        specifier: ^2.0.2
-        version: 2.0.3
-      '@bsv/sdk':
-        specifier: ^2.0.13
-        version: 2.0.14
-      mongodb:
-        specifier: ^6.11.0
-        version: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
+      '@bsv/overlay-topics':
+        specifier: workspace:*
+        version: link:../topics
     devDependencies:
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      mongodb-memory-server:
-        specifier: ^10.4.3
-        version: 10.4.3(gcp-metadata@8.1.2)(socks@2.8.7)
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
       ts-standard:
-        specifier: ^12.0.2
+        specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.0
-        version: 0.2.8
       typescript:
-        specifier: ^5.2.2
+        specifier: ^5.8.3
         version: 5.9.3
 
   packages/sdk/ts-sdk:
@@ -2291,9 +2060,6 @@ packages:
 
   '@bsv/overlay-express@2.2.0':
     resolution: {integrity: sha512-lFcgj6XglahJ63mly+EFQwsDuCCU5uX3IlLHsTyrOV1eFPM81e6uHEPJR+L8gZI8RCJ+rf7ieJI1oJXDMClgjQ==}
-
-  '@bsv/overlay@0.5.4':
-    resolution: {integrity: sha512-2N0P8VkP18HsMZyJ2ESpNunDhy+6HhzQMdNFDZR0upt5jgnVq2G/JIxkTy9Dwtt2lg96xMEJNoFLWxa3oZcIqA==}
 
   '@bsv/overlay@2.0.3':
     resolution: {integrity: sha512-dM1cJsxpEZakk0PyXtYCXE2ND9pBynl+cM2UFyGtpYXSZ7ZVzjXge3DTeuRvSI6qrnYR00a56brKTiDensw6RQ==}
@@ -4965,9 +4731,6 @@ packages:
 
   async-mutex@0.4.1:
     resolution: {integrity: sha512-WfoBo4E/TbCX1G95XTjbWTE3X2XLG0m1Xbv2cwOtuPdyH9CZvnaA5nCt1ucjaKEgW2A5IF71hxrRhr83Je5xjA==}
-
-  async-mutex@0.5.0:
-    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
 
   async-retry@1.3.3:
     resolution: {integrity: sha512-wfr/jstw9xNi/0teMHrRW7dsz3Lt5ARhYNZ2ewpadnhaIp5mbALhOAP+EAdsC7t4Z6wqsDVv9+W6gm1Dk9mEyw==}
@@ -8036,17 +7799,9 @@ packages:
     resolution: {integrity: sha512-h0AZ9A7IDVwwHyMxmdMXKy+9oNlF0zFoahHiX3vQ8e3KFcSP3VmsmfvtRSuLPxmyv2vjIDxqty8smTgie/SNRQ==}
     engines: {node: '>=20.19.0'}
 
-  mongodb-memory-server-core@10.4.3:
-    resolution: {integrity: sha512-IPjlw73IoSYopnqBibQKxmAXMbOEPf5uGAOsBcaUiNH/TOI7V19WO+K7n5KYtnQ9FqzLGLpvwCGuPOTBSg4s5Q==}
-    engines: {node: '>=16.20.1'}
-
   mongodb-memory-server-core@9.5.0:
     resolution: {integrity: sha512-Jb/V80JeYAKWaF4bPFme7SmTR6ew1PWgkpPUepLDfRraeN49i1cruxICeA4zz4T33W/o31N+zazP8wI8ebf7yw==}
     engines: {node: '>=14.20.1'}
-
-  mongodb-memory-server@10.4.3:
-    resolution: {integrity: sha512-CDZvFisXvGIigsIw5gqH6r9NI/zxGa/uRdutgUL/isuJh+inj0YXb7Ykw6oFMFzqgTJWb7x0I5DpzrqCstBWpg==}
-    engines: {node: '>=16.20.1'}
 
   mongodb-memory-server@9.5.0:
     resolution: {integrity: sha512-In3zRT40cLlVtpy7FK6b96Lby6JBAdXj8Kf9YrH4p1Aa2X4ptojq7SmiRR3x47Lo0/UCXXIwhJpkdbYY8kRZAw==}
@@ -10781,22 +10536,6 @@ snapshots:
       - pg-query-stream
       - snappy
       - socks
-      - sqlite3
-      - supports-color
-      - tedious
-
-  '@bsv/overlay@0.5.4':
-    dependencies:
-      '@bsv/gasp': 1.2.2
-      '@bsv/sdk': 1.10.4
-      knex: 3.2.9(better-sqlite3@12.9.0)(mysql2@3.22.2(@types/node@20.19.39))(sqlite3@5.1.7)
-    transitivePeerDependencies:
-      - better-sqlite3
-      - mysql
-      - mysql2
-      - pg
-      - pg-native
-      - pg-query-stream
       - sqlite3
       - supports-color
       - tedious
@@ -14458,10 +14197,6 @@ snapshots:
   async-function@1.0.0: {}
 
   async-mutex@0.4.1:
-    dependencies:
-      tslib: 2.8.1
-
-  async-mutex@0.5.0:
     dependencies:
       tslib: 2.8.1
 
@@ -19150,33 +18885,6 @@ snapshots:
       '@types/whatwg-url': 13.0.0
       whatwg-url: 14.2.0
 
-  mongodb-memory-server-core@10.4.3(gcp-metadata@8.1.2)(socks@2.8.7):
-    dependencies:
-      async-mutex: 0.5.0
-      camelcase: 6.3.0
-      debug: 4.4.3(supports-color@5.5.0)
-      find-cache-dir: 3.3.2
-      follow-redirects: 1.16.0(debug@4.4.3)
-      https-proxy-agent: 7.0.6
-      mongodb: 6.21.0(gcp-metadata@8.1.2)(socks@2.8.7)
-      new-find-package-json: 2.0.0
-      semver: 7.7.4
-      tar-stream: 3.1.8
-      tslib: 2.8.1
-      yauzl: 3.3.0
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-providers'
-      - '@mongodb-js/zstd'
-      - bare-abort-controller
-      - bare-buffer
-      - gcp-metadata
-      - kerberos
-      - mongodb-client-encryption
-      - react-native-b4a
-      - snappy
-      - socks
-      - supports-color
-
   mongodb-memory-server-core@9.5.0:
     dependencies:
       async-mutex: 0.4.1
@@ -19200,23 +18908,6 @@ snapshots:
       - mongodb-client-encryption
       - react-native-b4a
       - snappy
-      - supports-color
-
-  mongodb-memory-server@10.4.3(gcp-metadata@8.1.2)(socks@2.8.7):
-    dependencies:
-      mongodb-memory-server-core: 10.4.3(gcp-metadata@8.1.2)(socks@2.8.7)
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-providers'
-      - '@mongodb-js/zstd'
-      - bare-abort-controller
-      - bare-buffer
-      - gcp-metadata
-      - kerberos
-      - mongodb-client-encryption
-      - react-native-b4a
-      - snappy
-      - socks
       - supports-color
 
   mongodb-memory-server@9.5.0:
