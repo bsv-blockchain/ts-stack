@@ -48,6 +48,13 @@ jobs:
     needs: [build-and-test]
     steps:
       - uses: actions/checkout@v4
+
+      # go-sdk is required by the Go conformance runner (replace directive)
+      - uses: actions/checkout@v4
+        with:
+          repository: bsv-blockchain/go-sdk
+          path: go-sdk
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -55,10 +62,29 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: conformance/runner/go/go.mod
+          cache-dependency-path: conformance/runner/go/go.sum
+
       - run: pnpm install --ignore-scripts
-      - name: Validate conformance vectors
+
+      - name: Validate conformance vectors (TS)
         run: cd conformance/runner && node src/runner.js --validate-only
-      - name: Upload conformance report
+
+      - name: Run conformance vectors (TS)
+        run: cd conformance/runner && node src/runner.js --report ../reports/ts-report.xml
+
+      - name: Build Go runner
+        run: cd conformance/runner/go && go build ./...
+
+      - name: Run conformance vectors (Go)
+        run: |
+          cd conformance/runner/go && go run main.go \
+            --vectors ../../vectors \
+            --report ../../reports/go-report.xml
+
+      - name: Upload conformance reports
         if: always()
         uses: actions/upload-artifact@v4
         with:

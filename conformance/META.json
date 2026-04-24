@@ -3,14 +3,16 @@
   "description": "BSV cross-language conformance vector corpus",
   "domains": ["sdk", "wallet", "overlay", "messaging", "broadcast", "auth"],
   "brc_coverage": {
-    "BRC-42": ["sdk.keys.key-derivation"],
+    "BRC-42": ["sdk.keys.key-derivation", "sdk.keys.privatekey", "sdk.keys.publickey", "sdk.crypto.signature"],
+    "BRC-74": ["sdk.transactions.merklepath"],
+    "BRC-77": ["sdk.compat.bsm"],
     "BRC-31": [],
     "BRC-29": [],
     "BRC-100": []
   },
   "stats": {
-    "total_files": 0,
-    "total_vectors": 0,
+    "total_files": 15,
+    "total_vectors": 202,
     "last_updated": "2026-04-24"
   }
 }
