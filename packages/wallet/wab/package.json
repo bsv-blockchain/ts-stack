@@ -1,5 +1,6 @@
 {
-    "name": "wab-server",
+    "name": "@bsv/wab-server",
+    "private": true,
     "version": "1.4.1",
     "description": "Wallet Authentication Backend (WAB) server",
     "main": "dist/server.js",

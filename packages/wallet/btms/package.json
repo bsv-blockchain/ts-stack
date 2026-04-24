@@ -1,5 +1,5 @@
 {
-    "name": "@bsv/btms-project",
+    "name": "@bsv/btms",
     "private": true,
     "version": "1.0.0",
     "description": "Basic Token Management System project root",

@@ -1,0 +1,15 @@
+{
+  "name": "@bsv/conformance-runner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BSV ts-stack conformance test vector runner",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-vm-modules src/runner.js",
+    "build": "echo 'no build step'"
+  },
+  "devDependencies": {
+    "ts-standard": "^14.0.0",
+    "typescript": "^5.0.0"
+  }
+}
