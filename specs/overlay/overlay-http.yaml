@@ -1,0 +1,1065 @@
+openapi: "3.1.0"
+info:
+  title: Overlay HTTP API
+  version: "1.0.0"
+  description: |
+    HTTP API exposed by overlay-express (OverlayExpress).
+
+    The overlay accepts tagged BEEF transactions and routes them to Topic Managers,
+    answers Lookup Service queries, lists hosted managers and services, and exposes
+    admin endpoints protected by Bearer token or BSV mutual authentication.
+
+    Data plane routes (/submit, /lookup, /listTopicManagers, /listLookupServiceProviders,
+    /getDocumentationForTopicManager, /getDocumentationForLookupServiceProvider) are public.
+
+    GASP sync routes (/requestSyncResponse, /requestForeignGASPNode) are public but
+    only present when GASP sync is enabled.
+
+    Admin routes (/admin/*) require authentication.
+
+    Source: packages/overlays/overlay-express/src/OverlayExpress.ts
+
+servers:
+  - url: "https://{fqdn}"
+    description: Hosted overlay node
+    variables:
+      fqdn:
+        default: overlay.example.com
+        description: Fully qualified domain name of this overlay node.
+
+tags:
+  - name: data-plane
+    description: Transaction submission and lookup — public
+  - name: discovery
+    description: Topic manager and lookup service discovery — public
+  - name: gasp-sync
+    description: GASP cross-node synchronization — public, conditional on enableGASPSync
+  - name: admin
+    description: Administrative operations — requires Bearer token or BSV mutual auth
+  - name: health
+    description: Kubernetes/load-balancer health endpoints
+
+paths:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Data plane
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /submit:
+    post:
+      operationId: submitTransaction
+      tags: [data-plane]
+      summary: Submit a tagged BEEF transaction
+      description: |
+        Accepts a raw BEEF (BRC-62) binary body. The request must include an
+        `x-topics` header containing a JSON array of topic name strings.
+        The overlay engine routes the BEEF to the appropriate Topic Managers and
+        returns a STEAK (Structured Transaction Evidence for Admitted Knowledge)
+        object indicating which outputs were admitted to which topics.
+
+        If `x-includes-off-chain-values` is `"true"`, the body is prefixed with
+        a varint-encoded off-chain value block before the raw BEEF bytes.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: Raw BEEF bytes (BRC-62), optionally prefixed with off-chain values.
+      parameters:
+        - name: x-topics
+          in: header
+          required: true
+          schema:
+            type: string
+          description: |
+            JSON-encoded array of topic name strings to which this BEEF should be submitted.
+            Example: `["tm_ship", "tm_slap"]`
+        - name: x-includes-off-chain-values
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: |
+            When `"true"`, the body is prefixed with a varint length followed by the
+            off-chain values block before the BEEF bytes.
+      responses:
+        "200":
+          description: STEAK — structured admission results per topic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/STEAK"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /lookup:
+    post:
+      operationId: lookupOutputs
+      tags: [data-plane]
+      summary: Query a lookup service
+      description: |
+        Sends a lookup request to the specified lookup service. The request body
+        must contain `service` (string) and `query` (any shape defined by the service).
+
+        By default the response is a `LookupAnswer` JSON object containing an array
+        of output records. When the `x-aggregation: yes` header is present the
+        response is binary (application/octet-stream): a varint-encoded outpoint
+        list followed by aggregated BEEF.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LookupRequest"
+      parameters:
+        - name: x-aggregation
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: ["yes"]
+          description: |
+            When `"yes"`, return a binary aggregated BEEF payload instead of
+            the default JSON LookupAnswer.
+      responses:
+        "200":
+          description: Lookup results — JSON by default, binary when x-aggregation=yes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LookupAnswer"
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: |
+                  Varint-encoded outpoint list followed by aggregated BEEF bytes.
+                  Format: varint(numOutpoints) + foreach[txid(32 bytes) + varint(outputIndex) + varint(contextLen) + context] + BEEF
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Discovery
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /listTopicManagers:
+    get:
+      operationId: listTopicManagers
+      tags: [discovery]
+      summary: List hosted topic managers
+      description: |
+        Returns the names and metadata of all Topic Managers configured on this
+        overlay node. The exact shape of each record is defined by the engine's
+        `listTopicManagers()` implementation.
+      responses:
+        "200":
+          description: Map of topic manager name to metadata record.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/TopicManagerInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /listLookupServiceProviders:
+    get:
+      operationId: listLookupServiceProviders
+      tags: [discovery]
+      summary: List hosted lookup service providers
+      description: |
+        Returns the names and metadata of all Lookup Services configured on this
+        overlay node.
+      responses:
+        "200":
+          description: Map of lookup service name to metadata record.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/LookupServiceInfo"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /getDocumentationForTopicManager:
+    get:
+      operationId: getDocumentationForTopicManager
+      tags: [discovery]
+      summary: Get Markdown documentation for a topic manager
+      description: |
+        Returns the human-readable Markdown documentation string provided by the
+        named Topic Manager.
+      parameters:
+        - name: manager
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The name of the topic manager (e.g. `tm_ship`).
+      responses:
+        "200":
+          description: Markdown documentation text.
+          content:
+            text/markdown:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /getDocumentationForLookupServiceProvider:
+    get:
+      operationId: getDocumentationForLookupServiceProvider
+      tags: [discovery]
+      summary: Get Markdown documentation for a lookup service provider
+      description: |
+        Returns the human-readable Markdown documentation string provided by the
+        named Lookup Service.
+      parameters:
+        - name: lookupService
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The name of the lookup service (e.g. `ls_ship`).
+      responses:
+        "200":
+          description: Markdown documentation text.
+          content:
+            text/markdown:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # GASP sync (present only when enableGASPSync = true)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /requestSyncResponse:
+    post:
+      operationId: requestSyncResponse
+      tags: [gasp-sync]
+      summary: GASP — provide a foreign sync response
+      description: |
+        Used by a peer overlay node to request a sync response. The engine's
+        `provideForeignSyncResponse` method handles the request. The topic
+        to sync is provided in the `x-bsv-topic` header.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GASPSyncRequest"
+      parameters:
+        - name: x-bsv-topic
+          in: header
+          required: true
+          schema:
+            type: string
+          description: The topic name being synced.
+      responses:
+        "200":
+          description: Sync response from the engine.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GASPSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /requestForeignGASPNode:
+    post:
+      operationId: requestForeignGASPNode
+      tags: [gasp-sync]
+      summary: GASP — provide a foreign GASP node
+      description: |
+        Used by a peer overlay node to request a specific GASP node (graph vertex)
+        by its graphID, txid, and outputIndex. The engine's `provideForeignGASPNode`
+        method handles the request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GASPNodeRequest"
+      responses:
+        "200":
+          description: GASP node data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GASPNodeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ARC ingest (present only when arcApiKey is configured)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /arc-ingest:
+    post:
+      operationId: arcIngest
+      tags: [data-plane]
+      summary: ARC Merkle proof callback
+      description: |
+        Receives Merkle proof notifications from ARC after a transaction has been
+        mined. Calls `engine.handleNewMerkleProof`. Only registered when an ARC
+        API key is configured on the node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcIngestRequest"
+      responses:
+        "200":
+          description: Proof processed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Health
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      operationId: healthFull
+      tags: [health]
+      summary: Full health report (live + ready checks)
+      responses:
+        "200":
+          description: Service is ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+        "503":
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+
+  /health/live:
+    get:
+      operationId: healthLive
+      tags: [health]
+      summary: Liveness probe — is the process alive?
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+        "503":
+          description: Process is not alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+
+  /health/ready:
+    get:
+      operationId: healthReady
+      tags: [health]
+      summary: Readiness probe — is the service ready to accept traffic?
+      responses:
+        "200":
+          description: Service is ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+        "503":
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Admin — public config endpoint (no auth required)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /admin/config:
+    get:
+      operationId: adminConfig
+      tags: [admin]
+      summary: Public admin config (no auth required)
+      description: |
+        Returns the admin identity key (if configured) and the node name.
+        The identity key is a public key, so exposing it is safe. Frontends use
+        this to detect whether the current wallet user is the admin.
+      responses:
+        "200":
+          description: Admin config.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [adminIdentityKey, nodeName]
+                properties:
+                  adminIdentityKey:
+                    type: ["string", "null"]
+                    description: Hex-encoded public key of the admin, or null if not configured.
+                  nodeName:
+                    type: string
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Admin — authenticated endpoints
+  # ───────────────────────────────────────────────────────────────────────────
+
+  /admin/stats:
+    get:
+      operationId: adminStats
+      tags: [admin]
+      summary: Server statistics overview
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      responses:
+        "200":
+          description: Server statistics.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/ship-records:
+    get:
+      operationId: adminListShipRecords
+      tags: [admin]
+      summary: List SHIP records
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Filter by domain, topic, identity key, or txid.
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Paginated SHIP record list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRecordResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/slap-records:
+    get:
+      operationId: adminListSlapRecords
+      tags: [admin]
+      summary: List SLAP records
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Paginated SLAP record list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRecordResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/bans:
+    get:
+      operationId: adminListBans
+      tags: [admin]
+      summary: List all bans
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [domain, outpoint]
+          description: Filter by ban type.
+      responses:
+        "200":
+          description: List of bans.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BanListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/ban:
+    post:
+      operationId: adminBan
+      tags: [admin]
+      summary: Ban a domain or outpoint
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BanRequest"
+      responses:
+        "200":
+          description: Ban applied.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/unban:
+    post:
+      operationId: adminUnban
+      tags: [admin]
+      summary: Remove a ban
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnbanRequest"
+      responses:
+        "200":
+          description: Ban removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/evictOutpoint:
+    post:
+      operationId: adminEvictOutpoint
+      tags: [admin]
+      summary: Evict an outpoint from lookup services
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [txid, outputIndex]
+              properties:
+                txid:        { type: string, description: "Transaction ID (64 hex chars)" }
+                outputIndex: { type: integer, minimum: 0 }
+                service:     { type: string, description: "Lookup service name. Omit to evict from all services." }
+      responses:
+        "200":
+          description: Outpoint evicted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/remove-token:
+    post:
+      operationId: adminRemoveToken
+      tags: [admin]
+      summary: Remove a token and optionally ban the domain
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [txid, outputIndex]
+              properties:
+                txid:        { type: string }
+                outputIndex: { type: integer, minimum: 0 }
+                service:     { type: string }
+                ban:         { type: boolean, description: "Also ban the outpoint." }
+                banDomain:   { type: boolean, description: "Also ban the domain associated with this token." }
+      responses:
+        "200":
+          description: Token removed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/health-check:
+    post:
+      operationId: adminHealthCheck
+      tags: [admin]
+      summary: Check the health of a specific URL
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+      responses:
+        "200":
+          description: Health check result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/janitor:
+    post:
+      operationId: adminRunJanitor
+      tags: [admin]
+      summary: Run the janitor service
+      description: |
+        Runs the janitor service, which checks SHIP/SLAP hosts for availability,
+        revokes records for downed hosts after the configured threshold, and
+        optionally bans domains. Returns a detailed JanitorReport.
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      responses:
+        "200":
+          description: Janitor run completed with report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JanitorReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/syncAdvertisements:
+    post:
+      operationId: adminSyncAdvertisements
+      tags: [admin]
+      summary: Manually sync SHIP/SLAP advertisements
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      responses:
+        "200":
+          description: Advertisements synced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/startGASPSync:
+    post:
+      operationId: adminStartGASPSync
+      tags: [admin]
+      summary: Manually start GASP sync
+      security:
+        - BearerToken: []
+        - BSVMutualAuth: []
+      responses:
+        "200":
+          description: GASP sync completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    BearerToken:
+      type: http
+      scheme: bearer
+      description: Administrative bearer token set at server startup (or auto-generated).
+    BSVMutualAuth:
+      type: http
+      scheme: bearer
+      description: |
+        BSV mutual authentication via /.well-known/auth handshake. The resulting
+        identity key is compared against the configured adminIdentityKey.
+
+  responses:
+    BadRequest:
+      description: Bad request — validation error or missing required field.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Unexpected internal error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: No authentication credentials provided.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Credentials provided but insufficient.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+
+    ErrorResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status:  { type: string, const: error }
+        message: { type: string }
+        code:    { type: string, description: "Stable machine-readable error code (see specs/errors.md)." }
+
+    SuccessMessage:
+      type: object
+      required: [status]
+      properties:
+        status:  { type: string, const: success }
+        message: { type: string }
+
+    STEAK:
+      type: object
+      description: |
+        Structured Transaction Evidence for Admitted Knowledge — the overlay engine's
+        response to a /submit call. Maps each topic name to the set of output indices
+        admitted (and optionally coinstake outputs).
+      additionalProperties:
+        $ref: "#/components/schemas/TopicResult"
+
+    TopicResult:
+      type: object
+      description: Admission result for a single topic.
+      properties:
+        outputsToAdmit:
+          type: array
+          items: { type: integer, minimum: 0 }
+        coinstakeOutputsToRetain:
+          type: array
+          items: { type: integer, minimum: 0 }
+
+    LookupRequest:
+      type: object
+      required: [service, query]
+      properties:
+        service:
+          type: string
+          description: Name of the lookup service to query (e.g. `ls_ship`).
+        query:
+          description: Opaque query object whose shape is defined by the lookup service.
+
+    LookupAnswer:
+      type: object
+      required: [type, outputs]
+      properties:
+        type:
+          type: string
+          enum: [output-list, freeform]
+          description: |
+            `output-list` — the outputs array contains UTXO records.
+            `freeform`    — the result field contains arbitrary data.
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/LookupOutput"
+        result:
+          description: Freeform result when type is `freeform`.
+
+    LookupOutput:
+      type: object
+      required: [beef, outputIndex]
+      properties:
+        beef:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 255 }
+          description: BEEF bytes encoding the transaction containing this output.
+        outputIndex:
+          type: integer
+          minimum: 0
+        context:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 255 }
+          description: Optional opaque context bytes attached by the lookup service.
+
+    TopicManagerInfo:
+      type: object
+      properties:
+        name:        { type: string }
+        shortDescription: { type: string }
+        iconURL:     { type: string, format: uri }
+        version:     { type: string }
+        informationURL: { type: string, format: uri }
+
+    LookupServiceInfo:
+      type: object
+      properties:
+        name:        { type: string }
+        shortDescription: { type: string }
+        iconURL:     { type: string, format: uri }
+        version:     { type: string }
+        informationURL: { type: string, format: uri }
+
+    GASPSyncRequest:
+      type: object
+      description: GASP sync request body — shape defined by the GASP protocol.
+      additionalProperties: true
+
+    GASPSyncResponse:
+      type: object
+      description: GASP sync response — shape defined by the GASP protocol.
+      additionalProperties: true
+
+    GASPNodeRequest:
+      type: object
+      required: [graphID, txid, outputIndex]
+      properties:
+        graphID:     { type: string }
+        txid:        { type: string, minLength: 64, maxLength: 64 }
+        outputIndex: { type: integer, minimum: 0 }
+
+    GASPNodeResponse:
+      type: object
+      description: GASP node data — shape defined by the GASP protocol.
+      additionalProperties: true
+
+    ArcIngestRequest:
+      type: object
+      required: [txid, merklePath, blockHeight]
+      properties:
+        txid:        { type: string, minLength: 64, maxLength: 64 }
+        merklePath:  { type: string, description: "Hex-encoded Merkle path." }
+        blockHeight: { type: integer, minimum: 0 }
+
+    HealthReport:
+      type: object
+      required: [status, live, ready, service, checks]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, error]
+        live:   { type: boolean }
+        ready:  { type: boolean }
+        service:
+          type: object
+          required: [name, advertisableFQDN, port, network, uptimeMs, topicManagerCount, lookupServiceCount]
+          properties:
+            name:               { type: string }
+            advertisableFQDN:   { type: string }
+            port:               { type: integer }
+            network:            { type: string, enum: [main, test] }
+            startedAt:          { type: string, format: date-time }
+            uptimeMs:           { type: integer }
+            topicManagerCount:  { type: integer }
+            lookupServiceCount: { type: integer }
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/HealthCheckResult"
+        context:
+          type: object
+          additionalProperties: true
+
+    HealthCheckResult:
+      type: object
+      required: [name, scope, critical, status, durationMs]
+      properties:
+        name:       { type: string }
+        scope:      { type: string, enum: [live, ready] }
+        critical:   { type: boolean }
+        status:     { type: string, enum: [ok, degraded, error] }
+        message:    { type: string }
+        details:    { type: object, additionalProperties: true }
+        durationMs: { type: integer }
+
+    AdminStatsResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status: { type: string, const: success }
+        data:
+          type: object
+          properties:
+            nodeName:          { type: string }
+            network:           { type: string, enum: [main, test] }
+            uptime:            { type: integer }
+            startedAt:         { type: string, format: date-time }
+            shipRecordCount:   { type: integer }
+            slapRecordCount:   { type: integer }
+            bannedDomains:     { type: integer }
+            bannedOutpoints:   { type: integer }
+            totalBans:         { type: integer }
+            topicManagers:     { type: array, items: { type: string } }
+            lookupServices:    { type: array, items: { type: string } }
+            gaspSyncEnabled:   { type: boolean }
+
+    PaginatedRecordResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status: { type: string, const: success }
+        data:
+          type: object
+          required: [records, total, page, limit, pages]
+          properties:
+            records: { type: array, items: { type: object, additionalProperties: true } }
+            total:   { type: integer }
+            page:    { type: integer }
+            limit:   { type: integer }
+            pages:   { type: integer }
+
+    BanListResponse:
+      type: object
+      required: [status, data]
+      properties:
+        status: { type: string, const: success }
+        data:
+          type: object
+          required: [bans]
+          properties:
+            bans:
+              type: array
+              items:
+                $ref: "#/components/schemas/BanRecord"
+
+    BanRecord:
+      type: object
+      required: [type, value]
+      properties:
+        type:      { type: string, enum: [domain, outpoint] }
+        value:     { type: string }
+        reason:    { type: string }
+        createdAt: { type: string, format: date-time }
+
+    BanRequest:
+      type: object
+      required: [type, value]
+      properties:
+        type:   { type: string, enum: [domain, outpoint] }
+        value:  { type: string }
+        reason: { type: string }
+
+    UnbanRequest:
+      type: object
+      required: [type, value]
+      properties:
+        type:  { type: string, enum: [domain, outpoint] }
+        value: { type: string }
+
+    JanitorReport:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, const: success }
+        message: { type: string }
+        data:
+          type: object
+          description: Detailed janitor run results.
+          additionalProperties: true

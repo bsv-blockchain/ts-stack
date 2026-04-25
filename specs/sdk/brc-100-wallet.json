@@ -1,0 +1,1105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.bsvblockchain.org/sdk/brc-100-wallet.json",
+  "title": "BRC-100 Wallet Interface",
+  "description": "JSON Schema for the BRC-100 Wallet interface as defined in Wallet.interfaces.ts. Every method is represented as a request/response pair under $defs.",
+  "version": "1.0.0",
+  "$defs": {
+
+    "HexString": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]*$",
+      "description": "A string containing only hexadecimal characters (0-9, a-f)."
+    },
+    "TXIDHexString": {
+      "$ref": "#/$defs/HexString",
+      "minLength": 64,
+      "maxLength": 64,
+      "description": "Represents a transaction ID — exactly 64 hex characters."
+    },
+    "PubKeyHex": {
+      "$ref": "#/$defs/HexString",
+      "minLength": 66,
+      "maxLength": 66,
+      "description": "Compressed DER secp256k1 public key — exactly 66 hex characters (33 bytes)."
+    },
+    "OutpointString": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}\\.[0-9]+$",
+      "description": "TXID (64 hex chars) followed by '.' and an output index integer."
+    },
+    "Base64String": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Standard base64-encoded string."
+    },
+    "ByteArray": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 },
+      "description": "Array of bytes (integers 0–255)."
+    },
+    "SatoshiValue": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2100000000000000,
+      "description": "Value in satoshis. Max is 2.1 × 10^15 (total BSV supply)."
+    },
+    "PositiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "PositiveIntegerOrZero": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "PositiveIntegerDefault10Max10000": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "default": 10
+    },
+    "PositiveIntegerMax10": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "DescriptionString5to50Bytes": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "BasketStringUnder300Bytes": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "OutputTagStringUnder300Bytes": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "LabelStringUnder300Bytes": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "ProtocolString5To400Bytes": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 400
+    },
+    "KeyIDStringUnder800Bytes": {
+      "type": "string",
+      "maxLength": 800
+    },
+    "CertificateFieldNameUnder50Bytes": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "OriginatorDomainNameStringUnder250Bytes": {
+      "type": "string",
+      "maxLength": 250,
+      "description": "Fully qualified domain name (FQDN) of the requesting application."
+    },
+    "VersionString7To30Bytes": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 30,
+      "description": "Version string in format [vendor]-[major].[minor].[patch]."
+    },
+    "ISOTimestampString": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "WalletNetwork": {
+      "type": "string",
+      "enum": ["mainnet", "testnet"]
+    },
+    "SecurityLevel": {
+      "type": "integer",
+      "enum": [0, 1, 2],
+      "description": "0=Silent, 1=App, 2=Counterparty."
+    },
+    "WalletProtocol": {
+      "type": "array",
+      "prefixItems": [
+        { "$ref": "#/$defs/SecurityLevel" },
+        { "$ref": "#/$defs/ProtocolString5To400Bytes" }
+      ],
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[securityLevel, protocolString] tuple."
+    },
+    "WalletCounterparty": {
+      "oneOf": [
+        { "$ref": "#/$defs/PubKeyHex" },
+        { "type": "string", "enum": ["self", "anyone"] }
+      ]
+    },
+    "ActionStatus": {
+      "type": "string",
+      "enum": ["completed", "unprocessed", "sending", "unproven", "unsigned", "nosend", "nonfinal", "failed"]
+    },
+    "AcquisitionProtocol": {
+      "type": "string",
+      "enum": ["direct", "issuance"]
+    },
+    "KeyringRevealer": {
+      "oneOf": [
+        { "$ref": "#/$defs/PubKeyHex" },
+        { "type": "string", "const": "certifier" }
+      ]
+    },
+
+    "WalletEncryptionArgs": {
+      "type": "object",
+      "required": ["protocolID", "keyID"],
+      "properties": {
+        "protocolID":      { "$ref": "#/$defs/WalletProtocol" },
+        "keyID":           { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+        "counterparty":    { "$ref": "#/$defs/WalletCounterparty" },
+        "privileged":      { "type": "boolean", "default": false },
+        "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "seekPermission":  { "type": "boolean", "default": true }
+      }
+    },
+
+    "WalletCertificate": {
+      "type": "object",
+      "required": ["type", "subject", "serialNumber", "certifier", "revocationOutpoint", "signature", "fields"],
+      "properties": {
+        "type":               { "$ref": "#/$defs/Base64String" },
+        "subject":            { "$ref": "#/$defs/PubKeyHex" },
+        "serialNumber":       { "$ref": "#/$defs/Base64String" },
+        "certifier":          { "$ref": "#/$defs/PubKeyHex" },
+        "revocationOutpoint": { "$ref": "#/$defs/OutpointString" },
+        "signature":          { "$ref": "#/$defs/HexString" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of CertificateFieldNameUnder50Bytes to string value."
+        }
+      }
+    },
+
+    "SendWithResult": {
+      "type": "object",
+      "required": ["txid", "status"],
+      "properties": {
+        "txid":   { "$ref": "#/$defs/TXIDHexString" },
+        "status": { "type": "string", "enum": ["unproven", "sending", "failed"] }
+      }
+    },
+
+    "SignableTransaction": {
+      "type": "object",
+      "required": ["tx", "reference"],
+      "properties": {
+        "tx":        { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
+        "reference": { "$ref": "#/$defs/Base64String" }
+      }
+    },
+
+    "WalletActionInput": {
+      "type": "object",
+      "required": ["sourceOutpoint", "sourceSatoshis", "inputDescription", "sequenceNumber"],
+      "properties": {
+        "sourceOutpoint":     { "$ref": "#/$defs/OutpointString" },
+        "sourceSatoshis":     { "$ref": "#/$defs/SatoshiValue" },
+        "sourceLockingScript":{ "$ref": "#/$defs/HexString" },
+        "unlockingScript":    { "$ref": "#/$defs/HexString" },
+        "inputDescription":   { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "sequenceNumber":     { "$ref": "#/$defs/PositiveIntegerOrZero" }
+      }
+    },
+
+    "WalletActionOutput": {
+      "type": "object",
+      "required": ["satoshis", "spendable", "tags", "outputIndex", "outputDescription", "basket"],
+      "properties": {
+        "satoshis":          { "$ref": "#/$defs/SatoshiValue" },
+        "lockingScript":     { "$ref": "#/$defs/HexString" },
+        "spendable":         { "type": "boolean" },
+        "customInstructions":{ "type": "string" },
+        "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
+        "outputIndex":       { "$ref": "#/$defs/PositiveIntegerOrZero" },
+        "outputDescription": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "basket":            { "$ref": "#/$defs/BasketStringUnder300Bytes" }
+      }
+    },
+
+    "WalletOutput": {
+      "type": "object",
+      "required": ["satoshis", "spendable", "outpoint"],
+      "properties": {
+        "satoshis":          { "$ref": "#/$defs/SatoshiValue" },
+        "lockingScript":     { "$ref": "#/$defs/HexString" },
+        "spendable":         { "type": "boolean" },
+        "customInstructions":{ "type": "string" },
+        "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
+        "outpoint":          { "$ref": "#/$defs/OutpointString" },
+        "labels":            { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } }
+      }
+    },
+
+    "WalletAction": {
+      "type": "object",
+      "required": ["txid", "satoshis", "status", "isOutgoing", "description", "version", "lockTime"],
+      "properties": {
+        "txid":        { "$ref": "#/$defs/TXIDHexString" },
+        "satoshis":    { "$ref": "#/$defs/SatoshiValue" },
+        "status":      { "$ref": "#/$defs/ActionStatus" },
+        "isOutgoing":  { "type": "boolean" },
+        "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "labels":      { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+        "version":     { "$ref": "#/$defs/PositiveIntegerOrZero" },
+        "lockTime":    { "$ref": "#/$defs/PositiveIntegerOrZero" },
+        "inputs":      { "type": "array", "items": { "$ref": "#/$defs/WalletActionInput" } },
+        "outputs":     { "type": "array", "items": { "$ref": "#/$defs/WalletActionOutput" } }
+      }
+    },
+
+    "KeyLinkageResult": {
+      "type": "object",
+      "required": ["encryptedLinkage", "encryptedLinkageProof", "prover", "verifier", "counterparty"],
+      "properties": {
+        "encryptedLinkage":      { "$ref": "#/$defs/ByteArray" },
+        "encryptedLinkageProof": { "$ref": "#/$defs/ByteArray" },
+        "prover":                { "$ref": "#/$defs/PubKeyHex" },
+        "verifier":              { "$ref": "#/$defs/PubKeyHex" },
+        "counterparty":          { "$ref": "#/$defs/PubKeyHex" }
+      }
+    },
+
+    "IdentityCertifier": {
+      "type": "object",
+      "required": ["name", "iconUrl", "description", "trust"],
+      "properties": {
+        "name":        { "type": "string", "maxLength": 100 },
+        "iconUrl":     { "type": "string", "maxLength": 500 },
+        "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "trust":       { "$ref": "#/$defs/PositiveIntegerMax10" }
+      }
+    },
+
+    "IdentityCertificate": {
+      "allOf": [
+        { "$ref": "#/$defs/WalletCertificate" },
+        {
+          "type": "object",
+          "required": ["certifierInfo", "publiclyRevealedKeyring", "decryptedFields"],
+          "properties": {
+            "certifierInfo":           { "$ref": "#/$defs/IdentityCertifier" },
+            "publiclyRevealedKeyring": {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/$defs/Base64String" }
+            },
+            "decryptedFields": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
+      ]
+    },
+
+    "CertificateResult": {
+      "allOf": [
+        { "$ref": "#/$defs/WalletCertificate" },
+        {
+          "type": "object",
+          "properties": {
+            "keyring":  { "type": "object", "additionalProperties": { "$ref": "#/$defs/Base64String" } },
+            "verifier": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "WalletErrorObject": {
+      "type": "object",
+      "required": ["isError", "message"],
+      "properties": {
+        "isError": { "type": "boolean", "const": true },
+        "message": { "type": "string" },
+        "code":    { "type": "string", "minLength": 10, "maxLength": 40 },
+        "stack":   { "type": "string" }
+      }
+    },
+
+    "createAction": {
+      "title": "createAction",
+      "description": "Creates a new Bitcoin transaction based on the provided inputs, outputs, labels, lock, and options.",
+      "request": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "inputBEEF": { "$ref": "#/$defs/ByteArray", "description": "BEEF (BRC-62) data for input transactions." },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["outpoint", "inputDescription"],
+              "properties": {
+                "outpoint":              { "$ref": "#/$defs/OutpointString" },
+                "inputDescription":      { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+                "unlockingScript":       { "$ref": "#/$defs/HexString" },
+                "unlockingScriptLength": { "$ref": "#/$defs/PositiveInteger" },
+                "sequenceNumber":        { "$ref": "#/$defs/PositiveIntegerOrZero" }
+              }
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["lockingScript", "satoshis", "outputDescription"],
+              "properties": {
+                "lockingScript":     { "$ref": "#/$defs/HexString" },
+                "satoshis":         { "$ref": "#/$defs/SatoshiValue" },
+                "outputDescription":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+                "basket":           { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+                "customInstructions":{ "type": "string" },
+                "tags":             { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } }
+              }
+            }
+          },
+          "lockTime": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "version":  { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "labels":   { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+          "options": {
+            "type": "object",
+            "properties": {
+              "signAndProcess":       { "type": "boolean", "default": true },
+              "acceptDelayedBroadcast":{ "type": "boolean", "default": true },
+              "trustSelf":            { "type": "string", "const": "known" },
+              "knownTxids":           { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } },
+              "returnTXIDOnly":       { "type": "boolean", "default": false },
+              "noSend":               { "type": "boolean", "default": false },
+              "noSendChange":         { "type": "array", "items": { "$ref": "#/$defs/OutpointString" } },
+              "sendWith":             { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } },
+              "randomizeOutputs":     { "type": "boolean", "default": true }
+            }
+          },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "txid":            { "$ref": "#/$defs/TXIDHexString" },
+          "tx":              { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
+          "noSendChange":    { "type": "array", "items": { "$ref": "#/$defs/OutpointString" } },
+          "sendWithResults": { "type": "array", "items": { "$ref": "#/$defs/SendWithResult" } },
+          "signableTransaction": { "$ref": "#/$defs/SignableTransaction" }
+        }
+      }
+    },
+
+    "signAction": {
+      "title": "signAction",
+      "description": "Signs a transaction previously created using createAction.",
+      "request": {
+        "type": "object",
+        "required": ["spends", "reference"],
+        "properties": {
+          "spends": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["unlockingScript"],
+              "properties": {
+                "unlockingScript": { "$ref": "#/$defs/HexString" },
+                "sequenceNumber":  { "$ref": "#/$defs/PositiveIntegerOrZero" }
+              }
+            },
+            "description": "Map of input index (string) to unlocking script and optional sequence number."
+          },
+          "reference": { "$ref": "#/$defs/Base64String" },
+          "options": {
+            "type": "object",
+            "properties": {
+              "acceptDelayedBroadcast":{ "type": "boolean", "default": true },
+              "returnTXIDOnly":       { "type": "boolean", "default": false },
+              "noSend":               { "type": "boolean", "default": false },
+              "sendWith":             { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } }
+            }
+          },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "properties": {
+          "txid":            { "$ref": "#/$defs/TXIDHexString" },
+          "tx":              { "$ref": "#/$defs/ByteArray" },
+          "sendWithResults": { "type": "array", "items": { "$ref": "#/$defs/SendWithResult" } }
+        }
+      }
+    },
+
+    "abortAction": {
+      "title": "abortAction",
+      "description": "Aborts a transaction in progress that has not yet been finalized.",
+      "request": {
+        "type": "object",
+        "required": ["reference"],
+        "properties": {
+          "reference":  { "$ref": "#/$defs/Base64String" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["aborted"],
+        "properties": {
+          "aborted": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "listActions": {
+      "title": "listActions",
+      "description": "Lists all transactions matching the specified labels.",
+      "request": {
+        "type": "object",
+        "required": ["labels"],
+        "properties": {
+          "labels":                       { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+          "labelQueryMode":              { "type": "string", "enum": ["any", "all"], "default": "any" },
+          "includeLabels":               { "type": "boolean", "default": false },
+          "includeInputs":               { "type": "boolean", "default": false },
+          "includeInputSourceLockingScripts": { "type": "boolean", "default": false },
+          "includeInputUnlockingScripts":{ "type": "boolean", "default": false },
+          "includeOutputs":              { "type": "boolean", "default": false },
+          "includeOutputLockingScripts": { "type": "boolean", "default": false },
+          "limit":                       { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset":                      { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "seekPermission":              { "type": "boolean", "default": true },
+          "originator":                  { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["totalActions", "actions"],
+        "properties": {
+          "totalActions": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "actions":      { "type": "array", "items": { "$ref": "#/$defs/WalletAction" } }
+        }
+      }
+    },
+
+    "internalizeAction": {
+      "title": "internalizeAction",
+      "description": "Submits a transaction to be internalized — outputs may be paid to the wallet balance, inserted into baskets, and/or tagged.",
+      "request": {
+        "type": "object",
+        "required": ["tx", "outputs", "description"],
+        "properties": {
+          "tx": { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["outputIndex", "protocol"],
+              "properties": {
+                "outputIndex": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+                "protocol":    { "type": "string", "enum": ["wallet payment", "basket insertion"] },
+                "paymentRemittance": {
+                  "type": "object",
+                  "required": ["derivationPrefix", "derivationSuffix", "senderIdentityKey"],
+                  "properties": {
+                    "derivationPrefix":  { "$ref": "#/$defs/Base64String" },
+                    "derivationSuffix":  { "$ref": "#/$defs/Base64String" },
+                    "senderIdentityKey": { "$ref": "#/$defs/PubKeyHex" }
+                  }
+                },
+                "insertionRemittance": {
+                  "type": "object",
+                  "required": ["basket"],
+                  "properties": {
+                    "basket":            { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+                    "customInstructions":{ "type": "string" },
+                    "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } }
+                  }
+                }
+              }
+            }
+          },
+          "description":    { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "labels":         { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+          "seekPermission": { "type": "boolean", "default": true },
+          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["accepted"],
+        "properties": {
+          "accepted": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "listOutputs": {
+      "title": "listOutputs",
+      "description": "Lists spendable outputs in a specific basket, optionally tagged.",
+      "request": {
+        "type": "object",
+        "required": ["basket"],
+        "properties": {
+          "basket":                { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+          "tags":                  { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
+          "tagQueryMode":          { "type": "string", "enum": ["all", "any"], "default": "any" },
+          "include":               { "type": "string", "enum": ["locking scripts", "entire transactions"] },
+          "includeCustomInstructions": { "type": "boolean", "default": false },
+          "includeTags":           { "type": "boolean", "default": false },
+          "includeLabels":         { "type": "boolean", "default": false },
+          "limit":                 { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset":                { "type": "integer" },
+          "seekPermission":        { "type": "boolean", "default": true },
+          "originator":            { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["totalOutputs", "outputs"],
+        "properties": {
+          "totalOutputs": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "BEEF":         { "$ref": "#/$defs/ByteArray" },
+          "outputs":      { "type": "array", "items": { "$ref": "#/$defs/WalletOutput" } }
+        }
+      }
+    },
+
+    "relinquishOutput": {
+      "title": "relinquishOutput",
+      "description": "Removes an output from a basket without spending it.",
+      "request": {
+        "type": "object",
+        "required": ["basket", "output"],
+        "properties": {
+          "basket":     { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+          "output":     { "$ref": "#/$defs/OutpointString" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["relinquished"],
+        "properties": {
+          "relinquished": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "acquireCertificate": {
+      "title": "acquireCertificate",
+      "description": "Acquires an identity certificate by issuance or direct receipt.",
+      "request": {
+        "type": "object",
+        "required": ["type", "certifier", "acquisitionProtocol", "fields"],
+        "properties": {
+          "type":               { "$ref": "#/$defs/Base64String" },
+          "certifier":          { "$ref": "#/$defs/PubKeyHex" },
+          "acquisitionProtocol":{ "$ref": "#/$defs/AcquisitionProtocol" },
+          "fields": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "serialNumber":       { "$ref": "#/$defs/Base64String" },
+          "revocationOutpoint": { "$ref": "#/$defs/OutpointString" },
+          "signature":          { "$ref": "#/$defs/HexString" },
+          "certifierUrl":       { "type": "string", "format": "uri" },
+          "keyringRevealer":    { "$ref": "#/$defs/KeyringRevealer" },
+          "keyringForSubject": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/Base64String" }
+          },
+          "privileged":         { "type": "boolean", "default": false },
+          "privilegedReason":   { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator":         { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": { "$ref": "#/$defs/WalletCertificate" }
+    },
+
+    "listCertificates": {
+      "title": "listCertificates",
+      "description": "Lists identity certificates belonging to the user, filtered by certifier(s) and type(s).",
+      "request": {
+        "type": "object",
+        "required": ["certifiers", "types"],
+        "properties": {
+          "certifiers":      { "type": "array", "items": { "$ref": "#/$defs/PubKeyHex" } },
+          "types":           { "type": "array", "items": { "$ref": "#/$defs/Base64String" } },
+          "limit":           { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset":          { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "privileged":      { "type": "boolean", "default": false },
+          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["totalCertificates", "certificates"],
+        "properties": {
+          "totalCertificates": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "certificates":      { "type": "array", "items": { "$ref": "#/$defs/CertificateResult" } }
+        }
+      }
+    },
+
+    "proveCertificate": {
+      "title": "proveCertificate",
+      "description": "Proves select fields of an identity certificate to a verifier.",
+      "request": {
+        "type": "object",
+        "required": ["certificate", "fieldsToReveal", "verifier"],
+        "properties": {
+          "certificate":     { "$ref": "#/$defs/WalletCertificate" },
+          "fieldsToReveal":  { "type": "array", "items": { "$ref": "#/$defs/CertificateFieldNameUnder50Bytes" } },
+          "verifier":        { "$ref": "#/$defs/PubKeyHex" },
+          "privileged":      { "type": "boolean", "default": false },
+          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["keyringForVerifier"],
+        "properties": {
+          "keyringForVerifier": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/Base64String" }
+          },
+          "certificate": { "$ref": "#/$defs/WalletCertificate" },
+          "verifier":    { "$ref": "#/$defs/PubKeyHex" }
+        }
+      }
+    },
+
+    "relinquishCertificate": {
+      "title": "relinquishCertificate",
+      "description": "Removes an identity certificate from the wallet.",
+      "request": {
+        "type": "object",
+        "required": ["type", "serialNumber", "certifier"],
+        "properties": {
+          "type":         { "$ref": "#/$defs/Base64String" },
+          "serialNumber": { "$ref": "#/$defs/Base64String" },
+          "certifier":    { "$ref": "#/$defs/PubKeyHex" },
+          "originator":   { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["relinquished"],
+        "properties": {
+          "relinquished": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "discoverByIdentityKey": {
+      "title": "discoverByIdentityKey",
+      "description": "Discovers identity certificates issued to a given identity key by trusted certifiers.",
+      "request": {
+        "type": "object",
+        "required": ["identityKey"],
+        "properties": {
+          "identityKey":    { "$ref": "#/$defs/PubKeyHex" },
+          "limit":          { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset":         { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "seekPermission": { "type": "boolean", "default": true },
+          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["totalCertificates", "certificates"],
+        "properties": {
+          "totalCertificates": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "certificates":      { "type": "array", "items": { "$ref": "#/$defs/IdentityCertificate" } }
+        }
+      }
+    },
+
+    "discoverByAttributes": {
+      "title": "discoverByAttributes",
+      "description": "Discovers identity certificates belonging to others that contain specific attributes issued by trusted certifiers.",
+      "request": {
+        "type": "object",
+        "required": ["attributes"],
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "limit":          { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset":         { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "seekPermission": { "type": "boolean", "default": true },
+          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["totalCertificates", "certificates"],
+        "properties": {
+          "totalCertificates": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "certificates":      { "type": "array", "items": { "$ref": "#/$defs/IdentityCertificate" } }
+        }
+      }
+    },
+
+    "isAuthenticated": {
+      "title": "isAuthenticated",
+      "description": "Checks whether the user is currently authenticated.",
+      "request": {
+        "type": "object",
+        "properties": {
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["authenticated"],
+        "properties": {
+          "authenticated": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "waitForAuthentication": {
+      "title": "waitForAuthentication",
+      "description": "Waits (blocks) until the user is authenticated, then returns.",
+      "request": {
+        "type": "object",
+        "properties": {
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["authenticated"],
+        "properties": {
+          "authenticated": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "getHeight": {
+      "title": "getHeight",
+      "description": "Retrieves the current height of the blockchain.",
+      "request": {
+        "type": "object",
+        "properties": {
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["height"],
+        "properties": {
+          "height": { "$ref": "#/$defs/PositiveInteger" }
+        }
+      }
+    },
+
+    "getHeaderForHeight": {
+      "title": "getHeaderForHeight",
+      "description": "Retrieves the 80-byte block header at the specified height.",
+      "request": {
+        "type": "object",
+        "required": ["height"],
+        "properties": {
+          "height":     { "$ref": "#/$defs/PositiveInteger" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["header"],
+        "properties": {
+          "header": { "$ref": "#/$defs/HexString", "minLength": 160, "maxLength": 160, "description": "80-byte block header as hex." }
+        }
+      }
+    },
+
+    "getNetwork": {
+      "title": "getNetwork",
+      "description": "Retrieves the Bitcoin network the wallet is using.",
+      "request": {
+        "type": "object",
+        "properties": {
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["network"],
+        "properties": {
+          "network": { "$ref": "#/$defs/WalletNetwork" }
+        }
+      }
+    },
+
+    "getVersion": {
+      "title": "getVersion",
+      "description": "Retrieves the current version string of the wallet.",
+      "request": {
+        "type": "object",
+        "properties": {
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["version"],
+        "properties": {
+          "version": { "$ref": "#/$defs/VersionString7To30Bytes" }
+        }
+      }
+    },
+
+    "getPublicKey": {
+      "title": "getPublicKey",
+      "description": "Retrieves a derived or identity public key based on the requested protocol, key ID, and counterparty.",
+      "request": {
+        "type": "object",
+        "properties": {
+          "identityKey":    { "type": "boolean", "const": true, "description": "If true, return the user's own identity key, ignoring protocolID/keyID/counterparty." },
+          "protocolID":     { "$ref": "#/$defs/WalletProtocol" },
+          "keyID":          { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+          "counterparty":   { "$ref": "#/$defs/WalletCounterparty" },
+          "privileged":     { "type": "boolean", "default": false },
+          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "seekPermission": { "type": "boolean", "default": true },
+          "forSelf":        { "type": "boolean", "default": false },
+          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "type": "object",
+        "required": ["publicKey"],
+        "properties": {
+          "publicKey": { "$ref": "#/$defs/PubKeyHex" }
+        }
+      }
+    },
+
+    "revealCounterpartyKeyLinkage": {
+      "title": "revealCounterpartyKeyLinkage",
+      "description": "Reveals the key linkage between this wallet and a counterparty, across all interactions, to a verifier.",
+      "request": {
+        "type": "object",
+        "required": ["counterparty", "verifier"],
+        "properties": {
+          "counterparty":    { "$ref": "#/$defs/PubKeyHex" },
+          "verifier":        { "$ref": "#/$defs/PubKeyHex" },
+          "privileged":      { "type": "boolean", "default": false },
+          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "allOf": [
+          { "$ref": "#/$defs/KeyLinkageResult" },
+          {
+            "type": "object",
+            "required": ["revelationTime"],
+            "properties": {
+              "revelationTime": { "$ref": "#/$defs/ISOTimestampString" }
+            }
+          }
+        ]
+      }
+    },
+
+    "revealSpecificKeyLinkage": {
+      "title": "revealSpecificKeyLinkage",
+      "description": "Reveals the key linkage between this wallet and a counterparty for a specific protocol/keyID interaction.",
+      "request": {
+        "type": "object",
+        "required": ["counterparty", "verifier", "protocolID", "keyID"],
+        "properties": {
+          "counterparty":    { "$ref": "#/$defs/WalletCounterparty" },
+          "verifier":        { "$ref": "#/$defs/PubKeyHex" },
+          "protocolID":      { "$ref": "#/$defs/WalletProtocol" },
+          "keyID":           { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "privileged":      { "type": "boolean", "default": false },
+          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+        }
+      },
+      "response": {
+        "allOf": [
+          { "$ref": "#/$defs/KeyLinkageResult" },
+          {
+            "type": "object",
+            "required": ["protocolID", "keyID", "proofType"],
+            "properties": {
+              "protocolID": { "$ref": "#/$defs/WalletProtocol" },
+              "keyID":      { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+              "proofType":  { "type": "integer", "minimum": 0, "maximum": 255 }
+            }
+          }
+        ]
+      }
+    },
+
+    "encrypt": {
+      "title": "encrypt",
+      "description": "Encrypts plaintext using keys derived from the specified protocol, key ID, and counterparty.",
+      "request": {
+        "allOf": [
+          { "$ref": "#/$defs/WalletEncryptionArgs" },
+          {
+            "type": "object",
+            "required": ["plaintext"],
+            "properties": {
+              "plaintext":  { "$ref": "#/$defs/ByteArray" },
+              "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+            }
+          }
+        ]
+      },
+      "response": {
+        "type": "object",
+        "required": ["ciphertext"],
+        "properties": {
+          "ciphertext": { "$ref": "#/$defs/ByteArray" }
+        }
+      }
+    },
+
+    "decrypt": {
+      "title": "decrypt",
+      "description": "Decrypts ciphertext using keys derived from the specified protocol, key ID, and counterparty.",
+      "request": {
+        "allOf": [
+          { "$ref": "#/$defs/WalletEncryptionArgs" },
+          {
+            "type": "object",
+            "required": ["ciphertext"],
+            "properties": {
+              "ciphertext": { "$ref": "#/$defs/ByteArray" },
+              "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+            }
+          }
+        ]
+      },
+      "response": {
+        "type": "object",
+        "required": ["plaintext"],
+        "properties": {
+          "plaintext": { "$ref": "#/$defs/ByteArray" }
+        }
+      }
+    },
+
+    "createHmac": {
+      "title": "createHmac",
+      "description": "Creates an HMAC over data using a key derived from the specified protocol, key ID, and counterparty.",
+      "request": {
+        "allOf": [
+          { "$ref": "#/$defs/WalletEncryptionArgs" },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data":       { "$ref": "#/$defs/ByteArray" },
+              "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+            }
+          }
+        ]
+      },
+      "response": {
+        "type": "object",
+        "required": ["hmac"],
+        "properties": {
+          "hmac": { "$ref": "#/$defs/ByteArray" }
+        }
+      }
+    },
+
+    "verifyHmac": {
+      "title": "verifyHmac",
+      "description": "Verifies an HMAC over data using a key derived from the specified protocol, key ID, and counterparty.",
+      "request": {
+        "allOf": [
+          { "$ref": "#/$defs/WalletEncryptionArgs" },
+          {
+            "type": "object",
+            "required": ["data", "hmac"],
+            "properties": {
+              "data":       { "$ref": "#/$defs/ByteArray" },
+              "hmac":       { "$ref": "#/$defs/ByteArray" },
+              "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+            }
+          }
+        ]
+      },
+      "response": {
+        "type": "object",
+        "required": ["valid"],
+        "properties": {
+          "valid": { "type": "boolean", "const": true }
+        }
+      }
+    },
+
+    "createSignature": {
+      "title": "createSignature",
+      "description": "Creates a DER-encoded ECDSA signature over data or a precomputed hash using a derived key.",
+      "request": {
+        "allOf": [
+          { "$ref": "#/$defs/WalletEncryptionArgs" },
+          {
+            "type": "object",
+            "properties": {
+              "data":               { "$ref": "#/$defs/ByteArray", "description": "Data to be signed. Provide this or hashToDirectlySign, not both." },
+              "hashToDirectlySign": { "$ref": "#/$defs/ByteArray", "description": "Pre-hashed value to sign directly when data cannot be revealed." },
+              "originator":         { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+            }
+          }
+        ]
+      },
+      "response": {
+        "type": "object",
+        "required": ["signature"],
+        "properties": {
+          "signature": { "$ref": "#/$defs/ByteArray", "description": "DER-encoded ECDSA signature bytes." }
+        }
+      }
+    },
+
+    "verifySignature": {
+      "title": "verifySignature",
+      "description": "Verifies a DER-encoded ECDSA signature over data or a precomputed hash using a derived key.",
+      "request": {
+        "allOf": [
+          { "$ref": "#/$defs/WalletEncryptionArgs" },
+          {
+            "type": "object",
+            "required": ["signature"],
+            "properties": {
+              "data":                { "$ref": "#/$defs/ByteArray" },
+              "hashToDirectlyVerify":{ "$ref": "#/$defs/ByteArray" },
+              "signature":           { "$ref": "#/$defs/ByteArray", "description": "DER-encoded ECDSA signature to validate." },
+              "forSelf":             { "type": "boolean", "default": false },
+              "originator":          { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+            }
+          }
+        ]
+      },
+      "response": {
+        "type": "object",
+        "required": ["valid"],
+        "properties": {
+          "valid": { "type": "boolean", "const": true }
+        }
+      }
+    }
+  }
+}
