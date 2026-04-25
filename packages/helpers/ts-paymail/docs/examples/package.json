@@ -17,7 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@bsv/paymail": "^2.3.0",
+    "@bsv/paymail": "^2.2.5",
     "@bsv/sdk": "^2.0.14",
     "express": "^4.19.1",
     "jwt-simple": "^0.5.6",
