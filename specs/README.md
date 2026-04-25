@@ -28,16 +28,12 @@ specs/
 
   sdk/
     brc-100-wallet.json        — JSON Schema Draft 2020-12 for BRC-100 wallet interface
-    wallet-storage-adapter.json  — (planned, see EXCEPTIONS.md)
 
   overlay/
     overlay-http.yaml          — OpenAPI 3.1 for overlay submit/lookup/topic-management
-    gasp-protocol.md           — (planned, see EXCEPTIONS.md)
-    gasp-schema.json           — (planned, see EXCEPTIONS.md)
 
   broadcast/
     arc.yaml                   — OpenAPI 3.1 for ARC broadcast API
-    merkle-service.yaml        — (planned, see EXCEPTIONS.md)
 
   messaging/
     message-box-http.yaml      — OpenAPI 3.1 for message-box-server REST (done)
@@ -45,13 +41,22 @@ specs/
 
   auth/
     brc31-handshake.yaml       — AsyncAPI 3.0 for BRC-31 mutual auth handshake (done)
-    brc-29-payment.yaml        — (planned, see EXCEPTIONS.md)
 
-  payment/
-    brc-121-http.yaml          — (planned, see EXCEPTIONS.md)
+  payments/
+    brc29-payment-protocol.yaml — AsyncAPI 3.0 for BRC-29 peer payment protocol (done)
+    brc121.yaml                 — OpenAPI 3.1 for BRC-121 HTTP 402 payment middleware (done)
+
+  sync/
+    gasp-asyncapi.yaml         — AsyncAPI 3.0 for GASP cross-node sync protocol (done)
 
   storage/
-    uhrp.yaml                  — (planned, see EXCEPTIONS.md)
+    uhrp-http.yaml             — OpenAPI 3.1 for UHRP resolution HTTP API (done)
+
+  merkle/
+    merkle-service-http.yaml   — OpenAPI 3.1 for Merkle Service REST API (done)
+
+  wallet/
+    storage-adapter.yaml       — OpenAPI 3.1 for wallet storage adapter HTTP boundary (done)
 ```
 
 ---
@@ -68,11 +73,12 @@ specs/
 | `messaging/message-box-http.yaml` | OpenAPI 3.1 | Done | message-box-server REST (all 9 endpoints) |
 | `messaging/authsocket-asyncapi.yaml` | AsyncAPI 3.0 | Done | AuthSocket WebSocket protocol (all events) |
 | `auth/brc31-handshake.yaml` | AsyncAPI 3.0 | Done | BRC-31 mutual auth handshake (both phases) |
-| `auth/brc-29-payment.yaml` | AsyncAPI 3.0 | Planned | BRC-29 peer payment |
-| `broadcast/merkle-service.yaml` | OpenAPI 3.1 | Planned | Merkle service REST |
-| `storage/uhrp.yaml` | OpenAPI 3.1 | Planned | UHRP resolution |
-| `sdk/wallet-storage-adapter.json` | JSON Schema | Planned | Wallet storage adapter interface |
-| `payment/brc-121-http.yaml` | OpenAPI 3.1 | Planned | BRC-121 / HTTP 402 middleware |
+| `payments/brc29-payment-protocol.yaml` | AsyncAPI 3.0 | Done | BRC-29 P2PKH peer payment (key derivation, BEEF message, internalizeAction remittance) |
+| `payments/brc121.yaml` | OpenAPI 3.1 | Done | BRC-121 HTTP 402 payment middleware (all 7 headers, 2-trip exchange, replay guards) |
+| `sync/gasp-asyncapi.yaml` | AsyncAPI 3.0 | Done | GASP cross-node sync protocol (initial exchange, graph walk, all message shapes) |
+| `storage/uhrp-http.yaml` | OpenAPI 3.1 | Done | UHRP resolution HTTP API (upload, find, list, renew) |
+| `merkle/merkle-service-http.yaml` | OpenAPI 3.1 | Done | Merkle Service REST API (POST /watch, GET /health) |
+| `wallet/storage-adapter.yaml` | OpenAPI 3.1 | Done | Wallet storage adapter HTTP boundary (all operations, all table schemas) |
 
 ---
 
@@ -192,6 +198,8 @@ rather than message strings.
 See [`specs/EXCEPTIONS.md`](./EXCEPTIONS.md) for the list of Tier 1 boundaries
 that do not yet have specs, along with the reason for each gap and the planned
 spec location.
+
+As of 2026-04-24 (Phase 2 gate) there are no open exceptions.
 
 ---
 

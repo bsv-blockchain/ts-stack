@@ -1,0 +1,308 @@
+openapi: "3.1.0"
+
+info:
+  title: BRC-121 Simple 402 Payments
+  version: "1.0.0"
+  description: |
+    OpenAPI 3.1 specification for the BRC-121 HTTP 402 payment protocol.
+
+    BRC-121 monetises HTTP resources with a single round-trip pair:
+      1. The client sends a request without payment headers.
+      2. The server replies `402 Payment Required` with `x-bsv-sats` and
+         `x-bsv-server` headers.
+      3. The client constructs a BRC-29 P2PKH payment transaction
+         (Atomic BEEF / BRC-95), then re-sends the original request with
+         five additional `x-bsv-*` request headers.
+      4. The server calls `internalizeAction`, checks `isMerge`, and either
+         serves the resource (200) or rejects with 402.
+
+    ## Key derivation
+
+    The invoice number follows the BRC-29 format:
+
+    ```
+    2-3241645161d8-<x-bsv-nonce> <base64(x-bsv-time)>
+    ```
+
+    Where `x-bsv-nonce` is the derivation prefix and the base64-encoded
+    millisecond Unix timestamp (`x-bsv-time`) is the derivation suffix.
+
+    ## Replay protection
+
+    Two independent mechanisms prevent replay:
+    - **Timestamp freshness**: `x-bsv-time` must be within ±30 seconds of
+      the server's current time.
+    - **isMerge check**: the server's wallet rejects transactions already
+      seen (isMerge === true → 402).
+
+    ## Reference implementation
+
+    `@bsv/402-pay` (npm) — both server middleware and client fetch wrapper.
+
+    Source: /docs/BRCs/payments/0121.md
+  license:
+    name: Open BSV Licence
+  contact:
+    name: Deggen
+    email: d.kellenschwiler@bsvassociation.org
+
+servers:
+  - url: https://{host}
+    description: Any BRC-121-compatible HTTP server.
+    variables:
+      host:
+        default: example.com
+
+# ---------------------------------------------------------------------------
+# Paths
+# The spec models the *negotiation overlay* on any protected path.
+# The actual resource path is application-specific; we use a wildcard example.
+# ---------------------------------------------------------------------------
+paths:
+  /{resourcePath}:
+    parameters:
+      - name: resourcePath
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Arbitrary path of the protected resource.
+        example: "content/article-42"
+    get:
+      operationId: getProtectedResource
+      summary: Fetch a BRC-121-protected HTTP resource.
+      description: |
+        When called without payment headers the server returns 402.
+        When called with valid payment headers the server serves the resource.
+
+        The same pattern applies to any HTTP method; GET is used as the
+        canonical example.  POST, PUT, DELETE etc. follow identical header
+        semantics.
+      tags:
+        - Protocol
+      parameters:
+        - $ref: "#/components/parameters/XBsvBeef"
+        - $ref: "#/components/parameters/XBsvSender"
+        - $ref: "#/components/parameters/XBsvNonce"
+        - $ref: "#/components/parameters/XBsvTime"
+        - $ref: "#/components/parameters/XBsvVout"
+      responses:
+        "200":
+          description: |
+            Payment accepted; protected resource served.
+            Body is application-specific.
+          headers:
+            Access-Control-Expose-Headers:
+              schema:
+                type: string
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  # -----------------------------------------------------------------------
+  # Header parameters (client → server, payment headers)
+  # -----------------------------------------------------------------------
+  parameters:
+    XBsvBeef:
+      name: x-bsv-beef
+      in: header
+      required: false
+      description: |
+        Base64-encoded Atomic BEEF (BRC-95) transaction containing the payment
+        output.  MUST be present on the paid request.
+      schema:
+        type: string
+        example: "AABB...base64=="
+
+    XBsvSender:
+      name: x-bsv-sender
+      in: header
+      required: false
+      description: |
+        Client's compressed, hex-encoded secp256k1 identity public key.
+        Used by the server as the `senderIdentityKey` in `paymentRemittance`.
+      schema:
+        type: string
+        pattern: "^(02|03)[0-9a-fA-F]{64}$"
+        example: "02abc123def456..."
+
+    XBsvNonce:
+      name: x-bsv-nonce
+      in: header
+      required: false
+      description: |
+        Base64-encoded BRC-29 derivation prefix for this payment.
+        Serves as `derivationPrefix` in the internalizeAction remittance.
+      schema:
+        type: string
+        example: "3q2+7w=="
+
+    XBsvTime:
+      name: x-bsv-time
+      in: header
+      required: false
+      description: |
+        Unix millisecond timestamp as a decimal string (e.g. `1719500000000`).
+        Two purposes:
+          1. Freshness check — server rejects if |serverTime - x-bsv-time| > 30 s.
+          2. Derivation suffix — base64(x-bsv-time) is used as the BRC-29
+             `derivationSuffix` in key derivation.
+        MUST be present on the paid request.
+      schema:
+        type: string
+        pattern: "^[0-9]{13}$"
+        example: "1719500000000"
+
+    XBsvVout:
+      name: x-bsv-vout
+      in: header
+      required: false
+      description: |
+        Zero-based output index (decimal string) of the payment output within
+        the BEEF transaction.  MUST be present on the paid request.
+      schema:
+        type: string
+        pattern: "^[0-9]+$"
+        example: "0"
+
+  # -----------------------------------------------------------------------
+  # Response headers (server → client, payment challenge)
+  # -----------------------------------------------------------------------
+  headers:
+    XBsvSats:
+      description: |
+        Required satoshi amount for the protected resource.  Present on all
+        402 responses.
+      schema:
+        type: string
+        pattern: "^[0-9]+$"
+        example: "100"
+
+    XBsvServer:
+      description: |
+        Server's compressed, hex-encoded secp256k1 identity public key.
+        The client uses this as the BRC-29 recipient identity key when
+        deriving the P2PKH locking key.
+      schema:
+        type: string
+        pattern: "^(02|03)[0-9a-fA-F]{64}$"
+        example: "03def456abc789..."
+
+    AccessControlExposeHeaders:
+      description: |
+        CORS header exposing `x-bsv-sats` and `x-bsv-server` to browser
+        clients.  SHOULD be included on 402 responses.
+      schema:
+        type: string
+        example: "x-bsv-sats, x-bsv-server"
+
+  # -----------------------------------------------------------------------
+  # Responses
+  # -----------------------------------------------------------------------
+  responses:
+    PaymentRequired:
+      description: |
+        Payment is required.  The response body MUST be empty (the server
+        MUST NOT serve the protected content).
+
+        Two distinct conditions both result in 402:
+          1. No payment headers — client should read `x-bsv-sats` and
+             `x-bsv-server`, construct payment, and retry.
+          2. Invalid payment — client SHOULD NOT retry automatically to
+             avoid double-spending.
+      headers:
+        x-bsv-sats:
+          $ref: "#/components/headers/XBsvSats"
+        x-bsv-server:
+          $ref: "#/components/headers/XBsvServer"
+        Access-Control-Expose-Headers:
+          $ref: "#/components/headers/AccessControlExposeHeaders"
+
+    InternalServerError:
+      description: |
+        The server failed to initialise its wallet or encountered an unexpected
+        error.  The client SHOULD NOT retry payment for 5xx responses.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  # -----------------------------------------------------------------------
+  # Schemas
+  # -----------------------------------------------------------------------
+  schemas:
+    # Payment remittance passed to internalizeAction on the server side.
+    # Documented here for implementers; not transmitted as a request/response body.
+    PaymentRemittance:
+      type: object
+      description: |
+        Remittance object constructed by the server and passed to the BRC-100
+        `internalizeAction` wallet call.  Not transmitted over the wire.
+      required:
+        - derivationPrefix
+        - derivationSuffix
+        - senderIdentityKey
+      properties:
+        derivationPrefix:
+          type: string
+          description: Value of `x-bsv-nonce` header (base64-encoded).
+          example: "3q2+7w=="
+        derivationSuffix:
+          type: string
+          description: base64(x-bsv-time) — the millisecond timestamp encoded as base64.
+          example: "MTcxOTUwMDAwMDAwMA=="
+        senderIdentityKey:
+          type: string
+          description: Value of `x-bsv-sender` header (hex public key).
+          example: "02abc123def456..."
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error description.
+          example: "wallet unavailable"
+
+  # -----------------------------------------------------------------------
+  # Sequence summary (x-extension, informational)
+  # -----------------------------------------------------------------------
+  x-protocol-sequence:
+    description: |
+      Canonical two-trip exchange for BRC-121:
+
+      1. Client → Server:  GET /resource  (no payment headers)
+      2. Server → Client:  402
+                           x-bsv-sats: 100
+                           x-bsv-server: 03def456...
+                           Access-Control-Expose-Headers: x-bsv-sats, x-bsv-server
+                           (empty body)
+
+      3. Client constructs BRC-29 payment:
+           - derivationPrefix  = random nonce (x-bsv-nonce)
+           - derivationSuffix  = base64(now_ms)  (x-bsv-time)
+           - invoice number    = 2-3241645161d8-<nonce> <base64(time)>
+           - output            = P2PKH to key derived for x-bsv-server
+           - BEEF              = Atomic BEEF of the signed transaction
+
+      4. Client → Server:  GET /resource
+                           x-bsv-beef: <base64 BEEF>
+                           x-bsv-sender: 02abc123...
+                           x-bsv-nonce: <base64 nonce>
+                           x-bsv-time: 1719500000000
+                           x-bsv-vout: 0
+
+      5. Server validates:
+           a. All 5 headers present  → else 402
+           b. |now - x-bsv-time| ≤ 30 s  → else 402
+           c. internalizeAction(beef, remittance)
+           d. isMerge === false  → else 402 (replay)
+
+      6. Server → Client:  200  (resource body)

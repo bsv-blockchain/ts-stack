@@ -1,0 +1,483 @@
+asyncapi: "3.0.0"
+
+info:
+  title: GASP — Graph Aware Sync Protocol
+  version: "1.0.0"
+  description: |
+    AsyncAPI specification for GASP (Graph Aware Sync Protocol), the
+    cross-node UTXO synchronisation protocol implemented in
+    `gasp-core` (`@bsv/gasp-core`).
+
+    GASP is a bidirectional gossip/sync protocol between overlay nodes.
+    Two parties exchange UTXO lists (the "initial exchange") and then
+    walk the transaction graph in a request/response pattern to transfer
+    any UTXOs the counterparty does not yet hold.
+
+    ## Protocol flow (normal, bidirectional)
+
+    ```
+    Initiator                                   Responder
+       |                                             |
+       |-- GASPInitialRequest ---------------------->|
+       |<- GASPInitialResponse -----------------------|
+       |-- GASPInitialReply ------------------------->|   (if not unidirectional)
+       |                                             |
+       |  [for each UTXO the counterparty is missing]
+       |-- requestNode(graphID, txid, vout, meta) -->|
+       |<- GASPNode ---------------------------------|
+       |                                             |
+       |  [responder may request further inputs]
+       |<- submitNode(GASPNode) ---------------------|
+       |-- GASPNodeResponse ------------------------>|
+       |          (repeat until graph is complete)
+       |                                             |
+    ```
+
+    Source of truth: /ts/gasp-core/src/GASP.ts
+  license:
+    name: Open BSV Licence
+
+defaultContentType: application/json
+
+# ---------------------------------------------------------------------------
+# Channels
+# ---------------------------------------------------------------------------
+channels:
+  gasp/initialRequest:
+    address: gasp/initialRequest
+    description: |
+      Initiator sends its sync parameters.  The responder replies on the
+      `gasp/initialResponse` channel.
+    messages:
+      GASPInitialRequest:
+        $ref: "#/components/messages/GASPInitialRequest"
+
+  gasp/initialResponse:
+    address: gasp/initialResponse
+    description: |
+      Responder sends back its list of known UTXOs and the timestamp from
+      which it wants to receive UTXOs from the initiator.
+    messages:
+      GASPInitialResponse:
+        $ref: "#/components/messages/GASPInitialResponse"
+
+  gasp/initialReply:
+    address: gasp/initialReply
+    description: |
+      Initiator (if operating in bidirectional mode) sends the set of UTXOs
+      it holds that the responder does not.  Absent in unidirectional mode.
+    messages:
+      GASPInitialReply:
+        $ref: "#/components/messages/GASPInitialReply"
+
+  gasp/requestNode:
+    address: gasp/requestNode
+    description: |
+      Either party requests a specific graph node (transaction + output) from
+      the other.  Used when walking the transaction graph to hydrate UTXOs.
+    messages:
+      GASPNodeRequest:
+        $ref: "#/components/messages/GASPNodeRequest"
+
+  gasp/node:
+    address: gasp/node
+    description: |
+      The responding party delivers the requested GASPNode (raw transaction,
+      optional BUMP proof, optional metadata).
+    messages:
+      GASPNode:
+        $ref: "#/components/messages/GASPNode"
+
+  gasp/submitNode:
+    address: gasp/submitNode
+    description: |
+      A party submits a node it is trying to push to the counterparty.
+      The counterparty appends it to the temporary graph and may respond
+      with a list of additional inputs it still needs.
+    messages:
+      GASPNode:
+        $ref: "#/components/messages/GASPNode"
+
+  gasp/nodeResponse:
+    address: gasp/nodeResponse
+    description: |
+      Response to a submitted node; specifies which additional input transactions
+      (if any) the recipient still needs to complete the graph.  An empty / null
+      response means the graph is complete.
+    messages:
+      GASPNodeResponse:
+        $ref: "#/components/messages/GASPNodeResponse"
+
+# ---------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------
+operations:
+  sendInitialRequest:
+    action: send
+    channel:
+      $ref: "#/channels/gasp/initialRequest"
+    summary: Initiator sends sync parameters to the responder.
+    messages:
+      - $ref: "#/channels/gasp/initialRequest/messages/GASPInitialRequest"
+
+  receiveInitialResponse:
+    action: receive
+    channel:
+      $ref: "#/channels/gasp/initialResponse"
+    summary: Initiator receives the responder's UTXO list and since timestamp.
+    messages:
+      - $ref: "#/channels/gasp/initialResponse/messages/GASPInitialResponse"
+
+  sendInitialReply:
+    action: send
+    channel:
+      $ref: "#/channels/gasp/initialReply"
+    summary: |
+      Initiator (bidirectional mode only) sends UTXOs the responder is missing.
+    messages:
+      - $ref: "#/channels/gasp/initialReply/messages/GASPInitialReply"
+
+  requestNode:
+    action: send
+    channel:
+      $ref: "#/channels/gasp/requestNode"
+    summary: Request a specific transaction node from the counterparty.
+    messages:
+      - $ref: "#/channels/gasp/requestNode/messages/GASPNodeRequest"
+
+  deliverNode:
+    action: receive
+    channel:
+      $ref: "#/channels/gasp/node"
+    summary: Receive a requested graph node from the counterparty.
+    messages:
+      - $ref: "#/channels/gasp/node/messages/GASPNode"
+
+  submitNode:
+    action: send
+    channel:
+      $ref: "#/channels/gasp/submitNode"
+    summary: Push a graph node to the counterparty for ingestion.
+    messages:
+      - $ref: "#/channels/gasp/submitNode/messages/GASPNode"
+
+  receiveNodeResponse:
+    action: receive
+    channel:
+      $ref: "#/channels/gasp/nodeResponse"
+    summary: |
+      Receive the counterparty's response to a submitted node, listing any
+      additional input transactions needed to complete the graph.
+    messages:
+      - $ref: "#/channels/gasp/nodeResponse/messages/GASPNodeResponse"
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  messages:
+    GASPInitialRequest:
+      name: GASPInitialRequest
+      title: GASP Initial Request
+      summary: |
+        First message in a GASP sync session.  The initiator declares its
+        protocol version, the timestamp of the last sync with this party, and
+        an optional page size limit.
+      payload:
+        $ref: "#/components/schemas/GASPInitialRequest"
+
+    GASPInitialResponse:
+      name: GASPInitialResponse
+      title: GASP Initial Response
+      summary: |
+        Responder's reply to GASPInitialRequest.  Contains the list of UTXOs
+        the responder has seen since `request.since`, plus the timestamp from
+        which the responder wants UTXOs back from the initiator.
+      payload:
+        $ref: "#/components/schemas/GASPInitialResponse"
+
+    GASPInitialReply:
+      name: GASPInitialReply
+      title: GASP Initial Reply
+      summary: |
+        Initiator's follow-up (bidirectional mode).  UTXOs the initiator holds
+        that were not in the Initial Response — i.e. UTXOs the responder needs.
+      payload:
+        $ref: "#/components/schemas/GASPInitialReply"
+
+    GASPNodeRequest:
+      name: GASPNodeRequest
+      title: GASP Node Request
+      summary: |
+        Request for a specific transaction node identified by graphID, txid,
+        outputIndex, and whether transaction/output metadata should be included.
+      payload:
+        $ref: "#/components/schemas/GASPNodeRequest"
+
+    GASPNode:
+      name: GASPNode
+      title: GASP Node
+      summary: |
+        A transaction node: the raw transaction, the output index, an optional
+        BUMP merkle proof, optional metadata strings, and a mapping of input
+        outpoints to metadata hashes so the receiver can request ancestors.
+      payload:
+        $ref: "#/components/schemas/GASPNode"
+
+    GASPNodeResponse:
+      name: GASPNodeResponse
+      title: GASP Node Response
+      summary: |
+        Response to a submitted GASPNode.  Lists the input outpoints (in
+        36-byte `<txid>.<vout>` format) that the recipient still needs to
+        complete the graph.  A null / absent response means no further inputs
+        are required and the graph is complete.
+      payload:
+        $ref: "#/components/schemas/GASPNodeResponse"
+
+  schemas:
+    # -----------------------------------------------------------------------
+    GASPInitialRequest:
+      type: object
+      description: |
+        Parameters sent by the initiator to start a GASP sync session.
+        Version mismatch (current version is 1) causes the responder to throw
+        GASPVersionMismatchError and abort the session.
+      required:
+        - version
+        - since
+      properties:
+        version:
+          type: integer
+          description: GASP protocol version.  Currently always 1.
+          enum: [1]
+          example: 1
+        since:
+          type: integer
+          minimum: 0
+          description: |
+            UNIX timestamp (seconds since epoch) of the last successful sync
+            with this counterparty.  Use 0 to request all UTXOs.
+            Must be a non-negative integer.
+          example: 1714000000
+        limit:
+          type: integer
+          minimum: 1
+          description: |
+            Optional maximum number of UTXOs the responder should return per
+            page.  When the response contains exactly `limit` items the
+            initiator MUST send another GASPInitialRequest to fetch the next
+            page.  Absent means "return all".
+          example: 1000
+
+    GASPInitialResponse:
+      type: object
+      description: |
+        Responder's answer to GASPInitialRequest.  `UTXOList` contains all
+        UTXOs the responder has seen since `request.since`; unconfirmed
+        (non-timestamped) UTXOs are always included regardless of timestamp.
+      required:
+        - UTXOList
+        - since
+      properties:
+        UTXOList:
+          type: array
+          description: |
+            UTXOs the responder knows about (after `request.since`).  The
+            initiator will request any of these it does not already hold.
+          items:
+            $ref: "#/components/schemas/GASPOutput"
+        since:
+          type: integer
+          minimum: 0
+          description: |
+            Timestamp from which the responder wants to receive UTXOs back
+            from the initiator (used in the GASPInitialReply filter step).
+          example: 1714001000
+
+    GASPInitialReply:
+      type: object
+      description: |
+        Sent by the initiator in bidirectional mode.  Contains UTXOs the
+        initiator holds that are newer than `response.since` AND were not
+        already present in the Initial Response (so the responder can ingest
+        them).
+      required:
+        - UTXOList
+      properties:
+        UTXOList:
+          type: array
+          description: UTXOs the responder needs from the initiator.
+          items:
+            $ref: "#/components/schemas/GASPOutput"
+
+    GASPOutput:
+      type: object
+      description: |
+        Minimal outpoint descriptor used in the initial exchange phases.
+        `score` is a sortable timestamp (seconds since epoch) assigned when
+        the UTXO was first confirmed; unconfirmed UTXOs may have score 0.
+      required:
+        - txid
+        - outputIndex
+        - score
+      properties:
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID (hex, 64 characters).
+          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        outputIndex:
+          type: integer
+          minimum: 0
+          description: Output index (vout) within the transaction.
+          example: 0
+        score:
+          type: number
+          description: |
+            Sortable confirmation timestamp (UNIX seconds).  0 for unconfirmed
+            outputs.  Used to filter UTXOs by the `since` parameters.
+          example: 1714000000
+
+    GASPNodeRequest:
+      type: object
+      description: |
+        Request for a specific graph node.  `graphID` is the 36-byte outpoint
+        string (`<txid>.<vout>`) identifying the tip of the graph being walked.
+      required:
+        - graphID
+        - txid
+        - outputIndex
+        - metadata
+      properties:
+        graphID:
+          type: string
+          description: |
+            Graph identifier — the 36-byte outpoint string (`<txid>.<vout>`)
+            of the UTXO at the tip of this sync graph.
+          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2.0"
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID of the node being requested.
+          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        outputIndex:
+          type: integer
+          minimum: 0
+          description: Output index within the requested transaction.
+          example: 0
+        metadata:
+          type: boolean
+          description: |
+            Whether the responder should include transaction and output metadata
+            in the returned GASPNode.
+          example: true
+
+    GASPNode:
+      type: object
+      description: |
+        A fully-hydrated graph node.  `rawTx` is the complete serialised
+        Bitcoin transaction in hex.  `proof` is a hex-encoded BUMP (BRC-74)
+        merkle proof, only present for confirmed transactions.  `inputs` maps
+        each input outpoint (`<txid>.<vout>`) to the hash of its metadata,
+        allowing the recipient to detect when it needs updated metadata.
+      required:
+        - graphID
+        - rawTx
+        - outputIndex
+      properties:
+        graphID:
+          type: string
+          description: |
+            Outpoint string (`<txid>.<vout>`) of the UTXO at the graph tip.
+          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2.0"
+        rawTx:
+          type: string
+          description: Complete Bitcoin transaction serialised as a lowercase hex string.
+          example: "0100000001..."
+        outputIndex:
+          type: integer
+          minimum: 0
+          description: The output index within rawTx that this node represents.
+          example: 0
+        proof:
+          type: string
+          description: |
+            Hex-encoded BUMP merkle proof for the transaction.  Present only
+            when the transaction is confirmed in a block.
+        txMetadata:
+          type: string
+          description: |
+            Opaque string of transaction-level metadata.  Present only when
+            the request set `metadata: true`.
+        outputMetadata:
+          type: string
+          description: |
+            Opaque string of output-level metadata.  Present only when the
+            request set `metadata: true`.
+        inputs:
+          type: object
+          description: |
+            Mapping of input outpoints (`<txid>.<vout>`) to an object
+            containing the hash of their metadata.  Present only when
+            `metadata: true` was requested.
+          additionalProperties:
+            type: object
+            required:
+              - hash
+            properties:
+              hash:
+                type: string
+                description: Hash of the input's metadata (hex or base64).
+
+    GASPNodeResponse:
+      type: object
+      description: |
+        Response to a submitted GASPNode.  `requestedInputs` lists outpoints
+        the recipient still needs in order to complete the graph and whether
+        metadata is required for each.  If null or omitted, the graph is
+        complete and will be validated and finalised.
+      properties:
+        requestedInputs:
+          type: object
+          description: |
+            Mapping of input outpoints (`<txid>.<vout>`) to their metadata
+            requirement.  An empty object or absent field signals completion.
+          additionalProperties:
+            type: object
+            required:
+              - metadata
+            properties:
+              metadata:
+                type: boolean
+                description: Whether the submitter should include metadata for this input.
+
+  # -----------------------------------------------------------------------
+  # Error shapes
+  # -----------------------------------------------------------------------
+    GASPVersionMismatchError:
+      type: object
+      description: |
+        Thrown (and serialised into the response) when the responder's GASP
+        version differs from the version declared in GASPInitialRequest.
+      required:
+        - code
+        - message
+        - currentVersion
+        - foreignVersion
+      properties:
+        code:
+          type: string
+          enum:
+            - "ERR_GASP_VERSION_MISMATCH"
+        message:
+          type: string
+          example: "GASP version mismatch. Current version: 1, foreign version: 2"
+        currentVersion:
+          type: integer
+          description: The responder's supported GASP version.
+          example: 1
+        foreignVersion:
+          type: integer
+          description: The version declared by the initiator.
+          example: 2

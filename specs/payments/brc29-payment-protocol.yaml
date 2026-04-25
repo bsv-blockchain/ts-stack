@@ -1,0 +1,308 @@
+asyncapi: "3.0.0"
+
+info:
+  title: BRC-29 Simple Authenticated BSV P2PKH Payment Protocol
+  version: "1.0.0"
+  description: |
+    Specifies the peer-to-peer payment flow defined in BRC-29, including
+    BRC-42 key derivation prefix/suffix negotiation, the current Atomic BEEF
+    payment message, and the BRC-100 internalizeAction remittance envelope.
+
+    The older BRC-8 extended-envelope format (the `transactions` array) is
+    deprecated for new integrations; only the current BRC-100 / Atomic BEEF
+    transport is modelled here.
+
+    Source of truth: /docs/BRCs/payments/0029.md
+  license:
+    name: Open BSV Licence
+
+defaultContentType: application/json
+
+# ---------------------------------------------------------------------------
+# Channels
+# ---------------------------------------------------------------------------
+channels:
+  payment/send:
+    address: payment/send
+    description: |
+      Logical channel representing a sender delivering a BRC-29 payment message
+      to a recipient.  In practice this is carried over whatever higher-level
+      transport the application chooses (HTTP POST, WebSocket, BRC-104 message
+      box, etc.).  The channel models the one-way delivery of the payment.
+    messages:
+      paymentMessage:
+        $ref: "#/components/messages/PaymentMessage"
+
+  payment/acknowledge:
+    address: payment/acknowledge
+    description: |
+      Logical channel representing the recipient acknowledging acceptance or
+      rejection of the incoming payment after calling internalizeAction.
+    messages:
+      paymentAck:
+        $ref: "#/components/messages/PaymentAck"
+
+# ---------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------
+operations:
+  sendPayment:
+    action: send
+    channel:
+      $ref: "#/channels/payment/send"
+    summary: Sender delivers a BRC-29 payment message to the recipient.
+    messages:
+      - $ref: "#/channels/payment/send/messages/paymentMessage"
+
+  receiveAck:
+    action: receive
+    channel:
+      $ref: "#/channels/payment/acknowledge"
+    summary: Sender receives payment acceptance or rejection from the recipient.
+    messages:
+      - $ref: "#/channels/payment/acknowledge/messages/paymentAck"
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  messages:
+    PaymentMessage:
+      name: PaymentMessage
+      title: BRC-29 Payment Message
+      summary: |
+        Current (BRC-100 / Atomic BEEF) payment message sent from the payer to
+        the payee.  Carries one transaction with one or more P2PKH outputs
+        derived via BRC-42 key derivation using the invoice number format
+        `2-3241645161d8-<derivationPrefix> <derivationSuffix>`.
+      payload:
+        $ref: "#/components/schemas/PaymentMessage"
+
+    PaymentAck:
+      name: PaymentAck
+      title: Payment Acknowledgement
+      summary: |
+        Informal acknowledgement returned by the recipient after calling
+        BRC-100 internalizeAction.  No mandatory wire format is defined by
+        BRC-29; the shape below is the conventional minimal envelope.
+      payload:
+        $ref: "#/components/schemas/PaymentAck"
+
+  schemas:
+    # -----------------------------------------------------------------------
+    # PaymentMessage — single-output form (multi-output uses array variant)
+    # -----------------------------------------------------------------------
+    PaymentMessage:
+      type: object
+      description: |
+        Payment message delivered from sender to recipient.  The `transaction`
+        field carries a base64-encoded Atomic BEEF blob (BRC-95).  For payments
+        containing multiple outputs each output MUST carry its own
+        derivationSuffix and outputIndex so the recipient can recover the
+        correct P2PKH private key for each UTXO.
+      required:
+        - derivationPrefix
+        - derivationSuffix
+        - transaction
+      properties:
+        derivationPrefix:
+          type: string
+          description: |
+            Payment-wide random nonce (base64-encoded, BRC-29 §3).
+            Uniquely identifies this payment across all outputs.
+          example: "3q2+7w=="
+        derivationSuffix:
+          type: string
+          description: |
+            UTXO-specific random nonce (base64-encoded).
+            Uniquely identifies a single output within this payment.
+            For multi-output payments, use the `outputs` array instead.
+          example: "iMba2Q=="
+        transaction:
+          type: string
+          description: |
+            Base64-encoded Atomic BEEF (BRC-95) containing the signed BSV
+            transaction with one or more P2PKH outputs for the recipient.
+          example: "<base64-encoded-BEEF>"
+        outputs:
+          type: array
+          description: |
+            Present when multiple outputs belong to the same payment.  Each
+            element describes one P2PKH output intended for the recipient.
+            When this array is absent, `derivationSuffix` at the top level
+            refers to output index 0.
+          items:
+            $ref: "#/components/schemas/PaymentOutputDescriptor"
+        senderIdentityKey:
+          type: string
+          description: |
+            Hex-encoded compressed secp256k1 identity public key of the sender.
+            SHOULD be included so the recipient can verify key derivation and
+            include it in the internalizeAction remittance.
+          example: "02abc123..."
+
+    PaymentOutputDescriptor:
+      type: object
+      description: Describes one P2PKH output within a multi-output BRC-29 payment.
+      required:
+        - outputIndex
+        - derivationSuffix
+      properties:
+        outputIndex:
+          type: integer
+          minimum: 0
+          description: Zero-based output index within the transaction.
+        derivationSuffix:
+          type: string
+          description: UTXO-specific nonce for this output (base64-encoded).
+          example: "X9k4LA=="
+
+    # -----------------------------------------------------------------------
+    # Key-derivation invoice number (informational)
+    # -----------------------------------------------------------------------
+    Brc42InvoiceNumber:
+      type: string
+      description: |
+        BRC-42 invoice number used to derive the recipient's P2PKH key for each
+        output.  Format: `2-3241645161d8-<derivationPrefix> <derivationSuffix>`
+        where:
+          - `2`             = security level (BRC-43)
+          - `3241645161d8`  = BRC-29 magic number
+          - derivationPrefix / derivationSuffix are the values from the message
+      pattern: "^2-3241645161d8-[A-Za-z0-9+/=]+ [A-Za-z0-9+/=]+$"
+      example: "2-3241645161d8-3q2+7w== iMba2Q=="
+
+    # -----------------------------------------------------------------------
+    # internalizeAction remittance (as passed by the recipient's wallet)
+    # -----------------------------------------------------------------------
+    PaymentRemittance:
+      type: object
+      description: |
+        Remittance object passed to BRC-100 `internalizeAction` for each
+        payment output.  The recipient's wallet uses these fields to derive
+        the private key and credit the UTXO.
+      required:
+        - derivationPrefix
+        - derivationSuffix
+        - senderIdentityKey
+      properties:
+        derivationPrefix:
+          type: string
+          description: Payment-wide derivation prefix (base64-encoded).
+          example: "3q2+7w=="
+        derivationSuffix:
+          type: string
+          description: UTXO-specific derivation suffix (base64-encoded).
+          example: "iMba2Q=="
+        senderIdentityKey:
+          type: string
+          description: Hex-encoded compressed secp256k1 identity public key of the sender.
+          example: "02abc123..."
+
+    # -----------------------------------------------------------------------
+    # Full internalizeAction args shape (BRC-100)
+    # -----------------------------------------------------------------------
+    InternalizeActionArgs:
+      type: object
+      description: |
+        Arguments passed to the BRC-100 `internalizeAction` wallet method by
+        the recipient when processing an incoming BRC-29 payment.
+      required:
+        - tx
+        - outputs
+        - description
+      properties:
+        tx:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: Raw Atomic BEEF bytes of the payment transaction.
+        outputs:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/InternalizeOutput"
+          description: One entry per P2PKH output intended for this recipient.
+        description:
+          type: string
+          description: Human-readable description of the payment.
+          example: "Incoming BRC-29 payment"
+
+    InternalizeOutput:
+      type: object
+      required:
+        - outputIndex
+        - protocol
+        - paymentRemittance
+      properties:
+        outputIndex:
+          type: integer
+          minimum: 0
+          description: Zero-based output index within the transaction.
+        protocol:
+          type: string
+          enum:
+            - "wallet payment"
+          description: Protocol identifier understood by BRC-100 wallets.
+        paymentRemittance:
+          $ref: "#/components/schemas/PaymentRemittance"
+
+    # -----------------------------------------------------------------------
+    # Acknowledgement
+    # -----------------------------------------------------------------------
+    PaymentAck:
+      type: object
+      description: |
+        Minimal response returned to the sender after the recipient has called
+        `internalizeAction`.  BRC-29 does not mandate a wire format; this is
+        the conventional shape used by ts-sdk integrations.
+      required:
+        - accepted
+      properties:
+        accepted:
+          type: boolean
+          description: true if internalizeAction succeeded and the payment was credited.
+        txid:
+          type: string
+          description: Txid of the accepted transaction (hex, 64 characters).
+          pattern: "^[0-9a-fA-F]{64}$"
+        error:
+          type: string
+          description: |
+            Human-readable error message if `accepted` is false.  Only present
+            on rejection.
+
+    # -----------------------------------------------------------------------
+    # Legacy (deprecated) payment envelope — documented for compatibility only
+    # -----------------------------------------------------------------------
+    LegacyPaymentEnvelope:
+      type: object
+      deprecated: true
+      description: |
+        **Deprecated.** The original BRC-8 extended-envelope format.  New
+        integrations MUST NOT use this format; use `PaymentMessage` instead.
+        Documented here only for backwards-compatibility reference.
+      required:
+        - protocol
+        - senderIdentityKey
+        - derivationPrefix
+        - transactions
+      properties:
+        protocol:
+          type: string
+          enum:
+            - "3241645161d8"
+        senderIdentityKey:
+          type: string
+          description: Hex-encoded sender identity public key.
+        derivationPrefix:
+          type: string
+          description: Payment-wide derivation prefix.
+        transactions:
+          type: array
+          description: Array of extended BRC-8 transaction envelopes.
+          items:
+            type: object
+            description: Extended BRC-8 transaction envelope (schema omitted — deprecated).

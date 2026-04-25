@@ -1,0 +1,441 @@
+openapi: "3.1.0"
+
+info:
+  title: UHRP — Universal Hash Resolution Protocol (HTTP surface)
+  version: "1.0.0"
+  description: |
+    OpenAPI 3.1 specification for the HTTP routes exposed by a UHRP-compatible
+    storage server (e.g. a NanoStore-style provider or a custom `uhrp-services`
+    implementation).
+
+    ## Protocol background (BRC-26)
+
+    UHRP is a content-addressed storage protocol built on BSV overlay networks.
+    A content host creates a UTXO-based advertisement token on the `tm_uhrp`
+    topic (BRC-87 name; legacy: `UHRP`) that records:
+      - SHA-256 hash of the file
+      - HTTPS download URL
+      - Expiry timestamp
+      - Content length in bytes
+
+    Consumers resolve content by querying the `ls_uhrp` BRC-24 lookup service
+    with a UHRP URL and following the returned download URLs.
+
+    ## UHRP URL format
+
+    A UHRP URL encodes the SHA-256 hash of the file using Base58Check with
+    prefix bytes `ce00`.  The resulting string may be prefixed with `uhrp://`
+    or used bare.
+
+    Example: `uhrp://XYZ123...` (Base58Check-encoded SHA-256 hash)
+
+    ## Source notes
+
+    The HTTP routes below are derived from BRC-26 (the status-note section)
+    which documents the current SDK's `StorageUploader` / `StorageDownloader`
+    helpers.  A concrete `uhrp-services` implementation was not available at
+    spec time; routes marked **(inferred)** are derived from the BRC-26 status
+    note and SDK usage patterns.
+
+    Source: /docs/BRCs/overlays/0026.md
+  license:
+    name: Open BSV Licence
+
+servers:
+  - url: https://{host}
+    description: UHRP storage server
+    variables:
+      host:
+        default: storage.example.com
+        description: Hostname of the UHRP-compatible storage server.
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  /upload:
+    post:
+      operationId: initiateUpload
+      summary: Initiate a file upload (inferred from BRC-26 status note)
+      description: |
+        Request an upload slot for a file.  The server responds with a
+        pre-signed upload URL (or equivalent mechanism) and the UHRP URL
+        that will address the content once the upload is complete.
+
+        The client then issues a PUT request to the returned `uploadURL` with
+        the raw file bytes.
+      tags:
+        - Upload
+      security:
+        - BRC103Auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadRequest"
+      responses:
+        "200":
+          description: Upload slot allocated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /find:
+    get:
+      operationId: findFile
+      summary: Find the download URL(s) for a UHRP URL (inferred)
+      description: |
+        Queries this server's knowledge of advertisement tokens for the given
+        UHRP URL.  Returns one or more download URLs if the server is currently
+        advertising the content, or 404 if not found.
+      tags:
+        - Resolution
+      parameters:
+        - name: uhrpUrl
+          in: query
+          required: true
+          schema:
+            type: string
+          description: |
+            The UHRP URL to resolve.  May be bare Base58Check or prefixed
+            with `uhrp://`.
+          example: "uhrp://XYZ123abc..."
+      responses:
+        "200":
+          description: Content found; download URLs returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /list:
+    get:
+      operationId: listHostedFiles
+      summary: List all files currently advertised by this host (inferred)
+      description: |
+        Returns a paginated list of UHRP advertisement records that this
+        storage server is currently hosting (i.e. its active UTXO tokens
+        on the `tm_uhrp` overlay topic).
+      tags:
+        - Management
+      security:
+        - BRC103Auth: []
+      parameters:
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Pagination offset (number of records to skip).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum number of records to return.
+      responses:
+        "200":
+          description: List of hosted file records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /renew:
+    post:
+      operationId: renewAdvertisement
+      summary: Renew a UHRP advertisement token (inferred)
+      description: |
+        Extends the expiry of an existing advertisement UTXO by spending the
+        old token and creating a new one with a future expiry timestamp.  The
+        server charges the appropriate fee via the authenticated wallet.
+      tags:
+        - Management
+      security:
+        - BRC103Auth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenewRequest"
+      responses:
+        "200":
+          description: Advertisement renewed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenewResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  securitySchemes:
+    BRC103Auth:
+      type: apiKey
+      in: header
+      name: x-bsv-auth
+      description: |
+        BRC-103 mutual authentication token.  Clients that use the `@bsv/sdk`
+        `AuthFetch` wrapper will attach this header automatically.
+
+  schemas:
+    # -----------------------------------------------------------------------
+    # Upload
+    # -----------------------------------------------------------------------
+    UploadRequest:
+      type: object
+      required:
+        - fileSize
+        - sha256
+      properties:
+        fileSize:
+          type: integer
+          minimum: 1
+          description: Exact byte length of the file to be uploaded.
+          example: 204800
+        sha256:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: SHA-256 hash of the file content (hex, 64 characters).
+          example: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        mimeType:
+          type: string
+          description: Optional MIME type of the file.
+          example: "image/png"
+        retentionDays:
+          type: integer
+          minimum: 1
+          description: |
+            Requested number of days the advertisement token should remain
+            valid.  The server may cap this value.
+          example: 30
+
+    UploadResponse:
+      type: object
+      required:
+        - uhrpUrl
+        - uploadUrl
+      properties:
+        uhrpUrl:
+          type: string
+          description: |
+            The UHRP URL that will address this content.  Encoded as
+            Base58Check with prefix `ce00` over the SHA-256 hash.
+          example: "uhrp://XYZ123abc..."
+        uploadUrl:
+          type: string
+          format: uri
+          description: |
+            Pre-signed HTTPS URL.  The client MUST issue a PUT request with
+            the raw file bytes to this URL to complete the upload.
+          example: "https://storage.example.com/put/abc123?sig=..."
+        expiresAt:
+          type: integer
+          description: UNIX timestamp (seconds) when the upload URL expires.
+          example: 1714010000
+
+    # -----------------------------------------------------------------------
+    # Resolution
+    # -----------------------------------------------------------------------
+    FindResponse:
+      type: object
+      required:
+        - uhrpUrl
+        - urls
+      properties:
+        uhrpUrl:
+          type: string
+          description: The resolved UHRP URL (echoed from query parameter).
+          example: "uhrp://XYZ123abc..."
+        urls:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uri
+          description: |
+            One or more HTTPS download URLs where the content is currently
+            available.  Clients SHOULD try each in order and use the first
+            that responds successfully.
+          example:
+            - "https://storage.example.com/files/abc123"
+        expiresAt:
+          type: integer
+          description: |
+            UNIX timestamp of the earliest advertisement token expiry across
+            all returned hosts.
+          example: 1714100000
+        contentLength:
+          type: integer
+          description: Byte length of the content as advertised in the token.
+          example: 204800
+
+    # -----------------------------------------------------------------------
+    # List
+    # -----------------------------------------------------------------------
+    ListResponse:
+      type: object
+      required:
+        - files
+        - total
+      properties:
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdvertisementRecord"
+        total:
+          type: integer
+          description: Total number of files currently hosted by this server.
+          example: 42
+        offset:
+          type: integer
+          description: Echoed from the query parameter.
+          example: 0
+        limit:
+          type: integer
+          description: Echoed from the query parameter.
+          example: 100
+
+    AdvertisementRecord:
+      type: object
+      required:
+        - uhrpUrl
+        - downloadUrl
+        - expiresAt
+        - contentLength
+      properties:
+        uhrpUrl:
+          type: string
+          description: UHRP URL for this file.
+          example: "uhrp://XYZ123abc..."
+        downloadUrl:
+          type: string
+          format: uri
+          description: HTTPS URL where this server serves the file.
+          example: "https://storage.example.com/files/abc123"
+        expiresAt:
+          type: integer
+          description: UNIX timestamp of the advertisement UTXO expiry.
+          example: 1714100000
+        contentLength:
+          type: integer
+          description: Byte length of the advertised file.
+          example: 204800
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID of the active advertisement UTXO.
+          example: "a1b2c3d4..."
+
+    # -----------------------------------------------------------------------
+    # Renew
+    # -----------------------------------------------------------------------
+    RenewRequest:
+      type: object
+      required:
+        - uhrpUrl
+      properties:
+        uhrpUrl:
+          type: string
+          description: UHRP URL of the advertisement to renew.
+          example: "uhrp://XYZ123abc..."
+        retentionDays:
+          type: integer
+          minimum: 1
+          description: Number of additional days to extend the advertisement.
+          example: 30
+
+    RenewResponse:
+      type: object
+      required:
+        - uhrpUrl
+        - expiresAt
+        - txid
+      properties:
+        uhrpUrl:
+          type: string
+          description: The UHRP URL whose advertisement was renewed.
+          example: "uhrp://XYZ123abc..."
+        expiresAt:
+          type: integer
+          description: New UNIX timestamp of the renewed advertisement UTXO expiry.
+          example: 1716700000
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID of the new advertisement UTXO.
+          example: "b2c3d4e5..."
+
+    # -----------------------------------------------------------------------
+    # Errors
+    # -----------------------------------------------------------------------
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error description.
+          example: "invalid UHRP URL"
+        code:
+          type: string
+          description: Machine-readable error code (see specs/errors.md).
+          example: "ERR_INVALID_PARAMETER"
+
+  responses:
+    BadRequest:
+      description: Bad request — invalid input.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid BRC-103 authentication.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The requested UHRP URL is not known to this server.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

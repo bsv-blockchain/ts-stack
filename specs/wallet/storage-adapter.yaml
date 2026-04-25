@@ -1,0 +1,1374 @@
+openapi: "3.1.0"
+
+info:
+  title: Wallet Storage Adapter Interface
+  version: "1.0.0"
+  description: |
+    OpenAPI 3.1 specification describing the HTTP boundary exposed by a remote
+    wallet storage provider (the "storage adapter").
+
+    ## Context
+
+    The `wallet-toolbox` package uses a three-layer storage hierarchy:
+
+    ```
+    StorageReader          — read-only (find, count, sync-read)
+      └─ StorageReaderWriter  — + insert / update / delete, sync-write
+           └─ StorageProvider   — + active wallet operations (createAction, internalizeAction, …)
+    ```
+
+    Local (in-process) adapters (`StorageKnex`, `StorageIdb`) implement this
+    hierarchy directly.  Remote adapters expose equivalent operations over HTTP
+    and are consumed by `WalletStorageManager` via the `remoting/` layer.
+
+    This spec documents the HTTP surface as a **JSON Schema–style OpenAPI** file
+    so that implementors of remote storage servers know exactly which request
+    and response shapes to honour.
+
+    The spec is derived directly from the TypeScript interfaces in:
+      - `/ts/wallet-toolbox/src/sdk/WalletStorage.interfaces.ts`
+      - `/ts/wallet-toolbox/src/storage/StorageReaderWriter.ts`
+      - `/ts/wallet-toolbox/src/storage/StorageProvider.ts`
+      - `/ts/wallet-toolbox/src/storage/schema/tables/`
+
+    ## Authentication
+
+    Access to a remote storage adapter implies prior authentication.
+    Typically the HTTP channel is protected by a BRC-103 mutual-auth session
+    that establishes the `identityKey` of the wallet owner; the `AuthId`
+    object (`{ identityKey, userId?, isActive? }`) is injected server-side.
+
+    ## Status note
+
+    The `remoting/` layer in `wallet-toolbox` is the canonical implementation
+    of the HTTP client side.  The exact route paths on the server side are
+    implementation-defined.  This spec uses RESTful path conventions for
+    clarity.
+  license:
+    name: Open BSV Licence
+
+servers:
+  - url: https://{host}/storage/v1
+    description: Remote wallet storage adapter.
+    variables:
+      host:
+        default: wallet-storage.example.com
+
+# ---------------------------------------------------------------------------
+# Paths — grouped by storage layer
+# ---------------------------------------------------------------------------
+paths:
+  # -------------------------------------------------------------------------
+  # Settings
+  # -------------------------------------------------------------------------
+  /settings:
+    get:
+      operationId: readSettings
+      summary: Read storage identity and configuration settings.
+      description: |
+        Returns the single `TableSettings` row for this storage instance,
+        including `storageIdentityKey`, `storageName`, `chain`, `dbtype`, and
+        `maxOutputScript`.
+      tags:
+        - Settings
+      responses:
+        "200":
+          description: Storage settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TableSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /migrate:
+    post:
+      operationId: migrate
+      summary: Run database migrations.
+      description: |
+        Applies pending schema migrations.  Returns the migrated storage name
+        string on success.  Called once during `makeAvailable()`.
+      tags:
+        - Settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MigrateRequest"
+      responses:
+        "200":
+          description: Migration completed; returns the storage name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [storageName]
+                properties:
+                  storageName:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # -------------------------------------------------------------------------
+  # Wallet operations (StorageProvider layer)
+  # -------------------------------------------------------------------------
+  /actions:
+    post:
+      operationId: createAction
+      summary: Create a new wallet action (unsigned transaction).
+      description: |
+        Corresponds to `StorageProvider.createAction(auth, args)`.
+        Allocates inputs and outputs for a new transaction; returns the
+        data the SDK needs to construct and sign the raw transaction.
+      tags:
+        - Actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActionRequest"
+      responses:
+        "200":
+          description: Action creation result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageCreateActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /actions/process:
+    post:
+      operationId: processAction
+      summary: Process a signed action (broadcast + store).
+      description: |
+        Corresponds to `StorageProvider.processAction(auth, args)`.
+        Called after the client has signed the raw transaction.  Stores the
+        completed transaction and optionally broadcasts it.
+      tags:
+        - Actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorageProcessActionArgs"
+      responses:
+        "200":
+          description: Process results (broadcast status, optional send-with results).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageProcessActionResults"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /actions/abort:
+    post:
+      operationId: abortAction
+      summary: Abort an unsigned / in-process action.
+      description: |
+        Corresponds to `StorageProvider.abortAction(auth, args)`.
+        Marks the transaction as failed and frees any allocated inputs.
+      tags:
+        - Actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AbortActionArgs"
+      responses:
+        "200":
+          description: Abort result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AbortActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /actions/internalize:
+    post:
+      operationId: internalizeAction
+      summary: Internalize an external transaction (receive payment).
+      description: |
+        Corresponds to `StorageProvider.internalizeAction(auth, args)`.
+        Credits one or more outputs of an external transaction to the
+        authenticated user's wallet.  Returns `isMerge: true` if the
+        transaction was already known (replay guard for BRC-121).
+      tags:
+        - Actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InternalizeActionArgs"
+      responses:
+        "200":
+          description: Internalization result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageInternalizeActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # -------------------------------------------------------------------------
+  # List operations (authenticated reads)
+  # -------------------------------------------------------------------------
+  /list/actions:
+    post:
+      operationId: listActions
+      summary: List wallet actions (transactions).
+      tags:
+        - List
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListActionsArgs"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListActionsResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /list/outputs:
+    post:
+      operationId: listOutputs
+      summary: List wallet outputs (UTXOs).
+      tags:
+        - List
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListOutputsArgs"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListOutputsResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /list/certificates:
+    post:
+      operationId: listCertificates
+      summary: List identity certificates.
+      tags:
+        - List
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListCertificatesArgs"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListCertificatesResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # -------------------------------------------------------------------------
+  # Sync (WalletStorageSync layer)
+  # -------------------------------------------------------------------------
+  /sync/chunk:
+    post:
+      operationId: getSyncChunk
+      summary: Export a chunk of storage records for sync.
+      description: |
+        Corresponds to `WalletStorageSync.getSyncChunk(args)`.
+        Returns a paged subset of records since a given timestamp, for use
+        by the sync protocol between storage providers.
+      tags:
+        - Sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestSyncChunkArgs"
+      responses:
+        "200":
+          description: Sync chunk.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncChunk"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sync/process:
+    post:
+      operationId: processSyncChunk
+      summary: Apply a sync chunk from another storage provider.
+      description: |
+        Corresponds to `WalletStorageSync.processSyncChunk(args, chunk)`.
+        Merges records from a foreign storage provider into this one.
+      tags:
+        - Sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessSyncChunkRequest"
+      responses:
+        "200":
+          description: Sync chunk processing result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessSyncChunkResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sync/state:
+    post:
+      operationId: findOrInsertSyncState
+      summary: Find or create a sync state record for a foreign storage provider.
+      tags:
+        - Sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindOrInsertSyncStateRequest"
+      responses:
+        "200":
+          description: Sync state and isNew flag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindOrInsertSyncStateResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /sync/active:
+    post:
+      operationId: setActive
+      summary: Update the active storage for the authenticated user.
+      tags:
+        - Sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newActiveStorageIdentityKey]
+              properties:
+                newActiveStorageIdentityKey:
+                  type: string
+                  description: storageIdentityKey of the storage to set as active.
+      responses:
+        "200":
+          description: Number of rows updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+
+  # -------------------------------------------------------------------------
+  # Certificates
+  # -------------------------------------------------------------------------
+  /certificates:
+    post:
+      operationId: insertCertificate
+      summary: Insert an identity certificate.
+      tags:
+        - Certificates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TableCertificateX"
+      responses:
+        "200":
+          description: certificateId of the new record.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  certificateId:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /certificates/relinquish:
+    post:
+      operationId: relinquishCertificate
+      summary: Soft-delete (relinquish) a certificate.
+      tags:
+        - Certificates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelinquishCertificateArgs"
+      responses:
+        "200":
+          description: Number of rows updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+
+  /outputs/relinquish:
+    post:
+      operationId: relinquishOutput
+      summary: Remove an output from its basket (relinquish).
+      tags:
+        - Outputs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelinquishOutputArgs"
+      responses:
+        "200":
+          description: Number of rows updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  schemas:
+    # -----------------------------------------------------------------------
+    # Database table shapes (source-of-truth types)
+    # -----------------------------------------------------------------------
+    EntityTimeStamp:
+      type: object
+      required:
+        - created_at
+        - updated_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TableSettings:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - storageIdentityKey
+        - storageName
+        - chain
+        - dbtype
+        - maxOutputScript
+      properties:
+        storageIdentityKey:
+          type: string
+          description: The identity key (public key) assigned to this storage instance.
+          example: "02abc123..."
+        storageName:
+          type: string
+          description: Human-readable name for this storage instance.
+          example: "my-wallet-storage"
+        chain:
+          type: string
+          enum: ["main", "test"]
+          description: BSV chain this storage is associated with.
+        dbtype:
+          type: string
+          enum: ["SQLite", "MySQL", "IndexedDB"]
+          description: Underlying database type.
+        maxOutputScript:
+          type: integer
+          description: Maximum locking script size (bytes) stored inline.
+
+    TableUser:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - userId
+        - identityKey
+        - activeStorage
+      properties:
+        userId:
+          type: integer
+          description: Auto-incremented internal user ID.
+        identityKey:
+          type: string
+          description: Compressed secp256k1 public key (hex, typically 66 chars).
+          example: "02abc123..."
+        activeStorage:
+          type: string
+          description: storageIdentityKey of the user's currently active storage provider.
+
+    TableTransaction:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - transactionId
+        - userId
+        - status
+        - reference
+        - isOutgoing
+        - satoshis
+        - description
+      properties:
+        transactionId:
+          type: integer
+        userId:
+          type: integer
+        provenTxId:
+          type: integer
+          description: Set when the transaction has a confirmed merkle proof.
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        reference:
+          type: string
+          description: Base64-encoded reference string (max 64 chars).
+          maxLength: 64
+        isOutgoing:
+          type: boolean
+          description: true if the transaction originated in this wallet.
+        satoshis:
+          type: integer
+          description: Net satoshi change for this wallet (positive = received).
+        description:
+          type: string
+        version:
+          type: integer
+        lockTime:
+          type: integer
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        inputBEEF:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: Raw BEEF bytes for input ancestry.
+        rawTx:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: Raw serialised transaction bytes.
+
+    TableOutput:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - outputId
+        - userId
+        - transactionId
+        - spendable
+        - change
+        - outputDescription
+        - vout
+        - satoshis
+        - providedBy
+        - purpose
+        - type
+      properties:
+        outputId:
+          type: integer
+        userId:
+          type: integer
+        transactionId:
+          type: integer
+        basketId:
+          type: integer
+        spendable:
+          type: boolean
+        change:
+          type: boolean
+        outputDescription:
+          type: string
+          minLength: 5
+          maxLength: 50
+        vout:
+          type: integer
+          minimum: 0
+        satoshis:
+          type: integer
+          minimum: 0
+        providedBy:
+          type: string
+          enum: ["you", "storage", "you-and-storage"]
+        purpose:
+          type: string
+        type:
+          type: string
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        senderIdentityKey:
+          type: string
+        derivationPrefix:
+          type: string
+        derivationSuffix:
+          type: string
+        customInstructions:
+          type: string
+        spentBy:
+          type: integer
+        sequenceNumber:
+          type: integer
+        spendingDescription:
+          type: string
+        scriptLength:
+          type: integer
+        scriptOffset:
+          type: integer
+        lockingScript:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+
+    TableOutputBasket:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - basketId
+        - userId
+        - name
+        - numberOfDesiredUTXOs
+        - minimumDesiredUTXOValue
+        - isDeleted
+      properties:
+        basketId:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: string
+        numberOfDesiredUTXOs:
+          type: integer
+          minimum: 0
+        minimumDesiredUTXOValue:
+          type: integer
+          minimum: 0
+        isDeleted:
+          type: boolean
+
+    TableProvenTx:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - provenTxId
+        - txid
+        - height
+        - index
+        - merklePath
+        - rawTx
+        - blockHash
+        - merkleRoot
+      properties:
+        provenTxId:
+          type: integer
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        height:
+          type: integer
+          minimum: 0
+          description: Block height.
+        index:
+          type: integer
+          minimum: 0
+          description: Transaction index within the block.
+        merklePath:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: BUMP merkle path bytes.
+        rawTx:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+        blockHash:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        merkleRoot:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+
+    TableProvenTxReq:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - provenTxReqId
+        - status
+        - attempts
+        - notified
+        - txid
+        - history
+        - notify
+        - rawTx
+      properties:
+        provenTxReqId:
+          type: integer
+        provenTxId:
+          type: integer
+        status:
+          $ref: "#/components/schemas/ProvenTxReqStatus"
+        attempts:
+          type: integer
+          minimum: 0
+        notified:
+          type: boolean
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        batch:
+          type: string
+        history:
+          type: string
+          description: JSON-encoded processing history (ProvenTxReqHistoryApi).
+        notify:
+          type: string
+          description: JSON-encoded notification data (ProvenTxReqNotifyApi).
+        rawTx:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+        inputBEEF:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+
+    TableSyncState:
+      allOf:
+        - $ref: "#/components/schemas/EntityTimeStamp"
+      type: object
+      required:
+        - syncStateId
+        - userId
+        - storageIdentityKey
+        - storageName
+        - status
+        - init
+        - refNum
+        - syncMap
+      properties:
+        syncStateId:
+          type: integer
+        userId:
+          type: integer
+        storageIdentityKey:
+          type: string
+        storageName:
+          type: string
+        status:
+          type: string
+          description: Sync state status (SyncStatus enum).
+        init:
+          type: boolean
+        refNum:
+          type: string
+        syncMap:
+          type: string
+          description: JSON-encoded sync map.
+        when:
+          type: string
+          format: date-time
+        satoshis:
+          type: integer
+        errorLocal:
+          type: string
+        errorOther:
+          type: string
+
+    TableCertificateX:
+      type: object
+      description: Certificate record with optional fields.
+      required:
+        - userId
+        - certifier
+        - serialNumber
+        - type
+        - isDeleted
+      properties:
+        certificateId:
+          type: integer
+        userId:
+          type: integer
+        certifier:
+          type: string
+        serialNumber:
+          type: string
+        type:
+          type: string
+        isDeleted:
+          type: boolean
+        fields:
+          type: array
+          items:
+            type: object
+            description: Certificate field records (TableCertificateField).
+
+    # -----------------------------------------------------------------------
+    # Status enums
+    # -----------------------------------------------------------------------
+    TransactionStatus:
+      type: string
+      enum:
+        - completed
+        - failed
+        - nosend
+        - nonfinal
+        - unsigned
+        - unprocessed
+        - sending
+        - unproven
+
+    ProvenTxReqStatus:
+      type: string
+      enum:
+        - unknown
+        - nonfinal
+        - unprocessed
+        - unsent
+        - nosend
+        - sending
+        - unmined
+        - callback
+        - unconfirmed
+        - completed
+        - invalid
+        - doubleSpend
+
+    # -----------------------------------------------------------------------
+    # Operation argument/result schemas
+    # -----------------------------------------------------------------------
+    MigrateRequest:
+      type: object
+      required:
+        - storageName
+        - storageIdentityKey
+      properties:
+        storageName:
+          type: string
+        storageIdentityKey:
+          type: string
+
+    CreateActionRequest:
+      type: object
+      description: |
+        Wrapper for `Validation.ValidCreateActionArgs`.
+        Full schema follows the BRC-100 wallet interface spec in
+        `specs/sdk/brc-100-wallet.json`.
+      required:
+        - args
+      properties:
+        args:
+          type: object
+          description: BRC-100 ValidCreateActionArgs (see brc-100-wallet.json for full schema).
+          additionalProperties: true
+
+    StorageCreateActionResult:
+      type: object
+      required:
+        - inputs
+        - outputs
+        - derivationPrefix
+        - version
+        - lockTime
+        - reference
+      properties:
+        inputBeef:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StorageCreateTransactionSdkInput"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StorageCreateTransactionSdkOutput"
+        noSendChangeOutputVouts:
+          type: array
+          items:
+            type: integer
+        derivationPrefix:
+          type: string
+        version:
+          type: integer
+        lockTime:
+          type: integer
+        reference:
+          type: string
+
+    StorageCreateTransactionSdkInput:
+      type: object
+      required:
+        - vin
+        - sourceTxid
+        - sourceVout
+        - sourceSatoshis
+        - sourceLockingScript
+        - unlockingScriptLength
+        - providedBy
+        - type
+      properties:
+        vin:
+          type: integer
+        sourceTxid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        sourceVout:
+          type: integer
+          minimum: 0
+        sourceSatoshis:
+          type: integer
+          minimum: 0
+        sourceLockingScript:
+          type: string
+          description: Hex-encoded locking script.
+        sourceTransaction:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+        unlockingScriptLength:
+          type: integer
+        providedBy:
+          type: string
+          enum: ["you", "storage", "you-and-storage"]
+        type:
+          type: string
+        spendingDescription:
+          type: string
+        derivationPrefix:
+          type: string
+        derivationSuffix:
+          type: string
+        senderIdentityKey:
+          type: string
+
+    StorageCreateTransactionSdkOutput:
+      type: object
+      required:
+        - vout
+        - providedBy
+        - satoshis
+        - lockingScript
+      properties:
+        vout:
+          type: integer
+          minimum: 0
+        providedBy:
+          type: string
+          enum: ["you", "storage", "you-and-storage"]
+        purpose:
+          type: string
+        derivationSuffix:
+          type: string
+        satoshis:
+          type: integer
+          minimum: 0
+        lockingScript:
+          type: string
+
+    StorageProcessActionArgs:
+      type: object
+      required:
+        - isNewTx
+        - isSendWith
+        - isNoSend
+        - isDelayed
+        - sendWith
+      properties:
+        isNewTx:
+          type: boolean
+        isSendWith:
+          type: boolean
+        isNoSend:
+          type: boolean
+        isDelayed:
+          type: boolean
+        reference:
+          type: string
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        rawTx:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+        sendWith:
+          type: array
+          items:
+            type: string
+
+    StorageProcessActionResults:
+      type: object
+      properties:
+        sendWithResults:
+          type: array
+          items:
+            type: object
+            description: SendWithResult from BRC-100.
+        notDelayedResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewActionResult"
+        log:
+          type: string
+
+    ReviewActionResult:
+      type: object
+      required:
+        - txid
+        - status
+      properties:
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        status:
+          type: string
+          enum: ["success", "doubleSpend", "serviceError", "invalidTx"]
+        competingTxs:
+          type: array
+          items:
+            type: string
+        competingBeef:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+
+    AbortActionArgs:
+      type: object
+      required:
+        - reference
+      properties:
+        reference:
+          type: string
+          description: Reference string or txid of the action to abort.
+
+    AbortActionResult:
+      type: object
+      required:
+        - aborted
+      properties:
+        aborted:
+          type: boolean
+
+    InternalizeActionArgs:
+      type: object
+      description: |
+        Corresponds to BRC-100 InternalizeActionArgs.  Full schema in
+        `specs/sdk/brc-100-wallet.json`.
+      required:
+        - tx
+        - outputs
+        - description
+      properties:
+        tx:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: Atomic BEEF bytes of the transaction to internalize.
+        outputs:
+          type: array
+          items:
+            type: object
+            description: InternalizeOutput (protocol + paymentRemittance or basket).
+          additionalProperties: true
+        description:
+          type: string
+
+    StorageInternalizeActionResult:
+      type: object
+      required:
+        - accepted
+        - isMerge
+        - txid
+        - satoshis
+      properties:
+        accepted:
+          type: boolean
+        isMerge:
+          type: boolean
+          description: |
+            true if the transaction was already known to storage.
+            Used by BRC-121 as a replay guard.
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+        satoshis:
+          type: integer
+          description: Net satoshi change credited to the user.
+        sendWithResults:
+          type: array
+          items:
+            type: object
+        notDelayedResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewActionResult"
+
+    ListActionsArgs:
+      type: object
+      description: BRC-100 ListActionsArgs (see brc-100-wallet.json for full schema).
+      additionalProperties: true
+
+    ListActionsResult:
+      type: object
+      description: BRC-100 ListActionsResult.
+      additionalProperties: true
+
+    ListOutputsArgs:
+      type: object
+      description: BRC-100 ListOutputsArgs.
+      additionalProperties: true
+
+    ListOutputsResult:
+      type: object
+      description: BRC-100 ListOutputsResult.
+      additionalProperties: true
+
+    ListCertificatesArgs:
+      type: object
+      description: BRC-100 ValidListCertificatesArgs.
+      additionalProperties: true
+
+    ListCertificatesResult:
+      type: object
+      description: BRC-100 ListCertificatesResult.
+      additionalProperties: true
+
+    RelinquishCertificateArgs:
+      type: object
+      required:
+        - certifier
+        - serialNumber
+        - type
+      properties:
+        certifier:
+          type: string
+        serialNumber:
+          type: string
+        type:
+          type: string
+
+    RelinquishOutputArgs:
+      type: object
+      required:
+        - output
+      properties:
+        output:
+          type: string
+          description: Outpoint in `<txid>.<vout>` format.
+
+    RequestSyncChunkArgs:
+      type: object
+      required:
+        - identityKey
+        - fromStorageIdentityKey
+      properties:
+        identityKey:
+          type: string
+          description: Identity key of the wallet owner.
+        fromStorageIdentityKey:
+          type: string
+          description: storageIdentityKey of the storage requesting the chunk.
+        since:
+          type: string
+          format: date-time
+        paged:
+          type: object
+          properties:
+            limit:
+              type: integer
+            offset:
+              type: integer
+
+    SyncChunk:
+      type: object
+      description: |
+        A page of storage records for sync.  Contains subsets of each table
+        type changed since the requested timestamp.
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableUser"
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableTransaction"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableOutput"
+        outputBaskets:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableOutputBasket"
+        provenTxs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableProvenTx"
+        provenTxReqs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableProvenTxReq"
+        syncStates:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableSyncState"
+
+    ProcessSyncChunkRequest:
+      type: object
+      required:
+        - args
+        - chunk
+      properties:
+        args:
+          $ref: "#/components/schemas/RequestSyncChunkArgs"
+        chunk:
+          $ref: "#/components/schemas/SyncChunk"
+
+    ProcessSyncChunkResult:
+      type: object
+      description: Result of applying a sync chunk.
+      properties:
+        done:
+          type: boolean
+          description: true if no more chunks are needed.
+        error:
+          type: string
+
+    FindOrInsertSyncStateRequest:
+      type: object
+      required:
+        - storageIdentityKey
+        - storageName
+      properties:
+        storageIdentityKey:
+          type: string
+        storageName:
+          type: string
+
+    FindOrInsertSyncStateResult:
+      type: object
+      required:
+        - syncState
+        - isNew
+      properties:
+        syncState:
+          $ref: "#/components/schemas/TableSyncState"
+        isNew:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          description: Machine-readable error code (see specs/errors.md).
+
+  responses:
+    BadRequest:
+      description: Bad request — invalid arguments.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication required or token invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Internal storage error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
