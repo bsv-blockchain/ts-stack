@@ -1,0 +1,41 @@
+name: Codegen — OpenAPI → Go types
+on:
+  push:
+    paths:
+      - 'specs/**/*.yaml'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  generate-go-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - name: Generate Go types from overlay spec
+        run: |
+          mkdir -p conformance/generated/overlay
+          oapi-codegen -generate types -package overlay \
+            specs/overlay/overlay-http.yaml \
+            > conformance/generated/overlay/types.gen.go
+      - name: Generate Go types from ARC spec
+        run: |
+          mkdir -p conformance/generated/broadcast
+          oapi-codegen -generate types -package broadcast \
+            specs/broadcast/arc.yaml \
+            > conformance/generated/broadcast/types.gen.go
+      - name: Generate Go types from message-box spec
+        run: |
+          mkdir -p conformance/generated/messaging
+          oapi-codegen -generate types -package messaging \
+            specs/messaging/message-box-http.yaml \
+            > conformance/generated/messaging/types.gen.go
+      - name: Commit generated types (if changed)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(codegen): regenerate Go types from OpenAPI specs"
+          file_pattern: "conformance/generated/**"
