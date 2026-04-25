@@ -1,0 +1,588 @@
+asyncapi: "3.0.0"
+
+info:
+  title: BRC-31 Mutual Authentication Handshake
+  version: "1.0.0"
+  description: |
+    AsyncAPI 3.0 specification for the BRC-31 mutual authentication
+    protocol as implemented in:
+
+    - `packages/middleware/auth-express-middleware/src/index.ts`
+      (`ExpressTransport`, `createAuthMiddleware`)
+    - `packages/messaging/authsocket/src/SocketServerTransport.ts`
+      (`SocketServerTransport`)
+    - `@bsv/sdk` `Peer` and `Transport` interfaces
+
+    ## Protocol overview
+
+    BRC-31 mutual authentication uses ECDH-derived key pairs to create a
+    shared, forward-secret session between two parties. Neither party trusts
+    the other's identity until the signed handshake is verified.
+
+    ### Two-phase handshake
+
+    **Phase 1 — Non-general (initial exchange)**
+
+    Carried over the special endpoint `POST /.well-known/auth` for HTTP
+    transports, or the `authMessage` Socket.IO event for WebSocket transports.
+
+    1. **Client → Server** `initialRequest`
+       Client generates a fresh nonce, signs it with its identity key, and
+       sends the auth message. Headers on the HTTP path:
+       ```
+       x-bsv-auth-version: <version>
+       x-bsv-auth-identity-key: <clientPubKeyHex>
+       x-bsv-auth-nonce: <base64Nonce>
+       ```
+       Body (HTTP): the `AuthMessage` JSON object.
+
+    2. **Server → Client** `initialResponse`
+       Server validates the client's nonce/signature, generates its own nonce,
+       signs the response, and returns the `AuthMessage`. HTTP response headers:
+       ```
+       x-bsv-auth-version: <version>
+       x-bsv-auth-message-type: initialResponse
+       x-bsv-auth-identity-key: <serverPubKeyHex>
+       x-bsv-auth-nonce: <base64ServerNonce>
+       x-bsv-auth-your-nonce: <base64ClientNonce>
+       x-bsv-auth-signature: <hexDERSignature>
+       x-bsv-auth-requested-certificates: <JSON> (optional)
+       ```
+
+    **Phase 2 — General (authenticated request/response)**
+
+    Once the session is established all subsequent HTTP requests carry:
+    ```
+    x-bsv-auth-version: <version>
+    x-bsv-auth-identity-key: <clientPubKeyHex>
+    x-bsv-auth-nonce: <base64Nonce>
+    x-bsv-auth-your-nonce: <base64ServerNonce>
+    x-bsv-auth-request-id: <base64RequestId>
+    x-bsv-auth-signature: <hexDERSignature>
+    ```
+
+    The signed payload includes: `requestId || method || pathname || search
+    || headers (sorted) || body`.
+
+    The server responds with:
+    ```
+    x-bsv-auth-version: <version>
+    x-bsv-auth-identity-key: <serverPubKeyHex>
+    x-bsv-auth-nonce: <base64Nonce>
+    x-bsv-auth-your-nonce: <base64ClientNonce>
+    x-bsv-auth-request-id: <base64RequestId>
+    x-bsv-auth-signature: <hexDERSignature>
+    ```
+
+    The signed response payload includes: `requestId || statusCode ||
+    headers (sorted) || body`.
+
+    ### Certificate flow (optional)
+
+    If the server declares `certificatesToRequest`, it embeds the request set
+    in the `x-bsv-auth-requested-certificates` header of the `initialResponse`.
+    The client then provides certificates in a follow-up `/.well-known/auth`
+    call before the `next()` middleware proceeds. The server waits up to
+    30 seconds; timeout returns 408.
+
+    ### Unauthenticated pass-through
+
+    If `allowUnauthenticated: true` is set in middleware options, requests
+    without auth headers proceed with `req.auth.identityKey = 'unknown'`.
+
+    ## Implementation-specific notes
+
+    - `ExpressTransport` intercepts `res.status`, `res.json`, `res.send`,
+      `res.set`, `res.end`, `res.sendFile`, and `res.text` to buffer the
+      response until after `Peer.toPeer` signs and re-emits it. Original
+      methods are saved as `res.__status`, `res.__json`, etc.
+    - The `RequestId` is a 32-byte random value encoded as base64.
+    - Nonces are single-use; the `SessionManager` stores seen nonces to
+      prevent replay.
+
+servers:
+  httpServer:
+    host: "{host}"
+    pathname: "/.well-known/auth"
+    protocol: https
+    description: |
+      HTTP endpoint for BRC-31 non-general (initial handshake) messages.
+      General (authenticated) messages use normal application paths.
+    variables:
+      host:
+        default: messagebox.babbage.systems
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  schemas:
+    PubKeyHex:
+      type: string
+      pattern: "^0[23][0-9a-fA-F]{64}$"
+      description: Compressed secp256k1 public key, 66 hex characters.
+
+    Base64String:
+      type: string
+      description: Base64-encoded binary data.
+
+    HexString:
+      type: string
+      pattern: "^[0-9a-fA-F]+$"
+      description: Hex-encoded binary data.
+
+    AuthMessageType:
+      type: string
+      enum: [initialRequest, initialResponse, general]
+      description: |
+        - `initialRequest`  — first message from the initiating party
+        - `initialResponse` — response from the receiving party completing Phase 1
+        - `general`         — signed application message (Phase 2)
+
+    AuthMessage:
+      type: object
+      description: |
+        The core BRC-31 message envelope. Transported over HTTP bodies
+        (at `/.well-known/auth`) or Socket.IO `authMessage` events.
+      required: [messageType, version, identityKey]
+      properties:
+        messageType:
+          $ref: "#/components/schemas/AuthMessageType"
+        version:
+          type: string
+          description: Auth protocol version (e.g. "0.1").
+        identityKey:
+          $ref: "#/components/schemas/PubKeyHex"
+          description: Public identity key of the sender of this message.
+        nonce:
+          $ref: "#/components/schemas/Base64String"
+          description: |
+            Fresh single-use random value generated by the sender.
+            Stored in the `SessionManager` to prevent replay.
+        yourNonce:
+          $ref: "#/components/schemas/Base64String"
+          description: Echo of the peer's nonce from the previous message.
+        initialNonce:
+          $ref: "#/components/schemas/Base64String"
+          description: |
+            Present in `initialRequest` only. The very first nonce from the
+            initiating party before a session key is established.
+        payload:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: |
+            For `general` messages: the signed application payload.
+            Encoding: `requestId(32) || VarInt(statusCode) || VarInt(nHeaders)
+            || [header pairs] || VarInt(bodyLength) || body`.
+            For handshake messages: empty or absent.
+        signature:
+          type: array
+          items:
+            type: integer
+            minimum: 0
+            maximum: 255
+          description: DER-encoded ECDSA signature over the payload.
+        requestedCertificates:
+          type: object
+          description: |
+            BRC-52 certificate request set. Present in `initialResponse` when
+            the server requires certificates from the client.
+          additionalProperties: true
+
+    # -------------------------------------------------------------------------
+    # HTTP header shapes (informational — not AsyncAPI schema objects)
+    # -------------------------------------------------------------------------
+    InitialRequestHeaders:
+      type: object
+      description: |
+        HTTP request headers sent by the client when initiating the BRC-31
+        handshake at POST `/.well-known/auth`.
+      required:
+        - x-bsv-auth-version
+        - x-bsv-auth-identity-key
+        - x-bsv-auth-nonce
+      properties:
+        x-bsv-auth-version:
+          type: string
+        x-bsv-auth-identity-key:
+          $ref: "#/components/schemas/PubKeyHex"
+        x-bsv-auth-nonce:
+          $ref: "#/components/schemas/Base64String"
+
+    InitialResponseHeaders:
+      type: object
+      description: |
+        HTTP response headers set by the server completing Phase 1 of the
+        BRC-31 handshake.
+      required:
+        - x-bsv-auth-version
+        - x-bsv-auth-message-type
+        - x-bsv-auth-identity-key
+        - x-bsv-auth-nonce
+        - x-bsv-auth-your-nonce
+        - x-bsv-auth-signature
+      properties:
+        x-bsv-auth-version:
+          type: string
+        x-bsv-auth-message-type:
+          type: string
+          enum: [initialResponse]
+        x-bsv-auth-identity-key:
+          $ref: "#/components/schemas/PubKeyHex"
+        x-bsv-auth-nonce:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-your-nonce:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-signature:
+          $ref: "#/components/schemas/HexString"
+        x-bsv-auth-requested-certificates:
+          type: string
+          description: JSON-encoded BRC-52 certificate request set (optional).
+
+    GeneralRequestHeaders:
+      type: object
+      description: |
+        HTTP request headers sent by the client for every authenticated
+        application request (Phase 2).
+      required:
+        - x-bsv-auth-version
+        - x-bsv-auth-identity-key
+        - x-bsv-auth-nonce
+        - x-bsv-auth-your-nonce
+        - x-bsv-auth-request-id
+        - x-bsv-auth-signature
+      properties:
+        x-bsv-auth-version:
+          type: string
+        x-bsv-auth-identity-key:
+          $ref: "#/components/schemas/PubKeyHex"
+        x-bsv-auth-nonce:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-your-nonce:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-request-id:
+          $ref: "#/components/schemas/Base64String"
+          description: 32-byte random value, base64-encoded.
+        x-bsv-auth-signature:
+          $ref: "#/components/schemas/HexString"
+          description: |
+            ECDSA signature over:
+            `requestId(32B) || VarInt(method.length) || method
+            || VarInt(pathname.length) || pathname
+            || VarInt(search.length) || search (or -1 if empty)
+            || VarInt(nHeaders) || [sorted header pairs]
+            || VarInt(bodyLength) || body (or -1 if empty)`.
+
+    GeneralResponseHeaders:
+      type: object
+      description: |
+        HTTP response headers set by the server on every authenticated
+        application response (Phase 2).
+      required:
+        - x-bsv-auth-version
+        - x-bsv-auth-identity-key
+        - x-bsv-auth-nonce
+        - x-bsv-auth-your-nonce
+        - x-bsv-auth-request-id
+        - x-bsv-auth-signature
+      properties:
+        x-bsv-auth-version:
+          type: string
+        x-bsv-auth-identity-key:
+          $ref: "#/components/schemas/PubKeyHex"
+        x-bsv-auth-nonce:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-your-nonce:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-request-id:
+          $ref: "#/components/schemas/Base64String"
+        x-bsv-auth-signature:
+          $ref: "#/components/schemas/HexString"
+          description: |
+            ECDSA signature over:
+            `requestId(32B) || VarInt(statusCode)
+            || VarInt(nHeaders) || [sorted non-auth x-bsv header pairs]
+            || VarInt(bodyLength) || body (or -1 if empty)`.
+
+    # -------------------------------------------------------------------------
+    # Error shapes
+    # -------------------------------------------------------------------------
+    AuthError401:
+      type: object
+      description: Returned when mutual authentication fails (no or bad auth headers).
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+          enum: [UNAUTHORIZED, ERR_AUTH_FAILED]
+        message:
+          type: string
+
+    AuthError408:
+      type: object
+      description: |
+        Returned when the server is waiting for client certificates
+        and the 30-second timeout elapses.
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+          enum: [CERTIFICATE_TIMEOUT]
+        message:
+          type: string
+
+    AuthError500:
+      type: object
+      description: |
+        Returned when the server fails to sign its response payload
+        (`ERR_RESPONSE_SIGNING_FAILED`).
+      required: [status, code, description]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+          enum: [ERR_RESPONSE_SIGNING_FAILED, ERR_INTERNAL_SERVER_ERROR]
+        description:
+          type: string
+
+    RequestAuthPayload:
+      type: object
+      description: |
+        Informational schema: the signed payload for a `general` REQUEST.
+        Assembled by `buildAuthMessageFromRequest` in `ExpressTransport`.
+
+        Wire encoding (binary, concatenated):
+        | Field            | Encoding                                 |
+        |------------------|------------------------------------------|
+        | requestId        | 32 raw bytes (decoded from base64)       |
+        | method           | VarInt(len) + UTF-8 bytes                |
+        | pathname         | VarInt(len) + UTF-8 bytes                |
+        | search           | VarInt(len) + UTF-8 bytes, or VarInt(-1) |
+        | nHeaders         | VarInt                                   |
+        | headers (sorted) | VarInt(keyLen)+key + VarInt(valLen)+val  |
+        | bodyLength       | VarInt(len) or VarInt(-1)                |
+        | body             | raw bytes                                |
+
+        Only these headers are included (sorted, lowercase):
+        - Headers starting with `x-bsv-` (but NOT `x-bsv-auth-*`)
+        - `content-type` (normalized: type only, no parameters)
+        - `authorization`
+
+    ResponseAuthPayload:
+      type: object
+      description: |
+        Informational schema: the signed payload for a `general` RESPONSE.
+        Assembled by `buildResponsePayload` in `ExpressTransport`.
+
+        Wire encoding (binary, concatenated):
+        | Field            | Encoding                                 |
+        |------------------|------------------------------------------|
+        | requestId        | 32 raw bytes (decoded from base64)       |
+        | statusCode       | VarInt                                   |
+        | nHeaders         | VarInt                                   |
+        | headers (sorted) | VarInt(keyLen)+key + VarInt(valLen)+val  |
+        | bodyLength       | VarInt(len) or VarInt(-1)                |
+        | body             | raw bytes                                |
+
+        Only these response headers are included (sorted, lowercase):
+        - Headers starting with `x-bsv-` (but NOT `x-bsv-auth-*`)
+        - `authorization`
+
+# ---------------------------------------------------------------------------
+# Channels
+# ---------------------------------------------------------------------------
+channels:
+
+  wellKnownAuth:
+    address: "/.well-known/auth"
+    description: |
+      HTTP channel used for Phase 1 (non-general) BRC-31 handshake messages.
+      The client POSTs an `AuthMessage` JSON body; the server replies with an
+      `AuthMessage` JSON body and the `x-bsv-auth-*` response headers.
+
+      In Socket.IO transports the same exchange happens over the `authMessage`
+      Socket.IO event (see `authsocket-asyncapi.yaml`) rather than this HTTP
+      endpoint.
+    messages:
+      initialRequest:
+        name: initialRequest
+        summary: Client initiates the BRC-31 handshake.
+        description: |
+          The client generates a nonce, signs it, and sends the
+          `initialRequest` AuthMessage as the POST body.
+        headers:
+          $ref: "#/components/schemas/InitialRequestHeaders"
+        payload:
+          $ref: "#/components/schemas/AuthMessage"
+        examples:
+          - name: example-initial-request
+            payload:
+              messageType: initialRequest
+              version: "0.1"
+              identityKey: "028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1"
+              nonce: "dGVzdE5vbmNlMTIzNA=="
+              initialNonce: "dGVzdE5vbmNlMTIzNA=="
+              payload: []
+              signature: []
+
+      initialResponse:
+        name: initialResponse
+        summary: Server completes Phase 1 of the BRC-31 handshake.
+        description: |
+          The server validates the client's nonce/signature, generates its own
+          nonce, signs the response, and replies. The body is an `AuthMessage`
+          JSON object. Response headers carry the `x-bsv-auth-*` fields.
+
+          If `certificatesToRequest` is configured, the
+          `x-bsv-auth-requested-certificates` header contains the JSON-encoded
+          request set. The client must supply certificates in a follow-up
+          POST before the session is fully established.
+        headers:
+          $ref: "#/components/schemas/InitialResponseHeaders"
+        payload:
+          $ref: "#/components/schemas/AuthMessage"
+
+  generalRequest:
+    address: "{applicationPath}"
+    description: |
+      Every authenticated application HTTP request (Phase 2). The path is
+      the actual application endpoint (e.g. `/sendMessage`, `/listMessages`).
+      The auth headers are attached alongside any application-specific headers.
+    parameters:
+      applicationPath:
+        description: The application route path (e.g. /sendMessage).
+    messages:
+      generalRequestMessage:
+        name: generalRequestMessage
+        summary: Authenticated application request.
+        description: |
+          The client sends application-level request headers and body, augmented
+          with `x-bsv-auth-*` mutual-auth headers. The `x-bsv-auth-signature`
+          covers the entire request (method, path, query string, signed headers,
+          and body) as described in `RequestAuthPayload`.
+        headers:
+          $ref: "#/components/schemas/GeneralRequestHeaders"
+        payload:
+          description: Application-defined request body (any content type).
+
+  generalResponse:
+    address: "{applicationPath}"
+    description: |
+      Every authenticated application HTTP response (Phase 2). The server
+      signs the response status code, relevant headers, and body before sending.
+    parameters:
+      applicationPath:
+        description: The application route path.
+    messages:
+      generalResponseMessage:
+        name: generalResponseMessage
+        summary: Authenticated application response.
+        description: |
+          The server buffers the handler's response via `ResponseWriterWrapper`,
+          calls `Peer.toPeer` to sign it, and flushes the signed response
+          including `x-bsv-auth-*` response headers. The `x-bsv-auth-signature`
+          covers `requestId || statusCode || signed response headers || body`.
+        headers:
+          $ref: "#/components/schemas/GeneralResponseHeaders"
+        payload:
+          description: Application-defined response body.
+
+  authError:
+    address: "{applicationPath}"
+    description: |
+      Error responses emitted by the auth middleware when authentication fails.
+    parameters:
+      applicationPath:
+        description: The path at which the error was encountered.
+    messages:
+      unauthorized:
+        name: unauthorized
+        summary: 401 — mutual auth failed (no or bad auth headers).
+        payload:
+          $ref: "#/components/schemas/AuthError401"
+
+      certificateTimeout:
+        name: certificateTimeout
+        summary: 408 — server waited 30 s for client certificates and timed out.
+        payload:
+          $ref: "#/components/schemas/AuthError408"
+
+      signingFailed:
+        name: signingFailed
+        summary: 500 — server failed to sign its response payload.
+        payload:
+          $ref: "#/components/schemas/AuthError500"
+
+# ---------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------
+operations:
+
+  sendInitialRequest:
+    action: send
+    channel:
+      $ref: "#/channels/wellKnownAuth"
+    summary: Client initiates BRC-31 handshake (Phase 1, step 1).
+    description: |
+      Client POSTs an `initialRequest` AuthMessage to `/.well-known/auth`.
+      The body is a JSON-serialized `AuthMessage` with `messageType: initialRequest`.
+    messages:
+      - $ref: "#/channels/wellKnownAuth/messages/initialRequest"
+
+  receiveInitialResponse:
+    action: receive
+    channel:
+      $ref: "#/channels/wellKnownAuth"
+    summary: Client receives the server's Phase 1 challenge response.
+    description: |
+      Server replies with `initialResponse`. If `requestedCertificates` is
+      non-empty the client must send a follow-up request with the required
+      certificates before proceeding to Phase 2.
+    messages:
+      - $ref: "#/channels/wellKnownAuth/messages/initialResponse"
+
+  sendGeneralRequest:
+    action: send
+    channel:
+      $ref: "#/channels/generalRequest"
+    summary: Client sends an authenticated application request (Phase 2).
+    description: |
+      Any application HTTP request after the handshake. The client attaches
+      `x-bsv-auth-*` headers and a fresh signed payload covering the full
+      request. The server uses `buildAuthMessageFromRequest` to reconstruct
+      and verify the payload.
+    messages:
+      - $ref: "#/channels/generalRequest/messages/generalRequestMessage"
+
+  receiveGeneralResponse:
+    action: receive
+    channel:
+      $ref: "#/channels/generalResponse"
+    summary: Client receives the server's authenticated application response (Phase 2).
+    description: |
+      The server's response includes `x-bsv-auth-*` headers and a signature
+      over the response payload. The client can verify the response origin
+      using `buildResponsePayload` semantics.
+    messages:
+      - $ref: "#/channels/generalResponse/messages/generalResponseMessage"
+
+  receiveAuthError:
+    action: receive
+    channel:
+      $ref: "#/channels/authError"
+    summary: Client receives an auth error from the middleware.
+    messages:
+      - $ref: "#/channels/authError/messages/unauthorized"
+      - $ref: "#/channels/authError/messages/certificateTimeout"
+      - $ref: "#/channels/authError/messages/signingFailed"

@@ -40,11 +40,11 @@ specs/
     merkle-service.yaml        — (planned, see EXCEPTIONS.md)
 
   messaging/
-    message-box-http.yaml      — (planned, see EXCEPTIONS.md)
-    message-box-ws.yaml        — (planned, see EXCEPTIONS.md)
+    message-box-http.yaml      — OpenAPI 3.1 for message-box-server REST (done)
+    authsocket-asyncapi.yaml   — AsyncAPI 3.0 for AuthSocket WebSocket protocol (done)
 
   auth/
-    brc-31-handshake.yaml      — (planned, see EXCEPTIONS.md)
+    brc31-handshake.yaml       — AsyncAPI 3.0 for BRC-31 mutual auth handshake (done)
     brc-29-payment.yaml        — (planned, see EXCEPTIONS.md)
 
   payment/
@@ -65,9 +65,9 @@ specs/
 | `broadcast/arc.yaml` | OpenAPI 3.1 | Done | ARC broadcast submit, status, batch, callback |
 | `errors.md` | Markdown taxonomy | Done | All error categories and codes |
 | `EXCEPTIONS.md` | Tracked gaps | Done | Unspecced boundaries with reasons |
-| `messaging/message-box-http.yaml` | OpenAPI 3.1 | Planned | message-box-server REST |
-| `messaging/message-box-ws.yaml` | AsyncAPI 3.0 | Planned | message-box WebSocket / authsocket |
-| `auth/brc-31-handshake.yaml` | AsyncAPI 3.0 | Planned | BRC-31 mutual auth handshake |
+| `messaging/message-box-http.yaml` | OpenAPI 3.1 | Done | message-box-server REST (all 9 endpoints) |
+| `messaging/authsocket-asyncapi.yaml` | AsyncAPI 3.0 | Done | AuthSocket WebSocket protocol (all events) |
+| `auth/brc31-handshake.yaml` | AsyncAPI 3.0 | Done | BRC-31 mutual auth handshake (both phases) |
 | `auth/brc-29-payment.yaml` | AsyncAPI 3.0 | Planned | BRC-29 peer payment |
 | `broadcast/merkle-service.yaml` | OpenAPI 3.1 | Planned | Merkle service REST |
 | `storage/uhrp.yaml` | OpenAPI 3.1 | Planned | UHRP resolution |

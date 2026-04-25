@@ -13,43 +13,19 @@ from this file and add a link to the spec file instead.
 
 ---
 
+## Resolved in Phase 2
+
+The following exceptions were resolved by Phase 2 spec work (2026-04-24):
+
+| Boundary | Spec file | Resolved |
+|----------|-----------|---------|
+| `message-box-server` REST endpoints | [`specs/messaging/message-box-http.yaml`](messaging/message-box-http.yaml) | 2026-04-24 |
+| `message-box-server` WebSocket / authsocket | [`specs/messaging/authsocket-asyncapi.yaml`](messaging/authsocket-asyncapi.yaml) | 2026-04-24 |
+| BRC-31 mutual auth handshake | [`specs/auth/brc31-handshake.yaml`](auth/brc31-handshake.yaml) | 2026-04-24 |
+
+---
+
 ## Exceptions
-
-### 1. message-box HTTP API
-
-| Field | Value |
-|-------|-------|
-| **Boundary** | `message-box-server` REST endpoints |
-| **Spec type needed** | OpenAPI 3.1 |
-| **Status** | No spec yet |
-| **Reason** | The message-box-server HTTP API surface is still evolving. A stable spec will be written once the endpoint set is frozen. |
-| **Tracking** | Add issue link here when created |
-| **Expected spec location** | `specs/messaging/message-box-http.yaml` |
-| **Priority** | High — MBGA §6 Workstream C item 3 |
-
-### 2. message-box WebSocket / authsocket
-
-| Field | Value |
-|-------|-------|
-| **Boundary** | `message-box-server` WebSocket protocol; `authsocket` / `authsocket-client` |
-| **Spec type needed** | AsyncAPI 3.0 |
-| **Status** | No spec yet |
-| **Reason** | AsyncAPI 3.0 spec requires careful mapping of WebSocket message shapes and channel definitions. The authsocket protocol is closely tied to BRC-31 and should be specced together with the auth handshake. |
-| **Tracking** | Add issue link here when created |
-| **Expected spec location** | `specs/messaging/message-box-ws.yaml` |
-| **Priority** | High — MBGA §6 Workstream C item 4 |
-
-### 3. BRC-31 auth handshake
-
-| Field | Value |
-|-------|-------|
-| **Boundary** | BRC-31 mutual authentication request/response protocol used by `auth-express-middleware` and `authsocket` |
-| **Spec type needed** | AsyncAPI 3.0 + sequence diagrams + JSON Schema for each message type |
-| **Status** | No spec yet |
-| **Reason** | The handshake involves a multi-step challenge/response that is best modelled with AsyncAPI channels. The exact message shapes need to be extracted from `auth-express-middleware` source and the BRC-31 document reconciled with the implementation. |
-| **Tracking** | Add issue link here when created |
-| **Expected spec location** | `specs/auth/brc-31-handshake.yaml` |
-| **Priority** | High — MBGA §6 Workstream C item 5 |
 
 ### 4. BRC-29 peer payment
 
@@ -135,4 +111,4 @@ from this file and add a link to the spec file instead.
 
 ---
 
-*Last updated: 2026-04-24. Phase 2 target: all exceptions resolved or explicitly deferred to Phase 3.*
+*Last updated: 2026-04-24. Phase 2 resolved: message-box HTTP, authsocket AsyncAPI, BRC-31 handshake. Remaining items deferred to Phase 3.*
