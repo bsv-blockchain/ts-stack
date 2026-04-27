@@ -15,8 +15,8 @@ jobs:
         with:
           go-version: '1.22'
       - name: Run Go conformance runner
-        run: go run ./conformance/runner/go/main.go
-        working-directory: ${{ github.workspace }}
+        run: go run .
+        working-directory: ${{ github.workspace }}/conformance/runner/go
 
   ts-runner:
     runs-on: ubuntu-latest
