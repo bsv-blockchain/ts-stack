@@ -8,12 +8,12 @@ import {
 import {
   randomBytesBase64,
   ScriptTemplateBRC29,
+  sdk,
   Services,
   Setup,
   SetupWallet
 } from '@bsv/wallet-toolbox'
 import { outputBRC29 } from './brc29'
-import { parseWalletOutpoint } from '@bsv/wallet-toolbox/out/src/sdk'
 import { runArgv2Function } from './runArgv2Function'
 
 /**
@@ -44,7 +44,7 @@ export async function internalizeWalletPayment() {
 
   // Create a brc29 output to internalize
   const o = await outputBRC29(setup1, setup2.identityKey, 42)
-  const { txid, vout } = parseWalletOutpoint(o.outpoint)
+  const { txid, vout } = sdk.Validation.parseWalletOutpoint(o.outpoint)
 
   const args: InternalizeActionArgs = {
     tx: o.beef.toBinaryAtomic(txid),

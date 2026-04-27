@@ -30,6 +30,7 @@
   ],
   "exclude": [
     "dist",
-    "*/**/__tests"
+    "src/__tests__",
+    "src/__tests"
   ]
 }

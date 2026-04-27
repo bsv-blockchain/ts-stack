@@ -22,7 +22,7 @@
     "experimentalDecorators": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "types": ["jest"]
+    "types": ["jest", "node"]
   },
   "files": [
     "mod.ts"
@@ -31,8 +31,9 @@
     "src"
   ],
   "exclude": [
-  "dist",
-  "node_modules"
-]
+    "dist",
+    "node_modules",
+    "src/__tests"
+  ]
 
 }

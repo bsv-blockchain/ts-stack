@@ -1,8 +1,4 @@
 import { sdk, Setup } from '@bsv/wallet-toolbox'
-import {
-  parseWalletOutpoint,
-  specOpInvalidChange
-} from '@bsv/wallet-toolbox/out/src/sdk'
 import { runArgv2Function } from './runArgv2Function'
 import { ar } from './listChange'
 
@@ -26,7 +22,7 @@ export async function janitorOnIdentity(
     rootKeyHex: env.devKeys[identityKey]
   })
 
-  const change = await setup.wallet.listOutputs({ basket: specOpInvalidChange })
+  const change = await setup.wallet.listOutputs({ basket: sdk.specOpInvalidChange })
 
   console.log(`
 
@@ -47,7 +43,7 @@ Janitor list invalid change outputs for:
       '-----------|-------|--------------------------------------------'
     )
     for (const o of change.outputs) {
-      const { txid, vout } = parseWalletOutpoint(o.outpoint)
+      const { txid, vout } = sdk.Validation.parseWalletOutpoint(o.outpoint)
       console.log(`${ar(o.satoshis, 10)} | ${ar(vout, 5)} | ${txid}`)
     }
   }
@@ -82,7 +78,7 @@ export async function releaseOnIdentity(
   })
 
   const change = await setup.wallet.listOutputs({
-    basket: specOpInvalidChange,
+    basket: sdk.specOpInvalidChange,
     tags: ['release']
   })
   console.log(`

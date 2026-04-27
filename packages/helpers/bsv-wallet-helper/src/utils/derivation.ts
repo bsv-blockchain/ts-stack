@@ -1,7 +1,7 @@
 import { brc29ProtocolID } from '@bsv/wallet-toolbox-client'
 import { Random, Utils, WalletInterface, PublicKey, WalletProtocol } from '@bsv/sdk'
 
-export function getDerivation() {
+export function getDerivation () {
   const derivationPrefix = Utils.toBase64(Random(8))
   const derivationSuffix = Utils.toBase64(Random(8))
   return {
@@ -19,7 +19,7 @@ export interface AddressWithParams {
   }
 }
 
-export async function getAddress(wallet: WalletInterface, amount: number = 1, counterparty: string = "self"): Promise<AddressWithParams[]> {
+export async function getAddress (wallet: WalletInterface, amount: number = 1, counterparty: string = 'self'): Promise<AddressWithParams[]> {
   if (!wallet) {
     throw new Error('Wallet is required')
   }

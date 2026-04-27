@@ -4,6 +4,7 @@
      "jsx": "react-jsx",
     "module": "ESNext",
     "moduleResolution": "node",
+    "ignoreDeprecations": "5.0",
     "sourceMap": true,
     "outDir": "out",
     "allowJs": false,

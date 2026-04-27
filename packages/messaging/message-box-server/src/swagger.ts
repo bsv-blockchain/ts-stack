@@ -42,8 +42,9 @@ export function setupSwagger (app: Express): void {
 
   const swaggerSpec = swaggerJsdoc(options)
 
-  // Swagger UI at /docs
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
+  // Swagger UI at /docs — cast needed for @types/swagger-ui-express v4 + @types/express v5 compat
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(app as any).use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec))
 
   // Serve raw OpenAPI spec at /openapi.json
   app.get('/openapi.json', (_req, res) => {

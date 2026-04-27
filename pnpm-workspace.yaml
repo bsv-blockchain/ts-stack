@@ -1,4 +1,6 @@
 packages:
   - 'packages/**'
+  - '!packages/**/dist/**'
+  - '!packages/**/out/**'
   - 'conformance/**'
   - 'apps/**'

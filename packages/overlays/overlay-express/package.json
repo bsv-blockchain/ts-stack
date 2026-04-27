@@ -55,6 +55,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/overlay-express#readme",
   "devDependencies": {
+    "@types/body-parser": "^1.19.5",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",

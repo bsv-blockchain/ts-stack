@@ -171,7 +171,7 @@ export default class OrdLock implements ScriptTemplate {
    * - Purchase path (`kind: 'purchase'`): outputs blob + preimage + OP_0
    */
   unlock (params?: OrdLockUnlockParams) {
-    if (params && (params as any).kind === 'purchase') {
+    if ((params != null) && (params as any).kind === 'purchase') {
       return this.purchaseUnlock(params as OrdLockPurchaseUnlockParams)
     }
     return this.cancelUnlock(params as OrdLockCancelUnlockParams)
@@ -194,7 +194,7 @@ export default class OrdLock implements ScriptTemplate {
     // Set default values for the unlock parameters
     const protocolID = params?.protocolID ?? ([0, 'ordlock'] as WalletProtocol)
     const keyID = params?.keyID ?? '0'
-    const counterparty = (params?.counterparty ?? 'self') as WalletCounterparty
+    const counterparty = (params?.counterparty ?? 'self')
     const signOutputs = params?.signOutputs ?? 'all'
     const anyoneCanPay = params?.anyoneCanPay ?? false
     const sourceSatoshis = params?.sourceSatoshis
