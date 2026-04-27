@@ -11,3 +11,5 @@ coverage/
 .DS_Store
 # local go-sdk symlink (CI checks out go-sdk into this path instead)
 go-sdk
+# CARS deployment tool temp directories
+cars_tmp_build_*/
