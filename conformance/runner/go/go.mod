@@ -2,7 +2,7 @@ module github.com/bsv-blockchain/ts-stack/conformance/runner/go
 
 go 1.25.0
 
-require github.com/bsv-blockchain/go-sdk v0.0.0
+require github.com/bsv-blockchain/go-sdk v1.2.23
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -13,5 +13,3 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/bsv-blockchain/go-sdk => ../../../go-sdk

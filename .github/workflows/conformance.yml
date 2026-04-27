@@ -15,7 +15,7 @@ jobs:
         with:
           go-version: '1.22'
       - name: Run Go conformance runner
-        run: go run .
+        run: go run . -vectors ../../vectors
         working-directory: ${{ github.workspace }}/conformance/runner/go
 
   ts-runner:
@@ -34,3 +34,5 @@ jobs:
         run: pnpm --filter @bsv/sdk run build
       - name: Run TS conformance runner
         run: pnpm --filter @bsv/conformance-runner-ts test
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
