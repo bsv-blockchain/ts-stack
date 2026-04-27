@@ -25,8 +25,6 @@ jobs:
         run: |
           pnpm --filter @bsv/conformance-runner-ts test -- \
             --json --outputFile=../../reports/ts-results.json
-        env:
-          NODE_OPTIONS: --experimental-vm-modules
         working-directory: ${{ github.workspace }}/conformance/runner/ts
       - name: Upload TS conformance reports
         if: always()
