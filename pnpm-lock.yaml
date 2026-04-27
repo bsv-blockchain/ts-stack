@@ -197,8 +197,8 @@ importers:
   packages/helpers/ts-paymail/docs/examples:
     dependencies:
       '@bsv/paymail':
-        specifier: ^2.2.5
-        version: 2.2.5(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(@types/node@20.19.39)(babel-jest@30.3.0(@babel/core@7.29.0))(babel-plugin-macros@3.1.0)(encoding@0.1.13)(jest-util@30.3.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@20.19.39)(typescript@5.9.3))
+        specifier: workspace:*
+        version: link:../..
       '@bsv/sdk':
         specifier: ^2.0.14
         version: 2.0.14
@@ -2084,9 +2084,6 @@ packages:
 
   '@bsv/overlay@2.0.3':
     resolution: {integrity: sha512-dM1cJsxpEZakk0PyXtYCXE2ND9pBynl+cM2UFyGtpYXSZ7ZVzjXge3DTeuRvSI6qrnYR00a56brKTiDensw6RQ==}
-
-  '@bsv/paymail@2.2.5':
-    resolution: {integrity: sha512-qzhVVClae2UpZa14R+iyxyphO853+6MMXa6LJCGqoEX7uimS2wR3yxkKfkWkJWrroGaFYOH4gYH4SHkzmEeRuw==}
 
   '@bsv/payment-express-middleware@2.0.2':
     resolution: {integrity: sha512-T51esKvH1VgEWPKeJU81tLXG9I5C+D+MwWIzu5mJPq9E14UZJUYnoASLW6m3VojXBlHgEi3821wCdl+++5HyHQ==}
@@ -10259,35 +10256,6 @@ snapshots:
       - sqlite3
       - supports-color
       - tedious
-
-  '@bsv/paymail@2.2.5(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(@types/node@20.19.39)(babel-jest@30.3.0(@babel/core@7.29.0))(babel-plugin-macros@3.1.0)(encoding@0.1.13)(jest-util@30.3.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@20.19.39)(typescript@5.9.3))':
-    dependencies:
-      '@bsv/sdk': 2.0.14
-      '@types/jest': 30.0.0
-      cross-fetch: 4.1.0(encoding@0.1.13)
-      express: 5.2.1
-      jest: 30.3.0(@types/node@20.19.39)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@20.19.39)(typescript@5.9.3))
-      joi: 18.1.2
-      node-fetch: 3.3.2
-      supertest: 7.2.2
-      ts-jest: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@20.19.39)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@20.19.39)(typescript@5.9.3)))(typescript@5.9.3)
-      ts2md: 0.2.8
-      tsconfig-to-dual-package: 1.2.0(typescript@5.9.3)
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - '@babel/core'
-      - '@jest/transform'
-      - '@jest/types'
-      - '@types/node'
-      - babel-jest
-      - babel-plugin-macros
-      - encoding
-      - esbuild
-      - esbuild-register
-      - jest-util
-      - node-notifier
-      - supports-color
-      - ts-node
 
   '@bsv/payment-express-middleware@2.0.2':
     dependencies:
