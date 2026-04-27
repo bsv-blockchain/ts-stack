@@ -783,19 +783,6 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
-  packages/overlays/apps-overlay-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
   packages/overlays/btms-backend:
     dependencies:
       '@bsv/overlay':
@@ -900,19 +887,6 @@ importers:
         specifier: ^6.0.1
         version: 6.0.1(webpack@5.106.2)
 
-  packages/overlays/did-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
   packages/overlays/gasp-core:
     dependencies:
       '@bsv/sdk':
@@ -939,32 +913,6 @@ importers:
         version: 1.2.0(typescript@5.9.3)
       typescript:
         specifier: ^5.2.2
-        version: 5.9.3
-
-  packages/overlays/identity-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
-  packages/overlays/kvstore-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
         version: 5.9.3
 
   packages/overlays/lite-storage-server:
@@ -1194,19 +1142,6 @@ importers:
         specifier: ^5.2.2
         version: 5.9.3
 
-  packages/overlays/registry-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
   packages/overlays/storage-server:
     dependencies:
       '@bsv/auth-express-middleware':
@@ -1331,32 +1266,6 @@ importers:
       ts-jest:
         specifier: ^29.4.9
         version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(jest-util@30.3.0)(jest@30.3.0(@types/node@24.12.2)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@24.12.2)(typescript@5.9.3)))(typescript@5.9.3)
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
-  packages/overlays/uhrp-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.0
-        version: 12.0.2(typescript@5.9.3)
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-
-  packages/overlays/ump-services:
-    dependencies:
-      '@bsv/overlay-topics':
-        specifier: workspace:*
-        version: link:../topics
-    devDependencies:
       ts-standard:
         specifier: ^12.0.0
         version: 12.0.2(typescript@5.9.3)
