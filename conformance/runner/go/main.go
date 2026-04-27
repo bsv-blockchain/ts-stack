@@ -53,10 +53,11 @@ const (
 )
 
 type Result struct {
-	ID      string
-	Status  Status
-	Message string
-	Elapsed time.Duration
+	ID       string
+	Status   Status
+	Message  string
+	Elapsed  time.Duration
+	Category string
 }
 
 // ─── JUnit XML schema ─────────────────────────────────────────────────────────
@@ -2681,10 +2682,11 @@ func runVector(fileID string, filePath string, v map[string]interface{}, filePar
 	}
 
 	return Result{
-		ID:      id,
-		Status:  status,
-		Message: msg,
-		Elapsed: time.Since(start),
+		ID:       id,
+		Status:   status,
+		Message:  msg,
+		Elapsed:  time.Since(start),
+		Category: cat,
 	}
 }
 
@@ -2763,14 +2765,112 @@ func writeJUnit(reportPath string, allResults []Result) error {
 	return os.WriteFile(reportPath, append([]byte(xml.Header), data...), 0644)
 }
 
+// ─── JSON report output ───────────────────────────────────────────────────────
+
+type jsonVectorEntry struct {
+	ID         string  `json:"id"`
+	Status     string  `json:"status"`
+	Category   string  `json:"category"`
+	DurationMS float64 `json:"duration_ms"`
+	Message    string  `json:"message,omitempty"`
+}
+
+type jsonCategoryEntry struct {
+	Category string `json:"category"`
+	Passed   int    `json:"passed"`
+	Failed   int    `json:"failed"`
+	Skipped  int    `json:"skipped"`
+	Total    int    `json:"total"`
+}
+
+type jsonReport struct {
+	GeneratedAt string              `json:"generated_at"`
+	Runner      string              `json:"runner"`
+	Total       int                 `json:"total"`
+	Passed      int                 `json:"passed"`
+	Failed      int                 `json:"failed"`
+	Skipped     int                 `json:"skipped"`
+	PassRate    float64             `json:"pass_rate"`
+	Categories  []jsonCategoryEntry `json:"categories"`
+	Vectors     []jsonVectorEntry   `json:"vectors"`
+}
+
+func writeJSONReport(reportPath string, allResults []Result) error {
+	var passed, failed, skipped int
+	catStats := map[string]*jsonCategoryEntry{}
+
+	vectors := make([]jsonVectorEntry, 0, len(allResults))
+	for _, r := range allResults {
+		statusStr := strings.ToUpper(string(r.Status))
+		vectors = append(vectors, jsonVectorEntry{
+			ID:         r.ID,
+			Status:     statusStr,
+			Category:   r.Category,
+			DurationMS: float64(r.Elapsed.Microseconds()) / 1000.0,
+			Message:    r.Message,
+		})
+
+		if _, ok := catStats[r.Category]; !ok {
+			catStats[r.Category] = &jsonCategoryEntry{Category: r.Category}
+		}
+		entry := catStats[r.Category]
+		entry.Total++
+
+		switch r.Status {
+		case StatusPass:
+			passed++
+			entry.Passed++
+		case StatusFail:
+			failed++
+			entry.Failed++
+		default:
+			skipped++
+			entry.Skipped++
+		}
+	}
+
+	// Build ordered category slice.
+	categories := make([]jsonCategoryEntry, 0, len(catStats))
+	for _, v := range catStats {
+		categories = append(categories, *v)
+	}
+
+	total := len(allResults)
+	var passRate float64
+	if total > 0 {
+		passRate = float64(passed) / float64(total)
+		// Round to 4 decimal places.
+		passRate = float64(int(passRate*10000+0.5)) / 10000
+	}
+
+	report := jsonReport{
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Runner:      "go",
+		Total:       total,
+		Passed:      passed,
+		Failed:      failed,
+		Skipped:     skipped,
+		PassRate:    passRate,
+		Categories:  categories,
+		Vectors:     vectors,
+	}
+
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(reportPath, data, 0644)
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
 	// Default vectors path relative to the runner binary location.
 	defaultVectors := filepath.Join(filepath.Dir(os.Args[0]), "..", "..", "vectors")
-	vectorsDir := flag.String("vectors", defaultVectors, "path to vectors directory")
-	reportPath := flag.String("report", "", "JUnit XML report output path (optional)")
-	validateOnly := flag.Bool("validate-only", false, "validate JSON format only, do not execute vectors")
+	vectorsDir    := flag.String("vectors", defaultVectors, "path to vectors directory")
+	reportPath    := flag.String("report", "", "JUnit XML report output path (optional)")
+	jsonReportPath := flag.String("json-report", "", "JSON summary report output path (optional)")
+	validateOnly  := flag.Bool("validate-only", false, "validate JSON format only, do not execute vectors")
 	flag.Parse()
 
 	files, err := findJSONFiles(*vectorsDir)
@@ -2823,6 +2923,18 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("JUnit report written to %s\n", *reportPath)
+	}
+
+	if *jsonReportPath != "" {
+		if err := os.MkdirAll(filepath.Dir(*jsonReportPath), 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "create report dir: %v\n", err)
+			os.Exit(1)
+		}
+		if err := writeJSONReport(*jsonReportPath, allResults); err != nil {
+			fmt.Fprintf(os.Stderr, "write JSON report: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("JSON report written to %s\n", *jsonReportPath)
 	}
 
 	if fail > 0 {
