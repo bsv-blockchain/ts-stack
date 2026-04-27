@@ -11,8 +11,22 @@
     "BRC-100": []
   },
   "stats": {
-    "total_files": 15,
-    "total_vectors": 202,
+    "total_files": 27,
+    "total_vectors": 238,
     "last_updated": "2026-04-24"
+  },
+  "regression_index": {
+    "beef-v2-txid-panic": "go-sdk#306",
+    "privatekey-modular-reduction": "ts-sdk#31",
+    "merkle-path-odd-node": "go-sdk#298",
+    "uhrp-url-parity": "go-sdk#310",
+    "script-lshift-truncation": "ts-sdk#493",
+    "script-shift-endianness": "ts-sdk#377",
+    "tx-sequence-zero-sighash": "ts-sdk#371",
+    "script-writebin-empty": "ts-sdk#336",
+    "script-fromasm-numeric-token": "ts-sdk#42",
+    "fee-model-mismatch": "go-sdk#267",
+    "bip276-hex-decode": "go-sdk#286",
+    "beef-isvalid-hydration": "go-sdk#167"
   }
 }

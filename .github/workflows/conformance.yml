@@ -1,0 +1,63 @@
+name: Conformance
+
+on:
+  push:
+    branches: [main, phase2/boundary-specs]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Create reports directory
+        run: mkdir -p conformance/reports
+      - name: Run Go conformance runner
+        run: |
+          go run . \
+            -vectors ../../vectors \
+            --report ../../reports/go-results.xml \
+            --json-report ../../reports/go-results.json
+        working-directory: ${{ github.workspace }}/conformance/runner/go
+      - name: Upload Go conformance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-conformance-reports
+          path: conformance/reports/
+          retention-days: 30
+
+  ts-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - name: Install deps
+        run: pnpm install --no-frozen-lockfile
+      - name: Build TS SDK
+        run: pnpm --filter @bsv/sdk run build
+      - name: Create reports directory
+        run: mkdir -p conformance/reports
+      - name: Run TS conformance runner
+        run: |
+          pnpm --filter @bsv/conformance-runner-ts test -- \
+            --json --outputFile=../../reports/ts-results.json
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+        working-directory: ${{ github.workspace }}/conformance/runner/ts
+      - name: Upload TS conformance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ts-conformance-reports
+          path: conformance/reports/
+          retention-days: 30

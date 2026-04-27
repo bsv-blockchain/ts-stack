@@ -1,0 +1,238 @@
+openapi: "3.1.0"
+
+info:
+  title: Merkle Service API
+  version: "1.0.0"
+  description: |
+    OpenAPI 3.1 specification for the BSV Merkle Service REST API.
+
+    The Merkle Service is a Go microservice that accepts transaction IDs and
+    delivers merkle proofs (BSV-standard BUMP format) to caller-supplied
+    callback URLs when those proofs become available.
+
+    ## Architecture
+
+    - **Storage**: Aerospike (configurable namespace/set).
+    - **Default port**: 8080 (override via `API_PORT` environment variable).
+    - **Callback delivery**: Out-of-band HTTP POST to the `callbackUrl`
+      registered per transaction.  The callback payload format is not yet
+      specced (tracked separately).
+
+    ## Endpoints
+
+    | Method | Path      | Description                          |
+    |--------|-----------|--------------------------------------|
+    | POST   | /watch    | Register a txid for merkle callbacks |
+    | GET    | /health   | Health check (Aerospike connectivity) |
+
+    Source of truth: /go/merkle-service/docs/api.md
+    Implementation:  /go/merkle-service/cmd/api-server/main.go
+  license:
+    name: Open BSV Licence
+
+servers:
+  - url: http://{host}:{port}
+    description: Merkle Service instance.
+    variables:
+      host:
+        default: localhost
+        description: Hostname of the Merkle Service.
+      port:
+        default: "8080"
+        description: Port (set via API_PORT env var; default 8080).
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  /watch:
+    post:
+      operationId: registerWatch
+      summary: Register a transaction for merkle proof delivery.
+      description: |
+        Registers a transaction ID (`txid`) for merkle proof monitoring.
+        When the merkle proof for the transaction becomes available (i.e. the
+        transaction is confirmed in a block), the service delivers the proof
+        to the supplied `callbackUrl` via HTTP POST.
+
+        **Idempotency**: Registering the same `txid` with the same
+        `callbackUrl` more than once is safe; subsequent registrations are
+        deduplicated by the store.
+
+        **Validation errors**: The service validates both the `txid` format
+        (must be a 64-character hex string) and the `callbackUrl` format
+        (must be a valid HTTP or HTTPS URL).  Invalid input returns 400 with
+        a JSON error object.
+      tags:
+        - Watch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchRequest"
+            examples:
+              minimal:
+                summary: Register a single transaction
+                value:
+                  txid: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                  callbackUrl: "https://example.com/callback"
+      responses:
+        "200":
+          description: Registration accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchResponse"
+              example:
+                status: "ok"
+                message: "registration successful"
+        "400":
+          description: |
+            Validation failure.  Possible error messages:
+            - `"txid is required"`
+            - `"invalid txid format: must be a 64-character hex string"`
+            - `"callbackUrl is required"`
+            - `"invalid callbackUrl: must be a valid HTTP/HTTPS URL"`
+            - `"invalid request body"`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingTxid:
+                  value:
+                    error: "txid is required"
+                invalidTxid:
+                  value:
+                    error: "invalid txid format: must be a 64-character hex string"
+                missingCallbackUrl:
+                  value:
+                    error: "callbackUrl is required"
+                invalidCallbackUrl:
+                  value:
+                    error: "invalid callbackUrl: must be a valid HTTP/HTTPS URL"
+                invalidBody:
+                  value:
+                    error: "invalid request body"
+        "500":
+          description: Storage failure or other internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "internal server error"
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Service health check.
+      description: |
+        Returns the current health status of the Merkle Service and its
+        dependencies.  Currently checks Aerospike connectivity.
+
+        A `200` response means all dependencies are healthy.
+        A `503` response means one or more dependencies are unhealthy.
+      tags:
+        - Health
+      responses:
+        "200":
+          description: All dependencies healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "healthy"
+                details:
+                  aerospike: "connected"
+        "503":
+          description: One or more dependencies are unhealthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "unhealthy"
+                details:
+                  aerospike: "connection refused"
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+  schemas:
+    WatchRequest:
+      type: object
+      required:
+        - txid
+        - callbackUrl
+      properties:
+        txid:
+          type: string
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: |
+            Transaction ID of the Bitcoin transaction to monitor.
+            Must be a 64-character lowercase or uppercase hexadecimal string.
+          example: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        callbackUrl:
+          type: string
+          format: uri
+          description: |
+            HTTP or HTTPS URL that will receive the merkle proof when it
+            becomes available.  The service issues an HTTP POST to this URL
+            with the proof payload.
+          example: "https://example.com/callback"
+
+    WatchResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          enum:
+            - "ok"
+          description: Indicates successful registration.
+        message:
+          type: string
+          description: Human-readable confirmation message.
+          example: "registration successful"
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - details
+      properties:
+        status:
+          type: string
+          enum:
+            - "healthy"
+            - "unhealthy"
+          description: Overall service health status.
+          example: "healthy"
+        details:
+          type: object
+          description: Per-dependency health details.
+          properties:
+            aerospike:
+              type: string
+              description: |
+                Aerospike connectivity status.  Either `"connected"` (healthy)
+                or a human-readable error string (unhealthy).
+              example: "connected"
+          additionalProperties:
+            type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable description of the error.
+          example: "invalid txid format: must be a 64-character hex string"

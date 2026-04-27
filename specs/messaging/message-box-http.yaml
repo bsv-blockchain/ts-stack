@@ -1,0 +1,1019 @@
+openapi: "3.1.0"
+
+info:
+  title: MessageBox Server HTTP API
+  version: "1.0.0"
+  description: |
+    REST API for the BSV MessageBox Server. All endpoints require BRC-31
+    mutual authentication unless noted otherwise. Authentication is carried
+    via the `x-bsv-auth-*` header family produced by the auth-express-middleware.
+
+    A lightweight Bearer token scheme is also accepted for backwards-compatible
+    clients (the swagger-ui exposes BearerAuth). In practice, mutual-auth via
+    `x-bsv-auth-*` headers is the standard approach.
+
+    Source of truth: `packages/messaging/message-box-server/src/routes/`
+
+servers:
+  - url: "https://{host}"
+    description: MessageBox server (production default messagebox.babbage.systems)
+    variables:
+      host:
+        default: messagebox.babbage.systems
+        description: Hostname of the running MessageBox Server instance
+  - url: "http://localhost:{port}"
+    description: Local development server
+    variables:
+      port:
+        default: "5001"
+
+components:
+  securitySchemes:
+    BsvMutualAuth:
+      type: apiKey
+      in: header
+      name: x-bsv-auth-identity-key
+      description: |
+        BRC-31 mutual authentication. The client sends a family of `x-bsv-auth-*`
+        headers (version, identity-key, nonce, your-nonce, request-id, signature).
+        The server validates the signature and sets `req.auth.identityKey` for
+        downstream route handlers. See `specs/auth/brc31-handshake.yaml` for the
+        full protocol description.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Legacy Bearer token for swagger-ui exploration. Not used in production;
+        prefer BsvMutualAuth.
+
+  schemas:
+    # -------------------------------------------------------------------------
+    # Shared primitives
+    # -------------------------------------------------------------------------
+    PubKeyHex:
+      type: string
+      pattern: "^0[23][0-9a-fA-F]{64}$"
+      description: Compressed secp256k1 public key encoded as a 66-character hex string.
+      examples:
+        - "028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1"
+
+    AtomicBEEF:
+      type: array
+      items:
+        type: integer
+        minimum: 0
+        maximum: 255
+      description: Atomic BEEF (Background Evaluation Extended Format) encoded as a byte array.
+
+    # -------------------------------------------------------------------------
+    # Error envelope
+    # -------------------------------------------------------------------------
+    ErrorResponse:
+      type: object
+      required: [status, code, description]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+          description: Machine-readable error code (see specs/errors.md).
+          examples:
+            - ERR_AUTH_REQUIRED
+        description:
+          type: string
+          description: Human-readable explanation.
+
+    # -------------------------------------------------------------------------
+    # Message shapes
+    # -------------------------------------------------------------------------
+    MessageObject:
+      type: object
+      required: [messageBox, messageId, body]
+      description: |
+        A message to be stored in a recipient's message box. The `recipient` /
+        `recipients` field carries either a single key or an array. When multiple
+        recipients are provided, `messageId` must be an array of the same length
+        with one ID per recipient (same order).
+      properties:
+        recipient:
+          oneOf:
+            - $ref: "#/components/schemas/PubKeyHex"
+            - type: array
+              items:
+                $ref: "#/components/schemas/PubKeyHex"
+          description: |
+            Identity key of the recipient, or an array of recipient identity keys.
+            Alias: `recipients` (array form only). Both fields are accepted for
+            back-compat but must not be used simultaneously.
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/PubKeyHex"
+          description: Preferred plural form. Takes precedence over `recipient` when both are present.
+        messageBox:
+          type: string
+          description: Named message box (e.g. `payment_inbox`, `notifications`).
+          examples:
+            - payment_inbox
+        messageId:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: |
+            Unique identifier(s) for the message(s) — typically an HMAC. When
+            `recipients` has more than one entry, `messageId` must be an array
+            of the same length with one ID per recipient.
+          examples:
+            - "xyz123"
+        body:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+          description: Message payload. Strings and JSON objects are both accepted.
+
+    PaymentOutput:
+      type: object
+      description: A single output inside a Payment describing how to route satoshis.
+      required: [outputIndex, protocol]
+      properties:
+        outputIndex:
+          type: integer
+          minimum: 0
+          description: Index of this output in the BEEF transaction.
+        protocol:
+          type: string
+          enum: [wallet payment, basket insertion]
+        paymentRemittance:
+          type: object
+          properties:
+            derivationPrefix:
+              type: string
+              description: Base64-encoded derivation prefix.
+            derivationSuffix:
+              type: string
+              description: Base64-encoded derivation suffix.
+            senderIdentityKey:
+              $ref: "#/components/schemas/PubKeyHex"
+            customInstructions:
+              description: |
+                Arbitrary per-output routing instructions. The server attempts to
+                parse this as JSON. If the parsed object contains a
+                `recipientIdentityKey` string field, the output is routed to that
+                recipient (batch sends only).
+        insertionRemittance:
+          type: object
+          properties:
+            basket:
+              type: string
+              maxLength: 300
+            customInstructions:
+              type: string
+              description: |
+                Same `recipientIdentityKey` convention as `paymentRemittance.customInstructions`.
+            tags:
+              type: array
+              items:
+                type: string
+                maxLength: 300
+
+    Payment:
+      type: object
+      required: [tx, outputs, description]
+      description: |
+        Optional payment attached to a message send. Required when the recipient
+        has set a `recipientFee > 0` or the server has a `deliveryFee > 0`.
+      properties:
+        tx:
+          $ref: "#/components/schemas/AtomicBEEF"
+        outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentOutput"
+          description: |
+            Output list. When a server delivery fee applies, output[0] must be the
+            server's delivery fee output. Subsequent outputs are recipient-side.
+        description:
+          type: string
+          minLength: 5
+          maxLength: 50
+          description: Human-readable description for wallet internalization.
+        labels:
+          type: array
+          items:
+            type: string
+            maxLength: 300
+        seekPermission:
+          type: boolean
+          default: true
+
+    StoredMessage:
+      type: object
+      properties:
+        messageId:
+          type: string
+        body:
+          type: string
+          description: Stringified message body (JSON objects are JSON.stringify-ed before storage).
+        sender:
+          $ref: "#/components/schemas/PubKeyHex"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # -------------------------------------------------------------------------
+    # Permission shapes
+    # -------------------------------------------------------------------------
+    PermissionStatus:
+      type: string
+      enum: [always_allow, blocked, payment_required]
+      description: |
+        - `always_allow` — recipientFee is 0
+        - `blocked`      — recipientFee is -1
+        - `payment_required` — recipientFee is a positive integer (satoshi amount)
+
+    PermissionRecord:
+      type: object
+      properties:
+        sender:
+          oneOf:
+            - $ref: "#/components/schemas/PubKeyHex"
+            - type: "null"
+          description: Sender identity key, or null for a box-wide default.
+        messageBox:
+          type: string
+        recipientFee:
+          type: integer
+          description: -1 = blocked, 0 = always allow, positive = satoshi amount required.
+        status:
+          $ref: "#/components/schemas/PermissionStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # -------------------------------------------------------------------------
+    # Device shapes
+    # -------------------------------------------------------------------------
+    RegisteredDevice:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Database row ID.
+        deviceId:
+          type: string
+          nullable: true
+          description: Caller-supplied device identifier.
+        platform:
+          type: string
+          nullable: true
+          enum: [ios, android, web, null]
+        fcmToken:
+          type: string
+          description: Truncated FCM token (last 10 chars preceded by "...") for security.
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastUsed:
+          type: string
+          format: date-time
+
+security:
+  - BsvMutualAuth: []
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Message operations
+  # ---------------------------------------------------------------------------
+  /sendMessage:
+    post:
+      operationId: sendMessage
+      summary: Send a message to one or more recipients' message boxes
+      description: |
+        Inserts a message into each recipient's named message box. If the box
+        does not exist it is created automatically.
+
+        **Payment logic**
+        - If `deliveryFee > 0` (set by server policy) a payment is required
+          with output[0] assigned to the server.
+        - If any recipient's `recipientFee > 0` (set by the recipient) additional
+          per-recipient outputs must be included.
+        - If a recipient has `recipientFee === -1` (blocked) the entire request
+          fails with 403 before any DB writes.
+
+        **Deduplication**  Messages with a duplicate `messageId` are silently
+        ignored (ON CONFLICT IGNORE). If the database raises a hard duplicate-key
+        error, a 400 is returned.
+
+        **Multi-recipient output routing** When sending to multiple recipients
+        each output in `payment.outputs` (after the optional server output at
+        index 0) can include `customInstructions` containing a JSON object with
+        a `recipientIdentityKey` field. If present, the server routes that output
+        to the identified recipient. Otherwise, outputs are mapped positionally
+        to recipients who require a fee.
+      tags: [Message]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  $ref: "#/components/schemas/MessageObject"
+                payment:
+                  $ref: "#/components/schemas/Payment"
+            examples:
+              single_recipient_free:
+                summary: Send to one recipient (no payment required)
+                value:
+                  message:
+                    recipient: "028d37b941208cd6b8a4c28288eda5f2f16c2b3ab0fcb6d13c18b47fe37b971fc1"
+                    messageBox: payment_inbox
+                    messageId: xyz123
+                    body: "{}"
+      responses:
+        "200":
+          description: Message(s) sent successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message, results]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  message:
+                    type: string
+                    description: Human-readable summary (e.g. "Your message has been sent to 1 recipient(s).").
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [recipient, messageId]
+                      properties:
+                        recipient:
+                          $ref: "#/components/schemas/PubKeyHex"
+                        messageId:
+                          type: string
+        "400":
+          description: |
+            Bad request. Possible codes:
+            - `ERR_MESSAGE_REQUIRED`
+            - `ERR_INVALID_MESSAGEBOX`
+            - `ERR_INVALID_MESSAGE_BODY`
+            - `ERR_RECIPIENT_REQUIRED`
+            - `ERR_MESSAGEID_REQUIRED`
+            - `ERR_MESSAGEID_COUNT_MISMATCH`
+            - `ERR_INVALID_MESSAGEID`
+            - `ERR_INVALID_RECIPIENT_KEY`
+            - `ERR_MISSING_PAYMENT_TX`
+            - `ERR_MISSING_DELIVERY_OUTPUT`
+            - `ERR_INSUFFICIENT_PAYMENT`
+            - `ERR_INSUFFICIENT_OUTPUTS`
+            - `ERR_MISSING_RECIPIENT_OUTPUTS`
+            - `ERR_DUPLICATE_MESSAGE`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required (`ERR_AUTH_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: |
+            One or more recipients have blocked the sender (`ERR_DELIVERY_BLOCKED`).
+            The `blockedRecipients` field lists the affected identity keys.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ErrorResponse"
+                  - type: object
+                    properties:
+                      blockedRecipients:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PubKeyHex"
+        "500":
+          description: Internal server error (`ERR_INTERNAL`, `ERR_INTERNALIZE_FAILED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /listMessages:
+    post:
+      operationId: listMessages
+      summary: Retrieve messages from a named message box
+      description: |
+        Returns all stored messages belonging to the authenticated identity in the
+        specified message box. Returns an empty array if the box does not exist.
+        Message bodies are always returned as strings (JSON objects are stringified).
+      tags: [Message]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageBox]
+              properties:
+                messageBox:
+                  type: string
+                  description: Name of the message box to retrieve messages from.
+                  examples:
+                    - payment_inbox
+      responses:
+        "200":
+          description: Messages retrieved successfully (array may be empty).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, messages]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StoredMessage"
+        "400":
+          description: |
+            Invalid or missing message box name.
+            Codes: `ERR_MESSAGEBOX_REQUIRED`, `ERR_INVALID_MESSAGEBOX`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_INTERNAL_ERROR`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /acknowledgeMessage:
+    post:
+      operationId: acknowledgeMessage
+      summary: Acknowledge receipt of one or more messages
+      description: |
+        Permanently deletes the specified messages from the database for the
+        authenticated recipient. Used after a client has received and handled
+        messages (e.g., after syncing or display).
+      tags: [Message]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageIds]
+              properties:
+                messageIds:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                  description: Array of message IDs to acknowledge and delete.
+                  examples:
+                    - ["3301", "3302"]
+      responses:
+        "200":
+          description: Messages acknowledged (deleted) successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+        "400":
+          description: |
+            Missing or invalid input, or no matching messages found.
+            Codes: `ERR_MESSAGE_ID_REQUIRED`, `ERR_INVALID_MESSAGE_ID`, `ERR_INVALID_ACKNOWLEDGMENT`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_INTERNAL_ERROR`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ---------------------------------------------------------------------------
+  # Device registration
+  # ---------------------------------------------------------------------------
+  /registerDevice:
+    post:
+      operationId: registerDevice
+      summary: Register a device for FCM push notifications
+      description: |
+        Stores or updates an FCM token for the authenticated identity. If the
+        token already exists it is updated (identity key, device ID, platform,
+        last_used timestamp). The FCM token is unique-indexed; upsert semantics
+        are applied via ON CONFLICT MERGE.
+      tags: [Device]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fcmToken]
+              properties:
+                fcmToken:
+                  type: string
+                  description: Firebase Cloud Messaging registration token.
+                deviceId:
+                  type: string
+                  description: Optional caller-supplied device identifier.
+                platform:
+                  type: string
+                  enum: [ios, android, web]
+                  description: Device platform.
+      responses:
+        "200":
+          description: Device registered (or updated) successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message, deviceId]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  message:
+                    type: string
+                    examples:
+                      - Device registered successfully for push notifications
+                  deviceId:
+                    type: integer
+                    description: Database row ID of the registration record.
+        "400":
+          description: |
+            Invalid request parameters.
+            Codes: `ERR_INVALID_FCM_TOKEN`, `ERR_INVALID_PLATFORM`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required (`ERR_AUTHENTICATION_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_DATABASE_ERROR`, `ERR_INTERNAL`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /devices:
+    get:
+      operationId: listDevices
+      summary: List registered devices for the authenticated identity
+      description: |
+        Returns all device registrations for the authenticated user, sorted by
+        `updated_at` descending. FCM tokens are truncated for security (last 10
+        characters prefixed with "...").
+      tags: [Device]
+      responses:
+        "200":
+          description: Device list retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, devices]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  devices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RegisteredDevice"
+        "401":
+          description: Authentication required (`ERR_AUTHENTICATION_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_DATABASE_ERROR`, `ERR_INTERNAL`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ---------------------------------------------------------------------------
+  # Permission management
+  # ---------------------------------------------------------------------------
+  /permissions/set:
+    post:
+      operationId: setPermission
+      summary: Set a message permission for a sender or as a box-wide default
+      description: |
+        Sets the `recipientFee` for messages arriving in a named message box.
+        - If `sender` is omitted the setting is a box-wide default for all senders.
+        - If `sender` is provided, the setting applies only to that sender.
+        - `recipientFee` semantics:
+          - `-1` — block all messages from this sender (or box-wide)
+          - `0`  — always allow (no fee required)
+          - `>0` — require this many satoshis before delivery
+      tags: [Permissions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messageBox, recipientFee]
+              properties:
+                sender:
+                  $ref: "#/components/schemas/PubKeyHex"
+                  description: Optional. If omitted, sets a box-wide default.
+                messageBox:
+                  type: string
+                  description: Message box name (e.g. `notifications`, `inbox`).
+                recipientFee:
+                  type: integer
+                  description: "-1 = blocked, 0 = always allow, positive = satoshi amount."
+      responses:
+        "200":
+          description: Permission set or updated successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, description]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  description:
+                    type: string
+                    description: Human-readable confirmation of the new policy.
+        "400":
+          description: |
+            Invalid request.
+            Codes: `ERR_INVALID_REQUEST`, `ERR_INVALID_PUBLIC_KEY`, `ERR_INVALID_FEE_VALUE`,
+            `ERR_INVALID_MESSAGE_BOX`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required (`ERR_AUTHENTICATION_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_DATABASE_ERROR`, `ERR_INTERNAL`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /permissions/get:
+    get:
+      operationId: getPermission
+      summary: Get the message permission for a sender/box combination
+      description: |
+        Retrieves the permission record for a specific sender + message box pair
+        owned by the authenticated user. If `sender` is omitted, returns the
+        box-wide default. Returns `permission: undefined` (null in JSON) when no
+        record is set.
+      tags: [Permissions]
+      parameters:
+        - in: query
+          name: sender
+          required: false
+          schema:
+            $ref: "#/components/schemas/PubKeyHex"
+          description: Identity key of the sender to look up. Omit for box-wide default.
+        - in: query
+          name: messageBox
+          required: true
+          schema:
+            type: string
+          description: Message box type to check.
+      responses:
+        "200":
+          description: Permission found or confirmed absent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, description]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  description:
+                    type: string
+                  permission:
+                    oneOf:
+                      - $ref: "#/components/schemas/PermissionRecord"
+                      - type: "null"
+                    description: The permission record, or null/undefined if not set.
+        "400":
+          description: |
+            Missing or invalid parameters.
+            Codes: `ERR_MISSING_PARAMETERS`, `ERR_INVALID_PUBLIC_KEY`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required (`ERR_AUTHENTICATION_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_INTERNAL`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /permissions/list:
+    get:
+      operationId: listPermissions
+      summary: List all message permissions for the authenticated user
+      description: |
+        Returns all permission records owned by the authenticated identity with
+        optional filtering and pagination. Results are ordered by
+        `(message_box ASC, sender ASC NULLS FIRST, created_at DESC/ASC)`.
+        Box-wide defaults (sender = null) appear before sender-specific entries
+        within each message box.
+      tags: [Permissions]
+      parameters:
+        - in: query
+          name: messageBox
+          required: false
+          schema:
+            type: string
+          description: Filter results to a specific message box type.
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum number of records to return.
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of records to skip (for pagination).
+        - in: query
+          name: createdAtOrder
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order for `created_at` (newest first by default).
+      responses:
+        "200":
+          description: Permission list retrieved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, permissions, totalCount]
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  permissions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PermissionRecord"
+                  totalCount:
+                    type: integer
+                    description: Total count before pagination (useful for building page controls).
+        "400":
+          description: |
+            Invalid pagination parameters.
+            Codes: `ERR_INVALID_LIMIT`, `ERR_INVALID_OFFSET`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required (`ERR_UNAUTHORIZED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_LIST_PERMISSIONS_FAILED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /permissions/quote:
+    get:
+      operationId: getQuote
+      summary: Get message delivery quote(s)
+      description: |
+        Returns pricing information for sending a message to one or more
+        recipients in a named message box. The caller (sender) is identified by
+        their auth headers.
+
+        **Single-recipient response** uses the legacy shape
+        `{ status, description, quote: { deliveryFee, recipientFee } }`.
+
+        **Multi-recipient response** adds `quotesByRecipient`, `totals`, and
+        `blockedRecipients` fields. Blocked recipients are still returned in
+        the list; the caller decides whether to abort or proceed with the
+        non-blocked subset.
+      tags: [Permissions]
+      parameters:
+        - in: query
+          name: recipient
+          required: true
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/PubKeyHex"
+              - type: array
+                items:
+                  $ref: "#/components/schemas/PubKeyHex"
+          style: form
+          explode: true
+          description: |
+            Identity key of the recipient. Repeat the parameter for multiple
+            recipients: `?recipient=A&recipient=B`.
+        - in: query
+          name: messageBox
+          required: true
+          schema:
+            type: string
+          description: Message box type to quote against.
+      responses:
+        "200":
+          description: Quote(s) generated.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - title: SingleRecipientQuote
+                    type: object
+                    required: [status, description, quote]
+                    properties:
+                      status:
+                        type: string
+                        enum: [success]
+                      description:
+                        type: string
+                      quote:
+                        type: object
+                        required: [deliveryFee, recipientFee]
+                        properties:
+                          deliveryFee:
+                            type: integer
+                            description: Server delivery fee in satoshis.
+                          recipientFee:
+                            type: integer
+                            description: Recipient-set fee in satoshis (-1 = blocked).
+                  - title: MultiRecipientQuote
+                    type: object
+                    required: [status, description, quotesByRecipient, totals, blockedRecipients]
+                    properties:
+                      status:
+                        type: string
+                        enum: [success]
+                      description:
+                        type: string
+                      quotesByRecipient:
+                        type: array
+                        items:
+                          type: object
+                          required: [recipient, messageBox, deliveryFee, recipientFee, status]
+                          properties:
+                            recipient:
+                              $ref: "#/components/schemas/PubKeyHex"
+                            messageBox:
+                              type: string
+                            deliveryFee:
+                              type: integer
+                            recipientFee:
+                              type: integer
+                            status:
+                              $ref: "#/components/schemas/PermissionStatus"
+                      totals:
+                        type: object
+                        required: [deliveryFees, recipientFees, totalForPayableRecipients]
+                        properties:
+                          deliveryFees:
+                            type: integer
+                          recipientFees:
+                            type: integer
+                          totalForPayableRecipients:
+                            type: integer
+                      blockedRecipients:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/PubKeyHex"
+        "400":
+          description: |
+            Missing or invalid parameters.
+            Codes: `ERR_MISSING_PARAMETERS`, `ERR_INVALID_PUBLIC_KEY`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required (`ERR_AUTHENTICATION_REQUIRED`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error (`ERR_INTERNAL`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ---------------------------------------------------------------------------
+  # Swagger / docs (informational — not tested in contract tests)
+  # ---------------------------------------------------------------------------
+  /docs:
+    get:
+      operationId: swaggerUi
+      summary: Swagger UI (served by swagger-ui-express)
+      description: Human-readable API documentation. Not part of the machine contract.
+      tags: [Meta]
+      security: []
+      responses:
+        "200":
+          description: HTML page.
+
+  /openapi.json:
+    get:
+      operationId: openapiJson
+      summary: Raw OpenAPI spec as JSON
+      description: The swagger-jsdoc-generated spec at runtime.
+      tags: [Meta]
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.0 document.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true

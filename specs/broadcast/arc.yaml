@@ -1,0 +1,493 @@
+openapi: "3.1.0"
+info:
+  title: ARC Broadcast API
+  version: "1.0.0"
+  description: |
+    OpenAPI 3.1 specification for the ARC (Authoritative Registration Centre) broadcast API
+    as consumed by the `ARC` class in ts-sdk.
+
+    ARC is the BSV miner-facing broadcast service. Clients submit raw transactions or
+    batches and receive structured responses with `txStatus` codes. ARC also fires
+    HTTP callbacks when transactions gain Merkle proofs.
+
+    This spec is derived from the behaviour documented in:
+      packages/sdk/ts-sdk/src/transaction/broadcasters/ARC.ts
+
+    Request headers used by the TS-SDK ARC broadcaster:
+      - `Authorization: Bearer <apiKey>`        — when apiKey is configured
+      - `Content-Type: application/json`
+      - `XDeployment-ID: <deploymentId>`        — random or configured string
+      - `X-CallbackUrl: <url>`                  — when callbackUrl is configured
+      - `X-CallbackToken: <token>`              — when callbackToken is configured
+
+servers:
+  - url: "https://arc.taal.com"
+    description: ARC mainnet (TAAL)
+  - url: "https://arc-test.taal.com"
+    description: ARC testnet (TAAL)
+
+tags:
+  - name: transactions
+    description: Transaction submission and status
+  - name: callbacks
+    description: Inbound notifications from ARC to the client application
+
+paths:
+
+  /v1/tx:
+    post:
+      operationId: submitTransaction
+      tags: [transactions]
+      summary: Submit a single transaction
+      description: |
+        Submits a single raw transaction to the ARC network. The body must be a
+        JSON object with a `rawTx` field containing the hex-encoded transaction.
+
+        The SDK tries Extended Format (EF) first (`tx.toHexEF()`). If EF is not
+        available (source transactions missing), it falls back to raw hex (`tx.toHex()`).
+
+        ARC may return HTTP 200 with `txStatus` values that indicate failure
+        (e.g. `DOUBLE_SPEND_ATTEMPTED`, `REJECTED`, `INVALID`, `MALFORMED`,
+        `MINED_IN_STALE_BLOCK`, or any status containing `ORPHAN`). These are
+        treated as broadcast failures by the SDK.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitTransactionRequest"
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/XDeploymentID"
+        - $ref: "#/components/parameters/XCallbackUrl"
+        - $ref: "#/components/parameters/XCallbackToken"
+      responses:
+        "200":
+          description: |
+            Transaction accepted (or accepted with a warning status). Note: ARC
+            may return HTTP 200 with a `txStatus` that indicates rejection. Callers
+            must inspect `txStatus` to determine success vs. failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcTxResponse"
+              examples:
+                accepted:
+                  summary: Successfully broadcast
+                  value:
+                    txid: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                    txStatus: "SENT_TO_NETWORK"
+                    extraInfo: ""
+                doubleSpend:
+                  summary: Double-spend detected
+                  value:
+                    txid: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+                    txStatus: "DOUBLE_SPEND_ATTEMPTED"
+                    extraInfo: "competing tx: deadbeef..."
+                    competingTxs:
+                      - "deadbeef..."
+        "400":
+          description: Bad request — malformed payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "401":
+          description: Missing or invalid Authorization header.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "409":
+          description: Conflict — e.g. transaction already known.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "422":
+          description: Unprocessable entity — invalid transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "500":
+          description: ARC internal error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+
+    get:
+      operationId: getTransactionStatus
+      tags: [transactions]
+      summary: Get the status of a transaction by txid
+      description: |
+        Retrieves the current network status of a transaction. Not directly
+        called by the ts-sdk ARC class today, but part of the ARC HTTP API.
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/XDeploymentID"
+        - name: txid
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 64
+            maxLength: 64
+            pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID (64 hex characters).
+      responses:
+        "200":
+          description: Transaction status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcTxResponse"
+        "404":
+          description: Transaction not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+
+  /v1/tx/{txid}:
+    get:
+      operationId: getTransactionStatusByPath
+      tags: [transactions]
+      summary: Get the status of a transaction by path parameter
+      description: |
+        Retrieves the current network status of a transaction using the txid as a
+        path parameter. Semantically equivalent to GET /v1/tx?txid={txid}.
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/XDeploymentID"
+        - name: txid
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 64
+            maxLength: 64
+            pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID (64 hex characters).
+      responses:
+        "200":
+          description: Transaction status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcTxResponse"
+        "404":
+          description: Transaction not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+
+  /v1/txs:
+    post:
+      operationId: submitTransactionBatch
+      tags: [transactions]
+      summary: Submit a batch of transactions
+      description: |
+        Submits an array of raw transactions in a single HTTP request.
+        The SDK's `ARC.broadcastMany()` calls this endpoint. Each item in the
+        array contains a single `rawTx` field (hex-encoded).
+
+        Responses are an array of the same length, where each element corresponds
+        to the same-index input transaction. Some may succeed while others fail.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/SubmitTransactionRequest"
+              minItems: 1
+              description: Array of raw transaction objects.
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/XDeploymentID"
+        - $ref: "#/components/parameters/XCallbackUrl"
+        - $ref: "#/components/parameters/XCallbackToken"
+      responses:
+        "200":
+          description: |
+            Array of per-transaction results. Each element may be a success
+            (`ArcTxResponse`) or an error (`ArcErrorResponse`). The array length
+            matches the input array length.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: "#/components/schemas/ArcTxResponse"
+                    - $ref: "#/components/schemas/ArcErrorResponse"
+        "400":
+          description: Batch-level bad request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "401":
+          description: Unauthorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcErrorResponse"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Callback (inbound to the application from ARC)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  /arc-ingest:
+    post:
+      operationId: arcMerkleCallback
+      tags: [callbacks]
+      summary: ARC Merkle proof callback (inbound to overlay node)
+      description: |
+        ARC POSTs this to the URL specified in `X-CallbackUrl` when a submitted
+        transaction has been mined and a Merkle path is available.
+
+        In the ts-stack overlay, the endpoint is `/arc-ingest` on the overlay
+        node itself (see OverlayExpress.ts). The overlay node must register this
+        URL with ARC at submission time via the `X-CallbackUrl` header.
+
+        The overlay node calls `engine.handleNewMerkleProof(txid, merklePath, blockHeight)`
+        upon receiving this callback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcMerkleCallback"
+      parameters:
+        - name: Authorization
+          in: header
+          required: false
+          schema:
+            type: string
+          description: |
+            Bearer token matching the `X-CallbackToken` value set at submission time.
+            The overlay node verifies this token before processing.
+      responses:
+        "200":
+          description: Callback accepted and processed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message]
+                properties:
+                  status:  { type: string, const: success }
+                  message: { type: string }
+        "400":
+          description: Bad request.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, message]
+                properties:
+                  status:  { type: string, const: error }
+                  message: { type: string }
+
+components:
+  parameters:
+    AuthorizationHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: "^Bearer .+$"
+      description: "Bearer token: `Bearer <apiKey>`"
+
+    XDeploymentID:
+      name: XDeployment-ID
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Deployment identifier for correlating requests. Auto-generated if not set.
+
+    XCallbackUrl:
+      name: X-CallbackUrl
+      in: header
+      required: false
+      schema:
+        type: string
+        format: uri
+      description: |
+        HTTPS URL to which ARC will POST a Merkle proof callback once the
+        transaction has been mined.
+
+    XCallbackToken:
+      name: X-CallbackToken
+      in: header
+      required: false
+      schema:
+        type: string
+      description: |
+        Bearer token that ARC will include in the `Authorization` header when
+        calling the callback URL. Used to verify the callback origin.
+
+  schemas:
+
+    SubmitTransactionRequest:
+      type: object
+      required: [rawTx]
+      properties:
+        rawTx:
+          type: string
+          description: |
+            Hex-encoded raw transaction. The ts-sdk attempts Extended Format (EF)
+            first; falls back to standard raw hex when source transactions are missing.
+          example: "0100000001..."
+
+    ArcTxResponse:
+      type: object
+      required: [txid, txStatus]
+      description: |
+        Response from ARC for a single transaction submission.
+        `txStatus` determines whether the broadcast was truly successful.
+        The following `txStatus` values are treated as failures by the ts-sdk:
+        DOUBLE_SPEND_ATTEMPTED, REJECTED, INVALID, MALFORMED, MINED_IN_STALE_BLOCK,
+        and any value containing "ORPHAN".
+      properties:
+        txid:
+          type: string
+          minLength: 64
+          maxLength: 64
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID.
+        txStatus:
+          $ref: "#/components/schemas/ArcTxStatus"
+        extraInfo:
+          type: string
+          description: Additional human-readable context about the status.
+        competingTxs:
+          type: array
+          items:
+            type: string
+          description: |
+            Present when `txStatus` is `DOUBLE_SPEND_ATTEMPTED`. Lists competing
+            transaction IDs.
+
+    ArcTxStatus:
+      type: string
+      description: |
+        Network status of the transaction as reported by ARC.
+        Success statuses (HTTP 200, not treated as failure):
+          - STORED — received but not yet broadcast
+          - ANNOUNCED_TO_NETWORK — gossiped to peers
+          - REQUESTED_BY_NETWORK — requested by a peer
+          - SENT_TO_NETWORK — submitted to the network
+          - ACCEPTED_BY_NETWORK — accepted by at least one miner
+          - SEEN_ON_NETWORK — seen propagating on the network
+          - MINED — included in a block (Merkle proof available)
+          - SEEN_IN_ORPHAN_MEMPOOL — in an orphan block mempool (not a stable success)
+        Failure statuses (HTTP 200 body, treated as BroadcastFailure by ts-sdk):
+          - DOUBLE_SPEND_ATTEMPTED
+          - REJECTED
+          - INVALID
+          - MALFORMED
+          - MINED_IN_STALE_BLOCK
+          - (any value containing "ORPHAN" in extraInfo or txStatus)
+        Unknown:
+          - UNKNOWN
+      enum:
+        - STORED
+        - ANNOUNCED_TO_NETWORK
+        - REQUESTED_BY_NETWORK
+        - SENT_TO_NETWORK
+        - ACCEPTED_BY_NETWORK
+        - SEEN_ON_NETWORK
+        - MINED
+        - SEEN_IN_ORPHAN_MEMPOOL
+        - DOUBLE_SPEND_ATTEMPTED
+        - REJECTED
+        - INVALID
+        - MALFORMED
+        - MINED_IN_STALE_BLOCK
+        - UNKNOWN
+
+    ArcErrorResponse:
+      type: object
+      description: Error response from ARC. Also used as a BroadcastFailure by the ts-sdk.
+      properties:
+        txid:
+          type: string
+          description: Transaction ID if known at the time of error.
+        detail:
+          type: string
+          description: Human-readable error detail. Mapped to `description` in BroadcastFailure.
+        status:
+          type: integer
+          description: HTTP status code echoed in the body (ARC convention).
+        title:
+          type: string
+          description: Short error title.
+        type:
+          type: string
+          format: uri
+          description: URI identifying the error type.
+        instance:
+          type: string
+          description: URI identifying the specific occurrence.
+        extraInfo:
+          type: string
+
+    ArcMerkleCallback:
+      type: object
+      required: [txid, merklePath, blockHeight]
+      description: |
+        Payload POSTed by ARC to the callback URL when a transaction has been
+        mined and a Merkle path is available.
+      properties:
+        txid:
+          type: string
+          minLength: 64
+          maxLength: 64
+          pattern: "^[0-9a-fA-F]{64}$"
+          description: Transaction ID of the mined transaction.
+        merklePath:
+          type: string
+          description: Hex-encoded Merkle path (BUMP format).
+        blockHeight:
+          type: integer
+          minimum: 0
+          description: Block height at which the transaction was mined.
+        blockHash:
+          type: string
+          description: Hash of the block containing this transaction (optional, not always present).
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the callback.

@@ -1,0 +1,3 @@
+# To generate Rust types for the broadcast (ARC) spec:
+# cargo add typify
+# typify specs/broadcast/arc.yaml > src/types.rs
