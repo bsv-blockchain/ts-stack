@@ -8,12 +8,17 @@
     "BRC-77": ["sdk.compat.bsm"],
     "BRC-31": [],
     "BRC-29": [],
-    "BRC-100": []
+    "BRC-100": [
+      "wallet.brc100.getpublickey",
+      "wallet.brc100.hmac",
+      "wallet.brc100.signature",
+      "wallet.brc100.encrypt"
+    ]
   },
   "stats": {
-    "total_files": 27,
-    "total_vectors": 238,
-    "last_updated": "2026-04-24"
+    "total_files": 31,
+    "total_vectors": 253,
+    "last_updated": "2026-04-28"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

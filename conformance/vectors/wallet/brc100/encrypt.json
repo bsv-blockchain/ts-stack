@@ -1,0 +1,66 @@
+{
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.encrypt",
+  "name": "BRC-100 WalletInterface.encrypt / decrypt",
+  "brc": ["BRC-100"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "notes": "Root private key is scalar 1 (identity key 0279be66...). Counterparty wallet uses scalar 2 (identity key 02c6047f...). encrypt is non-deterministic (random IV); decrypt vectors use pre-computed ciphertext produced by the reference implementation. All Byte[] fields are lowercase hex strings.",
+  "vectors": [
+    {
+      "id": "wallet.brc100.encrypt.1",
+      "description": "decrypt: plaintext='secret message' encrypted by self to self, protocol=[0,'encryption'], keyID='1', counterparty='self'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "decrypt",
+        "args": {
+          "ciphertext": "95b5a87e9febb5f28ab88f0c49c1cf9313725b0f33265fde56cac6f70cdad6ea74cb91ddf3f51bf031221449c024190a314918b0f16b1eebd22c60ded9e2",
+          "protocolID": [0, "encryption"],
+          "keyID": "1",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "plaintext": "736563726574206d657373616765"
+      },
+      "tags": ["happy-path", "brc-100", "self-encryption"]
+    },
+    {
+      "id": "wallet.brc100.encrypt.2",
+      "description": "decrypt: plaintext='for counterparty' encrypted by wallet-1 for wallet-2, protocol=[0,'secure channel'], keyID='session-1'. Decrypted by wallet-2 with counterparty=identity of wallet-1.",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000002",
+        "method": "decrypt",
+        "args": {
+          "ciphertext": "2c3f5b3b9e32051b54a9324abeb8eace4e13b286403866a3a20e1a413ca301bbc3871e10c5b6afdb728dd5c4f828b40a78b9101649f5e524d81173671a50b63e",
+          "protocolID": [0, "secure channel"],
+          "keyID": "session-1",
+          "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        }
+      },
+      "expected": {
+        "plaintext": "666f7220636f756e7465727061727479"
+      },
+      "tags": ["happy-path", "brc-100", "counterparty-encryption"]
+    },
+    {
+      "id": "wallet.brc100.encrypt.3",
+      "description": "decrypt: wrong key (different keyID) should throw an error — ciphertext from keyID='1' cannot be decrypted with keyID='99'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "decrypt",
+        "args": {
+          "ciphertext": "95b5a87e9febb5f28ab88f0c49c1cf9313725b0f33265fde56cac6f70cdad6ea74cb91ddf3f51bf031221449c024190a314918b0f16b1eebd22c60ded9e2",
+          "protocolID": [0, "encryption"],
+          "keyID": "99",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "error": true
+      },
+      "tags": ["error-case", "brc-100"]
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.hmac",
+  "name": "BRC-100 WalletInterface.createHmac / verifyHmac",
+  "brc": ["BRC-100"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "notes": "Root private key is scalar 1. All Byte[] fields are lowercase hex strings. verifyHmac returns { valid: true } on success and throws on failure.",
+  "vectors": [
+    {
+      "id": "wallet.brc100.hmac.1",
+      "description": "createHmac: data='Hello, BSV!' (utf-8), protocol=[0,'message integrity'], keyID='1', counterparty='self'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "createHmac",
+        "args": {
+          "data": "48656c6c6f2c2042535621",
+          "protocolID": [0, "message integrity"],
+          "keyID": "1",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "hmac": "603c61273d75111f8168a4b98c262a1f46ba2e8c8629a1eda45556e50353d6d3"
+      },
+      "tags": ["happy-path", "brc-100"]
+    },
+    {
+      "id": "wallet.brc100.hmac.2",
+      "description": "createHmac: data='test vector data' (utf-8), protocol=[0,'message integrity'], keyID='1', counterparty='anyone'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "createHmac",
+        "args": {
+          "data": "7465737420766563746f722064617461",
+          "protocolID": [0, "message integrity"],
+          "keyID": "1",
+          "counterparty": "anyone"
+        }
+      },
+      "expected": {
+        "hmac": "e8b6e348412ef5166be9dcb1df3548f52df6716e08b5c50b22e3dd72391583d7"
+      },
+      "tags": ["happy-path", "brc-100"]
+    },
+    {
+      "id": "wallet.brc100.hmac.3",
+      "description": "verifyHmac: valid HMAC for data='Hello, BSV!', protocol=[0,'message integrity'], keyID='1', counterparty='self'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "verifyHmac",
+        "args": {
+          "data": "48656c6c6f2c2042535621",
+          "hmac": "603c61273d75111f8168a4b98c262a1f46ba2e8c8629a1eda45556e50353d6d3",
+          "protocolID": [0, "message integrity"],
+          "keyID": "1",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "valid": true
+      },
+      "tags": ["happy-path", "brc-100"]
+    },
+    {
+      "id": "wallet.brc100.hmac.4",
+      "description": "verifyHmac: wrong HMAC value should throw an error",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "verifyHmac",
+        "args": {
+          "data": "48656c6c6f2c2042535621",
+          "hmac": "0000000000000000000000000000000000000000000000000000000000000000",
+          "protocolID": [0, "message integrity"],
+          "keyID": "1",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "error": true
+      },
+      "tags": ["error-case", "brc-100"]
+    }
+  ]
+}

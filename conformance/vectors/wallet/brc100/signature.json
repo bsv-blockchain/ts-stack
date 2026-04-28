@@ -1,0 +1,88 @@
+{
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.signature",
+  "name": "BRC-100 WalletInterface.createSignature / verifySignature",
+  "brc": ["BRC-100"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "notes": "Root private key is scalar 1. DER-encoded ECDSA signatures are deterministic via RFC 6979. All Byte[] fields are lowercase hex strings. verifySignature returns { valid: true } on success and throws on failure.",
+  "vectors": [
+    {
+      "id": "wallet.brc100.signature.1",
+      "description": "createSignature: data='sign this message' (utf-8), protocol=[0,'message signing'], keyID='1', counterparty='self'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "createSignature",
+        "args": {
+          "data": "7369676e2074686973206d657373616765",
+          "protocolID": [0, "message signing"],
+          "keyID": "1",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "signature": "304402200afed236986e9ebd746d581d22efb590d336c5cea3d5be95f1b53bed03606345022039489bbf370f7d663e4f5fe664619f8263f6dd0bb5d8d452a554a76c1f2738a4"
+      },
+      "tags": ["happy-path", "brc-100"]
+    },
+    {
+      "id": "wallet.brc100.signature.2",
+      "description": "createSignature: hashToDirectlySign=32×0xab, protocol=[0,'message signing'], keyID='2', counterparty='self'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "createSignature",
+        "args": {
+          "hashToDirectlySign": "abababababababababababababababababababababababababababababababababab",
+          "protocolID": [0, "message signing"],
+          "keyID": "2",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "signature": "3045022100be4b09309ab55ca76914c74cb61a28fd1efbb2d1d27d3f7319b80c6ddfc4583e022073931a2e0ff26b09a030a99b59ef61d4674dd914146a348f6d332a69691a7da2"
+      },
+      "tags": ["happy-path", "brc-100", "hash-direct"]
+    },
+    {
+      "id": "wallet.brc100.signature.3",
+      "description": "verifySignature: valid signature for data='sign this message', forSelf=true (verifier and signer are the same wallet)",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "verifySignature",
+        "args": {
+          "data": "7369676e2074686973206d657373616765",
+          "signature": "304402200afed236986e9ebd746d581d22efb590d336c5cea3d5be95f1b53bed03606345022039489bbf370f7d663e4f5fe664619f8263f6dd0bb5d8d452a554a76c1f2738a4",
+          "protocolID": [0, "message signing"],
+          "keyID": "1",
+          "counterparty": "self",
+          "forSelf": true
+        }
+      },
+      "expected": {
+        "valid": true
+      },
+      "tags": ["happy-path", "brc-100"]
+    },
+    {
+      "id": "wallet.brc100.signature.4",
+      "description": "verifySignature: tampered signature (all-zeros) should throw an error",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "verifySignature",
+        "args": {
+          "data": "7369676e2074686973206d657373616765",
+          "signature": "3006020101020101",
+          "protocolID": [0, "message signing"],
+          "keyID": "1",
+          "counterparty": "self",
+          "forSelf": true
+        }
+      },
+      "expected": {
+        "error": true
+      },
+      "tags": ["error-case", "brc-100"]
+    }
+  ]
+}

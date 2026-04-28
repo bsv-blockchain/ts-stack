@@ -1,0 +1,75 @@
+{
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.getpublickey",
+  "name": "BRC-100 WalletInterface.getPublicKey",
+  "brc": ["BRC-100"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "notes": "All vectors use a test wallet with root private key equal to scalar 1 (hex: 000...001). A second wallet uses scalar 2. These are well-known test values — NOT for production use.",
+  "vectors": [
+    {
+      "id": "wallet.brc100.getpublickey.1",
+      "description": "identityKey=true returns the wallet's root public key (identity key)",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": {
+          "identityKey": true
+        }
+      },
+      "expected": {
+        "publicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "tags": ["happy-path", "brc-100", "identity"]
+    },
+    {
+      "id": "wallet.brc100.getpublickey.2",
+      "description": "BRC-42 derived public key: protocolID=[0,'message signing'], keyID='1', counterparty='self'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": {
+          "protocolID": [0, "message signing"],
+          "keyID": "1",
+          "counterparty": "self"
+        }
+      },
+      "expected": {
+        "publicKey": "02a1231083db7d8a6274d2af5a56c9b9f2d0351133be274cde7524b6624717e3fd"
+      },
+      "tags": ["happy-path", "brc-100", "brc-42", "key-derivation"]
+    },
+    {
+      "id": "wallet.brc100.getpublickey.3",
+      "description": "BRC-42 derived public key: protocolID=[0,'encryption'], keyID='42', counterparty='anyone'",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": {
+          "protocolID": [0, "encryption"],
+          "keyID": "42",
+          "counterparty": "anyone"
+        }
+      },
+      "expected": {
+        "publicKey": "03605e48f30ec93c4792b0f7115ee5b35aee3065d0ffd1d76f97e77b85dc1a194c"
+      },
+      "tags": ["happy-path", "brc-100", "brc-42", "key-derivation"]
+    },
+    {
+      "id": "wallet.brc100.getpublickey.4",
+      "description": "BRC-42 derived public key: protocolID=[1,'payment'], keyID='invoice-001', explicit counterparty, forSelf=true",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": {
+          "protocolID": [1, "payment"],
+          "keyID": "invoice-001",
+          "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+          "forSelf": true
+        }
+      },
+      "expected": {
+        "publicKey": "03a98ccba598c590a40056de5466f738ca4b4770bdcfe29b716cb65d6d7bfe0b8c"
+      },
+      "tags": ["happy-path", "brc-100", "brc-42", "key-derivation", "counterparty"]
+    }
+  ]
+}
