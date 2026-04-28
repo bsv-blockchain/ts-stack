@@ -151,71 +151,6 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/helpers/ts-paymail:
-    dependencies:
-      '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
-      '@types/jest':
-        specifier: ^30.0.0
-        version: 30.0.0
-      cross-fetch:
-        specifier: ^4.1.0
-        version: 4.1.0(encoding@0.1.13)
-      express:
-        specifier: ^5.1.0
-        version: 5.2.1
-      jest:
-        specifier: ^30.3.0
-        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
-      joi:
-        specifier: ^18.0.1
-        version: 18.1.2
-      node-fetch:
-        specifier: ^3
-        version: 3.3.2
-      supertest:
-        specifier: ^7.1.4
-        version: 7.2.2
-      ts-jest:
-        specifier: ^29.4.9
-        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
-      ts2md:
-        specifier: ^0.2.8
-        version: 0.2.8
-      tsconfig-to-dual-package:
-        specifier: ^1.2.0
-        version: 1.2.0(typescript@5.9.3)
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-    devDependencies:
-      ts-standard:
-        specifier: ^12.0.2
-        version: 12.0.2(typescript@5.9.3)
-
-  packages/helpers/ts-paymail/docs/examples:
-    dependencies:
-      '@bsv/paymail':
-        specifier: workspace:*
-        version: link:../..
-      '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
-      express:
-        specifier: ^4.19.1
-        version: 4.22.1
-      jwt-simple:
-        specifier: ^0.5.6
-        version: 0.5.6
-      ts-standard:
-        specifier: ^12.0.2
-        version: 12.0.2(typescript@5.9.3)
-    devDependencies:
-      '@types/node':
-        specifier: ^20.11.30
-        version: 20.19.39
-
   packages/messaging/authsocket:
     dependencies:
       '@bsv/sdk':
@@ -608,6 +543,71 @@ importers:
         specifier: ^1.5.8
         version: 1.5.8(@types/node@22.19.17)
 
+  packages/messaging/ts-paymail:
+    dependencies:
+      '@bsv/sdk':
+        specifier: ^2.0.14
+        version: 2.0.14
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      cross-fetch:
+        specifier: ^4.1.0
+        version: 4.1.0(encoding@0.1.13)
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      jest:
+        specifier: ^30.3.0
+        version: 30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3))
+      joi:
+        specifier: ^18.0.1
+        version: 18.1.2
+      node-fetch:
+        specifier: ^3
+        version: 3.3.2
+      supertest:
+        specifier: ^7.1.4
+        version: 7.2.2
+      ts-jest:
+        specifier: ^29.4.9
+        version: 29.4.9(@babel/core@7.29.0)(@jest/transform@30.3.0)(@jest/types@30.3.0)(babel-jest@30.3.0(@babel/core@7.29.0))(esbuild@0.27.7)(jest-util@30.3.0)(jest@30.3.0(@types/node@22.19.17)(babel-plugin-macros@3.1.0)(node-notifier@8.0.2)(ts-node@10.9.2(@types/node@22.19.17)(typescript@5.9.3)))(typescript@5.9.3)
+      ts2md:
+        specifier: ^0.2.8
+        version: 0.2.8
+      tsconfig-to-dual-package:
+        specifier: ^1.2.0
+        version: 1.2.0(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+    devDependencies:
+      ts-standard:
+        specifier: ^12.0.2
+        version: 12.0.2(typescript@5.9.3)
+
+  packages/messaging/ts-paymail/docs/examples:
+    dependencies:
+      '@bsv/paymail':
+        specifier: workspace:*
+        version: link:../..
+      '@bsv/sdk':
+        specifier: ^2.0.14
+        version: 2.0.14
+      express:
+        specifier: ^4.19.1
+        version: 4.22.1
+      jwt-simple:
+        specifier: ^0.5.6
+        version: 0.5.6
+      ts-standard:
+        specifier: ^12.0.2
+        version: 12.0.2(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.30
+        version: 20.19.39
+
   packages/middleware/402-pay:
     devDependencies:
       '@bsv/sdk':
@@ -692,37 +692,6 @@ importers:
         version: 1.2.0(typescript@5.9.3)
       typescript:
         specifier: ^5.2.2
-        version: 5.9.3
-
-  packages/network/chaintracks-server:
-    dependencies:
-      '@bsv/wallet-toolbox':
-        specifier: ^2.1.22
-        version: 2.1.22(@types/node@20.19.39)(sqlite3@5.1.7)
-      body-parser:
-        specifier: ^1.20.2
-        version: 1.20.4
-      dotenv:
-        specifier: ^17.2.3
-        version: 17.4.2
-      express:
-        specifier: ^4.18.2
-        version: 4.22.1
-    devDependencies:
-      '@types/body-parser':
-        specifier: ^1.19.5
-        version: 1.19.6
-      '@types/express':
-        specifier: ^4.17.21
-        version: 4.17.25
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.39
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@20.19.39)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.3.3
         version: 5.9.3
 
   packages/network/ts-p2p:
