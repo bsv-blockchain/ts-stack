@@ -12,6 +12,8 @@ export default {
       {
         useESM: true,
         tsconfig: {
+          lib: ['dom', 'ESNext'],
+          target: 'esnext',
           module: 'ESNext',
           moduleResolution: 'node',
           esModuleInterop: true,
