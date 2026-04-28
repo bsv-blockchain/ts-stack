@@ -49,6 +49,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@bsv/auth-express-middleware": "^2.0.5",
+    "@types/body-parser": "^1.19.5",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",

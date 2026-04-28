@@ -53,6 +53,7 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
+    "@types/body-parser": "^1.19.5",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/mime-types": "^2.1.4",
