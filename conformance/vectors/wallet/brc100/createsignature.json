@@ -1,6 +1,6 @@
 {
   "$schema": "../../../schema/vector.schema.json",
-  "id": "wallet.brc100.signature",
+  "id": "wallet.brc100.createsignature",
   "name": "BRC-100 WalletInterface.createSignature / verifySignature",
   "brc": ["BRC-100"],
   "version": "1.0.0",
@@ -9,7 +9,7 @@
   "notes": "Root private key is scalar 1. DER-encoded ECDSA signatures are deterministic via RFC 6979. All Byte[] fields are lowercase hex strings. verifySignature returns { valid: true } on success and throws on failure.",
   "vectors": [
     {
-      "id": "wallet.brc100.signature.1",
+      "id": "wallet.brc100.createsignature.1",
       "description": "createSignature: data='sign this message' (utf-8), protocol=[0,'message signing'], keyID='1', counterparty='self'",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
@@ -27,7 +27,7 @@
       "tags": ["happy-path", "brc-100"]
     },
     {
-      "id": "wallet.brc100.signature.2",
+      "id": "wallet.brc100.createsignature.2",
       "description": "createSignature: hashToDirectlySign=32×0xab, protocol=[0,'message signing'], keyID='2', counterparty='self'",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
@@ -45,7 +45,7 @@
       "tags": ["happy-path", "brc-100", "hash-direct"]
     },
     {
-      "id": "wallet.brc100.signature.3",
+      "id": "wallet.brc100.createsignature.3",
       "description": "verifySignature: valid signature for data='sign this message', forSelf=true (verifier and signer are the same wallet)",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
@@ -65,7 +65,7 @@
       "tags": ["happy-path", "brc-100"]
     },
     {
-      "id": "wallet.brc100.signature.4",
+      "id": "wallet.brc100.createsignature.4",
       "description": "verifySignature: tampered signature (all-zeros) should throw an error",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",

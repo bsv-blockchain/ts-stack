@@ -10,8 +10,8 @@
     "BRC-29": ["wallet.brc29.payment-derivation"],
     "BRC-100": [
       "wallet.brc100.getpublickey",
-      "wallet.brc100.hmac",
-      "wallet.brc100.signature",
+      "wallet.brc100.createhmac",
+      "wallet.brc100.createsignature",
       "wallet.brc100.encrypt"
     ]
   },

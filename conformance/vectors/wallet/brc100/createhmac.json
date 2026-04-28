@@ -1,6 +1,6 @@
 {
   "$schema": "../../../schema/vector.schema.json",
-  "id": "wallet.brc100.hmac",
+  "id": "wallet.brc100.createhmac",
   "name": "BRC-100 WalletInterface.createHmac / verifyHmac",
   "brc": ["BRC-100"],
   "version": "1.0.0",
@@ -9,7 +9,7 @@
   "notes": "Root private key is scalar 1. All Byte[] fields are lowercase hex strings. verifyHmac returns { valid: true } on success and throws on failure.",
   "vectors": [
     {
-      "id": "wallet.brc100.hmac.1",
+      "id": "wallet.brc100.createhmac.1",
       "description": "createHmac: data='Hello, BSV!' (utf-8), protocol=[0,'message integrity'], keyID='1', counterparty='self'",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
@@ -27,7 +27,7 @@
       "tags": ["happy-path", "brc-100"]
     },
     {
-      "id": "wallet.brc100.hmac.2",
+      "id": "wallet.brc100.createhmac.2",
       "description": "createHmac: data='test vector data' (utf-8), protocol=[0,'message integrity'], keyID='1', counterparty='anyone'",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
@@ -45,7 +45,7 @@
       "tags": ["happy-path", "brc-100"]
     },
     {
-      "id": "wallet.brc100.hmac.3",
+      "id": "wallet.brc100.createhmac.3",
       "description": "verifyHmac: valid HMAC for data='Hello, BSV!', protocol=[0,'message integrity'], keyID='1', counterparty='self'",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
@@ -64,7 +64,7 @@
       "tags": ["happy-path", "brc-100"]
     },
     {
-      "id": "wallet.brc100.hmac.4",
+      "id": "wallet.brc100.createhmac.4",
       "description": "verifyHmac: wrong HMAC value should throw an error",
       "input": {
         "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
