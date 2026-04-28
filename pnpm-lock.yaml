@@ -697,8 +697,8 @@ importers:
   packages/network/ts-p2p:
     dependencies:
       '@bsv/sdk':
-        specifier: workspace:^
-        version: link:../../sdk/ts-sdk
+        specifier: ^2.0.14
+        version: 2.0.14
       '@chainsafe/libp2p-gossipsub':
         specifier: ^14.1.1
         version: 14.1.2
