@@ -2,5 +2,10 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testPathIgnorePatterns: ['dist/']
+  testPathIgnorePatterns: ['dist/'],
+  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.cjs.json',
+    },
+  },
 }
