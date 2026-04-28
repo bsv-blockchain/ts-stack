@@ -1,0 +1,29 @@
+{
+  "name": "example-paymail",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc -p tsconfig.json",
+    "lint": "ts-standard --fix src/**/*.ts",
+    "server": "npm run build && node dist/cjs/src/server.js",
+    "client": "npm run build && node dist/cjs/src/client.js",
+    "getProfile": "npm run build && node dist/cjs/src/client/getProfile.js",
+    "getPki": "npm run build && node dist/cjs/src/client/getPki.js",
+    "sendP2P": "npm run build && node dist/cjs/src/client/sendP2P.js",
+    "sendBeefP2P": "npm run build && node dist/cjs/src/client/sendP2PBeef.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@bsv/paymail": "workspace:*",
+    "@bsv/sdk": "^2.0.14",
+    "express": "^4.19.1",
+    "jwt-simple": "^0.5.6",
+    "ts-standard": "^12.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30"
+  }
+}

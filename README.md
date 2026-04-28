@@ -9,15 +9,15 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | Domain | Path | Packages |
 |--------|------|----------|
 | **SDK** | `packages/sdk/` | 2 |
-| **Wallet** | `packages/wallet/` | 7 |
-| **Network** | `packages/network/` | 2 |
-| **Overlays** | `packages/overlays/` | 17 |
-| **Messaging** | `packages/messaging/` | 5 |
+| **Wallet** | `packages/wallet/` | 9 |
+| **Network** | `packages/network/` | 1 |
+| **Overlays** | `packages/overlays/` | 10 |
+| **Messaging** | `packages/messaging/` | 6 |
 | **Middleware** | `packages/middleware/` | 3 |
-| **Helpers** | `packages/helpers/` | 5 |
+| **Helpers** | `packages/helpers/` | 4 |
 | **Conformance** | `conformance/` | 1 runner |
 
-**41 packages** + conformance runner across 7 domains.
+**35 packages** + conformance runner across 7 domains.
 
 ---
 
@@ -33,7 +33,9 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | Package | npm |
 |---------|-----|
 | [wallet-toolbox](packages/wallet/wallet-toolbox) | [@bsv/wallet-toolbox](https://www.npmjs.com/package/@bsv/wallet-toolbox) |
-| [wallet-toolbox-examples](packages/wallet/wallet-toolbox-examples) | [@bsv/wallet-toolbox-examples](https://www.npmjs.com/package/@bsv/wallet-toolbox-examples) |
+| [wallet-toolbox/client](packages/wallet/wallet-toolbox/client) | [@bsv/wallet-toolbox-client](https://www.npmjs.com/package/@bsv/wallet-toolbox-client) |
+| [wallet-toolbox/mobile](packages/wallet/wallet-toolbox/mobile) | [@bsv/wallet-toolbox-mobile](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile) |
+| [wallet-toolbox-examples](packages/wallet/wallet-toolbox-examples) | `@bsv/wallet-toolbox-examples` *(private)* |
 | [wallet-infra](packages/wallet/wallet-infra) | `@bsv/wallet-infra` *(private)* |
 | [ts-wallet-relay](packages/wallet/ts-wallet-relay) | [@bsv/wallet-relay](https://www.npmjs.com/package/@bsv/wallet-relay) |
 | [btms](packages/wallet/btms) | [@bsv/btms](https://www.npmjs.com/package/@bsv/btms) |
@@ -43,7 +45,6 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 ### Network — `packages/network/`
 | Package | npm |
 |---------|-----|
-| [chaintracks-server](packages/network/chaintracks-server) | `@bsv/chaintracks-server` *(private)* |
 | [ts-p2p](packages/network/ts-p2p) | [@bsv/teranode-listener](https://www.npmjs.com/package/@bsv/teranode-listener) |
 
 ### Overlays — `packages/overlays/`
@@ -56,16 +57,9 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [gasp-core](packages/overlays/gasp-core) | [@bsv/gasp](https://www.npmjs.com/package/@bsv/gasp) |
 | [storage-server](packages/overlays/storage-server) | [@bsv/uhrp-storage-server](https://www.npmjs.com/package/@bsv/uhrp-storage-server) |
 | [lite-storage-server](packages/overlays/lite-storage-server) | `@bsv/uhrp-lite` *(private)* |
-| [kvstore-services](packages/overlays/kvstore-services) | [@bsv/kvstore-overlay-services](https://www.npmjs.com/package/@bsv/kvstore-overlay-services) |
-| [ump-services](packages/overlays/ump-services) | `@bsv/ump-services` *(private)* |
-| [apps-overlay-services](packages/overlays/apps-overlay-services) | [@bsv/apps-overlay-services](https://www.npmjs.com/package/@bsv/apps-overlay-services) |
-| [registry-services](packages/overlays/registry-services) | `@bsv/registry-services` *(private)* |
-| [uhrp-services](packages/overlays/uhrp-services) | `@bsv/uhrp-services` *(private)* |
-| [did-services](packages/overlays/did-services) | `@bsv/did-services` *(private)* |
-| [identity-services](packages/overlays/identity-services) | `@bsv/identity-services` *(private)* |
 | [did-client](packages/overlays/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 | [btms-backend](packages/overlays/btms-backend) | `@bsv/btms-backend` *(private)* |
-| [topics](packages/overlays/topics) | `@bsv/overlay-topics` |
+| [topics](packages/overlays/topics) | [@bsv/overlay-topics](https://www.npmjs.com/package/@bsv/overlay-topics) |
 
 ### Messaging — `packages/messaging/`
 | Package | npm |
@@ -75,6 +69,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [messagebox-services](packages/messaging/messagebox-services) | [@bsv/messagebox-services](https://www.npmjs.com/package/@bsv/messagebox-services) |
 | [authsocket](packages/messaging/authsocket) | [@bsv/authsocket](https://www.npmjs.com/package/@bsv/authsocket) |
 | [authsocket-client](packages/messaging/authsocket-client) | [@bsv/authsocket-client](https://www.npmjs.com/package/@bsv/authsocket-client) |
+| [ts-paymail](packages/messaging/ts-paymail) | [@bsv/paymail](https://www.npmjs.com/package/@bsv/paymail) |
 
 ### Middleware — `packages/middleware/`
 | Package | npm |
@@ -87,7 +82,6 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | Package | npm |
 |---------|-----|
 | [simple](packages/helpers/simple) | [@bsv/simple](https://www.npmjs.com/package/@bsv/simple) |
-| [ts-paymail](packages/helpers/ts-paymail) | [@bsv/paymail](https://www.npmjs.com/package/@bsv/paymail) |
 | [bsv-wallet-helper](packages/helpers/bsv-wallet-helper) | [@bsv/wallet-helper](https://www.npmjs.com/package/@bsv/wallet-helper) |
 | [amountinator](packages/helpers/amountinator) | [@bsv/amountinator](https://www.npmjs.com/package/@bsv/amountinator) |
 | [fund-metanet](packages/helpers/fund-metanet) | `@bsv/fund-metanet` *(private)* |

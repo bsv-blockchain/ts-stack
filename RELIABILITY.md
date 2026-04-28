@@ -19,7 +19,7 @@ Tiers determine priority for reliability investment, not severity of individual 
 |------|-------------|---------|
 | **Tier 0** | Core protocol — failure breaks the whole stack | ts-sdk |
 | **Tier 1** | Critical services — failure breaks multiple consumers | wallet-toolbox, overlay-services, auth-express-middleware |
-| **Tier 2** | Important — failure degrades one domain | message-box-server, chaintracks-server, ts-paymail |
+| **Tier 2** | Important — failure degrades one domain | message-box-server, ts-paymail |
 | **Tier 3** | Non-critical — failure isolated | examples, helpers, tooling |
 
 ## Phase Gates (from MBGA §16)
