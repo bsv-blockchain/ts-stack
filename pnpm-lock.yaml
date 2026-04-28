@@ -1372,6 +1372,9 @@ importers:
       '@bsv/wallet-toolbox-client':
         specifier: ^2.1.18
         version: 2.1.22
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
       typescript:
         specifier: ^5.2.2
         version: 5.9.3
