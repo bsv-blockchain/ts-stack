@@ -1,0 +1,86 @@
+{
+  "$schema": "../../../../schema/vector.schema.json",
+  "id": "messaging.brc31.authrite-signature",
+  "name": "BRC-31 Authrite Mutual Authentication Signatures",
+  "brc": ["BRC-31"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "notes": "BRC-31 uses BRC-43 key derivation with protocol=[2,'authrite message signature']. For initialResponse, Bob signs (aliceNonce_bytes || bobNonce_bytes) with keyID='<aliceNonce> <bobNonce>' and counterparty=aliceIdentityKey. For general messages, the sender signs payload bytes with keyID='<counterpartyOriginalNonce> <senderNewNonce>'. All nonces are base64-encoded 32-byte values. Test wallets: scalar=1 (Bob), scalar=2 (Alice).",
+  "vectors": [
+    {
+      "id": "messaging.brc31.authrite-signature.1",
+      "description": "initialResponse: Bob signs concat(aliceNonce_bytes || bobNonce_bytes) with protocol=[2,'authrite message signature'], keyID='<aliceNonce> <bobNonce>', counterparty=Alice",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "createSignature",
+        "args": {
+          "data": "00000000000000000000000000000000000000000000000000000000000000000101010101010101010101010101010101010101010101010101010101010101",
+          "protocolID": [2, "authrite message signature"],
+          "keyID": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+          "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "signature": "3045022100b6e6b252130262bf83958a413dc139c92cd3b4f764a743e204e7726926fc8a53022032ac7b3e6b7d69964db688fea7e3a220d0315be3998c1114893c0a1e941092ec"
+      },
+      "tags": ["happy-path", "brc-31", "brc-43", "initial-response"]
+    },
+    {
+      "id": "messaging.brc31.authrite-signature.2",
+      "description": "Alice verifies Bob's initialResponse signature",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000002",
+        "method": "verifySignature",
+        "args": {
+          "data": "00000000000000000000000000000000000000000000000000000000000000000101010101010101010101010101010101010101010101010101010101010101",
+          "signature": "3045022100b6e6b252130262bf83958a413dc139c92cd3b4f764a743e204e7726926fc8a53022032ac7b3e6b7d69964db688fea7e3a220d0315be3998c1114893c0a1e941092ec",
+          "protocolID": [2, "authrite message signature"],
+          "keyID": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+          "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        }
+      },
+      "expected": {
+        "valid": true
+      },
+      "tags": ["happy-path", "brc-31", "brc-43", "initial-response", "verify"]
+    },
+    {
+      "id": "messaging.brc31.authrite-signature.3",
+      "description": "General message: Bob signs payload='{\"hello\":\"Authrite!\"}' with keyID='<aliceOrigNonce> <bobNewNonce>', counterparty=Alice",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "method": "createSignature",
+        "args": {
+          "data": "7b2268656c6c6f223a22417574687269746521227d",
+          "protocolID": [2, "authrite message signature"],
+          "keyID": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+          "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "signature": "3045022100da1f64b67154ab62f1c0aed9a2e1e6e4febe2eb3e6e5defb8b675101ef9ca76002206630678c5bbf15e63f23cefdd3b240c3426b49e26634920762de5712698ec6b0"
+      },
+      "tags": ["happy-path", "brc-31", "brc-43", "general-message"]
+    },
+    {
+      "id": "messaging.brc31.authrite-signature.4",
+      "description": "Alice verifies Bob's general message signature",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000002",
+        "method": "verifySignature",
+        "args": {
+          "data": "7b2268656c6c6f223a22417574687269746521227d",
+          "signature": "3045022100da1f64b67154ab62f1c0aed9a2e1e6e4febe2eb3e6e5defb8b675101ef9ca76002206630678c5bbf15e63f23cefdd3b240c3426b49e26634920762de5712698ec6b0",
+          "protocolID": [2, "authrite message signature"],
+          "keyID": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=",
+          "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        }
+      },
+      "expected": {
+        "valid": true
+      },
+      "tags": ["happy-path", "brc-31", "brc-43", "general-message", "verify"]
+    }
+  ]
+}

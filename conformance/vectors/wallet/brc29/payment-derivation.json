@@ -1,0 +1,61 @@
+{
+  "$schema": "../../../../schema/vector.schema.json",
+  "id": "wallet.brc29.payment-derivation",
+  "name": "BRC-29 P2P Payment Key Derivation",
+  "brc": ["BRC-29"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "notes": "BRC-29 payment protocol uses BRC-42 key derivation with protocol=[2,'3241645161d8'] and keyID='<derivationPrefix> <derivationSuffix>'. Sender calls getPublicKey(counterparty=recipientIdentityKey) to derive the output key. Recipient calls getPublicKey(counterparty=senderIdentityKey, forSelf=true) to derive the same key. Test wallet root keys: scalar=1 (sender), scalar=2 (recipient).",
+  "vectors": [
+    {
+      "id": "wallet.brc29.payment-derivation.1",
+      "description": "Sender derives recipient output public key: protocol=[2,'3241645161d8'], prefix='rBpqFxcNxkmqWBxU', suffix='FDWH1mTbSBrC7yoW', counterparty=recipientIdentityKey",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": {
+          "protocolID": [2, "3241645161d8"],
+          "keyID": "rBpqFxcNxkmqWBxU FDWH1mTbSBrC7yoW",
+          "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "publicKey": "02e918a5972ece85499aabd64d12b4b051a53b258f71c58191dddfa094346d5b35"
+      },
+      "tags": ["happy-path", "brc-29", "brc-42", "payment"]
+    },
+    {
+      "id": "wallet.brc29.payment-derivation.2",
+      "description": "Recipient derives same output public key (forSelf=true): same protocol/keyID, counterparty=senderIdentityKey",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000002",
+        "args": {
+          "protocolID": [2, "3241645161d8"],
+          "keyID": "rBpqFxcNxkmqWBxU FDWH1mTbSBrC7yoW",
+          "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+          "forSelf": true
+        }
+      },
+      "expected": {
+        "publicKey": "02e918a5972ece85499aabd64d12b4b051a53b258f71c58191dddfa094346d5b35"
+      },
+      "tags": ["happy-path", "brc-29", "brc-42", "payment", "recipient-view"]
+    },
+    {
+      "id": "wallet.brc29.payment-derivation.3",
+      "description": "Sender derives recipient output key with different prefix/suffix pair",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": {
+          "protocolID": [2, "3241645161d8"],
+          "keyID": "YmFzZTY0cmFuZG9t b3V0cHV0c3VmZml4",
+          "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "publicKey": "026fe234ef613493eb403ac21d7d998fe1bab5e1a14546ab0d76b7a9ac10fffe42"
+      },
+      "tags": ["happy-path", "brc-29", "brc-42", "payment"]
+    }
+  ]
+}

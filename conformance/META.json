@@ -6,8 +6,8 @@
     "BRC-42": ["sdk.keys.key-derivation", "sdk.keys.privatekey", "sdk.keys.publickey", "sdk.crypto.signature"],
     "BRC-74": ["sdk.transactions.merklepath"],
     "BRC-77": ["sdk.compat.bsm"],
-    "BRC-31": [],
-    "BRC-29": [],
+    "BRC-31": ["messaging.brc31.authrite-signature"],
+    "BRC-29": ["wallet.brc29.payment-derivation"],
     "BRC-100": [
       "wallet.brc100.getpublickey",
       "wallet.brc100.hmac",
@@ -16,8 +16,8 @@
     ]
   },
   "stats": {
-    "total_files": 31,
-    "total_vectors": 253,
+    "total_files": 33,
+    "total_vectors": 260,
     "last_updated": "2026-04-28"
   },
   "regression_index": {

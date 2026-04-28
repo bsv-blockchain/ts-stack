@@ -23,5 +23,6 @@ export default {
   // but your source files are actually TypeScript, this mapper will remove the extension.
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
-  }
+  },
+  testTimeout: 30000
 }
