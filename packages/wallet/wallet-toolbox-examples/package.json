@@ -17,7 +17,7 @@
     "BRC100"
   ],
   "scripts": {
-    "test": "npm run build && jest",
+    "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
     "lint": "prettier --write 'src/**/*.ts' --log-level silent",

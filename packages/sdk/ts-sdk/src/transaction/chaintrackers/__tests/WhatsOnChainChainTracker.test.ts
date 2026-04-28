@@ -30,11 +30,11 @@ describe('WhatsOnChain ChainTracker', () => {
   })
 
   it('should verify merkleroot successfully using Node.js https', async () => {
-    // Mocking Node.js https module
-    mockedHttps(successResponse)
-    if (typeof global.window !== 'undefined') global.window = {} as any
+    const mockHttps = mockedHttps(successResponse)
 
-    const chainTracker = new WhatsOnChain(network)
+    const chainTracker = new WhatsOnChain(network, {
+      httpClient: new NodejsHttpClient(mockHttps)
+    })
     const response = await chainTracker.isValidRootForHeight(
       merkleroot,
       height

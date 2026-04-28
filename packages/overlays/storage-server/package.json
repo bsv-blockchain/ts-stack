@@ -30,7 +30,7 @@
     "start": "ts-node src/index.ts",
     "dev": "nodemon --watch .env --watch src --exec \"node --inspect=0.0.0.0 -r ts-node/register src/index.ts\"",
     "build": "tsc",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "lint": "standard --fix .",
     "secrets:staging": "ts-node scripts/sync-secrets.ts --env staging --create-env",

@@ -47,11 +47,11 @@ describe('WhatsOnChainBroadcaster', () => {
   })
 
   it('should broadcast successfully using Node.js https', async () => {
-    // Mocking Node.js https module
-    mockedHttps(successResponse)
-    global.window = {} as any
-
-    const broadcaster = new WhatsOnChainBroadcaster(network)
+    const mockHttps = mockedHttps(successResponse) as unknown as HttpsNodejs
+    const broadcaster = new WhatsOnChainBroadcaster(
+      network,
+      new NodejsHttpClient(mockHttps)
+    )
     const response = await broadcaster.broadcast(transaction)
 
     expect(response).toEqual({

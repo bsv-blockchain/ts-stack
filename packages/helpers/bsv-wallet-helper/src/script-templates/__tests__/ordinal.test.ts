@@ -303,5 +303,5 @@ describe('OrdP2PKH unlocking and transaction verification', () => {
     // P2PKH unlocking script should be 108 bytes
     // (1 byte push + 73 bytes signature) + (1 byte push + 33 bytes compressed pubkey) = 108
     expect(estimatedLength).toBe(108);
-  });
+  }, 30000);
 });

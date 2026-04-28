@@ -8,7 +8,6 @@ describe('#Paymail Server - Transaction Negotiation', () => {
 
   beforeAll(() => {
     app = express()
-    app.use(express.json())
     const baseUrl = 'http://localhost:3000'
 
     const domainLogicHandler = async (name, domain, body) => {

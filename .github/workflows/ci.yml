@@ -41,7 +41,9 @@ jobs:
         run: pnpm -r run lint --if-present
 
       - name: Test all packages
-        run: pnpm -r run test
+        # Exclude: @bsv/messagebox-services (uses cars deployment tool, not tsc)
+        # Exclude: example-paymail (example package, not production)
+        run: pnpm -r --filter '!@bsv/messagebox-services' --filter '!example-paymail' run test
 
   conformance:
     name: Conformance Vectors

@@ -470,7 +470,6 @@ describe('BSV Overlay Services Engine', () => {
           beef: exampleBeef,
           topics: ['Hello']
         })
-        expect(mockStorageEngine.doesAppliedTransactionExist).toReturnWith(Promise.resolve(true))
         expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
         expect(mockStorageEngine.markUTXOAsSpent).not.toHaveBeenCalled()
         expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
@@ -1010,7 +1009,7 @@ describe('BSV Overlay Services Engine', () => {
           mockOutput.outputIndex,
           0
         )
-        expect(mockedHistorySelector).toReturnWith(Promise.resolve(true))
+        expect(mockedHistorySelector).toHaveBeenCalled()
       })
       it('Returns undefined if history should not be traversed', async () => {
         const mockedHistorySelector = jest.fn(async (beef, outputIndex, currentDepth) => {

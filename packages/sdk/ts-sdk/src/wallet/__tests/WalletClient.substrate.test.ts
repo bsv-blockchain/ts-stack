@@ -749,11 +749,16 @@ describe('WalletClient.listOutputs – substrate delegation', () => {
 
 describe('WalletClient.connectToSubstrate – error when no substrate available', () => {
   it('throws a descriptive error when auto-substrate fails to connect', async () => {
-    // The 'auto' substrate string means connectToSubstrate will try real substrates.
-    // All of them will fail in a test environment, so an error should be thrown.
-    const client = new WalletClient('auto', 'test.origin')
-    await expect(client.connectToSubstrate()).rejects.toThrow(
-      'No wallet available over any communication substrate'
-    )
+    // Mock fetch so all HTTP-based substrates fail deterministically (no real network I/O).
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('fetch failed'))
+    try {
+      const client = new WalletClient('auto', 'test.origin')
+      await expect(client.connectToSubstrate()).rejects.toThrow(
+        'No wallet available over any communication substrate'
+      )
+    } finally {
+      globalThis.fetch = originalFetch
+    }
   }, 10000)
 })

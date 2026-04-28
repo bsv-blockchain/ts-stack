@@ -53,13 +53,10 @@ describe('ARC Broadcaster', () => {
   })
 
   it('should broadcast successfully using Node.js https', async () => {
-    // Mocking Node.js https module
-    mockedHttps(successResponse)
-    if ('window' in globalThis) {
-      delete (globalThis as { window?: unknown }).window // ✅ Explicit property check
-    }
-
-    const broadcaster = new ARC(URL)
+    const mockHttps = mockedHttps(successResponse)
+    const broadcaster = new ARC(URL, {
+      httpClient: new NodejsHttpClient(mockHttps)
+    })
     const response = await broadcaster.broadcast(transaction)
 
     expect(response).toEqual({

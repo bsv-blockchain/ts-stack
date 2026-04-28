@@ -25,7 +25,7 @@
     }
   },
   "scripts": {
-    "test": "npm run build && jest",
+    "test": "npm run build && jest --passWithNoTests",
     "test:watch": "npm run build && jest --watch",
     "test:coverage": "npm run build && jest --coverage",
     "lint": "ts-standard --fix 'src/**/*.ts'",

@@ -158,7 +158,7 @@ var P2PKH = class {
         protocolID,
         keyID,
         counterparty,
-        forSelf: counterparty === "anyone" ? true : false
+        forSelf: counterparty === "anyone"
       });
       const pubKeyToHash = import_sdk2.PublicKey.fromString(publicKey);
       data = pubKeyToHash.toHash();
@@ -471,7 +471,7 @@ var OrdLock = class {
    * - Purchase path (`kind: 'purchase'`): outputs blob + preimage + OP_0
    */
   unlock(params) {
-    if (params && params.kind === "purchase") {
+    if (params != null && params.kind === "purchase") {
       return this.purchaseUnlock(params);
     }
     return this.cancelUnlock(params);
