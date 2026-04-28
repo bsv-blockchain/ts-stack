@@ -10,27 +10,40 @@
 
 import { PeerPayClient, PAYMENT_REQUESTS_MESSAGEBOX, PAYMENT_REQUEST_RESPONSES_MESSAGEBOX, STANDARD_PAYMENT_MESSAGEBOX } from '../PeerPayClient.js'
 import { PeerMessage } from '../types.js'
-import { PrivateKey, CreateHmacResult, WalletClient } from '@bsv/sdk'
+import { PrivateKey, WalletInterface } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
-// ---------------------------------------------------------------------------
-// Mock @bsv/sdk the same way as PeerPayClientUnit.test.ts
-// ---------------------------------------------------------------------------
-jest.mock('@bsv/sdk', () => {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const actualSDK = jest.requireActual('@bsv/sdk') as any
-  return {
-    ...actualSDK,
-    WalletClient: jest.fn().mockImplementation(() => ({
-      getPublicKey: jest.fn(),
-      createAction: jest.fn(),
-      internalizeAction: jest.fn(),
-      createHmac: jest.fn<() => Promise<CreateHmacResult>>().mockResolvedValue({
-        hmac: [1, 2, 3, 4, 5]
-      }),
-      verifyHmac: jest.fn<() => Promise<{ valid: true }>>().mockResolvedValue({ valid: true as const })
-    }))
-  }
+type MockWallet = jest.Mocked<WalletInterface>
+
+const createMockWalletClient = (): MockWallet => ({
+  getPublicKey: jest.fn(),
+  createAction: jest.fn(),
+  signAction: jest.fn(),
+  abortAction: jest.fn(),
+  listActions: jest.fn(),
+  internalizeAction: jest.fn(),
+  listOutputs: jest.fn(),
+  relinquishOutput: jest.fn(),
+  acquireCertificate: jest.fn(),
+  listCertificates: jest.fn(),
+  proveCertificate: jest.fn(),
+  relinquishCertificate: jest.fn(),
+  discoverByIdentityKey: jest.fn(),
+  discoverByAttributes: jest.fn(),
+  isAuthenticated: jest.fn(),
+  waitForAuthentication: jest.fn(),
+  getHeight: jest.fn(),
+  getHeaderForHeight: jest.fn(),
+  getNetwork: jest.fn(),
+  getVersion: jest.fn(),
+  createHmac: jest.fn().mockResolvedValue({ hmac: [1, 2, 3, 4, 5] }),
+  verifyHmac: jest.fn().mockResolvedValue({ valid: true as const }),
+  createSignature: jest.fn(),
+  verifySignature: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  revealCounterpartyKeyLinkage: jest.fn(),
+  revealSpecificKeyLinkage: jest.fn(),
 })
 
 // ---------------------------------------------------------------------------
@@ -99,7 +112,7 @@ class MockMessageBus {
 function createWiredClient (params: {
   bus: MockMessageBus
   identityKey: string
-  walletClient: jest.Mocked<WalletClient>
+  walletClient: MockWallet
 }): PeerPayClient {
   const { bus, identityKey, walletClient } = params
 
@@ -149,8 +162,8 @@ function createWiredClient (params: {
 // ---------------------------------------------------------------------------
 describe('PeerPayClient — Integration: payment request flow', () => {
   let bus: MockMessageBus
-  let mockWalletRequester: jest.Mocked<WalletClient>
-  let mockWalletPayer: jest.Mocked<WalletClient>
+  let mockWalletRequester: MockWallet
+  let mockWalletPayer: MockWallet
   const REQUESTER_KEY = PrivateKey.fromRandom().toPublicKey().toString()
   const PAYER_KEY = PrivateKey.fromRandom().toPublicKey().toString()
 
@@ -158,10 +171,10 @@ describe('PeerPayClient — Integration: payment request flow', () => {
     jest.clearAllMocks()
     bus = new MockMessageBus()
 
-    mockWalletRequester = new WalletClient() as jest.Mocked<WalletClient>
+    mockWalletRequester = createMockWalletClient()
     mockWalletRequester.getPublicKey.mockResolvedValue({ publicKey: REQUESTER_KEY })
 
-    mockWalletPayer = new WalletClient() as jest.Mocked<WalletClient>
+    mockWalletPayer = createMockWalletClient()
     mockWalletPayer.getPublicKey.mockResolvedValue({ publicKey: PAYER_KEY })
   })
 
