@@ -17,7 +17,7 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
   let server: Server
   beforeAll((done) => {
     // Start the Express server
-    server = startServer(3000)
+    server = startServer(3002)
     server.on('listening', () => {
       done()
     })
@@ -35,7 +35,7 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     const walletWithRequests = new MockWallet(privKey)
     const authClient = new AuthFetch(walletWithRequests)
     const result = await authClient.fetch(
-      'http://localhost:3000/weather',
+      'http://localhost:3002/weather',
       {
         method: 'GET'
       }

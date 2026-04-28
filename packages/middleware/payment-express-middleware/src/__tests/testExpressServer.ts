@@ -71,7 +71,7 @@ app.use((req, res, next) => {
     message: 'The requested resource was not found on this server.'
   })
 })
-const defaultPort = 3000
+const defaultPort = 3002
 // Export a function to start the server programmatically
 export const startServer = (port = defaultPort): ReturnType<typeof app.listen> => {
   return app.listen(port, () => {
