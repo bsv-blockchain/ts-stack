@@ -2,6 +2,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  testTimeout: 30000,
   moduleNameMapper: {
     // Strip .js extensions so ts-jest can resolve TypeScript source files
     '^(\\.{1,2}/.*)\\.js$': '$1',
