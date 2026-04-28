@@ -10,43 +10,43 @@ permissions:
   contents: write
 
 jobs:
-  generate-go-types:
+  generate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      # ── Go types (oapi-codegen) ───────────────────────────────────────────
+      # NOTE: oapi-codegen does not yet support OpenAPI 3.1 nullable syntax
+      # (type: [string, null]). Steps are continue-on-error until resolved.
+      # Upstream: https://github.com/oapi-codegen/oapi-codegen/issues/373
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
       - name: Install oapi-codegen
         run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
       - name: Generate Go types from overlay spec
+        continue-on-error: true
         run: |
           mkdir -p conformance/generated/overlay
           oapi-codegen -generate types -package overlay \
             specs/overlay/overlay-http.yaml \
             > conformance/generated/overlay/types.gen.go
       - name: Generate Go types from ARC spec
+        continue-on-error: true
         run: |
           mkdir -p conformance/generated/broadcast
           oapi-codegen -generate types -package broadcast \
             specs/broadcast/arc.yaml \
             > conformance/generated/broadcast/types.gen.go
       - name: Generate Go types from message-box spec
+        continue-on-error: true
         run: |
           mkdir -p conformance/generated/messaging
           oapi-codegen -generate types -package messaging \
             specs/messaging/message-box-http.yaml \
             > conformance/generated/messaging/types.gen.go
-      - name: Commit generated types (if changed)
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore(codegen): regenerate Go types from OpenAPI specs"
-          file_pattern: "conformance/generated/**"
 
-  generate-ts-types:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+      # ── TypeScript types (openapi-typescript) ────────────────────────────
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
@@ -65,15 +65,8 @@ jobs:
           mkdir -p conformance/generated/messaging
           npx --yes openapi-typescript@latest specs/messaging/message-box-http.yaml \
             -o conformance/generated/messaging/types.gen.d.ts
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore(codegen): regenerate TS types from OpenAPI specs"
-          file_pattern: "conformance/generated/**/*.d.ts"
 
-  generate-py-types:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+      # ── Python types (datamodel-code-generator / pydantic v2) ────────────
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -103,42 +96,29 @@ jobs:
             --input-file-type openapi \
             --output conformance/generated/messaging/models.py \
             --output-model-type pydantic_v2.BaseModel
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore(codegen): regenerate Python types from OpenAPI specs"
-          file_pattern: "conformance/generated/**/*.py"
 
-  # NOTE: Rust codegen (typify / progenitor) requires a Cargo workspace context
-  # that does not exist in this repository. Placeholder files are committed
-  # instead; run the commands below manually inside a Rust project that
-  # imports these specs.
-  create-rust-placeholders:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+      # ── Rust placeholders (no Cargo workspace in this repo) ──────────────
       - name: Create Rust codegen placeholder files
         run: |
-          mkdir -p conformance/generated/overlay
+          mkdir -p conformance/generated/overlay conformance/generated/broadcast conformance/generated/messaging
           cat > conformance/generated/overlay/types.rs.TODO <<'EOF'
           # To generate Rust types for the overlay spec:
           # cargo add typify
           # typify specs/overlay/overlay-http.yaml > src/types.rs
           EOF
-
-          mkdir -p conformance/generated/broadcast
           cat > conformance/generated/broadcast/types.rs.TODO <<'EOF'
           # To generate Rust types for the broadcast (ARC) spec:
           # cargo add typify
           # typify specs/broadcast/arc.yaml > src/types.rs
           EOF
-
-          mkdir -p conformance/generated/messaging
           cat > conformance/generated/messaging/types.rs.TODO <<'EOF'
           # To generate Rust types for the messaging spec:
           # cargo add typify
           # typify specs/messaging/message-box-http.yaml > src/types.rs
           EOF
+
+      # ── Single commit for all generated files ────────────────────────────
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore(codegen): add Rust placeholder TODO files"
-          file_pattern: "conformance/generated/**/*.TODO"
+          commit_message: "chore(codegen): regenerate types from OpenAPI specs"
+          file_pattern: "conformance/generated/**"
