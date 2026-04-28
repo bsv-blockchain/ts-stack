@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bsv-conformance" tests="238" failures="0" errors="0" skipped="0">
+  <testsuite name="regressions/beef-isvalid-hydration" tests="2" failures="0" errors="0" skipped="0">
+    <testcase name="regression.beef.isvalid-hydration.0001" classname="regressions/beef-isvalid-hydration" time="0"/>
+    <testcase name="regression.beef.isvalid-hydration.0002" classname="regressions/beef-isvalid-hydration" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/beef-v2-txid-panic" tests="2" failures="0" errors="0" skipped="0">
+    <testcase name="regression.beef.v2-txid-panic.0001" classname="regressions/beef-v2-txid-panic" time="0"/>
+    <testcase name="regression.beef.v2-txid-panic.0002" classname="regressions/beef-v2-txid-panic" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/bip276-hex-decode" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.bip276.hex-decode.0001" classname="regressions/bip276-hex-decode" time="0"/>
+    <testcase name="regression.bip276.hex-decode.0002" classname="regressions/bip276-hex-decode" time="0"/>
+    <testcase name="regression.bip276.hex-decode.0003" classname="regressions/bip276-hex-decode" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/fee-model-mismatch" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.transactions.fee-model-mismatch.0001" classname="regressions/fee-model-mismatch" time="0"/>
+    <testcase name="regression.transactions.fee-model-mismatch.0002" classname="regressions/fee-model-mismatch" time="0"/>
+    <testcase name="regression.transactions.fee-model-mismatch.0003" classname="regressions/fee-model-mismatch" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/merkle-path-odd-node" tests="5" failures="0" errors="0" skipped="0">
+    <testcase name="regression.merkle-path.odd-node.0001" classname="regressions/merkle-path-odd-node" time="0"/>
+    <testcase name="regression.merkle-path.odd-node.0002" classname="regressions/merkle-path-odd-node" time="0"/>
+    <testcase name="regression.merkle-path.odd-node.0003" classname="regressions/merkle-path-odd-node" time="0"/>
+    <testcase name="regression.merkle-path.odd-node.0004" classname="regressions/merkle-path-odd-node" time="0"/>
+    <testcase name="regression.merkle-path.odd-node.0005" classname="regressions/merkle-path-odd-node" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/privatekey-modular-reduction" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.privatekey.modular-reduction.0001" classname="regressions/privatekey-modular-reduction" time="0"/>
+    <testcase name="regression.privatekey.modular-reduction.0002" classname="regressions/privatekey-modular-reduction" time="0"/>
+    <testcase name="regression.privatekey.modular-reduction.0003" classname="regressions/privatekey-modular-reduction" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/script-fromasm-numeric-token" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.script.fromasm-numeric-token.0001" classname="regressions/script-fromasm-numeric-token" time="0"/>
+    <testcase name="regression.script.fromasm-numeric-token.0002" classname="regressions/script-fromasm-numeric-token" time="0"/>
+    <testcase name="regression.script.fromasm-numeric-token.0003" classname="regressions/script-fromasm-numeric-token" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/script-lshift-truncation" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.script.lshift-truncation.0001" classname="regressions/script-lshift-truncation" time="0"/>
+    <testcase name="regression.script.lshift-truncation.0002" classname="regressions/script-lshift-truncation" time="0"/>
+    <testcase name="regression.script.lshift-truncation.0003" classname="regressions/script-lshift-truncation" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/script-shift-endianness" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.script.shift-endianness.0001" classname="regressions/script-shift-endianness" time="0"/>
+    <testcase name="regression.script.shift-endianness.0002" classname="regressions/script-shift-endianness" time="0"/>
+    <testcase name="regression.script.shift-endianness.0003" classname="regressions/script-shift-endianness" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/script-writebin-empty" tests="2" failures="0" errors="0" skipped="0">
+    <testcase name="regression.script.writebin-empty.0001" classname="regressions/script-writebin-empty" time="0"/>
+    <testcase name="regression.script.writebin-empty.0002" classname="regressions/script-writebin-empty" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/tx-sequence-zero-sighash" tests="3" failures="0" errors="0" skipped="0">
+    <testcase name="regression.transactions.sequence-zero-sighash.0001" classname="regressions/tx-sequence-zero-sighash" time="0"/>
+    <testcase name="regression.transactions.sequence-zero-sighash.0002" classname="regressions/tx-sequence-zero-sighash" time="0"/>
+    <testcase name="regression.transactions.sequence-zero-sighash.0003" classname="regressions/tx-sequence-zero-sighash" time="0"/>
+  </testsuite>
+  <testsuite name="regressions/uhrp-url-parity" tests="4" failures="0" errors="0" skipped="0">
+    <testcase name="regression.uhrp.url-parity.0001" classname="regressions/uhrp-url-parity" time="0"/>
+    <testcase name="regression.uhrp.url-parity.0002" classname="regressions/uhrp-url-parity" time="0"/>
+    <testcase name="regression.uhrp.url-parity.0003" classname="regressions/uhrp-url-parity" time="0"/>
+    <testcase name="regression.uhrp.url-parity.0004" classname="regressions/uhrp-url-parity" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/compat/bsm" tests="9" failures="0" errors="0" skipped="0">
+    <testcase name="bsm-magic-001" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-magic-002" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-magic-003" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-magic-004" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-sign-001" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-sign-002" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-verify-001" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-verify-002" classname="sdk/compat/bsm" time="0"/>
+    <testcase name="bsm-recovery-001" classname="sdk/compat/bsm" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/aes" tests="15" failures="0" errors="0" skipped="0">
+    <testcase name="sdk.crypto.aes.1" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.2" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.3" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.4" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.5" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.6" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.7" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.8" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.9" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.10" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.11" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.12" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.13" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.14" classname="sdk/crypto/aes" time="0"/>
+    <testcase name="sdk.crypto.aes.15" classname="sdk/crypto/aes" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/ecdsa" tests="24" failures="0" errors="0" skipped="0">
+    <testcase name="ecdsa-001" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-002" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-003" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-004" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-005" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-006" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-007" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-008" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-009" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-010" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-011" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-012" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-013" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-014" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-015" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-016" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-017" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-018" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-019" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-020" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-021" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-022" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-023" classname="sdk/crypto/ecdsa" time="0"/>
+    <testcase name="ecdsa-024" classname="sdk/crypto/ecdsa" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/ecies" tests="5" failures="0" errors="0" skipped="0">
+    <testcase name="sdk.crypto.ecies.1" classname="sdk/crypto/ecies" time="0"/>
+    <testcase name="sdk.crypto.ecies.2" classname="sdk/crypto/ecies" time="0"/>
+    <testcase name="sdk.crypto.ecies.3" classname="sdk/crypto/ecies" time="0"/>
+    <testcase name="sdk.crypto.ecies.4" classname="sdk/crypto/ecies" time="0"/>
+    <testcase name="sdk.crypto.ecies.5" classname="sdk/crypto/ecies" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/hash160" tests="8" failures="0" errors="0" skipped="0">
+    <testcase name="sdk.crypto.hash160.1" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.2" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.3" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.4" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.5" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.6" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.7" classname="sdk/crypto/hash160" time="0"/>
+    <testcase name="sdk.crypto.hash160.8" classname="sdk/crypto/hash160" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/hmac" tests="11" failures="0" errors="0" skipped="0">
+    <testcase name="sdk.crypto.hmac.1" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.2" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.3" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.4" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.5" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.6" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.7" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.8" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.9" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.10" classname="sdk/crypto/hmac" time="0"/>
+    <testcase name="sdk.crypto.hmac.11" classname="sdk/crypto/hmac" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/ripemd160" tests="7" failures="0" errors="0" skipped="0">
+    <testcase name="sdk.crypto.ripemd160.1" classname="sdk/crypto/ripemd160" time="0"/>
+    <testcase name="sdk.crypto.ripemd160.2" classname="sdk/crypto/ripemd160" time="0"/>
+    <testcase name="sdk.crypto.ripemd160.3" classname="sdk/crypto/ripemd160" time="0"/>
+    <testcase name="sdk.crypto.ripemd160.4" classname="sdk/crypto/ripemd160" time="0"/>
+    <testcase name="sdk.crypto.ripemd160.5" classname="sdk/crypto/ripemd160" time="0"/>
+    <testcase name="sdk.crypto.ripemd160.6" classname="sdk/crypto/ripemd160" time="0"/>
+    <testcase name="sdk.crypto.ripemd160.7" classname="sdk/crypto/ripemd160" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/sha256" tests="14" failures="0" errors="0" skipped="0">
+    <testcase name="sdk.crypto.sha256.1" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.2" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.3" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.4" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.5" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.6" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.7" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.8" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.9" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.10" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.11" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.12" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.13" classname="sdk/crypto/sha256" time="0"/>
+    <testcase name="sdk.crypto.sha256.14" classname="sdk/crypto/sha256" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/crypto/signature" tests="15" failures="0" errors="0" skipped="0">
+    <testcase name="sig-der-001" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-der-002" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-der-003" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-der-004" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-der-005" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-der-006" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-001" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-002" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-003" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-004" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-005" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-006" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-compact-007" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-tocompact-err-001" classname="sdk/crypto/signature" time="0"/>
+    <testcase name="sig-tocompact-err-002" classname="sdk/crypto/signature" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/keys/key-derivation" tests="17" failures="0" errors="0" skipped="0">
+    <testcase name="key-001" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-002" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-003" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-004" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-005" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-006" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-007" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-008" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-009" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-010" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-011" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-012" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-013" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-014" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-015" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-016" classname="sdk/keys/key-derivation" time="0"/>
+    <testcase name="key-017" classname="sdk/keys/key-derivation" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/keys/private-key" tests="11" failures="0" errors="0" skipped="0">
+    <testcase name="privkey-hex-001" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-hex-002" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-hex-003" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-hex-004" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-wif-001" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-scalar-001" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-brc42-001" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-brc42-002" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-brc42-003" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-brc42-004" classname="sdk/keys/private-key" time="0"/>
+    <testcase name="privkey-brc42-005" classname="sdk/keys/private-key" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/keys/public-key" tests="15" failures="0" errors="0" skipped="0">
+    <testcase name="pubkey-der-001" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-der-002" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-der-003" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-fromstring-001" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-fromstring-002" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-fromstring-003" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-constructor-err-001" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-ecdh-err-001" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-brc42-001" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-brc42-002" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-brc42-003" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-brc42-004" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-brc42-005" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-mid-key-003" classname="sdk/keys/public-key" time="0"/>
+    <testcase name="pubkey-mid-key-004" classname="sdk/keys/public-key" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/scripts/evaluation" tests="20" failures="0" errors="0" skipped="0">
+    <testcase name="script-001" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-002" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-003" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-004" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-005" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-006" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-007" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-008" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-009" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-010" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-011" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-012" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-013" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-014" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-015" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-016" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-017" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-018" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-019" classname="sdk/scripts/evaluation" time="0"/>
+    <testcase name="script-020" classname="sdk/scripts/evaluation" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/transactions/merkle-path" tests="16" failures="0" errors="0" skipped="0">
+    <testcase name="mp-parse-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-serialize-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-computeroot-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-computeroot-002" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-computeroot-003" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-single-tx-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-compound-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-coinbase-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-block125632-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-block125632-002" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-block125632-003" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-combine-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-findleaf-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-extract-001" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-extract-002" classname="sdk/transactions/merkle-path" time="0"/>
+    <testcase name="mp-extract-003" classname="sdk/transactions/merkle-path" time="0"/>
+  </testsuite>
+  <testsuite name="sdk/transactions/serialization" tests="15" failures="0" errors="0" skipped="0">
+    <testcase name="tx-001" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-002" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-003" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-004" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-005" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-006" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-007" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-008" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-009" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-010" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-011" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-012" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-013" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-014" classname="sdk/transactions/serialization" time="0"/>
+    <testcase name="tx-015" classname="sdk/transactions/serialization" time="0"/>
+  </testsuite>
+</testsuites>
