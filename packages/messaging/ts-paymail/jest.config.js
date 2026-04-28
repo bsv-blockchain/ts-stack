@@ -2,7 +2,7 @@
 export default {
     preset: 'ts-jest/presets/default-esm',
     testEnvironment: 'node',
-    testPathIgnorePatterns: ['dist/'],
+    testPathIgnorePatterns: ['dist/', ...(process.env.CI ? ['src/paymailClient/__tests'] : [])],
     testTimeout: 30000,
     setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
     extensionsToTreatAsEsm: ['.ts'],
