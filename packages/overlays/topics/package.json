@@ -23,6 +23,7 @@
     "mongodb": "^7.1.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.3.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.3",
     "jest": "^30.3.0",

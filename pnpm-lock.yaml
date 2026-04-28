@@ -1229,6 +1229,9 @@ importers:
         specifier: ^7.1.0
         version: 7.2.0(gcp-metadata@8.1.2)(socks@2.8.7)
     devDependencies:
+      '@jest/globals':
+        specifier: ^30.3.0
+        version: 30.3.0
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
