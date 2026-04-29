@@ -3,8 +3,8 @@ id: get-started
 title: Get Started
 kind: meta
 version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-29"
+last_verified: "2026-04-29"
 review_cadence_days: 30
 status: stable
 tags: ["onboarding"]
@@ -12,55 +12,81 @@ tags: ["onboarding"]
 
 # Get Started
 
-Welcome to ts-stack. Whether you're building a wallet, running an overlay, or adding BSV payments to an app, this guide gets you from zero to your first transaction in three steps.
+Most apps on ts-stack start with `@bsv/simple` — one import, full access to payments, tokens, identity, and messaging. This guide gets you from zero to your first on-chain action in three steps.
 
-## Step 1: Install the SDK
-
-The [SDK](../packages/sdk/index.md) is the foundation — it gives you private keys, signatures, and transaction building.
+## Step 1: Install
 
 ```bash
-npm install @bsv/sdk
+npm install @bsv/simple @bsv/sdk
 ```
 
-Then verify it works:
+`@bsv/sdk` is a required peer dependency. It provides the cryptographic primitives and transaction engine that `@bsv/simple` builds on.
+
+## Step 2: Connect a Wallet
+
+### Browser app (user's wallet)
+
+Your app connects to the user's BSV wallet extension over `localhost` or `window.postMessage`. Your code never holds private keys.
 
 ```typescript
-import { PrivateKey } from '@bsv/sdk';
+import { createWallet } from '@bsv/simple/browser'
 
-const key = PrivateKey.fromRandom();
-console.log('Your public key:', key.publicKey.toString());
+const wallet = await createWallet()
+console.log('Connected:', wallet.getIdentityKey())
 ```
 
-Continue to [Install](./install.md) for detailed setup and monorepo configuration.
+`createWallet()` prompts the user to approve the connection via their browser wallet. Once approved, all wallet methods are available.
 
-## Step 2: Connect to the Network
+### Server agent (self-custodial)
 
-Once you can build transactions, you need to broadcast them and read chain state. The [Network](../packages/network/index.md) packages handle this through a typed client that talks to BSV nodes.
+A server wallet manages its own keys with file-based persistence — suitable for bots, automated agents, and backend funding.
 
 ```typescript
-import { PrivateKey } from '@bsv/sdk';
+import { ServerWallet } from '@bsv/simple/server'
 
-const key = PrivateKey.fromRandom();
-
-// Create a transaction, sign it, broadcast it
-// (See guides for full examples)
+const wallet = await ServerWallet.create({ storageDir: './wallet-data' })
+console.log('Ready:', wallet.getIdentityKey())
 ```
 
-## Step 3: Layer In What You Need
+## Step 3: Do Something Useful
 
-The real power emerges when you add packages on top. Depending on what you're building:
+### Send a payment
 
-- **Wallet-integrated app?** Add [Wallet Toolbox](../packages/wallet/wallet-toolbox.md) to sync keys and balances with a user's wallet
-- **Overlay node?** Add [Overlay](../packages/overlays/overlay.md) to index and serve data
-- **Token system?** Add [BTMS](../packages/wallet/btms.md) for token transactions
-- **Authenticated messaging?** Add [Authsocket](../packages/messaging/authsocket.md) for encrypted messages between identities
-- **Payment-gated API?** Add [Auth Middleware](../packages/middleware/auth-express-middleware.md) and [Payment Middleware](../packages/middleware/payment-express-middleware.md)
+```typescript
+const result = await wallet.pay({
+  to: '02abc123...',   // recipient identity key
+  satoshis: 1000,
+  memo: 'Hello BSV'
+})
+console.log('txid:', result.txid)
+```
 
-See [Choose Your Stack](./choose-your-stack.md) for a full decision matrix.
+### Create and query a token
 
-## Next Steps
+```typescript
+const token = await wallet.createToken({
+  data: { type: 'reward', points: 100 },
+  basket: 'my-tokens'
+})
 
-- **[Install](./install.md)** — Prerequisites and npm setup
-- **[Key Concepts](./concepts.md)** — BEEF, overlays, BRC-100, identity keys
-- **[Choose Your Stack](./choose-your-stack.md)** — Decision guide by use case
-- **[Guides](../guides/index.md)** — Hands-on tutorials and examples
+const tokens = await wallet.listTokenDetails('my-tokens')
+for (const t of tokens) {
+  console.log(t.outpoint, t.data)
+}
+```
+
+### Inscribe data on-chain
+
+```typescript
+const inscription = await wallet.inscribeText('Hello blockchain!')
+console.log('txid:', inscription.txid)
+```
+
+## What to Read Next
+
+| Guide | What you'll learn |
+|-------|-------------------|
+| [Install](./install.md) | Entry points, framework setup, TypeScript config |
+| [Choose Your Stack](./choose-your-stack.md) | Pick the right packages for what you're building |
+| [Key Concepts](./concepts.md) | BEEF, BRC-100, wallets, overlays, identity |
+| [Guides](../guides/index.md) | Wallets, overlays, messaging, HTTP 402 payments |

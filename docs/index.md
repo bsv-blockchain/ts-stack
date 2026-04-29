@@ -78,24 +78,27 @@ flowchart TD
 ## Quick Install
 
 ```bash
-npm install @bsv/sdk
+npm install @bsv/simple @bsv/sdk
 ```
 
-Create a key, get its public key, and sign data:
+Connect to a user's wallet and send a payment:
 
 ```typescript
-import { PrivateKey } from '@bsv/sdk';
+import { createWallet } from '@bsv/simple/browser'
 
-const key = PrivateKey.fromRandom();
-console.log('Public Key:', key.publicKey.toString());
-
-const signature = key.sign('hello');
-console.log('Signature:', signature.toString());
+const wallet = await createWallet()
+const result = await wallet.pay({
+  to: recipientIdentityKey,
+  satoshis: 1000,
+})
+console.log('txid:', result.txid)
 ```
+
+For protocol-level work (keys, scripts, transactions, BEEF), use `@bsv/sdk` directly. See [Choose Your Stack](./get-started/choose-your-stack.md) for the full decision guide.
 
 ## What's Next?
 
-- **[Get Started](./get-started/index.md)** — 3-step onboarding from zero to transaction
+- **[Get Started](./get-started/index.md)** — Connect a wallet and send your first payment
 - **[Choose Your Stack](./get-started/choose-your-stack.md)** — Decision guide based on what you're building
 - **[Package Index](./packages/index.md)** — Browse all 27 packages and their APIs
 - **[Guides](./guides/index.md)** — Wallets, overlays, messaging, payments — how-to walkthroughs
