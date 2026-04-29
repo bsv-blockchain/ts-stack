@@ -175,8 +175,8 @@ const page1 = await didClient.findDID({
 
 ## Related packages
 
-- [@bsv/simple](/docs/packages/helpers/simple.md) — High-level wallet with DID support
-- [@bsv/templates](/docs/packages/helpers/ts-templates.md) — PushDrop script implementation
+- [@bsv/simple](simple.md) — High-level wallet with DID support
+- [@bsv/templates](ts-templates.md) — PushDrop script implementation
 - [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction and wallet utilities
 
 ## Reference

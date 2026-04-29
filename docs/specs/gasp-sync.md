@@ -156,7 +156,7 @@ GASP conformance is tested in `conformance/vectors/sync/gasp/`:
 ## Related specs
 
 - [Overlay HTTP](./overlay-http.md) — HTTP surface that can trigger GASP sync
-- [BRC-95 / BRC-62](../../../docs/BRCs/transactions/0095.md) — Transaction and proof formats
+- [BRC-95 / BRC-62](https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md) — Transaction and proof formats
 
 ## Spec artifact
 

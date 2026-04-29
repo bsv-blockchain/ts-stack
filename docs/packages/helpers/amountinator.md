@@ -133,8 +133,8 @@ const amount = await staticConverter.convertAmount('100')
 
 ## Related packages
 
-- [@bsv/simple](/docs/packages/helpers/simple.md) — Wallet with payment operations
-- [@bsv/fund-wallet](/docs/packages/helpers/fund-wallet.md) — Faucet that may display amounts
+- [@bsv/simple](simple.md) — Wallet with payment operations
+- [@bsv/fund-wallet](fund-wallet.md) — Faucet that may display amounts
 - [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Transaction building with satoshis
 
 ## Reference

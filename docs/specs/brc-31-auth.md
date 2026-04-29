@@ -176,8 +176,8 @@ BRC-31 handshake conformance is tested in `conformance/vectors/auth/`:
 ## Related specs
 
 - [BRC-100 Wallet](./brc-100-wallet.md) — Wallet interface (provides identity keys and signing)
-- [BRC-103 Peer Auth](../../../docs/BRCs/auth/0103.md) — Underlying peer-to-peer mutual auth primitives
-- [BRC-104 HTTP Transport](../../../docs/BRCs/auth/0104.md) — HTTP header protocol for BRC-103
+- [BRC-103 Peer Auth](https://github.com/bitcoin-sv/BRCs/blob/master/auth/0103.md) — Underlying peer-to-peer mutual auth primitives
+- [BRC-104 HTTP Transport](https://github.com/bitcoin-sv/BRCs/blob/master/auth/0104.md) — HTTP header protocol for BRC-103
 - [BRC-121 / 402](./brc-121-402.md) — Often stacked after BRC-31 for monetized endpoints
 
 ## Spec artifact

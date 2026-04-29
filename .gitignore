@@ -13,3 +13,6 @@ coverage/
 go-sdk
 # CARS deployment tool temp directories
 cars_tmp_build_*/
+
+# MkDocs build output
+site/

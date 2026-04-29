@@ -146,7 +146,7 @@ Overlay conformance is tested in `conformance/vectors/overlay/`:
 
 - [GASP Sync](./gasp-sync.md) — Peer-to-peer state synchronization between overlay nodes
 - [UHRP](./uhrp.md) — Content-addressed file storage topic
-- [BRC-62 / BEEF](../../../docs/BRCs/transactions/0095.md) — Transaction encoding format
+- [BRC-62 / BEEF](https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md) — Transaction encoding format
 
 ## Spec artifact
 

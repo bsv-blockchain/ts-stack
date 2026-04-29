@@ -124,8 +124,8 @@ BRC-100 defines the wallet interface contract. Conformance vectors exist in `con
 
 ## Related specs
 
-- [BRC-42/43](../../../docs/BRCs/wallet/0042.md) — Key derivation for protocol-specific keys
-- [BRC-18](../../../docs/BRCs/wallet/0018.md) — Signed messages
+- [BRC-42/43](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md) — Key derivation for protocol-specific keys
+- [BRC-18](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0018.md) — Signed messages
 - [BRC-31 Auth](./brc-31-auth.md) — Mutual authentication (uses wallet identity keys)
 - [Storage Adapter](./storage-adapter.md) — Remote wallet storage backend interface
 

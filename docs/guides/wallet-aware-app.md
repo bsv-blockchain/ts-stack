@@ -332,7 +332,7 @@ This complete example:
 
 ## What to read next
 
-- **[Wallet-Toolbox Package Reference](/docs/packages/wallet-toolbox/)** — Full API documentation and configuration options
-- **[BRC-100 Wallet Standard](/docs/specs/brc-100/)** — The standard your wallet implements
-- **[HTTP 402 Payments Guide](/docs/guides/http-402-payments.md)** — Monetize your app by accepting payments
-- **[SDK Documentation](/docs/packages/sdk/)** — The @bsv/sdk crypto primitives and transaction API
+- **[Wallet-Toolbox Package Reference](../packages/wallet/wallet-toolbox.md)** — Full API documentation and configuration options
+- **[BRC-100 Wallet Standard](../specs/brc-100-wallet.md)** — The standard your wallet implements
+- **[HTTP 402 Payments Guide](http-402-payments.md)** — Monetize your app by accepting payments
+- **[SDK Documentation](../packages/sdk)** — The @bsv/sdk crypto primitives and transaction API

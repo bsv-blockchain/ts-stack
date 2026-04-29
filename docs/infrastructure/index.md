@@ -18,12 +18,12 @@ Infrastructure components are deployed services — not npm packages, but applic
 
 | Component | Purpose | Database | Status | Deploy target |
 |-----------|---------|----------|--------|----------------|
-| [Message Box Server](/docs/infrastructure/message-box-server/) | Secure peer-to-peer messaging with real-time WebSocket delivery | MySQL 8.0 | stable | Docker / Kubernetes |
-| [Overlay Server](/docs/infrastructure/overlay-server/) | Topic managers and lookup services for overlay network | MongoDB + MySQL/Knex | stable | Docker / Kubernetes |
-| [UHRP Server (Basic)](/docs/infrastructure/uhrp-server-basic/) | Lightweight file storage via local filesystem (dev/test) | None (filesystem) | beta | Local Docker |
-| [UHRP Server (Cloud Bucket)](/docs/infrastructure/uhrp-server-cloud-bucket/) | Production UHRP storage via Google Cloud Storage | Optional Cloud SQL | stable | Google Cloud Run |
-| [Wallet Abstraction Backend (WAB)](/docs/infrastructure/wab/) | Multi-factor user authentication (SMS, ID verification, OTP) | SQLite (dev) / MySQL (prod) | stable | Docker / Kubernetes / Cloud Run |
-| [Wallet Infrastructure](/docs/infrastructure/wallet-infra/) | JSON-RPC wallet UTXO storage and management | MySQL 8.0 | stable | Docker / Kubernetes |
+| [Message Box Server](message-box-server.md) | Secure peer-to-peer messaging with real-time WebSocket delivery | MySQL 8.0 | stable | Docker / Kubernetes |
+| [Overlay Server](overlay-server.md) | Topic managers and lookup services for overlay network | MongoDB + MySQL/Knex | stable | Docker / Kubernetes |
+| [UHRP Server (Basic)](uhrp-server-basic.md) | Lightweight file storage via local filesystem (dev/test) | None (filesystem) | beta | Local Docker |
+| [UHRP Server (Cloud Bucket)](uhrp-server-cloud-bucket.md) | Production UHRP storage via Google Cloud Storage | Optional Cloud SQL | stable | Google Cloud Run |
+| [Wallet Abstraction Backend (WAB)](wab.md) | Multi-factor user authentication (SMS, ID verification, OTP) | SQLite (dev) / MySQL (prod) | stable | Docker / Kubernetes / Cloud Run |
+| [Wallet Infrastructure](wallet-infra.md) | JSON-RPC wallet UTXO storage and management | MySQL 8.0 | stable | Docker / Kubernetes |
 
 ## Decision Matrix: Which Services to Deploy
 

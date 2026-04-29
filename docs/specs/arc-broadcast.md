@@ -148,7 +148,7 @@ ARC conformance is tested in `conformance/vectors/broadcast/arc/`:
 ## Related specs
 
 - [Merkle Service](./merkle-service.md) — Alternative proof delivery (Go microservice)
-- [BRC-95 / BRC-62](../../../docs/BRCs/transactions/0095.md) — Transaction format (raw hex, Extended Format, BEEF)
+- [BRC-95 / BRC-62](https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md) — Transaction format (raw hex, Extended Format, BEEF)
 
 ## Spec artifact
 

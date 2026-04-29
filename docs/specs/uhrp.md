@@ -141,7 +141,7 @@ UHRP conformance is tested in `conformance/vectors/storage/uhrp/`:
 ## Related specs
 
 - [Overlay HTTP](./overlay-http.md) — Overlay network where UHRP advertisements are published
-- [BRC-26](../../../docs/BRCs/storage/0026.md) — Full UHRP specification
+- [BRC-26](https://github.com/bitcoin-sv/BRCs/blob/master/storage/0026.md) — Full UHRP specification
 
 ## Spec artifact
 

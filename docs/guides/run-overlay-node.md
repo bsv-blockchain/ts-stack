@@ -392,8 +392,8 @@ Visit `http://localhost:8080` to see the auto-generated web UI documenting your 
 
 ## What to read next
 
-- **[Overlay Topics Reference](/docs/packages/overlay-topics/)** — Full list of pre-built topic managers
-- **[Overlay-Express API](/docs/packages/overlay-express/)** — Complete configuration reference
-- **[SHIP/SLAP Discovery](/docs/specs/ship-slap/)** — Peer discovery protocol
-- **[GASP Sync Protocol](/docs/specs/gasp/)** — Historical data synchronization
-- **[Creating Custom Topics](/docs/tutorials/custom-overlay-topics/)** — Build your own topic managers
+- **[Overlay Topics Reference](../packages/overlays/topics.md)** — Full list of pre-built topic managers
+- **[Overlay-Express API](../packages/overlays/overlay-express.md)** — Complete configuration reference
+- **[SHIP/SLAP Discovery](../specs/overlay-http.md)** — Peer discovery protocol
+- **[GASP Sync Protocol](../specs/gasp-sync.md)** — Historical data synchronization
+- **Creating Custom Topics** — Build your own topic managers

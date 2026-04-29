@@ -18,12 +18,12 @@ Quick reference for all Bitcoin Request for Comments (BRC) standards implemented
 
 | BRC | Title | Domain | Spec Page | Key Packages | Status |
 |-----|-------|--------|-----------|--------------|--------|
-| BRC-29 | Peer-to-Peer Payment | Payments | [spec](/docs/specs/brc-29-peer-payment/) | @bsv/paymail, @bsv/wallet-toolbox | Stable |
-| BRC-31 | Mutual Authentication | Auth | [spec](/docs/specs/brc-31-auth/) | @bsv/authsocket, @bsv/auth-express-middleware | Stable |
-| BRC-42 | Key Derivation | Crypto | [SDK docs](/docs/packages/sdk/) | @bsv/sdk, @bsv/wallet-toolbox | Stable |
-| BRC-74 | Merkle Path | Crypto | [SDK docs](/docs/packages/sdk/) | @bsv/sdk | Stable |
-| BRC-100 | Wallet Interface | Wallet | [spec](/docs/specs/brc-100-wallet/) | @bsv/wallet-toolbox, @bsv/wab-server | Stable |
-| BRC-121 | HTTP 402 Payment | Payments | [spec](/docs/specs/brc-121-402/) | @bsv/payment-express-middleware, @bsv/402-pay | Stable |
+| BRC-29 | Peer-to-Peer Payment | Payments | [spec](../specs/brc-29-peer-payment.md) | @bsv/paymail, @bsv/wallet-toolbox | Stable |
+| BRC-31 | Mutual Authentication | Auth | [spec](../specs/brc-31-auth.md) | @bsv/authsocket, @bsv/auth-express-middleware | Stable |
+| BRC-42 | Key Derivation | Crypto | [SDK docs](../packages/sdk) | @bsv/sdk, @bsv/wallet-toolbox | Stable |
+| BRC-74 | Merkle Path | Crypto | [SDK docs](../packages/sdk) | @bsv/sdk | Stable |
+| BRC-100 | Wallet Interface | Wallet | [spec](../specs/brc-100-wallet.md) | @bsv/wallet-toolbox, @bsv/wab-server | Stable |
+| BRC-121 | HTTP 402 Payment | Payments | [spec](../specs/brc-121-402.md) | @bsv/payment-express-middleware, @bsv/402-pay | Stable |
 
 ## Standard Details
 
@@ -127,10 +127,10 @@ Each BRC is tested against conformance vectors:
 | BRC-100 | 50 | Complete |
 | BRC-121 | 5 | Complete |
 
-View vectors at [Conformance Vectors](/docs/conformance/vectors/).
+View vectors at [Conformance Vectors](../conformance/vectors.md).
 
 ## Next Steps
 
-- [Specifications Index](/docs/specs/) — Full specification details
-- [Conformance Testing](/docs/conformance/) — Test vectors and runners
-- [Guides](/docs/guides/) — Implementation tutorials
+- [Specifications Index](../specs) — Full specification details
+- [Conformance Testing](../conformance) — Test vectors and runners
+- [Guides](../guides) — Implementation tutorials

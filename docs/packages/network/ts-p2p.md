@@ -177,9 +177,9 @@ await listener.stop()
 
 ## Related packages
 
-- [@bsv/overlay](./overlays/overlay.md) — Can use TeranodeListener for transaction submission
+- [@bsv/overlay](../overlays/overlay.md) — Can use TeranodeListener for transaction submission
 - [@bsv/sdk](https://github.com/bsv-blockchain/ts-sdk) — Transaction and block deserialization
-- [@bsv/overlay-express](./overlays/overlay-express.md) — Overlay services can integrate with network
+- [@bsv/overlay-express](../overlays/overlay-express.md) — Overlay services can integrate with network
 
 ## Reference
 

@@ -153,10 +153,10 @@ BRC-29 conformance is tested in `conformance/vectors/payments/brc29/`:
 
 ## Related specs
 
-- [BRC-42/43](../../../docs/BRCs/wallet/0042.md) — Key derivation (used to derive payment addresses)
-- [BRC-95 / BRC-62](../../../docs/BRCs/transactions/0095.md) — Atomic BEEF transaction format
+- [BRC-42/43](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md) — Key derivation (used to derive payment addresses)
+- [BRC-95 / BRC-62](https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md) — Atomic BEEF transaction format
 - [BRC-100 Wallet](./brc-100-wallet.md) — `internalizeAction()` for receiving payments
-- [BRC-121 Paymail](../../../docs/BRCs/payments/0121.md) — Service discovery for payment endpoints
+- [BRC-121 Paymail](https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md) — Service discovery for payment endpoints
 - [Message Box HTTP](./message-box-http.md) — Transport layer for peer-to-peer messages
 
 ## Spec artifact

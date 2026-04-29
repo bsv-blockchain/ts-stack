@@ -47,7 +47,7 @@ Each BRC solves a specific interoperability problem. Implementations reference t
 
 **I'm building a wallet**
 - Start with [BRC-100 Wallet](./brc-100-wallet.md) to understand the standard interface
-- Implement cryptographic signing per [BRC-100](./brc-100-wallet.md) and key derivation per [BRC-42](../../../docs/BRCs/wallet/0042.md)
+- Implement cryptographic signing per [BRC-100](./brc-100-wallet.md) and key derivation per [BRC-42](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md)
 - Reference implementation: `@bsv/wallet-toolbox`
 
 **I'm implementing peer-to-peer payments**

@@ -177,6 +177,6 @@ Format per [Keep a Changelog](https://keepachangelog.com/):
 
 ## Next Steps
 
-- [Contributing Guide](/docs/about/contributing/) — How to contribute
-- [Doc Agent Guide](/docs/about/doc-agent/) — Maintaining docs
-- [Package Updates](/docs/about/keeping-docs-fresh/) — Syncing with releases
+- [Contributing Guide](contributing.md) — How to contribute
+- [Doc Agent Guide](doc-agent.md) — Maintaining docs
+- Package Updates — Syncing with releases

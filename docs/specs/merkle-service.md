@@ -134,7 +134,7 @@ Merkle Service conformance is tested in `conformance/vectors/merkle/`:
 ## Related specs
 
 - [ARC Broadcast](./arc-broadcast.md) — Alternative way to receive merkle proofs (via callback URL in initial submission)
-- [BRC-95 / BRC-62](../../../docs/BRCs/transactions/0095.md) — Merkle proof formats (BUMP, Merkle branch)
+- [BRC-95 / BRC-62](https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md) — Merkle proof formats (BUMP, Merkle branch)
 
 ## Spec artifact
 

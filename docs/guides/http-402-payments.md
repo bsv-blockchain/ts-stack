@@ -392,8 +392,8 @@ npx ts-node main.ts
 
 ## What to read next
 
-- **[402-Pay Package Reference](/docs/packages/402-pay/)** — Client and server APIs
-- **[Payment Express Middleware](/docs/packages/payment-express-middleware/)** — Detailed middleware config
-- **[BRC-121 Specification](/docs/specs/brc-121/)** — HTTP 402 Payment Required protocol
-- **[BRC-29 Key Derivation](/docs/specs/brc-29/)** — Payment address generation
-- **[Wallet-Toolbox Reference](/docs/packages/wallet-toolbox/)** — Wallet configuration
+- **[402-Pay Package Reference](../packages/middleware/402-pay.md)** — Client and server APIs
+- **[Payment Express Middleware](../packages/middleware/payment-express-middleware.md)** — Detailed middleware config
+- **[BRC-121 Specification](../specs/brc-121-402.md)** — HTTP 402 Payment Required protocol
+- **[BRC-29 Key Derivation](../specs/brc-29-peer-payment.md)** — Payment address generation
+- **[Wallet-Toolbox Reference](../packages/wallet/wallet-toolbox.md)** — Wallet configuration

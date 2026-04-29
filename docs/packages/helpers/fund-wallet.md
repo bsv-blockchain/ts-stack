@@ -135,8 +135,8 @@ npx fund-wallet
 
 ## Related packages
 
-- [@bsv/amountinator](/docs/packages/helpers/amountinator.md) — Could enhance output with currency conversion
-- [@bsv/simple](/docs/packages/helpers/simple.md) — Wallet that may use funded address
+- [@bsv/amountinator](amountinator.md) — Could enhance output with currency conversion
+- [@bsv/simple](simple.md) — Wallet that may use funded address
 - [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Private key and transaction utilities
 
 ## Reference

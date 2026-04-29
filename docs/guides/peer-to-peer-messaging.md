@@ -365,8 +365,8 @@ This complete example:
 
 ## What to read next
 
-- **[MessageBoxClient API](/docs/packages/message-box-client/)** — Full store-and-forward reference
-- **[AuthSocketClient API](/docs/packages/authsocket-client/)** — Real-time WebSocket reference
-- **[BRC-103 Mutual Authentication](/docs/specs/brc-103/)** — Authentication protocol details
-- **[Peer-to-Peer Payments](/docs/guides/peer-to-peer-payments.md)** — Combine messaging with payments
-- **[Message-box Server](/docs/infrastructure/message-box-server/)** — Deploy your own storage backend
+- **[MessageBoxClient API](../packages/messaging/message-box-client.md)** — Full store-and-forward reference
+- **[AuthSocketClient API](../packages/messaging/authsocket-client.md)** — Real-time WebSocket reference
+- **[BRC-103 Mutual Authentication](../specs/brc-31-auth.md)** — Authentication protocol details
+- **Peer-to-Peer Payments** — Combine messaging with payments
+- **[Message-box Server](../infrastructure/message-box-server.md)** — Deploy your own storage backend

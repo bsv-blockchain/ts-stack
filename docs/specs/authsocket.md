@@ -148,7 +148,7 @@ AuthSocket conformance is tested in `conformance/vectors/messaging/authsocket/`:
 
 - [BRC-31 Auth](./brc-31-auth.md) — HTTP variant of the same mutual auth protocol
 - [Message Box HTTP](./message-box-http.md) — Polling alternative (HTTP POST)
-- [BRC-103](../../../docs/BRCs/auth/0103.md) — Underlying peer authentication primitives
+- [BRC-103](https://github.com/bitcoin-sv/BRCs/blob/master/auth/0103.md) — Underlying peer authentication primitives
 
 ## Spec artifact
 
