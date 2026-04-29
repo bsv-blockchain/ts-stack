@@ -27,7 +27,7 @@
     
     
       
-        <title>Specification - ts-stack</title>
+        <title>BRC-121 HTTP 402 Payment Required - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#specification" class="md-skip">
+        <a href="#brc-121-http-402-payment-required" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Specification
+              BRC-121 HTTP 402 Payment Required
             
           </span>
         </div>
@@ -2924,6 +2924,31 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-121 / HTTP 402
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -2947,6 +2972,124 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-monetized-express-endpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Monetized Express endpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -3911,6 +4054,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-monetized-express-endpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Monetized Express endpoint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3929,8 +4179,202 @@
   
 
 
-<h1 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h1>
-<p>Technical specification document.</p>
+<h1 id="brc-121-http-402-payment-required">BRC-121 HTTP 402 Payment Required<a class="headerlink" href="#brc-121-http-402-payment-required" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>BRC-121 monetizes HTTP API endpoints with a single-round-trip payment flow: client requests a resource, server responds with 402 and payment instructions (a nonce), client derives a payment address, constructs a BSV transaction, and re-sends the original request with payment headers. Server validates and serves the resource (or rejects with another 402).</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>OpenAPI 3.1</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/402-pay, @bsv/payment-express-middleware</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Monetize APIs without subscriptions or token systems</strong>. Traditional APIs require accounts, credit cards, or API keys. BRC-121 enables instant monetization: each request is micro-paid in satoshis. No signup, no account needed—just pay per request and immediate access.</p>
+<p><strong>Replay-proof payment derivation</strong>. The server provides a fresh nonce for each 402 response. The client must use that exact nonce to derive the payment address. This prevents replay attacks: a payment for one request cannot be reused for another. Additionally, the server's wallet rejects duplicate nonces with <code>isMerge=true</code>.</p>
+<p><strong>Stateless server operation</strong>. The server doesn't maintain client sessions or payment history. Every request is independent. The payment derivation is deterministic (nonce + timestamp), so the server can validate payments without database lookups.</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Single round-trip with payment</strong>:</p>
+<ol>
+<li><strong>Client → Server</strong> <code>GET /protected-resource</code> (no payment headers)</li>
+<li>Server checks if resource is free (price = 0) → serve it</li>
+<li>
+<p>Otherwise, server sends 402 Payment Required</p>
+</li>
+<li>
+<p><strong>Server → Client</strong> HTTP 402 response</p>
+</li>
+<li><code>x-bsv-server: &lt;serverPublicKey&gt;</code> — Server's identity key</li>
+<li><code>x-bsv-sats: &lt;amount&gt;</code> — Satoshis required</li>
+<li>
+<p><code>x-bsv-nonce: &lt;derivationPrefix&gt;</code> — Server's nonce for key derivation (BRC-29 format)</p>
+</li>
+<li>
+<p><strong>Client</strong> (constructs payment)</p>
+</li>
+<li>Calls <code>wallet.createAction()</code> with one P2PKH output</li>
+<li>Derives address: <code>invoiceNumber = "2-3241645161d8-&lt;x-bsv-nonce&gt; &lt;base64(timestamp))"</code></li>
+<li>Uses BRC-42 to derive <code>(pubKeyA, pubKeyB)</code> from sender+server keys</li>
+<li>Locks output to sender's receiving address</li>
+<li>
+<p>Signs and constructs Atomic BEEF (BRC-95)</p>
+</li>
+<li>
+<p><strong>Client → Server</strong> same request with payment headers</p>
+</li>
+<li><code>x-bsv-beef: &lt;beefHex&gt;</code> — Atomic BEEF transaction</li>
+<li><code>x-bsv-sender: &lt;clientPublicKey&gt;</code> — Sender's identity key</li>
+<li><code>x-bsv-nonce: &lt;derivationPrefix&gt;</code> — Same nonce from 402</li>
+<li><code>x-bsv-time: &lt;base64(timestamp)&gt;</code> — Timestamp suffix</li>
+<li>
+<p><code>x-bsv-vout: &lt;outputIndex&gt;</code> — Which output contains the payment</p>
+</li>
+<li>
+<p><strong>Server</strong> (validates &amp; serves)</p>
+</li>
+<li>Calls <code>wallet.internalizeAction()</code> with BEEF</li>
+<li>If <code>isMerge === false</code> → payment accepted, serve resource (HTTP 200)</li>
+<li>If <code>isMerge === true</code> → duplicate payment, reject (HTTP 402)</li>
+<li>If amount &lt; required → reject (HTTP 402)</li>
+</ol>
+<h2 id="key-types-endpoints">Key types / endpoints<a class="headerlink" href="#key-types-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+<th>Request</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET/POST/etc.</td>
+<td><code>/{resourcePath}</code></td>
+<td>First request (unauthenticated)</td>
+<td>(none)</td>
+<td>402 + <code>x-bsv-sats</code>, <code>x-bsv-nonce</code>, <code>x-bsv-server</code></td>
+</tr>
+<tr>
+<td>GET/POST/etc.</td>
+<td><code>/{resourcePath}</code></td>
+<td>Second request with payment</td>
+<td><code>x-bsv-beef</code>, <code>x-bsv-sender</code>, <code>x-bsv-nonce</code>, <code>x-bsv-time</code>, <code>x-bsv-vout</code></td>
+<td>200 + resource body, or 402 on failure</td>
+</tr>
+</tbody>
+</table>
+<h2 id="example-monetized-express-endpoint">Example: Monetized Express endpoint<a class="headerlink" href="#example-monetized-express-endpoint" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="nx">express</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;express&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createAuthMiddleware</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/auth-express-middleware&#39;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createPaymentMiddleware</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/payment-express-middleware&#39;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-toolbox&#39;</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="p">({</span><span class="w"> </span><span class="nx">env</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;main&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">app</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">express</span><span class="p">()</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1">// Stack auth, then payment middleware</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nx">app</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">createAuthMiddleware</span><span class="p">({</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="p">}))</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nx">app</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">createPaymentMiddleware</span><span class="p">({</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nx">wallet</span><span class="p">,</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nx">calculateRequestPrice</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">req</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="c1">// Pricing logic</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">path</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;/premium&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="mf">500</span><span class="w">  </span><span class="c1">// 500 sats</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">req</span><span class="p">.</span><span class="nx">path</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s1">&#39;/free&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="mf">0</span><span class="w">       </span><span class="c1">// Free</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="mf">100</span><span class="w">  </span><span class="c1">// Default 100 sats</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="p">}))</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1">// Protected endpoint</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="nx">app</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/premium&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">res</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span><span class="c1">// If we reach here, payment was accepted</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span><span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">({</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Premium article here&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span><span class="nx">paidBy</span><span class="o">:</span><span class="w"> </span><span class="kt">req.auth.identityKey</span><span class="p">,</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">    </span><span class="nx">amount</span><span class="o">:</span><span class="w"> </span><span class="kt">req.payment.satoshisPaid</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="p">})</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="nx">app</span><span class="p">.</span><span class="nx">listen</span><span class="p">(</span><span class="mf">3000</span><span class="p">)</span>
+</code></pre></div>
+<p>Client-side (using <code>create402Fetch</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">create402Fetch</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/402-pay/client&#39;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">WalletClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WalletClient</span><span class="p">()</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1">// Fetch wrapper that auto-handles 402</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">fetch402</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">create402Fetch</span><span class="p">({</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch402</span><span class="p">(</span><span class="s1">&#39;https://api.example.com/premium&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kd">const</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">data</span><span class="p">.</span><span class="nx">content</span><span class="p">)</span><span class="w">  </span><span class="c1">// Automatic payment + resource retrieval</span>
+</code></pre></div>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>BRC-121 conformance is tested in <code>conformance/vectors/payments/brc121/</code>:</p>
+<ul>
+<li>Nonce generation and freshness (± 30 seconds)</li>
+<li>BRC-29 key derivation (prefix + suffix format)</li>
+<li>Atomic BEEF transaction validation</li>
+<li><code>isMerge</code> handling (duplicate nonce rejection)</li>
+<li>Timestamp validation</li>
+<li>Output index validation</li>
+</ul>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/402-pay/server</td>
+<td>Server-side middleware for 402 handling; builds on payment-express-middleware</td>
+</tr>
+<tr>
+<td>@bsv/402-pay/client</td>
+<td>Client-side fetch wrapper that auto-detects 402 and constructs payment headers</td>
+</tr>
+<tr>
+<td>@bsv/payment-express-middleware</td>
+<td>Express middleware for payment gating; requires auth middleware first</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../brc-29-peer-payment/">BRC-29 Peer Payment</a> — Key derivation and payment format</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md">BRC-42/43</a> — Key derivation for payment address</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md">BRC-95 / BRC-62</a> — Atomic BEEF format</li>
+<li><a href="../brc-31-auth/">BRC-31 Auth</a> — Often combined with 402 for dual auth + payment</li>
+<li><a href="../brc-100-wallet/">BRC-100 Wallet</a> — <code>internalizeAction()</code> for payment validation</li>
+</ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/payments/brc121.yaml">brc121.yaml</a></p>
 
 
 
@@ -3953,7 +4397,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

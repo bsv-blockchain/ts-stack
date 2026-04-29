@@ -27,7 +27,7 @@
     
     
       
-        <title>GASP Sync Protocol - ts-stack</title>
+        <title>GASP — Graph Aware Sync Protocol - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gasp-sync-protocol" class="md-skip">
+        <a href="#gasp-graph-aware-sync-protocol" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GASP Sync Protocol
+              GASP — Graph Aware Sync Protocol
             
           </span>
         </div>
@@ -3129,10 +3129,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#at-a-glance" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        At a glance
       
     </span>
   </a>
@@ -3140,121 +3140,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
+  <a href="#what-problem-this-solves" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key Concepts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Key Concepts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#transaction-graph" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction Graph
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graph-metadata" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Graph Metadata
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#selective-synchronization" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Selective Synchronization
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#protocol-messages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Protocol Messages
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Protocol Messages">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#sync-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sync Request
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graph-metadata-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Graph Metadata Response
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transaction-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction Request
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transaction-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction Response
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#efficiency-benefits" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Efficiency Benefits
+        What problem this solves
       
     </span>
   </a>
@@ -3262,10 +3151,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#specification" class="md-nav__link">
+  <a href="#protocol-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Specification
+        Protocol overview
       
     </span>
   </a>
@@ -3273,10 +3162,65 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
+  <a href="#key-types-channels" class="md-nav__link">
     <span class="md-ellipsis">
       
-        References
+        Key types / channels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-sync-two-overlay-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Sync two overlay nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
       
     </span>
   </a>
@@ -4117,10 +4061,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#at-a-glance" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        At a glance
       
     </span>
   </a>
@@ -4128,121 +4072,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
+  <a href="#what-problem-this-solves" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key Concepts
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Key Concepts">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#transaction-graph" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction Graph
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graph-metadata" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Graph Metadata
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#selective-synchronization" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Selective Synchronization
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#protocol-messages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Protocol Messages
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Protocol Messages">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#sync-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Sync Request
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graph-metadata-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Graph Metadata Response
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transaction-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction Request
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transaction-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction Response
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#efficiency-benefits" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Efficiency Benefits
+        What problem this solves
       
     </span>
   </a>
@@ -4250,10 +4083,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#specification" class="md-nav__link">
+  <a href="#protocol-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Specification
+        Protocol overview
       
     </span>
   </a>
@@ -4261,10 +4094,65 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
+  <a href="#key-types-channels" class="md-nav__link">
     <span class="md-ellipsis">
       
-        References
+        Key types / channels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-sync-two-overlay-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Sync two overlay nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
       
     </span>
   </a>
@@ -4291,83 +4179,220 @@
   
 
 
-<h1 id="gasp-sync-protocol">GASP Sync Protocol<a class="headerlink" href="#gasp-sync-protocol" title="Permanent link">&para;</a></h1>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>GASP (Graph Aware Sync Protocol) enables overlay nodes to efficiently propagate transaction graphs. Rather than broadcasting individual transactions, GASP shares metadata about transaction dependencies, allowing peers to request only what they're missing.</p>
-<h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
-<h3 id="transaction-graph">Transaction Graph<a class="headerlink" href="#transaction-graph" title="Permanent link">&para;</a></h3>
-<p>A transaction graph is a DAG (directed acyclic graph) where:
-- Each transaction is a node
-- Edges represent spending relationships (transaction A spends output of transaction B)</p>
-<h3 id="graph-metadata">Graph Metadata<a class="headerlink" href="#graph-metadata" title="Permanent link">&para;</a></h3>
-<p>GASP shares metadata including:
-- Transaction IDs
-- Input references (which outputs are spent)
-- Graph topology (who spends whom)
-- Availability status (whether nodes have the full transaction)</p>
-<h3 id="selective-synchronization">Selective Synchronization<a class="headerlink" href="#selective-synchronization" title="Permanent link">&para;</a></h3>
-<p>Nodes only request:
-- Transactions they don't have
-- In dependency order (dependencies first)
-- From peers that have them</p>
-<h2 id="protocol-messages">Protocol Messages<a class="headerlink" href="#protocol-messages" title="Permanent link">&para;</a></h2>
-<h3 id="sync-request">Sync Request<a class="headerlink" href="#sync-request" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sync_request&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;from_height&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">123456</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;graph_hash&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;merkle root of known transactions&gt;&quot;</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">}</span>
+<h1 id="gasp-graph-aware-sync-protocol">GASP — Graph Aware Sync Protocol<a class="headerlink" href="#gasp-graph-aware-sync-protocol" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>GASP enables two overlay nodes to efficiently synchronize transaction state by walking the transaction graph together. Instead of broadcasting individual transactions, nodes exchange UTXO lists, then request only missing transaction ancestry and descendancy. Merkle proof validation ensures legitimacy without trusting peers.</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>AsyncAPI 3.0</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/gasp-core</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Efficient state sync between overlay nodes</strong>. When two overlay nodes meet, they need to exchange their UTXO sets so they have consistent state. Broadcasting every transaction is slow. GASP exchanges UTXO lists first, then each node requests only the inputs it's missing, walking the transaction graph backward until all dependencies are satisfied.</p>
+<p><strong>Completeness verification</strong>. Nodes can prove they have a complete, unbroken transaction history from some anchor point (e.g., a confirmed block) back to inputs. If a peer claims to have a UTXO but can't provide its full ancestry, the node rejects it.</p>
+<p><strong>Bidirectional and unidirectional modes</strong>. Nodes can sync in both directions (both exchange missing UTXOs) or one-way (only one side sends). This supports various topologies: hub-and-spoke (spoke only receives), peer-to-peer (both ways), etc.</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Four-phase synchronization</strong> (if bidirectional):</p>
+<p><strong>Phase 1 — Initial Request/Response</strong></p>
+<ol>
+<li><strong>Initiator → Responder</strong> <code>GASPInitialRequest</code></li>
+<li>Initiator's UTXO list (everything it knows)</li>
+<li>Timestamp (<code>since</code>) — initiator wants UTXOs from responder created after this time</li>
+<li>
+<p>Limit (max UTXOs to return)</p>
+</li>
+<li>
+<p><strong>Responder → Initiator</strong> <code>GASPInitialResponse</code></p>
+</li>
+<li>Responder's UTXO list (what initiator is missing)</li>
+<li>Responder's <code>since</code> timestamp (what it wants from initiator)</li>
+</ol>
+<p><strong>Phase 2 — Initial Reply (bidirectional only)</strong></p>
+<ol>
+<li><strong>Initiator → Responder</strong> <code>GASPInitialReply</code></li>
+<li>UTXOs that responder is missing (based on responder's <code>since</code> timestamp)</li>
+</ol>
+<p><strong>Phase 3 &amp; 4 — Graph Walking</strong></p>
+<p>For each UTXO the peer is missing, request the full transaction and ancestry:</p>
+<ol>
+<li><strong>Either party → Peer</strong> <code>GASPNodeRequest</code></li>
+<li><code>graphID</code> — unique identifier for this sync session</li>
+<li><code>txid</code>, <code>outputIndex</code> — UTXO to request</li>
+<li>
+<p><code>metadata</code> — optional custom data</p>
+</li>
+<li>
+<p><strong>Peer → Requester</strong> <code>GASPNode</code></p>
+</li>
+<li>Raw transaction hex</li>
+<li>Output index</li>
+<li>Merkle proof (if available)</li>
+<li>Transaction metadata</li>
+<li>Input requirements (what inputs does this transaction need?)</li>
+</ol>
+<p>If the transaction has inputs the requester doesn't have, it requests those too (recursive graph walk). Continue until all dependencies are satisfied.</p>
+<ol>
+<li><strong>Requester → Peer</strong> <code>GASPNodeResponse</code></li>
+<li>If more inputs are needed: list of input txids to request</li>
+<li>Or completion signal</li>
+</ol>
+<h2 id="key-types-channels">Key types / channels<a class="headerlink" href="#key-types-channels" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Direction</th>
+<th>Message Type</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gasp/initialRequest</code></td>
+<td>Send</td>
+<td><code>GASPInitialRequest</code></td>
+<td>Initiator sends UTXO list and <code>since</code> timestamp</td>
+</tr>
+<tr>
+<td><code>gasp/initialResponse</code></td>
+<td>Receive</td>
+<td><code>GASPInitialResponse</code></td>
+<td>Responder sends UTXO list and its <code>since</code></td>
+</tr>
+<tr>
+<td><code>gasp/initialReply</code></td>
+<td>Send</td>
+<td><code>GASPInitialReply</code></td>
+<td>Initiator sends missing UTXOs (bidirectional mode)</td>
+</tr>
+<tr>
+<td><code>gasp/requestNode</code></td>
+<td>Bidirectional</td>
+<td><code>GASPNodeRequest</code></td>
+<td>Request a transaction and its inputs</td>
+</tr>
+<tr>
+<td><code>gasp/node</code></td>
+<td>Bidirectional</td>
+<td><code>GASPNode</code></td>
+<td>Respond with transaction data</td>
+</tr>
+<tr>
+<td><code>gasp/nodeResponse</code></td>
+<td>Bidirectional</td>
+<td><code>GASPNodeResponse</code></td>
+<td>Confirm receipt; request more inputs if needed</td>
+</tr>
+</tbody>
+</table>
+<h2 id="example-sync-two-overlay-nodes">Example: Sync two overlay nodes<a class="headerlink" href="#example-sync-two-overlay-nodes" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">GASP</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/gasp-core&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// 1. Implement storage interface</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">class</span><span class="w"> </span><span class="nx">MyStorage</span><span class="w"> </span><span class="k">implements</span><span class="w"> </span><span class="nx">GASPStorage</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="k">async</span><span class="w"> </span><span class="nx">findKnownUTXOs</span><span class="p">(</span><span class="nx">since</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">,</span><span class="w"> </span><span class="nx">limit?</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="c1">// Return all UTXOs created after `since`</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="p">{</span><span class="w"> </span><span class="nx">txid</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;abc...&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">outputIndex</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span><span class="w"> </span><span class="nx">score</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">()</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span><span class="p">{</span><span class="w"> </span><span class="nx">txid</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;def...&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">outputIndex</span><span class="o">:</span><span class="w"> </span><span class="kt">1</span><span class="p">,</span><span class="w"> </span><span class="nx">score</span><span class="o">:</span><span class="w"> </span><span class="kt">Date.now</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="k">async</span><span class="w"> </span><span class="nx">hydrateGASPNode</span><span class="p">(</span><span class="nx">graphID</span><span class="p">,</span><span class="w"> </span><span class="nx">txid</span><span class="p">,</span><span class="w"> </span><span class="nx">outputIndex</span><span class="p">,</span><span class="w"> </span><span class="nx">metadata</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="c1">// Return the transaction and proof</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="nx">graphID</span><span class="p">,</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="nx">rawTx</span><span class="o">:</span><span class="w"> </span><span class="kt">await</span><span class="w"> </span><span class="nx">getTransactionHex</span><span class="p">(</span><span class="nx">txid</span><span class="p">),</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="nx">outputIndex</span><span class="p">,</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="nx">proof</span><span class="o">:</span><span class="w"> </span><span class="kt">await</span><span class="w"> </span><span class="nx">getMerkleProof</span><span class="p">(</span><span class="nx">txid</span><span class="p">),</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">      </span><span class="nx">txMetadata</span><span class="o">:</span><span class="w"> </span><span class="p">{}</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span><span class="c1">// ... implement other methods ...</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="p">}</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="c1">// 2. Implement remote peer interface</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="kd">class</span><span class="w"> </span><span class="nx">MyRemote</span><span class="w"> </span><span class="k">implements</span><span class="w"> </span><span class="nx">GASPRemote</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span><span class="k">async</span><span class="w"> </span><span class="nx">getInitialResponse</span><span class="p">(</span><span class="nx">request</span><span class="o">:</span><span class="w"> </span><span class="kt">GASPInitialRequest</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span><span class="c1">// Send request to peer, receive response</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span><span class="sb">`https://peer.example.com/gasp/initial`</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">      </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;POST&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">      </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="kt">JSON.stringify</span><span class="p">(</span><span class="nx">request</span><span class="p">)</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span><span class="p">})</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">  </span><span class="c1">// ... implement other methods ...</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="p">}</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a>
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="c1">// 3. Run sync</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="kd">const</span><span class="w"> </span><span class="nx">storage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MyStorage</span><span class="p">()</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="kd">const</span><span class="w"> </span><span class="nx">remote</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MyRemote</span><span class="p">()</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="kd">const</span><span class="w"> </span><span class="nx">gasp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">GASP</span><span class="p">(</span><span class="nx">storage</span><span class="p">,</span><span class="w"> </span><span class="nx">remote</span><span class="p">)</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="k">await</span><span class="w"> </span><span class="nx">gasp</span><span class="p">.</span><span class="nx">sync</span><span class="p">()</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Sync complete; state is now consistent with peer&#39;</span><span class="p">)</span>
 </code></pre></div>
-<h3 id="graph-metadata-response">Graph Metadata Response<a class="headerlink" href="#graph-metadata-response" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;graph_metadata&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;txids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;txid1&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;&lt;txid2&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;edges&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="nt">&quot;input_txid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;txid&gt;&quot;</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="nt">&quot;input_vout&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="nt">&quot;output_txid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;txid&gt;&quot;</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="p">],</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">&quot;availability&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="nt">&quot;&lt;txid1&gt;&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nt">&quot;&lt;txid2&gt;&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">}</span>
-</code></pre></div>
-<h3 id="transaction-request">Transaction Request<a class="headerlink" href="#transaction-request" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;transaction_request&quot;</span><span class="p">,</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;txids&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;&lt;txid&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">]</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">}</span>
-</code></pre></div>
-<h3 id="transaction-response">Transaction Response<a class="headerlink" href="#transaction-response" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;transaction_response&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;transactions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="p">{</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">      </span><span class="nt">&quot;txid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;txid&gt;&quot;</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">      </span><span class="nt">&quot;raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&lt;hex-encoded transaction&gt;&quot;</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">}</span>
-</code></pre></div>
-<h2 id="efficiency-benefits">Efficiency Benefits<a class="headerlink" href="#efficiency-benefits" title="Permanent link">&para;</a></h2>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>GASP conformance is tested in <code>conformance/vectors/sync/gasp/</code>:</p>
 <ul>
-<li><strong>Bandwidth</strong> — Metadata is much smaller than full transactions</li>
-<li><strong>Parallelism</strong> — Independent subgraphs can sync in parallel</li>
-<li><strong>Caching</strong> — Repeated graph syncs reuse known transactions</li>
-<li><strong>Conditional</strong> — Nodes can skip irrelevant subgraphs</li>
+<li>UTXO list exchange and deduplication</li>
+<li>Graph walking (recursive input resolution)</li>
+<li>Merkle proof validation</li>
+<li>Phase ordering (initial before graph walk)</li>
+<li>Bidirectional vs. unidirectional modes</li>
+<li>Anchor validation (transactions must connect to confirmed blocks)</li>
 </ul>
-<h2 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h2>
-<p>The complete GASP protocol is defined in AsyncAPI 3.0:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>specs/sync/gasp-asyncapi.yaml
-</code></pre></div>
-<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/gasp-core</td>
+<td>Core GASP protocol implementation; orchestrates graph walking, validates proofs, manages sync state</td>
+</tr>
+<tr>
+<td>@bsv/overlay</td>
+<td>Integrates GASP for syncing state between overlay nodes</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="/docs/packages/gasp/">GASP Package</a></li>
-<li><a href="/docs/packages/overlay-express/">Overlay Express</a></li>
+<li><a href="../overlay-http/">Overlay HTTP</a> — HTTP surface that can trigger GASP sync</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md">BRC-95 / BRC-62</a> — Transaction and proof formats</li>
 </ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/sync/gasp-asyncapi.yaml">gasp-asyncapi.yaml</a></p>
 
 
 
@@ -4390,7 +4415,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

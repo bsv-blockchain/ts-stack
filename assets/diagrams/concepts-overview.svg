@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-labelledby="title desc">
+  <title id="title">Key Concepts: BEEF, Overlay, Topic Manager</title>
+  <desc id="desc">A transaction is encoded as BEEF and submitted to an Overlay node. The Engine consults its Topic Manager to admit valid transactions, then writes to a Lookup Service which apps query. SPV proofs travel inside BEEF so any peer can verify.</desc>
+  <style>
+    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
+    .box-accent { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.75; }
+    .box-amber { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .arrow-orange { stroke: #FF6B00; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
+    .label-mono { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: #FF6B00; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+    .caption { font: italic 11px ui-sans-serif, system-ui, sans-serif; fill: #6B7280; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#FF6B00"/>
+    </marker>
+  </defs>
+
+  <!-- 1. Transaction with proof -->
+  <rect x="40" y="60" width="200" height="120" rx="8" class="box-amber"/>
+  <text x="140" y="86" text-anchor="middle" class="title">Transaction</text>
+  <text x="140" y="106" text-anchor="middle" class="label">+ Merkle Proof</text>
+  <text x="140" y="148" text-anchor="middle" class="label-mono">BEEF</text>
+  <text x="140" y="168" text-anchor="middle" class="caption">tx + SPV inside</text>
+
+  <line x1="240" y1="120" x2="320" y2="120" class="arrow-orange"/>
+  <text x="280" y="110" text-anchor="middle" class="caption">submit</text>
+
+  <!-- 2. Overlay engine box -->
+  <rect x="320" y="40" width="540" height="320" rx="8" class="box"/>
+  <text x="590" y="66" text-anchor="middle" class="heading">Overlay Node</text>
+
+  <!-- Topic Manager -->
+  <rect x="350" y="90" width="220" height="120" rx="6" class="box-amber"/>
+  <text x="460" y="116" text-anchor="middle" class="title">Topic Manager</text>
+  <line x1="370" y1="128" x2="550" y2="128" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="460" y="152" text-anchor="middle" class="label">Validates which</text>
+  <text x="460" y="172" text-anchor="middle" class="label">outputs belong</text>
+  <text x="460" y="192" text-anchor="middle" class="label">to this topic</text>
+
+  <line x1="570" y1="150" x2="610" y2="150" class="arrow"/>
+  <text x="590" y="142" text-anchor="middle" class="caption">admits</text>
+
+  <!-- Lookup Service -->
+  <rect x="610" y="90" width="220" height="120" rx="6" class="box-accent"/>
+  <text x="720" y="116" text-anchor="middle" class="title">Lookup Service</text>
+  <line x1="630" y1="128" x2="810" y2="128" stroke="#FF6B00" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="720" y="152" text-anchor="middle" class="label">Indexes admitted</text>
+  <text x="720" y="172" text-anchor="middle" class="label">UTXOs and serves</text>
+  <text x="720" y="192" text-anchor="middle" class="label">queries to apps</text>
+
+  <!-- Examples row -->
+  <text x="350" y="245" class="caption">Examples of Topic / Lookup pairs:</text>
+  <rect x="350" y="255" width="150" height="80" rx="6" class="box"/>
+  <text x="425" y="280" text-anchor="middle" class="title">UHRP</text>
+  <text x="425" y="305" text-anchor="middle" class="label">files by hash</text>
+  <text x="425" y="323" text-anchor="middle" class="caption">overlay-topics</text>
+
+  <rect x="515" y="255" width="150" height="80" rx="6" class="box"/>
+  <text x="590" y="280" text-anchor="middle" class="title">BTMS</text>
+  <text x="590" y="305" text-anchor="middle" class="label">tokens</text>
+  <text x="590" y="323" text-anchor="middle" class="caption">btms-backend</text>
+
+  <rect x="680" y="255" width="150" height="80" rx="6" class="box"/>
+  <text x="755" y="280" text-anchor="middle" class="title">DID</text>
+  <text x="755" y="305" text-anchor="middle" class="label">identity registry</text>
+  <text x="755" y="323" text-anchor="middle" class="caption">overlay-topics</text>
+
+  <!-- App pulls from lookup -->
+  <line x1="720" y1="360" x2="720" y2="450" class="arrow-orange"/>
+  <text x="735" y="412" class="caption">query</text>
+
+  <rect x="600" y="455" width="240" height="60" rx="8" class="box-accent"/>
+  <text x="720" y="491" text-anchor="middle" class="heading">Your Application</text>
+
+  <!-- BRC-100 wallet annotation -->
+  <rect x="40" y="220" width="200" height="120" rx="8" class="box-accent"/>
+  <text x="140" y="246" text-anchor="middle" class="title">BRC-100 Wallet</text>
+  <line x1="60" y1="258" x2="220" y2="258" stroke="#FF6B00" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="140" y="282" text-anchor="middle" class="label">Standard interface</text>
+  <text x="140" y="302" text-anchor="middle" class="label">for sign / encrypt /</text>
+  <text x="140" y="322" text-anchor="middle" class="label">authenticate</text>
+
+  <!-- arrow from wallet to BEEF transaction -->
+  <line x1="140" y1="220" x2="140" y2="180" class="arrow"/>
+  <text x="155" y="205" class="caption">signs</text>
+
+  <!-- Identity Key footer -->
+  <rect x="40" y="455" width="540" height="60" rx="8" class="box-amber"/>
+  <text x="310" y="481" text-anchor="middle" class="title">Identity Key</text>
+  <text x="310" y="501" text-anchor="middle" class="label">Long-lived public key — used by wallets, messaging, overlays, middleware</text>
+</svg>

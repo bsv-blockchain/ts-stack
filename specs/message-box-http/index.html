@@ -27,7 +27,7 @@
     
     
       
-        <title>Specification - ts-stack</title>
+        <title>MessageBox Server HTTP API - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#specification" class="md-skip">
+        <a href="#messagebox-server-http-api" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Specification
+              MessageBox Server HTTP API
             
           </span>
         </div>
@@ -2784,6 +2784,31 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Message-box HTTP
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -2807,6 +2832,124 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-send-encrypted-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Send encrypted message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -3911,6 +4054,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-send-encrypted-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Send encrypted message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3929,8 +4179,201 @@
   
 
 
-<h1 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h1>
-<p>Technical specification document.</p>
+<h1 id="messagebox-server-http-api">MessageBox Server HTTP API<a class="headerlink" href="#messagebox-server-http-api" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>The MessageBox Server provides a store-and-forward REST API for peer-to-peer messaging. Clients send messages to named inboxes, recipients retrieve messages later, and messages are deleted once acknowledged. All requests use BRC-31 mutual authentication so the server knows sender and recipient identity without passwords.</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>OpenAPI 3.1</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/message-box-client</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Asynchronous peer-to-peer messaging without accounts or servers</strong>. Traditional messaging requires accounts, servers, and complex infrastructure. MessageBox enables store-and-forward: sender encrypts and posts to recipient's inbox, recipient polls or listens via WebSocket, and messages are automatically deleted after reading. Identity is cryptographic (no username/password).</p>
+<p><strong>Encrypted message storage</strong>. Messages are encrypted with AES-256-GCM before storage. Only the recipient (holder of the private key) can decrypt. The server cannot read message contents.</p>
+<p><strong>Peer discovery via overlay network</strong>. Clients can discover peers' MessageBox hosts by querying the overlay network (UHRP protocol), enabling dynamic host discovery without DNS or a central directory.</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Three-step flow</strong> (send → store → retrieve):</p>
+<ol>
+<li><strong>Sender → MessageBox</strong> <code>POST /messages</code></li>
+<li>Recipient public key in body</li>
+<li>Message body (encrypted with AES-256-GCM)</li>
+<li><code>x-bsv-auth-*</code> headers (BRC-31 mutual auth)</li>
+<li>
+<p>Server stores message in recipient's inbox</p>
+</li>
+<li>
+<p><strong>Recipient → MessageBox</strong> <code>GET /messages/{messageBox}</code></p>
+</li>
+<li>Retrieves all pending messages in their inbox</li>
+<li><code>x-bsv-auth-*</code> headers</li>
+<li>
+<p>Server returns array of messages</p>
+</li>
+<li>
+<p><strong>Recipient → MessageBox</strong> <code>POST /acknowledge</code></p>
+</li>
+<li>Acknowledges (deletes) messages by ID</li>
+<li><code>x-bsv-auth-*</code> headers</li>
+<li>Server deletes messages</li>
+</ol>
+<p><strong>Live subscription</strong> (alternative to polling):</p>
+<ul>
+<li><strong>Recipient → MessageBox</strong> WebSocket upgrade + BRC-103 handshake</li>
+<li>Server pushes new messages in real-time via WebSocket</li>
+<li>Recipient can <code>joinRoom(messageBox)</code> / <code>listenForMessages()</code></li>
+</ul>
+<h2 id="key-types-endpoints">Key types / endpoints<a class="headerlink" href="#key-types-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+<th>Request</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/messages</code></td>
+<td>Send message</td>
+<td><code>{ recipient, messageBox, body }</code></td>
+<td><code>{ messageId }</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/messages/{messageBox}</code></td>
+<td>List messages</td>
+<td>(via auth headers)</td>
+<td><code>[ { messageId, body, sender, timestamp } ]</code></td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/acknowledge</code></td>
+<td>Delete messages</td>
+<td><code>{ messageIds: [...] }</code></td>
+<td>OK</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/resolve-host</code></td>
+<td>Discover peer's MessageBox host</td>
+<td><code>{ identityKey }</code></td>
+<td><code>{ host }</code></td>
+</tr>
+<tr>
+<td>WebSocket</td>
+<td><code>/live</code></td>
+<td>Listen for live messages</td>
+<td>BRC-103 handshake + <code>joinRoom</code></td>
+<td>Real-time message push</td>
+</tr>
+</tbody>
+</table>
+<h2 id="example-send-encrypted-message">Example: Send encrypted message<a class="headerlink" href="#example-send-encrypted-message" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/message-box-client&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-toolbox&#39;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="p">({</span><span class="w"> </span><span class="nx">env</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;main&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">msgBox</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="p">({</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nx">walletClient</span><span class="o">:</span><span class="w"> </span><span class="kt">wallet</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;https://messagebox.babbage.systems&#39;</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">})</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1">// 1. Send message (auto-encrypted with AES-256-GCM)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBox</span><span class="p">.</span><span class="nx">sendMessage</span><span class="p">({</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nx">recipient</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;02abc123...&#39;</span><span class="p">,</span><span class="w">  </span><span class="c1">// Recipient&#39;s public key</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;general_inbox&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Hello! This is encrypted and only you can read it.&#39;</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">})</span>
+</code></pre></div>
+<p>Example: Retrieve and acknowledge messages</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// 2. Retrieve all messages in inbox</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">messages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">msgBox</span><span class="p">.</span><span class="nx">listMessages</span><span class="p">({</span><span class="w"> </span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;general_inbox&#39;</span><span class="w"> </span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">})</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">const</span><span class="w"> </span><span class="nx">msg</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="nx">messages</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`From </span><span class="si">${</span><span class="nx">msg</span><span class="p">.</span><span class="nx">sender</span><span class="si">}</span><span class="sb">: </span><span class="si">${</span><span class="nx">msg</span><span class="p">.</span><span class="nx">body</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">}</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1">// 3. Acknowledge (delete) messages</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBox</span><span class="p">.</span><span class="nx">acknowledgeMessage</span><span class="p">({</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nx">messageIds</span><span class="o">:</span><span class="w"> </span><span class="kt">messages.map</span><span class="p">(</span><span class="nx">m</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">m</span><span class="p">.</span><span class="nx">messageId</span><span class="p">)</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">})</span>
+</code></pre></div>
+<p>Example: Listen for live messages</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// 4. Subscribe to real-time messages</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBox</span><span class="p">.</span><span class="nx">listenForLiveMessages</span><span class="p">({</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;general_inbox&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nx">onMessage</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">msg</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Live message:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="p">.</span><span class="nx">body</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">})</span>
+</code></pre></div>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>MessageBox conformance is tested in <code>conformance/vectors/messaging/message-box/</code>:</p>
+<ul>
+<li>AES-256-GCM encryption/decryption</li>
+<li>BRC-31 authentication on all endpoints</li>
+<li>Message storage and retrieval</li>
+<li>Acknowledge/delete functionality</li>
+<li>WebSocket live message delivery</li>
+<li>Host discovery via overlay network</li>
+</ul>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/message-box-client</td>
+<td>Client library for sending/receiving messages; WebSocket support via Socket.IO; BRC-31 auth integration</td>
+</tr>
+<tr>
+<td>MessageBox Server</td>
+<td>Infrastructure repository (not in ts-stack); HTTP + WebSocket endpoints</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../brc-31-auth/">BRC-31 Auth</a> — Mutual authentication for all endpoints</li>
+<li><a href="../authsocket/">AuthSocket</a> — WebSocket implementation of BRC-31</li>
+<li><a href="../brc-29-peer-payment/">BRC-29 Peer Payment</a> — Payment delivery via message box</li>
+<li><a href="../uhrp/">UHRP</a> — Host discovery overlay protocol</li>
+</ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/messaging/message-box-http.yaml">message-box-http.yaml</a></p>
 
 
 
@@ -3953,7 +4396,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:09:38 UTC">April 29, 2026</span>
   </span>
 
     

@@ -1885,10 +1885,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use
+        Common patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#client-capability-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client capability discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
       
     </span>
   </a>
@@ -1896,10 +1935,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use" class="md-nav__link">
+  <a href="#when-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to use
+        When to use this
       
     </span>
   </a>
@@ -1907,10 +1946,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#when-not-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API reference
+        When NOT to use this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common pitfalls
       
     </span>
   </a>
@@ -1922,6 +1983,17 @@
     <span class="md-ellipsis">
       
         Related packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
       
     </span>
   </a>
@@ -4093,10 +4165,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use
+        Common patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#client-capability-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Client capability discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
       
     </span>
   </a>
@@ -4104,10 +4215,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use" class="md-nav__link">
+  <a href="#when-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to use
+        When to use this
       
     </span>
   </a>
@@ -4115,10 +4226,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#when-not-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API reference
+        When NOT to use this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common pitfalls
       
     </span>
   </a>
@@ -4130,6 +4263,17 @@
     <span class="md-ellipsis">
       
         Related packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
       
     </span>
   </a>
@@ -4157,62 +4301,144 @@
 
 
 <h1 id="bsvpaymail">@bsv/paymail<a class="headerlink" href="#bsvpaymail" title="Permanent link">&para;</a></h1>
-<p>Paymail protocol implementation — capability discovery, PKI, P2P payment destinations, and public profiles for BSV.</p>
+<blockquote>
+<p>TypeScript SDK for BSV Paymail (BRC-121 capability discovery and routing). Provides both client-side capability discovery and server-side router with built-in support for PKI, P2P destinations, and public profiles.</p>
+</blockquote>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>npm<span class="w"> </span>install<span class="w"> </span>@bsv/paymail
 </code></pre></div>
 <h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">PaymailClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/paymail&#39;</span><span class="p">;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">PaymailClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/paymail&#39;</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PaymailClient</span><span class="p">();</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PaymailClient</span><span class="p">()</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1">// Discover capabilities for a paymail address</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">capabilities</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getCapabilities</span><span class="p">(</span><span class="s1">&#39;user@example.com&#39;</span><span class="p">);</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Supports:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">capabilities</span><span class="p">);</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1">// Get public key for a paymail user</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kd">const</span><span class="w"> </span><span class="nx">pubkey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getPublicKey</span><span class="p">(</span><span class="s1">&#39;user@example.com&#39;</span><span class="p">);</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Public Key:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">pubkey</span><span class="p">);</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1">// Request payment destination for sending money</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="kd">const</span><span class="w"> </span><span class="nx">dest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getPaymentDestination</span><span class="p">(</span><span class="s1">&#39;user@example.com&#39;</span><span class="p">,</span><span class="w"> </span><span class="mf">1000</span><span class="p">);</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Send to:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">dest</span><span class="p">.</span><span class="nx">outputs</span><span class="p">);</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">publicProfile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getPublicProfile</span><span class="p">(</span><span class="s1">&#39;satoshi@myDomain.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">publicProfile</span><span class="p">.</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">publicProfile</span><span class="p">.</span><span class="nx">avatar</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="kd">const</span><span class="w"> </span><span class="nx">capabilities</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getCapabilities</span><span class="p">(</span><span class="s1">&#39;myDomain.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">capabilities</span><span class="p">)</span><span class="w"> </span><span class="c1">// lists all supported BRC-121 capabilities</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="kd">const</span><span class="w"> </span><span class="nx">pkiResult</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getPki</span><span class="p">(</span><span class="s1">&#39;satoshi@myDomain.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">pkiResult</span><span class="p">.</span><span class="nx">pubkey</span><span class="p">)</span><span class="w"> </span><span class="c1">// user&#39;s identity key</span>
 </code></pre></div>
 <h2 id="what-it-provides">What it provides<a class="headerlink" href="#what-it-provides" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Capability discovery</strong> — Query paymail servers for supported operations</li>
-<li><strong>PKI (Public Key Infrastructure)</strong> — Retrieve and verify public keys</li>
-<li><strong>Payment destinations</strong> — Get addresses for sending payments</li>
-<li><strong>Public profiles</strong> — Retrieve user metadata and avatar</li>
-<li><strong>BRFC support</strong> — Handle various Bitmail Request For Comments standards</li>
-<li><strong>Signature verification</strong> — Verify paymail server responses</li>
-<li><strong>Avatar retrieval</strong> — Get user profile pictures</li>
-<li><strong>Domain validation</strong> — Verify paymail domain authenticity</li>
+<li><strong>PaymailClient</strong> — Discover capabilities, retrieve profiles, get PKI, request payment destinations</li>
+<li><strong>PaymailRouter</strong> — Express router for <code>/.well-known/bsvalias/*</code> endpoints</li>
+<li><strong>PublicProfileRoute</strong> — Respond to profile requests with name, avatar, avatar_hash</li>
+<li><strong>PublicKeyInfrastructureRoute</strong> — Respond to PKI requests with user public key</li>
+<li><strong>ReceiveRawTransactionRoute</strong> — Accept raw transactions for receiving payments</li>
+<li><strong>P2PDestinationsRoute</strong> — Return payment derivation instructions per BRC-29</li>
+<li><strong>Capability negotiation</strong> — Client discovers what a domain supports before making requests</li>
+<li><strong>Domain logic delegates</strong> — Routes delegate user lookup to your <code>domainLogicHandler</code> callback</li>
 </ul>
-<h2 id="when-to-use">When to use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
+<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="server-setup">Server setup<a class="headerlink" href="#server-setup" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">import</span><span class="w"> </span><span class="nx">express</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;express&#39;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">PaymailRouter</span><span class="p">,</span><span class="w"> </span><span class="nx">PublicKeyInfrastructureRoute</span><span class="p">,</span><span class="w"> </span><span class="nx">PublicProfileRoute</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/paymail&#39;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">app</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">express</span><span class="p">()</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">baseUrl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;https://myDomain.com&#39;</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">publicProfileRoute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PublicProfileRoute</span><span class="p">({</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nx">domainLogicHandler</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">domain</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetchUser</span><span class="p">(</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">domain</span><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">      </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="kt">user.getAlias</span><span class="p">(),</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nx">domain</span><span class="p">,</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">      </span><span class="nx">avatar</span><span class="o">:</span><span class="w"> </span><span class="kt">user.getAvatarUrl</span><span class="p">()</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="p">})</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="kd">const</span><span class="w"> </span><span class="nx">pkiRoute</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PublicKeyInfrastructureRoute</span><span class="p">({</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nx">domainLogicHandler</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">domain</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">user</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetchUser</span><span class="p">(</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">domain</span><span class="p">)</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nx">bsvalias</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;1.0&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">      </span><span class="nx">handle</span><span class="o">:</span><span class="w"> </span><span class="sb">`</span><span class="si">${</span><span class="nx">name</span><span class="si">}</span><span class="sb">@</span><span class="si">${</span><span class="nx">domain</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">      </span><span class="nx">pubkey</span><span class="o">:</span><span class="w"> </span><span class="kt">user.getIdentityKey</span><span class="p">()</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="p">})</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="kd">const</span><span class="w"> </span><span class="nx">routes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="nx">publicProfileRoute</span><span class="p">,</span><span class="w"> </span><span class="nx">pkiRoute</span><span class="p">]</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="kd">const</span><span class="w"> </span><span class="nx">paymailRouter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PaymailRouter</span><span class="p">({</span><span class="w"> </span><span class="nx">baseUrl</span><span class="p">,</span><span class="w"> </span><span class="nx">routes</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="nx">app</span><span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">paymailRouter</span><span class="p">.</span><span class="nx">getRouter</span><span class="p">())</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="nx">app</span><span class="p">.</span><span class="nx">listen</span><span class="p">(</span><span class="mf">3000</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`Paymail server running on </span><span class="si">${</span><span class="nx">baseUrl</span><span class="si">}</span><span class="sb">:3000`</span><span class="p">)</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="p">})</span>
+</code></pre></div>
+<h3 id="client-capability-discovery">Client capability discovery<a class="headerlink" href="#client-capability-discovery" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">PaymailClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/paymail&#39;</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PaymailClient</span><span class="p">()</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1">// Get public profile</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">profile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getPublicProfile</span><span class="p">(</span><span class="s1">&#39;alice@example.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">profile</span><span class="p">.</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="nx">profile</span><span class="p">.</span><span class="nx">avatar</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1">// Discover all capabilities</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="kd">const</span><span class="w"> </span><span class="nx">caps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getCapabilities</span><span class="p">(</span><span class="s1">&#39;example.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1">// Get user&#39;s public key</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="kd">const</span><span class="w"> </span><span class="nx">pki</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getPki</span><span class="p">(</span><span class="s1">&#39;alice@example.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1">// Get payment destination</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="kd">const</span><span class="w"> </span><span class="nx">p2pDest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getP2pDestinations</span><span class="p">(</span><span class="s1">&#39;alice@example.com&#39;</span><span class="p">,</span><span class="w"> </span><span class="mf">10000</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;payment&#39;</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Building payment applications that need paymail integration</li>
-<li>Discovering user capabilities (payments, messaging, profiles)</li>
-<li>Verifying user identities via paymail</li>
-<li>Implementing P2P payment flows</li>
-<li>Building user directories or address books</li>
-<li>Implementing identity-based routing</li>
+<li><strong>BRC-121 capabilities</strong> — Discovery of Paymail services (PKI, P2P destinations, receive transaction, public profile)</li>
+<li><strong>Well-known endpoints</strong> — All Paymail services exposed via <code>/.well-known/bsvalias/*</code> paths</li>
+<li><strong>Capability negotiation</strong> — Client discovers what a domain supports before making requests</li>
+<li><strong>PKI (Public Key Infrastructure)</strong> — Maps paymail to public key via BRC-121</li>
+<li><strong>P2P Destinations</strong> — Returns payment output derivation per BRC-29</li>
+<li><strong>Domain logic</strong> — Routes delegate user lookup to your <code>domainLogicHandler</code> callback</li>
+<li><strong>Paymail format</strong> — <code>name@domain</code> validated per BRC-121 spec</li>
 </ul>
-<h2 id="when-not-to-use">When not to use<a class="headerlink" href="#when-not-to-use" title="Permanent link">&para;</a></h2>
+<h2 id="when-to-use-this">When to use this<a class="headerlink" href="#when-to-use-this" title="Permanent link">&para;</a></h2>
 <ul>
-<li>For simple HTTP APIs without paymail requirement — use direct APIs</li>
-<li>If users don't have paymail addresses — use raw Bitcoin addresses</li>
-<li>For non-payment identity — use @bsv/did-client instead</li>
-<li>For on-chain identity — use overlay-based DID</li>
+<li>Building payment applications that need Paymail integration</li>
+<li>Discovering user capabilities (payments, messaging, profiles) via Paymail</li>
+<li>Verifying user identities and public keys via Paymail</li>
+<li>Implementing P2P payment flows with Paymail recipient discovery</li>
+<li>Building user directories or identity-based routing</li>
+<li>Hosting Paymail services for your own domain</li>
 </ul>
-<h2 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
-<p>Full TypeScript API documentation: <a href="https://bsv-blockchain.github.io/ts-stack/api/paymail/">TypeDoc</a></p>
+<h2 id="when-not-to-use-this">When NOT to use this<a class="headerlink" href="#when-not-to-use-this" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Simple HTTP APIs without Paymail requirement — use direct APIs</li>
+<li>Users don't have Paymail addresses — use raw Bitcoin addresses</li>
+<li>Non-payment identity — use DID clients instead</li>
+<li>On-chain identity verification — use overlay-based DID</li>
+</ul>
+<h2 id="spec-conformance">Spec conformance<a class="headerlink" href="#spec-conformance" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>BRC-121</strong> (Paymail Service Discovery): Full capability discovery, service routing, profile/PKI/P2P capability exposure</li>
+<li><strong>BRC-29</strong> (Payment Derivation): P2P payment destination uses BRC-29 key derivation</li>
+<li><strong>BRC-100</strong> (Wallet interface): Public key infrastructure integrates with wallet identity keys</li>
+</ul>
+<h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Domain logic is async</strong> — all <code>domainLogicHandler</code> callbacks are async; implement accordingly</li>
+<li><strong>Paymail format validation</strong> — library validates <code>name@domain</code> format; invalid paymail raises error</li>
+<li><strong>BaseUrl must match DNS</strong> — PaymailRouter's baseUrl should match the domain's actual DNS (e.g., 'https://myDomain.com')</li>
+<li><strong>No trailing slashes</strong> — baseUrl should not have trailing slash</li>
+<li><strong>HTTP-only discovery</strong> — Paymail service discovery happens via standard HTTP DNS lookup + well-known paths</li>
+</ol>
 <h2 id="related-packages">Related packages<a class="headerlink" href="#related-packages" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@bsv/did-client — Decentralized identifier resolution</li>
-<li>@bsv/message-box-client — Messaging to paymail addresses</li>
-<li>@bsv/wallet-toolbox — Wallet for payment operations</li>
-<li>@bsv/sdk — Transaction building for payments</li>
+<li><strong>@bsv/message-box-client</strong> — Messaging to paymail addresses for peer discovery</li>
+<li><strong>@bsv/auth-express-middleware</strong> — Can combine with Paymail for authenticated routes</li>
+<li><strong>@bsv/authsocket</strong> / <strong>@bsv/authsocket-client</strong> — Real-time communication paired with Paymail discovery</li>
+</ul>
+<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://bsv-blockchain.github.io/ts-stack/api/paymail/">API reference (TypeDoc)</a></li>
+<li><a href="https://github.com/bsv-blockchain/paymail">Source on GitHub</a></li>
+<li><a href="https://www.npmjs.com/package/@bsv/paymail">npm</a></li>
 </ul>
 
 
@@ -4236,7 +4462,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:05:44 UTC">April 29, 2026</span>
   </span>
 
     

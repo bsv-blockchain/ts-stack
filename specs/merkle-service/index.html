@@ -27,7 +27,7 @@
     
     
       
-        <title>Specification - ts-stack</title>
+        <title>Merkle Service API - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#specification" class="md-skip">
+        <a href="#merkle-service-api" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Specification
+              Merkle Service API
             
           </span>
         </div>
@@ -2994,6 +2994,31 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Merkle Service
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -3017,6 +3042,124 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-monitor-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Monitor transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -3911,6 +4054,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-monitor-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Monitor transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3929,8 +4179,180 @@
   
 
 
-<h1 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h1>
-<p>Technical specification document.</p>
+<h1 id="merkle-service-api">Merkle Service API<a class="headerlink" href="#merkle-service-api" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>The Merkle Service is a Go microservice that accepts transaction IDs and monitors the blockchain for Merkle proofs. When a transaction is confirmed in a block, the service delivers the SPV proof (BUMP format) to a registered callback URL. Clients use it to obtain proofs without running a full node or polling repeatedly.</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>OpenAPI 3.1</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/sdk (client), external Go microservice</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Simplified SPV without full node</strong>. Wallets need Merkle proofs to verify transaction inclusion without downloading full blocks. Running a full node is expensive. The Merkle Service monitors the blockchain (either running a node itself or querying public data sources) and delivers proofs to clients on demand.</p>
+<p><strong>Callback-based delivery</strong>. Instead of polling the service repeatedly ("is my transaction confirmed yet?"), clients register a callback URL once. The service delivers the proof automatically when confirmation occurs, reducing network traffic and latency.</p>
+<p><strong>Idempotent registration</strong>. Registering the same transaction ID multiple times with the same callback is safe; the service deduplicates internally. This simplifies client logic (no need to track registrations).</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Register transaction for monitoring</strong>:</p>
+<ol>
+<li><strong>Client → Merkle Service</strong> <code>POST /watch</code></li>
+<li>Transaction ID (64-char hex string)</li>
+<li>
+<p>Callback URL (HTTPS endpoint to receive proof)</p>
+</li>
+<li>
+<p><strong>Merkle Service</strong> (monitoring)</p>
+</li>
+<li>Watches blockchain for transaction confirmation</li>
+<li>When block arrives, extracts Merkle proof in BUMP format</li>
+<li>
+<p>Makes HTTP POST to registered callback URL with proof</p>
+</li>
+<li>
+<p><strong>Client</strong> (receives callback)</p>
+</li>
+<li>Validates BUMP proof against transaction ID</li>
+<li>Uses proof for SPV verification</li>
+</ol>
+<p><strong>Health check</strong>:</p>
+<ul>
+<li><code>GET /health</code> — Returns OK if Merkle Service is connected to blockchain data source (Aerospike)</li>
+</ul>
+<h2 id="key-types-endpoints">Key types / endpoints<a class="headerlink" href="#key-types-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+<th>Request</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/watch</code></td>
+<td>Register transaction for merkle proof</td>
+<td><code>{ txid, callbackUrl }</code></td>
+<td><code>{ status: "OK" }</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>Health check</td>
+<td>(none)</td>
+<td><code>{ status: "OK" }</code> or error</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request body</strong> (<code>POST /watch</code>):
+- <code>txid: string</code> — Transaction ID (64 hex characters, case-insensitive)
+- <code>callbackUrl: string</code> — HTTPS URL to POST proof to (must be valid HTTPS)</p>
+<p><strong>Response body</strong> (callback POST):
+- <code>txid: string</code> — Transaction ID
+- <code>merkleProof: string</code> — BUMP format (Base64 or hex, spec-dependent)
+- <code>blockHeight: number</code> — Block height of confirmation
+- <code>blockHash: string</code> — Block hash (64-char hex)
+- <code>timestamp: number</code> — Block timestamp (Unix seconds)</p>
+<p><strong>Error responses</strong> (400, 404, etc.):
+- Invalid txid format → 400 Bad Request
+- Invalid callback URL → 400 Bad Request
+- Service offline → 503 Service Unavailable</p>
+<h2 id="example-monitor-transaction">Example: Monitor transaction<a class="headerlink" href="#example-monitor-transaction" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Transaction</span><span class="p">,</span><span class="w"> </span><span class="nx">ARC</span><span class="p">,</span><span class="w"> </span><span class="nx">Merkle</span><span class="err">​</span><span class="nx">Service</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// 1. Submit transaction via ARC</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">arc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">ARC</span><span class="p">()</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">arc</span><span class="p">.</span><span class="nx">broadcast</span><span class="p">(</span><span class="nx">tx</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">txid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">txid</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">// 2. Register callback with Merkle Service</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="kd">const</span><span class="w"> </span><span class="nx">merkleService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MerkleService</span><span class="p">(</span><span class="s1">&#39;https://merkle.example.com&#39;</span><span class="p">)</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">await</span><span class="w"> </span><span class="nx">merkleService</span><span class="p">.</span><span class="nx">watch</span><span class="p">({</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nx">txid</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nx">callbackUrl</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;https://yourapp.com/merkle-callback&#39;</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">})</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1">// 3. Wait for callback</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1">// Server receives POST /merkle-callback with { txid, merkleProof, blockHeight, ... }</span>
+</code></pre></div>
+<p>Server-side callback handler:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">app</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/merkle-callback&#39;</span><span class="p">,</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">(</span><span class="nx">req</span><span class="p">,</span><span class="w"> </span><span class="nx">res</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">txid</span><span class="p">,</span><span class="w"> </span><span class="nx">merkleProof</span><span class="p">,</span><span class="w"> </span><span class="nx">blockHeight</span><span class="p">,</span><span class="w"> </span><span class="nx">blockHash</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">req</span><span class="p">.</span><span class="nx">body</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="c1">// Verify proof (SPV)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">isValid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">verifyMerkleProof</span><span class="p">(</span><span class="nx">txid</span><span class="p">,</span><span class="w"> </span><span class="nx">merkleProof</span><span class="p">,</span><span class="w"> </span><span class="nx">blockHash</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">isValid</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="c1">// Store proof and update transaction status to &quot;confirmed&quot;</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">markTransactionConfirmed</span><span class="p">(</span><span class="nx">txid</span><span class="p">,</span><span class="w"> </span><span class="nx">merkleProof</span><span class="p">,</span><span class="w"> </span><span class="nx">blockHeight</span><span class="p">)</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nx">res</span><span class="p">.</span><span class="nx">json</span><span class="p">({</span><span class="w"> </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;received&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">})</span>
+</code></pre></div>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>Merkle Service conformance is tested in <code>conformance/vectors/merkle/</code>:</p>
+<ul>
+<li>Transaction ID validation (format, case-insensitivity)</li>
+<li>Callback URL validation (HTTPS-only)</li>
+<li>Idempotent registration (duplicate txid + url)</li>
+<li>Proof format validation (BUMP structure)</li>
+<li>Callback delivery timing</li>
+</ul>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/sdk</td>
+<td><code>MerkleService</code> client class for registering transactions and handling callbacks</td>
+</tr>
+<tr>
+<td>@bsv/wallet-toolbox</td>
+<td>Integrates Merkle Service for obtaining proofs during transaction confirmation</td>
+</tr>
+<tr>
+<td>External: Go Merkle Service</td>
+<td>Reference implementation (not in ts-stack; run separately)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../arc-broadcast/">ARC Broadcast</a> — Alternative way to receive merkle proofs (via callback URL in initial submission)</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md">BRC-95 / BRC-62</a> — Merkle proof formats (BUMP, Merkle branch)</li>
+</ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/merkle/merkle-service-http.yaml">merkle-service-http.yaml</a></p>
 
 
 
@@ -3953,7 +4375,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

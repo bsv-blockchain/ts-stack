@@ -3908,10 +3908,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#services-overview" class="md-nav__link">
+  <a href="#components-overview" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Services Overview
+        Components Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-matrix-which-services-to-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Matrix: Which Services to Deploy
       
     </span>
   </a>
@@ -3931,10 +3942,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#development-testing" class="md-nav__link">
+  <a href="#local-development" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Development / Testing
+        Local Development
       
     </span>
   </a>
@@ -3942,10 +3953,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#production" class="md-nav__link">
+  <a href="#dockerkubernetes-production" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Production
+        Docker/Kubernetes Production
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-native-google-cloud-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cloud-Native (Google Cloud Run)
       
     </span>
   </a>
@@ -3969,6 +3991,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#prerequisites-by-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites by Service
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Points
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#getting-started" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3980,10 +4024,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
+  <a href="#source-references" class="md-nav__link">
     <span class="md-ellipsis">
       
-        References
+        Source &amp; References
       
     </span>
   </a>
@@ -4011,86 +4055,140 @@
 
 
 <h1 id="infrastructure">Infrastructure<a class="headerlink" href="#infrastructure" title="Permanent link">&para;</a></h1>
-<p>Infrastructure pages document deployed services — not npm packages, but applications you run in containers or on servers. These are reference implementations and production-grade services for running parts of the ts-stack.</p>
-<h2 id="services-overview">Services Overview<a class="headerlink" href="#services-overview" title="Permanent link">&para;</a></h2>
+<p>Infrastructure components are deployed services — not npm packages, but applications you run in Docker containers or on servers. These are reference implementations and production-grade services for running key parts of the ts-stack.</p>
+<h2 id="components-overview">Components Overview<a class="headerlink" href="#components-overview" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th>Component</th>
-<th>Package</th>
 <th>Purpose</th>
+<th>Database</th>
+<th>Status</th>
+<th>Deploy target</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>message-box-server</td>
-<td>@bsv/messagebox-server 1.1.5</td>
-<td>Host MessageBox overlay for authenticated messaging</td>
+<td><a href="message-box-server/">Message Box Server</a></td>
+<td>Secure peer-to-peer messaging with real-time WebSocket delivery</td>
+<td>MySQL 8.0</td>
+<td>stable</td>
+<td>Docker / Kubernetes</td>
 </tr>
 <tr>
-<td>overlay-server</td>
-<td>@bsv/overlay-express-examples 2.1.6</td>
-<td>Reference overlay node with transaction routing</td>
+<td><a href="overlay-server/">Overlay Server</a></td>
+<td>Topic managers and lookup services for overlay network</td>
+<td>MongoDB + MySQL/Knex</td>
+<td>stable</td>
+<td>Docker / Kubernetes</td>
 </tr>
 <tr>
-<td>uhrp-server-basic</td>
-<td>@bsv/uhrp-lite 0.1.0</td>
-<td>Simple UHRP storage using local filesystem</td>
+<td><a href="uhrp-server-basic/">UHRP Server (Basic)</a></td>
+<td>Lightweight file storage via local filesystem (dev/test)</td>
+<td>None (filesystem)</td>
+<td>beta</td>
+<td>Local Docker</td>
 </tr>
 <tr>
-<td>uhrp-server-cloud-bucket</td>
-<td>@bsv/uhrp-storage-server 0.2.1</td>
-<td>Cloud-bucket UHRP storage for production</td>
+<td><a href="uhrp-server-cloud-bucket/">UHRP Server (Cloud Bucket)</a></td>
+<td>Production UHRP storage via Google Cloud Storage</td>
+<td>Optional Cloud SQL</td>
+<td>stable</td>
+<td>Google Cloud Run</td>
 </tr>
 <tr>
-<td>wab</td>
-<td>@bsv/wab-server 1.4.1</td>
-<td>Wallet Abstraction Backend — HTTP wallet service</td>
+<td><a href="wab/">Wallet Abstraction Backend (WAB)</a></td>
+<td>Multi-factor user authentication (SMS, ID verification, OTP)</td>
+<td>SQLite (dev) / MySQL (prod)</td>
+<td>stable</td>
+<td>Docker / Kubernetes / Cloud Run</td>
 </tr>
 <tr>
-<td>wallet-infra</td>
-<td>@bsv/wallet-infra 2.0.4</td>
-<td>Supporting services for wallet operations</td>
+<td><a href="wallet-infra/">Wallet Infrastructure</a></td>
+<td>JSON-RPC wallet UTXO storage and management</td>
+<td>MySQL 8.0</td>
+<td>stable</td>
+<td>Docker / Kubernetes</td>
 </tr>
 </tbody>
 </table>
+<h2 id="decision-matrix-which-services-to-deploy">Decision Matrix: Which Services to Deploy<a class="headerlink" href="#decision-matrix-which-services-to-deploy" title="Permanent link">&para;</a></h2>
+<p><strong>Building a messaging app?</strong>
+- Deploy Message Box Server (MySQL backend, WebSocket support)
+- Pair with Wallet Infrastructure for UTXO management if handling payments</p>
+<p><strong>Building an overlay node?</strong>
+- Deploy Overlay Server (MongoDB + MySQL/Knex)
+- Implement custom topic managers and lookup services, or use reference implementations (ProtoMap, CertMap, UHRP, Identity, etc.)</p>
+<p><strong>Hosting UHRP files?</strong>
+- Development: UHRP Server (Basic) with local filesystem storage
+- Production: UHRP Server (Cloud Bucket) on Google Cloud Run with Cloud Storage</p>
+<p><strong>Providing wallet services?</strong>
+- Deploy WAB for user authentication and key recovery (presentation keys via SMS/ID verification)
+- Deploy Wallet Infrastructure for UTXO storage (JSON-RPC endpoint)
+- Combined, these enable wallet-aware applications with key backup/recovery</p>
+<p><strong>Building BSV applications?</strong>
+- Deploy Message Box Server + Wallet Infrastructure for messaging + wallet capabilities
+- Deploy WAB if you need multi-factor user authentication
+- Deploy Overlay Server if you want to operate overlay services or coordinate with other overlay nodes</p>
 <h2 id="deployment-models">Deployment Models<a class="headerlink" href="#deployment-models" title="Permanent link">&para;</a></h2>
-<h3 id="development-testing">Development / Testing<a class="headerlink" href="#development-testing" title="Permanent link">&para;</a></h3>
+<h3 id="local-development">Local Development<a class="headerlink" href="#local-development" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Run locally with Docker Compose</li>
-<li>Use SQLite or in-memory stores</li>
-<li>Single instance, no clustering</li>
+<li>Docker Compose with single-instance services</li>
+<li>SQLite or in-memory stores</li>
+<li>All services on localhost</li>
+<li>See each service's docker-compose.yml for example</li>
 </ul>
-<h3 id="production">Production<a class="headerlink" href="#production" title="Permanent link">&para;</a></h3>
+<h3 id="dockerkubernetes-production">Docker/Kubernetes Production<a class="headerlink" href="#dockerkubernetes-production" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Kubernetes or Docker Swarm orchestration</li>
-<li>PostgreSQL or MongoDB backend</li>
-<li>Multi-zone redundancy</li>
-<li>Load balancing and health checks</li>
+<li>Alpine-based container images with Node 20-22</li>
+<li>Persistent volumes for databases</li>
+<li>Health checks and readiness probes configured</li>
+<li>Horizontal scaling via stateless design (except local in-memory state, e.g., WebSocket rooms)</li>
+</ul>
+<h3 id="cloud-native-google-cloud-run">Cloud-Native (Google Cloud Run)<a class="headerlink" href="#cloud-native-google-cloud-run" title="Permanent link">&para;</a></h3>
+<ul>
+<li>UHRP Server (Cloud Bucket) designed for Cloud Run</li>
+<li>Stateless HTTP service with cloud bucket storage</li>
+<li>Optional Cloud SQL for metadata</li>
+<li>Graceful shutdown via SIGTERM</li>
 </ul>
 <h2 id="common-requirements">Common Requirements<a class="headerlink" href="#common-requirements" title="Permanent link">&para;</a></h2>
-<p>All infrastructure services require:
-- <strong>Node.js 18+</strong> — Runtime
-- <strong>Docker</strong> — Containerization
-- <strong>Environment variables</strong> — Configuration
-- <strong>Database</strong> — Data persistence
-- <strong>Network access</strong> — Inter-service communication</p>
+<p>All infrastructure services:
+- <strong>Node.js 18+</strong> – Runtime environment
+- <strong>Docker &amp; docker-compose</strong> – Local development and containerization
+- <strong>Environment variables</strong> – Configuration (see each service's Configuration section)
+- <strong>Database</strong> – Data persistence (MySQL, MongoDB, or filesystem; see table above)
+- <strong>Network access</strong> – Services communicate via HTTP/WebSocket</p>
+<h2 id="prerequisites-by-service">Prerequisites by Service<a class="headerlink" href="#prerequisites-by-service" title="Permanent link">&para;</a></h2>
+<p><strong>Message Box Server</strong>: MySQL 8.0, 3GB+ RAM, Docker
+<strong>Overlay Server</strong>: MongoDB, MySQL/Knex, 4GB+ RAM, Docker
+<strong>UHRP Basic</strong>: Local filesystem, 1GB+ disk, Docker (lightweight)
+<strong>UHRP Cloud</strong>: Google Cloud account, Cloud Storage bucket, Cloud Run, optional Cloud SQL
+<strong>WAB</strong>: SQLite (dev) or MySQL (prod), 2GB+ RAM, Docker
+<strong>Wallet Infrastructure</strong>: MySQL 8.0, 2GB+ RAM, Docker</p>
+<h2 id="integration-points">Integration Points<a class="headerlink" href="#integration-points" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Message Box + Wallet Infrastructure</strong>: WAB authenticates users; Wallet Infrastructure stores their UTXOs. Together enable wallet messaging apps.</li>
+<li><strong>Overlay Server + All services</strong>: Overlay advertises other services' capabilities via SHIP protocol (topic managers, lookup services, UHRP hosts, etc.)</li>
+<li><strong>WAB + UHRP Cloud</strong>: Presentation key auth from WAB; UHRP Cloud can enforce payments via BRC-100 payment middleware</li>
+<li><strong>Wallet Infrastructure + Message Box</strong>: Wallet infrastructure manages UTXOs; Message Box Server handles peer-to-peer communication</li>
+</ul>
 <h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
 <ol>
-<li>Choose which services you need</li>
-<li>Review the service documentation</li>
-<li>Configure environment variables</li>
-<li>Deploy using Docker or Kubernetes</li>
-<li>Monitor health and logs</li>
+<li><strong>Identify use case</strong> — Review Decision Matrix above</li>
+<li><strong>Choose services</strong> — Select from components table</li>
+<li><strong>Read service docs</strong> — Each service page has Configuration, Deployment, and Health Checks sections</li>
+<li><strong>Configure env vars</strong> — Copy .env.example, fill in required variables from Configuration tables</li>
+<li><strong>Deploy locally</strong> — Use docker-compose.yml from service or write custom docker-compose.yml</li>
+<li><strong>Test endpoints</strong> — Verify HTTP/WebSocket connectivity and health checks</li>
+<li><strong>Deploy to production</strong> — Follow Deploy to Production section with real database credentials, keys, and domains</li>
 </ol>
-<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
-<p>Each service has detailed documentation on this page:
-- Configuration options
-- Environment variables
-- Docker setup
-- Database schema
-- API endpoints
-- Monitoring</p>
+<h2 id="source-references">Source &amp; References<a class="headerlink" href="#source-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/bsv-stack/ts-stack">ts-stack GitHub</a></li>
+<li>Each service has GitHub links in its documentation</li>
+<li><a href="https://github.com/bitcoin-sv/brc">BRC Standards</a> – Authentication (BRC-103), Wallet Interface (BRC-100), Payment (BRC-100), etc.</li>
+</ul>
 
 
 
@@ -4113,7 +4211,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

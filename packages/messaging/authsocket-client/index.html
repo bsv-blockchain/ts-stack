@@ -1850,10 +1850,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use
+        Common patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-authenticated-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic authenticated connection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-custom-manager-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With custom manager options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
       
     </span>
   </a>
@@ -1861,10 +1900,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use" class="md-nav__link">
+  <a href="#when-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to use
+        When to use this
       
     </span>
   </a>
@@ -1872,10 +1911,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#when-not-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API reference
+        When NOT to use this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common pitfalls
       
     </span>
   </a>
@@ -1887,6 +1948,17 @@
     <span class="md-ellipsis">
       
         Related packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
       
     </span>
   </a>
@@ -4093,10 +4165,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use
+        Common patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-authenticated-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic authenticated connection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#with-custom-manager-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With custom manager options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
       
     </span>
   </a>
@@ -4104,10 +4215,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use" class="md-nav__link">
+  <a href="#when-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to use
+        When to use this
       
     </span>
   </a>
@@ -4115,10 +4226,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#when-not-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API reference
+        When NOT to use this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common pitfalls
       
     </span>
   </a>
@@ -4130,6 +4263,17 @@
     <span class="md-ellipsis">
       
         Related packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
       
     </span>
   </a>
@@ -4157,67 +4301,119 @@
 
 
 <h1 id="bsvauthsocket-client">@bsv/authsocket-client<a class="headerlink" href="#bsvauthsocket-client" title="Permanent link">&para;</a></h1>
-<p>Client-side BRC-31 authenticated WebSocket — connect to authsocket servers and prove your identity via Bitcoin signature.</p>
+<blockquote>
+<p>Client-side BRC-103 mutual authentication wrapper for socket.io-client. Signs all outbound messages and verifies inbound messages using a wallet, enabling authenticated peer-to-peer WebSocket communication.</p>
+</blockquote>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>npm<span class="w"> </span>install<span class="w"> </span>@bsv/authsocket-client
 </code></pre></div>
 <h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/authsocket-client&#39;</span><span class="p">;</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">WalletToolbox</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-toolbox&#39;</span><span class="p">;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/authsocket-client&#39;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">ProtoWallet</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WalletToolbox</span><span class="p">();</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="p">({</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nx">url</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;wss://server.example.com&#39;</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nx">wallet</span><span class="o">:</span><span class="w"> </span><span class="kt">wallet</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">});</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1">// Connect and authenticate</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nx">client</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;open&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Connected and authenticated&#39;</span><span class="p">);</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nx">client</span><span class="p">.</span><span class="nx">send</span><span class="p">({</span><span class="w"> </span><span class="nx">hello</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;world&#39;</span><span class="w"> </span><span class="p">});</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">});</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">clientWallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">ProtoWallet</span><span class="p">(</span><span class="s1">&#39;client-private-key-hex&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">socket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="p">(</span><span class="s1">&#39;http://localhost:3000&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">wallet</span><span class="o">:</span><span class="w"> </span><span class="kt">clientWallet</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;connect&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Connected. Socket ID:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">socket</span><span class="p">.</span><span class="nx">id</span><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nx">socket</span><span class="p">.</span><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;chatMessage&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">text</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Hello from client!&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">})</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;chatMessage&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">msg</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Server says:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">})</span>
 <a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1">// Receive messages</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="nx">client</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;message&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">msg</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Message from server:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="p">);</span>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="p">});</span>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">connect</span><span class="p">();</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;disconnect&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Disconnected&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">})</span>
 </code></pre></div>
 <h2 id="what-it-provides">What it provides<a class="headerlink" href="#what-it-provides" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>BRC-31 authentication</strong> — Sign connection proof with wallet key</li>
-<li><strong>WebSocket client</strong> — Connect to BRC-31 authenticated servers</li>
-<li><strong>Wallet integration</strong> — Use any BRC-100 wallet for signing</li>
-<li><strong>Connection events</strong> — Listen for connect/disconnect/error/message</li>
-<li><strong>Binary support</strong> — Send/receive binary data</li>
-<li><strong>Auto-reconnect</strong> — Automatic reconnection with backoff</li>
-<li><strong>Timeout handling</strong> — Configurable connection timeouts</li>
-<li><strong>Event streaming</strong> — Standard EventEmitter interface</li>
+<li><strong>AuthSocketClient</strong> — Wraps socket.io-client with BRC-103 authentication</li>
+<li><strong>Automatic message signing</strong> — All outbound messages signed with client wallet key</li>
+<li><strong>Automatic message verification</strong> — Inbound messages verified against server's public key</li>
+<li><strong>BRC-103 handshake</strong> — Nonce-based challenge-response protocol</li>
+<li><strong>Transparent proxying</strong> — User code sees normal Socket.IO API; BRC-103 hidden</li>
+<li><strong>Certificate exchange</strong> — Supports verifiable certificates during handshake (optional)</li>
+<li><strong>Standard Socket.IO interface</strong> — <code>.on()</code>, <code>.emit()</code>, <code>.id</code>, <code>.connect()</code>, <code>.disconnect()</code></li>
 </ul>
-<h2 id="when-to-use">When to use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
+<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="basic-authenticated-connection">Basic authenticated connection<a class="headerlink" href="#basic-authenticated-connection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/authsocket-client&#39;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">ProtoWallet</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">ProtoWallet</span><span class="p">(</span><span class="s1">&#39;my-private-key-hex&#39;</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">socket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="p">(</span><span class="s1">&#39;http://localhost:3000&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;connect&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Authenticated&#39;</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nx">socket</span><span class="p">.</span><span class="nx">emit</span><span class="p">(</span><span class="s1">&#39;joinRoom&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;general&#39;</span><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="p">})</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nx">socket</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">&#39;message&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Received:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="p">})</span>
+</code></pre></div>
+<h3 id="with-custom-manager-options">With custom manager options<a class="headerlink" href="#with-custom-manager-options" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">socket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">AuthSocketClient</span><span class="p">(</span><span class="s1">&#39;http://localhost:3000&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nx">wallet</span><span class="o">:</span><span class="w"> </span><span class="kt">myWallet</span><span class="p">,</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nx">managerOptions</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nx">reconnection</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span><span class="p">,</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nx">reconnectionDelay</span><span class="o">:</span><span class="w"> </span><span class="kt">1000</span><span class="p">,</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nx">reconnectionDelayMax</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span><span class="p">,</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nx">reconnectionAttempts</span><span class="o">:</span><span class="w"> </span><span class="kt">5</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">})</span>
+</code></pre></div>
+<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Building applications that connect to BRC-31 authenticated servers</li>
-<li>Creating real-time clients for game servers or chat</li>
-<li>Connecting to notification servers with crypto identity</li>
+<li><strong>BRC-103 mutual authentication</strong> — Nonce-based challenge-response protocol</li>
+<li><strong>Ephemeral nonces</strong> — Each outbound message includes fresh nonce + signature</li>
+<li><strong>Signature verification</strong> — Inbound messages verified against server's public key</li>
+<li><strong>Session binding</strong> — Server nonce proves server identity; client nonce proves client identity</li>
+<li><strong>Certificate exchange</strong> — Optional verifiable certificates during handshake</li>
+<li><strong>Transparent proxying</strong> — User code interacts with normal Socket.IO API</li>
+</ul>
+<h2 id="when-to-use-this">When to use this<a class="headerlink" href="#when-to-use-this" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Connecting to BRC-103 authenticated servers (e.g., <code>@bsv/authsocket</code>)</li>
+<li>Real-time applications requiring cryptographic identity</li>
 <li>Building collaborative tools with verified user authentication</li>
-<li>Replacing traditional session auth with Bitcoin signatures</li>
+<li>Live messaging systems with signature-based security</li>
+<li>Games or interactive apps needing peer identity verification</li>
 </ul>
-<h2 id="when-not-to-use">When not to use<a class="headerlink" href="#when-not-to-use" title="Permanent link">&para;</a></h2>
+<h2 id="when-not-to-use-this">When NOT to use this<a class="headerlink" href="#when-not-to-use-this" title="Permanent link">&para;</a></h2>
 <ul>
-<li>For simple WebSocket clients without auth — use ws library</li>
-<li>For HTTP requests — use @bsv/auth-express-middleware</li>
-<li>For batch messaging — use @bsv/message-box-client instead</li>
-<li>For one-way communication — use fetch/HTTP instead</li>
+<li>Simple WebSocket clients without authentication — use Socket.IO directly</li>
+<li>REST APIs with request/response auth — use <code>@bsv/auth-express-middleware</code></li>
+<li>Batch or store-and-forward messaging — use <code>@bsv/message-box-client</code> instead</li>
+<li>One-way data feeds — Server-Sent Events may be simpler</li>
 </ul>
-<h2 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
-<p>Full TypeScript API documentation: <a href="https://bsv-blockchain.github.io/ts-stack/api/authsocket-client/">TypeDoc</a></p>
+<h2 id="spec-conformance">Spec conformance<a class="headerlink" href="#spec-conformance" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>BRC-103</strong> (Peer-to-Peer Mutual Authentication): Full handshake, nonce exchange, signature verification, optional certificate exchange</li>
+<li>Uses BRC-103 <code>Peer</code> and <code>Transport</code> abstractions from SDK</li>
+<li>Client transport implements ephemeral nonce generation + signing</li>
+</ul>
+<h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Wallet must be BRC-100 compatible</strong> — needs <code>sign()</code> and <code>verify()</code> methods</li>
+<li><strong>Server must support BRC-103</strong> — use <code>@bsv/authsocket</code> or implement BRC-103 <code>Peer</code> yourself</li>
+<li><strong>Nonce tracking handled automatically</strong> — library auto-generates nonces; don't manually set them</li>
+<li><strong>Signature verification automatic</strong> — inbound messages verified; if verification fails, message is dropped</li>
+<li><strong>Handshake must complete first</strong> — BRC-103 handshake completes before general messages; library handles this</li>
+</ol>
 <h2 id="related-packages">Related packages<a class="headerlink" href="#related-packages" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@bsv/authsocket — Server implementation</li>
-<li>@bsv/wallet-toolbox — Wallet for signing authentication</li>
-<li>@bsv/auth-express-middleware — HTTP auth middleware</li>
-<li>@bsv/message-box-client — Overlay-based messaging</li>
+<li><strong>@bsv/authsocket</strong> — Server-side counterpart; host authenticated WebSocket server</li>
+<li><strong>@bsv/message-box-client</strong> — Uses <code>AuthSocketClient</code> for live message delivery</li>
+<li><strong>@bsv/auth-express-middleware</strong> — HTTP authentication for REST endpoints</li>
+</ul>
+<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://bsv-blockchain.github.io/ts-stack/api/authsocket-client/">API reference (TypeDoc)</a></li>
+<li><a href="https://github.com/bsv-blockchain/authsocket-client">Source on GitHub</a></li>
+<li><a href="https://www.npmjs.com/package/@bsv/authsocket-client">npm</a></li>
 </ul>
 
 
@@ -4241,7 +4437,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:05:44 UTC">April 29, 2026</span>
   </span>
 
     

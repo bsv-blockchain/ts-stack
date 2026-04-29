@@ -3973,6 +3973,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4004,44 +4015,86 @@
 
 
 <h1 id="overlays">Overlays<a class="headerlink" href="#overlays" title="Permanent link">&para;</a></h1>
-<p>Run and consume overlay services that index on-chain data.</p>
+<p>Build and operate overlay services that index, validate, and serve on-chain data through a modular architecture of topic managers and lookup services.</p>
 <h2 id="packages-in-this-domain">Packages in this Domain<a class="headerlink" href="#packages-in-this-domain" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="overlay/">@bsv/overlay</a> — Core overlay framework</li>
-<li><a href="overlay-express/">@bsv/overlay-express</a> — HTTP server implementation</li>
-<li><a href="topics/">@bsv/overlay-topics</a> — Topic managers (UHRP, BTMS)</li>
-<li><a href="overlay-discovery-services/">@bsv/overlay-discovery-services</a> — Service discovery</li>
-<li><a href="gasp-core/">@bsv/gasp</a> — GASP sync protocol</li>
-<li><a href="btms-backend/">@bsv/btms-backend</a> — Token overlay backend</li>
-</ul>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="overlay/">@bsv/overlay</a></td>
+<td>Core Engine orchestrating topic managers, lookup services, and storage with BEEF/STEAK encoding</td>
+</tr>
+<tr>
+<td><a href="overlay-express/">@bsv/overlay-express</a></td>
+<td>Opinionated Express.js HTTP server with configuration, health checks, and admin endpoints</td>
+</tr>
+<tr>
+<td><a href="topics/">@bsv/overlay-topics</a></td>
+<td>20+ pre-built topic managers and lookup services (BTMS, DID, KVStore, UHRP, UMP, Supply Chain, etc.)</td>
+</tr>
+<tr>
+<td><a href="overlay-discovery-services/">@bsv/overlay-discovery-services</a></td>
+<td>SHIP/SLAP peer discovery and WalletAdvertiser for certificate-based advertisements</td>
+</tr>
+<tr>
+<td><a href="gasp-core/">@bsv/gasp</a></td>
+<td>Graph Aware Sync Protocol for incremental transaction graph synchronization with SPV validation</td>
+</tr>
+<tr>
+<td><a href="btms-backend/">@bsv/btms-backend</a></td>
+<td>BTMS token validation and indexing (legacy; core moved to @bsv/overlay-topics)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="what-you-can-do">What You Can Do<a class="headerlink" href="#what-you-can-do" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Index on-chain data by topic</li>
-<li>Serve indexed data to applications</li>
-<li>Validate transactions for a topic</li>
-<li>Manage file storage (UHRP)</li>
-<li>Sync state between overlays (GASP)</li>
+<li><strong>Index transactions by topic</strong> — Define custom admission logic via TopicManager interface</li>
+<li><strong>Query indexed data</strong> — Efficient lookups of admitted UTXOs via LookupService interface</li>
+<li><strong>Peer discovery</strong> — Advertise and discover overlay hosts and services via SHIP/SLAP</li>
+<li><strong>Sync state between nodes</strong> — Incremental transaction graph synchronization with GASP</li>
+<li><strong>Deploy HTTP services</strong> — Instant REST API via OverlayExpress with monitoring and web UI</li>
+<li><strong>Build token systems</strong> — Pre-built BTMS topic for token issuance, transfer, and burning</li>
+<li><strong>Implement identity</strong> — DID topic manager for decentralized identifiers</li>
+<li><strong>Key-value storage</strong> — KVStore topic for protocol-agnostic data storage</li>
+<li><strong>File management</strong> — UHRP topic for hash registry and file references</li>
 </ul>
 <h2 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
-<p>Use overlays when you're:</p>
+<p>Use overlays when you need to:</p>
 <ul>
-<li>Running a service that indexes data</li>
-<li>Querying indexed data (instead of scanning the chain)</li>
-<li>Storing files on BSV</li>
-<li>Building a token system backend</li>
+<li>Run a service that validates and indexes a specific type of transaction</li>
+<li>Query indexed transaction data without scanning the entire blockchain</li>
+<li>Discover and communicate with other overlay nodes for state synchronization</li>
+<li>Build applications that depend on consistent indexing of on-chain data</li>
+<li>Implement custom business logic for transaction admission and querying</li>
 </ul>
 <h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Overlay</strong> — Service that indexes a topic or category of transactions</li>
-<li><strong>Topic</strong> — A category of transactions (e.g., token transfers, files)</li>
-<li><strong>Topic Manager</strong> — Validates and indexes transactions for a topic</li>
-<li><strong>UHRP</strong> — Universal Hash Reference Protocol for file storage</li>
+<li><strong>Overlay</strong> — Service that indexes transactions matching a protocol (topic), validates them, and serves queries</li>
+<li><strong>Topic</strong> — A category/protocol of transactions with specific format and validation rules</li>
+<li><strong>TopicManager</strong> — Interface implementing admission logic (which outputs belong to this overlay)</li>
+<li><strong>LookupService</strong> — Interface implementing indexing and query logic for admitted UTXOs</li>
+<li><strong>Engine</strong> — Orchestrator combining topic managers, lookup services, storage, and networking</li>
+<li><strong>BEEF/STEAK</strong> — Bitcoin-efficient transaction encoding (BEEF = input; STEAK = engine response)</li>
+<li><strong>SHIP/SLAP</strong> — Peer discovery protocols (Service Host Interconnect Protocol / Service Lookup Availability Protocol)</li>
+<li><strong>GASP</strong> — Graph-aware synchronization for sharing transaction ancestry and descendancy</li>
+<li><strong>AdmissionMode</strong> — Whether lookup service receives locking-script details or full transaction</li>
+<li><strong>SpendNotificationMode</strong> — How lookup service learns about spent UTXOs (none, txid-only, full script, whole-tx)</li>
 </ul>
+<h2 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
+<p><img alt="Overlay node architecture: OverlayExpress HTTP server wraps the Engine that holds topic managers, lookup services, GASP sync and SHIP/SLAP, alongside a Janitor service. Storage layer connects to MongoDB, a SQL database, and the blockchain via SPV" src="../../assets/diagrams/overlays-architecture.svg" /></p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="overlay/">@bsv/overlay</a></strong> — Core framework</li>
-<li><strong><a href="overlay-express/">@bsv/overlay-express</a></strong> — Run an HTTP overlay</li>
-<li><strong><a href="../../guides/run-overlay-node/">Guide: Run an Overlay Node</a></strong></li>
+<li><strong>Start with <a href="overlay/">@bsv/overlay</a></strong> — Understand the core Engine and interfaces</li>
+<li><strong>Deploy with <a href="overlay-express/">@bsv/overlay-express</a></strong> — Quickly build HTTP overlay services</li>
+<li><strong>Use pre-built topics from <a href="topics/">@bsv/overlay-topics</a></strong> — BTMS, DID, KVStore, and 17 more</li>
+<li><strong>Discover peers with <a href="overlay-discovery-services/">@bsv/overlay-discovery-services</a></strong> — SHIP/SLAP for decentralized discovery</li>
+<li><strong>Sync state with <a href="gasp-core/">@bsv/gasp</a></strong> — Keep multiple nodes in sync efficiently</li>
+<li><strong><a href="../../guides/run-overlay-node/">Guide: Run an Overlay Node</a></strong> — Step-by-step deployment walkthrough</li>
 </ul>
 
 
@@ -4065,7 +4118,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:22:05 UTC">April 29, 2026</span>
   </span>
 
     

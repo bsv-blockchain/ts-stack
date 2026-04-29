@@ -3916,6 +3916,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Available Guides">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-build-a-wallet-aware-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Build a Wallet-Aware App
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-run-an-overlay-node" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Run an Overlay Node
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-peer-to-peer-messaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Peer-to-Peer Messaging
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-http-402-payment-gating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. HTTP 402 Payment Gating
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-learning-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Learning Path
+      
+    </span>
+  </a>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3950,19 +4011,33 @@
 
 
 <h1 id="guides">Guides<a class="headerlink" href="#guides" title="Permanent link">&para;</a></h1>
-<p>Step-by-step guides for building applications with the ts-stack.</p>
+<p>Comprehensive step-by-step walkthroughs for building production applications with the ts-stack. Each guide includes real code from CLAUDE.md files, runnable examples, and troubleshooting tips.</p>
 <h2 id="available-guides">Available Guides<a class="headerlink" href="#available-guides" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="wallet-aware-app/">Building a Wallet-Aware App</a> — Create a TypeScript app that interacts with wallets</li>
-<li><a href="run-overlay-node/">Running an Overlay Node</a> — Deploy and configure an overlay service</li>
-<li><a href="peer-to-peer-messaging/">Peer-to-Peer Messaging</a> — Send authenticated messages between parties</li>
-<li><a href="http-402-payments/">HTTP 402 Payment Gating</a> — Monetize your API with blockchain payments</li>
-</ul>
+<h3 id="1-build-a-wallet-aware-app">1. <a href="wallet-aware-app/">Build a Wallet-Aware App</a><a class="headerlink" href="#1-build-a-wallet-aware-app" title="Permanent link">&para;</a></h3>
+<p>Create a TypeScript application that integrates BRC-100 wallets for transaction creation, signing, and broadcasting. Learn wallet initialization, UTXO management, transaction monitoring, and SDK integration.</p>
+<p><strong>Time:</strong> ~20 minutes | <strong>Level:</strong> Intermediate</p>
+<h3 id="2-run-an-overlay-node">2. <a href="run-overlay-node/">Run an Overlay Node</a><a class="headerlink" href="#2-run-an-overlay-node" title="Permanent link">&para;</a></h3>
+<p>Deploy a production-ready overlay service that indexes and queries PushDrop data. Configure topic managers, set up MongoDB storage, enable GASP sync, and advertise via SHIP/SLAP for peer discovery.</p>
+<p><strong>Time:</strong> ~30 minutes | <strong>Level:</strong> Intermediate</p>
+<h3 id="3-peer-to-peer-messaging">3. <a href="peer-to-peer-messaging/">Peer-to-Peer Messaging</a><a class="headerlink" href="#3-peer-to-peer-messaging" title="Permanent link">&para;</a></h3>
+<p>Build authenticated, encrypted messaging between peers using BRC-103 mutual authentication. Choose between store-and-forward HTTP (MessageBox) or real-time WebSocket (Authsocket) transport.</p>
+<p><strong>Time:</strong> ~25 minutes | <strong>Level:</strong> Intermediate</p>
+<h3 id="4-http-402-payment-gating">4. <a href="http-402-payments/">HTTP 402 Payment Gating</a><a class="headerlink" href="#4-http-402-payment-gating" title="Permanent link">&para;</a></h3>
+<p>Monetize your API with Bitcoin SV micropayments using HTTP 402 Payment Required. Build a payment-gated Express server and an auto-paying client that transparently handles payment challenges.</p>
+<p><strong>Time:</strong> ~25 minutes | <strong>Level:</strong> Intermediate</p>
+<h2 id="recommended-learning-path">Recommended Learning Path<a class="headerlink" href="#recommended-learning-path" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Start with <strong>Wallet-Aware App</strong> if you're new to wallets and transactions</li>
+<li>Learn <strong>P2P Messaging</strong> to understand identity and authentication</li>
+<li>Explore <strong>Overlay Node</strong> for understanding data indexing and discovery</li>
+<li>Master <strong>HTTP 402 Payments</strong> to monetize your services</li>
+</ol>
 <h2 id="quick-links">Quick Links<a class="headerlink" href="#quick-links" title="Permanent link">&para;</a></h2>
 <p><strong>New to ts-stack?</strong> Start with <a href="../get-started/">Get Started</a>.</p>
 <p><strong>Need a spec?</strong> Check <a href="../specs/">Specifications</a>.</p>
 <p><strong>Looking for a package?</strong> Browse <a href="../packages/">Packages</a>.</p>
-<p><strong>Implementing a protocol?</strong> See <a href="../conformance/">Conformance Testing</a>.</p>
+<p><strong>Want to implement a protocol?</strong> See <a href="../conformance/">Conformance Testing</a>.</p>
+<p><strong>Looking for infrastructure examples?</strong> Check <a href="../infrastructure/">Infrastructure Components</a>.</p>
 
 
 
@@ -3985,7 +4060,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:36:18 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:07:32 UTC">April 29, 2026</span>
   </span>
 
     

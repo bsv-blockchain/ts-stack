@@ -27,7 +27,7 @@
     
     
       
-        <title>Specification - ts-stack</title>
+        <title>BRC-100 Wallet Interface - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#specification" class="md-skip">
+        <a href="#brc-100-wallet-interface" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Specification
+              BRC-100 Wallet Interface
             
           </span>
         </div>
@@ -2714,6 +2714,31 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-100 Wallet Interface
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -2737,6 +2762,124 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-create-and-sign-a-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Create and sign a transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -3911,6 +4054,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-create-and-sign-a-transaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Create and sign a transaction
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3929,8 +4179,220 @@
   
 
 
-<h1 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h1>
-<p>Technical specification document.</p>
+<h1 id="brc-100-wallet-interface">BRC-100 Wallet Interface<a class="headerlink" href="#brc-100-wallet-interface" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>BRC-100 defines a standardized interface that all wallet implementations follow. This enables applications to work with any wallet (BSV Desktop, BSV Browser, custom wallets) without code changes, treating the wallet as an opaque transaction signing and key management service.</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>JSON Schema 2020-12</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/wallet-toolbox, @bsv/sdk</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Wallet proliferation without interoperability</strong>. Different wallets (desktop, mobile, browser extensions, hardware) use incompatible signing protocols. Applications must write custom code for each wallet, creating lock-in and friction. BRC-100 defines a common interface so applications can request signing operations from any compliant wallet without knowing implementation details.</p>
+<p><strong>Privacy via opacity</strong>. Applications should not see which specific UTXOs a wallet chooses to spend. BRC-100's "action" model lets apps describe what they want to accomplish (e.g., "send 10,000 satoshis") without revealing address details. The wallet internally selects coins, builds the transaction, and returns a signable reference. This enables privacy and flexibility.</p>
+<p><strong>Key derivation and multi-signature support</strong>. Different protocols need different keys from a single root without exposing the root itself. BRC-100 supports protocol-based key derivation (BRC-42/43) so wallets can issue protocol-specific keys on demand. This supports multi-party signing orchestration and advanced cryptography.</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Wallet as a service</strong>. BRC-100 defines a request/response interface:</p>
+<ol>
+<li>
+<p><strong>App calls <code>wallet.createAction(outputs[])</code></strong> — App specifies desired outputs (recipient, satoshis, metadata). Wallet internally selects UTXOs, builds a transaction, and returns an opaque <code>SignableTransaction</code> reference.</p>
+</li>
+<li>
+<p><strong>App calls <code>wallet.signAction(reference)</code></strong> — App signs the reference (which the wallet has locked away internally). Wallet performs ECDSA signing and returns a signature list.</p>
+</li>
+<li>
+<p><strong>App submits the signed transaction to network</strong> — Wallet doesn't broadcast; app decides when and where to submit.</p>
+</li>
+<li>
+<p><strong>Wallet tracks outputs via <code>listOutputs()</code> and <code>listActions()</code></strong> — Apps poll or listen for transaction status (pending, confirmed, spent).</p>
+</li>
+</ol>
+<p><strong>Certificate and permission system</strong>. Beyond signing, wallets maintain:</p>
+<ul>
+<li><strong>Certificates</strong> — Identity proofs for peer-to-peer authentication (BRC-100 model: identity key + signature over a challenge)</li>
+<li><strong>Permissions</strong> — Fine-grained grants (e.g., "App A can spend from Token Protocol B but not from Protocol C")</li>
+<li><strong>Topics and discovery</strong> — Overlay service resolution for protocol-specific endpoints</li>
+</ul>
+<h2 id="key-types-endpoints">Key types / endpoints<a class="headerlink" href="#key-types-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Signature</th>
+<th>Purpose</th>
+<th>Request</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>createAction</code></td>
+<td><code>async (args: CreateActionArgs)</code></td>
+<td>Create unsigned transaction</td>
+<td><code>description, outputs, optionallySignedMetadata</code></td>
+<td><code>signableTransaction: { reference }</code></td>
+</tr>
+<tr>
+<td><code>signAction</code></td>
+<td><code>async (args: SignActionArgs)</code></td>
+<td>Sign a created action</td>
+<td><code>actionReference, optionallyProveWithCertificates</code></td>
+<td><code>signatures: Signature[]</code></td>
+</tr>
+<tr>
+<td><code>listOutputs</code></td>
+<td><code>async (args: ListOutputsArgs)</code></td>
+<td>Query UTXO state</td>
+<td><code>basket, includeSpent, limit</code></td>
+<td><code>outputs: Output[]</code></td>
+</tr>
+<tr>
+<td><code>listActions</code></td>
+<td><code>async (args: ListActionsArgs)</code></td>
+<td>Query transaction history</td>
+<td><code>basket, limit, includedMetadata</code></td>
+<td><code>actions: Action[]</code></td>
+</tr>
+<tr>
+<td><code>internalizeAction</code></td>
+<td><code>async (args)</code></td>
+<td>Import external transaction</td>
+<td><code>tx: Beef, description</code></td>
+<td><code>{ isMerge: boolean }</code></td>
+</tr>
+<tr>
+<td><code>getPublicKey</code></td>
+<td><code>async (args: GetPublicKeyArgs)</code></td>
+<td>Retrieve identity or derivation key</td>
+<td><code>protocol?, keyId?</code></td>
+<td><code>publicKey: string</code></td>
+</tr>
+<tr>
+<td><code>listCertificates</code></td>
+<td><code>async (args?)</code></td>
+<td>List installed certificates</td>
+<td>(none)</td>
+<td><code>certificates: Certificate[]</code></td>
+</tr>
+<tr>
+<td><code>proveCertificate</code></td>
+<td><code>async (args: ProveCertificateArgs)</code></td>
+<td>Generate certificate proof</td>
+<td><code>certificate, challengeData</code></td>
+<td><code>proof: string</code></td>
+</tr>
+<tr>
+<td><code>discoverByTopic</code></td>
+<td><code>async (args: DiscoverByTopicArgs)</code></td>
+<td>Resolve identity/protocol from overlay</td>
+<td><code>topic</code></td>
+<td><code>results: DiscoveryResult[]</code></td>
+</tr>
+<tr>
+<td><code>listPermissions</code></td>
+<td><code>async (args: ListPermissionsArgs)</code></td>
+<td>Query app permissions</td>
+<td><code>appId, protocolId?</code></td>
+<td><code>permissions: Permission[]</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="example-create-and-sign-a-transaction">Example: Create and sign a transaction<a class="headerlink" href="#example-create-and-sign-a-transaction" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-toolbox&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// 1. Create a wallet (in-process or remote)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="p">({</span><span class="w"> </span><span class="nx">env</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;main&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1">// 2. App specifies what it wants to send</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">action</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">createAction</span><span class="p">({</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nx">description</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Send 5000 sats to recipient&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nx">outputs</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span><span class="p">,</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span><span class="nx">lockingScript</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;76a914...&#39;</span><span class="p">,</span><span class="w"> </span><span class="c1">// P2PKH script for recipient</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="nx">outputDescription</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;payment to alice&#39;</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">})</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1">// 3. App requests signature (wallet decides which UTXOs and private keys to use)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="kd">const</span><span class="w"> </span><span class="nx">signed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">signAction</span><span class="p">({</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span><span class="nx">actionReference</span><span class="o">:</span><span class="w"> </span><span class="kt">action.signableTransaction.reference</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="p">})</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1">// 4. App receives signatures and submits transaction to network</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="c1">// (Wallet doesn&#39;t broadcast; app chooses the broadcast service)</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="kd">const</span><span class="w"> </span><span class="nx">broadcastResult</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">submitToARC</span><span class="p">(</span><span class="nx">signed</span><span class="p">.</span><span class="nx">tx</span><span class="p">)</span>
+</code></pre></div>
+<p>Example: Retrieve public key for peer authentication</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Get the wallet&#39;s identity key for BRC-103 mutual auth</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">identityKeyResult</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">getPublicKey</span><span class="p">({</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="c1">// If undefined, returns default identity key</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">})</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">identityKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">identityKeyResult</span><span class="p">.</span><span class="nx">publicKey</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1">// Use for signing/verifying in peer-to-peer handshakes</span>
+</code></pre></div>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>BRC-100 defines the wallet interface contract. Conformance vectors exist in <code>conformance/vectors/wallet/</code> and test:</p>
+<ul>
+<li>Correct action creation from output specifications</li>
+<li>Correct signing with proper ECDSA signatures</li>
+<li>UTXO and action tracking (spent vs. unspent states)</li>
+<li>Certificate storage and proof generation</li>
+<li>Permission gating of operations</li>
+</ul>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/wallet-toolbox</td>
+<td>Reference implementation with SQLite/MySQL/IndexedDB storage, ARC/WhatsOnChain integration, transaction monitoring</td>
+</tr>
+<tr>
+<td>@bsv/sdk</td>
+<td>ProtoWallet (minimal in-memory), WalletClient (factory for connecting to standard wallets), Transaction signing adapter</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md">BRC-42/43</a> — Key derivation for protocol-specific keys</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0018.md">BRC-18</a> — Signed messages</li>
+<li><a href="../brc-31-auth/">BRC-31 Auth</a> — Mutual authentication (uses wallet identity keys)</li>
+<li><a href="../storage-adapter/">Storage Adapter</a> — Remote wallet storage backend interface</li>
+</ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/sdk/brc-100-wallet.json">brc-100-wallet.json</a></p>
 
 
 
@@ -3953,7 +4415,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

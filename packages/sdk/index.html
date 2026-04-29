@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#sdk" class="md-skip">
+        <a href="#sdk-domain" class="md-skip">
           Skip to content
         </a>
       
@@ -3940,24 +3940,74 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-you-can-do" class="md-nav__link">
+  <a href="#common-use-cases" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What You Can Do
+        Common Use Cases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#im-building-an-application-that-needs-to-handle-bitcoin-transactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I'm building an application that needs to handle Bitcoin transactions
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#im-building-a-wallet-application" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to Use
+        I'm building a wallet application
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#im-working-with-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I'm working with tokens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#i-need-to-verify-a-transaction-spv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I need to verify a transaction (SPV)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#i-need-to-encode-data-on-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I need to encode data on-chain
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3977,6 +4027,45 @@
     <span class="md-ellipsis">
       
         Quick Example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-each-package-provides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Each Package Provides
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Each Package Provides">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bsvsdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @bsv/sdk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-sdk-vs-higher-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use SDK vs. Higher Layers
       
     </span>
   </a>
@@ -4014,55 +4103,98 @@
   
 
 
-<h1 id="sdk">SDK<a class="headerlink" href="#sdk" title="Permanent link">&para;</a></h1>
-<p>The foundation of ts-stack. Core cryptographic primitives and transaction building.</p>
+<h1 id="sdk-domain">SDK Domain<a class="headerlink" href="#sdk-domain" title="Permanent link">&para;</a></h1>
+<p>The foundation of ts-stack. Contains core cryptographic primitives, Bitcoin Script execution, transaction building and signing, network broadcasting, and lightweight SPV verification. This is the base layer that all other ts-stack packages build on top of.</p>
+<p>The SDK is intentionally standalone with zero runtime dependencies — it works in both Node.js and modern browsers using native crypto APIs. It provides both low-level primitives (for fine-grained control) and high-level helpers (for common workflows).</p>
 <h2 id="packages-in-this-domain">Packages in this Domain<a class="headerlink" href="#packages-in-this-domain" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="bsv-sdk/">@bsv/sdk</a> — Keys, signatures, transactions, BEEF, SPV</li>
-</ul>
-<h2 id="what-you-can-do">What You Can Do<a class="headerlink" href="#what-you-can-do" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Generate and manage private keys</li>
-<li>Sign and verify cryptographic signatures</li>
-<li>Build and serialize transactions</li>
-<li>Create and validate Simplified Payment Verification (SPV) proofs</li>
-<li>Encode and decode BEEF (Binary Encoded Extended Format)</li>
-<li>Work with Bitcoin Script</li>
-</ul>
-<h2 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
-<p>Every project using ts-stack starts with the SDK. It's the foundational layer for:</p>
-<ul>
-<li>Transaction building and broadcasting</li>
-<li>Key management (if you're not using a wallet)</li>
-<li>Signature verification (for authentication)</li>
-<li>SPV proof validation</li>
-</ul>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="bsv-sdk/">@bsv/sdk</a></td>
+<td>Cryptographic primitives, script building, transactions, BEEF, SPV, wallet interface types, broadcasting, and overlay tools</td>
+</tr>
+</tbody>
+</table>
+<h2 id="common-use-cases">Common Use Cases<a class="headerlink" href="#common-use-cases" title="Permanent link">&para;</a></h2>
+<h3 id="im-building-an-application-that-needs-to-handle-bitcoin-transactions">I'm building an application that needs to handle Bitcoin transactions<a class="headerlink" href="#im-building-an-application-that-needs-to-handle-bitcoin-transactions" title="Permanent link">&para;</a></h3>
+<p>Start with <a href="bsv-sdk/">@bsv/sdk</a> for transaction building, signing, and broadcasting. If you need persistent state and balance tracking, layer <a href="../wallet/wallet-toolbox/">@bsv/wallet-toolbox</a> on top.</p>
+<h3 id="im-building-a-wallet-application">I'm building a wallet application<a class="headerlink" href="#im-building-a-wallet-application" title="Permanent link">&para;</a></h3>
+<p>Use <a href="bsv-sdk/">@bsv/sdk</a> for cryptographic operations and <a href="../wallet/wallet-toolbox/">@bsv/wallet-toolbox</a> for the full BRC-100 wallet implementation with storage and signing.</p>
+<h3 id="im-working-with-tokens">I'm working with tokens<a class="headerlink" href="#im-working-with-tokens" title="Permanent link">&para;</a></h3>
+<p>Use <a href="bsv-sdk/">@bsv/sdk</a> for low-level script control, or <a href="../wallet/btms/">@bsv/btms</a> for higher-level token abstraction.</p>
+<h3 id="i-need-to-verify-a-transaction-spv">I need to verify a transaction (SPV)<a class="headerlink" href="#i-need-to-verify-a-transaction-spv" title="Permanent link">&para;</a></h3>
+<p><a href="bsv-sdk/">@bsv/sdk</a> provides full SPV support with <code>MerklePath</code> for merkle proof verification without downloading full blocks.</p>
+<h3 id="i-need-to-encode-data-on-chain">I need to encode data on-chain<a class="headerlink" href="#i-need-to-encode-data-on-chain" title="Permanent link">&para;</a></h3>
+<p><a href="bsv-sdk/">@bsv/sdk</a>'s <code>PushDrop</code> class encodes multi-field data in locking scripts, used by overlay protocols like BTMS.</p>
 <h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Private Key</strong> — Secret key that controls UTXOs and signs data</li>
-<li><strong>Public Key</strong> — Derived from private key, shared with others</li>
-<li><strong>Transaction</strong> — Collection of inputs (money in) and outputs (money out)</li>
-<li><strong>UTXO</strong> — Unspent transaction output you can spend</li>
-<li><strong>BEEF</strong> — Format that bundles a transaction with merkle proofs</li>
-<li><strong>SPV</strong> — Verify a transaction is in the chain without the full chain</li>
-<li><strong>Script</strong> — Bitcoin Script that controls who can spend an output</li>
+<li><strong>Private Key</strong> — 256-bit secret that controls UTXOs and signs transactions. Must never be exposed.</li>
+<li><strong>Public Key</strong> — Elliptic curve point derived from private key. Used for address generation and signature verification.</li>
+<li><strong>Script</strong> — Bitcoin Script bytecode that defines spending conditions. Locking scripts (on outputs) constrain who can spend; unlocking scripts (in inputs) prove authorization.</li>
+<li><strong>Transaction</strong> — Atomic unit of blockchain state change. Contains inputs (references to previous outputs) and outputs (new UTXOs).</li>
+<li><strong>UTXO</strong> — Unspent Transaction Output. Identified by (txid, outputIndex). Spending requires a valid unlocking script.</li>
+<li><strong>Signature</strong> — ECDSA signature with sighash byte indicating which transaction fields are committed to. Used to prove authorization.</li>
+<li><strong>Merkle Proof</strong> — Cryptographic proof that a transaction is included in a specific block. Enables SPV without full chain download.</li>
+<li><strong>BEEF</strong> — BRC-62 envelope format. Bundles transaction(s) with merkle proofs for offline verification and atomic transmission.</li>
+<li><strong>Wallet Interface (BRC-100)</strong> — Standardized interface that all wallets implement. Apps can work with any wallet without code changes.</li>
+<li><strong>Overlay</strong> — Layer-2 protocol using on-chain anchors (PushDrop) to build services without modifying Bitcoin consensus.</li>
 </ul>
 <h2 id="quick-example">Quick Example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
-<p>```typescript
-import { PrivateKey, Transaction } from '@bsv/sdk';</p>
-<p>// Create a key
-const key = PrivateKey.fromRandom();</p>
-<p>// Build a transaction
-const tx = new Transaction().addInput(...).addOutput(...);</p>
-<p>// Sign it
-const signature = key.sign(tx);</p>
-<p>// Encode as BEEF for transmission
-const beef = Beef.fromTransaction(tx, proofs);
-```</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">PrivateKey</span><span class="p">,</span><span class="w"> </span><span class="nx">P2PKH</span><span class="p">,</span><span class="w"> </span><span class="nx">Transaction</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">// Create a private key</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">PrivateKey</span><span class="p">.</span><span class="nx">fromRandom</span><span class="p">()</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1">// Build and sign a transaction</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">tx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Transaction</span><span class="p">(</span><span class="mf">1</span><span class="p">,</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="p">{</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="nx">sourceTransaction</span><span class="o">:</span><span class="w"> </span><span class="kt">Transaction.fromHex</span><span class="p">(</span><span class="s1">&#39;...&#39;</span><span class="p">),</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nx">sourceOutputIndex</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nx">unlockingScriptTemplate</span><span class="o">:</span><span class="w"> </span><span class="kt">new</span><span class="w"> </span><span class="nx">P2PKH</span><span class="p">().</span><span class="nx">unlock</span><span class="p">(</span><span class="nx">key</span><span class="p">)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">],</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="p">{</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nx">lockingScript</span><span class="o">:</span><span class="w"> </span><span class="kt">new</span><span class="w"> </span><span class="nx">P2PKH</span><span class="p">().</span><span class="nx">lock</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">toAddress</span><span class="p">()),</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="p">])</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1">// Sign and broadcast</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="k">await</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">sign</span><span class="p">()</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">tx</span><span class="p">.</span><span class="nx">broadcast</span><span class="p">()</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Broadcasted:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">txid</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="what-each-package-provides">What Each Package Provides<a class="headerlink" href="#what-each-package-provides" title="Permanent link">&para;</a></h2>
+<h3 id="bsvsdk">@bsv/sdk<a class="headerlink" href="#bsvsdk" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Elliptic curve cryptography (secp256k1), ECDSA signatures, key derivation (BRC-42/43)</li>
+<li>20+ script templates and Bitcoin Script interpreter</li>
+<li>Transaction builder with fee estimation and broadcasting</li>
+<li>Network integration (ARC, WhatsOnChain, Teranode)</li>
+<li>SPV merkle proof verification</li>
+<li>BRC-100 wallet interface types and WalletClient factory</li>
+<li>Message signing (BRC-18), TOTP, BEEF encoding/decoding</li>
+<li>Storage and KV store abstractions</li>
+<li>Overlay protocol integration (topics, remittance, identity, registry)</li>
+</ul>
+<h2 id="when-to-use-sdk-vs-higher-layers">When to Use SDK vs. Higher Layers<a class="headerlink" href="#when-to-use-sdk-vs-higher-layers" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Use SDK directly</strong> if: You're building a stateless app, you only need transaction building, you want fine-grained Script control, you're implementing a custom wallet</li>
+<li><strong>Use Wallet Toolbox</strong> if: You need persistent storage, background monitoring, full BRC-100 wallet, Shamir key sharing, permission management</li>
+<li><strong>Use BTMS</strong> if: You're working with tokens, you want token-specific abstractions like issuance/transfer/burn</li>
+<li><strong>Use Wallet Relay</strong> if: You need mobile-to-desktop wallet pairing without local key storage</li>
+</ul>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="bsv-sdk/">@bsv/sdk</a></strong> — Full API reference</li>
-<li><strong><a href="../../guides/">Guides</a></strong> — Hands-on examples</li>
+<li><strong><a href="bsv-sdk/">@bsv/sdk</a></strong> — Full API reference and code examples</li>
+<li><strong><a href="../wallet/">Wallet Domain</a></strong> — Higher-layer packages for persistence and key management</li>
+<li><strong>Guides</strong> — Hands-on examples (coming soon)</li>
 </ul>
 
 
@@ -4086,7 +4218,7 @@ const beef = Beef.fromTransaction(tx, proofs);
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:05:44 UTC">April 29, 2026</span>
   </span>
 
     

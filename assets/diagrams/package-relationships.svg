@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 720" role="img" aria-labelledby="title desc">
+  <title id="title">Package Relationships</title>
+  <desc id="desc">Domain packages organized by layer: Middleware, Messaging, Overlays sit on top of Wallet and Helpers, which depend on Network and SDK.</desc>
+  <style>
+    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
+    .box-accent { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.75; }
+    .box-amber { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .arrow-orange { stroke: #FF6B00; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#FF6B00"/>
+    </marker>
+  </defs>
+
+  <!-- Application -->
+  <rect x="320" y="20" width="260" height="50" rx="8" class="box-accent"/>
+  <text x="450" y="51" text-anchor="middle" class="heading">Your Application</text>
+
+  <!-- arrows from app to three -->
+  <line x1="450" y1="70" x2="160" y2="105" class="arrow-orange"/>
+  <line x1="450" y1="70" x2="450" y2="105" class="arrow-orange"/>
+  <line x1="450" y1="70" x2="740" y2="105" class="arrow-orange"/>
+
+  <!-- Three top boxes -->
+  <rect x="40" y="110" width="240" height="120" rx="8" class="box"/>
+  <text x="160" y="136" text-anchor="middle" class="title">Middleware</text>
+  <text x="60" y="166" class="label">• Auth</text>
+  <text x="60" y="186" class="label">• Payment</text>
+  <text x="60" y="206" class="label">• 402</text>
+
+  <rect x="320" y="110" width="260" height="120" rx="8" class="box"/>
+  <text x="450" y="136" text-anchor="middle" class="title">Messaging</text>
+  <text x="340" y="166" class="label">• Auth (BRC-103)</text>
+  <text x="340" y="186" class="label">• Paymail</text>
+  <text x="340" y="206" class="label">• Message-Box</text>
+
+  <rect x="620" y="110" width="240" height="120" rx="8" class="box"/>
+  <text x="740" y="136" text-anchor="middle" class="title">Overlays</text>
+  <text x="640" y="166" class="label">• Overlay / Express</text>
+  <text x="640" y="186" class="label">• Topics</text>
+  <text x="640" y="206" class="label">• GASP</text>
+
+  <!-- arrows down -->
+  <line x1="160" y1="230" x2="450" y2="270" class="arrow"/>
+  <line x1="450" y1="230" x2="450" y2="270" class="arrow"/>
+  <line x1="740" y1="230" x2="450" y2="270" class="arrow"/>
+
+  <!-- Wallet + Helpers -->
+  <rect x="220" y="275" width="460" height="130" rx="8" class="box"/>
+  <text x="450" y="301" text-anchor="middle" class="title">Wallet + Helpers</text>
+  <text x="240" y="331" class="label">• wallet-toolbox &#160;&#160;&#160; • btms</text>
+  <text x="240" y="351" class="label">• wallet-relay &#160;&#160;&#160; • btms-permission-module</text>
+  <text x="240" y="371" class="label">• did-client &#160;&#160;&#160; • simple &#160;&#160;&#160; • wallet-helper</text>
+  <text x="240" y="391" class="label">• templates &#160;&#160;&#160; • amountinator &#160;&#160;&#160; • fund-wallet</text>
+
+  <line x1="450" y1="405" x2="450" y2="435" class="arrow"/>
+
+  <!-- Network -->
+  <rect x="300" y="440" width="300" height="70" rx="8" class="box"/>
+  <text x="450" y="466" text-anchor="middle" class="title">Network</text>
+  <text x="320" y="494" class="label">• ts-p2p (Teranode listener)</text>
+
+  <line x1="450" y1="510" x2="450" y2="540" class="arrow"/>
+
+  <!-- SDK -->
+  <rect x="240" y="545" width="420" height="110" rx="8" class="box-amber"/>
+  <text x="450" y="571" text-anchor="middle" class="title">SDK</text>
+  <text x="260" y="601" class="label">• Keys &#160;&#160;&#160; • Signatures</text>
+  <text x="260" y="621" class="label">• Transactions</text>
+  <text x="260" y="641" class="label">• BEEF / SPV</text>
+
+  <line x1="450" y1="655" x2="450" y2="685" class="arrow-orange"/>
+
+  <!-- BSV Chain -->
+  <rect x="350" y="688" width="200" height="28" rx="8" class="box-accent"/>
+  <text x="450" y="708" text-anchor="middle" class="heading">BSV Chain</text>
+</svg>

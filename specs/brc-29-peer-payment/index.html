@@ -27,7 +27,7 @@
     
     
       
-        <title>Specification - ts-stack</title>
+        <title>BRC-29 Simple Authenticated P2P Payment Protocol - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#specification" class="md-skip">
+        <a href="#brc-29-simple-authenticated-p2p-payment-protocol" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Specification
+              BRC-29 Simple Authenticated P2P Payment Protocol
             
           </span>
         </div>
@@ -2889,6 +2889,31 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-29 Peer Payment
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -2912,6 +2937,124 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / channels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-send-peer-to-peer-payment-via-message-box" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Send peer-to-peer payment via message box
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -3911,6 +4054,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / channels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-send-peer-to-peer-payment-via-message-box" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Send peer-to-peer payment via message box
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3929,8 +4179,201 @@
   
 
 
-<h1 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h1>
-<p>Technical specification document.</p>
+<h1 id="brc-29-simple-authenticated-p2p-payment-protocol">BRC-29 Simple Authenticated P2P Payment Protocol<a class="headerlink" href="#brc-29-simple-authenticated-p2p-payment-protocol" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>BRC-29 defines how to send a peer-to-peer payment: derive a unique payment address from sender and recipient identity keys (using BRC-42 key derivation), construct a transaction with one or more P2PKH outputs to those addresses, and transmit the transaction via any transport (HTTP, WebSocket, message box). The receiver then internalizes the transaction into their wallet.</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>AsyncAPI 3.0</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/ts-paymail, @bsv/message-box-client</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Deriving unique payment addresses per payer without revealing the recipient's private key</strong>. With BRC-42/43 key derivation, a recipient can issue a new address to every payer (avoiding address reuse) without managing thousands of keys. The address is derived deterministically from sender+recipient keys, so only the recipient can receive to that address.</p>
+<p><strong>Authenticated peer payments without a central service</strong>. Traditional P2P payment requires a service to map paymail addresses to payment outputs. BRC-29 enables peer-to-peer: sender and recipient negotiate payment parameters directly (no intermediary), then sender constructs and transmits the transaction.</p>
+<p><strong>Transmit flexibility</strong>. BRC-29 specifies the transaction format (Atomic BEEF + BRC-100 envelope) but not how to send it. Payments can travel via HTTP POST, WebSocket message, message box, Paymail, or any transport layer.</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Three-step flow</strong>:</p>
+<ol>
+<li>
+<p><strong>Sender → Recipient</strong> (capability discovery) — Sender queries recipient's Paymail domain for supported capabilities (BRC-121). Learns recipient's public key and payment output derivation instructions.</p>
+</li>
+<li>
+<p><strong>Sender → Recipient</strong> (payment message) — Sender derives payment address using BRC-42:</p>
+</li>
+<li><code>invoiceNumber = "2-3241645161d8-&lt;prefix&gt; &lt;suffix&gt;"</code></li>
+<li><code>prefix</code> = server-provided nonce (BRC-29 format)</li>
+<li><code>suffix</code> = derivation suffix (e.g., base64-encoded timestamp or counter)</li>
+<li>Derives address and creates P2PKH output(s) to that address</li>
+<li>Wraps in Atomic BEEF (BRC-95) format</li>
+<li>
+<p>Sends transaction via HTTP/WebSocket/message box</p>
+</li>
+<li>
+<p><strong>Recipient → Sender</strong> (acknowledgment) — Recipient calls <code>wallet.internalizeAction()</code> to import transaction. If merged successfully, responds with acknowledgment (ACCEPTED or REJECTED).</p>
+</li>
+</ol>
+<h2 id="key-types-channels">Key types / channels<a class="headerlink" href="#key-types-channels" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Direction</th>
+<th>Message</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>payment/send</code></td>
+<td>Send</td>
+<td><code>PaymentMessage</code></td>
+<td>Sender delivers Atomic BEEF transaction to recipient</td>
+</tr>
+<tr>
+<td><code>payment/acknowledge</code></td>
+<td>Receive</td>
+<td><code>PaymentAck</code></td>
+<td>Recipient confirms acceptance or rejection</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PaymentMessage schema</strong>:
+- <code>tx: AtomicBEEF</code> — Transaction in BRC-95 Atomic BEEF format
+- <code>amount: number</code> — Total satoshis in outputs (metadata)
+- <code>derivationPrefix: string</code> — Server-provided nonce (BRC-29 format)
+- <code>derivationSuffix: string</code> — Client-provided derivation suffix
+- <code>metadata: object</code> — Optional sender metadata (memo, reference ID, etc.)</p>
+<p><strong>PaymentAck schema</strong>:
+- <code>status: "ACCEPTED" | "REJECTED"</code> — Whether recipient accepted the transaction
+- <code>txid: string</code> — Transaction ID (if accepted)
+- <code>reason?: string</code> — Explanation if rejected</p>
+<h2 id="example-send-peer-to-peer-payment-via-message-box">Example: Send peer-to-peer payment via message box<a class="headerlink" href="#example-send-peer-to-peer-payment-via-message-box" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/message-box-client&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-toolbox&#39;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Transaction</span><span class="p">,</span><span class="w"> </span><span class="nx">P2PKH</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">SetupWallet</span><span class="p">({</span><span class="w"> </span><span class="nx">env</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;main&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kd">const</span><span class="w"> </span><span class="nx">msgBox</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="p">({</span><span class="w"> </span><span class="nx">walletClient</span><span class="o">:</span><span class="w"> </span><span class="kt">wallet</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">// 1. Get recipient&#39;s identity key (from Paymail or direct exchange)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="kd">const</span><span class="w"> </span><span class="nx">recipientKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;02abc123...&#39;</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1">// 2. Create payment action</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="kd">const</span><span class="w"> </span><span class="nx">action</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">createAction</span><span class="p">({</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nx">description</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;P2P payment to alice&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="nx">outputs</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">10000</span><span class="p">,</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="nx">lockingScript</span><span class="o">:</span><span class="w"> </span><span class="kt">new</span><span class="w"> </span><span class="nx">P2PKH</span><span class="p">().</span><span class="nx">lock</span><span class="p">(</span><span class="nx">recipientKey</span><span class="p">).</span><span class="nx">toHex</span><span class="p">(),</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="nx">outputDescription</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;payment to alice&#39;</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="p">})</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1">// 3. Sign the transaction</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="kd">const</span><span class="w"> </span><span class="nx">signed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">signAction</span><span class="p">({</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span><span class="nx">actionReference</span><span class="o">:</span><span class="w"> </span><span class="kt">action.signableTransaction.reference</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="p">})</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1">// 4. Wrap in Atomic BEEF and send via message box</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="kd">const</span><span class="w"> </span><span class="nx">beef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">signed</span><span class="p">.</span><span class="nx">tx</span><span class="p">.</span><span class="nx">toBeef</span><span class="p">()</span><span class="w">  </span><span class="c1">// BRC-95 format</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBox</span><span class="p">.</span><span class="nx">sendMessage</span><span class="p">({</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">  </span><span class="nx">recipient</span><span class="o">:</span><span class="w"> </span><span class="kt">recipientKey</span><span class="p">,</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">  </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;payment_inbox&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="kt">JSON.stringify</span><span class="p">({</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;payment&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span><span class="nx">beef</span><span class="o">:</span><span class="w"> </span><span class="kt">beef.toHex</span><span class="p">(),</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">    </span><span class="nx">amount</span><span class="o">:</span><span class="w"> </span><span class="kt">10000</span><span class="p">,</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">    </span><span class="nx">memo</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Thanks for the coffee!&#39;</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="p">})</span>
+</code></pre></div>
+<p>Recipient receives and internalizes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Recipient listens for messages</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">messages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">msgBox</span><span class="p">.</span><span class="nx">listMessages</span><span class="p">({</span><span class="w"> </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;payment_inbox&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">const</span><span class="w"> </span><span class="nx">msg</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="nx">messages</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">payment</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">msg</span><span class="p">.</span><span class="nx">body</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="c1">// Internalize the BEEF transaction</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">wallet</span><span class="p">.</span><span class="nx">internalizeAction</span><span class="p">({</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nx">tx</span><span class="o">:</span><span class="w"> </span><span class="kt">Beef.fromHex</span><span class="p">(</span><span class="nx">payment</span><span class="p">.</span><span class="nx">beef</span><span class="p">),</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nx">description</span><span class="o">:</span><span class="w"> </span><span class="sb">`Received from sender: </span><span class="si">${</span><span class="nx">payment</span><span class="p">.</span><span class="nx">memo</span><span class="si">}</span><span class="sb">`</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">isMerge</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Already seen this tx&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;New transaction internalized&#39;</span><span class="p">)</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">}</span>
+</code></pre></div>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>BRC-29 conformance is tested in <code>conformance/vectors/payments/brc29/</code>:</p>
+<ul>
+<li>Key derivation with BRC-42 (prefix/suffix parsing)</li>
+<li>Correct P2PKH output generation</li>
+<li>Transaction format (Atomic BEEF)</li>
+<li>Payment message schema validation</li>
+<li><code>isMerge</code> handling on internalization</li>
+</ul>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/ts-paymail</td>
+<td>Paymail client/server for capability discovery and payment routing</td>
+</tr>
+<tr>
+<td>@bsv/message-box-client</td>
+<td>Message box transport for peer-to-peer payments</td>
+</tr>
+<tr>
+<td>@bsv/wallet-toolbox</td>
+<td><code>internalizeAction()</code> method for receiving transactions</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md">BRC-42/43</a> — Key derivation (used to derive payment addresses)</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md">BRC-95 / BRC-62</a> — Atomic BEEF transaction format</li>
+<li><a href="../brc-100-wallet/">BRC-100 Wallet</a> — <code>internalizeAction()</code> for receiving payments</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md">BRC-121 Paymail</a> — Service discovery for payment endpoints</li>
+<li><a href="../message-box-http/">Message Box HTTP</a> — Transport layer for peer-to-peer messages</li>
+</ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/payments/brc29-payment-protocol.yaml">brc29-payment-protocol.yaml</a></p>
 
 
 
@@ -3953,7 +4396,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

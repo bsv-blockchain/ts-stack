@@ -1780,10 +1780,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use
+        Common patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#listening-for-live-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listening for live messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#peer-to-peer-payments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peer-to-peer payments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
       
     </span>
   </a>
@@ -1791,10 +1830,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use" class="md-nav__link">
+  <a href="#when-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to use
+        When to use this
       
     </span>
   </a>
@@ -1802,10 +1841,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#when-not-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API reference
+        When NOT to use this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common pitfalls
       
     </span>
   </a>
@@ -1817,6 +1878,17 @@
     <span class="md-ellipsis">
       
         Related packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
       
     </span>
   </a>
@@ -4093,10 +4165,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use
+        Common patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#listening-for-live-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listening for live messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#peer-to-peer-payments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peer-to-peer payments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key concepts
       
     </span>
   </a>
@@ -4104,10 +4215,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use" class="md-nav__link">
+  <a href="#when-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to use
+        When to use this
       
     </span>
   </a>
@@ -4115,10 +4226,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#when-not-to-use-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API reference
+        When NOT to use this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec conformance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common pitfalls
       
     </span>
   </a>
@@ -4130,6 +4263,17 @@
     <span class="md-ellipsis">
       
         Related packages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference
       
     </span>
   </a>
@@ -4157,67 +4301,136 @@
 
 
 <h1 id="bsvmessage-box-client">@bsv/message-box-client<a class="headerlink" href="#bsvmessage-box-client" title="Permanent link">&para;</a></h1>
-<p>Client for sending and receiving authenticated messages via MessageBox overlay hosts — encrypted message delivery with proof-of-identity.</p>
+<blockquote>
+<p>Toolkit for peer-to-peer messaging and Bitcoin SV payments via store-and-forward architecture. Provides <code>MessageBoxClient</code> (message inbox management) and <code>PeerPayClient</code> (higher-level P2P payments) leveraging BRC-103 mutual authentication and BRC-29 payment derivation.</p>
+</blockquote>
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>npm<span class="w"> </span>install<span class="w"> </span>@bsv/message-box-client
 </code></pre></div>
 <h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/message-box-client&#39;</span><span class="p">;</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">WalletToolbox</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-toolbox&#39;</span><span class="p">;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/message-box-client&#39;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">WalletClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">wallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WalletToolbox</span><span class="p">();</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="p">({</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nx">overlayHost</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;https://messagebox.example.com&#39;</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">});</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1">// Send a message</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">sendMessage</span><span class="p">({</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nx">to</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;recipient@example.com&#39;</span><span class="p">,</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nx">subject</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Hello&#39;</span><span class="p">,</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;This is an encrypted message&#39;</span><span class="p">,</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="nx">wallet</span><span class="o">:</span><span class="w"> </span><span class="kt">wallet</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">});</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1">// Receive messages</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="kd">const</span><span class="w"> </span><span class="nx">messages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getMessages</span><span class="p">(</span><span class="nx">wallet</span><span class="p">.</span><span class="nx">getIdentity</span><span class="p">());</span>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="nx">messages</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="nx">msg</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;From:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="p">.</span><span class="kr">from</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;Body:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="p">.</span><span class="nx">body</span><span class="p">);</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="p">});</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">myWallet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WalletClient</span><span class="p">()</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="p">({</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;https://message-box-us-1.bsvb.tech&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nx">walletClient</span><span class="o">:</span><span class="w"> </span><span class="kt">myWallet</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">})</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">init</span><span class="p">()</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1">// Send message to John</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">sendMessage</span><span class="p">({</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="nx">recipient</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;022600d2ef37d123fdcac7d25d7a464ada7acd3fb65a0daf85412140ee20884311&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">  </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;demo_inbox&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Hello John!&#39;</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="p">})</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1">// List messages</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="kd">const</span><span class="w"> </span><span class="nx">messages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">listMessages</span><span class="p">({</span><span class="w"> </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;demo_inbox&#39;</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">messages</span><span class="p">[</span><span class="mf">0</span><span class="p">].</span><span class="nx">body</span><span class="p">)</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1">// Acknowledge (delete)</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">acknowledgeMessage</span><span class="p">({</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">  </span><span class="nx">messageIds</span><span class="o">:</span><span class="w"> </span><span class="kt">messages.map</span><span class="p">(</span><span class="nx">msg</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">msg</span><span class="p">.</span><span class="nx">messageId</span><span class="p">.</span><span class="nx">toString</span><span class="p">())</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="p">})</span>
 </code></pre></div>
 <h2 id="what-it-provides">What it provides<a class="headerlink" href="#what-it-provides" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Message sending</strong> — Send encrypted messages to other identities</li>
-<li><strong>Message retrieval</strong> — Query and retrieve messages from overlay</li>
-<li><strong>Encryption</strong> — Automatic ECIES encryption of message content</li>
-<li><strong>Authentication</strong> — Sign messages with wallet identity</li>
-<li><strong>Host discovery</strong> — Automatically discover message-box hosts via SHIP/SLAP</li>
-<li><strong>Batch operations</strong> — Send multiple messages efficiently</li>
-<li><strong>Message deletion</strong> — Remove messages from overlay</li>
-<li><strong>Folder support</strong> — Organize messages into custom folders</li>
+<li><strong>MessageBoxClient</strong> — Store-and-forward message client with HTTP and WebSocket support</li>
+<li><strong>PeerPayClient</strong> — Higher-level P2P payment client with live and HTTP modes</li>
+<li><strong>BRC-103 authentication</strong> — All requests signed with wallet identity; server verifies sender</li>
+<li><strong>Message encryption</strong> — AES-256-GCM by default; <code>skipEncryption</code> flag disables</li>
+<li><strong>Ephemeral storage</strong> — Messages deleted once acknowledged by recipient</li>
+<li><strong>Live WebSocket</strong> — Push notifications via WebSocket; HTTP for polling</li>
+<li><strong>BRC-29 derivation</strong> — Payment addresses derived from sender+recipient identity keys</li>
+<li><strong>Overlay discovery</strong> — Discover peers' MessageBox hosts via decentralized overlay service</li>
 </ul>
-<h2 id="when-to-use">When to use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
+<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="listening-for-live-messages">Listening for live messages<a class="headerlink" href="#listening-for-live-messages" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">MessageBoxClient</span><span class="p">({</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nx">host</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;https://message-box-us-1.bsvb.tech&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nx">walletClient</span><span class="o">:</span><span class="w"> </span><span class="kt">myWallet</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">})</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">initializeConnection</span><span class="p">()</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">joinRoom</span><span class="p">(</span><span class="s1">&#39;demo_inbox&#39;</span><span class="p">)</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">await</span><span class="w"> </span><span class="nx">msgBoxClient</span><span class="p">.</span><span class="nx">listenForLiveMessages</span><span class="p">({</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nx">messageBox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;demo_inbox&#39;</span><span class="p">,</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nx">onMessage</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">msg</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Live:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">msg</span><span class="p">.</span><span class="nx">body</span><span class="p">)</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="p">})</span>
+</code></pre></div>
+<h3 id="peer-to-peer-payments">Peer-to-peer payments<a class="headerlink" href="#peer-to-peer-payments" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">PeerPayClient</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/message-box-client&#39;</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">peerPay</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">PeerPayClient</span><span class="p">({</span><span class="w"> </span><span class="nx">walletClient</span><span class="o">:</span><span class="w"> </span><span class="kt">myWallet</span><span class="w"> </span><span class="p">})</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1">// Listen for incoming payments</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">await</span><span class="w"> </span><span class="nx">peerPay</span><span class="p">.</span><span class="nx">listenForLivePayments</span><span class="p">({</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nx">onPayment</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">payment</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Received payment:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">payment</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="k">await</span><span class="w"> </span><span class="nx">peerPay</span><span class="p">.</span><span class="nx">acceptPayment</span><span class="p">(</span><span class="nx">payment</span><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">})</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1">// Send 50,000 sats</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">await</span><span class="w"> </span><span class="nx">peerPay</span><span class="p">.</span><span class="nx">sendLivePayment</span><span class="p">({</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="nx">recipient</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;0277a2b...e3f4&#39;</span><span class="p">,</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="nx">amount</span><span class="o">:</span><span class="w"> </span><span class="kt">50000</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="p">})</span>
+</code></pre></div>
+<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Building messaging applications on BSV</li>
-<li>Sending notifications or alerts to identities</li>
-<li>Implementing private communication channels</li>
-<li>Creating user-to-user messaging systems</li>
-<li>Storing off-chain messages with on-chain proofs</li>
+<li><strong>Store-and-forward</strong> — Messages posted to named "inboxes" on server; recipient polls or subscribes via WebSocket</li>
+<li><strong>Ephemeral storage</strong> — Messages deleted once acknowledged by recipient</li>
+<li><strong>Message encryption</strong> — AES-256-GCM by default; <code>skipEncryption</code> flag disables</li>
+<li><strong>BRC-103 auth</strong> — All requests signed with wallet identity; server verifies sender</li>
+<li><strong>BRC-29 derivation</strong> — Payment addresses derived from sender+recipient identity keys</li>
+<li><strong>Overlay network</strong> — Can discover peers' MessageBox hosts via decentralized overlay service</li>
+<li><strong>Live vs HTTP</strong> — WebSocket for push notifications; HTTP for polling</li>
 </ul>
-<h2 id="when-not-to-use">When not to use<a class="headerlink" href="#when-not-to-use" title="Permanent link">&para;</a></h2>
+<h2 id="when-to-use-this">When to use this<a class="headerlink" href="#when-to-use-this" title="Permanent link">&para;</a></h2>
 <ul>
-<li>For simple text messages without encryption — use plain HTTP instead</li>
-<li>If you only need one-way notifications — consider webhooks</li>
-<li>For real-time chat — use @bsv/authsocket instead</li>
-<li>For bulk email-style messages — integrate a traditional email service</li>
+<li>Building peer-to-peer messaging applications on BSV</li>
+<li>Sending notifications or alerts to Bitcoin identities</li>
+<li>Implementing private communication channels with identity verification</li>
+<li>Creating user-to-user messaging systems with signatures</li>
+<li>Building P2P payment applications with store-and-forward messaging</li>
 </ul>
-<h2 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
-<p>Full TypeScript API documentation: <a href="https://bsv-blockchain.github.io/ts-stack/api/message-box-client/">TypeDoc</a></p>
+<h2 id="when-not-to-use-this">When NOT to use this<a class="headerlink" href="#when-not-to-use-this" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Simple text messages without encryption — use plain HTTP instead</li>
+<li>Only one-way notifications without delivery confirmation — consider webhooks</li>
+<li>Real-time chat requiring sub-second latency — use <code>@bsv/authsocket-client</code> instead</li>
+<li>Bulk email-style messages — integrate traditional email service instead</li>
+</ul>
+<h2 id="spec-conformance">Spec conformance<a class="headerlink" href="#spec-conformance" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>BRC-103</strong> (Peer-to-Peer Mutual Authentication): All messages signed/verified</li>
+<li><strong>BRC-29</strong> (Payment Derivation): Payment address derivation using sender+recipient keys</li>
+<li><strong>BRC-100</strong> (Wallet interface): Uses standard wallet methods for signing/verifying</li>
+<li><strong>MessageBox server protocol</strong>: Custom HTTP + WebSocket endpoints for store-and-forward</li>
+</ul>
+<h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Auto-init default</strong> — <code>init()</code> is optional but recommended; first use auto-initializes if not called</li>
+<li><strong>Encryption enabled by default</strong> — message bodies are AES-256-GCM encrypted; set <code>skipEncryption: true</code> for raw data</li>
+<li><strong>Live requires room subscription</strong> — WebSocket requires explicit <code>joinRoom()</code> before <code>listenForLiveMessages()</code></li>
+<li><strong>Payment rejection reduces amount</strong> — rejecting a payment sends a refund minus 1000 sats</li>
+<li><strong>Overlay discovery takes time</strong> — if no explicit host provided, client queries overlay; this takes ~10s per peer</li>
+</ol>
 <h2 id="related-packages">Related packages<a class="headerlink" href="#related-packages" title="Permanent link">&para;</a></h2>
 <ul>
-<li>@bsv/wallet-toolbox — Wallet for signing messages</li>
-<li>@bsv/overlay-topics — MessageBox topic manager implementation</li>
-<li>@bsv/authsocket-client — Real-time authenticated communication</li>
-<li>@bsv/paymail — Identity and payment address discovery</li>
+<li><strong>@bsv/authsocket-client</strong> — Real-time authenticated WebSocket communication</li>
+<li><strong>@bsv/auth-express-middleware</strong> — HTTP authentication for REST endpoints</li>
+<li><strong>@bsv/paymail</strong> — Paymail protocol for identity and payment address discovery</li>
+</ul>
+<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://bsv-blockchain.github.io/ts-stack/api/message-box-client/">API reference (TypeDoc)</a></li>
+<li><a href="https://github.com/bsv-blockchain/message-box-client">Source on GitHub</a></li>
+<li><a href="https://www.npmjs.com/package/@bsv/message-box-client">npm</a></li>
 </ul>
 
 
@@ -4241,7 +4454,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:05:44 UTC">April 29, 2026</span>
   </span>
 
     

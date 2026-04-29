@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#wallet" class="md-skip">
+        <a href="#wallet-domain" class="md-skip">
           Skip to content
         </a>
       
@@ -3940,24 +3940,85 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-you-can-do" class="md-nav__link">
+  <a href="#common-use-cases" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What You Can Do
+        Common Use Cases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#im-building-an-app-and-need-user-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I'm building an app and need user signatures
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#im-building-a-web-app-that-integrates-with-user-wallets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to Use
+        I'm building a web app that integrates with user wallets
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#i-need-to-issue-and-manage-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I need to issue and manage tokens
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#im-building-a-wallet-application-myself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I'm building a wallet application myself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#i-need-mobile-to-desktop-signing-without-downloading-wallet-software" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I need mobile-to-desktop signing without downloading wallet software
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#i-want-fine-grained-permission-control-over-token-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I want fine-grained permission control over token operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3969,6 +4030,100 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-platform-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage &amp; Platform Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-use-each-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use Each Package
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When to Use Each Package">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#wallet-toolbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wallet Toolbox
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#btms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BTMS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#btms-permission-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BTMS Permission Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wallet-relay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wallet Relay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-for-these" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NOT for these
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4003,43 +4158,144 @@
   
 
 
-<h1 id="wallet">Wallet<a class="headerlink" href="#wallet" title="Permanent link">&para;</a></h1>
-<p>Key management, balance tracking, and signing — local or via wallet service.</p>
+<h1 id="wallet-domain">Wallet Domain<a class="headerlink" href="#wallet-domain" title="Permanent link">&para;</a></h1>
+<p>Higher-layer packages for key management, balance tracking, transaction signing, token operations, and mobile wallet pairing. These packages provide persistent state, BRC-100 wallet implementation, and framework-agnostic permission systems.</p>
+<p>The wallet domain builds on top of <a href="../sdk/bsv-sdk/">@bsv/sdk</a>. If you only need transaction building without persistent state or key management, use the SDK directly. If you need full wallet functionality with storage, key derivation, background monitoring, or token support, use packages from this domain.</p>
 <h2 id="packages-in-this-domain">Packages in this Domain<a class="headerlink" href="#packages-in-this-domain" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="wallet-toolbox/">@bsv/wallet-toolbox</a> — BRC-100 wallet client library</li>
-<li><a href="btms/">@bsv/btms</a> — Binary Token Management System</li>
-<li><a href="btms-permission-module/">@bsv/btms-permission-module</a> — Token permission checking</li>
-<li><a href="wallet-relay/">@bsv/wallet-relay</a> — Broadcast and query wrapper</li>
-</ul>
-<h2 id="what-you-can-do">What You Can Do<a class="headerlink" href="#what-you-can-do" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Connect to a BRC-100 wallet (local or remote)</li>
-<li>Request signature and encryption operations</li>
-<li>Manage keys (if building a wallet)</li>
-<li>Track UTXO balance</li>
-<li>Issue and transfer tokens (BTMS)</li>
-</ul>
-<h2 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
-<p>Use wallet packages when you're:</p>
-<ul>
-<li>Building an app that integrates with user wallets</li>
-<li>Building a wallet itself</li>
-<li>Managing tokens</li>
-<li>Signing transactions remotely</li>
-</ul>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="wallet-toolbox/">@bsv/wallet-toolbox</a></td>
+<td>Reference BRC-100 wallet implementation with SQLite/MySQL/IndexedDB storage, background monitoring, Shamir key sharing, and permission management</td>
+</tr>
+<tr>
+<td><a href="btms/">@bsv/btms</a></td>
+<td>UTXO-based token issuance, transfer, burning, and ownership proof validation</td>
+</tr>
+<tr>
+<td><a href="btms-permission-module/">@bsv/btms-permission-module</a></td>
+<td>Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback</td>
+</tr>
+<tr>
+<td><a href="wallet-relay/">@bsv/wallet-relay</a></td>
+<td>Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components</td>
+</tr>
+</tbody>
+</table>
+<h2 id="common-use-cases">Common Use Cases<a class="headerlink" href="#common-use-cases" title="Permanent link">&para;</a></h2>
+<h3 id="im-building-an-app-and-need-user-signatures">I'm building an app and need user signatures<a class="headerlink" href="#im-building-an-app-and-need-user-signatures" title="Permanent link">&para;</a></h3>
+<p>Use <a href="wallet-toolbox/">@bsv/wallet-toolbox</a> to create a full wallet with persistent storage and signing, or integrate with user-installed wallets via the BRC-100 interface.</p>
+<h3 id="im-building-a-web-app-that-integrates-with-user-wallets">I'm building a web app that integrates with user wallets<a class="headerlink" href="#im-building-a-web-app-that-integrates-with-user-wallets" title="Permanent link">&para;</a></h3>
+<p>Use <a href="wallet-toolbox/">@bsv/wallet-toolbox</a> for local wallet, or <a href="wallet-relay/">@bsv/wallet-relay</a> for mobile wallet pairing via QR code.</p>
+<h3 id="i-need-to-issue-and-manage-tokens">I need to issue and manage tokens<a class="headerlink" href="#i-need-to-issue-and-manage-tokens" title="Permanent link">&para;</a></h3>
+<p>Use <a href="btms/">@bsv/btms</a> for token operations (issue, send, accept, burn). Integrate with <a href="wallet-toolbox/">@bsv/wallet-toolbox</a> for wallet signing and <a href="btms-permission-module/">@bsv/btms-permission-module</a> for permission control.</p>
+<h3 id="im-building-a-wallet-application-myself">I'm building a wallet application myself<a class="headerlink" href="#im-building-a-wallet-application-myself" title="Permanent link">&para;</a></h3>
+<p>Use <a href="wallet-toolbox/">@bsv/wallet-toolbox</a> as reference implementation. It demonstrates BRC-100 compliance, storage abstraction, key management, and background monitoring patterns.</p>
+<h3 id="i-need-mobile-to-desktop-signing-without-downloading-wallet-software">I need mobile-to-desktop signing without downloading wallet software<a class="headerlink" href="#i-need-mobile-to-desktop-signing-without-downloading-wallet-software" title="Permanent link">&para;</a></h3>
+<p>Use <a href="wallet-relay/">@bsv/wallet-relay</a> for QR pairing. Desktop shows QR, mobile scans, then mobile wallet signs and relays responses back encrypted.</p>
+<h3 id="i-want-fine-grained-permission-control-over-token-operations">I want fine-grained permission control over token operations<a class="headerlink" href="#i-want-fine-grained-permission-control-over-token-operations" title="Permanent link">&para;</a></h3>
+<p>Use <a href="btms-permission-module/">@bsv/btms-permission-module</a> with your custom permission handler (modal, alert, web component, etc.).</p>
 <h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>BRC-100</strong> — Standard wallet interface for signing and encryption</li>
-<li><strong>BTMS</strong> — Token protocol for issuance and transfer</li>
-<li><strong>Relay</strong> — Service that broadcasts transactions and queries UTXOs</li>
-<li><strong>Identity Key</strong> — Long-lived key representing a user</li>
+<li><strong>BRC-100 Wallet Interface</strong> — Standard interface implemented by all wallet packages. Apps can work with any wallet (desktop, mobile, hardware) without code changes.</li>
+<li><strong>Action</strong> — High-level transaction intent. App specifies outputs; wallet picks inputs internally for privacy and flexibility.</li>
+<li><strong>SignableTransaction</strong> — Opaque reference to a created action. App requests wallet to sign this reference; wallet handles ECDSA signing.</li>
+<li><strong>Storage Backend</strong> — Pluggable abstraction layer. Same wallet code works with SQLite (Node.js), IndexedDB (browser), or remote HTTPS server.</li>
+<li><strong>Key Derivation</strong> — BRC-42/43 hierarchical key generation. Each protocol can request keys from wallet without exposing root key.</li>
+<li><strong>Monitor</strong> — Background daemon that polls blockchain for transaction confirmations, acquires merkle proofs, and rebroadcasts stalled transactions.</li>
+<li><strong>BTMS Token</strong> — UTXO-based token identified by canonical asset ID (<code>{txid}.{vout}</code>). Each token is a separate on-chain output with metadata.</li>
+<li><strong>Ownership Proof</strong> — Cryptographic proof of token ownership without revealing private key. Used for collateral, escrow, access control.</li>
+<li><strong>Relay Session</strong> — Encrypted tunnel between desktop and mobile wallet. QR encodes relay URL + session ID; mobile scans and establishes WebSocket connection.</li>
+<li><strong>Permission Module</strong> — BRC-98/99 hooks that intercept special operations (token spend, burn) and prompt user via custom callback.</li>
+</ul>
+<h2 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
+<p><img alt="Wallet domain architecture: btms, btms-permission-module and wallet-relay sit on top of wallet-toolbox, which itself contains storage, services, key management, and permissions modules — all building on @bsv/sdk for cryptography and transactions" src="../../assets/diagrams/wallet-architecture.svg" /></p>
+<h2 id="storage-platform-support">Storage &amp; Platform Support<a class="headerlink" href="#storage-platform-support" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Node.js</th>
+<th>Browser</th>
+<th>Mobile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>wallet-toolbox</strong></td>
+<td>SQLite, MySQL</td>
+<td>IndexedDB, Remote</td>
+<td>IndexedDB, Remote</td>
+</tr>
+<tr>
+<td><strong>btms</strong></td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td><strong>btms-permission-module</strong></td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td><strong>wallet-relay</strong></td>
+<td>Server</td>
+<td>React components</td>
+<td>Supported via relay</td>
+</tr>
+</tbody>
+</table>
+<h2 id="when-to-use-each-package">When to Use Each Package<a class="headerlink" href="#when-to-use-each-package" title="Permanent link">&para;</a></h2>
+<h3 id="wallet-toolbox">Wallet Toolbox<a class="headerlink" href="#wallet-toolbox" title="Permanent link">&para;</a></h3>
+<ul>
+<li>You're building a wallet application</li>
+<li>You need persistent transaction history and UTXO state</li>
+<li>You want BRC-100 compliance</li>
+<li>You need key derivation for multiple protocols</li>
+<li>You want background transaction monitoring</li>
+<li>You need different storage for different platforms</li>
+</ul>
+<h3 id="btms">BTMS<a class="headerlink" href="#btms" title="Permanent link">&para;</a></h3>
+<ul>
+<li>You're building token issuance/transfer system</li>
+<li>You need UTXO-based tokens with on-chain metadata</li>
+<li>You want automated PushDrop encoding/decoding</li>
+<li>You need ownership proofs for collateral/escrow</li>
+</ul>
+<h3 id="btms-permission-module">BTMS Permission Module<a class="headerlink" href="#btms-permission-module" title="Permanent link">&para;</a></h3>
+<ul>
+<li>You want user approval for token operations</li>
+<li>You need framework-agnostic permission callbacks</li>
+<li>You're building a wallet with permission control</li>
+<li>You want custom UI for permission prompts</li>
+</ul>
+<h3 id="wallet-relay">Wallet Relay<a class="headerlink" href="#wallet-relay" title="Permanent link">&para;</a></h3>
+<ul>
+<li>You're building a web app needing mobile signatures</li>
+<li>You want QR-based pairing (no software download)</li>
+<li>You need encrypted communication over untrusted networks</li>
+<li>You want stateless session management</li>
+</ul>
+<h3 id="not-for-these">NOT for these<a class="headerlink" href="#not-for-these" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Don't use wallet packages if you only need transaction building — use <a href="../sdk/bsv-sdk/">@bsv/sdk</a> directly</li>
+<li>Don't use wallet-toolbox if you only need BRC-100 interface types — import from SDK instead</li>
 </ul>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="wallet-toolbox/">@bsv/wallet-toolbox</a></strong> — Connect to wallets</li>
+<li><strong><a href="wallet-toolbox/">@bsv/wallet-toolbox</a></strong> — Full wallet implementation</li>
 <li><strong><a href="btms/">@bsv/btms</a></strong> — Token protocol</li>
-<li><strong><a href="../../guides/wallet-aware-app/">Guide: Wallet-Aware App</a></strong> — Build with wallets</li>
+<li><strong><a href="wallet-relay/">@bsv/wallet-relay</a></strong> — Mobile pairing</li>
+<li><strong><a href="btms-permission-module/">@bsv/btms-permission-module</a></strong> — Token permissions</li>
+<li><strong><a href="../sdk/">SDK Domain</a></strong> — Cryptography and transactions</li>
 </ul>
 
 
@@ -4063,7 +4319,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:22:05 UTC">April 29, 2026</span>
   </span>
 
     

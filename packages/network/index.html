@@ -3951,10 +3951,54 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#key-concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Concepts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-to-use" class="md-nav__link">
     <span class="md-ellipsis">
       
         When to Use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-not-to-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When NOT to Use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topics-available" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topics Available
       
     </span>
   </a>
@@ -3993,28 +4037,105 @@
 
 
 <h1 id="network">Network<a class="headerlink" href="#network" title="Permanent link">&para;</a></h1>
-<p>Broadcast transactions and query BSV nodes through a typed client.</p>
+<p>Connect to Teranode via private DHT and subscribe to real-time blockchain events (blocks, subtrees, mining updates).</p>
 <h2 id="packages-in-this-domain">Packages in this Domain<a class="headerlink" href="#packages-in-this-domain" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="ts-p2p/">@bsv/teranode-listener</a> — Connect to Teranode and listen for transactions</li>
-</ul>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="ts-p2p/">@bsv/ts-p2p</a></td>
+<td>Subscribe to Teranode P2P topics via libp2p private DHT with gossipsub pub/sub messaging</td>
+</tr>
+</tbody>
+</table>
 <h2 id="what-you-can-do">What You Can Do<a class="headerlink" href="#what-you-can-do" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Broadcast signed transactions</li>
-<li>Query UTXOs</li>
-<li>Listen for new transactions</li>
-<li>Retrieve transaction history</li>
+<li><strong>Listen for new blocks</strong> — Real-time block solution events from Teranode</li>
+<li><strong>Monitor subtree updates</strong> — Track subtree creation and validation</li>
+<li><strong>Track mining status</strong> — Subscribe to mining enabled/disabled events</li>
+<li><strong>Monitor peer connections</strong> — Handshake messages from connecting peers</li>
+<li><strong>Detect rejected transactions</strong> — Receive txid of transactions rejected by network</li>
+<li><strong>Custom topic subscription</strong> — Dynamic add/remove of topic callbacks at runtime</li>
+<li><strong>Private DHT participation</strong> — Join closed, authenticated peer network with pre-shared key</li>
+</ul>
+<h2 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Private DHT</strong> — Uses pre-shared key (PSK) for secure, closed peer-to-peer network</li>
+<li><strong>Gossipsub</strong> — Efficient pub/sub messaging layer for blockchain event distribution</li>
+<li><strong>Topic-based subscriptions</strong> — Subscribe to specific events (bitcoin/mainnet-block, bitcoin/mainnet-subtree, etc.)</li>
+<li><strong>Bootstrap peers</strong> — Known entry points for discovering other peers in the network</li>
+<li><strong>Static peers</strong> — Explicitly configured peers maintained for reliable connectivity</li>
+<li><strong>Peer discovery</strong> — libp2p Kademlia DHT discovers peers dynamically</li>
+<li><strong>Callbacks</strong> — Each topic has own async message handler for processing events</li>
+<li><strong>Message format</strong> — Events arrive as raw Uint8Array; caller deserializes (typically BSV transactions/blocks)</li>
 </ul>
 <h2 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h2>
 <p>Use network packages when you need to:</p>
 <ul>
-<li>Broadcast transactions to the chain</li>
-<li>Query account balance</li>
-<li>Monitor for incoming transactions</li>
+<li>Monitor real-time blockchain events</li>
+<li>React to new blocks as they arrive</li>
+<li>Track peer connectivity and network health</li>
+<li>Run an overlay service that listens for transactions</li>
+<li>Build applications that need live blockchain state updates</li>
 </ul>
+<h2 id="when-not-to-use">When NOT to Use<a class="headerlink" href="#when-not-to-use" title="Permanent link">&para;</a></h2>
+<ul>
+<li>For transaction broadcasting — use transaction submission endpoints</li>
+<li>For historical queries — use indexers or explorer APIs</li>
+<li>For UTXO lookups — use full-node RPC or @bsv/overlay lookup services</li>
+<li>Without requirement for real-time updates — use batch query APIs</li>
+</ul>
+<h2 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h2>
+<p><img alt="Network flow: your application subscribes to TeranodeListener which routes through libp2p (private DHT + gossipsub with noise encryption, Kademlia discovery, bootstrap and static peers) over TCP/Noise to Teranode peers in the P2P network" src="../../assets/diagrams/network-flow.svg" /></p>
+<h2 id="topics-available">Topics Available<a class="headerlink" href="#topics-available" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bitcoin/mainnet-bestblock</code></td>
+<td>Best block message</td>
+</tr>
+<tr>
+<td><code>bitcoin/mainnet-block</code></td>
+<td>Block solution found</td>
+</tr>
+<tr>
+<td><code>bitcoin/mainnet-subtree</code></td>
+<td>Subtree created</td>
+</tr>
+<tr>
+<td><code>bitcoin/mainnet-mining_on</code></td>
+<td>Mining enabled</td>
+</tr>
+<tr>
+<td><code>bitcoin/mainnet-handshake</code></td>
+<td>Peer connects</td>
+</tr>
+<tr>
+<td><code>bitcoin/mainnet-rejected_tx</code></td>
+<td>Transaction rejected</td>
+</tr>
+<tr>
+<td><code>bitcoin/testnet-*</code></td>
+<td>Testnet equivalents</td>
+</tr>
+</tbody>
+</table>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="ts-p2p/">@bsv/teranode-listener</a></strong> — Transaction broadcast and query</li>
+<li><strong><a href="ts-p2p/">@bsv/ts-p2p</a></strong> — Real-time blockchain event subscription</li>
+<li><strong><a href="../overlays/overlay/">@bsv/overlay</a></strong> — Indexing service integration</li>
+<li><strong><a href="https://github.com/bsv-blockchain/ts-sdk">@bsv/sdk</a></strong> — Transaction/block deserialization</li>
 </ul>
 
 
@@ -4038,7 +4159,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:22:05 UTC">April 29, 2026</span>
   </span>
 
     

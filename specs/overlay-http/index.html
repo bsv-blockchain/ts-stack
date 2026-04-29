@@ -27,7 +27,7 @@
     
     
       
-        <title>Specification - ts-stack</title>
+        <title>Overlay HTTP API - ts-stack</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#specification" class="md-skip">
+        <a href="#overlay-http-api" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Specification
+              Overlay HTTP API
             
           </span>
         </div>
@@ -2749,6 +2749,31 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overlay HTTP
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -2772,6 +2797,124 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-submit-transaction-to-overlay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Submit transaction to overlay
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -3911,6 +4054,113 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-problem-this-solves" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What problem this solves
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protocol-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-types-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key types / endpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-submit-transaction-to-overlay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Submit transaction to overlay
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-vectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance vectors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementations-in-ts-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementations in ts-stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#spec-artifact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spec artifact
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3929,8 +4179,229 @@
   
 
 
-<h1 id="specification">Specification<a class="headerlink" href="#specification" title="Permanent link">&para;</a></h1>
-<p>Technical specification document.</p>
+<h1 id="overlay-http-api">Overlay HTTP API<a class="headerlink" href="#overlay-http-api" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>The Overlay HTTP API exposes a BSV overlay service engine as REST endpoints. Clients submit tagged BEEF transactions, query the overlay for admitted UTXOs, discover topic managers and lookup services, and optionally sync state with peer overlay nodes using GASP (Graph Aware Sync Protocol).</p>
+</blockquote>
+<h2 id="at-a-glance">At a glance<a class="headerlink" href="#at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>OpenAPI 3.1</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>1.0.0</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>stable</td>
+</tr>
+<tr>
+<td>Implementations</td>
+<td>@bsv/overlay, @bsv/overlay-express</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-problem-this-solves">What problem this solves<a class="headerlink" href="#what-problem-this-solves" title="Permanent link">&para;</a></h2>
+<p><strong>Decentralized applications without blockchain validation</strong>. Applications built on BSV need to validate which UTXOs are admissible to their protocol without running a full node. Overlay nodes host topic managers (admission logic) and lookup services (UTXO indexing). Clients submit transactions to the overlay, which validates and indexes them, enabling fast queries and low-latency consensus.</p>
+<p><strong>Multi-topic routing in a single transaction</strong>. A transaction can carry data for multiple protocols (topics). The overlay engine routes outputs to the correct topic manager, records admittance, and notifies corresponding lookup services. This enables composable protocols on a single blockchain transaction.</p>
+<p><strong>Peer-to-peer state synchronization</strong>. Multiple overlay nodes can sync state using GASP so they have consistent UTXO knowledge. This enables horizontal scaling and geographic distribution without central coordination.</p>
+<h2 id="protocol-overview">Protocol overview<a class="headerlink" href="#protocol-overview" title="Permanent link">&para;</a></h2>
+<p><strong>Transaction submission and routing</strong>:</p>
+<ol>
+<li><strong>Client → Overlay</strong> <code>POST /submit</code></li>
+<li>Raw BEEF transaction (BRC-62) in request body</li>
+<li><code>x-topics</code> header: JSON array of topic names (e.g., <code>["tm_ship", "tm_identity"]</code>)</li>
+<li>
+<p>Optional <code>x-includes-off-chain-values</code> for metadata</p>
+</li>
+<li>
+<p><strong>Overlay Engine</strong></p>
+</li>
+<li>Parses BEEF, extracts PushDrop outputs</li>
+<li>Routes each output to relevant topic manager's <code>identifyAdmissibleOutputs()</code></li>
+<li>Topic manager responds with list of admissible output indices</li>
+<li>
+<p>Overlap engine records admittance in storage, notifies lookup services</p>
+</li>
+<li>
+<p><strong>Overlay → Client</strong> <code>200 OK</code> with STEAK response</p>
+</li>
+<li>STEAK = Structured Transaction Evidence for Admitted Knowledge</li>
+<li>Lists which outputs were admitted to which topics</li>
+<li>Contains merkle proof (if available)</li>
+</ol>
+<p><strong>UTXO lookup</strong>:</p>
+<ol>
+<li><strong>Client → Overlay</strong> <code>POST /lookup</code></li>
+<li>
+<p>Topic and query (e.g., <code>{ service: "ls_identity", query: { identityKey: "02abc..." } }</code>)</p>
+</li>
+<li>
+<p><strong>Overlay</strong> queries the topic's lookup service</p>
+</li>
+<li>
+<p><strong>Overlay → Client</strong> <code>200 OK</code> with lookup results (UTXOs, merkle proofs)</p>
+</li>
+</ol>
+<p><strong>Service discovery</strong>:</p>
+<ul>
+<li><code>GET /listTopicManagers</code> — Lists all hosted topic managers with metadata</li>
+<li><code>GET /listLookupServiceProviders</code> — Lists all lookup services</li>
+<li><code>GET /getDocumentationForTopicManager?topic=tm_ship</code> — Returns protocol specification</li>
+</ul>
+<h2 id="key-types-endpoints">Key types / endpoints<a class="headerlink" href="#key-types-endpoints" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Purpose</th>
+<th>Request</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>POST</td>
+<td><code>/submit</code></td>
+<td>Submit transaction to topics</td>
+<td>BEEF binary + <code>x-topics</code> header</td>
+<td>STEAK (admitted outputs)</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/lookup</code></td>
+<td>Query admitted UTXOs</td>
+<td><code>{ service, query }</code></td>
+<td>Lookup results + proofs</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/listTopicManagers</code></td>
+<td>Discover topics</td>
+<td>(none)</td>
+<td><code>[ { name, version, shortDescription } ]</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/listLookupServiceProviders</code></td>
+<td>Discover lookup services</td>
+<td>(none)</td>
+<td><code>[ { name, version, admissionMode } ]</code></td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/getDocumentationForTopicManager</code></td>
+<td>Protocol documentation</td>
+<td><code>?topic=tm_ship</code></td>
+<td>Markdown documentation</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/admin/registerTopicManager</code></td>
+<td>Register new topic (admin)</td>
+<td>Topic config</td>
+<td>OK</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>Health check</td>
+<td>(none)</td>
+<td>OK or error</td>
+</tr>
+</tbody>
+</table>
+<h2 id="example-submit-transaction-to-overlay">Example: Submit transaction to overlay<a class="headerlink" href="#example-submit-transaction-to-overlay" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Engine</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/overlay&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Transaction</span><span class="p">,</span><span class="w"> </span><span class="nx">Beef</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">// 1. Create a transaction with PushDrop outputs</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">tx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Transaction</span><span class="p">()</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nx">tx</span><span class="p">.</span><span class="nx">addOutput</span><span class="p">({</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">1</span><span class="p">,</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nx">lockingScript</span><span class="o">:</span><span class="w"> </span><span class="kt">PushDrop.createFromFields</span><span class="p">([</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span><span class="s1">&#39;tm_identity&#39;</span><span class="p">,</span><span class="w">  </span><span class="c1">// Topic name</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="s1">&#39;myIdentity&#39;</span><span class="p">,</span><span class="w">   </span><span class="c1">// Topic-specific data</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="s1">&#39;myPublicKey&#39;</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="p">]).</span><span class="nx">toHex</span><span class="p">()</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">})</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1">// 2. Wrap in BEEF and submit</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="kd">const</span><span class="w"> </span><span class="nx">beef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Beef</span><span class="p">.</span><span class="nx">fromTransaction</span><span class="p">(</span><span class="nx">tx</span><span class="p">)</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="kd">const</span><span class="w"> </span><span class="nx">topics</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;tm_identity&#39;</span><span class="p">]</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;https://overlay.example.com/submit&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;POST&#39;</span><span class="p">,</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s1">&#39;x-topics&#39;</span><span class="o">:</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">topics</span><span class="p">)</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="kt">beef.toHex</span><span class="p">()</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="p">})</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="kd">const</span><span class="w"> </span><span class="nx">steak</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">steak</span><span class="p">.</span><span class="nx">outputs</span><span class="p">)</span><span class="w">  </span><span class="c1">// Outputs admitted to tm_identity</span>
+</code></pre></div>
+<p>Example: Query admitted UTXOs</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">lookupResponse</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span><span class="s1">&#39;https://overlay.example.com/lookup&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;POST&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s1">&#39;content-type&#39;</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;application/json&#39;</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="kt">JSON.stringify</span><span class="p">({</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nx">service</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;ls_identity&#39;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nx">query</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">identityKey</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;02abc...&#39;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="p">})</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">})</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kd">const</span><span class="w"> </span><span class="nx">results</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">lookupResponse</span><span class="p">.</span><span class="nx">json</span><span class="p">()</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">results</span><span class="p">.</span><span class="nx">UTXOs</span><span class="p">)</span><span class="w">  </span><span class="c1">// Array of UTXOs for this identity</span>
+</code></pre></div>
+<h2 id="conformance-vectors">Conformance vectors<a class="headerlink" href="#conformance-vectors" title="Permanent link">&para;</a></h2>
+<p>Overlay conformance is tested in <code>conformance/vectors/overlay/</code>:</p>
+<ul>
+<li>BEEF parsing and PushDrop extraction</li>
+<li>Topic manager admission logic</li>
+<li>Lookup service query functionality</li>
+<li>STEAK response format validation</li>
+<li>GASP synchronization protocol</li>
+</ul>
+<h2 id="implementations-in-ts-stack">Implementations in ts-stack<a class="headerlink" href="#implementations-in-ts-stack" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@bsv/overlay</td>
+<td>Core engine; orchestrates topic managers, lookup services, storage</td>
+</tr>
+<tr>
+<td>@bsv/overlay-express</td>
+<td>Express.js HTTP server exposing overlay endpoints</td>
+</tr>
+<tr>
+<td>@bsv/overlay-topics</td>
+<td>Pre-built topic managers and lookup services (identity, tokens, supply chain, etc.)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-specs">Related specs<a class="headerlink" href="#related-specs" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../gasp-sync/">GASP Sync</a> — Peer-to-peer state synchronization between overlay nodes</li>
+<li><a href="../uhrp/">UHRP</a> — Content-addressed file storage topic</li>
+<li><a href="https://github.com/bitcoin-sv/BRCs/blob/master/transactions/0095.md">BRC-62 / BEEF</a> — Transaction encoding format</li>
+</ul>
+<h2 id="spec-artifact">Spec artifact<a class="headerlink" href="#spec-artifact" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/bsv-blockchain/ts-stack/blob/main/specs/overlay/overlay-http.yaml">overlay-http.yaml</a></p>
 
 
 
@@ -3953,7 +4424,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     

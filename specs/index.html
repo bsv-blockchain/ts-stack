@@ -3908,10 +3908,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#brc-standards" class="md-nav__link">
+  <a href="#quick-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BRC Standards
+        Quick Reference
       
     </span>
   </a>
@@ -3919,10 +3919,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#protocols" class="md-nav__link">
+  <a href="#brc-numbering-scheme" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Protocols
+        BRC Numbering Scheme
       
     </span>
   </a>
@@ -3930,10 +3930,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#infrastructure" class="md-nav__link">
+  <a href="#by-use-case" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Infrastructure
+        By Use Case
       
     </span>
   </a>
@@ -3945,6 +3945,17 @@
     <span class="md-ellipsis">
       
         Learning Path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
       
     </span>
   </a>
@@ -3972,31 +3983,151 @@
 
 
 <h1 id="specifications">Specifications<a class="headerlink" href="#specifications" title="Permanent link">&para;</a></h1>
-<p>Technical specifications for BSV protocols and standards implemented in ts-stack.</p>
-<h2 id="brc-standards">BRC Standards<a class="headerlink" href="#brc-standards" title="Permanent link">&para;</a></h2>
+<p>This section documents the protocols and standards that the ts-stack implements. Each protocol solves a specific coordination problem on BSV: from wallet identity and authentication to peer payments, overlay service management, and transaction broadcast. These specs enable interoperable applications by defining precise request/response formats and protocol flows.</p>
+<p><img alt="Specs to packages map: each BSV protocol specification on the left is implemented by one or more ts-stack packages on the right, with curved links showing the BRC-100 to wallet-toolbox/sdk, BRC-31 to authsocket/middleware, Overlay HTTP to overlay/overlay-express, and other relationships" src="../assets/diagrams/specs-package-map.svg" /></p>
+<h2 id="quick-reference">Quick Reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Format</th>
+<th>Version</th>
+<th>Implementations</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="brc-100-wallet/">BRC-100 Wallet</a></td>
+<td>JSON Schema</td>
+<td>1.0.0</td>
+<td>@bsv/wallet-toolbox, @bsv/sdk</td>
+<td>Standard wallet interface for signing and key management</td>
+</tr>
+<tr>
+<td><a href="brc-31-auth/">BRC-31 Auth</a></td>
+<td>AsyncAPI 3.0</td>
+<td>1.0.0</td>
+<td>@bsv/auth-express-middleware, @bsv/authsocket</td>
+<td>Mutual authentication handshake (BRC-103 + BRC-104)</td>
+</tr>
+<tr>
+<td><a href="brc-29-peer-payment/">BRC-29 Peer Payment</a></td>
+<td>AsyncAPI 3.0</td>
+<td>1.0.0</td>
+<td>@bsv/ts-paymail, @bsv/message-box-client</td>
+<td>P2P payment derivation and transmission</td>
+</tr>
+<tr>
+<td><a href="brc-121-402/">BRC-121 / 402</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/402-pay, @bsv/payment-express-middleware</td>
+<td>HTTP micropayment protocol</td>
+</tr>
+<tr>
+<td><a href="overlay-http/">Overlay HTTP</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/overlay, @bsv/overlay-express</td>
+<td>Transaction routing and topic management</td>
+</tr>
+<tr>
+<td><a href="message-box-http/">Message Box HTTP</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/message-box-client</td>
+<td>Store-and-forward messaging API</td>
+</tr>
+<tr>
+<td><a href="authsocket/">AuthSocket</a></td>
+<td>AsyncAPI 3.0</td>
+<td>1.0.0</td>
+<td>@bsv/authsocket</td>
+<td>Authenticated WebSocket for live messaging</td>
+</tr>
+<tr>
+<td><a href="arc-broadcast/">ARC Broadcast</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/sdk</td>
+<td>Miner-facing transaction broadcast</td>
+</tr>
+<tr>
+<td><a href="merkle-service/">Merkle Service</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/sdk</td>
+<td>SPV proof delivery service</td>
+</tr>
+<tr>
+<td><a href="storage-adapter/">Storage Adapter</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/wallet-toolbox</td>
+<td>Remote wallet storage interface</td>
+</tr>
+<tr>
+<td><a href="gasp-sync/">GASP Sync</a></td>
+<td>AsyncAPI 3.0</td>
+<td>1.0.0</td>
+<td>@bsv/gasp-core</td>
+<td>Transaction graph synchronization</td>
+</tr>
+<tr>
+<td><a href="uhrp/">UHRP</a></td>
+<td>OpenAPI 3.1</td>
+<td>1.0.0</td>
+<td>@bsv/overlay-topics</td>
+<td>Content-addressed file storage</td>
+</tr>
+</tbody>
+</table>
+<h2 id="brc-numbering-scheme">BRC Numbering Scheme<a class="headerlink" href="#brc-numbering-scheme" title="Permanent link">&para;</a></h2>
+<p><strong>BRC</strong> = BSV (or Bitcoin) Request for Comments. BRCs are numbered sequentially and grouped by category:</p>
 <ul>
-<li><strong>BRC-100</strong> — Wallet interface standard</li>
-<li><strong>BRC-31</strong> — Auth handshake protocol</li>
-<li><strong>BRC-29</strong> — Peer payment protocol</li>
-<li><strong>BRC-121</strong> — HTTP 402 payment gating</li>
+<li><strong>0–99</strong> — Core protocols (BRC-100 = Wallet interface, BRC-103 = Mutual auth, etc.)</li>
+<li><strong>Messaging</strong> (200s) — Messaging and payment protocols</li>
+<li><strong>Overlays</strong> (80s) — Overlay network standards (UHRP, GASP, etc.)</li>
 </ul>
-<h2 id="protocols">Protocols<a class="headerlink" href="#protocols" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Overlay HTTP</strong> — RESTful API for overlay services</li>
-<li><strong>Message-box HTTP</strong> — API for message storage</li>
-<li><strong>Authsocket</strong> — WebSocket with authentication</li>
-<li><strong>GASP Sync</strong> — Generic Append-only Structured Proofs</li>
-<li><strong>UHRP</strong> — Universal Hash Reference Protocol</li>
-<li><strong>Paymail</strong> — Payment address discovery</li>
-</ul>
-<h2 id="infrastructure">Infrastructure<a class="headerlink" href="#infrastructure" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>ARC Broadcast</strong> — Attestation Required Commitment</li>
-<li><strong>Merkle Service</strong> — Merkle proof services</li>
-<li><strong>Storage Adapter</strong> — Abstract storage layer</li>
-</ul>
+<p>Each BRC solves a specific interoperability problem. Implementations reference the spec by number so different teams can build compatible systems without coordination.</p>
+<h2 id="by-use-case">By Use Case<a class="headerlink" href="#by-use-case" title="Permanent link">&para;</a></h2>
+<p><strong>I'm building a wallet</strong>
+- Start with <a href="brc-100-wallet/">BRC-100 Wallet</a> to understand the standard interface
+- Implement cryptographic signing per <a href="brc-100-wallet/">BRC-100</a> and key derivation per <a href="https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0042.md">BRC-42</a>
+- Reference implementation: <code>@bsv/wallet-toolbox</code></p>
+<p><strong>I'm implementing peer-to-peer payments</strong>
+- Use <a href="brc-29-peer-payment/">BRC-29 Peer Payment</a> for payment derivation and transmission
+- Combine with <a href="brc-31-auth/">BRC-31 Auth</a> for mutual authentication
+- Implementation: <code>@bsv/ts-paymail</code>, <code>@bsv/message-box-client</code></p>
+<p><strong>I'm monetizing an API endpoint</strong>
+- Implement <a href="brc-121-402/">BRC-121 / 402</a> using <code>@bsv/402-pay</code> or <code>@bsv/payment-express-middleware</code>
+- Gateway checks payment before serving content; wallet derives and submits satoshi transaction</p>
+<p><strong>I'm running an overlay service (topic manager)</strong>
+- Deploy with <a href="overlay-http/">Overlay HTTP</a> endpoints using <code>@bsv/overlay-express</code>
+- Implement topic managers per <a href="overlay-http/">Overlay spec</a>
+- Reference implementations in <code>@bsv/overlay-topics</code></p>
+<p><strong>I'm building transaction broadcasting</strong>
+- Use <a href="arc-broadcast/">ARC Broadcast</a> for miner-facing submission
+- Implement via <code>@bsv/sdk</code> <code>ARC</code> class</p>
+<p><strong>I need proof of transaction inclusion</strong>
+- Use <a href="merkle-service/">Merkle Service</a> for SPV proof delivery
+- Implement via <code>@bsv/sdk</code> or external Merkle Service</p>
 <h2 id="learning-path">Learning Path<a class="headerlink" href="#learning-path" title="Permanent link">&para;</a></h2>
-<p>Start with <a href="../get-started/concepts/">Key Concepts</a> to understand the fundamental ideas, then dive into the specs that apply to your use case.</p>
+<ol>
+<li><strong>Foundations</strong> — Read <a href="../get-started/concepts/">Key Concepts</a> for UTXO model, scripts, and transactions</li>
+<li><strong>Identity &amp; Auth</strong> — Study <a href="brc-31-auth/">BRC-31 Auth</a> to understand mutual authentication</li>
+<li><strong>Wallets &amp; Signing</strong> — Review <a href="brc-100-wallet/">BRC-100 Wallet</a> for standard signing interface</li>
+<li><strong>Payments</strong> — Learn <a href="brc-29-peer-payment/">BRC-29 Peer Payment</a> for deriving payment addresses</li>
+<li><strong>APIs &amp; Services</strong> — Explore <a href="overlay-http/">Overlay HTTP</a> and <a href="message-box-http/">Message Box HTTP</a> for building services</li>
+<li><strong>Infrastructure</strong> — Deploy with <a href="arc-broadcast/">ARC Broadcast</a> and <a href="merkle-service/">Merkle Service</a></li>
+</ol>
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Implementations</strong> — See package-specific guides in <code>/packages/*/CLAUDE.md</code></li>
+<li><strong>Error Codes</strong> — Reference <code>specs/errors.md</code> for standardized error responses</li>
+<li><strong>Network Services</strong> — Consult <code>/docs/network-services/</code> for Merkle Service, ARC endpoints, and provider lists</li>
+</ul>
 
 
 
@@ -4019,7 +4150,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
   </span>
 
     
