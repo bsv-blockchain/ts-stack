@@ -17,7 +17,9 @@ tags: [tokens, btms, backend, mongodb]
 
 # @bsv/btms-backend
 
-Backend infrastructure for BTMS — MongoDB storage, topic manager, and lookup service for the BTMS token overlay.
+> BTMS (Basic Token Management System) overlay services — topic manager and lookup service for token validation and indexing.
+
+**Note:** Core BTMS definitions have been consolidated into [@bsv/overlay-topics](./topics.md). This package may be transitional or legacy; prefer using @bsv/overlay-topics directly for new projects.
 
 ## Install
 
@@ -28,58 +30,128 @@ npm install @bsv/btms-backend
 ## Quick start
 
 ```typescript
-import { BTMSBackend } from '@bsv/btms-backend';
-import { OverlayExpress } from '@bsv/overlay-express';
-import express from 'express';
+import { BTMSTopicManager } from '@bsv/btms-backend'
+import { MongoClient } from 'mongodb'
 
-const app = express();
-const overlay = new OverlayExpress(app);
+const client = new MongoClient('mongodb://localhost:27017')
+await client.connect()
+const db = client.db('btms')
 
-// Initialize BTMS backend with MongoDB
-const btmsBackend = new BTMSBackend({
-  mongoUri: 'mongodb://localhost:27017/btms'
-});
+const topicManager = new BTMSTopicManager()
 
-// Register topic and lookup service
-overlay.addTopicManager('btms', btmsBackend.getTopicManager());
-overlay.addLookupService('btms', btmsBackend.getLookupService());
+// Validate a transaction
+const result = await topicManager.identifyAdmissibleOutputs(beef, previousCoins)
+// Returns: { outputsToAdmit: [0, 1], coinsToRetain: [] }
 
-app.listen(3000);
+// Create lookup service
+import BTMSLookupServiceFactory from '@bsv/btms-backend'
+
+const lookupService = await BTMSLookupServiceFactory(db)
+
+// Query tokens by asset ID
+const results = await lookupService.lookup({
+  service: 'ls_btms',
+  query: { assetId: 'txid.0' }
+})
 ```
 
 ## What it provides
 
-- **MongoDB integration** — Persistent storage for token metadata and transactions
-- **Topic Manager** — Validates and indexes BTMS token transactions
-- **Lookup Service** — Query tokens by ID, owner, or other properties
-- **Token indexing** — Track token supply, transfers, and ownership
-- **Pagination** — Support efficient querying of large token sets
-- **Event logging** — Track all token operations and history
-- **Permission checking** — Integrate with @bsv/btms-permission-module
-- **Broadcast integration** — Hook into transaction broadcasts from network
+- **BTMSTopicManager** — Validates token transactions (issuance, transfer, burn)
+- **BTMSLookupServiceFactory** — Factory for creating MongoDB-backed lookup service
+- **Token validation** — Enforces BTMS protocol rules (conservation, metadata consistency)
+- **Query by asset ID** — Find all tokens for a specific asset
+- **Query by owner** — Find tokens owned by a public key
+- **MongoDB storage** — Auto-creates indices for efficient queries
+- **Type-safe queries** — BTMSQuery, BTMSRecord, BTMSLookupResult types
 
-## When to use
+## Common patterns
+
+### Register in OverlayExpress
+
+```typescript
+import OverlayExpress from '@bsv/overlay-express'
+import { BTMSTopicManager } from '@bsv/btms-backend'
+import BTMSLookupServiceFactory from '@bsv/btms-backend'
+
+const server = new OverlayExpress('mynode', privateKey, 'https://example.com')
+
+server.configureTopicManager('tm_btms', new BTMSTopicManager())
+await server.configureLookupServiceWithMongo('ls_btms', db => 
+  BTMSLookupServiceFactory(db)
+)
+
+await server.configureEngine()
+await server.start()
+```
+
+### Query tokens by owner
+
+```typescript
+const ownerResults = await lookupService.lookup({
+  service: 'ls_btms',
+  query: { ownerKey: '03abc123...' }
+})
+```
+
+### Retrieve metadata
+
+```typescript
+const manager = new BTMSTopicManager()
+const docs = await manager.getDocumentation()
+const metadata = await manager.getMetaData()
+// metadata = { name: 'btms', shortDescription: '...', version: '0.1.0', ... }
+```
+
+## Key concepts
+
+- **Token issuance** — Outputs with assetId = "ISSUE" create new tokens; subsequent transfers reference via `txid.outputIndex`
+- **Token protocol** — PushDrop-encoded with fields `[assetIdField, amount, metadata?]`
+- **Conservation law** — Sum of input amounts per asset must be >= sum of output amounts (tokens can be burned)
+- **Metadata persistence** — Optional metadata remains consistent across all transfers if set during issuance
+- **Validation modes** — Issuance vs Transfer validation ensures protocol integrity
+
+## When to use this
 
 - Running a BTMS overlay node in production
-- Providing token metadata and discovery services
+- Need token metadata and discovery services
 - Building a token registry or explorer
 - Implementing token-based applications with persistent storage
-- Synchronizing token state across multiple nodes with GASP
+- Synchronizing token state across nodes with GASP
 
-## When not to use
+## When NOT to use this
 
-- For client-side token operations — use @bsv/btms
-- If you don't need persistent storage — use in-memory overlay only
-- For non-token overlays — use @bsv/overlay or @bsv/overlay-topics
-- For development without MongoDB — use @bsv/overlay-topics memory backend
+- For client-side token operations — use @bsv/sdk directly
+- If you don't need persistent storage — use @bsv/overlay-topics without lookup
+- For non-token overlays — use @bsv/overlay or @bsv/overlay-topics for other topics
+- New projects should prefer [@bsv/overlay-topics](./topics.md) BTMS implementation
 
-## API reference
+## Spec conformance
 
-Full TypeScript API documentation: [TypeDoc](https://bsv-blockchain.github.io/ts-stack/api/btms-backend/)
+- **BTMS Protocol** — Basic Token Management System (BSV token standard)
+- **PushDrop encoding** — Uses PushDrop format per @bsv/sdk
+- **Token conservation** — Enforces that output amounts <= input amounts per asset
+- **Metadata persistence** — Optional metadata tracked across all token transfers
+
+## Common pitfalls
+
+1. **Asset ID semantics** — "ISSUE" = new token; other values must match previous issuance txid.outputIndex
+2. **Amount validation** — Must be numeric string and >= 1; non-numeric or negative rejected
+3. **Lookup factory is async** — `BTMSLookupServiceFactory()` returns Promise; must await
+4. **MongoDB required** — No Knex fallback; requires MongoDB for lookup service
+5. **Conservation law** — Sum of input amounts per asset must >= sum of output amounts
+6. **Field count** — Accepts 2-4 PushDrop fields ([assetId, amount, metadata?, signature?])
+7. **Deprecation** — Core BTMS definitions now at [@bsv/overlay-topics](./topics.md); prefer that for new projects
 
 ## Related packages
 
-- @bsv/btms — Token operations from client perspective
-- @bsv/btms-permission-module — Permission checking for tokens
-- @bsv/overlay-express — HTTP server for backend
-- @bsv/gasp — Synchronize token state between nodes
+- [@bsv/overlay-topics](./topics.md) — Canonical BTMS implementation (preferred for new projects)
+- [@bsv/overlay](./overlay.md) — Core Engine that uses this topic manager
+- [@bsv/overlay-express](./overlay-express.md) — HTTP server wrapper
+- [@bsv/gasp](./gasp-core.md) — Synchronize token state between nodes
+
+## Reference
+
+- [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/btms-backend/)
+- [Source on GitHub](https://github.com/bsv-blockchain/btms-backend)
+- [npm](https://www.npmjs.com/package/@bsv/btms-backend)
