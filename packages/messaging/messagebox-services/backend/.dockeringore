@@ -1,8 +1,0 @@
-.git
-dist
-build
-coverage
-logs
-*.log
-.vscode
-.DS_Store

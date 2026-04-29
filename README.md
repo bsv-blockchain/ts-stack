@@ -66,7 +66,6 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 |---------|-----|
 | [message-box-server](packages/messaging/message-box-server) | `@bsv/messagebox-server` *(private)* |
 | [message-box-client](packages/messaging/message-box-client) | [@bsv/message-box-client](https://www.npmjs.com/package/@bsv/message-box-client) |
-| [messagebox-services](packages/messaging/messagebox-services) | [@bsv/messagebox-services](https://www.npmjs.com/package/@bsv/messagebox-services) |
 | [authsocket](packages/messaging/authsocket) | [@bsv/authsocket](https://www.npmjs.com/package/@bsv/authsocket) |
 | [authsocket-client](packages/messaging/authsocket-client) | [@bsv/authsocket-client](https://www.npmjs.com/package/@bsv/authsocket-client) |
 | [ts-paymail](packages/messaging/ts-paymail) | [@bsv/paymail](https://www.npmjs.com/package/@bsv/paymail) |

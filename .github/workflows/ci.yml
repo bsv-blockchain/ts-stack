@@ -32,18 +32,16 @@ jobs:
         run: node scripts/check-versions.mjs
 
       - name: Build all packages
-        # Exclude: @bsv/messagebox-services (uses cars deployment tool, not tsc)
         # Exclude: example-paymail (example package, not production)
-        run: pnpm -r --filter '!@bsv/messagebox-services' --filter '!example-paymail' run build
+        run: pnpm -r --filter '!example-paymail' run build
 
       - name: Lint all packages
         continue-on-error: true
         run: pnpm -r run lint --if-present
 
       - name: Test all packages
-        # Exclude: @bsv/messagebox-services (uses cars deployment tool, not tsc)
         # Exclude: example-paymail (example package, not production)
-        run: pnpm -r --filter '!@bsv/messagebox-services' --filter '!example-paymail' run test
+        run: pnpm -r --filter '!example-paymail' run test
 
   conformance:
     name: Conformance Vectors
