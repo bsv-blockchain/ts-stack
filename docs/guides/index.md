@@ -1,37 +1,32 @@
 ---
-id: guides-index
-title: Guides
+id: guides-overview
+title: "Guides"
 kind: meta
-version: "n/a"
+version: "1.0.0"
 last_updated: "2026-04-28"
 last_verified: "2026-04-28"
 review_cadence_days: 30
 status: stable
-tags: ["guides"]
+tags: [guides, tutorials, how-to]
 ---
 
 # Guides
 
-Hands-on tutorials for common ts-stack use cases.
+Step-by-step guides for building applications with the ts-stack.
 
-## Core Guides
+## Available Guides
 
-- **[Build a Wallet-Aware App](./wallet-aware-app.md)** — Integrate with user wallets
-- **[Run an Overlay Node](./run-overlay-node.md)** — Index and serve data
-- **[Peer-to-Peer Messaging](./peer-to-peer-messaging.md)** — Send encrypted messages
-- **[HTTP 402 Payments](./http-402-payments.md)** — Gate APIs behind payments
+- [Building a Wallet-Aware App](./wallet-aware-app.md) — Create a TypeScript app that interacts with wallets
+- [Running an Overlay Node](./run-overlay-node.md) — Deploy and configure an overlay service
+- [Peer-to-Peer Messaging](./peer-to-peer-messaging.md) — Send authenticated messages between parties
+- [HTTP 402 Payment Gating](./http-402-payments.md) — Monetize your API with blockchain payments
 
-## How to Use Guides
+## Quick Links
 
-Each guide:
+**New to ts-stack?** Start with [Get Started](../get-started/).
 
-1. Explains the concept and when to use it
-2. Walks through a complete example
-3. Shows integration with other packages
-4. Provides next steps
+**Need a spec?** Check [Specifications](../specs/).
 
-## Learning Path
+**Looking for a package?** Browse [Packages](../packages/).
 
-- New to ts-stack? Start with [Get Started](../get-started/index.md)
-- Looking for reference docs? See [Packages](../packages/index.md)
-- Need protocol details? Check [Specs](../specs/index.md)
+**Implementing a protocol?** See [Conformance Testing](../conformance/).
