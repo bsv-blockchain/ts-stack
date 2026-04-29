@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ts-stack doc page frontmatter",
+  "type": "object",
+  "required": ["id", "title", "kind", "version", "last_updated", "last_verified", "status"],
+  "properties": {
+    "id": { "type": "string", "description": "Stable slug, never changes" },
+    "title": { "type": "string" },
+    "kind": { "type": "string", "enum": ["package", "infra", "spec", "guide", "conformance", "reference", "meta"] },
+    "domain": { "type": ["string", "null"], "enum": ["sdk", "wallet", "network", "overlays", "messaging", "middleware", "helpers", null] },
+    "version": { "type": "string" },
+    "source_repo": { "type": "string" },
+    "source_commit": { "type": "string" },
+    "last_updated": { "type": "string", "format": "date" },
+    "last_verified": { "type": "string", "format": "date" },
+    "review_cadence_days": { "type": "integer" },
+    "npm": { "type": ["string", "null"] },
+    "repo": { "type": ["string", "null"] },
+    "status": { "type": "string", "enum": ["stable", "beta", "deprecated", "experimental"] },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  }
+}

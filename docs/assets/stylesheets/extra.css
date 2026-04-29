@@ -1,0 +1,102 @@
+/* BSV Blockchain Material Theme Customization */
+
+:root {
+  --md-primary-fg-color: #FF6B00;        /* BSV Orange */
+  --md-primary-fg-color--light: #FF8C33;
+  --md-primary-fg-color--dark: #CC5500;
+  --md-accent-fg-color: #FF6B00;
+  --md-footer-bg-color: #1a1a1a;
+  --md-footer-fg-color: #fff;
+}
+
+/* Dark mode specific */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #FF8C33;
+  --md-primary-fg-color--light: #FFB366;
+  --md-primary-fg-color--dark: #FF6B00;
+}
+
+/* Hero section styling */
+.md-typeset h1 {
+  font-weight: 700;
+  margin-bottom: 1.5em;
+}
+
+/* Code block styling */
+.md-typeset code {
+  padding: 0.1em 0.3em;
+  border-radius: 0.25em;
+}
+
+.md-typeset pre {
+  border-radius: 0.5em;
+}
+
+/* Table styling */
+.md-typeset table {
+  border-collapse: collapse;
+}
+
+.md-typeset table thead tr {
+  background-color: rgba(255, 107, 0, 0.1);
+}
+
+.md-typeset table tbody tr:nth-child(odd) {
+  background-color: rgba(255, 107, 0, 0.05);
+}
+
+/* Navigation styling */
+.md-nav__link {
+  transition: color 0.3s ease;
+}
+
+.md-nav__link:hover {
+  color: var(--md-primary-fg-color);
+}
+
+/* Admonition styling */
+.md-typeset .admonition,
+.md-typeset details {
+  border-left-color: var(--md-primary-fg-color);
+}
+
+.md-typeset .admonition.warning,
+.md-typeset .admonition.danger {
+  border-left-color: #ff6b6b;
+}
+
+.md-typeset .admonition.info {
+  border-left-color: #4dabf7;
+}
+
+/* Button styling */
+.md-button {
+  border-color: var(--md-primary-fg-color);
+}
+
+.md-button--primary {
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-button--primary:hover {
+  background-color: var(--md-primary-fg-color--dark);
+}
+
+/* Content section spacing */
+.md-content {
+  padding-top: 2em;
+}
+
+/* Search box styling */
+.md-search__input {
+  font-size: 1em;
+}
+
+/* Footer customization */
+.md-footer {
+  background-color: var(--md-footer-bg-color);
+}
+
+.md-footer-copyright {
+  margin: 0;
+}
