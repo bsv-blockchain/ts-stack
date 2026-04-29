@@ -1,125 +1,148 @@
 ---
 id: spec-uhrp
-title: "UHRP (Universal Hash Resolution Protocol)"
+title: UHRP — Universal Hash Resolution Protocol
 kind: spec
-version: "1.0"
+version: "1.0.0"
 last_updated: "2026-04-28"
 last_verified: "2026-04-28"
-review_cadence_days: 30
 status: stable
-tags: [uhrp, storage, content-addressed, protocol]
+tags: ["spec", "storage", "content-addressed", "uhrp"]
 ---
 
-# UHRP (Universal Hash Resolution Protocol)
+# UHRP — Universal Hash Resolution Protocol
 
-## Overview
+> UHRP (BRC-26) enables content-addressed file storage on BSV. Files are identified and retrieved by their SHA-256 hash, not by path. A UHRP server stores files and publishes availability advertisements on the overlay network (`tm_uhrp` topic). Clients discover storage locations and verify file integrity by hash.
 
-UHRP enables content-addressed file storage and retrieval on BSV. Files are identified by their cryptographic hash, allowing any client to verify integrity and find the file across a distributed network of UHRP servers.
+## At a glance
 
-## Key Concepts
+| Field | Value |
+|---|---|
+| Format | OpenAPI 3.1 |
+| Version | 1.0.0 |
+| Status | stable |
+| Implementations | @bsv/overlay-topics (tm_uhrp topic manager) |
 
-### Content Addressing
+## What problem this solves
 
-Files are referenced by their hash rather than by path or URL:
+**Permanent, hash-addressed file storage**. Traditional URLs break when servers move. UHRP uses SHA-256 hash as permanent file ID: `uhrp://abc123...` always refers to the same content. Any server can host the file; clients verify integrity by hashing the retrieved data.
 
-```
-uhrp://sha256(file_contents)
-```
+**Decentralized availability**. Files are mirrored across multiple UHRP servers. Clients query the overlay network (`ls_uhrp` lookup service) to find all hosts with a given hash, then download from any available server. No single point of failure.
 
-The hash serves as:
-- **Identity** — The file's permanent identifier
-- **Verification** — Proof the retrieved file is correct
-- **Deduplication** — Identical files share one hash
+**Peer discovery via overlay**. UHRP servers publish availability advertisements to the overlay's `tm_uhrp` topic. These advertisements record file hash, size, expiry, and download URLs. The `ls_uhrp` lookup service indexes these advertisements, enabling instant discovery.
 
-### Storage Network
+## Protocol overview
 
-Multiple UHRP servers store files and respond to retrieval requests. A file stored on any server is discoverable by any client querying the network.
+**Three-phase flow** (upload → advertise → retrieve):
 
-### Overlay Indexing
+**Phase 1 — Upload File**
 
-UHRP servers publish availability information to overlay topics, enabling discovery:
+1. **Client → UHRP Server** `POST /upload`
+   - File binary data (raw bytes)
+   - Server computes SHA-256 hash
+   - Returns: UHRP URL (`uhrp://hash...`) and metadata
 
-```
-topic: uhrp.hashes
-event: {
-  "hash": "<sha256>",
-  "size": 1024,
-  "servers": ["https://server1.com", "https://server2.com"]
+2. **UHRP Server** stores file and generates advertisement
+
+**Phase 2 — Publish to Overlay**
+
+3. **UHRP Server → Overlay** (via `POST /submit`)
+   - PushDrop transaction tagged with `tm_uhrp` topic
+   - Advertisement contains: hash, file size, download URL, expiry timestamp
+   - Overlay records admission; `ls_uhrp` lookup service indexes it
+
+**Phase 3 — Retrieve File**
+
+4. **Client → Overlay** `POST /lookup`
+   - Query: `{ service: "ls_uhrp", query: { hash: "abc123..." } }`
+   - Lookup service returns: array of servers hosting the file
+
+5. **Client → UHRP Server** `GET /{hash}`
+   - Downloads file from any available server
+   - Verifies SHA-256 matches requested hash
+   - Rejects file if hash doesn't match
+
+## Key types / endpoints
+
+| Method | Path | Purpose | Request | Response |
+|--------|------|---------|---------|----------|
+| POST | `/upload` | Upload file | Binary file data | `{ hash, uhrpUrl, size, expiryTimestamp }` |
+| GET | `/{hash}` | Download file | (none) | Binary file data + `Content-Hash` header |
+| HEAD | `/{hash}` | Check availability | (none) | `200 OK` + `Content-Hash` header |
+| GET | `/info/{hash}` | Get metadata | (none) | `{ hash, size, expiryTimestamp, hosts: [...] }` |
+
+**Overlay integration**:
+- `tm_uhrp` topic manager — Validates UHRP advertisements
+- `ls_uhrp` lookup service — Queries for files by hash; returns host list
+
+## Example: Upload and retrieve file
+
+```typescript
+import { StorageUploader, StorageDownloader } from '@bsv/sdk'
+
+// 1. Upload file to UHRP server
+const uploader = new StorageUploader('https://uhrp-server.example.com')
+const file = Buffer.from('Hello, UHRP!')
+const result = await uploader.upload(file)
+
+console.log('File stored at:', result.uhrpUrl)  // uhrp://abc123...
+
+// 2. Publish advertisement to overlay (server does this automatically)
+// UHRP server issues a PushDrop transaction to tm_uhrp topic
+
+// 3. Retrieve file later (from any server)
+const downloader = new StorageDownloader()
+const retrieved = await downloader.download(result.hash)
+
+// 4. Verify integrity
+const hash = sha256(retrieved)
+if (hash === result.hash) {
+  console.log('File verified!')
+} else {
+  console.log('Hash mismatch - file corrupted or incorrect')
 }
 ```
 
-## Key Endpoints
+Example: Query overlay for file locations
 
-### Store File
+```typescript
+const overlayClient = new OverlayClient('https://overlay.example.com')
 
-**`POST /store`**
+// 1. Find all servers hosting a file
+const locations = await overlayClient.lookup({
+  service: 'ls_uhrp',
+  query: { hash: 'abc123...' }
+})
 
-Upload a file to the UHRP server.
+console.log('File available at:', locations.urls)
+// [ 'https://server1.com/abc123...', 'https://server2.com/abc123...' ]
 
-```
-Request:
-Content-Type: application/octet-stream
-<binary file data>
-
-Response:
-{
-  "hash": "<sha256>",
-  "size": 1024,
-  "timestamp": 1234567890
-}
+// 2. Download from fastest/closest server
+const downloaded = await fetch(locations.urls[0])
+const data = await downloaded.arrayBuffer()
 ```
 
-### Retrieve File
+## Conformance vectors
 
-**`GET /{hash}`**
+UHRP conformance is tested in `conformance/vectors/storage/uhrp/`:
 
-Download a file by its hash.
+- File upload and hash computation
+- SHA-256 hash verification on download
+- Advertisement publication and overlay indexing
+- Lookup service correctness (returns all hosts for a hash)
+- Expiry timestamp handling
 
-```
-Response:
-Content-Type: application/octet-stream
-Content-Hash: <sha256>
-<binary file data>
-```
+## Implementations in ts-stack
 
-### Check Availability
+| Package | Notes |
+|---------|-------|
+| @bsv/overlay-topics | `UHRPTopicManager` (validates advertisements), `createUHRPLookupService` (indexes hashes) |
+| @bsv/sdk | `StorageUploader`, `StorageDownloader` client classes |
 
-**`HEAD /{hash}`**
+## Related specs
 
-Check if a file is available on this server.
+- [Overlay HTTP](./overlay-http.md) — Overlay network where UHRP advertisements are published
+- [BRC-26](../../../docs/BRCs/storage/0026.md) — Full UHRP specification
 
-```
-Response:
-HTTP/1.1 200 OK
-Content-Length: 1024
-Content-Hash: <sha256>
-```
+## Spec artifact
 
-## Verification
-
-Clients verify retrieved files by:
-1. Computing the SHA256 hash of received data
-2. Comparing to the requested hash
-3. Rejecting the file if hashes don't match
-
-## Use Cases
-
-- Wallet backups — Store encrypted backup files
-- Transaction data — Archive transaction details
-- Contract metadata — Store smart contract artifacts
-- Media — Host images, documents, videos
-- Software — Distribute application code and resources
-
-## Specification
-
-The complete UHRP protocol is defined in OpenAPI 3.1:
-
-```
-specs/storage/uhrp-http.yaml
-```
-
-## References
-
-- [UHRP Lite Server](/docs/infrastructure/uhrp-server-basic/)
-- [UHRP Cloud Server](/docs/infrastructure/uhrp-server-cloud-bucket/)
-- [Overlay Topics](/docs/packages/overlay-topics/)
+[uhrp-http.yaml](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/storage/uhrp-http.yaml)

@@ -12,30 +12,75 @@ tags: ["specs"]
 
 # Specifications
 
-Technical specifications for BSV protocols and standards implemented in ts-stack.
+This section documents the protocols and standards that the ts-stack implements. Each protocol solves a specific coordination problem on BSV: from wallet identity and authentication to peer payments, overlay service management, and transaction broadcast. These specs enable interoperable applications by defining precise request/response formats and protocol flows.
 
-## BRC Standards
+## Quick Reference
 
-- **BRC-100** — Wallet interface standard
-- **BRC-31** — Auth handshake protocol
-- **BRC-29** — Peer payment protocol
-- **BRC-121** — HTTP 402 payment gating
+| Spec | Format | Version | Implementations | Purpose |
+|------|--------|---------|-----------------|---------|
+| [BRC-100 Wallet](./brc-100-wallet.md) | JSON Schema | 1.0.0 | @bsv/wallet-toolbox, @bsv/sdk | Standard wallet interface for signing and key management |
+| [BRC-31 Auth](./brc-31-auth.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/auth-express-middleware, @bsv/authsocket | Mutual authentication handshake (BRC-103 + BRC-104) |
+| [BRC-29 Peer Payment](./brc-29-peer-payment.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/ts-paymail, @bsv/message-box-client | P2P payment derivation and transmission |
+| [BRC-121 / 402](./brc-121-402.md) | OpenAPI 3.1 | 1.0.0 | @bsv/402-pay, @bsv/payment-express-middleware | HTTP micropayment protocol |
+| [Overlay HTTP](./overlay-http.md) | OpenAPI 3.1 | 1.0.0 | @bsv/overlay, @bsv/overlay-express | Transaction routing and topic management |
+| [Message Box HTTP](./message-box-http.md) | OpenAPI 3.1 | 1.0.0 | @bsv/message-box-client | Store-and-forward messaging API |
+| [AuthSocket](./authsocket.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/authsocket | Authenticated WebSocket for live messaging |
+| [ARC Broadcast](./arc-broadcast.md) | OpenAPI 3.1 | 1.0.0 | @bsv/sdk | Miner-facing transaction broadcast |
+| [Merkle Service](./merkle-service.md) | OpenAPI 3.1 | 1.0.0 | @bsv/sdk | SPV proof delivery service |
+| [Storage Adapter](./storage-adapter.md) | OpenAPI 3.1 | 1.0.0 | @bsv/wallet-toolbox | Remote wallet storage interface |
+| [GASP Sync](./gasp-sync.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/gasp-core | Transaction graph synchronization |
+| [UHRP](./uhrp.md) | OpenAPI 3.1 | 1.0.0 | @bsv/overlay-topics | Content-addressed file storage |
 
-## Protocols
+## BRC Numbering Scheme
 
-- **Overlay HTTP** — RESTful API for overlay services
-- **Message-box HTTP** — API for message storage
-- **Authsocket** — WebSocket with authentication
-- **GASP Sync** — Generic Append-only Structured Proofs
-- **UHRP** — Universal Hash Reference Protocol
-- **Paymail** — Payment address discovery
+**BRC** = BSV (or Bitcoin) Request for Comments. BRCs are numbered sequentially and grouped by category:
 
-## Infrastructure
+- **0–99** — Core protocols (BRC-100 = Wallet interface, BRC-103 = Mutual auth, etc.)
+- **Messaging** (200s) — Messaging and payment protocols
+- **Overlays** (80s) — Overlay network standards (UHRP, GASP, etc.)
 
-- **ARC Broadcast** — Attestation Required Commitment
-- **Merkle Service** — Merkle proof services
-- **Storage Adapter** — Abstract storage layer
+Each BRC solves a specific interoperability problem. Implementations reference the spec by number so different teams can build compatible systems without coordination.
+
+## By Use Case
+
+**I'm building a wallet**
+- Start with [BRC-100 Wallet](./brc-100-wallet.md) to understand the standard interface
+- Implement cryptographic signing per [BRC-100](./brc-100-wallet.md) and key derivation per [BRC-42](../../../docs/BRCs/wallet/0042.md)
+- Reference implementation: `@bsv/wallet-toolbox`
+
+**I'm implementing peer-to-peer payments**
+- Use [BRC-29 Peer Payment](./brc-29-peer-payment.md) for payment derivation and transmission
+- Combine with [BRC-31 Auth](./brc-31-auth.md) for mutual authentication
+- Implementation: `@bsv/ts-paymail`, `@bsv/message-box-client`
+
+**I'm monetizing an API endpoint**
+- Implement [BRC-121 / 402](./brc-121-402.md) using `@bsv/402-pay` or `@bsv/payment-express-middleware`
+- Gateway checks payment before serving content; wallet derives and submits satoshi transaction
+
+**I'm running an overlay service (topic manager)**
+- Deploy with [Overlay HTTP](./overlay-http.md) endpoints using `@bsv/overlay-express`
+- Implement topic managers per [Overlay spec](./overlay-http.md)
+- Reference implementations in `@bsv/overlay-topics`
+
+**I'm building transaction broadcasting**
+- Use [ARC Broadcast](./arc-broadcast.md) for miner-facing submission
+- Implement via `@bsv/sdk` `ARC` class
+
+**I need proof of transaction inclusion**
+- Use [Merkle Service](./merkle-service.md) for SPV proof delivery
+- Implement via `@bsv/sdk` or external Merkle Service
 
 ## Learning Path
 
-Start with [Key Concepts](../get-started/concepts.md) to understand the fundamental ideas, then dive into the specs that apply to your use case.
+1. **Foundations** — Read [Key Concepts](../get-started/concepts.md) for UTXO model, scripts, and transactions
+2. **Identity & Auth** — Study [BRC-31 Auth](./brc-31-auth.md) to understand mutual authentication
+3. **Wallets & Signing** — Review [BRC-100 Wallet](./brc-100-wallet.md) for standard signing interface
+4. **Payments** — Learn [BRC-29 Peer Payment](./brc-29-peer-payment.md) for deriving payment addresses
+5. **APIs & Services** — Explore [Overlay HTTP](./overlay-http.md) and [Message Box HTTP](./message-box-http.md) for building services
+6. **Infrastructure** — Deploy with [ARC Broadcast](./arc-broadcast.md) and [Merkle Service](./merkle-service.md)
+
+## Related Documentation
+
+- **Implementations** — See package-specific guides in `/packages/*/CLAUDE.md`
+- **Error Codes** — Reference `specs/errors.md` for standardized error responses
+- **Network Services** — Consult `/docs/network-services/` for Merkle Service, ARC endpoints, and provider lists
