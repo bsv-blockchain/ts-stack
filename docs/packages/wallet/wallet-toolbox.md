@@ -51,9 +51,9 @@ const signResult = await wallet.signAction({
 - **Setup factories** — `SetupWallet()`, `Setup()`, `SetupClient()` for quick initialization with sensible defaults
 - **Wallet class** — `Wallet` implementing full BRC-100 interface: `createAction()`, `signAction()`, `listActions()`, `listOutputs()`, `internalizeAction()`, `getPublicKey()`, etc.
 - **Storage backends** — `KnexWalletStorage` (SQLite/MySQL/PostgreSQL), `IndexedDBWalletStorage` (browser), `RemoteWalletStorage` (client/server over HTTPS)
-- **Network services** — `Services` container with `ARC`, `WhatsOnChain`, `Chaintracks` integration; `ArcSSEClient` for real-time status
+- **Network services** — `Services` container with `ARC`, `WhatsOnChain`, `Chaintracks` integration; `ArcSSEClient` for real-time status. Chain tracker interface exposes `rootForHeight(height)` and `currentHeight()` — wallets call these to validate Merkle paths. <!-- audio: ts-stack.m4a @ 13:00 -->
 - **Transaction monitor** — `Monitor` daemon that polls confirmations, acquires merkle proofs, rebroadcasts stalled txs, updates wallet state
-- **Key management** — `PrivilegedKeyManager`, `SimpleWalletManager`, `ShamirWalletManager` with Shamir secret sharing and BRC-42/43 derivation
+- **Key management** — Three wallet manager types: `CWIStyleWalletManager` / `WalletAuthenticationManager` (WAB-based, requires WAB server for OTP auth flow), `SimpleWalletManager` (root-key based, no external server), `ShamirWalletManager` (Shamir secret sharing for backup/recovery). BRC-42/43 key derivation throughout. <!-- audio: ts-stack.m4a @ 14:30 -->
 - **Permissions** — `WalletPermissionsManager` for fine-grained per-app, per-protocol access control with permission modules
 - **Signing bridge** — `WalletSigner` adapter connecting BRC-100 wallet to SDK's `Transaction.sign()` interface
 - **Utilities** — `MessageSigner` (BRC-18), `OutputTracker`, `CertificateManager`, `WalletLogger`, `EntropyCollector`

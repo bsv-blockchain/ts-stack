@@ -15,7 +15,9 @@ github_repo: "https://github.com/bsv-blockchain/ts-stack"
 
 # @bsv/sdk
 
-The foundational cryptographic and transaction library for the BSV blockchain. Provides low-level primitives (keys, signatures, hashing), script construction and execution, transaction creation and signing, and integration interfaces for wallets and overlay networks.
+The foundational cryptographic and transaction library for the BSV blockchain. Zero external dependencies — all cryptographic primitives have been validated by a third-party auditor. Every other library in the ts-stack builds on top of `@bsv/sdk`. <!-- audio: ts-stack.m4a @ 27:00 -->
+
+Provides low-level primitives (keys, signatures, hashing), script construction and execution, transaction creation and signing, and integration interfaces for wallets and overlay networks.
 
 ## Install
 

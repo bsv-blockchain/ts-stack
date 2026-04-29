@@ -39,6 +39,6 @@ The BSV TypeScript stack is organized as a foundation-to-application hierarchy. 
 
 **Zero-dependency SDK** — `@bsv/sdk` has no npm dependencies. This eliminates supply-chain risk in the cryptographic foundation and makes it suitable for embedding in constrained environments.
 
-**Audited cryptography** — The secp256k1/r1 primitives and transaction validation logic have undergone third-party security auditing.
+**Audited cryptography** — The @bsv/sdk primitives and transaction validation logic have undergone third-party security auditing by Trail of Bits.
 
 **BRC-100 as the seam** — The wallet interface is the most important architectural boundary. Applications above it are wallet-agnostic; implementations below it are application-agnostic. This is what makes the ecosystem composable.

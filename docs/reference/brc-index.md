@@ -68,9 +68,9 @@ These BRCs appear in the codebase, specs, or conformance vectors:
 
 ### BRC-29: Peer-to-Peer Payment Protocol
 
-Two parties derive the same payment key without sharing private keys. Used by Paymail and MessageBox P2P payments.
+Defines the minimum data required for passing a transaction from one person to another: a transaction derivation prefix, suffix, and sender public key. Transport-agnostic — works over Bluetooth, HTTP, WebSocket, or animated QR codes. The 402 Pay library (BRC-121) uses BRC-29 as its payment data structure. <!-- audio: ts-stack.m4a @ 22:30 -->
 
-Implementations: `@bsv/paymail`, `@bsv/message-box-client`
+Implementations: `@bsv/paymail`, `@bsv/message-box-client`, `@bsv/402-pay`
 
 Conformance vectors: `conformance/vectors/wallet/brc29/`
 
@@ -132,7 +132,7 @@ Transport option for BRC-103 Peer sessions.
 
 ### BRC-121: HTTP 402 Payment Protocol
 
-Stateless settlement-gated HTTP. Server responds `402 Payment Required`; client resends with a BEEF-encoded micropayment in headers. Single round-trip.
+Stateless settlement-gated HTTP. Server responds `402 Payment Required`; client resends with a BEEF-encoded micropayment in headers. Single round-trip. Uses BRC-29 as its payment data structure. "Simple payments without any authentication other than HTTPS itself" — distinct from AuthExpress/PaymentExpress which require a mutual-auth handshake. <!-- audio: ts-stack.m4a @ 11:30 -->
 
 Implementations: `@bsv/402-pay` (client), `@bsv/payment-express-middleware` (server)
 

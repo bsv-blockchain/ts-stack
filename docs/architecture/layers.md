@@ -108,6 +108,10 @@ Two entry points in `@bsv/simple`:
 
 **`@bsv/simple/server`** — Manages a self-custodial server wallet backed by file persistence. Suitable for automated agents, backend services, and MCP servers. Methods: `ServerWallet`, `ServerWalletManager`, `FileRevocationStore`, handler factories for identity registry, DID resolver, credentials.
 
+## Direct service access
+
+Application code can also communicate with overlays, message box servers, and UHRP storage servers **independently of the wallet**. The wallet is only required for operations that need private keys. Private keys stay on the user's device at all times; the wallet interface is the architectural boundary separating key material from application code. <!-- audio: ts-stack.m4a @ 34:30 -->
+
 ## Related
 
 - [Key Concepts](../get-started/concepts.md) — Terminology and protocol concepts
