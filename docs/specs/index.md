@@ -14,6 +14,8 @@ tags: ["specs"]
 
 This section documents the protocols and standards that the ts-stack implements. Each protocol solves a specific coordination problem on BSV: from wallet identity and authentication to peer payments, overlay service management, and transaction broadcast. These specs enable interoperable applications by defining precise request/response formats and protocol flows.
 
+![Specs to packages map: each BSV protocol specification on the left is implemented by one or more ts-stack packages on the right, with curved links showing the BRC-100 to wallet-toolbox/sdk, BRC-31 to authsocket/middleware, Overlay HTTP to overlay/overlay-express, and other relationships](../assets/diagrams/specs-package-map.svg)
+
 ## Quick Reference
 
 | Spec | Format | Version | Implementations | Purpose |

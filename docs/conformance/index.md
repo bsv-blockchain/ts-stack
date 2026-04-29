@@ -14,6 +14,8 @@ tags: [conformance, testing, cross-language, vectors]
 
 Cross-language conformance testing ensures implementations across TypeScript, Go, and other languages follow the same protocol specifications and can interoperate.
 
+![Conformance vector flow: 260+ JSON test vectors feed both a TypeScript Jest runner and a Go runner. Each produces a results.json report. A comparison tool diffs the two reports to verify cross-language interoperability](../assets/diagrams/conformance-flow.svg)
+
 ## What is Conformance?
 
 Conformance vectors are standardized test cases that define expected behavior for a protocol or interface. By running the same vectors across different language implementations, we verify that:

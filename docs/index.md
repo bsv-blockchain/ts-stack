@@ -16,58 +16,7 @@ A TypeScript stack for building apps that move money, store data, and authentica
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Your Application                         │
-└─────────────────────────────────────────────────────────────┘
-                              ▲
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
-  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-  │  Middleware  │    │  Messaging   │    │  Overlays    │
-  │              │    │              │    │              │
-  │ • Auth       │    │ • Authsocket │    │ • Overlay    │
-  │ • Payment    │    │ • Paymail    │    │ • Topics     │
-  │ • 402-pay    │    │ • Message-Box│    │ • Discovery  │
-  └──────────────┘    └──────────────┘    └──────────────┘
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │  Wallet & Relay  │
-                    │                  │
-                    │ • Wallet Toolbox │
-                    │ • BTMS           │
-                    │ • Relay          │
-                    └──────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │   Network        │
-                    │                  │
-                    │ • Teranode       │
-                    │ • Transaction    │
-                    │   Broadcast      │
-                    └──────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │  SDK (Core)      │
-                    │                  │
-                    │ • Private Keys   │
-                    │ • Signatures     │
-                    │ • BEEF Format    │
-                    │ • SPV Proofs     │
-                    └──────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │   BSV Chain      │
-                    └──────────────────┘
-```
+![ts-stack architecture diagram showing Application sitting on top of Middleware, Messaging, and Overlays, which all rest on Wallet & Relay, Network, SDK, and finally the BSV Chain](assets/diagrams/stack-architecture.svg)
 
 ## Domain Overview
 

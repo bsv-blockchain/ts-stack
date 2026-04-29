@@ -61,36 +61,7 @@ Use network packages when you need to:
 
 ## Architecture Overview
 
-```
-┌──────────────────────┐
-│  Your Application    │
-└──────────────────────┘
-          │
-    ┌─────▼──────┐
-    │ TeranodeListener
-    ├─────────────┤
-    │ Topic       │
-    │ Callbacks   │
-    │ Dynamic     │
-    │ Management  │
-    └─────┬───────┘
-          │
-    ┌─────▼────────────────────────┐
-    │ libp2p (Private DHT + Gossipsub
-    ├──────────────────────────────┤
-    │ • Noise Encryption            │
-    │ • Kademlia DHT Discovery      │
-    │ • Bootstrap Peer Connections  │
-    │ • Static Peer Maintenance     │
-    └─────┬────────────────────────┘
-          │
-          │ TCP/Noise
-          │
-    ┌─────▼─────────┐
-    │ Teranode Peers│
-    │ (P2P Network) │
-    └───────────────┘
-```
+![Network flow: your application subscribes to TeranodeListener which routes through libp2p (private DHT + gossipsub with noise encryption, Kademlia discovery, bootstrap and static peers) over TCP/Noise to Teranode peers in the P2P network](../../assets/diagrams/network-flow.svg)
 
 ## Topics Available
 

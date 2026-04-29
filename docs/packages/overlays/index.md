@@ -63,38 +63,7 @@ Use overlays when you need to:
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Your Application                         │
-└────────────────────────────────────────────────────────────┬─┘
-                                                               │
-                      OverlayExpress (HTTP Server)
-                    ┌────────────────────────────┐
-                    │ Admin Endpoints             │
-                    │ Health Checks               │
-                    │ Web UI                      │
-                    └────────────────────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-          ┌─────────▼────────┐    ┌────────▼────────┐
-          │ Engine           │    │ JanitorService  │
-          ├──────────────────┤    ├─────────────────┤
-          │ TopicManagers    │    │ SHIP/SLAP       │
-          │ LookupServices   │    │ Host Validation │
-          │ Storage (Knex)   │    └─────────────────┘
-          │ GASP Sync        │
-          │ SHIP/SLAP        │
-          └──────────────────┘
-                    │
-        ┌───────────┴───────────┬──────────────┐
-        │                       │              │
-   ┌────▼─────┐        ┌───────▼────┐   ┌────▼──────┐
-   │ MongoDB   │        │ SQL DB     │   │ Blockchain│
-   │ (per-     │        │ (global    │   │ (SPV)     │
-   │  service) │        │  storage)  │   │           │
-   └───────────┘        └────────────┘   └───────────┘
-```
+![Overlay node architecture: OverlayExpress HTTP server wraps the Engine that holds topic managers, lookup services, GASP sync and SHIP/SLAP, alongside a Janitor service. Storage layer connects to MongoDB, a SQL database, and the blockchain via SPV](../../assets/diagrams/overlays-architecture.svg)
 
 ## Next Steps
 

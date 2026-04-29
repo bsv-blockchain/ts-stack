@@ -78,44 +78,7 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 
 ## Package Relationships
 
-```
-                    Your Application
-                           ▲
-         ┌─────────────────┼─────────────────┐
-         │                 │                 │
-    Middleware         Messaging          Overlays
-   ┌──────────┐      ┌──────────┐      ┌──────────┐
-   │ • Auth   │      │ • Auth   │      │ • Overlay│
-   │ • Payment│      │ • Paymail│      │ • Topics │
-   │ • 402    │      │ • Msg-Box│      │ • GASP   │
-   └──────────┘      └──────────┘      └──────────┘
-         │                 │                 │
-         └─────────────────┼─────────────────┘
-                           │
-                       Wallet + Helpers
-                   ┌──────────────────┐
-                   │ • Toolbox        │
-                   │ • BTMS           │
-                   │ • Relay          │
-                   │ • DID, Simple    │
-                   │ • Templates      │
-                   └──────────────────┘
-                           │
-                       Network
-                   ┌──────────────────┐
-                   │ • Teranode Listener
-                   └──────────────────┘
-                           │
-                         SDK
-                   ┌──────────────────┐
-                   │ • Keys           │
-                   │ • Signatures     │
-                   │ • Transactions   │
-                   │ • BEEF / SPV     │
-                   └──────────────────┘
-                           │
-                      BSV Chain
-```
+![Package relationships diagram showing how middleware, messaging, and overlays sit on top of wallet and helpers, which depend on network and SDK packages, ultimately connecting to the BSV chain](../assets/diagrams/package-relationships.svg)
 
 ## Choosing Packages
 

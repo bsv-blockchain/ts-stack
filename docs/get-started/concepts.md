@@ -14,6 +14,8 @@ tags: ["concepts", "protocol"]
 
 ts-stack uses several concepts from the BSV protocol and the ecosystem. Understanding them helps you choose the right packages and architecture for your app.
 
+![Concepts overview: a transaction wrapped in BEEF (with SPV merkle proof) signed by a BRC-100 wallet flows into an Overlay Node where the Topic Manager admits it and the Lookup Service indexes it for application queries — identity keys tie everything together](../assets/diagrams/concepts-overview.svg)
+
 ## BEEF (Binary Encoded Extended Format)
 
 BEEF is a binary format that bundles a transaction together with all the merkle proofs needed to prove it's in the chain. Instead of saying "trust me, this transaction is in the chain," you send BEEF to another system and they can verify it immediately using Simplified Payment Verification (SPV).

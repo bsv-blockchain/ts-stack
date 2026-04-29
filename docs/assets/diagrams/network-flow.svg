@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" role="img" aria-labelledby="title desc">
+  <title id="title">Network: Teranode P2P Listener</title>
+  <desc id="desc">Application subscribes to TeranodeListener, which uses libp2p (private DHT + gossipsub) over TCP/Noise to connect to Teranode peers in the BSV P2P network.</desc>
+  <style>
+    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
+    .box-accent { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.75; }
+    .box-amber { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .arrow-orange { stroke: #FF6B00; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
+    .label-mono { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: #4B5563; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#FF6B00"/>
+    </marker>
+  </defs>
+
+  <!-- Your Application -->
+  <rect x="280" y="20" width="340" height="60" rx="8" class="box-accent"/>
+  <text x="450" y="56" text-anchor="middle" class="heading">Your Application</text>
+
+  <line x1="450" y1="80" x2="450" y2="115" class="arrow-orange"/>
+  <text x="465" y="103" class="label">subscribes</text>
+
+  <!-- TeranodeListener -->
+  <rect x="220" y="120" width="460" height="130" rx="8" class="box-amber"/>
+  <text x="450" y="146" text-anchor="middle" class="title">TeranodeListener</text>
+  <line x1="240" y1="158" x2="660" y2="158" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="240" y="184" class="label">• Topic callbacks</text>
+  <text x="240" y="206" class="label">• Dynamic add / remove</text>
+  <text x="240" y="228" class="label">• Async message handlers</text>
+
+  <line x1="450" y1="250" x2="450" y2="285" class="arrow"/>
+
+  <!-- libp2p layer -->
+  <rect x="120" y="290" width="660" height="140" rx="8" class="box"/>
+  <text x="450" y="316" text-anchor="middle" class="title">libp2p &#160; (Private DHT + Gossipsub)</text>
+  <line x1="140" y1="328" x2="760" y2="328" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="140" y="354" class="label">• Noise encryption (PSK)</text>
+  <text x="140" y="376" class="label">• Kademlia DHT discovery</text>
+  <text x="140" y="398" class="label">• Bootstrap peer connections</text>
+  <text x="140" y="420" class="label">• Static peer maintenance</text>
+
+  <line x1="450" y1="430" x2="450" y2="478" class="arrow-orange"/>
+  <text x="465" y="462" class="label-mono">TCP / Noise</text>
+
+  <!-- Teranode Peers -->
+  <rect x="280" y="483" width="340" height="80" rx="8" class="box-accent"/>
+  <text x="450" y="513" text-anchor="middle" class="heading">Teranode Peers</text>
+  <text x="450" y="537" text-anchor="middle" class="label">P2P network</text>
+  <text x="450" y="555" text-anchor="middle" class="label-mono">bitcoin/mainnet-* &#160; bitcoin/testnet-*</text>
+</svg>

@@ -61,24 +61,7 @@ Use [@bsv/btms-permission-module](./btms-permission-module.md) with your custom 
 
 ## Architecture Overview
 
-```
-┌─ @bsv/sdk (Cryptography & Transactions) ─┐
-│                                           │
-├─ @bsv/wallet-toolbox (Wallet)             │
-│  ├─ Storage (SQLite/MySQL/IndexedDB)      │
-│  ├─ Services (ARC/WhatsOnChain)           │
-│  ├─ Key Management (Shamir, BRC-42/43)    │
-│  └─ Permissions Manager                   │
-│                                           │
-├─ @bsv/btms (Tokens)                       │
-│  └─ Uses wallet-toolbox for signing       │
-│                                           │
-├─ @bsv/btms-permission-module (Token Perms)│
-│  └─ Integrates with wallet permissions    │
-│                                           │
-└─ @bsv/wallet-relay (Mobile Pairing)       │
-   └─ Uses wallet-toolbox or ProtoWallet    │
-```
+![Wallet domain architecture: btms, btms-permission-module and wallet-relay sit on top of wallet-toolbox, which itself contains storage, services, key management, and permissions modules — all building on @bsv/sdk for cryptography and transactions](../../assets/diagrams/wallet-architecture.svg)
 
 ## Storage & Platform Support
 

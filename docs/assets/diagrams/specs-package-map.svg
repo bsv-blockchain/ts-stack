@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 720" role="img" aria-labelledby="title desc">
+  <title id="title">Specs to Packages Map</title>
+  <desc id="desc">Each BSV protocol specification (left) is implemented by one or more ts-stack packages (right). BRC-100 maps to wallet-toolbox and sdk; BRC-31 maps to authsocket and middleware; etc.</desc>
+  <style>
+    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
+    .box-spec { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .box-pkg { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.5; }
+    .link { stroke: #6B7280; stroke-width: 1.25; fill: none; opacity: 0.6; }
+    .link-orange { stroke: #FF6B00; stroke-width: 1.25; fill: none; opacity: 0.7; }
+    .title { font: 600 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .label { font: 11px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+    .col-head { font: 700 14px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; }
+  </style>
+
+  <text x="160" y="30" text-anchor="middle" class="col-head">SPECIFICATIONS</text>
+  <text x="780" y="30" text-anchor="middle" class="col-head">PACKAGES</text>
+
+  <!-- Specs (left column) -->
+  <g>
+    <rect x="40" y="50" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="70" text-anchor="middle" class="title">BRC-100 Wallet</text>
+    <text x="160" y="86" text-anchor="middle" class="label">JSON Schema 1.0.0</text>
+
+    <rect x="40" y="104" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="124" text-anchor="middle" class="title">BRC-31 Auth</text>
+    <text x="160" y="140" text-anchor="middle" class="label">AsyncAPI 3.0</text>
+
+    <rect x="40" y="158" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="178" text-anchor="middle" class="title">BRC-29 Peer Payment</text>
+    <text x="160" y="194" text-anchor="middle" class="label">AsyncAPI 3.0</text>
+
+    <rect x="40" y="212" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="232" text-anchor="middle" class="title">BRC-121 / 402</text>
+    <text x="160" y="248" text-anchor="middle" class="label">OpenAPI 3.1</text>
+
+    <rect x="40" y="266" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="286" text-anchor="middle" class="title">Overlay HTTP</text>
+    <text x="160" y="302" text-anchor="middle" class="label">OpenAPI 3.1</text>
+
+    <rect x="40" y="320" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="340" text-anchor="middle" class="title">Message Box HTTP</text>
+    <text x="160" y="356" text-anchor="middle" class="label">OpenAPI 3.1</text>
+
+    <rect x="40" y="374" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="394" text-anchor="middle" class="title">AuthSocket</text>
+    <text x="160" y="410" text-anchor="middle" class="label">AsyncAPI 3.0</text>
+
+    <rect x="40" y="428" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="448" text-anchor="middle" class="title">ARC Broadcast</text>
+    <text x="160" y="464" text-anchor="middle" class="label">OpenAPI 3.1</text>
+
+    <rect x="40" y="482" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="502" text-anchor="middle" class="title">Merkle Service</text>
+    <text x="160" y="518" text-anchor="middle" class="label">OpenAPI 3.1</text>
+
+    <rect x="40" y="536" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="556" text-anchor="middle" class="title">Storage Adapter</text>
+    <text x="160" y="572" text-anchor="middle" class="label">OpenAPI 3.1</text>
+
+    <rect x="40" y="590" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="610" text-anchor="middle" class="title">GASP Sync</text>
+    <text x="160" y="626" text-anchor="middle" class="label">AsyncAPI 3.0</text>
+
+    <rect x="40" y="644" width="240" height="44" rx="6" class="box-spec"/>
+    <text x="160" y="664" text-anchor="middle" class="title">UHRP</text>
+    <text x="160" y="680" text-anchor="middle" class="label">OpenAPI 3.1</text>
+  </g>
+
+  <!-- Packages (right column) -->
+  <g>
+    <rect x="660" y="50" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="74" text-anchor="middle" class="title">@bsv/wallet-toolbox</text>
+
+    <rect x="660" y="100" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="124" text-anchor="middle" class="title">@bsv/sdk</text>
+
+    <rect x="660" y="150" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="174" text-anchor="middle" class="title">@bsv/auth-express-middleware</text>
+
+    <rect x="660" y="200" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="224" text-anchor="middle" class="title">@bsv/authsocket</text>
+
+    <rect x="660" y="250" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="274" text-anchor="middle" class="title">@bsv/ts-paymail</text>
+
+    <rect x="660" y="300" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="324" text-anchor="middle" class="title">@bsv/message-box-client</text>
+
+    <rect x="660" y="350" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="374" text-anchor="middle" class="title">@bsv/402-pay</text>
+
+    <rect x="660" y="400" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="424" text-anchor="middle" class="title">@bsv/payment-express-middleware</text>
+
+    <rect x="660" y="450" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="474" text-anchor="middle" class="title">@bsv/overlay</text>
+
+    <rect x="660" y="500" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="524" text-anchor="middle" class="title">@bsv/overlay-express</text>
+
+    <rect x="660" y="550" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="574" text-anchor="middle" class="title">@bsv/overlay-topics</text>
+
+    <rect x="660" y="600" width="240" height="40" rx="6" class="box-pkg"/>
+    <text x="780" y="624" text-anchor="middle" class="title">@bsv/gasp-core</text>
+  </g>
+
+  <!-- Links (curves) -->
+  <!-- BRC-100 -> wallet-toolbox + sdk -->
+  <path d="M 280 72 C 460 72, 460 70, 660 70" class="link-orange"/>
+  <path d="M 280 80 C 460 110, 460 110, 660 120" class="link-orange"/>
+
+  <!-- BRC-31 -> auth-express-middleware + authsocket -->
+  <path d="M 280 126 C 460 140, 460 165, 660 170" class="link"/>
+  <path d="M 280 132 C 460 160, 460 215, 660 220" class="link"/>
+
+  <!-- BRC-29 -> ts-paymail + message-box-client -->
+  <path d="M 280 180 C 460 200, 460 265, 660 270" class="link"/>
+  <path d="M 280 186 C 460 240, 460 320, 660 320" class="link"/>
+
+  <!-- BRC-121/402 -> 402-pay + payment-express-middleware -->
+  <path d="M 280 234 C 460 290, 460 365, 660 370" class="link"/>
+  <path d="M 280 240 C 460 320, 460 415, 660 420" class="link"/>
+
+  <!-- Overlay HTTP -> overlay + overlay-express -->
+  <path d="M 280 288 C 460 350, 460 465, 660 470" class="link"/>
+  <path d="M 280 294 C 460 400, 460 515, 660 520" class="link"/>
+
+  <!-- Message Box HTTP -> message-box-client -->
+  <path d="M 280 342 C 460 340, 460 320, 660 320" class="link"/>
+
+  <!-- AuthSocket -> authsocket -->
+  <path d="M 280 396 C 460 320, 460 220, 660 220" class="link"/>
+
+  <!-- ARC -> sdk -->
+  <path d="M 280 450 C 460 320, 460 130, 660 120" class="link"/>
+
+  <!-- Merkle -> sdk -->
+  <path d="M 280 504 C 460 350, 460 130, 660 120" class="link"/>
+
+  <!-- Storage Adapter -> wallet-toolbox -->
+  <path d="M 280 558 C 460 360, 460 80, 660 70" class="link"/>
+
+  <!-- GASP -> gasp-core -->
+  <path d="M 280 612 C 460 615, 460 620, 660 620" class="link-orange"/>
+
+  <!-- UHRP -> overlay-topics -->
+  <path d="M 280 666 C 460 600, 460 575, 660 570" class="link"/>
+</svg>

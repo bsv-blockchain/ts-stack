@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-labelledby="title desc">
+  <title id="title">Wallet Domain Architecture</title>
+  <desc id="desc">Wallet packages stack on the SDK: wallet-toolbox provides storage, services, key management and permissions. BTMS, btms-permission-module, and wallet-relay build on top.</desc>
+  <style>
+    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
+    .box-accent { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.75; }
+    .box-amber { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .arrow-orange { stroke: #FF6B00; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#FF6B00"/>
+    </marker>
+  </defs>
+
+  <!-- @bsv/btms -->
+  <rect x="40" y="20" width="260" height="100" rx="8" class="box"/>
+  <text x="170" y="46" text-anchor="middle" class="title">@bsv/btms</text>
+  <text x="60" y="76" class="label">Tokens (issue / send /</text>
+  <text x="60" y="96" class="label">accept / burn / proofs)</text>
+
+  <!-- @bsv/btms-permission-module -->
+  <rect x="320" y="20" width="260" height="100" rx="8" class="box"/>
+  <text x="450" y="46" text-anchor="middle" class="title">@bsv/btms-permission-module</text>
+  <text x="340" y="76" class="label">BRC-98/99 hooks</text>
+  <text x="340" y="96" class="label">for token operations</text>
+
+  <!-- @bsv/wallet-relay -->
+  <rect x="600" y="20" width="260" height="100" rx="8" class="box"/>
+  <text x="730" y="46" text-anchor="middle" class="title">@bsv/wallet-relay</text>
+  <text x="620" y="76" class="label">Mobile pairing via QR</text>
+  <text x="620" y="96" class="label">+ encrypted WebSocket</text>
+
+  <!-- arrows down -->
+  <line x1="170" y1="120" x2="320" y2="155" class="arrow"/>
+  <line x1="450" y1="120" x2="450" y2="155" class="arrow"/>
+  <line x1="730" y1="120" x2="580" y2="155" class="arrow"/>
+
+  <!-- wallet-toolbox -->
+  <rect x="120" y="160" width="660" height="240" rx="8" class="box-amber"/>
+  <text x="450" y="186" text-anchor="middle" class="title">@bsv/wallet-toolbox</text>
+  <text x="450" y="206" text-anchor="middle" class="label">BRC-100 wallet implementation</text>
+  <line x1="140" y1="218" x2="760" y2="218" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- subboxes inside -->
+  <rect x="150" y="234" width="280" height="70" rx="6" class="box"/>
+  <text x="290" y="258" text-anchor="middle" class="title">Storage</text>
+  <text x="290" y="282" text-anchor="middle" class="label">SQLite / MySQL / IndexedDB / Remote</text>
+
+  <rect x="470" y="234" width="280" height="70" rx="6" class="box"/>
+  <text x="610" y="258" text-anchor="middle" class="title">Services</text>
+  <text x="610" y="282" text-anchor="middle" class="label">ARC broadcast / WhatsOnChain</text>
+
+  <rect x="150" y="316" width="280" height="70" rx="6" class="box"/>
+  <text x="290" y="340" text-anchor="middle" class="title">Key Management</text>
+  <text x="290" y="364" text-anchor="middle" class="label">Shamir, BRC-42 / 43 derivation</text>
+
+  <rect x="470" y="316" width="280" height="70" rx="6" class="box"/>
+  <text x="610" y="340" text-anchor="middle" class="title">Permissions Manager</text>
+  <text x="610" y="364" text-anchor="middle" class="label">Hooks for sensitive operations</text>
+
+  <line x1="450" y1="400" x2="450" y2="435" class="arrow-orange"/>
+
+  <!-- @bsv/sdk base -->
+  <rect x="200" y="440" width="500" height="100" rx="8" class="box-accent"/>
+  <text x="450" y="466" text-anchor="middle" class="heading">@bsv/sdk</text>
+  <text x="450" y="492" text-anchor="middle" class="label">Cryptography &amp; transactions</text>
+  <text x="450" y="514" text-anchor="middle" class="label">Keys &#160; • &#160; Signatures &#160; • &#160; BEEF &#160; • &#160; SPV</text>
+</svg>
