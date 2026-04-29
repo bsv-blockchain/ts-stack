@@ -4,14 +4,14 @@
   <desc id="desc">JSON vector files feed two language runners (TypeScript Jest and Go), each producing a results report. A comparison tool diffs the two reports to confirm interoperability.</desc>
   <style>
     .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
-    .box-accent { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.75; }
-    .box-amber { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .box-accent { fill: rgba(58,85,255,0.12); stroke: #0a3afd; stroke-width: 1.75; }
+    .box-amber { fill: rgba(28,44,138,0.06); stroke: #94a3b8; stroke-width: 1.5; }
     .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-    .arrow-orange { stroke: #FF6B00; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
-    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .arrow-orange { stroke: #0a3afd; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1c2c8a; }
     .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
     .label-mono { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: #4B5563; }
-    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #0a3afd; letter-spacing: 0.5px; }
     .caption { font: italic 11px ui-sans-serif, system-ui, sans-serif; fill: #6B7280; }
   </style>
   <defs>
@@ -19,7 +19,7 @@
       <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
     </marker>
     <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#FF6B00"/>
+      <path d="M0,0 L0,6 L9,3 z" fill="#0a3afd"/>
     </marker>
   </defs>
 
@@ -27,7 +27,7 @@
   <rect x="40" y="200" width="220" height="140" rx="8" class="box-amber"/>
   <text x="150" y="226" text-anchor="middle" class="title">Vector JSON</text>
   <text x="150" y="246" text-anchor="middle" class="label">260+ test cases</text>
-  <line x1="60" y1="258" x2="240" y2="258" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="60" y1="258" x2="240" y2="258" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
   <text x="60" y="280" class="label">• SDK (80)</text>
   <text x="60" y="300" class="label">• Wallet (90)</text>
   <text x="60" y="320" class="label">• Messaging (60)</text>
