@@ -7,213 +7,138 @@ last_updated: "2026-04-28"
 last_verified: "2026-04-28"
 review_cadence_days: 30
 status: stable
-tags: [uhrp, storage, cloud, s3, production]
+tags: [uhrp, storage, cloud, google-cloud-run, production]
 ---
 
 # UHRP Server (Cloud Bucket)
 
-## Overview
+> A production-grade UHRP host server backed by Google Cloud Storage (or S3-compatible buckets). Stores large files in cloud buckets with optional billing/micropayments and includes advertising infrastructure for overlay network discovery.
 
-Production-grade UHRP storage backed by cloud object storage (S3-compatible). Scales to petabytes of data with automatic replication and disaster recovery.
+## What it does
 
-Built with `@bsv/uhrp-storage-server@0.2.1`.
+A TypeScript/Express server designed for Google Cloud Run that implements UHRP endpoints backed by Google Cloud Storage or S3-compatible buckets. Files are uploaded via authenticated PUT /put/{hash} endpoint with BRC-103 signatures, served publicly via GET /{hash}, and queried via POST /lookup. The server bills users per GB/month using configurable pricing, optionally enforces micropayment verification, and runs a background worker that broadcasts UHRP host advertisements to the overlay network via SHIP protocol. Metadata tracked in optional Cloud SQL MySQL database; stateless HTTP service with cloud bucket as source of truth.
 
-## What It Does
+Clients upload files with authentication, retrieve files via public GET, and server continuously advertises hosting capability.
 
-- **Stores files** in cloud object storage (S3, GCS, Minio, etc.)
-- **Serves files** by hash via HTTP
-- **Handles geo-replication** across regions
-- **Provides audit logs** of all operations
-- **Supports access control** and fine-grained permissions
-- **Scales automatically** with demand
+## When to deploy this
 
-## Supported Backends
+- Production UHRP hosting on Google Cloud Run or equivalent
+- High-volume file storage with auto-scaling requirements
+- Multi-region replication and disaster recovery needed
+- Monetizing UHRP hosting via micropayments
+- Advertising UHRP services to overlay network
 
-- **Amazon S3** — Primary production storage
-- **Google Cloud Storage** — GCS buckets
-- **Azure Blob Storage** — Azure's object store
-- **Minio** — Self-hosted S3-compatible storage
-- **DigitalOcean Spaces** — DO's object storage
-- **Wasabi** — High-performance S3 alternative
+## Dependencies
 
-## Running with Docker
+| Type | Requirement |
+|------|-------------|
+| Database | Optional MySQL via Knex (for backup storage or metadata tracking); not required if using cloud-only |
+| External services | Google Cloud Storage bucket, ARC API key, Wallet Storage, Bugsnag (optional) |
+| ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox, @bsv/wallet-toolbox-client |
 
-```bash
-docker run -d \
-  -e S3_BUCKET=my-uhrp-bucket \
-  -e S3_REGION=us-west-2 \
-  -e AWS_ACCESS_KEY_ID=<key> \
-  -e AWS_SECRET_ACCESS_KEY=<secret> \
-  -p 3002:3002 \
-  bsv/uhrp-storage-server:0.2.1
-```
+## HTTP endpoints
 
-## Environment Variables
+| Method | Path | Purpose |
+|--------|------|---------|
+| PUT | /put/{hash} | Upload file to cloud bucket (authenticated, priced, size-limited) |
+| GET | /{hash} | Retrieve file from cloud bucket (public) |
+| POST | /lookup | UHRP metadata lookup queries (public) |
+| GET | /info | Server info, pricing, and status (public) |
 
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `S3_BUCKET` | Yes | — | Cloud bucket name |
-| `S3_REGION` | Yes | — | Bucket region |
-| `S3_ENDPOINT` | No | aws | S3 endpoint (aws, gcs, azure, minio) |
-| `AWS_ACCESS_KEY_ID` | Yes | — | Cloud provider API key |
-| `AWS_SECRET_ACCESS_KEY` | Yes | — | Cloud provider secret |
-| `PORT` | No | 3002 | HTTP server port |
-| `LOG_LEVEL` | No | info | Logging level |
-| `CACHE_SIZE` | No | 10GB | Local cache size for hot files |
-| `MAX_FILE_SIZE` | No | 5TB | Maximum file size |
-| `METADATA_DB` | No | postgresql | Metadata store (postgresql, dynamodb) |
+## WebSocket endpoints
 
-## Docker Compose with S3
+None; HTTP-only with background advertising worker.
 
-```yaml
-version: '3.8'
-services:
-  uhrp:
-    image: bsv/uhrp-storage-server:0.2.1
-    environment:
-      S3_BUCKET: my-uhrp-bucket
-      S3_REGION: us-west-2
-      S3_ENDPOINT: aws
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      PORT: 3002
-      CACHE_SIZE: 50GB
-    ports:
-      - "3002:3002"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-```
+## Configuration (env vars)
 
-## Metadata Database
+| Variable | Required | Description |
+|----------|----------|-------------|
+| HTTP_PORT | No | Express server port (default: 8080, typically 8080 for Cloud Run) |
+| NODE_ENV | No | `development`, `staging`, or `production` |
+| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
+| HOSTING_DOMAIN | No | Public HTTPS domain for advertising (e.g., `https://uhrp-storage.example.com`) |
+| BSV_NETWORK | No | Target blockchain network (`main`, `test`, or `regtest`) |
+| WALLET_STORAGE_URL | No | Wallet storage endpoint (e.g., `https://storage.babbage.systems`) |
+| PRICE_PER_GB_MO | No | Monthly storage price per GB for billing |
+| ENABLE_PAYMENT_MIDDLEWARE | No | Set to `'true'` to require payment for uploads |
+| GOOGLE_CLOUD_PROJECT | No | GCP project ID (auto-detected from service account if available) |
+| GOOGLE_CLOUD_BUCKET | Yes | Cloud Storage bucket name (e.g., `uhrp-storage-prod`) |
+| GOOGLE_APPLICATION_CREDENTIALS | No | Path to service account JSON key (for local/Cloud Run auth) |
+| ARC_API_KEY | No | ARC API key for transaction broadcasting (advertising) |
+| ADVERTISE_INTERVAL_MS | No | Interval for re-advertising to overlay (default: 3600000ms = 1 hour) |
+| BUGSNAG_API_KEY | No | Bugsnag error reporting API key (optional) |
 
-Store file metadata separately for fast queries:
-
-### PostgreSQL Setup
-
-```yaml
-postgres:
-  image: postgres:14
-  environment:
-    POSTGRES_DB: uhrp_metadata
-    POSTGRES_PASSWORD: uhrppass
-  volumes:
-    - postgres_data:/var/lib/postgresql/data
-
-# Add to uhrp service:
-# METADATA_DB: postgresql://postgres:uhrppass@postgres:5432/uhrp_metadata
-```
-
-### DynamoDB Setup
-
-```
-METADATA_DB: dynamodb://uhrp-metadata
-AWS_REGION: us-west-2
-```
-
-## Database Schema
-
-PostgreSQL table for file metadata:
-
-```
-files
-  id UUID PRIMARY KEY,
-  hash CHAR(64) UNIQUE,
-  size BIGINT,
-  uploaded_by VARCHAR(255),
-  created_at TIMESTAMP,
-  expires_at TIMESTAMP,
-  is_public BOOLEAN,
-  metadata JSONB,
-  INDEX (hash),
-  INDEX (created_at DESC)
-```
-
-## Endpoints
-
-- `POST /store` — Upload file
-- `GET /{hash}` — Download file (cached locally)
-- `HEAD /{hash}` — Check availability
-- `DELETE /{hash}` — Delete file (with auth)
-- `GET /health` — Health check
-- `GET /stats` — Storage statistics
-
-For full API details, see [UHRP Spec](/docs/specs/uhrp/).
-
-## Geo-replication
-
-Enable multi-region replication:
-
-```yaml
-replication:
-  enabled: true
-  regions:
-    - us-west-2    # Primary
-    - eu-west-1    # Europe
-    - ap-south-1   # Asia
-  policy: "replicate-all"
-```
-
-## Monitoring
-
-Health endpoint includes storage stats:
+## Run locally
 
 ```bash
-curl http://localhost:3002/health
-{
-  "status": "healthy",
-  "uptime": 172800,
-  "files_stored": 1250000,
-  "total_size_bytes": 5368709120000,
-  "cache_hit_ratio": 0.85,
-  "s3_latency_ms": 45
-}
+# Install dependencies
+npm install
+
+# Development with hot-reload
+npm run dev
+
+# Build TypeScript
+npm run build
+
+# Run production build
+npm start
 ```
 
-## Performance Tuning
+Requires GCP service account credentials or emulator for local testing.
 
-- **Local cache** — Increase cache size for hot files
-- **Concurrent uploads** — Configure upload concurrency
-- **Compression** — Enable for text/metadata files
-- **CDN** — Use CloudFront or Cloudflare for distribution
+## Deploy to production
 
-## Cost Optimization
+```bash
+# Multi-stage build: Node 22 alpine builder → production runtime
+docker build -t uhrp-storage:latest .
 
-- **S3 storage class** — Use Glacier for cold files
-- **Intelligent tiering** — AWS moves files automatically
-- **Compression** — Reduces storage costs
-- **Deduplication** — Share identical files (by hash)
+# Deploy to Google Cloud Run
+gcloud run deploy uhrp-storage \
+  --image uhrp-storage:latest \
+  --platform managed \
+  --region us-central1 \
+  --set-env-vars SERVER_PRIVATE_KEY=<hex-key>,GOOGLE_CLOUD_BUCKET=uhrp-storage-prod,ENABLE_PAYMENT_MIDDLEWARE=true
 
-## Security
+# Or deploy with docker-compose (local testing only)
+docker compose up -d
+```
 
-- **Bucket encryption** — Enable AES-256 at rest
-- **IAM policies** — Restrict access to specific buckets
-- **Signed URLs** — Time-limited download links
-- **Audit logging** — S3 access logs to separate bucket
-- **Private bucket** — Disable public access
+Follows GCP 12-factor patterns: stateless design, cloud bucket for file storage, Cloud SQL for optional metadata, Cloud Logging integration, Bugsnag for error tracking. Graceful shutdown via SIGTERM signal handling.
 
-## Upgrading
+## Migrations
 
-1. Update image version
-2. Deploy new service alongside existing
-3. Run migration script to sync bucket
-4. Update DNS to point to new service
-5. Monitor for issues, roll back if needed
+Stateless; cloud bucket is source of truth. Optional MySQL Knex migrations for metadata tables if ENABLE_METADATA_DB=true.
 
-## Troubleshooting
+## Health checks
 
-**Slow downloads**: Check cache hit ratio, enable local caching.
+Implicit health via /info endpoint (HTTP 200). Cloud Run readiness probe typically checks GET /info or GET /{hash} availability. No explicit /healthz endpoint.
 
-**S3 access errors**: Verify AWS credentials and bucket permissions.
+## Spec conformance
 
-**Metadata sync failures**: Check database connectivity and disk space.
+- **UHRP** – Implements UHRP host protocol for file storage, retrieval, and metadata
+- **BRC-103** – Mutual authentication on PUT, optional on GET/POST
+- **BRC-100** – Payment verification for uploads (optional)
+- **Google Cloud** – Follows Cloud Run best practices (health checks, graceful shutdown, 12-factor)
 
-**High storage costs**: Analyze usage, transition old files to cheaper tier.
+## Integration with ts-stack
 
-## References
+- UHRP clients upload/retrieve files using SERVER_PRIVATE_KEY and HOSTING_DOMAIN
+- Wallet Storage derives keys, validates payments, manages user accounts
+- Background worker advertises UHRP host via SHIP overlay protocol using ARC broadcaster
+- Optional Cloud SQL metadata database for query optimization
+- Bugsnag integration for production error tracking and monitoring
 
-- [UHRP Basic Server](/docs/infrastructure/uhrp-server-basic/)
-- [UHRP Specification](/docs/specs/uhrp/)
-- [AWS S3 Best Practices](https://docs.aws.amazon.com/AmazonS3/latest/userguide/)
+## Common pitfalls
+
+- GCP credentials: GOOGLE_APPLICATION_CREDENTIALS must point to valid service account JSON; Cloud Run uses default service account if not set
+- Storage bucket policy: Ensure bucket exists and service account has storage.objects.create/get/delete permissions
+- Cost management: Monitor storage usage and pricing; use Cloud Storage lifecycle policies for archival
+- Payment enforcement: ENABLE_PAYMENT_MIDDLEWARE requires ARC_API_KEY and WALLET_STORAGE_URL; uploads fail if not configured
+- Advertising loop: ADVERTISE_INTERVAL_MS should balance frequent updates vs transaction costs; 1 hour is conservative default
+- Cloud Run timeout: Default 60s timeout may be too short for large file uploads; increase if needed
+- Graceful shutdown: Cloud Run sends SIGTERM; ensure all writes complete before exit (transaction broadcasts, metadata flushes)
+
+## Source
+
+- [GitHub](https://github.com/bsv-stack/uhrp-server-cloud-bucket)
+- [npm package](https://npmjs.com/package/@bsv/uhrp-storage-server)

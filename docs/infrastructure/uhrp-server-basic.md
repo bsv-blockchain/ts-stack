@@ -7,124 +7,127 @@ last_updated: "2026-04-28"
 last_verified: "2026-04-28"
 review_cadence_days: 30
 status: beta
-tags: [uhrp, storage, file-server, development]
+tags: [uhrp, storage, file-server, development, lightweight]
 ---
 
 # UHRP Server (Basic)
 
-## Overview
+> A simple, file-system based UHRP (Universal Host Reference Protocol) host server. Stores files locally on disk and provides HTTP endpoints for UHRP data retrieval and storage.
 
-A lightweight UHRP implementation for development and testing. Uses local filesystem storage, making it quick to deploy for development environments.
+## What it does
 
-Built with `@bsv/uhrp-lite@0.1.0`.
+A lightweight Node.js server with Express that implements UHRP endpoints for file storage and retrieval. Files are stored on local filesystem (configurable via `./public` or `./data` directory), served by HTTP with public GET access, and uploads via PUT are authenticated with BRC-103 signatures. The server calculates pricing per GB/month (advisory pricing, not enforced by default) and provides a simple POST /lookup endpoint for UHRP metadata queries. No database dependencies — all file metadata stored as JSON alongside files.
 
-## What It Does
+Clients PUT files with authentication, retrieve files via public GET, and query metadata via POST /lookup.
 
-- **Stores files** on local disk by content hash
-- **Serves files** by hash via HTTP GET
-- **Verifies integrity** by checking hash on retrieval
-- **Simple metadata** without database
-- **Quick deployment** for testing
+## When to deploy this
 
-## When to Use
+- Local development and testing of UHRP clients
+- Proof-of-concept deployments with small file volumes
+- Single-server setups without cloud infrastructure
+- Educational or internal network use
 
-- Local development
-- Testing UHRP client code
-- Proof-of-concept deployments
-- Single-server setups
+## Dependencies
 
-## Not Recommended For
+| Type | Requirement |
+|------|-------------|
+| Database | None; filesystem-based storage |
+| External services | Wallet Storage (WALLET_STORAGE_URL), ARC (optional for payment transactions) |
+| ts-stack packages | @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware, @bsv/wallet-toolbox-client |
 
-- Production use
-- Large file volumes
-- Multiple-server deployments
-- Long-term storage
+## HTTP endpoints
 
-## Running with Docker
+| Method | Path | Purpose |
+|--------|------|---------|
+| PUT | /put/{hash} | Upload file to local storage (authenticated, priced) |
+| GET | /{hash} | Retrieve file from local storage (public) |
+| POST | /lookup | UHRP lookup queries to find files and metadata (public) |
+| GET | /info | Server info and pricing details (public) |
+| GET | / | Health/readiness check (HTTP 200) |
+
+## WebSocket endpoints
+
+None.
+
+## Configuration (env vars)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| PRICE_PER_GB_MO | No | Monthly storage price per GB (e.g., `0.03`) |
+| HOSTING_DOMAIN | No | Public domain for server advertisement (e.g., `localhost:8080` or `https://uhrp.example.com`) |
+| BSV_NETWORK | No | Target blockchain network (e.g., `mainnet` or `testnet`) |
+| WALLET_STORAGE_URL | No | Wallet storage endpoint for key derivation (e.g., `https://storage.babbage.systems`) |
+| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
+| HTTP_PORT | No | Express server port (default: 8080) |
+| NODE_ENV | No | `development` or `production` |
+
+## Run locally
 
 ```bash
+# Install dependencies
+npm install
+
+# Development with nodemon hot-reload
+npm run dev
+
+# Build TypeScript
+npm run build
+
+# Run production build
+npm start
+```
+
+Files stored in `./public` or configured data directory.
+
+## Deploy to production
+
+```bash
+# Build and start
+npm run build && npm start
+
+# Or as Docker container (lightweight ts-node, no Dockerfile provided)
 docker run -d \
-  -v uhrp_data:/data \
-  -p 3002:3002 \
-  bsv/uhrp-lite:0.1.0
+  -e SERVER_PRIVATE_KEY=<256-bit-hex> \
+  -e HOSTING_DOMAIN=https://uhrp.example.com \
+  -e HTTP_PORT=8080 \
+  -v uhrp_data:/app/public \
+  -p 8080:8080 \
+  node-uhrp-server:latest
 ```
 
-## Environment Variables
+No docker-compose.yml or nginx.conf provided; filesystem-based, no external database. Direct Express server on configured port.
 
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `PORT` | No | 3002 | HTTP server port |
-| `STORAGE_PATH` | No | /data | Directory for file storage |
-| `LOG_LEVEL` | No | info | Logging level |
-| `MAX_FILE_SIZE` | No | 1GB | Maximum file size |
+## Migrations
 
-## Docker Compose Example
+None; stateless server with files stored directly on disk with JSON metadata.
 
-```yaml
-version: '3.8'
-services:
-  uhrp:
-    image: bsv/uhrp-lite:0.1.0
-    environment:
-      PORT: 3002
-      STORAGE_PATH: /data
-    ports:
-      - "3002:3002"
-    volumes:
-      - uhrp_data:/data
+## Health checks
 
-volumes:
-  uhrp_data:
-```
+Implicit health via GET / returning HTTP 200. No explicit health endpoint. Monitor disk space and file directory accessibility.
 
-## Endpoints
+## Spec conformance
 
-- `POST /store` — Upload file
-- `GET /{hash}` — Download file
-- `HEAD /{hash}` — Check availability
-- `GET /health` — Health check
+- **UHRP** – Implements basic UHRP host protocol for file storage and retrieval
+- **BRC-103** – Mutual authentication on PUT (authenticated endpoint)
+- **BRC-100** – Optional payment verification (via payment middleware if enabled)
 
-For full API details, see [UHRP Spec](/docs/specs/uhrp/).
+## Integration with ts-stack
 
-## Storage Structure
+- UHRP clients upload/retrieve files using SERVER_PRIVATE_KEY and HOSTING_DOMAIN
+- Wallet Storage derives keys from SERVER_PRIVATE_KEY, validates optional payments
+- Overlay nodes can advertise UHRP hosting capability via overlay
+- No npm package published; standalone reference implementation
 
-Files stored in the filesystem:
+## Common pitfalls
 
-```
-/data/
-  sha256/
-    abc123.../
-      metadata.json
-      file
-    def456.../
-      metadata.json
-      file
-```
+- No cleanup mechanism: files persist until manually deleted; monitor disk usage in production
+- Pricing is advisory: PRICE_PER_GB_MO displayed but not enforced unless payment middleware configured
+- Single instance only: no built-in replication or load balancing
+- MIME types auto-detected from file extension; unusual extensions may lack proper type
+- Direct disk access: ensure filesystem permissions allow Node.js process read/write access
+- No backup strategy: files lost if filesystem corrupted; implement external backup policy
 
-## Performance
+## Source
 
-- **Throughput** — Limited by disk I/O (50-200 MB/s depending on hardware)
-- **Concurrent uploads** — No built-in limit, limited by available disk space
-- **File discovery** — O(1) for known hashes, no directory listing
-
-## Upgrading to Production
-
-When you outgrow this server, switch to the cloud-bucket version:
-
-1. Export file list from basic server
-2. Migrate files to cloud storage
-3. Deploy cloud-bucket version
-4. Update client URLs to point to new server
-
-## Troubleshooting
-
-**Disk full**: Monitor available space, implement archival policy.
-
-**Slow transfers**: Check disk speed and network bandwidth.
-
-**File corruption**: The server doesn't recover corrupted files; restore from backup.
-
-## References
-
-- [UHRP Cloud Bucket Server](/docs/infrastructure/uhrp-server-cloud-bucket/)
-- [UHRP Specification](/docs/specs/uhrp/)
+- [GitHub](https://github.com/bsv-stack/uhrp-server-basic)
+- [npm package](https://npmjs.com/package/@bsv/uhrp-lite)

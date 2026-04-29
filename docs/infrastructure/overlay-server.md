@@ -7,206 +7,142 @@ last_updated: "2026-04-28"
 last_verified: "2026-04-28"
 review_cadence_days: 30
 status: stable
-tags: [overlay, http, transaction-routing, service]
+tags: [overlay, topic-manager, lookup-service, transaction-routing]
 ---
 
 # Overlay Server
 
-## Overview
+> A reference implementation of an overlay node built on @bsv/overlay-express. Implements topic managers and lookup services to enable distributed applications to organize and query blockchain data efficiently.
 
-The Overlay Server is a reference implementation of an overlay node built on @bsv/overlay-express. It handles transaction routing, lookup, and topic management for the overlay network.
+## What it does
 
-Built with `@bsv/overlay-express-examples@2.1.6`, this service implements the Overlay HTTP API (SHIP/SLAP).
+The Overlay Server bootstraps topic managers and lookup services from @bsv/overlay-express. Topic managers validate which transaction outputs are admissible to the overlay by decoding PushDrop-encoded outputs, verifying signatures and cryptographic proofs, and returning AdmittanceInstructions. Lookup services store admitted outputs in MongoDB and respond to queries via the SLAP protocol. The server coordinates with a WalletAdvertiser for overlay advertising and connects to both MongoDB (lookup storage) and MySQL/Knex (overlay transaction tracking).
 
-## What It Does
+Clients submit transaction outputs via HTTP, the server routes valid outputs through registered topic managers, stores admitted outputs, and serves queries from any peer.
 
-- **Accepts transactions** via SHIP (Synchronised Host Invoice Protocol)
-- **Routes transactions** to the Bitcoin network
-- **Responds to lookups** via SLAP (Synchronised Lookup Availability Protocol)
-- **Manages topics** for service discovery and availability
-- **Broadcasts updates** to connected peers
-- **Validates transactions** before accepting
+## When to deploy this
 
-## Running with Docker
+- Running an overlay node with topic managers and lookup services
+- You need to organize and index blockchain outputs by topic
+- Require distributed query capability across peers
+- Building services on top of overlay (ProtoMap, CertMap, UHRP, etc.)
+
+## Dependencies
+
+| Type | Requirement |
+|------|-------------|
+| Database | MongoDB (lookup data), MySQL/Knex (overlay tracking) |
+| External services | ARC API key (transaction broadcasting), Wallet Storage (key derivation) |
+| ts-stack packages | @bsv/sdk, @bsv/overlay-express, @bsv/auth-express-middleware |
+
+## HTTP endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | / | Submit transaction (default OverlayExpress endpoint) |
+
+Additional endpoints exposed by configured topic managers and lookup services (see src/services/ for ProtoMap, CertMap, BasketMap, UHRP, Identity, MessageBox, UMP, etc.).
+
+## WebSocket endpoints
+
+None (HTTP-only OverlayExpress endpoints).
+
+## Configuration (env vars)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| NODE_NAME | Yes | One-word, lowercase overlay service node identifier |
+| SERVER_PRIVATE_KEY | Yes | 32-byte hex root private key for server wallet |
+| HOSTING_URL | Yes | Public URL where the node is reachable |
+| ADMIN_TOKEN | Yes | Token for admin API access |
+| WALLET_STORAGE_URL | Yes | BSV wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`) |
+| NETWORK | Yes | `main` or `test` (BSV blockchain network) |
+| ARC_API_KEY | Yes | ARC key for transaction broadcasting |
+| MONGO_URL | Yes | MongoDB connection string |
+| KNEX_URL | Yes | MySQL connection string for Knex |
+| GASP_ENABLED | No | `true` or `false` (Graph Aware Sync Protocol for overlay sync) |
+
+## Run locally
 
 ```bash
+# Install dependencies
+npm install
+
+# Development with hot-reload (uses tsx)
+npm run dev
+
+# Build TypeScript to dist/
+npm run build
+
+# Run production build
+npm start
+
+# Full stack with Docker Compose (app + MongoDB + MySQL)
+docker compose up --build
+```
+
+## Deploy to production
+
+```bash
+# Multi-stage build: Node builder → production runtime
+docker build -t overlay-server:latest .
+
+# Run with environment variables
 docker run -d \
-  -e DATABASE_URL=postgresql://user:pass@postgres:5432/overlay \
-  -e BITCOIN_RPC_URL=http://bitcoind:8332 \
-  -e WALLET_ID=<your-wallet-id> \
-  -e PRIVATE_KEY=<your-private-key> \
-  -p 3001:3001 \
-  bsv/overlay-server:2.1.6
+  -e NODE_NAME=overlay-node-1 \
+  -e SERVER_PRIVATE_KEY=<32-byte-hex> \
+  -e HOSTING_URL=https://overlay.example.com \
+  -e ADMIN_TOKEN=<secure-token> \
+  -e WALLET_STORAGE_URL=https://store-us-1.bsvb.tech \
+  -e NETWORK=main \
+  -e ARC_API_KEY=<arc-key> \
+  -e MONGO_URL=mongodb://mongo:27017/overlay \
+  -e KNEX_URL=mysql://user:pass@mysql:3306/overlay \
+  -p 8080:8080 \
+  overlay-server:latest
+
+# Or with Docker Compose (includes MongoDB, MySQL, janitor service)
+docker compose up -d
 ```
 
-## Environment Variables
+Service listens on port 8080 by default. Kubernetes deployment files available in deploy/ (app-deployment.yaml, mongodb, mysql with persistent volumes).
 
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `BITCOIN_RPC_URL` | Yes | — | Bitcoin Core RPC endpoint |
-| `WALLET_ID` | Yes | — | This node's wallet identifier |
-| `PRIVATE_KEY` | Yes | — | This node's private key |
-| `PORT` | No | 3001 | HTTP server port |
-| `LOG_LEVEL` | No | info | Logging level |
-| `OVERLAY_TOPICS` | No | transactions | Comma-separated topics to manage |
-| `TOPIC_MANAGER` | No | file | Topic manager (file, redis, memory) |
+## Migrations
 
-## Topic Configuration
+Managed by @bsv/overlay-express and Knex. Auto-run on startup. Tables: outputs, topic_managers, lookup_services, with indexes on identity_key, output_hash, blockchain_height.
 
-Configure topic managers for different data types:
+## Health checks
 
-```yaml
-topics:
-  transactions:
-    description: "All network transactions"
-    schema: "transaction-v1"
-    retention_hours: 720
+No explicit health endpoint. Monitor:
+- MongoDB and MySQL connectivity
+- OverlayExpress admin endpoints (require ADMIN_TOKEN)
+- Topic manager and lookup service status via admin API
 
-  utxos:
-    description: "Available UTXOs"
-    schema: "utxo-v1"
-    retention_hours: 24
+## Spec conformance
 
-  contracts:
-    description: "Smart contract deployments"
-    schema: "contract-v1"
-    retention_hours: 8760  # 1 year
-```
+- **Topic Manager Pattern** – Validates outputs via identifyAdmissibleOutputs() method
+- **Lookup Service Pattern** – Stores/queries via outputAdmittedByTopic(), outputSpent(), lookup() methods
+- **PushDrop (BRC-48)** – Standard output decoding format
+- **GASP** – Graph Aware Sync Protocol for multi-node overlay synchronization (disable for simple local deployments)
 
-## Database Schema
+## Integration with ts-stack
 
-PostgreSQL tables:
+- Implements topic managers and lookup services from @bsv/sdk Transaction and PushDrop utilities
+- Coordinates with WalletAdvertiser for overlay service advertisement
+- Uses @bsv/overlay-express server configuration and routing
+- Connects wallet operations to blockchain via ARC and Wallet Storage
+- Services registered in src/index.ts: tm_protomap, ls_protomap, tm_certmap, ls_certmap, tm_uhrp, ls_uhrp, etc.
 
-```
-transactions
-  id UUID PRIMARY KEY,
-  txid CHAR(64) UNIQUE,
-  raw BYTEA,
-  inputs INT,
-  outputs INT,
-  fee BIGINT,
-  created_at TIMESTAMP
+## Common pitfalls
 
-topics
-  id UUID PRIMARY KEY,
-  name VARCHAR(255) UNIQUE,
-  description TEXT,
-  schema_version VARCHAR(32),
-  last_update TIMESTAMP
+- Topic manager IDs must start with `tm_`, lookup service IDs with `ls_`
+- Invalid outputs must be silently skipped in topic managers (don't throw errors)
+- Lookup services use factory pattern returning instances from MongoDB connection
+- GASP sync may cause conflicts if disabled on some nodes; keep consistent across deployment
+- Admin API requires ADMIN_TOKEN in Authorization header; unauthenticated calls rejected
+- Database indexes critical for performance with large transaction volumes
 
-topic_events
-  id BIGSERIAL PRIMARY KEY,
-  topic_id UUID REFERENCES topics,
-  event_data JSONB,
-  created_at TIMESTAMP,
-  INDEX (topic_id, created_at)
-```
+## Source
 
-## Docker Compose Example
-
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:14
-    environment:
-      POSTGRES_DB: overlay
-      POSTGRES_PASSWORD: overlaypass
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  overlay:
-    image: bsv/overlay-server:2.1.6
-    environment:
-      DATABASE_URL: postgresql://postgres:overlaypass@postgres:5432/overlay
-      BITCOIN_RPC_URL: http://bitcoind:8332
-      WALLET_ID: overlay-node-1
-      PRIVATE_KEY: ${OVERLAY_PRIVATE_KEY}
-    ports:
-      - "3001:3001"
-    depends_on:
-      - postgres
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  postgres_data:
-```
-
-## Endpoints
-
-The server exposes the Overlay HTTP API:
-
-- `POST /submit` — Submit transaction (SHIP)
-- `GET /lookup?txid=...` — Query transaction (SLAP)
-- `POST /arc-ingest` — Receive ARC callbacks
-- `GET /topics` — List available topics
-- `GET /topics/{name}` — Get topic events
-- `GET /health` — Health check
-
-For full API details, see [Overlay HTTP Spec](/docs/specs/overlay-http/).
-
-## Monitoring
-
-Health endpoint returns:
-
-```bash
-curl http://localhost:3001/health
-{
-  "status": "healthy",
-  "uptime": 7200,
-  "transactions_stored": 42501,
-  "topics_managed": 3,
-  "blockchain_height": 850123
-}
-```
-
-## Performance Tuning
-
-- **Connection pooling** — Increase PostgreSQL pool for throughput
-- **Topic sharding** — Distribute topics across servers
-- **Caching** — Enable Redis for hot transaction lookups
-- **Batch inserts** — Group topic events into batches
-
-## Security Considerations
-
-- **HTTPS required** in production
-- **Bitcoin RPC auth** — Use HTTP basic auth or restrict to internal network
-- **Database encryption** — Enable PostgreSQL encryption at rest
-- **API rate limiting** — Configure per-IP request limits
-
-## Upgrading
-
-Backup your PostgreSQL before upgrading:
-
-```bash
-pg_dump $DATABASE_URL > backup_$(date +%s).sql
-```
-
-Then pull the new image:
-
-```bash
-docker pull bsv/overlay-server:2.1.6
-docker compose up -d overlay
-```
-
-## Troubleshooting
-
-**Transactions not appearing**: Verify Bitcoin RPC connectivity and transaction validity.
-
-**Slow lookups**: Add database indexes, enable Redis caching.
-
-**High memory usage**: Reduce topic retention periods, archive old events.
-
-## References
-
-- [Overlay Express Package](/docs/packages/overlay-express/)
-- [Overlay HTTP Spec](/docs/specs/overlay-http/)
-- [GASP Sync Protocol](/docs/specs/gasp-sync/)
-- [Running an Overlay Node Guide](/docs/guides/run-overlay-node/)
+- [GitHub](https://github.com/bsv-stack/overlay-express-examples)
+- [npm package](https://npmjs.com/package/@bsv/overlay-express)

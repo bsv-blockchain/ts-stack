@@ -7,300 +7,151 @@ last_updated: "2026-04-28"
 last_verified: "2026-04-28"
 review_cadence_days: 30
 status: stable
-tags: [wallet, infrastructure, jobs, monitoring, services]
+tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
 ---
 
 # Wallet Infrastructure Services
 
-## Overview
+> A reference implementation of BSV wallet infrastructure for secure UTXO storage and management. Provides HTTP JSON-RPC endpoints for wallet clients to store/retrieve transaction outputs, track spent/unspent states, manage baskets and labels, and store certificate data.
 
-Wallet Infrastructure provides supporting services for wallet operations. It includes database migration tools, background job processors, wallet health monitoring, and key rotation services.
+## What it does
 
-Built with `@bsv/wallet-infra@2.0.4`.
+The Wallet Infrastructure Server implements JSON-RPC 2.0 endpoints backed by MySQL via Knex, extending `@bsv/wallet-toolbox` base classes. Clients POST JSON-RPC method calls (walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, etc.) to a single / endpoint. The server enforces mutual authentication via BRC-103 auth middleware, optionally enforces micropayment pricing via `@bsv/payment-express-middleware`, and manages UTXO state in MySQL with indexes on identity_key, output_hash, and blockchain_height.
 
-## What It Does
+Clients connect with identity-based auth headers, manage UTXOs, baskets, labels, and certificates via standardized JSON-RPC interface compatible with @bsv/wallet-toolbox WalletClient.
 
-- **Database migrations** — Schema initialization and upgrades
-- **Background jobs** — Process transactions, update balances
-- **Health monitoring** — Alert on wallet issues
-- **Key rotation** — Manage key lifecycle
-- **Cleanup tasks** — Archive old data, expire sessions
-- **Metrics collection** — Track wallet performance
+## When to deploy this
 
-## Components
+- Hosting wallet UTXO storage service for multiple wallet clients
+- You need BRC-100-compliant JSON-RPC wallet interface
+- Supporting basket/label/certificate metadata alongside UTXOs
+- Enforcing optional micropayment pricing per API call
+- Production wallet infrastructure with MySQL persistence
 
-### Migration Service
+## Dependencies
 
-Manages database schema versions:
+| Type | Requirement |
+|------|-------------|
+| Database | MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted) |
+| External services | Taal or ARC (optional, for blockchain data and transaction broadcasting) |
+| ts-stack packages | @bsv/wallet-toolbox, @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware |
+
+## HTTP endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | / | JSON-RPC 2.0 endpoint (all wallet operations) |
+
+JSON-RPC methods: walletUtxoStorage_getHeight, walletUtxoStorage_listOutputs, walletUtxoStorage_insertOutput, walletUtxoStorage_updateOutput, walletUtxoStorage_listBaskets, walletUtxoStorage_createBasket, walletUtxoStorage_getBasket, walletUtxoStorage_listLabels, walletUtxoStorage_upsertLabel, walletUtxoStorage_dropLabels, walletUtxoStorage_listCertificates, walletUtxoStorage_insertCertificate (see @bsv/wallet-toolbox docs for full list).
+
+## WebSocket endpoints
+
+None; HTTP JSON-RPC only.
+
+## Configuration (env vars)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| NODE_ENV | No | `development` or `production` |
+| HTTP_PORT | No | Express server port (default: 8081, use 8081 if nginx enabled on 8080) |
+| ENABLE_NGINX | No | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false) |
+| BSV_NETWORK | No | Target blockchain network (`main`, `test`, or `regtest`) |
+| SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
+| KNEX_DB_CONNECTION | Yes | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`) |
+| COMMISSION_FEE | No | Optional commission fee in satoshis per request (default: 0) |
+| COMMISSION_PUBLIC_KEY | No | Public key to receive commission payments (if COMMISSION_FEE > 0) |
+| FEE_MODEL | No | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`) |
+| TAAL_API_KEY | No | API key for Taal blockchain data service (optional) |
+
+## Run locally
 
 ```bash
-docker run bsv/wallet-infra:2.0.4 migrate up
-docker run bsv/wallet-infra:2.0.4 migrate status
-docker run bsv/wallet-infra:2.0.4 migrate rollback
+# Install dependencies
+npm install
+
+# Development with ts-node
+npm run dev
+
+# Requires MySQL running
+docker compose up -d mysql
+
+# Build TypeScript
+npm run build
+
+# Run production build
+npm start
 ```
 
-### Job Processor
-
-Processes background tasks:
+## Deploy to production
 
 ```bash
+# Multi-stage Docker build: Node 22 alpine → production
+docker build -t wallet-infra:latest .
+
+# Run with MySQL backend
 docker run -d \
-  -e DATABASE_URL=postgresql://... \
-  -e REDIS_URL=redis://redis:6379 \
-  -e WORKER_CONCURRENCY=10 \
-  bsv/wallet-infra:2.0.4 worker
-```
+  -e NODE_ENV=production \
+  -e HTTP_PORT=8081 \
+  -e BSV_NETWORK=main \
+  -e SERVER_PRIVATE_KEY=<256-bit-hex> \
+  -e KNEX_DB_CONNECTION='{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}' \
+  -e COMMISSION_FEE=1000 \
+  -e COMMISSION_PUBLIC_KEY=<pubkey> \
+  -p 8081:8081 \
+  wallet-infra:latest
 
-### Health Monitor
-
-Checks wallet status and alerts:
-
-```bash
+# With optional nginx reverse proxy on port 8080
 docker run -d \
-  -e DATABASE_URL=postgresql://... \
-  -e ALERT_WEBHOOK=https://... \
-  bsv/wallet-infra:2.0.4 monitor
-```
+  -e ENABLE_NGINX=true \
+  ... (other env vars)
+  -p 8080:8080 \
+  -p 8081:8081 \
+  wallet-infra:latest
 
-### Key Rotation Service
-
-Manages key lifecycle:
-
-```bash
-docker run -d \
-  -e DATABASE_URL=postgresql://... \
-  -e ROTATION_INTERVAL_DAYS=90 \
-  bsv/wallet-infra:2.0.4 key-rotator
-```
-
-## Running with Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-
-  postgres:
-    image: postgres:14
-    environment:
-      POSTGRES_DB: wallet
-      POSTGRES_PASSWORD: walletpass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  # Database migrations
-  migrator:
-    image: bsv/wallet-infra:2.0.4
-    command: migrate up
-    environment:
-      DATABASE_URL: postgresql://postgres:walletpass@postgres:5432/wallet
-    depends_on:
-      - postgres
-
-  # Background job processor
-  worker:
-    image: bsv/wallet-infra:2.0.4
-    command: worker
-    environment:
-      DATABASE_URL: postgresql://postgres:walletpass@postgres:5432/wallet
-      REDIS_URL: redis://redis:6379
-      WORKER_CONCURRENCY: 10
-    depends_on:
-      - postgres
-      - redis
-
-  # Health monitoring
-  monitor:
-    image: bsv/wallet-infra:2.0.4
-    command: monitor
-    environment:
-      DATABASE_URL: postgresql://postgres:walletpass@postgres:5432/wallet
-      ALERT_WEBHOOK: ${ALERT_WEBHOOK}
-    depends_on:
-      - postgres
-
-  # Key rotation
-  key-rotator:
-    image: bsv/wallet-infra:2.0.4
-    command: key-rotator
-    environment:
-      DATABASE_URL: postgresql://postgres:walletpass@postgres:5432/wallet
-      ROTATION_INTERVAL_DAYS: 90
-    depends_on:
-      - postgres
-
-volumes:
-  postgres_data:
-```
-
-## Environment Variables
-
-### Common to All Services
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `LOG_LEVEL` | No | info | Logging level |
-
-### Job Processor
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `REDIS_URL` | Yes | — | Redis connection |
-| `WORKER_CONCURRENCY` | No | 5 | Concurrent job processing |
-| `JOB_TIMEOUT_MS` | No | 30000 | Max job duration |
-
-### Health Monitor
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `ALERT_WEBHOOK` | Yes | — | Webhook for alerts |
-| `CHECK_INTERVAL_SECONDS` | No | 300 | Health check frequency |
-| `ALERT_THRESHOLD` | No | 3 | Failures before alerting |
-
-### Key Rotator
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `ROTATION_INTERVAL_DAYS` | No | 90 | Key rotation schedule |
-| `ARCHIVE_OLD_KEYS` | No | true | Keep old keys in archive |
-| `NOTIFY_USERS` | No | false | Email users on rotation |
-
-## Database Migrations
-
-Schema versions are tracked:
-
-```
-wallet_migrations
-  id SERIAL PRIMARY KEY,
-  version INT UNIQUE,
-  name VARCHAR(255),
-  sql TEXT,
-  executed_at TIMESTAMP DEFAULT NOW(),
-  INDEX (version)
-```
-
-View migration status:
-
-```bash
-docker compose exec wallet-infra migrate status
-v1 (2026-01-01) — Create base schema
-v2 (2026-02-15) — Add key rotation fields
-v3 (2026-03-20) — Add health check tables
-v4 (2026-04-10) — Optimize indexes
-```
-
-## Background Jobs
-
-Job queue in Redis:
-
-```yaml
-job_types:
-  update_balance:
-    description: "Recalculate wallet balance"
-    schedule: "*/5 * * * *"  # Every 5 minutes
-    timeout: 30000
-
-  sync_transactions:
-    description: "Fetch new transactions from blockchain"
-    schedule: "*/10 * * * *"  # Every 10 minutes
-    timeout: 60000
-
-  cleanup_expired_sessions:
-    description: "Delete expired user sessions"
-    schedule: "0 3 * * *"  # Daily at 3 AM
-    timeout: 3600000
-
-  archive_old_data:
-    description: "Archive transactions older than 1 year"
-    schedule: "0 2 * * 0"  # Weekly
-    timeout: 86400000
-
-  rotate_keys:
-    description: "Rotate wallet keys"
-    schedule: "0 1 * * *"  # Daily
-    timeout: 1800000
-```
-
-## Health Checks
-
-The monitor tracks wallet health:
-
-```
-checks:
-  database_connectivity: OK
-  redis_connectivity: OK
-  key_validity: OK (5234 keys active)
-  balance_sync: WARNING (5 wallets 10+ min stale)
-  transaction_confirmation: OK (0 pending > 1 hour)
-  disk_space: OK (45% used)
-  memory_usage: OK (62% used)
-```
-
-Alert webhook payload:
-
-```json
-{
-  "timestamp": "2026-04-28T10:30:00Z",
-  "severity": "WARNING",
-  "check": "balance_sync",
-  "message": "5 wallets have stale balances (10+ minutes)",
-  "affected_wallets": 5,
-  "recommended_action": "Review database connectivity"
-}
-```
-
-## Monitoring Metrics
-
-Prometheus metrics exported:
-
-```
-wallet_info_total{wallet_id} — Total wallets
-wallet_balance_satoshis{wallet_id} — Current balance
-wallet_transactions_total{wallet_id} — Transactions
-wallet_keys_active{wallet_id} — Active keys
-wallet_utxos_available{wallet_id} — Available UTXOs
-job_queue_length — Pending jobs
-job_duration_seconds — Job processing time
-database_query_duration_seconds — Query latency
-```
-
-## Scaling
-
-For large deployments:
-
-- **Multiple workers** — Scale job processing horizontally
-- **Redis cluster** — Distribute job queue
-- **Database replicas** — Read-only monitoring queries
-- **Monitoring sidecar** — Dedicated health check instance
-
-## Upgrading
-
-```bash
-# Backup database
-pg_dump $DATABASE_URL > backup_$(date +%s).sql
-
-# Migrate schema
-docker compose run wallet-infra migrate up
-
-# Restart all services
+# Or via docker-compose (includes MySQL)
 docker compose up -d
-
-# Verify health
-docker compose logs monitor
 ```
 
-## Troubleshooting
+Dockerfile uses multi-stage build (Node 22 builder → production). Optional nginx.conf reverse proxy (if ENABLE_NGINX=true) on 8080 proxying to app on 8081.
 
-**Jobs not processing**: Check Redis connectivity, monitor worker logs.
+## Migrations
 
-**Migration failures**: Review migration SQL, check database permissions.
+Auto-run on startup via Knex. Creates tables: outputs, baskets, labels, certificates, metadata with indexes on identity_key, output_hash, blockchain_height for query performance.
 
-**Health check alerts**: Verify database and network connectivity.
+## Health checks
 
-**Key rotation delays**: Check background job queue, increase worker concurrency.
+No explicit health endpoint. Monitor:
+- MySQL connectivity and query latency
+- JSON-RPC endpoint responds to method calls (e.g., walletUtxoStorage_getHeight)
+- Database indexes present and functional
 
-## References
+## Spec conformance
 
-- [WAB (Wallet Abstraction Backend)](/docs/infrastructure/wab/)
-- [Wallet-Toolbox Package](/docs/packages/wallet-toolbox/)
-- [Building Wallet-Aware Apps](/docs/guides/wallet-aware-app/)
+- **BRC-100** – Full JSON-RPC wallet interface for UTXO storage and management
+- **BRC-103** – Mutual authentication on all API calls
+- **BRC-105** – Optional envelope support for multi-sig authorization
+- **JSON-RPC 2.0** – Standard JSON-RPC protocol on POST /
+
+## Integration with ts-stack
+
+- BSV wallet clients use this via @bsv/wallet-toolbox WalletClient
+- Storage implementation extends @bsv/wallet-toolbox base classes
+- Integrates with Taal or ARC for fee estimation and transaction submission
+- Optional payment middleware charges per-call or per-route via BRC-100
+- Advertises wallet storage service capability to overlay network
+
+## Common pitfalls
+
+- Knex connection JSON must be valid; malformed connection string causes startup failure
+- MySQL 8.0 required; earlier versions lack necessary index types
+- Identity key indexing critical: high-volume wallets need composite index (identity_key, output_hash) for query performance
+- Stateless design: multiple instances can share MySQL database with proper connection pooling
+- BRC-103 auth enforced: all clients must provide signed auth headers; unsigned requests rejected
+- Migrations auto-run: schema changes apply on startup; use Knex CLI for manual migration control if needed
+- Optional nginx: ENABLE_NGINX=true adds another layer; ensure port 8080 available and firewall open
+- Commission fees: COMMISSION_FEE enforcement requires COMMISSION_PUBLIC_KEY; mismatched config silently skips fee collection
+
+## Source
+
+- [GitHub](https://github.com/bsv-stack/wallet-infra)
+- [npm package](https://npmjs.com/package/@bsv/wallet-toolbox)

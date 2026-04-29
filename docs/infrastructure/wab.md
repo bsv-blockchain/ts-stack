@@ -7,253 +7,171 @@ last_updated: "2026-04-28"
 last_verified: "2026-04-28"
 review_cadence_days: 30
 status: stable
-tags: [wallet, http, abstraction, brc-100, service]
+tags: [wallet, authentication, mfa, presentation-keys, bsv-wallet]
 ---
 
 # Wallet Abstraction Backend (WAB)
 
-## Overview
+> A TypeScript/Express server that provides multi-factor authentication for BSV wallet applications. Manages 256-bit presentation keys for users, authenticated via SMS (Twilio), ID verification (Persona), or dev console, as part of a 2-of-3 threshold cryptographic recovery system.
 
-Wallet Abstraction Backend is a server-side HTTP wallet that implements the BRC-100 WalletInterface. Instead of embedding wallet logic in your application, WAB provides wallet functionality as a microservice accessible via HTTP.
+## What it does
 
-Built with `@bsv/wab-server@1.4.1`.
+The Wallet Abstraction Backend (WAB) implements three auth methods (TwilioAuthMethod, PersonaAuthMethod, DevConsoleAuthMethod) and coordinates key storage via a UserService backed by SQLite (dev) or MySQL (production). Clients request authentication via /auth/start with a presentation key, an external service verifies identity (phone number via SMS, ID document verification, or console OTP), then clients complete authentication via /auth/complete with the verification code. The server looks up existing users by verified identity (phone number, etc.) and returns their stored presentation key, or creates new users. Supports endpoints for managing linked auth methods, deleting users, and requesting faucet payments using R-puzzle transactions.
 
-## What It Does
+Clients authenticate by phone number, recover original presentation keys, and optionally receive one-time BSV payments.
 
-- **Implements BRC-100** — Full WalletInterface over HTTP
-- **Manages keys** — Store, derive, and rotate keys
-- **Creates actions** — Build transactions with UTXO management
-- **Signs transactions** — BIP-32 deterministic signing
-- **Encrypts data** — AES encryption using derived keys
-- **Computes HMAC** — Message authentication codes
-- **Manages UTXOs** — Automatic UTXO tracking and spending
+## When to deploy this
 
-## When to Use
+- BSV wallet applications needing multi-factor user authentication
+- Key recovery using 2-of-3 threshold system (presentation key + password + recovery key)
+- Development/testing with OTP-based console auth
+- Production deployments with Twilio SMS verification
+- Faucet distribution for new users (with SERVER_PRIVATE_KEY and STORAGE_URL)
 
-- Shared wallet service across multiple applications
-- Key management as a service
-- Wallet backup and recovery
-- Compliance and audit requirements
-- Mobile app backend
+## Dependencies
 
-## Running with Docker
+| Type | Requirement |
+|------|-------------|
+| Database | SQLite (dev: ./dev.sqlite3) or MySQL (production: DB_CLIENT, DB_USER, DB_PASS, DB_NAME, DB_HOST, DB_PORT) |
+| External services | Twilio (if TwilioAuthMethod), Wallet Storage (if faucet enabled), ARC (for transaction broadcasting) |
+| ts-stack packages | @bsv/sdk, @bsv/wallet-toolbox |
+
+## HTTP endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /info | Server configuration info |
+| POST | /auth/start | Start authentication (methodType, presentationKey, payload) |
+| POST | /auth/complete | Complete authentication (methodType, presentationKey, payload) |
+| POST | /user/linkedMethods | List user's linked auth methods (presentationKey) |
+| POST | /user/unlinkMethod | Unlink auth method (presentationKey, methodId) |
+| POST | /user/delete | Delete user account (presentationKey) |
+| POST | /faucet/request | Request faucet payment (presentationKey) |
+
+## WebSocket endpoints
+
+None.
+
+## Configuration (env vars)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| NODE_ENV | No | `development` or `production` |
+| PORT | No | HTTP server port (default: 3000) |
+| TWILIO_ACCOUNT_SID | No | Twilio account ID (if using TwilioAuthMethod) |
+| TWILIO_AUTH_TOKEN | No | Twilio auth token |
+| TWILIO_VERIFY_SERVICE_SID | No | Twilio Verify service ID (VAxxxx or VExxxx) |
+| SERVER_PRIVATE_KEY | No | 256-bit hex key for faucet transactions |
+| STORAGE_URL | No | Overlay services URL for faucet (e.g., wallet storage endpoint) |
+| COMMISSION_FEE | No | Commission fee in satoshis per faucet request (default: 0) |
+| DB_CLIENT | No | Database client (default: sqlite3; or mysql2) |
+| DB_USER | No | Database user (production MySQL) |
+| DB_PASS | No | Database password |
+| DB_NAME | No | Database name |
+| DB_HOST | No | Database host |
+| DB_PORT | No | Database port |
+| DB_CONNECTION_NAME | No | GCP Cloud SQL connection name (for Cloud SQL with Unix socket) |
+
+## Run locally
 
 ```bash
+# Install dependencies
+npm install
+
+# Development with auto-restart
+npm run dev
+
+# Database migrations
+npm run migrate
+
+# Run tests with coverage
+npm test
+
+# Build TypeScript
+npm run build
+
+# Run production server
+npm start
+```
+
+Uses SQLite by default (./dev.sqlite3); MySQL configured via DB_* env vars.
+
+## Deploy to production
+
+```bash
+# Build Docker image
+docker build -t wab-server:latest .
+
+# Run with MySQL backend
 docker run -d \
-  -e DATABASE_URL=postgresql://user:pass@postgres:5432/wab \
-  -e MASTER_KEY_ENCRYPTED=<encrypted-key> \
-  -e JWT_SECRET=<your-jwt-secret> \
-  -p 3003:3003 \
-  bsv/wab-server:1.4.1
+  -e NODE_ENV=production \
+  -e DB_CLIENT=mysql2 \
+  -e DB_HOST=mysql \
+  -e DB_USER=root \
+  -e DB_PASS=password \
+  -e DB_NAME=wab \
+  -e TWILIO_ACCOUNT_SID=<sid> \
+  -e TWILIO_AUTH_TOKEN=<token> \
+  -e TWILIO_VERIFY_SERVICE_SID=<service-id> \
+  -e SERVER_PRIVATE_KEY=<hex-key> \
+  -e STORAGE_URL=<overlay-url> \
+  -p 3000:3000 \
+  wab-server:latest
+
+# Or with GCP Cloud SQL
+docker run -d \
+  -e DB_CLIENT=mysql2 \
+  -e DB_CONNECTION_NAME=project:region:instance \
+  -e DB_USER=root \
+  -e DB_PASS=password \
+  -e DB_NAME=wab \
+  ... (other env vars)
+
+# Or via docker-compose with MySQL
+docker compose up -d
 ```
 
-## Environment Variables
+## Migrations
 
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `MASTER_KEY_ENCRYPTED` | Yes | — | Encrypted master key (see key setup below) |
-| `JWT_SECRET` | Yes | — | Secret for signing JWT tokens |
-| `PORT` | No | 3003 | HTTP server port |
-| `LOG_LEVEL` | No | info | Logging level |
-| `KEY_DERIVATION_PATH` | No | m/44'/0'/0' | Default BIP-32 path |
-| `MAX_ACTIVE_WALLETS` | No | 1000 | Maximum concurrent wallets |
-
-## Master Key Setup
-
-Generate and encrypt your master key:
+Run Knex migrations for schema initialization:
 
 ```bash
-# Generate new key
-openssl rand -hex 32
-
-# Encrypt it (WAB will ask for password)
-wab-encrypt --key <your-random-key>
-# Output: eyJjdHkiOiJhZXMtMjU2LWdjbSIsIml2IjoiLi4uIn0=
-
-export MASTER_KEY_ENCRYPTED="eyJjdHkiOiJhZXMtMjU2LWdjbSIsIml2IjoiLi4uIn0="
+npm run migrate
 ```
 
-## Docker Compose Example
+Creates tables: users (id, presentationKey), auth_methods (id, userId, methodType, config), payments (id, userId, beef, k, txid, amount, outputIndex).
 
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:14
-    environment:
-      POSTGRES_DB: wab
-      POSTGRES_PASSWORD: wabpass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+## Health checks
 
-  wab:
-    image: bsv/wab-server:1.4.1
-    environment:
-      DATABASE_URL: postgresql://postgres:wabpass@postgres:5432/wab
-      MASTER_KEY_ENCRYPTED: ${MASTER_KEY_ENCRYPTED}
-      JWT_SECRET: ${JWT_SECRET}
-      PORT: 3003
-    ports:
-      - "3003:3003"
-    depends_on:
-      - postgres
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+No explicit health endpoint. Monitor:
+- Database connectivity (run `npm run migrate` to verify)
+- Auth method configuration (Twilio credentials, etc.)
+- POST /auth/start endpoint responds with 200/4xx
 
-volumes:
-  postgres_data:
-```
+## Spec conformance
 
-## Database Schema
+- **BRC-100** – Optional integration with @bsv/wallet-toolbox for faucet R-puzzle transactions
+- **2-of-3 Recovery** – Presentation key is factor #1 (password #2, recovery key #3) in XOR-based derivation system
 
-PostgreSQL tables for wallet state:
+## Integration with ts-stack
 
-```
-wallets
-  id UUID PRIMARY KEY,
-  user_id VARCHAR(255),
-  name VARCHAR(255),
-  created_at TIMESTAMP,
-  last_accessed TIMESTAMP
+- Clients implement AuthMethod subclasses for custom verification flows
+- Wallet Toolbox integration for faucet BSV payments and key derivation
+- WalletAuthenticationManager uses WAB for presentation key authentication
+- UMP (User Management Protocol) token system coordinates with presentation keys
+- See how-it-works.md for detailed 2-of-3 cryptographic recovery explanation
 
-keys
-  id UUID PRIMARY KEY,
-  wallet_id UUID REFERENCES wallets,
-  key_path VARCHAR(255),
-  public_key CHAR(66),
-  derived BOOLEAN,
-  created_at TIMESTAMP,
-  INDEX (wallet_id)
+## Common pitfalls
 
-actions
-  id UUID PRIMARY KEY,
-  wallet_id UUID REFERENCES wallets,
-  description TEXT,
-  outputs JSONB,
-  signed BOOLEAN,
-  broadcast BOOLEAN,
-  created_at TIMESTAMP,
-  INDEX (wallet_id)
+- User identification by config, not presentation key: Auth method's buildConfigFromPayload() extracts unique identifier (e.g., phone number); two devices with same phone return same user's key
+- Twilio setup critical: TWILIO_VERIFY_SERVICE_SID must be VAxxxx (Verify) or VExxxx (Verify Email); wrong SID causes all auth attempts to fail
+- SQLite for dev only: In-memory tables reset on restart; switch to MySQL for production
+- Faucet requires funds: SERVER_PRIVATE_KEY wallet must have UTXOs; transactions fail if insufficient balance
+- Auth methods are singletons: DevConsoleAuthMethod uses in-memory state; reset on service restart
+- CORS permissive: All origins/headers allowed; apply restrictive CORS in production via reverse proxy
+- Migration timing: Must run before server startup; Knex handles schema versioning automatically
 
-utxos
-  id UUID PRIMARY KEY,
-  wallet_id UUID REFERENCES wallets,
-  txid CHAR(64),
-  vout INT,
-  satoshis BIGINT,
-  script BYTEA,
-  spent BOOLEAN,
-  spent_at TIMESTAMP,
-  UNIQUE (txid, vout)
-```
+## Source
 
-## API Endpoints
-
-### Wallet Management
-- `POST /wallets` — Create wallet
-- `GET /wallets/{walletId}` — Get wallet info
-- `DELETE /wallets/{walletId}` — Delete wallet
-
-### Key Operations (BRC-100)
-- `GET /wallets/{walletId}/keys` — List keys
-- `POST /wallets/{walletId}/keys/public` — Get public key
-- `POST /wallets/{walletId}/keys/derive` — Derive new key
-
-### Transaction Operations (BRC-100)
-- `POST /wallets/{walletId}/actions/create` — Create action
-- `POST /wallets/{walletId}/actions/{actionId}/sign` — Sign action
-- `POST /wallets/{walletId}/actions/{actionId}/broadcast` — Broadcast
-
-### Cryptography (BRC-100)
-- `POST /wallets/{walletId}/encrypt` — Encrypt data
-- `POST /wallets/{walletId}/decrypt` — Decrypt data
-- `POST /wallets/{walletId}/hmac` — Generate HMAC
-- `POST /wallets/{walletId}/signature` — Sign message
-
-For full API details, see [BRC-100 Spec](/docs/specs/brc-100-wallet/).
-
-## Authentication
-
-All endpoints require JWT bearer token:
-
-```bash
-curl -H "Authorization: Bearer <jwt-token>" \
-  http://localhost:3003/wallets
-```
-
-Obtain token via:
-
-```bash
-curl -X POST http://localhost:3003/auth \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": "user123", "password": "password"}'
-```
-
-## UTXO Management
-
-WAB automatically tracks UTXOs:
-
-```bash
-# Get available UTXOs
-curl http://localhost:3003/wallets/{id}/utxos
-
-# Manually add UTXO
-curl -X POST http://localhost:3003/wallets/{id}/utxos \
-  -d '{"txid": "...", "vout": 0, "satoshis": 1000, "script": "..."}'
-
-# Mark UTXO as spent
-curl -X DELETE http://localhost:3003/wallets/{id}/utxos/{txid}/{vout}
-```
-
-## Monitoring
-
-Health endpoint returns wallet statistics:
-
-```bash
-curl http://localhost:3003/health
-{
-  "status": "healthy",
-  "uptime": 86400,
-  "active_wallets": 42,
-  "total_keys": 156,
-  "total_utxos": 8934,
-  "total_satoshis": 50000000,
-  "db_latency_ms": 5
-}
-```
-
-## Security Considerations
-
-- **HTTPS required** in production
-- **Master key rotation** — Implement key rotation policy
-- **Database encryption** — PostgreSQL encryption at rest
-- **JWT expiry** — Short-lived tokens (5-15 minutes)
-- **Rate limiting** — Per-user request limits
-- **Audit logging** — Log all key operations
-
-## Upgrading
-
-1. Backup PostgreSQL database
-2. Pull new image
-3. Run migrations: `docker compose run wab npm run migrate`
-4. Restart service
-
-## Troubleshooting
-
-**JWT token errors**: Verify JWT_SECRET matches across instances.
-
-**Database connection issues**: Check DATABASE_URL and PostgreSQL credentials.
-
-**Slow signing**: Monitor database performance, increase connection pool.
-
-**Out of memory**: Reduce MAX_ACTIVE_WALLETS, enable garbage collection.
-
-## References
-
-- [BRC-100 Wallet Interface](/docs/specs/brc-100-wallet/)
-- [Wallet Infrastructure](/docs/infrastructure/wallet-infra/)
-- [Building Wallet-Aware Apps](/docs/guides/wallet-aware-app/)
+- [GitHub](https://github.com/bsv-stack/wab-server)
+- [npm package](https://npmjs.com/package/@bsv/wab-server)
