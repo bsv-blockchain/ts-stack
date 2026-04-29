@@ -935,6 +935,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#direct-service-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct service access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#related" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4416,6 +4427,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#direct-service-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct service access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#related" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4561,6 +4583,8 @@
 <p>Two entry points in <code>@bsv/simple</code>:</p>
 <p><strong><code>@bsv/simple/browser</code></strong> — <code>WalletClient</code> substrate. Communicates with the user's BSV Browser wallet via BRC-100 over <code>localhost</code> or <code>window.postMessage</code>. The app never holds private keys. Methods: <code>createWallet</code>, <code>Wallet</code>, <code>Overlay</code>, <code>Certifier</code>, <code>DID</code>, <code>CredentialSchema</code>, <code>CredentialIssuer</code>, <code>MemoryRevocationStore</code>.</p>
 <p><strong><code>@bsv/simple/server</code></strong> — Manages a self-custodial server wallet backed by file persistence. Suitable for automated agents, backend services, and MCP servers. Methods: <code>ServerWallet</code>, <code>ServerWalletManager</code>, <code>FileRevocationStore</code>, handler factories for identity registry, DID resolver, credentials.</p>
+<h2 id="direct-service-access">Direct service access<a class="headerlink" href="#direct-service-access" title="Permanent link">&para;</a></h2>
+<p>Application code can also communicate with overlays, message box servers, and UHRP storage servers <strong>independently of the wallet</strong>. The wallet is only required for operations that need private keys. Private keys stay on the user's device at all times; the wallet interface is the architectural boundary separating key material from application code. <!-- audio: ts-stack.m4a @ 34:30 --></p>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../../get-started/concepts/">Key Concepts</a> — Terminology and protocol concepts</li>
@@ -4590,7 +4614,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:46:14 UTC">April 29, 2026</span>
   </span>
 
     
