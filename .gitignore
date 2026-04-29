@@ -26,3 +26,8 @@ docs/_internal/
 
 # AsyncAPI generator local cache (dependencies installed on-demand by generate-asyncapi-html.mjs)
 .asyncapi-gen-cache/
+
+# docs-site build artifacts and generated files
+docs-site/dist/
+docs-site/.vite/
+docs-site/src/manifest.json

@@ -1,0 +1,41 @@
+.pagination {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--dev-border);
+}
+
+.prev, .next {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  background: var(--dev-surface);
+  border: 1px solid var(--dev-border);
+  border-radius: 6px;
+  text-decoration: none;
+  transition: border-color 0.12s;
+}
+
+.prev:hover, .next:hover {
+  border-color: var(--dev-cyan);
+  text-decoration: none;
+}
+
+.next { text-align: right; }
+
+.label {
+  font-size: 0.7rem;
+  font-family: var(--dev-font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dev-fg-muted);
+}
+
+.title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--dev-cyan);
+}

@@ -1,0 +1,54 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: dark;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--dev-bg);
+  color: var(--dev-fg);
+  font-family: var(--dev-font-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--dev-cyan);
+  text-decoration: none;
+}
+
+a:hover {
+  color: #67e8f9;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+img, svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.18);
+  color: var(--dev-fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--dev-cyan);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--dev-bg); }
+::-webkit-scrollbar-thumb { background: var(--dev-border-hi); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--dev-fg-muted); }

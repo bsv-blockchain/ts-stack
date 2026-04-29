@@ -1,0 +1,51 @@
+.callout {
+  border-radius: 6px;
+  border: 1px solid var(--dev-border-hi);
+  border-left: 3px solid var(--dev-cyan);
+  background: var(--dev-surface-2);
+  margin: 1.25rem 0;
+  overflow: hidden;
+}
+
+.callout-title {
+  font-family: var(--dev-font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--dev-border);
+  padding: 0.5rem 0.875rem;
+  color: var(--dev-cyan);
+}
+
+.callout-body {
+  padding: 0.75rem 0.875rem;
+  font-size: 0.875rem;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.callout-body p:first-child { margin-top: 0; }
+.callout-body p:last-child { margin-bottom: 0; }
+
+.callout.note    { border-left-color: var(--dev-cyan);   }
+.callout.info    { border-left-color: var(--dev-cyan);   }
+.callout.tip     { border-left-color: var(--dev-green);  }
+.callout.success { border-left-color: var(--dev-green);  }
+.callout.warning { border-left-color: var(--dev-yellow); }
+.callout.danger  { border-left-color: var(--dev-red);    }
+.callout.error   { border-left-color: var(--dev-red);    }
+.callout.example { border-left-color: var(--dev-violet); }
+
+.callout.note .callout-title,
+.callout.info .callout-title { color: var(--dev-cyan); }
+
+.callout.tip .callout-title,
+.callout.success .callout-title { color: var(--dev-green); }
+
+.callout.warning .callout-title { color: var(--dev-yellow); }
+
+.callout.danger .callout-title,
+.callout.error .callout-title { color: var(--dev-red); }
+
+.callout.example .callout-title { color: var(--dev-violet); }

@@ -1,0 +1,96 @@
+.root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input {
+  background: var(--dev-bg-elevated);
+  border: 1px solid var(--dev-border);
+  border-radius: 6px;
+  color: var(--dev-text);
+  font-size: 0.875rem;
+  padding: 6px 10px;
+  width: 200px;
+  outline: none;
+  transition: border-color 0.15s, width 0.2s;
+}
+
+.input:focus {
+  border-color: var(--dev-cyan);
+  width: 260px;
+}
+
+.input::placeholder {
+  color: var(--dev-text-dim);
+}
+
+.kbd {
+  font-size: 0.7rem;
+  color: var(--dev-text-dim);
+  background: var(--dev-bg-elevated);
+  border: 1px solid var(--dev-border);
+  border-radius: 4px;
+  padding: 2px 5px;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 420px;
+  max-height: 480px;
+  overflow-y: auto;
+  background: var(--dev-bg-elevated);
+  border: 1px solid var(--dev-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  z-index: 100;
+}
+
+.result {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--dev-text);
+  transition: background 0.1s;
+}
+
+.result:hover,
+.result:focus {
+  background: var(--dev-bg);
+  outline: none;
+}
+
+.resultTitle {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--dev-cyan);
+  margin-bottom: 4px;
+}
+
+.resultExcerpt {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--dev-text-dim);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.resultExcerpt mark {
+  background: transparent;
+  color: var(--dev-text);
+  font-weight: 600;
+}

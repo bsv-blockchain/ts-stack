@@ -1,0 +1,55 @@
+.sidebar {
+  padding: 1.25rem 0 2rem;
+}
+
+.sidebar-section {
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-section-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dev-fg-muted);
+  padding: 0.8rem 1rem 0.35rem;
+  display: block;
+}
+
+.sidebar-link {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: rgba(226, 232, 240, 0.6);
+  padding: 0.28rem 1rem;
+  border-radius: 4px;
+  margin: 1px 6px;
+  transition: color 0.12s, background 0.12s;
+  text-decoration: none;
+}
+
+.sidebar-link:hover {
+  color: var(--dev-fg);
+  background: rgba(255, 255, 255, 0.04);
+  text-decoration: none;
+}
+
+.sidebar-link.active {
+  color: var(--dev-cyan);
+  background: var(--dev-cyan-dim);
+  font-weight: 500;
+}
+
+.sidebar-sub {
+  padding-left: 0.75rem;
+}
+
+.sidebar-sub .sidebar-section-label {
+  font-size: 0.65rem;
+  padding-top: 0.5rem;
+}
+
+.sidebar-sub .sidebar-link {
+  font-size: 0.78rem;
+  padding-left: 1rem;
+}

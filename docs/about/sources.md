@@ -1,8 +1,13 @@
 ---
 id: about-sources
 title: "Documentation Sources"
-kind: about
+kind: meta
 last_updated: "2026-04-29"
+version: "n/a"
+last_verified: "2026-04-29"
+review_cadence_days: 90
+status: stable
+tags: [about, sources, documentation]
 ---
 
 # Documentation Sources

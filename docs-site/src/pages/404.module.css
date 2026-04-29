@@ -1,0 +1,44 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 3rem 0;
+}
+
+.code {
+  font-family: var(--dev-font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dev-cyan);
+  background: var(--dev-cyan-dim);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 4px;
+  padding: 0.25em 0.75em;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #f1f5f9;
+}
+
+.body {
+  color: var(--dev-fg-muted);
+  font-size: 0.95rem;
+}
+
+.link {
+  color: var(--dev-cyan);
+  font-size: 0.875rem;
+  font-family: var(--dev-font-mono);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.link:hover {
+  color: #67e8f9;
+}

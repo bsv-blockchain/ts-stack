@@ -1,8 +1,13 @@
 ---
 id: domain-messaging
 title: Messaging
-kind: domain
+kind: reference
 last_updated: "2026-04-28"
+version: "n/a"
+last_verified: "2026-04-28"
+review_cadence_days: 90
+status: stable
+tags: [packages, messaging]
 ---
 
 # Messaging Domain

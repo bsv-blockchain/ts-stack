@@ -1,0 +1,111 @@
+.bsv-hero {
+  position: relative;
+  margin: -2.5rem calc(-1 * var(--gap)) 3rem;
+  padding: 5rem 2rem 5.5rem;
+  background:
+    radial-gradient(ellipse at 60% 0%, rgba(34, 211, 238, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse at 10% 80%, rgba(167, 139, 250, 0.05) 0%, transparent 50%),
+    var(--dev-bg);
+  color: var(--dev-fg);
+  text-align: center;
+  overflow: hidden;
+}
+
+.bsv-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.bsv-hero::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--dev-cyan-glow) 30%,
+    var(--dev-cyan) 50%,
+    var(--dev-cyan-glow) 70%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.bsv-hero__inner {
+  position: relative;
+  max-width: 760px;
+  margin: 0 auto;
+  z-index: 1;
+}
+
+.bsv-hero__title {
+  font-family: var(--dev-font-body);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 5vw + 1rem, 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #f1f5f9;
+  margin: 0 0 1.25rem;
+}
+
+.bsv-hero__title em {
+  font-style: normal;
+  color: var(--dev-cyan);
+  text-shadow: 0 0 28px var(--dev-cyan-glow);
+}
+
+.bsv-hero__lede {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: rgba(226, 232, 240, 0.6);
+  max-width: 580px;
+  margin: 0 auto 2.5rem;
+  font-weight: 400;
+}
+
+.bsv-hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--dev-cyan);
+  color: #0a0a14;
+  padding: 0.6rem 1rem 0.6rem 1.4rem;
+  border-radius: 6px;
+  font-family: var(--dev-font-mono);
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.2), 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+}
+
+.bsv-hero__cta:hover {
+  background: #38e8ff;
+  color: #0a0a14;
+  transform: translateY(-1px);
+  box-shadow: 0 0 32px rgba(34, 211, 238, 0.35), 0 4px 16px rgba(0, 0, 0, 0.5);
+  text-decoration: none;
+}
+
+.bsv-hero__cta-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  font-weight: 700;
+  font-size: 0.9rem;
+}

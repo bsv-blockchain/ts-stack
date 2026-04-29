@@ -15,7 +15,7 @@ tags: ["spec", "sync", "overlay", "gasp"]
 
 ## Interactive spec
 
-<iframe src="../assets/asyncapi/gasp/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="GASP AsyncAPI Specification" loading="lazy"></iframe>
+<AsyncApiEmbed slug="gasp" />
 
 ## At a glance
 

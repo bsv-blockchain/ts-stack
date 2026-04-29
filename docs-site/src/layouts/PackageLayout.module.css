@@ -1,0 +1,55 @@
+.root {
+  padding-bottom: 2rem;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--dev-surface);
+  border: 1px solid var(--dev-border);
+  border-radius: 6px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--dev-font-mono);
+  font-size: 0.72rem;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--dev-border-hi);
+}
+
+.badgeKey {
+  background: var(--dev-surface-2);
+  color: var(--dev-fg-muted);
+  padding: 0.2em 0.5em;
+  border-right: 1px solid var(--dev-border-hi);
+}
+
+.badgeVal {
+  background: var(--dev-bg);
+  color: var(--dev-fg);
+  padding: 0.2em 0.6em;
+}
+
+.badge.beta .badgeVal   { color: var(--dev-yellow); }
+.badge.deprecated .badgeVal { color: var(--dev-red); }
+.badge.experimental .badgeVal { color: var(--dev-violet); }
+
+.apiLink {
+  font-family: var(--dev-font-mono);
+  font-size: 0.72rem;
+  color: var(--dev-cyan);
+  text-decoration: none;
+  transition: color 0.12s;
+  margin-left: auto;
+}
+
+.apiLink:hover {
+  color: #67e8f9;
+}

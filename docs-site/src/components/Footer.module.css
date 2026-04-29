@@ -1,0 +1,23 @@
+.inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.links {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.links a {
+  color: var(--dev-fg-muted);
+  font-size: 0.78rem;
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.links a:hover {
+  color: var(--dev-cyan);
+}

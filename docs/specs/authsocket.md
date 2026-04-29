@@ -15,7 +15,7 @@ tags: ["spec", "messaging", "websocket"]
 
 ## Interactive spec
 
-<iframe src="../assets/asyncapi/authsocket/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="AuthSocket AsyncAPI Specification" loading="lazy"></iframe>
+<AsyncApiEmbed slug="authsocket" />
 
 ## At a glance
 

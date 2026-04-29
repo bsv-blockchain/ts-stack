@@ -29,19 +29,19 @@ const Generator = require('@asyncapi/generator');
 const SPECS = [
   {
     spec: 'specs/payments/brc29-payment-protocol.yaml',
-    out:  'docs/assets/asyncapi/brc29',
+    out:  'docs-site/public/assets/asyncapi/brc29',
   },
   {
     spec: 'specs/auth/brc31-handshake.yaml',
-    out:  'docs/assets/asyncapi/brc31',
+    out:  'docs-site/public/assets/asyncapi/brc31',
   },
   {
     spec: 'specs/messaging/authsocket-asyncapi.yaml',
-    out:  'docs/assets/asyncapi/authsocket',
+    out:  'docs-site/public/assets/asyncapi/authsocket',
   },
   {
     spec: 'specs/sync/gasp-asyncapi.yaml',
-    out:  'docs/assets/asyncapi/gasp',
+    out:  'docs-site/public/assets/asyncapi/gasp',
   },
 ];
 

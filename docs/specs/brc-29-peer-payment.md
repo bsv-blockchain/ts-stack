@@ -15,7 +15,7 @@ tags: ["spec", "payments", "brc-29"]
 
 ## Interactive spec
 
-<iframe src="../assets/asyncapi/brc29/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="BRC-29 AsyncAPI Specification" loading="lazy"></iframe>
+<AsyncApiEmbed slug="brc29" />
 
 ## At a glance
 

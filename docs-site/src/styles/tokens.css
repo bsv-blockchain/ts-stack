@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* surfaces */
+  --dev-bg:         #0c0c14;
+  --dev-surface:    #111119;
+  --dev-surface-2:  #16161f;
+  --dev-border:     #1e1e2e;
+  --dev-border-hi:  #2a2a3d;
+
+  /* accent */
+  --dev-cyan:       #22d3ee;
+  --dev-cyan-dim:   rgba(34, 211, 238, 0.12);
+  --dev-cyan-glow:  rgba(34, 211, 238, 0.25);
+
+  /* text */
+  --dev-fg:         #e2e8f0;
+  --dev-fg-muted:   #6b7280;
+  --dev-fg-subtle:  #374151;
+
+  /* semantic */
+  --dev-yellow:     #fbbf24;
+  --dev-red:        #f87171;
+  --dev-green:      #4ade80;
+  --dev-violet:     #a78bfa;
+
+  /* typography */
+  --dev-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --dev-font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* layout */
+  --header-h: 56px;
+  --sidebar-w: 260px;
+  --content-max: 820px;
+  --toc-w: 220px;
+  --gap: 1.5rem;
+}

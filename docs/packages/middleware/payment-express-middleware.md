@@ -12,7 +12,7 @@ review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/payment-express-middleware"
 repo: "https://github.com/bsv-blockchain/payment-express-middleware"
 status: stable
-tags: [middleware, express, payment, brc-121, 402]
+tags: [middleware, express, payment, brc-121, "402"]
 ---
 
 # @bsv/payment-express-middleware

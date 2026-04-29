@@ -5,24 +5,67 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'mkdocs.yml'
+      - 'docs-site/**'
+      - 'specs/**'
+      - 'scripts/generate-asyncapi-html.mjs'
+      - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+
+      - uses: pnpm/action-setup@v4
         with:
-          python-version: '3.x'
-      - name: Install MkDocs
-        run: |
-          pip install mkdocs-material mkdocs-git-revision-date-localized-plugin
-      - name: Deploy
-        run: mkdocs gh-deploy --force
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate AsyncAPI HTML bundles
+        run: pnpm docs:asyncapi
+
+      - name: Build manifest
+        run: node docs-site/scripts/build-manifest.mjs
+
+      - name: Build docs site
+        run: pnpm docs:build
+
+      - name: Merge TypeDoc /api/ from gh-pages
+        run: node docs-site/scripts/fetch-typedoc.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

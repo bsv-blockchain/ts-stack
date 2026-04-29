@@ -4,3 +4,4 @@ packages:
   - '!packages/**/out/**'
   - 'conformance/**'
   - 'apps/**'
+  - 'docs-site'

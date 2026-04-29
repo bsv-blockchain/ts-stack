@@ -1,0 +1,64 @@
+.code-block {
+  position: relative;
+  border-radius: 8px;
+  margin: 1.25rem 0;
+  background: var(--dev-surface-2);
+  border: 1px solid var(--dev-border-hi);
+  overflow: hidden;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 1rem;
+  background: var(--dev-surface);
+  border-bottom: 1px solid var(--dev-border-hi);
+}
+
+.code-block-lang {
+  font-family: var(--dev-font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--dev-fg-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.code-copy-btn {
+  background: transparent;
+  border: 1px solid var(--dev-border-hi);
+  border-radius: 4px;
+  color: var(--dev-fg-muted);
+  font-family: var(--dev-font-mono);
+  font-size: 0.68rem;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.code-copy-btn:hover {
+  color: var(--dev-cyan);
+  border-color: var(--dev-cyan);
+}
+
+.code-copy-btn.copied {
+  color: var(--dev-green);
+  border-color: var(--dev-green);
+}
+
+.code-block pre {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  background: transparent !important;
+}
+
+.code-block code {
+  font-family: var(--dev-font-mono);
+  font-size: 0.85rem;
+  line-height: 1.65;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}

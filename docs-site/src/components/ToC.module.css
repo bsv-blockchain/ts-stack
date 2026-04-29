@@ -1,0 +1,57 @@
+.toc {
+  position: sticky;
+  top: calc(var(--header-h) + 1.5rem);
+  width: var(--toc-w);
+  flex-shrink: 0;
+  padding: 0 0 2rem;
+  max-height: calc(100vh - var(--header-h) - 3rem);
+  overflow-y: auto;
+}
+
+.label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dev-fg-muted);
+  padding: 0 0 0.5rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--dev-border);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.level2, .level3 {
+  margin: 0;
+}
+
+.level3 .link {
+  padding-left: 0.875rem;
+  font-size: 0.75rem;
+}
+
+.link {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--dev-fg-muted);
+  padding: 0.225rem 0;
+  text-decoration: none;
+  transition: color 0.12s;
+  border-left: 2px solid transparent;
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+
+.link:hover {
+  color: var(--dev-fg);
+}
+
+.link.active {
+  color: var(--dev-cyan);
+  border-left-color: var(--dev-cyan);
+}

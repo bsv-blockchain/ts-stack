@@ -15,7 +15,7 @@ tags: ["spec", "auth", "brc-103", "brc-31"]
 
 ## Interactive spec
 
-<iframe src="../assets/asyncapi/brc31/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="BRC-31 AsyncAPI Specification" loading="lazy"></iframe>
+<AsyncApiEmbed slug="brc31" />
 
 ## At a glance
 

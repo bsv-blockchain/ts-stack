@@ -1,0 +1,20 @@
+.root {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--dev-border);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-family: var(--dev-font-mono);
+  color: var(--dev-fg-muted);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.link:hover {
+  color: var(--dev-cyan);
+}

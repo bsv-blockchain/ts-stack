@@ -1,0 +1,24 @@
+.root {
+  margin: 1.25rem 0;
+  background: var(--dev-surface-2);
+  border: 1px solid var(--dev-border-hi);
+  border-radius: 8px;
+  padding: 1.5rem;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.root svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.error {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  color: var(--dev-red);
+  margin: 1.25rem 0;
+}
