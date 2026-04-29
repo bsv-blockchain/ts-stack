@@ -142,7 +142,7 @@ const ordResult = await new TransactionBuilder(wallet, "Mint ordinal")
 ## Related packages
 
 - [@bsv/simple](simple.md) — High-level wallet operations
-- [@bsv/templates](ts-templates.md) — Low-level script templates
+- [@bsv/templates](templates.md) — Low-level script templates
 - [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction building
 
 ## Reference

@@ -205,11 +205,12 @@ Review feedback is normal. We aim to be constructive and helpful.
 ### Imports
 
 ```typescript
-// Good
-import { sign, verify } from '@bsv/crypto';
+// Good — import specific exports from the top-level or subpath
+import { PrivateKey, Hash } from '@bsv/sdk';
+import { Transaction } from '@bsv/sdk/transaction';
 
-// Bad
-import * as crypto from '@bsv/crypto';
+// Bad — avoid wildcard imports
+import * as sdk from '@bsv/sdk';
 ```
 
 ### Naming

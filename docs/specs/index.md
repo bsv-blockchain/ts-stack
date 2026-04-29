@@ -22,7 +22,7 @@ This section documents the protocols and standards that the ts-stack implements.
 |------|--------|---------|-----------------|---------|
 | [BRC-100 Wallet](./brc-100-wallet.md) | JSON Schema | 1.0.0 | @bsv/wallet-toolbox, @bsv/sdk | Standard wallet interface for signing and key management |
 | [BRC-31 Auth](./brc-31-auth.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/auth-express-middleware, @bsv/authsocket | Mutual authentication handshake (BRC-103 + BRC-104) |
-| [BRC-29 Peer Payment](./brc-29-peer-payment.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/ts-paymail, @bsv/message-box-client | P2P payment derivation and transmission |
+| [BRC-29 Peer Payment](./brc-29-peer-payment.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/paymail, @bsv/message-box-client | P2P payment derivation and transmission |
 | [BRC-121 / 402](./brc-121-402.md) | OpenAPI 3.1 | 1.0.0 | @bsv/402-pay, @bsv/payment-express-middleware | HTTP micropayment protocol |
 | [Overlay HTTP](./overlay-http.md) | OpenAPI 3.1 | 1.0.0 | @bsv/overlay, @bsv/overlay-express | Transaction routing and topic management |
 | [Message Box HTTP](./message-box-http.md) | OpenAPI 3.1 | 1.0.0 | @bsv/message-box-client | Store-and-forward messaging API |
@@ -30,18 +30,14 @@ This section documents the protocols and standards that the ts-stack implements.
 | [ARC Broadcast](./arc-broadcast.md) | OpenAPI 3.1 | 1.0.0 | @bsv/sdk | Miner-facing transaction broadcast |
 | [Merkle Service](./merkle-service.md) | OpenAPI 3.1 | 1.0.0 | @bsv/sdk | SPV proof delivery service |
 | [Storage Adapter](./storage-adapter.md) | OpenAPI 3.1 | 1.0.0 | @bsv/wallet-toolbox | Remote wallet storage interface |
-| [GASP Sync](./gasp-sync.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/gasp-core | Transaction graph synchronization |
+| [GASP Sync](./gasp-sync.md) | AsyncAPI 3.0 | 1.0.0 | @bsv/gasp | Transaction graph synchronization |
 | [UHRP](./uhrp.md) | OpenAPI 3.1 | 1.0.0 | @bsv/overlay-topics | Content-addressed file storage |
 
-## BRC Numbering Scheme
+## About BRCs
 
-**BRC** = BSV (or Bitcoin) Request for Comments. BRCs are numbered sequentially and grouped by category:
+**BRC** = BSV Request for Comments. BRCs are numbered sequentially (there is no categorical grouping by number range). Each BRC solves a specific interoperability problem. Implementations reference the spec by number so different teams build compatible systems without central coordination.
 
-- **0–99** — Core protocols (BRC-100 = Wallet interface, BRC-103 = Mutual auth, etc.)
-- **Messaging** (200s) — Messaging and payment protocols
-- **Overlays** (80s) — Overlay network standards (UHRP, GASP, etc.)
-
-Each BRC solves a specific interoperability problem. Implementations reference the spec by number so different teams can build compatible systems without coordination.
+The authoritative BRC repository is at [github.com/bitcoin-sv/BRCs](https://github.com/bitcoin-sv/BRCs). The machine-readable contracts for BRCs implemented in ts-stack live in the [`/specs`](https://github.com/bsv-blockchain/ts-stack/tree/main/specs) directory as OpenAPI 3.1, AsyncAPI 3.0, and JSON Schema files.
 
 ## By Use Case
 
@@ -53,7 +49,7 @@ Each BRC solves a specific interoperability problem. Implementations reference t
 **I'm implementing peer-to-peer payments**
 - Use [BRC-29 Peer Payment](./brc-29-peer-payment.md) for payment derivation and transmission
 - Combine with [BRC-31 Auth](./brc-31-auth.md) for mutual authentication
-- Implementation: `@bsv/ts-paymail`, `@bsv/message-box-client`
+- Implementation: `@bsv/paymail`, `@bsv/message-box-client`
 
 **I'm monetizing an API endpoint**
 - Implement [BRC-121 / 402](./brc-121-402.md) using `@bsv/402-pay` or `@bsv/payment-express-middleware`

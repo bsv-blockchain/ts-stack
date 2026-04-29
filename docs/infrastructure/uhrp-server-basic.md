@@ -129,5 +129,5 @@ Implicit health via GET / returning HTTP 200. No explicit health endpoint. Monit
 
 ## Source
 
-- [GitHub](https://github.com/bsv-stack/uhrp-server-basic)
+- [GitHub](https://github.com/bsv-blockchain/uhrp-server-basic)
 - [npm package](https://npmjs.com/package/@bsv/uhrp-lite)

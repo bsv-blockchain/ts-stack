@@ -153,5 +153,5 @@ No explicit health endpoint. Monitor:
 
 ## Source
 
-- [GitHub](https://github.com/bsv-stack/wallet-infra)
+- [GitHub](https://github.com/bsv-blockchain/wallet-infra)
 - [npm package](https://npmjs.com/package/@bsv/wallet-toolbox)

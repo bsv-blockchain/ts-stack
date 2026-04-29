@@ -392,7 +392,7 @@ Visit `http://localhost:8080` to see the auto-generated web UI documenting your 
 
 ## What to read next
 
-- **[Overlay Topics Reference](../packages/overlays/topics.md)** — Full list of pre-built topic managers
+- **[Overlay Topics Reference](../packages/overlays/overlay-topics.md)** — Full list of pre-built topic managers
 - **[Overlay-Express API](../packages/overlays/overlay-express.md)** — Complete configuration reference
 - **[SHIP/SLAP Discovery](../specs/overlay-http.md)** — Peer discovery protocol
 - **[GASP Sync Protocol](../specs/gasp-sync.md)** — Historical data synchronization

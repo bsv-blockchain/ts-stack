@@ -144,5 +144,5 @@ No explicit health endpoint. Monitor:
 
 ## Source
 
-- [GitHub](https://github.com/bsv-stack/overlay-express-examples)
+- [GitHub](https://github.com/bsv-blockchain/overlay-express-examples)
 - [npm package](https://npmjs.com/package/@bsv/overlay-express)

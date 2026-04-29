@@ -106,6 +106,6 @@ All infrastructure services:
 
 ## Source & References
 
-- [ts-stack GitHub](https://github.com/bsv-stack/ts-stack)
+- [ts-stack GitHub](https://github.com/bsv-blockchain/ts-stack)
 - Each service has GitHub links in its documentation
 - [BRC Standards](https://github.com/bitcoin-sv/brc) – Authentication (BRC-103), Wallet Interface (BRC-100), Payment (BRC-100), etc.

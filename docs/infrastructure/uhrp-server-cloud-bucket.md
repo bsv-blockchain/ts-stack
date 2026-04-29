@@ -140,5 +140,5 @@ Implicit health via /info endpoint (HTTP 200). Cloud Run readiness probe typical
 
 ## Source
 
-- [GitHub](https://github.com/bsv-stack/uhrp-server-cloud-bucket)
+- [GitHub](https://github.com/bsv-blockchain/uhrp-server-cloud-bucket)
 - [npm package](https://npmjs.com/package/@bsv/uhrp-storage-server)

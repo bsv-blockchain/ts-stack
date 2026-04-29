@@ -248,4 +248,4 @@ This indicates a compatibility issue. Investigate and fix the implementation.
 
 - [Vector Catalog](./vectors.md) — Browse existing vectors
 - [TS Runner](./runner-ts.md) — Run and debug
-- [Go Runner](./runner-go.md) — Run in Go
+- [Go Runner](https://github.com/bsv-blockchain/go-sdk) — Run in Go

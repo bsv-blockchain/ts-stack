@@ -173,5 +173,5 @@ No explicit health endpoint. Monitor:
 
 ## Source
 
-- [GitHub](https://github.com/bsv-stack/wab-server)
+- [GitHub](https://github.com/bsv-blockchain/wab-server)
 - [npm package](https://npmjs.com/package/@bsv/wab-server)

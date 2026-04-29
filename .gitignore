@@ -20,3 +20,6 @@ site/
 # Official BSVA brand kit reference (do not commit — too large; clean copies live alongside)
 docs/assets/images/BSVA Logos/
 docs/assets/images/Logo_Guidelines_Jan2026.pdf
+
+# Internal working artifacts (audio transcripts, fact tables)
+docs/_internal/

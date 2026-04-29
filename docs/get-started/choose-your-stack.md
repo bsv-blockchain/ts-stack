@@ -3,8 +3,8 @@ id: choose-your-stack
 title: Choose Your Stack
 kind: meta
 version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-29"
+last_verified: "2026-04-29"
 review_cadence_days: 30
 status: stable
 tags: ["decision-guide"]
@@ -12,43 +12,95 @@ tags: ["decision-guide"]
 
 # Choose Your Stack
 
-Based on what you're building, here are the recommended starting packages.
+Start from what you're building and pick the right entry point.
 
-## By Use Case
+## Primary question: who manages keys?
 
-### Building BSV Transactions from Scratch
-
-```bash
-npm install @bsv/sdk
+```
+Are you building a wallet (you manage keys)?
+  YES → @bsv/wallet-toolbox
+  NO  → Is this a browser app or server agent?
+          BROWSER → @bsv/simple/browser
+          SERVER  → @bsv/simple/server
+          PROTOCOL LEVEL → @bsv/sdk
 ```
 
-You have everything you need:
-- Private keys and signatures
-- Transaction building and serialization
-- BEEF encoding and SPV proof validation
-- No wallet or overlay required
+---
+
+## App Developer — browser or server agent
+
+The fastest entry point for most developers.
+
+### Browser app (connects to user's wallet)
+
+```bash
+npm install @bsv/simple
+```
+
+```typescript
+import { createWallet } from '@bsv/simple/browser'
+
+const wallet = await createWallet()
+const result = await wallet.pay({ to: recipientIdentityKey, satoshis: 1000 })
+console.log('Paid:', result.txid)
+```
+
+`@bsv/simple/browser` connects to the user's BSV Browser wallet over `localhost` or `window.postMessage` via the BRC-100 interface. Your app never touches private keys.
 
 **Resources:**
-- [SDK Package](../packages/sdk/index.md)
-- [Guide: Transactions 101](../guides/index.md)
+- [@bsv/simple](../packages/helpers/simple.md)
 
-### Wallet-Integrated App
+### Server agent (automated, self-custodial)
+
+```bash
+npm install @bsv/simple
+```
+
+```typescript
+import { ServerWallet } from '@bsv/simple/server'
+
+const wallet = await ServerWallet.create({ storageDir: './wallet-data' })
+```
+
+`@bsv/simple/server` manages a server-side wallet with file-based persistence. Suitable for automated agents, bots, and backend funding operations. Can be deployed as an MCP server.
+
+**Resources:**
+- [@bsv/simple](../packages/helpers/simple.md)
+
+---
+
+## Wallet Builder
+
+You're building a BRC-100-compliant wallet — handling key storage, signing flows, and UTXO management yourself.
 
 ```bash
 npm install @bsv/wallet-toolbox
 ```
 
-Your app lets users sign in with their wallet and approve transactions.
-
-**Includes:**
-- BRC-100 wallet interface implementation
-- Key management (if you're building a wallet)
-- Balance sync and UTXO selection
-- Transaction signing with wallet approval
+`@bsv/wallet-toolbox` is the modular toolkit. Use `WalletStorageManager` to assemble a wallet from persistence providers (SQL/Knex, IndexedDB, Remote) and network services (ARC, Chaintracks). The `Wallet` class it produces is BRC-100-compliant and can be used anywhere a BRC-100 interface is expected.
 
 **Resources:**
-- [Wallet Toolbox](../packages/wallet/wallet-toolbox.md)
+- [@bsv/wallet-toolbox](../packages/wallet/wallet-toolbox.md)
 - [Guide: Build a Wallet-Aware App](../guides/wallet-aware-app.md)
+
+---
+
+## Protocol Engineer
+
+You need direct access to cryptographic primitives, transaction construction, or BEEF encoding.
+
+```bash
+npm install @bsv/sdk
+```
+
+Zero-dependency. Includes: secp256k1/r1, hashing, Script engine, transaction builder, BEEF (BRC-62), Merkle paths (BRC-74), BRC-42 key derivation, ARC broadcaster, Chaintracks client.
+
+**Resources:**
+- [@bsv/sdk](../packages/sdk/bsv-sdk.md)
+
+---
+
+## By Capability
 
 ### Running an Overlay Node
 
@@ -56,137 +108,91 @@ Your app lets users sign in with their wallet and approve transactions.
 npm install @bsv/overlay @bsv/overlay-express
 ```
 
-You want to index on-chain data and serve it to applications.
-
-**Includes:**
-- Overlay core (transaction validation, topic management)
-- Express HTTP server for the Overlay spec
-- Built-in topic managers for common protocols
+Index on-chain data and serve it to applications via the Overlay HTTP spec. Implement Topic Managers and Lookup Services; `@bsv/overlay-express` wraps the Engine as an Express server.
 
 **Resources:**
-- [Overlay Package](../packages/overlays/overlay.md)
-- [Overlay Express](../packages/overlays/overlay-express.md)
+- [@bsv/overlay](../packages/overlays/overlay.md)
+- [@bsv/overlay-express](../packages/overlays/overlay-express.md)
 - [Guide: Run an Overlay Node](../guides/run-overlay-node.md)
 
-### Building a Token System (BTMS)
+### Token System (BTMS / PushDrop)
 
 ```bash
 npm install @bsv/btms @bsv/btms-permission-module
 ```
 
-You want to issue, transfer, and manage tokens on BSV.
-
-**Includes:**
-- BTMS token protocol implementation
-- Permission checking (who can transfer which tokens)
-- Backend support if you're running an overlay
+Issue, transfer, and manage UTXO-based tokens (BRC-48 PushDrop protocol). `@bsv/btms-backend` is the overlay-server-side shell; core BTMS logic lives in `@bsv/overlay-topics`.
 
 **Resources:**
-- [BTMS](../packages/wallet/btms.md)
-- [BTMS Permission Module](../packages/wallet/btms-permission-module.md)
-- [Spec: BTMS Protocol](../specs/index.md)
+- [@bsv/btms](../packages/wallet/btms.md)
+- [@bsv/btms-permission-module](../packages/wallet/btms-permission-module.md)
 
-### Authenticated Messaging Between Users
+### Authenticated Messaging
 
 ```bash
 npm install @bsv/authsocket @bsv/authsocket-client
 ```
 
-Users send encrypted messages to each other using identity keys.
-
-**Includes:**
-- WebSocket protocol for authenticated messaging
-- Encryption with recipient's public key
-- Message routing by identity key
+Live authenticated WebSocket channel using BRC-103/104 mutual authentication. For store-and-forward messaging use `@bsv/message-box-client` against a MessageBox server.
 
 **Resources:**
-- [Authsocket](../packages/messaging/authsocket.md)
-- [Authsocket Client](../packages/messaging/authsocket-client.md)
+- [@bsv/authsocket](../packages/messaging/authsocket.md)
+- [@bsv/authsocket-client](../packages/messaging/authsocket-client.md)
 - [Guide: Peer-to-Peer Messaging](../guides/peer-to-peer-messaging.md)
 
-### Payment-Gated HTTP API (HTTP 402)
+### Payment-Gated HTTP API (HTTP 402 / BRC-121)
 
 ```bash
-npm install @bsv/auth-express-middleware @bsv/payment-express-middleware
+npm install @bsv/auth-express-middleware @bsv/402-pay
 ```
 
-Your API requires users to prove identity or pay before accessing endpoints.
-
-**Includes:**
-- Authentication middleware (verify identity keys)
-- Payment middleware (require payment to access routes)
-- BRC-121 / HTTP 402 protocol support
+Server challenges with `402 Payment Required`; client resends with BEEF micropayment in headers. Single round-trip, stateless.
 
 **Resources:**
-- [Auth Middleware](../packages/middleware/auth-express-middleware.md)
-- [Payment Middleware](../packages/middleware/payment-express-middleware.md)
+- [@bsv/auth-express-middleware](../packages/middleware/auth-express-middleware.md)
+- [@bsv/402-pay](../packages/middleware/402-pay.md)
 - [Guide: HTTP 402 Payments](../guides/http-402-payments.md)
 
-### Adding Paymail to Your App
+### Paymail
 
 ```bash
 npm install @bsv/paymail
 ```
 
-Users can discover each other by Paymail handle and send payments.
-
-**Includes:**
-- Paymail discovery protocol
-- Payment address lookup
-- Integration with wallet and overlay
+Paymail discovery protocol — look up payment addresses by human-readable handle.
 
 **Resources:**
-- [Paymail Package](../packages/messaging/ts-paymail.md)
+- [@bsv/paymail](../packages/messaging/paymail.md)
 
-### Storing Files on BSV (UHRP)
+### File Storage (UHRP)
 
 ```bash
 npm install @bsv/overlay-topics
 ```
 
-You're running an overlay and want to store and retrieve files.
-
-**Includes:**
-- UHRP topic manager (validates file inscriptions)
-- File storage and retrieval protocol
-- Integration with overlay core
+Run a UHRP overlay that maps file hashes to CDN URLs (BRC-26). Includes the UHRP Topic Manager and Lookup Service.
 
 **Resources:**
-- [Overlay Topics](../packages/overlays/topics.md)
+- [@bsv/overlay-topics](../packages/overlays/overlay-topics.md)
 - [Spec: UHRP](../specs/uhrp.md)
+
+---
 
 ## Decision Matrix
 
-| Use Case | Start With | Likely Adds |
-|----------|------------|-------------|
-| Transactions | @bsv/sdk | @bsv/teranode-listener |
-| Wallet app | @bsv/wallet-toolbox | @bsv/sdk, auth middleware |
-| Overlay node | @bsv/overlay | @bsv/overlay-express, @bsv/overlay-topics |
-| Token system | @bsv/btms | @bsv/overlay, @bsv/btms-backend |
-| Authenticated app | @bsv/authsocket | @bsv/wallet-toolbox, @bsv/sdk |
-| Payment API | @bsv/payment-express-middleware | @bsv/auth-express-middleware, @bsv/sdk |
-| Paymail | @bsv/paymail | @bsv/sdk, @bsv/teranode-listener |
-| File storage | @bsv/overlay-topics | @bsv/overlay, @bsv/overlay-express |
+| What you're building | Start with | Typically adds |
+|----------------------|------------|----------------|
+| Browser app | `@bsv/simple/browser` | `@bsv/message-box-client` |
+| Server agent | `@bsv/simple/server` | `@bsv/402-pay` |
+| BRC-100 wallet | `@bsv/wallet-toolbox` | `@bsv/sdk` |
+| Protocol / SDK work | `@bsv/sdk` | — |
+| Overlay node | `@bsv/overlay` | `@bsv/overlay-express`, `@bsv/overlay-topics` |
+| Token system | `@bsv/btms` | `@bsv/overlay`, `@bsv/btms-backend` |
+| Authenticated API | `@bsv/auth-express-middleware` | `@bsv/sdk` |
+| Payment-gated API | `@bsv/402-pay` | `@bsv/auth-express-middleware` |
+| Paymail | `@bsv/paymail` | `@bsv/sdk` |
+| File storage (UHRP) | `@bsv/overlay-topics` | `@bsv/overlay`, `@bsv/overlay-express` |
 
-## All Packages by Domain
+## All Packages
 
-For a complete list of all 27 packages, see [Packages](../packages/index.md).
-
-## Domain Specialization
-
-Each domain serves a specific purpose in the stack:
-
-- **[SDK](../packages/sdk/index.md)** — Always the foundation
-- **[Wallet](../packages/wallet/index.md)** — If you're managing keys or integrating with wallets
-- **[Network](../packages/network/index.md)** — If you're broadcasting or querying the chain
-- **[Overlays](../packages/overlays/index.md)** — If you're indexing data or running a service
-- **[Messaging](../packages/messaging/index.md)** — If you're authenticating or routing messages
-- **[Middleware](../packages/middleware/index.md)** — If you're building an Express API
-- **[Helpers](../packages/helpers/index.md)** — Shared utilities and adapters
-
-## Next Steps
-
-1. Pick your starting package from the decision matrix
-2. Read that package's documentation in [Packages](../packages/index.md)
-3. Follow the relevant [Guide](../guides/index.md)
-4. Refer to [Specs](../specs/index.md) for protocol details
+See [Packages](../packages/index.md) for the full list.

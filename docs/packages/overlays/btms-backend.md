@@ -19,7 +19,7 @@ tags: [tokens, btms, backend, mongodb]
 
 > BTMS (Basic Token Management System) overlay services — topic manager and lookup service for token validation and indexing.
 
-**Note:** Core BTMS definitions have been consolidated into [@bsv/overlay-topics](./topics.md). This package may be transitional or legacy; prefer using @bsv/overlay-topics directly for new projects.
+**Note:** Core BTMS definitions have been consolidated into [@bsv/overlay-topics](./overlay-topics.md). This package may be transitional or legacy; prefer using @bsv/overlay-topics directly for new projects.
 
 ## Install
 
@@ -124,7 +124,7 @@ const metadata = await manager.getMetaData()
 - For client-side token operations — use @bsv/sdk directly
 - If you don't need persistent storage — use @bsv/overlay-topics without lookup
 - For non-token overlays — use @bsv/overlay or @bsv/overlay-topics for other topics
-- New projects should prefer [@bsv/overlay-topics](./topics.md) BTMS implementation
+- New projects should prefer [@bsv/overlay-topics](./overlay-topics.md) BTMS implementation
 
 ## Spec conformance
 
@@ -141,14 +141,14 @@ const metadata = await manager.getMetaData()
 4. **MongoDB required** — No Knex fallback; requires MongoDB for lookup service
 5. **Conservation law** — Sum of input amounts per asset must >= sum of output amounts
 6. **Field count** — Accepts 2-4 PushDrop fields ([assetId, amount, metadata?, signature?])
-7. **Deprecation** — Core BTMS definitions now at [@bsv/overlay-topics](./topics.md); prefer that for new projects
+7. **Deprecation** — Core BTMS definitions now at [@bsv/overlay-topics](./overlay-topics.md); prefer that for new projects
 
 ## Related packages
 
-- [@bsv/overlay-topics](./topics.md) — Canonical BTMS implementation (preferred for new projects)
+- [@bsv/overlay-topics](./overlay-topics.md) — Canonical BTMS implementation (preferred for new projects)
 - [@bsv/overlay](./overlay.md) — Core Engine that uses this topic manager
 - [@bsv/overlay-express](./overlay-express.md) — HTTP server wrapper
-- [@bsv/gasp](./gasp-core.md) — Synchronize token state between nodes
+- [@bsv/gasp](./gasp.md) — Synchronize token state between nodes
 
 ## Reference
 

@@ -2,9 +2,9 @@
 id: conformance-overview
 title: "Conformance"
 kind: meta
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+version: "n/a"
+last_updated: "2026-04-29"
+last_verified: "2026-04-29"
 review_cadence_days: 30
 status: stable
 tags: [conformance, testing, cross-language, vectors]
@@ -12,106 +12,84 @@ tags: [conformance, testing, cross-language, vectors]
 
 # Conformance Testing
 
-Cross-language conformance testing ensures implementations across TypeScript, Go, and other languages follow the same protocol specifications and can interoperate.
+The TypeScript stack is the **canonical reference implementation** for the BSV ecosystem. Conformance vectors are derived from this codebase and define expected behavior for every supported protocol. Other language implementations (Go, Python, Rust) consume the same vectors to verify cross-language compatibility.
 
-![Conformance vector flow: 260+ JSON test vectors feed both a TypeScript Jest runner and a Go runner. Each produces a results.json report. A comparison tool diffs the two reports to verify cross-language interoperability](../assets/diagrams/conformance-flow.svg)
+## How It Works
 
-## What is Conformance?
-
-Conformance vectors are standardized test cases that define expected behavior for a protocol or interface. By running the same vectors across different language implementations, we verify that:
-
-- Different implementations produce identical outputs
-- Edge cases are handled consistently
-- Implementations are compatible for interoperability
-- Regressions are caught early
+1. The TypeScript SDK generates expected outputs for each supported protocol operation.
+2. These outputs are committed as JSON vectors in `conformance/vectors/`.
+3. The TypeScript Jest runner validates that the current TS codebase produces results matching the vectors.
+4. Implementations in other languages (Go, Python, Rust) run the same vectors against their own code and compare outputs.
+5. Any divergence indicates a protocol-level incompatibility that must be resolved.
 
 ## Coverage
 
-The ts-stack includes **260+ conformance vectors** across three domains:
+**260 vectors across 33 files** (see `conformance/META.json` for the authoritative corpus metadata).
 
-### SDK Vectors (80 vectors)
-- Cryptographic signing and verification
-- Key derivation (BRC-42)
-- Transaction serialization
-- Script validation
-- Merkle path computation
+| Domain | BRCs covered | Vector path |
+|--------|-------------|-------------|
+| SDK — keys | BRC-42 | `conformance/vectors/sdk/keys/` |
+| SDK — crypto | BRC-42 signatures | `conformance/vectors/sdk/crypto/` |
+| SDK — transactions | BRC-74 (MerklePath) | `conformance/vectors/sdk/transactions/` |
+| SDK — scripts | Script engine | `conformance/vectors/sdk/scripts/` |
+| SDK — compat | BRC-77 (BSM) | `conformance/vectors/sdk/compat/` |
+| Wallet — BRC-100 | `getPublicKey`, `createHmac`, `createSignature`, `encrypt` | `conformance/vectors/wallet/brc100/` |
+| Wallet — BRC-29 | Payment key derivation | `conformance/vectors/wallet/brc29/` |
+| Messaging — BRC-31 | Authrite signature | `conformance/vectors/messaging/brc31/` |
+| Regressions | 12 historical bug fixes | `conformance/vectors/regressions/` |
 
-### Wallet Vectors (90 vectors)
-- BRC-100 WalletInterface methods
-- BRC-29 peer payment key derivation
-- Action creation and signing
-- UTXO management
-- Encryption/decryption
-
-### Messaging Vectors (60 vectors)
-- BRC-31 authentication handshake
-- Message formatting and signing
-- Nonce exchange
-- Replay protection
-
-### Regression Vectors (30 vectors)
-- Historical bug fixes
-- Edge cases found in production
-- Performance benchmarks
-
-## Test Runners
-
-Two runners execute vectors:
-
-- **TypeScript (Jest)** — `pnpm conformance` — full coverage
-- **Go** — `go test ./conformance` — core coverage
-
-## Quick Start
-
-Run conformance tests locally:
+## Running Tests
 
 ```bash
-# TypeScript
-cd /Users/personal/git/ts-stack
+# TypeScript — runs all vectors against the current @bsv/sdk build
 pnpm conformance
-
-# Go
-cd conformance/go
-go test -v ./...
 ```
+
+The runner is at `conformance/runner/ts/runner.test.ts` and uses Jest.
+
+Reports land in `conformance/runner/reports/` after each run.
 
 ## Vector Format
 
-Vectors are JSON files in `conformance/vectors/`:
+Each vector is a JSON file validated against `conformance/schema/vector.schema.json` (JSON Schema 2020-12):
 
 ```json
 {
-  "name": "BRC-100 getPublicKey happy path",
-  "domain": "wallet/brc100",
+  "id": "brc42-key-derivation-happy-path",
+  "parity_class": "BRC-42",
+  "domain": "sdk/keys",
   "inputs": {
-    "derivationKey": "m/44'/0'/0'/0/0",
-    "walletId": "wallet-001"
+    "rootKey": "...",
+    "derivationPath": "m/44'/0'/0'/0/0"
   },
   "expectedOutput": {
-    "publicKey": "02a1b2c3d4e5f6..."
+    "publicKey": "02a1b2c3..."
   }
 }
 ```
 
-## Results
+See `conformance/VECTOR-FORMAT.md` for the complete schema specification.
 
-Both runners produce JSON reports:
+## Cross-Language Implementations
 
-```
-conformance/results/
-  ts-results-2026-04-28.json
-  go-results-2026-04-28.json
-```
+The same vector corpus is consumed by:
 
-Comparison tool shows differences:
+- **Go** — `bsv-blockchain/go-sdk` (runner migrating from ts-stack into the go-sdk repo)
+- **Python** — planned
+- **Rust** — planned
 
-```bash
-pnpm conformance:compare ts-results-*.json go-results-*.json
-```
+When a new protocol feature lands in the TS SDK, adding conformance vectors for it is part of the PR checklist (see `conformance/REGRESSION_QUEUE.md` for cases pending vectorization).
+
+## Contributing Vectors
+
+See [Contributing Vectors](./contributing-vectors.md) for the contribution workflow and the `VECTOR-FORMAT.md` spec.
+
+## Regression Tracking
+
+12 regression vectors (in `conformance/vectors/regressions/`) trace historical bugs across both the TS and Go implementations. The `regression_index` in `META.json` maps each to its source issue.
 
 ## Next Steps
 
 - **[Vector Catalog](./vectors.md)** — Browse all vectors by domain
-- **[TS Runner](./runner-ts.md)** — Run and debug in TypeScript
-- **[Go Runner](./runner-go.md)** — Run in Go
+- **[TS Runner](./runner-ts.md)** — Run and debug the TypeScript test suite
 - **[Contributing Vectors](./contributing-vectors.md)** — Add new test cases

@@ -162,8 +162,8 @@ const serviceDiscovery = await engine.lookup({
 
 - [@bsv/overlay](./overlay.md) — Core Engine that integrates SHIP/SLAP
 - [@bsv/overlay-express](./overlay-express.md) — HTTP server with automatic SHIP/SLAP configuration
-- [@bsv/gasp](./gasp-core.md) — Can sync with discovered peers
-- [@bsv/overlay-topics](./topics.md) — Topic managers that can be advertised via SHIP/SLAP
+- [@bsv/gasp](./gasp.md) — Can sync with discovered peers
+- [@bsv/overlay-topics](./overlay-topics.md) — Topic managers that can be advertised via SHIP/SLAP
 
 ## Reference
 

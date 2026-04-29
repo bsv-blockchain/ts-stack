@@ -1,30 +1,30 @@
 ---
 id: teranode-listener
-title: "@bsv/ts-p2p"
+title: "@bsv/teranode-listener"
 kind: package
 domain: network
-npm: "@bsv/ts-p2p"
-version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+npm: "@bsv/teranode-listener"
+version: "1.0.3"
+last_updated: "2026-04-29"
+last_verified: "2026-04-29"
 status: stable
 tags: ["network", "broadcast", "teranode", "p2p", "libp2p"]
 ---
 
-# @bsv/ts-p2p
+# @bsv/teranode-listener
 
 > TypeScript library for subscribing to Teranode P2P topics (blocks, subtrees, mining updates) via libp2p private DHT network.
 
 ## Install
 
 ```bash
-npm install @bsv/ts-p2p
+npm install @bsv/teranode-listener
 ```
 
 ## Quick start
 
 ```typescript
-import { TeranodeListener } from '@bsv/ts-p2p'
+import { TeranodeListener } from '@bsv/teranode-listener'
 
 const blockCallback = (data: Uint8Array, topic: string, from: string) => {
   console.log(`New block from ${from}:`, data)
@@ -185,5 +185,5 @@ await listener.stop()
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/ts-p2p/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-p2p)
-- [npm](https://www.npmjs.com/package/@bsv/ts-p2p)
+- [npm](https://www.npmjs.com/package/@bsv/teranode-listener)
 - [libp2p documentation](https://docs.libp2p.io/)

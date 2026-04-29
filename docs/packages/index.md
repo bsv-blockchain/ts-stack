@@ -35,7 +35,7 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 
 **Broadcast transactions and query BSV nodes through a typed client.**
 
-- [@bsv/teranode-listener](./network/ts-p2p.md) — Connect to Teranode and listen for transactions
+- [@bsv/teranode-listener](./network/teranode-listener.md) — Connect to Teranode and listen for transactions
 
 ### Overlays
 
@@ -43,9 +43,9 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 
 - [@bsv/overlay](./overlays/overlay.md) — Core overlay framework and transaction validation
 - [@bsv/overlay-express](./overlays/overlay-express.md) — HTTP server for the Overlay spec
-- [@bsv/overlay-topics](./overlays/topics.md) — Topic managers (UHRP, BTMS, custom)
+- [@bsv/overlay-topics](./overlays/overlay-topics.md) — Topic managers (UHRP, BTMS, custom)
 - [@bsv/overlay-discovery-services](./overlays/overlay-discovery-services.md) — Discover overlays by service type
-- [@bsv/gasp](./overlays/gasp-core.md) — GASP (Generic Append-only Structured Proofs) sync protocol
+- [@bsv/gasp](./overlays/gasp.md) — GASP (Generic Append-only Structured Proofs) sync protocol
 - [@bsv/btms-backend](./overlays/btms-backend.md) — Backend for running a token overlay
 
 ### Messaging
@@ -55,7 +55,7 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 - [@bsv/message-box-client](./messaging/message-box-client.md) — Send and retrieve messages from a message box service
 - [@bsv/authsocket](./messaging/authsocket.md) — WebSocket protocol for authenticated messaging
 - [@bsv/authsocket-client](./messaging/authsocket-client.md) — Client library for Authsocket
-- [@bsv/paymail](./messaging/ts-paymail.md) — Paymail protocol (payment address discovery)
+- [@bsv/paymail](./messaging/paymail.md) — Paymail protocol (payment address discovery)
 
 ### Middleware
 
@@ -69,10 +69,10 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 
 **Shared utilities, codecs, templates, and adapters.**
 
-- [@bsv/templates](./helpers/ts-templates.md) — Template system for OP_RETURN inscriptions
+- [@bsv/templates](./helpers/templates.md) — Template system for OP_RETURN inscriptions
 - [@bsv/did-client](./helpers/did-client.md) — DID resolver (Decentralized Identifiers)
 - [@bsv/simple](./helpers/simple.md) — Simplified API for common operations
-- [@bsv/wallet-helper](./helpers/bsv-wallet-helper.md) — Wallet utility functions
+- [@bsv/wallet-helper](./helpers/wallet-helper.md) — Wallet utility functions
 - [@bsv/amountinator](./helpers/amountinator.md) — Satoshi/BSV conversion and formatting
 - [@bsv/fund-wallet](./helpers/fund-wallet.md) — Faucet integration for testnet/devnet
 

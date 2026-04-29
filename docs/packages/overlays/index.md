@@ -21,9 +21,9 @@ Build and operate overlay services that index, validate, and serve on-chain data
 |---------|---------|
 | [@bsv/overlay](./overlay.md) | Core Engine orchestrating topic managers, lookup services, and storage with BEEF/STEAK encoding |
 | [@bsv/overlay-express](./overlay-express.md) | Opinionated Express.js HTTP server with configuration, health checks, and admin endpoints |
-| [@bsv/overlay-topics](./topics.md) | 20+ pre-built topic managers and lookup services (BTMS, DID, KVStore, UHRP, UMP, Supply Chain, etc.) |
+| [@bsv/overlay-topics](./overlay-topics.md) | 20+ pre-built topic managers and lookup services (BTMS, DID, KVStore, UHRP, UMP, Supply Chain, etc.) |
 | [@bsv/overlay-discovery-services](./overlay-discovery-services.md) | SHIP/SLAP peer discovery and WalletAdvertiser for certificate-based advertisements |
-| [@bsv/gasp](./gasp-core.md) | Graph Aware Sync Protocol for incremental transaction graph synchronization with SPV validation |
+| [@bsv/gasp](./gasp.md) | Graph Aware Sync Protocol for incremental transaction graph synchronization with SPV validation |
 | [@bsv/btms-backend](./btms-backend.md) | BTMS token validation and indexing (legacy; core moved to @bsv/overlay-topics) |
 
 ## What You Can Do
@@ -69,7 +69,7 @@ Use overlays when you need to:
 
 - **Start with [@bsv/overlay](./overlay.md)** — Understand the core Engine and interfaces
 - **Deploy with [@bsv/overlay-express](./overlay-express.md)** — Quickly build HTTP overlay services
-- **Use pre-built topics from [@bsv/overlay-topics](./topics.md)** — BTMS, DID, KVStore, and 17 more
+- **Use pre-built topics from [@bsv/overlay-topics](./overlay-topics.md)** — BTMS, DID, KVStore, and 17 more
 - **Discover peers with [@bsv/overlay-discovery-services](./overlay-discovery-services.md)** — SHIP/SLAP for decentralized discovery
-- **Sync state with [@bsv/gasp](./gasp-core.md)** — Keep multiple nodes in sync efficiently
+- **Sync state with [@bsv/gasp](./gasp.md)** — Keep multiple nodes in sync efficiently
 - **[Guide: Run an Overlay Node](../../guides/run-overlay-node.md)** — Step-by-step deployment walkthrough

@@ -178,7 +178,7 @@ const admittance = await manager.identifyAdmissibleOutputs(beef, [])
 - [@bsv/overlay](./overlay.md) — Core Engine and interfaces
 - [@bsv/overlay-express](./overlay-express.md) — HTTP server wrapper
 - [@bsv/overlay-discovery-services](./overlay-discovery-services.md) — SHIP/SLAP peer discovery
-- [@bsv/gasp](./gasp-core.md) — Graph Aware Sync Protocol
+- [@bsv/gasp](./gasp.md) — Graph Aware Sync Protocol
 
 ## Reference
 

@@ -154,7 +154,7 @@ const unlockingScript = await multiSigUnlocker.sign(tx, 0)
 
 ## Related packages
 
-- [@bsv/wallet-helper](bsv-wallet-helper.md) — Higher-level abstraction over these templates
+- [@bsv/wallet-helper](wallet-helper.md) — Higher-level abstraction over these templates
 - [@bsv/simple](simple.md) — Wallet-level operations
 - [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction building and script execution
 

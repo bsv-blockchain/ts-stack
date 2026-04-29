@@ -55,7 +55,7 @@ const result = await engine.lookup({
 - **TopicManager** — Interface for implementing admission logic (validates which outputs belong to your overlay)
 - **LookupService** — Interface for indexing and querying admitted UTXOs
 - **Storage** — Abstracted persistence layer with Knex-based SQL implementation
-- **BEEF/STEAK encoding** — Transaction encoding (BEEF = Bitcoins Efficiently Formatted; STEAK = engine response format)
+- **BEEF/STEAK encoding** — Transaction encoding (BEEF = Background Evaluation Extended Format / BRC-62; STEAK = engine response format)
 - **GASP Integration** — Syncs with other overlay services using Graph Aware Sync Protocol
 - **SHIP/SLAP support** — Built-in peer discovery protocols
 
@@ -149,9 +149,9 @@ const storage = new KnexStorage({ knex })
 ## Related packages
 
 - [@bsv/overlay-express](./overlay-express.md) — HTTP server wrapper for Engine
-- [@bsv/overlay-topics](./topics.md) — Pre-built topic managers and lookup services
+- [@bsv/overlay-topics](./overlay-topics.md) — Pre-built topic managers and lookup services
 - [@bsv/overlay-discovery-services](./overlay-discovery-services.md) — SHIP/SLAP peer discovery
-- [@bsv/gasp](./gasp-core.md) — Graph Aware Sync Protocol
+- [@bsv/gasp](./gasp.md) — Graph Aware Sync Protocol
 
 ## Reference
 

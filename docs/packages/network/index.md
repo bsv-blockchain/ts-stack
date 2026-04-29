@@ -19,7 +19,7 @@ Connect to Teranode via private DHT and subscribe to real-time blockchain events
 
 | Package | Purpose |
 |---------|---------|
-| [@bsv/ts-p2p](./ts-p2p.md) | Subscribe to Teranode P2P topics via libp2p private DHT with gossipsub pub/sub messaging |
+| [@bsv/teranode-listener](./teranode-listener.md) | Subscribe to Teranode P2P topics via libp2p private DHT with gossipsub pub/sub messaging |
 
 ## What You Can Do
 
@@ -77,6 +77,6 @@ Use network packages when you need to:
 
 ## Next Steps
 
-- **[@bsv/ts-p2p](./ts-p2p.md)** — Real-time blockchain event subscription
+- **[@bsv/teranode-listener](./teranode-listener.md)** — Real-time blockchain event subscription
 - **[@bsv/overlay](../overlays/overlay.md)** — Indexing service integration
 - **[@bsv/sdk](https://github.com/bsv-blockchain/ts-sdk)** — Transaction/block deserialization

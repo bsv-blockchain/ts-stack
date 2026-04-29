@@ -85,7 +85,7 @@ const action = await wallet.createAction({
 
 // 3. App requests signature (wallet decides which UTXOs and private keys to use)
 const signed = await wallet.signAction({
-  actionReference: action.signableTransaction.reference
+  reference: action.signableTransaction.reference
 })
 
 // 4. App receives signatures and submits transaction to network
@@ -104,6 +104,52 @@ const identityKeyResult = await wallet.getPublicKey({
 const identityKey = identityKeyResult.publicKey
 // Use for signing/verifying in peer-to-peer handshakes
 ```
+
+## Labels vs. Tags
+
+BRC-100 uses two distinct metadata mechanisms that operate at different granularities:
+
+| Concept | Scope | Purpose | Query method |
+|---------|-------|---------|--------------|
+| **Labels** | Transaction (Action) | Categorize whole transactions | `listActions({ label })` |
+| **Tags** | Output (UTXO) | Track specific assets in a basket | `listOutputs({ tags })` |
+
+Labels and tags are mutually independent. An Action may carry labels without any of its outputs having tags, and vice versa.
+
+## Batching Workflows
+
+`createAction` supports two chaining options for constructing coordinated multi-transaction sequences:
+
+**`noSend: true`** — Prepare and sign a transaction without broadcasting. Returns a `signableTransaction.txid` handle for later use.
+
+```typescript
+const prepared = await wallet.createAction({
+  description: 'Token mint',
+  outputs: [...],
+  options: { noSend: true }
+})
+const preparedTxid = prepared.signableTransaction.txid
+```
+
+**`sendWith: [txid, ...]`** — Couple the current action with previously `noSend` transactions and broadcast all atomically.
+
+```typescript
+await wallet.createAction({
+  description: 'Final step — broadcast all',
+  outputs: [...],
+  options: { sendWith: [preparedTxid] }
+})
+```
+
+## Privileged Mode
+
+All keys are derived from the wallet's root using BRC-42 (BKDS). BRC-100 additionally reserves a **Privileged Mode** keyring for highly sensitive operations:
+
+- Identity key signing
+- Certificate issuance
+- High-trust transaction authorization
+
+Privileged-mode operations require explicit wallet UX approval. The privileged keyring is isolated from application keys — privileged key material is never accessible to application code.
 
 ## Conformance vectors
 

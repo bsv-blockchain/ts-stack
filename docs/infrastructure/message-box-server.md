@@ -157,5 +157,5 @@ No explicit health endpoint; monitor via:
 
 ## Source
 
-- [GitHub](https://github.com/bsv-stack/message-box-server)
+- [GitHub](https://github.com/bsv-blockchain/message-box-server)
 - [npm package](https://npmjs.com/package/@bsv/messagebox-server)

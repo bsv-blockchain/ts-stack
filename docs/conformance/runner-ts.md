@@ -249,5 +249,5 @@ The runner is configured for CI in `.github/workflows/conformance.yml`:
 ## Next Steps
 
 - [Vector Catalog](./vectors.md) — Browse available vectors
-- [Go Runner](./runner-go.md) — Run vectors in Go
+- [Go Runner](https://github.com/bsv-blockchain/go-sdk) — Run vectors in Go
 - [Contributing](./contributing-vectors.md) — Add new vectors

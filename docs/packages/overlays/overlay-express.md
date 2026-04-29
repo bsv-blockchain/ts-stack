@@ -163,9 +163,9 @@ server.configureWebUI({
 ## Related packages
 
 - [@bsv/overlay](./overlay.md) — Core Engine and interfaces
-- [@bsv/overlay-topics](./topics.md) — Pre-built topic managers and lookup services
+- [@bsv/overlay-topics](./overlay-topics.md) — Pre-built topic managers and lookup services
 - [@bsv/overlay-discovery-services](./overlay-discovery-services.md) — SHIP/SLAP implementation
-- [@bsv/gasp](./gasp-core.md) — Graph Aware Sync Protocol
+- [@bsv/gasp](./gasp.md) — Graph Aware Sync Protocol
 
 ## Reference
 

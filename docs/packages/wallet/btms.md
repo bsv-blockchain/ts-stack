@@ -14,7 +14,25 @@ github_repo: "https://github.com/bsv-blockchain/ts-stack"
 
 # @bsv/btms
 
-A modular library for issuing, sending, receiving, and burning UTXO-based tokens on the BSV blockchain. Provides high-level APIs for token operations while handling low-level details like PushDrop encoding, UTXO selection, transaction construction, and overlay service integration. Tokens are first-class on-chain objects identified by canonical asset IDs derived from transaction output references.
+BTMS — Basic Token Management System — is a modular library for issuing, sending, receiving, and burning UTXO-based tokens on the BSV blockchain. <!-- audio: Btms.m4a @ 00:00 -->
+
+## The wallet context
+
+BSV Desktop and BSV Browser present a **spend authorization modal** whenever BSV is spent from the default basket. Without token context, this modal shows only the raw satoshi amount of the UTXO — typically 1 satoshi for a BTMS token output. That's misleading: the real value is the token embedded in the output's locking script, not the sats funding it. <!-- audio: Btms.m4a @ 00:20 -->
+
+BTMS solves this per-token. A token issuer (e.g. a USD stablecoin issuer) ships a **BTMS module** — a small piece of code that:
+
+- retrieves any additional metadata needed to represent the token's true value (from a server or wallet storage)
+- defines how the wallet UX should display and gate authorization for that specific token type
+- integrates with the BRC-100 wallet permission system so users see "$1.00 USD" rather than "1 satoshi"
+
+This modular approach means no single token specification is hardcoded. Any token implementation can provide a BTMS module, and it automatically works with every BRC-100-compatible wallet in the ecosystem. <!-- audio: Btms.m4a @ 01:10 -->
+
+See [@bsv/btms-permission-module](./btms-permission-module.md) for the permission hook interface wallet builders register.
+
+---
+
+`@bsv/btms` handles the on-chain side: token lifecycle, UTXO selection, PushDrop encoding, and overlay service integration. Tokens are first-class on-chain objects identified by canonical asset IDs derived from transaction output references.
 
 ## Install
 

@@ -118,7 +118,7 @@ import { SetupWallet } from '@bsv/wallet-toolbox'
 export async function signAndBroadcast(wallet: any, action: any) {
   // Sign the action using wallet keys
   const signedAction = await wallet.signAction({
-    actionId: action.id
+    reference: action.signableTransaction.reference
   })
   
   console.log('Action signed:', signedAction)
@@ -267,7 +267,7 @@ async function main() {
   // Step 4: Sign the action
   console.log('\nStep 4: Signing action...')
   const signed = await wallet.signAction({
-    actionId: action.id
+    reference: action.signableTransaction.reference
   })
   console.log('Action signed and ready to broadcast')
   

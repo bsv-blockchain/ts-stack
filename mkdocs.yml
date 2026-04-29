@@ -1,5 +1,5 @@
 site_name: ts-stack
-site_description: BSV TypeScript monorepo — 27 production packages for building payment, identity, and data apps
+site_description: BSV TypeScript monorepo — production packages for building payment, identity, and data apps on BSV
 site_url: https://bsv-blockchain.github.io/ts-stack
 repo_url: https://github.com/bsv-blockchain/ts-stack
 repo_name: bsv-blockchain/ts-stack
@@ -64,6 +64,13 @@ nav:
     - Install: get-started/install.md
     - Choose your stack: get-started/choose-your-stack.md
     - Key concepts: get-started/concepts.md
+  - Architecture:
+    - architecture/index.md
+    - Stack Layers: architecture/layers.md
+    - BEEF (BRC-62): architecture/beef.md
+    - BRC-100 Wallet Interface: architecture/brc-100.md
+    - Identity & Auth: architecture/identity.md
+    - Conformance Pipeline: architecture/conformance.md
   - Packages:
     - packages/index.md
     - SDK:
@@ -75,23 +82,24 @@ nav:
       - "@bsv/btms": packages/wallet/btms.md
       - "@bsv/btms-permission-module": packages/wallet/btms-permission-module.md
       - "@bsv/wallet-relay": packages/wallet/wallet-relay.md
+      - "@bsv/wallet-toolbox-examples": packages/wallet/wallet-toolbox-examples.md
     - Network:
       - packages/network/index.md
-      - "@bsv/teranode-listener": packages/network/ts-p2p.md
+      - "@bsv/teranode-listener": packages/network/teranode-listener.md
     - Overlays:
       - packages/overlays/index.md
       - "@bsv/overlay": packages/overlays/overlay.md
       - "@bsv/overlay-express": packages/overlays/overlay-express.md
-      - "@bsv/overlay-topics": packages/overlays/topics.md
+      - "@bsv/overlay-topics": packages/overlays/overlay-topics.md
       - "@bsv/overlay-discovery-services": packages/overlays/overlay-discovery-services.md
-      - "@bsv/gasp": packages/overlays/gasp-core.md
+      - "@bsv/gasp": packages/overlays/gasp.md
       - "@bsv/btms-backend": packages/overlays/btms-backend.md
     - Messaging:
       - packages/messaging/index.md
       - "@bsv/message-box-client": packages/messaging/message-box-client.md
       - "@bsv/authsocket": packages/messaging/authsocket.md
       - "@bsv/authsocket-client": packages/messaging/authsocket-client.md
-      - "@bsv/paymail": packages/messaging/ts-paymail.md
+      - "@bsv/paymail": packages/messaging/paymail.md
     - Middleware:
       - packages/middleware/index.md
       - "@bsv/auth-express-middleware": packages/middleware/auth-express-middleware.md
@@ -99,10 +107,10 @@ nav:
       - "@bsv/402-pay": packages/middleware/402-pay.md
     - Helpers:
       - packages/helpers/index.md
-      - "@bsv/templates": packages/helpers/ts-templates.md
-      - "@bsv/did-client": packages/helpers/did-client.md
       - "@bsv/simple": packages/helpers/simple.md
-      - "@bsv/wallet-helper": packages/helpers/bsv-wallet-helper.md
+      - "@bsv/templates": packages/helpers/templates.md
+      - "@bsv/did-client": packages/helpers/did-client.md
+      - "@bsv/wallet-helper": packages/helpers/wallet-helper.md
       - "@bsv/amountinator": packages/helpers/amountinator.md
       - "@bsv/fund-wallet": packages/helpers/fund-wallet.md
   - Infrastructure:
@@ -113,6 +121,7 @@ nav:
     - uhrp-server-cloud-bucket: infrastructure/uhrp-server-cloud-bucket.md
     - wab: infrastructure/wab.md
     - wallet-infra: infrastructure/wallet-infra.md
+    - chaintracks-server: infrastructure/chaintracks-server.md
   - Specs:
     - specs/index.md
     - BRC-100 Wallet Interface: specs/brc-100-wallet.md
@@ -131,7 +140,6 @@ nav:
     - conformance/index.md
     - Vector catalog: conformance/vectors.md
     - TS runner: conformance/runner-ts.md
-    - Go runner: conformance/runner-go.md
     - Contributing vectors: conformance/contributing-vectors.md
   - Guides:
     - guides/index.md
@@ -146,6 +154,7 @@ nav:
     - about/versioning.md
     - about/contributing.md
     - about/doc-agent.md
+    - Documentation Sources: about/sources.md
 
 extra:
   social:
