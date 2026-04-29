@@ -16,3 +16,7 @@ cars_tmp_build_*/
 
 # MkDocs build output
 site/
+
+# Official BSVA brand kit reference (do not commit — too large; clean copies live alongside)
+docs/assets/images/BSVA Logos/
+docs/assets/images/Logo_Guidelines_Jan2026.pdf
