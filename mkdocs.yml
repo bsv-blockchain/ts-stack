@@ -7,7 +7,7 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  logo: assets/images/bsv-blockchain-logo.svg
+  logo: assets/images/bsva-linear-blue.png
   palette:
     - scheme: default
       primary: custom

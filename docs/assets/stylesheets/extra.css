@@ -76,9 +76,18 @@
 
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-  height: 28px;
+  height: 24px;
   width: auto;
   display: block;
+}
+
+/* Dark mode: swap to white logo for slate scheme */
+[data-md-color-scheme="slate"] .md-header__button.md-logo {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-md-color-scheme="slate"] .md-header__button.md-logo img {
+  content: url('/../images/bsva-linear-white.png');
 }
 
 /* Tabs row */
@@ -107,6 +116,12 @@
   overflow: hidden;
 }
 
+[data-md-color-scheme="slate"] .bsv-hero {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(122, 145, 255, 0.15), transparent 60%),
+    linear-gradient(160deg, #030727 0%, #050d3f 100%);
+}
+
 .bsv-hero::before {
   /* subtle grid texture */
   content: "";
@@ -123,6 +138,18 @@
   position: relative;
   max-width: 820px;
   margin: 0 auto;
+}
+
+.bsv-hero__logo {
+  max-width: 140px;
+  height: auto;
+  margin: 0 auto 2rem;
+  display: block;
+}
+
+/* Dark mode: use white stacked logo */
+[data-md-color-scheme="slate"] .bsv-hero__logo {
+  content: url('/../images/bsva-stacked-white.svg');
 }
 
 .bsv-hero__eyebrow {

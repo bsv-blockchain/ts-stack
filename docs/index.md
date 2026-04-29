@@ -12,7 +12,7 @@ tags: []
 
 <div class="bsv-hero" markdown="0">
   <div class="bsv-hero__inner">
-    <div class="bsv-hero__eyebrow">BSV Blockchain · TypeScript Stack</div>
+    <img class="bsv-hero__logo" src="assets/images/bsva-stacked-blue.svg" alt="BSV Association" />
     <h1 class="bsv-hero__title">Unleash the potential of <em>data-on-chain</em></h1>
     <p class="bsv-hero__lede">
       A TypeScript stack for building apps that move money, store data, and authenticate users on BSV.
