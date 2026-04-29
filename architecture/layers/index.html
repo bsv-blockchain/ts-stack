@@ -6,35 +6,35 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="BSV TypeScript monorepo — 27 production packages for building payment, identity, and data apps">
+        <meta name="description" content="BSV TypeScript monorepo — production packages for building payment, identity, and data apps on BSV">
       
       
       
-        <link rel="canonical" href="https://bsv-blockchain.github.io/ts-stack/packages/overlays/topics/">
+        <link rel="canonical" href="https://bsv-blockchain.github.io/ts-stack/architecture/layers/">
       
       
-        <link rel="prev" href="../overlay-express/">
+        <link rel="prev" href="../">
       
       
-        <link rel="next" href="../overlay-discovery-services/">
+        <link rel="next" href="../beef/">
       
       
         
       
       
-      <link rel="icon" href="../../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>@bsv/overlay-topics - ts-stack</title>
+        <title>Stack Layers - ts-stack</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/extra.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bsvoverlay-topics" class="md-skip">
+        <a href="#stack-layers" class="md-skip">
           Skip to content
         </a>
       
@@ -104,9 +104,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="ts-stack" class="md-header__button md-logo" aria-label="ts-stack" data-md-component="logo">
+    <a href="../.." title="ts-stack" class="md-header__button md-logo" aria-label="ts-stack" data-md-component="logo">
       
-  <img src="../../../assets/images/bsva-linear-blue.png" alt="logo">
+  <img src="../../assets/images/bsva-linear-blue.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              @bsv/overlay-topics
+              Stack Layers
             
           </span>
         </div>
@@ -236,7 +236,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../.." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -257,7 +257,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../get-started/" class="md-tabs__link">
+        <a href="../../get-started/" class="md-tabs__link">
           
   
   
@@ -281,7 +281,29 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../" class="md-tabs__link">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../packages/" class="md-tabs__link">
           
   
   
@@ -303,7 +325,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../infrastructure/" class="md-tabs__link">
+        <a href="../../infrastructure/" class="md-tabs__link">
           
   
   
@@ -325,7 +347,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../specs/" class="md-tabs__link">
+        <a href="../../specs/" class="md-tabs__link">
           
   
   
@@ -347,7 +369,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../conformance/" class="md-tabs__link">
+        <a href="../../conformance/" class="md-tabs__link">
           
   
   
@@ -369,7 +391,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../guides/" class="md-tabs__link">
+        <a href="../../guides/" class="md-tabs__link">
           
   
   
@@ -391,7 +413,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/" class="md-tabs__link">
+        <a href="../../reference/" class="md-tabs__link">
           
   
   
@@ -413,7 +435,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../about/versioning/" class="md-tabs__link">
+        <a href="../../about/versioning/" class="md-tabs__link">
           
   
   
@@ -449,9 +471,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="ts-stack" class="md-nav__button md-logo" aria-label="ts-stack" data-md-component="logo">
+    <a href="../.." title="ts-stack" class="md-nav__button md-logo" aria-label="ts-stack" data-md-component="logo">
       
-  <img src="../../../assets/images/bsva-linear-blue.png" alt="logo">
+  <img src="../../assets/images/bsva-linear-blue.png" alt="logo">
 
     </a>
     ts-stack
@@ -478,7 +500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -543,7 +565,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../get-started/" class="md-nav__link ">
+            <a href="../../get-started/" class="md-nav__link ">
               
   
   
@@ -594,7 +616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/install/" class="md-nav__link">
+      <a href="../../get-started/install/" class="md-nav__link">
         
   
   
@@ -629,7 +651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/choose-your-stack/" class="md-nav__link">
+      <a href="../../get-started/choose-your-stack/" class="md-nav__link">
         
   
   
@@ -664,7 +686,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/concepts/" class="md-nav__link">
+      <a href="../../get-started/concepts/" class="md-nav__link">
         
   
   
@@ -724,10 +746,6 @@
       
         
       
-        
-      
-        
-      
     
     
     
@@ -748,14 +766,14 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
   <span class="md-ellipsis">
     
   
-    Packages
+    Architecture
   
 
     
@@ -784,6 +802,387 @@
             <span class="md-nav__icon md-icon"></span>
             
   
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stack Layers
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stack Layers
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#foundation-bsvsdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Foundation: @bsv/sdk
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#brc-100-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BRC-100 Boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wallet-builder-toolkit-bsvwallet-toolbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wallet Builder Toolkit: @bsv/wallet-toolbox
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#application-layer-bsvsimple" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Application Layer: @bsv/simple
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../beef/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BEEF (BRC-62)
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brc-100/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-100 Wallet Interface
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Auth
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance Pipeline
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../packages/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
     Packages
   
 
@@ -813,23 +1212,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../sdk/" class="md-nav__link ">
+            <a href="../../packages/sdk/" class="md-nav__link ">
               
   
   
@@ -854,14 +1250,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -880,7 +1276,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdk/bsv-sdk/" class="md-nav__link">
+      <a href="../../packages/sdk/bsv-sdk/" class="md-nav__link">
         
   
   
@@ -937,29 +1333,28 @@
       
         
       
+        
+      
     
     
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
         
           
-          
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../wallet/" class="md-nav__link ">
+            <a href="../../packages/wallet/" class="md-nav__link ">
               
   
   
@@ -984,14 +1379,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1010,7 +1405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/wallet-toolbox/" class="md-nav__link">
+      <a href="../../packages/wallet/wallet-toolbox/" class="md-nav__link">
         
   
   
@@ -1045,7 +1440,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/btms/" class="md-nav__link">
+      <a href="../../packages/wallet/btms/" class="md-nav__link">
         
   
   
@@ -1080,7 +1475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/btms-permission-module/" class="md-nav__link">
+      <a href="../../packages/wallet/btms-permission-module/" class="md-nav__link">
         
   
   
@@ -1115,7 +1510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/wallet-relay/" class="md-nav__link">
+      <a href="../../packages/wallet/wallet-relay/" class="md-nav__link">
         
   
   
@@ -1123,6 +1518,41 @@
     
   
     @bsv/wallet-relay
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/wallet/wallet-toolbox-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/wallet-toolbox-examples
   
 
     
@@ -1172,23 +1602,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../network/" class="md-nav__link ">
+            <a href="../../packages/network/" class="md-nav__link ">
               
   
   
@@ -1213,14 +1640,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1239,7 +1666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../network/ts-p2p/" class="md-nav__link">
+      <a href="../../packages/network/teranode-listener/" class="md-nav__link">
         
   
   
@@ -1279,8 +1706,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1308,21 +1733,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../packages/overlays/" class="md-nav__link ">
               
   
   
@@ -1347,14 +1771,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1373,7 +1797,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overlay/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay/" class="md-nav__link">
         
   
   
@@ -1408,7 +1832,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overlay-express/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-express/" class="md-nav__link">
         
   
   
@@ -1440,44 +1864,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/overlay-topics
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../packages/overlays/overlay-topics/" class="md-nav__link">
         
   
   
@@ -1500,197 +1890,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-provides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it provides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#register-multiple-topics-in-overlayexpress" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Register multiple topics in OverlayExpress
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#query-by-topic" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query by topic
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#manual-topic-manager-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Manual topic manager use
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key concepts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-not-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When NOT to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec-conformance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec conformance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-pitfalls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common pitfalls
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#available-topics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Available topics
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related packages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1703,7 +1902,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../overlay-discovery-services/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-discovery-services/" class="md-nav__link">
         
   
   
@@ -1738,7 +1937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../gasp-core/" class="md-nav__link">
+      <a href="../../packages/overlays/gasp/" class="md-nav__link">
         
   
   
@@ -1773,7 +1972,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../btms-backend/" class="md-nav__link">
+      <a href="../../packages/overlays/btms-backend/" class="md-nav__link">
         
   
   
@@ -1836,23 +2035,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_6" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../messaging/" class="md-nav__link ">
+            <a href="../../packages/messaging/" class="md-nav__link ">
               
   
   
@@ -1870,14 +2066,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_6" id="__nav_3_6_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1896,7 +2092,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/message-box-client/" class="md-nav__link">
+      <a href="../../packages/messaging/message-box-client/" class="md-nav__link">
         
   
   
@@ -1931,7 +2127,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/authsocket/" class="md-nav__link">
+      <a href="../../packages/messaging/authsocket/" class="md-nav__link">
         
   
   
@@ -1966,7 +2162,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/authsocket-client/" class="md-nav__link">
+      <a href="../../packages/messaging/authsocket-client/" class="md-nav__link">
         
   
   
@@ -2001,7 +2197,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/ts-paymail/" class="md-nav__link">
+      <a href="../../packages/messaging/paymail/" class="md-nav__link">
         
   
   
@@ -2062,23 +2258,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../middleware/" class="md-nav__link ">
+            <a href="../../packages/middleware/" class="md-nav__link ">
               
   
   
@@ -2096,14 +2289,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_7" id="__nav_3_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2122,7 +2315,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/auth-express-middleware/" class="md-nav__link">
+      <a href="../../packages/middleware/auth-express-middleware/" class="md-nav__link">
         
   
   
@@ -2157,7 +2350,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/payment-express-middleware/" class="md-nav__link">
+      <a href="../../packages/middleware/payment-express-middleware/" class="md-nav__link">
         
   
   
@@ -2192,7 +2385,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/402-pay/" class="md-nav__link">
+      <a href="../../packages/middleware/402-pay/" class="md-nav__link">
         
   
   
@@ -2259,23 +2452,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../helpers/" class="md-nav__link ">
+            <a href="../../packages/helpers/" class="md-nav__link ">
               
   
   
@@ -2293,14 +2483,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_8" id="__nav_3_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2319,77 +2509,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/ts-templates/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/templates
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../helpers/did-client/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/did-client
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../helpers/simple/" class="md-nav__link">
+      <a href="../../packages/helpers/simple/" class="md-nav__link">
         
   
   
@@ -2424,7 +2544,77 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/bsv-wallet-helper/" class="md-nav__link">
+      <a href="../../packages/helpers/templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/templates
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/helpers/did-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/did-client
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/helpers/wallet-helper/" class="md-nav__link">
         
   
   
@@ -2459,7 +2649,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/amountinator/" class="md-nav__link">
+      <a href="../../packages/helpers/amountinator/" class="md-nav__link">
         
   
   
@@ -2494,7 +2684,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/fund-wallet/" class="md-nav__link">
+      <a href="../../packages/helpers/fund-wallet/" class="md-nav__link">
         
   
   
@@ -2562,6 +2752,8 @@
       
         
       
+        
+      
     
     
     
@@ -2577,11 +2769,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../infrastructure/" class="md-nav__link ">
+            <a href="../../infrastructure/" class="md-nav__link ">
               
   
   
@@ -2606,14 +2798,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2632,7 +2824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/message-box-server/" class="md-nav__link">
+      <a href="../../infrastructure/message-box-server/" class="md-nav__link">
         
   
   
@@ -2667,7 +2859,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/overlay-server/" class="md-nav__link">
+      <a href="../../infrastructure/overlay-server/" class="md-nav__link">
         
   
   
@@ -2702,7 +2894,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/uhrp-server-basic/" class="md-nav__link">
+      <a href="../../infrastructure/uhrp-server-basic/" class="md-nav__link">
         
   
   
@@ -2737,7 +2929,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/uhrp-server-cloud-bucket/" class="md-nav__link">
+      <a href="../../infrastructure/uhrp-server-cloud-bucket/" class="md-nav__link">
         
   
   
@@ -2772,7 +2964,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/wab/" class="md-nav__link">
+      <a href="../../infrastructure/wab/" class="md-nav__link">
         
   
   
@@ -2807,7 +2999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/wallet-infra/" class="md-nav__link">
+      <a href="../../infrastructure/wallet-infra/" class="md-nav__link">
         
   
   
@@ -2815,6 +3007,41 @@
     
   
     wallet-infra
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../infrastructure/chaintracks-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    chaintracks-server
   
 
     
@@ -2894,11 +3121,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../specs/" class="md-nav__link ">
+            <a href="../../specs/" class="md-nav__link ">
               
   
   
@@ -2923,14 +3150,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2949,7 +3176,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-100-wallet/" class="md-nav__link">
+      <a href="../../specs/brc-100-wallet/" class="md-nav__link">
         
   
   
@@ -2984,7 +3211,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/overlay-http/" class="md-nav__link">
+      <a href="../../specs/overlay-http/" class="md-nav__link">
         
   
   
@@ -3019,7 +3246,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/message-box-http/" class="md-nav__link">
+      <a href="../../specs/message-box-http/" class="md-nav__link">
         
   
   
@@ -3054,7 +3281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/authsocket/" class="md-nav__link">
+      <a href="../../specs/authsocket/" class="md-nav__link">
         
   
   
@@ -3089,7 +3316,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-31-auth/" class="md-nav__link">
+      <a href="../../specs/brc-31-auth/" class="md-nav__link">
         
   
   
@@ -3124,7 +3351,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-29-peer-payment/" class="md-nav__link">
+      <a href="../../specs/brc-29-peer-payment/" class="md-nav__link">
         
   
   
@@ -3159,7 +3386,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-121-402/" class="md-nav__link">
+      <a href="../../specs/brc-121-402/" class="md-nav__link">
         
   
   
@@ -3194,7 +3421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/arc-broadcast/" class="md-nav__link">
+      <a href="../../specs/arc-broadcast/" class="md-nav__link">
         
   
   
@@ -3229,7 +3456,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/merkle-service/" class="md-nav__link">
+      <a href="../../specs/merkle-service/" class="md-nav__link">
         
   
   
@@ -3264,7 +3491,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/storage-adapter/" class="md-nav__link">
+      <a href="../../specs/storage-adapter/" class="md-nav__link">
         
   
   
@@ -3299,7 +3526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/gasp-sync/" class="md-nav__link">
+      <a href="../../specs/gasp-sync/" class="md-nav__link">
         
   
   
@@ -3334,7 +3561,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/uhrp/" class="md-nav__link">
+      <a href="../../specs/uhrp/" class="md-nav__link">
         
   
   
@@ -3388,8 +3615,6 @@
       
         
       
-        
-      
     
     
     
@@ -3405,11 +3630,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../conformance/" class="md-nav__link ">
+            <a href="../../conformance/" class="md-nav__link ">
               
   
   
@@ -3434,14 +3659,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3460,7 +3685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/vectors/" class="md-nav__link">
+      <a href="../../conformance/vectors/" class="md-nav__link">
         
   
   
@@ -3495,7 +3720,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/runner-ts/" class="md-nav__link">
+      <a href="../../conformance/runner-ts/" class="md-nav__link">
         
   
   
@@ -3530,42 +3755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/runner-go/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Go runner
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../conformance/contributing-vectors/" class="md-nav__link">
+      <a href="../../conformance/contributing-vectors/" class="md-nav__link">
         
   
   
@@ -3636,11 +3826,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../guides/" class="md-nav__link ">
+            <a href="../../guides/" class="md-nav__link ">
               
   
   
@@ -3665,14 +3855,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3691,7 +3881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/wallet-aware-app/" class="md-nav__link">
+      <a href="../../guides/wallet-aware-app/" class="md-nav__link">
         
   
   
@@ -3726,7 +3916,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/run-overlay-node/" class="md-nav__link">
+      <a href="../../guides/run-overlay-node/" class="md-nav__link">
         
   
   
@@ -3761,7 +3951,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/peer-to-peer-messaging/" class="md-nav__link">
+      <a href="../../guides/peer-to-peer-messaging/" class="md-nav__link">
         
   
   
@@ -3796,7 +3986,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/http-402-payments/" class="md-nav__link">
+      <a href="../../guides/http-402-payments/" class="md-nav__link">
         
   
   
@@ -3861,11 +4051,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../reference/" class="md-nav__link ">
+            <a href="../../reference/" class="md-nav__link ">
               
   
   
@@ -3890,14 +4080,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3916,7 +4106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/brc-index/" class="md-nav__link">
+      <a href="../../reference/brc-index/" class="md-nav__link">
         
   
   
@@ -3966,6 +4156,8 @@
       
         
       
+        
+      
     
     
     
@@ -3981,10 +4173,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
             
   
   
@@ -4002,8 +4194,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4020,7 +4212,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/versioning/" class="md-nav__link">
+      <a href="../../about/versioning/" class="md-nav__link">
         
   
   
@@ -4055,7 +4247,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/contributing/" class="md-nav__link">
+      <a href="../../about/contributing/" class="md-nav__link">
         
   
   
@@ -4090,7 +4282,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/doc-agent/" class="md-nav__link">
+      <a href="../../about/doc-agent/" class="md-nav__link">
         
   
   
@@ -4110,6 +4302,34 @@
     <span class="md-status md-status--stable"></span>
   
 
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Sources
+  
+
+    
+  </span>
+  
   
 
       </a>
@@ -4152,10 +4372,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
+  <a href="#foundation-bsvsdk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install
+        Foundation: @bsv/sdk
       
     </span>
   </a>
@@ -4163,10 +4383,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#brc-100-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick start
+        BRC-100 Boundary
       
     </span>
   </a>
@@ -4174,10 +4394,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-provides" class="md-nav__link">
+  <a href="#wallet-builder-toolkit-bsvwallet-toolbox" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it provides
+        Wallet Builder Toolkit: @bsv/wallet-toolbox
       
     </span>
   </a>
@@ -4185,60 +4405,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
+  <a href="#application-layer-bsvsimple" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#register-multiple-topics-in-overlayexpress" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Register multiple topics in OverlayExpress
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#query-by-topic" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query by topic
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#manual-topic-manager-use" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Manual topic manager use
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key concepts
+        Application Layer: @bsv/simple
       
     </span>
   </a>
@@ -4246,76 +4416,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this" class="md-nav__link">
+  <a href="#related" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-not-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When NOT to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec-conformance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec conformance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-pitfalls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common pitfalls
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#available-topics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Available topics
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related packages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference
+        Related
       
     </span>
   </a>
@@ -4342,164 +4446,127 @@
   
 
 
-<h1 id="bsvoverlay-topics">@bsv/overlay-topics<a class="headerlink" href="#bsvoverlay-topics" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p>Canonical collection of pre-built BSV overlay topic managers and lookup services for identity, tokens, supply chain, messaging, and more.</p>
-</blockquote>
-<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>npm<span class="w"> </span>install<span class="w"> </span>@bsv/overlay-topics
+<h1 id="stack-layers">Stack Layers<a class="headerlink" href="#stack-layers" title="Permanent link">&para;</a></h1>
+<p>The stack is organized in three primary layers with supporting components that connect horizontally.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌─────────────────────────────────────────────────────────────────┐
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│                   APPLICATION LAYER                              │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│        @bsv/simple/browser    @bsv/simple/server                │
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│    (connects to browser wallet)  (self-custodial agent)         │
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>└────────────────────────┬────────────────────────────────────────┘
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                         │ BRC-100 interface
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>┌────────────────────────▼────────────────────────────────────────┐
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│              WALLET BUILDER TOOLKIT                              │
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│                  @bsv/wallet-toolbox                             │
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   WalletStorageManager + persistence providers + Monitor        │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└────────────────────────┬────────────────────────────────────────┘
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                         │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>┌────────────────────────▼────────────────────────────────────────┐
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│                   FOUNDATION: @bsv/sdk                           │
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│   secp256k1/r1 · hashing · Script engine · transactions         │
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│   BEEF (BRC-62) · BUMP (BRC-74) · BRC-42 key derivation         │
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│   ARC broadcaster · Chaintracks client                          │
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>└─────────────────────────────────────────────────────────────────┘
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>Adjacent capabilities (use the BRC-100 interface or @bsv/sdk directly):
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>  DATA OVERLAYS                          P2P MESSAGING &amp; PAYMENTS
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>  @bsv/overlay                           @bsv/message-box-client
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>  @bsv/overlay-express                   @bsv/authsocket
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>  @bsv/overlay-topics                    @bsv/paymail
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>  Topic Manager / Lookup Service         BRC-29 payment derivation
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>  SHIP/SLAP discovery                    BRC-103/104 mutual auth
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>  IDENTITY                               MONETIZATION
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>  @bsv/auth-express-middleware           @bsv/402-pay
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>  BRC-31 HTTP handshake                  @bsv/payment-express-middleware
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>  BRC-103/104 Peer framework             BRC-121 HTTP 402
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>  TOKENS                                 STORAGE
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>  @bsv/btms                              @bsv/overlay-topics (UHRP)
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>  @bsv/btms-permission-module            Universal Hash Resolution (BRC-26)
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>  BRC-48 PushDrop protocol
 </code></pre></div>
-<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">HelloWorldTopicManager</span><span class="p">,</span><span class="w"> </span><span class="nx">createHelloWorldLookupService</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/overlay-topics&#39;</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">BTMSTopicManager</span><span class="p">,</span><span class="w"> </span><span class="nx">createBTMSLookupService</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/overlay-topics&#39;</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">helloManager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">HelloWorldTopicManager</span><span class="p">()</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">const</span><span class="w"> </span><span class="nx">helloService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">createHelloWorldLookupService</span><span class="p">(</span><span class="nx">mongoDb</span><span class="p">)</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">btmsManager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">BTMSTopicManager</span><span class="p">()</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="kd">const</span><span class="w"> </span><span class="nx">btmsService</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">createBTMSLookupService</span><span class="p">(</span><span class="nx">mongoDb</span><span class="p">)</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kd">const</span><span class="w"> </span><span class="nx">results</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">btmsService</span><span class="p">.</span><span class="nx">lookup</span><span class="p">({</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nx">service</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;ls_btms&#39;</span><span class="p">,</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nx">query</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">assetId</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;txid.0&#39;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">})</span>
-</code></pre></div>
-<h2 id="what-it-provides">What it provides<a class="headerlink" href="#what-it-provides" title="Permanent link">&para;</a></h2>
+<h2 id="foundation-bsvsdk">Foundation: @bsv/sdk<a class="headerlink" href="#foundation-bsvsdk" title="Permanent link">&para;</a></h2>
+<p><code>@bsv/sdk</code> is the only zero-dependency package in the stack. It provides every primitive the other layers build on:</p>
 <ul>
-<li><strong>20+ topic managers</strong> — Pre-built implementations (HelloWorld, DID, BTMS, KVStore, SupplyChain, UHRP, UMP, ProtoMap, and more)</li>
-<li><strong>Lookup service factories</strong> — Each topic includes MongoDB-backed lookup service</li>
-<li><strong>Type-safe queries</strong> — Each topic defines its own Query and Record types</li>
-<li><strong>PushDrop encoding</strong> — All topics use standardized data encoding for consistency</li>
-<li><strong>Auto-indexing</strong> — Lookup services auto-create MongoDB indices for efficient queries</li>
-<li><strong>Complete documentation</strong> — Each topic includes metadata and protocol docs</li>
+<li><strong>Cryptography</strong> — secp256k1 and secp256r1 ECDSA, Schnorr, ECDH; SHA-256/512, RIPEMD-160, HMAC</li>
+<li><strong>Script engine</strong> — Full Bitcoin Script interpreter and template system</li>
+<li><strong>Transactions</strong> — Transaction builder, serialization, fee model, UTXO handling</li>
+<li><strong>BEEF</strong> — <code>Beef</code> class: BRC-62 encoding/decoding, streaming validation ordering</li>
+<li><strong>Merkle paths</strong> — <code>MerklePath</code> class: BRC-74 BUMP format, compound path support</li>
+<li><strong>Key derivation</strong> — BRC-42 BKDS, BRC-43 security levels</li>
+<li><strong>Network</strong> — <code>ArcBroadcaster</code> for transaction submission; <code>ChaintracksClient</code> for block headers</li>
+<li><strong>BRC-100 types</strong> — Interface definitions consumed by wallet-toolbox and wallet clients</li>
 </ul>
-<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
-<h3 id="register-multiple-topics-in-overlayexpress">Register multiple topics in OverlayExpress<a class="headerlink" href="#register-multiple-topics-in-overlayexpress" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">import</span><span class="w"> </span><span class="nx">OverlayExpress</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/overlay-express&#39;</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nx">HelloWorldTopicManager</span><span class="p">,</span><span class="w"> </span><span class="nx">createHelloWorldLookupService</span><span class="p">,</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nx">DIDTopicManager</span><span class="p">,</span><span class="w"> </span><span class="nx">createDIDLookupService</span><span class="p">,</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nx">KVStoreTopicManager</span><span class="p">,</span><span class="w"> </span><span class="nx">createKVStoreLookupService</span><span class="p">,</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nx">BTMSTopicManager</span><span class="p">,</span><span class="w"> </span><span class="nx">createBTMSLookupService</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/overlay-topics&#39;</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="kd">const</span><span class="w"> </span><span class="nx">server</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">OverlayExpress</span><span class="p">(</span><span class="s1">&#39;mynode&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">privateKey</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;https://example.com&#39;</span><span class="p">)</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nx">server</span><span class="p">.</span><span class="nx">configureTopicManager</span><span class="p">(</span><span class="s1">&#39;tm_hello&#39;</span><span class="p">,</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">HelloWorldTopicManager</span><span class="p">())</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nx">server</span><span class="p">.</span><span class="nx">configureTopicManager</span><span class="p">(</span><span class="s1">&#39;tm_did&#39;</span><span class="p">,</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">DIDTopicManager</span><span class="p">())</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nx">server</span><span class="p">.</span><span class="nx">configureTopicManager</span><span class="p">(</span><span class="s1">&#39;tm_kvstore&#39;</span><span class="p">,</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">KVStoreTopicManager</span><span class="p">())</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nx">server</span><span class="p">.</span><span class="nx">configureTopicManager</span><span class="p">(</span><span class="s1">&#39;tm_btms&#39;</span><span class="p">,</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">BTMSTopicManager</span><span class="p">())</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">await</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">configureLookupServiceWithMongo</span><span class="p">(</span><span class="s1">&#39;ls_hello&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">createHelloWorldLookupService</span><span class="p">(</span><span class="nx">db</span><span class="p">))</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="k">await</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">configureLookupServiceWithMongo</span><span class="p">(</span><span class="s1">&#39;ls_did&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">createDIDLookupService</span><span class="p">(</span><span class="nx">db</span><span class="p">))</span>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="k">await</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">configureLookupServiceWithMongo</span><span class="p">(</span><span class="s1">&#39;ls_kvstore&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">createKVStoreLookupService</span><span class="p">(</span><span class="nx">db</span><span class="p">))</span>
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="k">await</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">configureLookupServiceWithMongo</span><span class="p">(</span><span class="s1">&#39;ls_btms&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">db</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="nx">createBTMSLookupService</span><span class="p">(</span><span class="nx">db</span><span class="p">))</span>
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
-<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="k">await</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">configureEngine</span><span class="p">()</span>
-<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="k">await</span><span class="w"> </span><span class="nx">server</span><span class="p">.</span><span class="nx">start</span><span class="p">()</span>
-</code></pre></div>
-<h3 id="query-by-topic">Query by topic<a class="headerlink" href="#query-by-topic" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">// DID query</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">didResults</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">didService</span><span class="p">.</span><span class="nx">lookup</span><span class="p">({</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nx">service</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;ls_did&#39;</span><span class="p">,</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nx">query</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* topic-specific */</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">})</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1">// KVStore query</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="kd">const</span><span class="w"> </span><span class="nx">kvResults</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">kvService</span><span class="p">.</span><span class="nx">lookup</span><span class="p">({</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nx">service</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;ls_kvstore&#39;</span><span class="p">,</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nx">query</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">key</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;mykey&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">owner</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;03abc123...&#39;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">})</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1">// Supply chain query</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="kd">const</span><span class="w"> </span><span class="nx">scResults</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">scService</span><span class="p">.</span><span class="nx">lookup</span><span class="p">({</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="nx">service</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;ls_supplychain&#39;</span><span class="p">,</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="nx">query</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">productId</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;abc123&#39;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="p">})</span>
-</code></pre></div>
-<h3 id="manual-topic-manager-use">Manual topic manager use<a class="headerlink" href="#manual-topic-manager-use" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">manager</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">DIDTopicManager</span><span class="p">()</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">admittance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">manager</span><span class="p">.</span><span class="nx">identifyAdmissibleOutputs</span><span class="p">(</span><span class="nx">beef</span><span class="p">,</span><span class="w"> </span><span class="p">[])</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">// Expects 2-field PushDrop: [serialNumber, signature]</span>
-</code></pre></div>
-<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
+<p>No dependencies means no <code>node_modules</code> vulnerabilities in the cryptographic core.</p>
+<h2 id="brc-100-boundary">BRC-100 Boundary<a class="headerlink" href="#brc-100-boundary" title="Permanent link">&para;</a></h2>
+<p>The BRC-100 wallet interface is the single most important seam in the stack. It separates:</p>
 <ul>
-<li><strong>Topic managers</strong> — Validate which outputs are protocol-valid (implements TopicManager interface)</li>
-<li><strong>Lookup services</strong> — Index and query admitted outputs in MongoDB (implements LookupService interface)</li>
-<li><strong>PushDrop encoding</strong> — All topics use PushDrop format for structured data + signature/lock</li>
-<li><strong>Protocol-specific fields</strong> — Each topic defines what fields it expects (e.g., DID requires [serialNumber, signature])</li>
-<li><strong>Query types</strong> — Each topic defines type-safe Query and Record types</li>
-<li><strong>Lookup factories</strong> — <code>create*LookupService(db)</code> functions are async and return configured services</li>
-<li><strong>MongoDB indexing</strong> — Services auto-create indices on frequently-queried fields</li>
+<li><strong>Above</strong> — Application business logic. Uses <code>createAction</code>, <code>signAction</code>, <code>listOutputs</code>, <code>listActions</code>, <code>internalizeAction</code>, and cryptographic primitives. Does not manage keys or storage.</li>
+<li><strong>Below</strong> — Wallet/key management. Implements storage, signing, key derivation, UTXO selection, Merkle proof acquisition. Does not know what the application is building.</li>
 </ul>
-<h2 id="when-to-use-this">When to use this<a class="headerlink" href="#when-to-use-this" title="Permanent link">&para;</a></h2>
+<p>Any BRC-100-compliant wallet can be swapped below this boundary without changing application code.</p>
+<h2 id="wallet-builder-toolkit-bsvwallet-toolbox">Wallet Builder Toolkit: @bsv/wallet-toolbox<a class="headerlink" href="#wallet-builder-toolkit-bsvwallet-toolbox" title="Permanent link">&para;</a></h2>
+<p><code>@bsv/wallet-toolbox</code> is not a single monolithic wallet. It is a set of composable modules:</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WalletStorageManager</code></td>
+<td>Orchestrates persistence providers (active + backup + incremental sync)</td>
+</tr>
+<tr>
+<td><code>KnexWalletStorage</code></td>
+<td>SQL persistence (SQLite, MySQL, PostgreSQL)</td>
+</tr>
+<tr>
+<td><code>IndexedDBWalletStorage</code></td>
+<td>Browser persistence</td>
+</tr>
+<tr>
+<td><code>RemoteWalletStorage</code></td>
+<td>Remote storage over HTTPS (for relay setups)</td>
+</tr>
+<tr>
+<td><code>Monitor</code></td>
+<td>Background daemon: confirms transactions, acquires Merkle proofs, rebroadcasts stalled txs</td>
+</tr>
+<tr>
+<td><code>PrivilegedKeyManager</code></td>
+<td>Handles the privileged-mode keyring for identity operations</td>
+</tr>
+<tr>
+<td><code>ShamirWalletManager</code></td>
+<td>Shamir secret sharing for key backup</td>
+</tr>
+<tr>
+<td><code>WalletSigner</code></td>
+<td>Bridges BRC-100 <code>signAction</code> to <code>@bsv/sdk</code> signing internals</td>
+</tr>
+<tr>
+<td><code>Services</code></td>
+<td>Container wiring ARC, Chaintracks, WhatsOnChain</td>
+</tr>
+</tbody>
+</table>
+<p>Wallet builders compose these into a BRC-100 <code>Wallet</code>. The resulting object is the same interface that <code>@bsv/simple</code> and other app-layer packages use.</p>
+<h2 id="application-layer-bsvsimple">Application Layer: @bsv/simple<a class="headerlink" href="#application-layer-bsvsimple" title="Permanent link">&para;</a></h2>
+<p><code>@bsv/simple</code> is the recommended entry point for most application developers. The primary interface for BSV application development is <strong><code>WalletClient</code></strong> — the object returned by <code>@bsv/simple/browser</code>. Application developers instantiate <code>WalletClient</code> in their own code; within a browser app it connects to the user's wallet over <code>localhost</code> or <code>window.postMessage</code>, discovers whichever BRC-100 wallet is available, and exposes the full wallet interface (<code>createAction</code>, <code>listOutputs</code>, etc.) without the app ever holding private keys. <!-- audio: ts-stack.m4a @ 00:00 --></p>
+<p><code>@bsv/wallet-toolbox</code> is for developers building wallets, not applications. If you have a strong opinion about wallet UX or are building a competing wallet implementation, <code>wallet-toolbox</code> is where you start. <!-- audio: ts-stack.m4a @ 00:00 --></p>
+<p>Two entry points in <code>@bsv/simple</code>:</p>
+<p><strong><code>@bsv/simple/browser</code></strong> — <code>WalletClient</code> substrate. Communicates with the user's BSV Browser wallet via BRC-100 over <code>localhost</code> or <code>window.postMessage</code>. The app never holds private keys. Methods: <code>createWallet</code>, <code>Wallet</code>, <code>Overlay</code>, <code>Certifier</code>, <code>DID</code>, <code>CredentialSchema</code>, <code>CredentialIssuer</code>, <code>MemoryRevocationStore</code>.</p>
+<p><strong><code>@bsv/simple/server</code></strong> — Manages a self-custodial server wallet backed by file persistence. Suitable for automated agents, backend services, and MCP servers. Methods: <code>ServerWallet</code>, <code>ServerWalletManager</code>, <code>FileRevocationStore</code>, handler factories for identity registry, DID resolver, credentials.</p>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Running an overlay node with multiple topics</li>
-<li>Need pre-built, tested topic implementations</li>
-<li>Want standardized PushDrop encoding</li>
-<li>Building applications on top of overlay services</li>
-<li>Need token management (BTMS), identity (DID), or key-value storage</li>
-</ul>
-<h2 id="when-not-to-use-this">When NOT to use this<a class="headerlink" href="#when-not-to-use-this" title="Permanent link">&para;</a></h2>
-<ul>
-<li>For custom protocol topics — implement TopicManager/LookupService directly</li>
-<li>If you don't need lookup queries — just use topic managers</li>
-<li>Without MongoDB backend — lookup services require MongoDB</li>
-</ul>
-<h2 id="spec-conformance">Spec conformance<a class="headerlink" href="#spec-conformance" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>DID</strong> — W3C-compliant decentralized identifiers (serialNumber as DID identifier)</li>
-<li><strong>BTMS</strong> — Basic Token Management System protocol (issuance, transfer, burn)</li>
-<li><strong>KVStore</strong> — Key-value protocol-agnostic storage</li>
-<li><strong>ProtoMap</strong> — Registry of wallet protocols with deserialization support</li>
-<li><strong>UHRP</strong> — Unified Hash Registry Protocol</li>
-<li><strong>UMP</strong> — Universal Messenger Protocol</li>
-<li><strong>All topics</strong> — Use PushDrop encoding per @bsv/sdk</li>
-</ul>
-<h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>Lookup factories are async</strong> — <code>create*LookupService()</code> returns Promise; must await</li>
-<li><strong>MongoDB required</strong> — All lookup services assume MongoDB; no Knex fallback</li>
-<li><strong>PushDrop validation</strong> — Each topic validates structure; malformed scripts are rejected</li>
-<li><strong>Field count varies</strong> — DID requires exactly 2 fields; BTMS requires 2-4; violations rejected</li>
-<li><strong>BTMS asset semantics</strong> — "ISSUE" = new token; otherwise must match previous issuance txid.outputIndex</li>
-<li><strong>Signature validation</strong> — Most topics verify signatures; invalid signatures cause rejection</li>
-</ol>
-<h2 id="available-topics">Available topics<a class="headerlink" href="#available-topics" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>any</strong> — Catch-all topic accepting any PushDrop output</li>
-<li><strong>btms</strong> — Basic Token Management System (token issuance/transfer)</li>
-<li><strong>apps</strong> — Application catalog</li>
-<li><strong>basketmap</strong> — Logical grouping of tokens</li>
-<li><strong>certmap</strong> — Certificate mapping</li>
-<li><strong>desktopintegrity</strong> — Desktop integrity verification</li>
-<li><strong>did</strong> — Decentralized Identifiers</li>
-<li><strong>fractionalize</strong> — Token fractionalization</li>
-<li><strong>hello</strong> — Hello World demo topic</li>
-<li><strong>identity</strong> — Identity attributes and claims</li>
-<li><strong>kvstore</strong> — Key-value store</li>
-<li><strong>message-box</strong> — Inbox/messaging</li>
-<li><strong>monsterbattle</strong> — Game state (demo)</li>
-<li><strong>protomap</strong> — Protocol registry</li>
-<li><strong>slackthreads</strong> — Slack thread indexing</li>
-<li><strong>supplychain</strong> — Supply chain tracking</li>
-<li><strong>uhrp</strong> — Unified Hash Registry Protocol</li>
-<li><strong>ump</strong> — Universal Messenger Protocol</li>
-<li><strong>utility-tokens</strong> — Fungible token demo</li>
-<li><strong>walletconfig</strong> — Wallet configuration</li>
-</ul>
-<h2 id="related-packages">Related packages<a class="headerlink" href="#related-packages" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../overlay/">@bsv/overlay</a> — Core Engine and interfaces</li>
-<li><a href="../overlay-express/">@bsv/overlay-express</a> — HTTP server wrapper</li>
-<li><a href="../overlay-discovery-services/">@bsv/overlay-discovery-services</a> — SHIP/SLAP peer discovery</li>
-<li><a href="../gasp-core/">@bsv/gasp</a> — Graph Aware Sync Protocol</li>
-</ul>
-<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="https://bsv-blockchain.github.io/ts-stack/api/overlay-topics/">API reference (TypeDoc)</a></li>
-<li><a href="https://github.com/bsv-blockchain/overlay-topics">Source on GitHub</a></li>
-<li><a href="https://www.npmjs.com/package/@bsv/overlay-topics">npm</a></li>
+<li><a href="../../get-started/concepts/">Key Concepts</a> — Terminology and protocol concepts</li>
+<li><a href="../beef/">BEEF (BRC-62)</a> — Transaction format details</li>
+<li><a href="../brc-100/">BRC-100 Interface</a> — Full method surface, labels/tags, batching</li>
+<li><a href="../conformance/">Conformance Pipeline</a> — How the TS stack drives cross-language compatibility</li>
 </ul>
 
 
@@ -4523,7 +4590,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:05:55 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     
@@ -4533,7 +4600,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     
@@ -4608,10 +4675,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

@@ -6,35 +6,35 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="BSV TypeScript monorepo — 27 production packages for building payment, identity, and data apps">
+        <meta name="description" content="BSV TypeScript monorepo — production packages for building payment, identity, and data apps on BSV">
       
       
       
-        <link rel="canonical" href="https://bsv-blockchain.github.io/ts-stack/packages/helpers/bsv-wallet-helper/">
+        <link rel="canonical" href="https://bsv-blockchain.github.io/ts-stack/infrastructure/chaintracks-server/">
       
       
-        <link rel="prev" href="../simple/">
+        <link rel="prev" href="../wallet-infra/">
       
       
-        <link rel="next" href="../amountinator/">
+        <link rel="next" href="../../specs/">
       
       
         
       
       
-      <link rel="icon" href="../../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>@bsv/wallet-helper - ts-stack</title>
+        <title>Chaintracks Server - ts-stack</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/extra.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bsvwallet-helper" class="md-skip">
+        <a href="#chaintracks-server" class="md-skip">
           Skip to content
         </a>
       
@@ -104,9 +104,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="ts-stack" class="md-header__button md-logo" aria-label="ts-stack" data-md-component="logo">
+    <a href="../.." title="ts-stack" class="md-header__button md-logo" aria-label="ts-stack" data-md-component="logo">
       
-  <img src="../../../assets/images/bsva-linear-blue.png" alt="logo">
+  <img src="../../assets/images/bsva-linear-blue.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              @bsv/wallet-helper
+              Chaintracks Server
             
           </span>
         </div>
@@ -236,7 +236,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../.." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -257,7 +257,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../get-started/" class="md-tabs__link">
+        <a href="../../get-started/" class="md-tabs__link">
           
   
   
@@ -275,13 +275,33 @@
   
   
   
+  
     
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
   
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../packages/" class="md-tabs__link">
           
   
   
@@ -299,11 +319,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../../infrastructure/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -325,7 +347,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../specs/" class="md-tabs__link">
+        <a href="../../specs/" class="md-tabs__link">
           
   
   
@@ -347,7 +369,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../conformance/" class="md-tabs__link">
+        <a href="../../conformance/" class="md-tabs__link">
           
   
   
@@ -369,7 +391,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../guides/" class="md-tabs__link">
+        <a href="../../guides/" class="md-tabs__link">
           
   
   
@@ -391,7 +413,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/" class="md-tabs__link">
+        <a href="../../reference/" class="md-tabs__link">
           
   
   
@@ -413,7 +435,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../about/versioning/" class="md-tabs__link">
+        <a href="../../about/versioning/" class="md-tabs__link">
           
   
   
@@ -449,9 +471,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="ts-stack" class="md-nav__button md-logo" aria-label="ts-stack" data-md-component="logo">
+    <a href="../.." title="ts-stack" class="md-nav__button md-logo" aria-label="ts-stack" data-md-component="logo">
       
-  <img src="../../../assets/images/bsva-linear-blue.png" alt="logo">
+  <img src="../../assets/images/bsva-linear-blue.png" alt="logo">
 
     </a>
     ts-stack
@@ -478,7 +500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -543,7 +565,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../get-started/" class="md-nav__link ">
+            <a href="../../get-started/" class="md-nav__link ">
               
   
   
@@ -594,7 +616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/install/" class="md-nav__link">
+      <a href="../../get-started/install/" class="md-nav__link">
         
   
   
@@ -629,7 +651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/choose-your-stack/" class="md-nav__link">
+      <a href="../../get-started/choose-your-stack/" class="md-nav__link">
         
   
   
@@ -664,7 +686,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/concepts/" class="md-nav__link">
+      <a href="../../get-started/concepts/" class="md-nav__link">
         
   
   
@@ -703,8 +725,6 @@
       
   
   
-    
-  
   
   
     
@@ -724,31 +744,298 @@
       
         
       
-        
-      
-        
-      
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../" class="md-nav__link ">
+            <a href="../../architecture/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stack Layers
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/beef/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BEEF (BRC-62)
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/brc-100/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-100 Wallet Interface
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Auth
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance Pipeline
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../packages/" class="md-nav__link ">
               
   
   
@@ -773,14 +1060,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -813,23 +1100,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../sdk/" class="md-nav__link ">
+            <a href="../../packages/sdk/" class="md-nav__link ">
               
   
   
@@ -854,14 +1138,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -880,7 +1164,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdk/bsv-sdk/" class="md-nav__link">
+      <a href="../../packages/sdk/bsv-sdk/" class="md-nav__link">
         
   
   
@@ -937,29 +1221,28 @@
       
         
       
+        
+      
     
     
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
         
           
-          
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../wallet/" class="md-nav__link ">
+            <a href="../../packages/wallet/" class="md-nav__link ">
               
   
   
@@ -984,14 +1267,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1010,7 +1293,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/wallet-toolbox/" class="md-nav__link">
+      <a href="../../packages/wallet/wallet-toolbox/" class="md-nav__link">
         
   
   
@@ -1045,7 +1328,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/btms/" class="md-nav__link">
+      <a href="../../packages/wallet/btms/" class="md-nav__link">
         
   
   
@@ -1080,7 +1363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/btms-permission-module/" class="md-nav__link">
+      <a href="../../packages/wallet/btms-permission-module/" class="md-nav__link">
         
   
   
@@ -1115,7 +1398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/wallet-relay/" class="md-nav__link">
+      <a href="../../packages/wallet/wallet-relay/" class="md-nav__link">
         
   
   
@@ -1123,6 +1406,41 @@
     
   
     @bsv/wallet-relay
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/wallet/wallet-toolbox-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/wallet-toolbox-examples
   
 
     
@@ -1172,23 +1490,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../network/" class="md-nav__link ">
+            <a href="../../packages/network/" class="md-nav__link ">
               
   
   
@@ -1213,14 +1528,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1239,7 +1554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../network/ts-p2p/" class="md-nav__link">
+      <a href="../../packages/network/teranode-listener/" class="md-nav__link">
         
   
   
@@ -1306,23 +1621,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../overlays/" class="md-nav__link ">
+            <a href="../../packages/overlays/" class="md-nav__link ">
               
   
   
@@ -1347,14 +1659,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1373,7 +1685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/overlay/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay/" class="md-nav__link">
         
   
   
@@ -1408,7 +1720,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/overlay-express/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-express/" class="md-nav__link">
         
   
   
@@ -1443,7 +1755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/topics/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-topics/" class="md-nav__link">
         
   
   
@@ -1478,7 +1790,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/overlay-discovery-services/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-discovery-services/" class="md-nav__link">
         
   
   
@@ -1513,7 +1825,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/gasp-core/" class="md-nav__link">
+      <a href="../../packages/overlays/gasp/" class="md-nav__link">
         
   
   
@@ -1548,7 +1860,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/btms-backend/" class="md-nav__link">
+      <a href="../../packages/overlays/btms-backend/" class="md-nav__link">
         
   
   
@@ -1611,23 +1923,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_6" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../messaging/" class="md-nav__link ">
+            <a href="../../packages/messaging/" class="md-nav__link ">
               
   
   
@@ -1645,14 +1954,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_6" id="__nav_3_6_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1671,7 +1980,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/message-box-client/" class="md-nav__link">
+      <a href="../../packages/messaging/message-box-client/" class="md-nav__link">
         
   
   
@@ -1706,7 +2015,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/authsocket/" class="md-nav__link">
+      <a href="../../packages/messaging/authsocket/" class="md-nav__link">
         
   
   
@@ -1741,7 +2050,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/authsocket-client/" class="md-nav__link">
+      <a href="../../packages/messaging/authsocket-client/" class="md-nav__link">
         
   
   
@@ -1776,7 +2085,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/ts-paymail/" class="md-nav__link">
+      <a href="../../packages/messaging/paymail/" class="md-nav__link">
         
   
   
@@ -1837,23 +2146,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../middleware/" class="md-nav__link ">
+            <a href="../../packages/middleware/" class="md-nav__link ">
               
   
   
@@ -1871,14 +2177,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_7" id="__nav_3_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1897,7 +2203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/auth-express-middleware/" class="md-nav__link">
+      <a href="../../packages/middleware/auth-express-middleware/" class="md-nav__link">
         
   
   
@@ -1932,7 +2238,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/payment-express-middleware/" class="md-nav__link">
+      <a href="../../packages/middleware/payment-express-middleware/" class="md-nav__link">
         
   
   
@@ -1967,7 +2273,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/402-pay/" class="md-nav__link">
+      <a href="../../packages/middleware/402-pay/" class="md-nav__link">
         
   
   
@@ -2007,8 +2313,6 @@
                 
   
   
-    
-  
   
   
     
@@ -2036,21 +2340,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_8" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../packages/helpers/" class="md-nav__link ">
               
   
   
@@ -2068,14 +2371,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_8" id="__nav_3_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2094,7 +2397,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../ts-templates/" class="md-nav__link">
+      <a href="../../packages/helpers/simple/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/simple
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/helpers/templates/" class="md-nav__link">
         
   
   
@@ -2129,7 +2467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../did-client/" class="md-nav__link">
+      <a href="../../packages/helpers/did-client/" class="md-nav__link">
         
   
   
@@ -2164,76 +2502,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../simple/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/simple
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/wallet-helper
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--beta"></span>
-  
-
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+      <a href="../../packages/helpers/wallet-helper/" class="md-nav__link">
         
   
   
@@ -2256,197 +2525,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-provides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it provides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#multi-output-transaction-with-auto-calculated-change" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multi-output transaction with auto-calculated change
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transaction-with-brc-29-automatic-derivation-no-public-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction with BRC-29 automatic derivation (no public key)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#spend-utxos-and-send-to-recipient" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spend UTXOs and send to recipient
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#create-1-sat-ordinal-with-inscription-and-metadata" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Create 1-sat ordinal with inscription and metadata
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key concepts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-not-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When NOT to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec-conformance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec conformance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-pitfalls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common pitfalls
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related packages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2459,7 +2537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../amountinator/" class="md-nav__link">
+      <a href="../../packages/helpers/amountinator/" class="md-nav__link">
         
   
   
@@ -2494,7 +2572,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../fund-wallet/" class="md-nav__link">
+      <a href="../../packages/helpers/fund-wallet/" class="md-nav__link">
         
   
   
@@ -2541,6 +2619,8 @@
       
   
   
+    
+  
   
   
     
@@ -2562,26 +2642,29 @@
       
         
       
+        
+      
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../infrastructure/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -2606,14 +2689,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2632,7 +2715,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/message-box-server/" class="md-nav__link">
+      <a href="../message-box-server/" class="md-nav__link">
         
   
   
@@ -2667,7 +2750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/overlay-server/" class="md-nav__link">
+      <a href="../overlay-server/" class="md-nav__link">
         
   
   
@@ -2702,7 +2785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/uhrp-server-basic/" class="md-nav__link">
+      <a href="../uhrp-server-basic/" class="md-nav__link">
         
   
   
@@ -2737,7 +2820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/uhrp-server-cloud-bucket/" class="md-nav__link">
+      <a href="../uhrp-server-cloud-bucket/" class="md-nav__link">
         
   
   
@@ -2772,7 +2855,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/wab/" class="md-nav__link">
+      <a href="../wab/" class="md-nav__link">
         
   
   
@@ -2807,7 +2890,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/wallet-infra/" class="md-nav__link">
+      <a href="../wallet-infra/" class="md-nav__link">
         
   
   
@@ -2830,6 +2913,172 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    chaintracks-server
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    chaintracks-server
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#startup-and-bootstrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and Bootstrap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-to-deploy-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to deploy this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-not-to-deploy-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When NOT to deploy this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2894,11 +3143,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../specs/" class="md-nav__link ">
+            <a href="../../specs/" class="md-nav__link ">
               
   
   
@@ -2923,14 +3172,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2949,7 +3198,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-100-wallet/" class="md-nav__link">
+      <a href="../../specs/brc-100-wallet/" class="md-nav__link">
         
   
   
@@ -2984,7 +3233,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/overlay-http/" class="md-nav__link">
+      <a href="../../specs/overlay-http/" class="md-nav__link">
         
   
   
@@ -3019,7 +3268,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/message-box-http/" class="md-nav__link">
+      <a href="../../specs/message-box-http/" class="md-nav__link">
         
   
   
@@ -3054,7 +3303,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/authsocket/" class="md-nav__link">
+      <a href="../../specs/authsocket/" class="md-nav__link">
         
   
   
@@ -3089,7 +3338,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-31-auth/" class="md-nav__link">
+      <a href="../../specs/brc-31-auth/" class="md-nav__link">
         
   
   
@@ -3124,7 +3373,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-29-peer-payment/" class="md-nav__link">
+      <a href="../../specs/brc-29-peer-payment/" class="md-nav__link">
         
   
   
@@ -3159,7 +3408,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-121-402/" class="md-nav__link">
+      <a href="../../specs/brc-121-402/" class="md-nav__link">
         
   
   
@@ -3194,7 +3443,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/arc-broadcast/" class="md-nav__link">
+      <a href="../../specs/arc-broadcast/" class="md-nav__link">
         
   
   
@@ -3229,7 +3478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/merkle-service/" class="md-nav__link">
+      <a href="../../specs/merkle-service/" class="md-nav__link">
         
   
   
@@ -3264,7 +3513,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/storage-adapter/" class="md-nav__link">
+      <a href="../../specs/storage-adapter/" class="md-nav__link">
         
   
   
@@ -3299,7 +3548,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/gasp-sync/" class="md-nav__link">
+      <a href="../../specs/gasp-sync/" class="md-nav__link">
         
   
   
@@ -3334,7 +3583,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/uhrp/" class="md-nav__link">
+      <a href="../../specs/uhrp/" class="md-nav__link">
         
   
   
@@ -3388,8 +3637,6 @@
       
         
       
-        
-      
     
     
     
@@ -3405,11 +3652,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../conformance/" class="md-nav__link ">
+            <a href="../../conformance/" class="md-nav__link ">
               
   
   
@@ -3434,14 +3681,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3460,7 +3707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/vectors/" class="md-nav__link">
+      <a href="../../conformance/vectors/" class="md-nav__link">
         
   
   
@@ -3495,7 +3742,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/runner-ts/" class="md-nav__link">
+      <a href="../../conformance/runner-ts/" class="md-nav__link">
         
   
   
@@ -3530,42 +3777,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/runner-go/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Go runner
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../conformance/contributing-vectors/" class="md-nav__link">
+      <a href="../../conformance/contributing-vectors/" class="md-nav__link">
         
   
   
@@ -3636,11 +3848,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../guides/" class="md-nav__link ">
+            <a href="../../guides/" class="md-nav__link ">
               
   
   
@@ -3665,14 +3877,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3691,7 +3903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/wallet-aware-app/" class="md-nav__link">
+      <a href="../../guides/wallet-aware-app/" class="md-nav__link">
         
   
   
@@ -3726,7 +3938,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/run-overlay-node/" class="md-nav__link">
+      <a href="../../guides/run-overlay-node/" class="md-nav__link">
         
   
   
@@ -3761,7 +3973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/peer-to-peer-messaging/" class="md-nav__link">
+      <a href="../../guides/peer-to-peer-messaging/" class="md-nav__link">
         
   
   
@@ -3796,7 +4008,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/http-402-payments/" class="md-nav__link">
+      <a href="../../guides/http-402-payments/" class="md-nav__link">
         
   
   
@@ -3861,11 +4073,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../reference/" class="md-nav__link ">
+            <a href="../../reference/" class="md-nav__link ">
               
   
   
@@ -3890,14 +4102,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3916,7 +4128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/brc-index/" class="md-nav__link">
+      <a href="../../reference/brc-index/" class="md-nav__link">
         
   
   
@@ -3966,6 +4178,8 @@
       
         
       
+        
+      
     
     
     
@@ -3981,10 +4195,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
             
   
   
@@ -4002,8 +4216,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4020,7 +4234,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/versioning/" class="md-nav__link">
+      <a href="../../about/versioning/" class="md-nav__link">
         
   
   
@@ -4055,7 +4269,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/contributing/" class="md-nav__link">
+      <a href="../../about/contributing/" class="md-nav__link">
         
   
   
@@ -4090,7 +4304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/doc-agent/" class="md-nav__link">
+      <a href="../../about/doc-agent/" class="md-nav__link">
         
   
   
@@ -4110,6 +4324,34 @@
     <span class="md-status md-status--stable"></span>
   
 
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Sources
+  
+
+    
+  </span>
+  
   
 
       </a>
@@ -4152,10 +4394,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
+  <a href="#what-it-does" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install
+        What it does
       
     </span>
   </a>
@@ -4163,10 +4405,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#startup-and-bootstrap" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick start
+        Startup and Bootstrap
       
     </span>
   </a>
@@ -4174,10 +4416,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-provides" class="md-nav__link">
+  <a href="#api" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it provides
+        API
       
     </span>
   </a>
@@ -4185,71 +4427,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
+  <a href="#configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#multi-output-transaction-with-auto-calculated-change" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multi-output transaction with auto-calculated change
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#transaction-with-brc-29-automatic-derivation-no-public-key" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Transaction with BRC-29 automatic derivation (no public key)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#spend-utxos-and-send-to-recipient" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spend UTXOs and send to recipient
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#create-1-sat-ordinal-with-inscription-and-metadata" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Create 1-sat ordinal with inscription and metadata
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key concepts
+        Configuration
       
     </span>
   </a>
@@ -4257,10 +4438,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this" class="md-nav__link">
+  <a href="#when-to-deploy-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use this
+        When to deploy this
       
     </span>
   </a>
@@ -4268,10 +4449,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use-this" class="md-nav__link">
+  <a href="#when-not-to-deploy-this" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When NOT to use this
+        When NOT to deploy this
       
     </span>
   </a>
@@ -4279,43 +4460,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spec-conformance" class="md-nav__link">
+  <a href="#related" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Spec conformance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-pitfalls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common pitfalls
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related packages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference
+        Related
       
     </span>
   </a>
@@ -4342,126 +4490,58 @@
   
 
 
-<h1 id="bsvwallet-helper">@bsv/wallet-helper<a class="headerlink" href="#bsvwallet-helper" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p>Fluent transaction builder and wallet-compatible script templates for BSV — construct multi-output transactions (P2PKH, ordinals, custom) with method chaining, BRC-29 key derivation, and no private key exposure.</p>
-</blockquote>
-<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>npm<span class="w"> </span>install<span class="w"> </span>@bsv/wallet-helper
+<h1 id="chaintracks-server">Chaintracks Server<a class="headerlink" href="#chaintracks-server" title="Permanent link">&para;</a></h1>
+<p>Chaintracks Server is the reference implementation for BSV block header management. It maintains a complete chain of block headers and exposes an API for Merkle root validation — the header-side half of Simplified Payment Verification (SPV). <!-- audio: Chaintracks server.m4a @ 00:00 --></p>
+<p>The Chaintracks primitives and client interface are defined in <code>@bsv/wallet-toolbox</code>. This server is the reference deployment of those primitives.</p>
+<h2 id="what-it-does">What it does<a class="headerlink" href="#what-it-does" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Listens to Teranode peer-to-peer messages for live block header announcements</li>
+<li>Maintains a chain of headers from genesis to the current tip</li>
+<li>Exposes an API for validating individual Merkle root / block height assertions</li>
+<li>Provides bulk header lookup for downstream services</li>
+</ul>
+<h2 id="startup-and-bootstrap">Startup and Bootstrap<a class="headerlink" href="#startup-and-bootstrap" title="Permanent link">&para;</a></h2>
+<p>On first start, Chaintracks must acquire ~900,000 existing BSV block headers before it can validate recent transactions. The bootstrap sequence:</p>
+<ol>
+<li><strong>Bundled files</strong> — The repository ships with bulk header files. If no CDN URL is configured, these files are used for the initial bulk ingest.</li>
+<li><strong>CDN bulk ingest</strong> — If a CDN URL is configured (typically another running Chaintracks server), headers are fetched 100,000 at a time. This is the fastest path.</li>
+<li><strong>WhatsOnChain bulk ingester</strong> — Fallback if bundled files and CDN are unavailable.</li>
+<li><strong>Live tip sync</strong> — Once bulk headers are loaded, the server switches to live mode: ingesting new block headers from Teranode P2P connections or the WhatsOnChain live ingester. <!-- audio: Chaintracks server.m4a @ 00:40 --></li>
+</ol>
+<h2 id="api">API<a class="headerlink" href="#api" title="Permanent link">&para;</a></h2>
+<p>The primary purpose of the API is individual Merkle root / block height validation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>GET /blockHeaderForHeight?height=100
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>→ { hash, merkleRoot, ... }
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>POST /verifyMerkleRoot
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>body: { blockHeight: 100, merkleRoot: &quot;abc123...&quot; }
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>→ { valid: true }
 </code></pre></div>
-<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">TransactionBuilder</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/wallet-helper&#39;</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TransactionBuilder</span><span class="p">(</span><span class="nx">wallet</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Payment with metadata&quot;</span><span class="p">)</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="p">.</span><span class="nx">addP2PKHOutput</span><span class="p">({</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nx">publicKey</span><span class="o">:</span><span class="w"> </span><span class="kt">recipientKey</span><span class="p">,</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">5000</span><span class="p">,</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nx">description</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Payment to Bob&quot;</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="p">})</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="p">.</span><span class="nx">addOpReturn</span><span class="p">([</span><span class="s1">&#39;APP_ID&#39;</span><span class="p">,</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">({</span><span class="w"> </span><span class="nx">memo</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Thanks!&#39;</span><span class="w"> </span><span class="p">})])</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="p">.</span><span class="nx">build</span><span class="p">()</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`Sent: </span><span class="si">${</span><span class="nx">result</span><span class="p">.</span><span class="nx">txid</span><span class="si">}</span><span class="sb">`</span><span class="p">)</span>
+<p>Applications (primarily <code>@bsv/wallet-toolbox</code>) ask: "Does block height 100 have Merkle root <code>X</code>?" The server responds valid or not. This is what <code>Beef.verify()</code> calls internally to confirm Merkle proofs. <!-- audio: Chaintracks server.m4a @ 03:40 --></p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Bootstrap from another Chaintracks server</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nv">CHAINTRACKS_CDN_URL</span><span class="o">=</span>https://chaintracks.example.com
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Use WhatsOnChain live ingester instead of Teranode</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nv">WHATS_ON_CHAIN_LIVE</span><span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
-<h2 id="what-it-provides">What it provides<a class="headerlink" href="#what-it-provides" title="Permanent link">&para;</a></h2>
+<p>Teranode P2P connection requires bootstrap peer configuration to enter the node network.</p>
+<h2 id="when-to-deploy-this">When to deploy this<a class="headerlink" href="#when-to-deploy-this" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>TransactionBuilder</strong> — Fluent API for multi-output transactions</li>
-<li><strong>P2PKH outputs</strong> — Pay-to-pubkey-hash with automatic or derived keys</li>
-<li><strong>Ordinal outputs</strong> — 1-sat ordinals with inscription and MAP metadata</li>
-<li><strong>OP_RETURN</strong> — Data inscriptions with automatic unlocking</li>
-<li><strong>Custom scripts</strong> — Add arbitrary locking scripts</li>
-<li><strong>Change output</strong> — Auto-calculate change with fee deduction</li>
-<li><strong>Input spending</strong> — Consume P2PKH, ordinal, and custom UTXOs</li>
-<li><strong>BRC-29 derivation</strong> — Automatic hierarchical key derivation</li>
-<li><strong>Script validation</strong> — Identify and classify script types</li>
+<li>Running <code>@bsv/wallet-toolbox</code>-based wallets in production (the toolbox calls Chaintracks for SPV)</li>
+<li>Need in-house Merkle root validation instead of relying on a third-party instance</li>
+<li>Building services that need to validate BEEF packages server-side</li>
 </ul>
-<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
-<h3 id="multi-output-transaction-with-auto-calculated-change">Multi-output transaction with auto-calculated change<a class="headerlink" href="#multi-output-transaction-with-auto-calculated-change" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">await</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TransactionBuilder</span><span class="p">(</span><span class="nx">wallet</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Multi-output with change&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="p">.</span><span class="nx">addP2PKHOutput</span><span class="p">({</span><span class="w"> </span><span class="nx">publicKey</span><span class="o">:</span><span class="w"> </span><span class="kt">alice</span><span class="p">,</span><span class="w"> </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">1000</span><span class="w"> </span><span class="p">})</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="p">.</span><span class="nx">addP2PKHOutput</span><span class="p">({</span><span class="w"> </span><span class="nx">publicKey</span><span class="o">:</span><span class="w"> </span><span class="kt">bob</span><span class="p">,</span><span class="w"> </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">2000</span><span class="w"> </span><span class="p">})</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p">.</span><span class="nx">addChangeOutput</span><span class="p">({</span><span class="w"> </span><span class="nx">description</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Change&quot;</span><span class="w"> </span><span class="p">})</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="p">.</span><span class="nx">build</span><span class="p">()</span>
-</code></pre></div>
-<h3 id="transaction-with-brc-29-automatic-derivation-no-public-key">Transaction with BRC-29 automatic derivation (no public key)<a class="headerlink" href="#transaction-with-brc-29-automatic-derivation-no-public-key" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">await</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TransactionBuilder</span><span class="p">(</span><span class="nx">wallet</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Auto-derived&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p">.</span><span class="nx">addP2PKHOutput</span><span class="p">({</span><span class="w"> </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">1000</span><span class="w"> </span><span class="p">})</span><span class="w">  </span><span class="c1">// Uses automatic derivation</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="p">.</span><span class="nx">basket</span><span class="p">(</span><span class="s2">&quot;my-basket&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="p">.</span><span class="nx">customInstructions</span><span class="p">(</span><span class="s2">&quot;app-data&quot;</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="p">.</span><span class="nx">build</span><span class="p">()</span>
-</code></pre></div>
-<h3 id="spend-utxos-and-send-to-recipient">Spend UTXOs and send to recipient<a class="headerlink" href="#spend-utxos-and-send-to-recipient" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">await</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TransactionBuilder</span><span class="p">(</span><span class="nx">wallet</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Spend UTXO&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="p">.</span><span class="nx">addP2PKHInput</span><span class="p">({</span><span class="w"> </span><span class="nx">sourceTransaction</span><span class="p">,</span><span class="w"> </span><span class="nx">sourceOutputIndex</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span><span class="w"> </span><span class="nx">description</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;UTXO&quot;</span><span class="w"> </span><span class="p">})</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p">.</span><span class="nx">addP2PKHOutput</span><span class="p">({</span><span class="w"> </span><span class="nx">publicKey</span><span class="o">:</span><span class="w"> </span><span class="kt">recipient</span><span class="p">,</span><span class="w"> </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">500</span><span class="w"> </span><span class="p">})</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="p">.</span><span class="nx">build</span><span class="p">()</span>
-</code></pre></div>
-<h3 id="create-1-sat-ordinal-with-inscription-and-metadata">Create 1-sat ordinal with inscription and metadata<a class="headerlink" href="#create-1-sat-ordinal-with-inscription-and-metadata" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">ordResult</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TransactionBuilder</span><span class="p">(</span><span class="nx">wallet</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Mint ordinal&quot;</span><span class="p">)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="p">.</span><span class="nx">addOrdinalP2PKHOutput</span><span class="p">({</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nx">walletParams</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">protocolID</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="mf">2</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;p2pkh&#39;</span><span class="p">],</span><span class="w"> </span><span class="nx">keyID</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;0&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">counterparty</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;self&#39;</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nx">satoshis</span><span class="o">:</span><span class="w"> </span><span class="kt">1</span><span class="p">,</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nx">inscription</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="nx">dataB64</span><span class="o">:</span><span class="w"> </span><span class="kt">Buffer.from</span><span class="p">(</span><span class="s1">&#39;Hello ordinals&#39;</span><span class="p">).</span><span class="nx">toString</span><span class="p">(</span><span class="s1">&#39;base64&#39;</span><span class="p">),</span>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">      </span><span class="nx">contentType</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;text/plain&#39;</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="p">},</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nx">metadata</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">app</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;gallery&#39;</span><span class="p">,</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;greeting&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">author</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Alice&#39;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="p">})</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span><span class="p">.</span><span class="nx">build</span><span class="p">()</span>
-</code></pre></div>
-<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
+<h2 id="when-not-to-deploy-this">When NOT to deploy this<a class="headerlink" href="#when-not-to-deploy-this" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Fluent API</strong> — Method chaining for readable transaction construction</li>
-<li><strong>BRC-29 Derivation</strong> — Automatic hierarchical key derivation; omit publicKey to enable</li>
-<li><strong>Wallet-Compatible</strong> — Never exposes private keys; uses wallet's <code>createAction</code> / <code>signAction</code></li>
-<li><strong>Basket</strong> — Logical grouping of outputs for wallet organization</li>
-<li><strong>CustomInstructions</strong> — JSON metadata per output; auto-includes derivation info</li>
-<li><strong>BEEF</strong> — Broadcast-Everything-BEEF transaction format for secure input proofs</li>
-<li><strong>MAP Metadata</strong> — Magic Attribute Protocol for ordinal inscriptions</li>
-<li><strong>Output randomization</strong> — Improves privacy; disable with <code>options({ randomizeOutputs: false })</code></li>
+<li>Development and testing — use the hosted Chaintracks instance or the bundled files</li>
+<li>If another Chaintracks instance is already available in your infrastructure</li>
 </ul>
-<h2 id="when-to-use-this">When to use this<a class="headerlink" href="#when-to-use-this" title="Permanent link">&para;</a></h2>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Building transactions with method chaining</li>
-<li>Creating complex multi-output transactions readably</li>
-<li>Working with ordinals and inscriptions</li>
-<li>Leveraging wallet derivation without exposing keys</li>
-<li>Reducing boilerplate in transaction construction</li>
-</ul>
-<h2 id="when-not-to-use-this">When NOT to use this<a class="headerlink" href="#when-not-to-use-this" title="Permanent link">&para;</a></h2>
-<ul>
-<li>For ultra-simple single payments — use @bsv/simple</li>
-<li>When you need full low-level control — use @bsv/sdk</li>
-<li>For completely custom script logic — use @bsv/templates directly</li>
-</ul>
-<h2 id="spec-conformance">Spec conformance<a class="headerlink" href="#spec-conformance" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>BRC-29</strong> — Hierarchical key derivation</li>
-<li><strong>BRC-42</strong> — Public key derivation</li>
-<li><strong>BRC-100</strong> — Wallet interface</li>
-<li><strong>BRC-95</strong> — PushDrop tokens</li>
-<li><strong>MAP</strong> — Magic Attribute Protocol for ordinal metadata</li>
-<li><strong>1-sat Ordinals</strong> — Inscription format</li>
-</ul>
-<h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Lock/Unlock key mismatch</strong> — If you lock with <code>walletParams</code> but try to unlock with <code>publicKey</code>, it fails</li>
-<li><strong>Omitting satoshis on P2PKH</strong> — Without satoshis and no changeOutput, transaction will fail during build</li>
-<li><strong>UTXO input without outputs</strong> — If you add inputs, you must add outputs; builder doesn't auto-create them</li>
-<li><strong>publicKey vs walletParams</strong> — Choose one per output; don't mix. Wallet derivation is preferred for security</li>
-<li><strong>MAP metadata encoding</strong> — Fields must be key-value strings; nested objects are not standard</li>
-</ul>
-<h2 id="related-packages">Related packages<a class="headerlink" href="#related-packages" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../simple/">@bsv/simple</a> — High-level wallet operations</li>
-<li><a href="../ts-templates/">@bsv/templates</a> — Low-level script templates</li>
-<li><a href="https://github.com/bsv-blockchain/sdk-ts">@bsv/sdk</a> — Core transaction building</li>
-</ul>
-<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="https://bsv-blockchain.github.io/ts-stack/api/wallet-helper/">API reference (TypeDoc)</a></li>
-<li><a href="https://github.com/bsv-blockchain/wallet-helper">Source on GitHub</a></li>
-<li><a href="https://www.npmjs.com/package/@bsv/wallet-helper">npm</a></li>
+<li><a href="../../packages/wallet/wallet-toolbox/"><code>@bsv/wallet-toolbox</code></a> — Chaintracks primitives defined here; toolbox wraps the client</li>
+<li><a href="../../architecture/beef/">BEEF (BRC-62)</a> — Merkle proofs that Chaintracks validates</li>
+<li><a href="../../get-started/concepts/#arc-and-chaintracks">Key Concepts: ARC and Chaintracks</a></li>
 </ul>
 
 
@@ -4485,7 +4565,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     
@@ -4495,7 +4575,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     
@@ -4570,10 +4650,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

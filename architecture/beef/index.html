@@ -6,35 +6,35 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="BSV TypeScript monorepo — 27 production packages for building payment, identity, and data apps">
+        <meta name="description" content="BSV TypeScript monorepo — production packages for building payment, identity, and data apps on BSV">
       
       
       
-        <link rel="canonical" href="https://bsv-blockchain.github.io/ts-stack/packages/network/ts-p2p/">
+        <link rel="canonical" href="https://bsv-blockchain.github.io/ts-stack/architecture/beef/">
       
       
-        <link rel="prev" href="../">
+        <link rel="prev" href="../layers/">
       
       
-        <link rel="next" href="../../overlays/">
+        <link rel="next" href="../brc-100/">
       
       
         
       
       
-      <link rel="icon" href="../../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>@bsv/ts-p2p - ts-stack</title>
+        <title>BEEF — Background Evaluation Extended Format (BRC-62) - ts-stack</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/extra.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bsvts-p2p" class="md-skip">
+        <a href="#beef-background-evaluation-extended-format-brc-62" class="md-skip">
           Skip to content
         </a>
       
@@ -104,9 +104,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="ts-stack" class="md-header__button md-logo" aria-label="ts-stack" data-md-component="logo">
+    <a href="../.." title="ts-stack" class="md-header__button md-logo" aria-label="ts-stack" data-md-component="logo">
       
-  <img src="../../../assets/images/bsva-linear-blue.png" alt="logo">
+  <img src="../../assets/images/bsva-linear-blue.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              @bsv/ts-p2p
+              BEEF — Background Evaluation Extended Format (BRC-62)
             
           </span>
         </div>
@@ -236,7 +236,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../.." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -257,7 +257,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../get-started/" class="md-tabs__link">
+        <a href="../../get-started/" class="md-tabs__link">
           
   
   
@@ -281,7 +281,29 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../" class="md-tabs__link">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../packages/" class="md-tabs__link">
           
   
   
@@ -303,7 +325,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../infrastructure/" class="md-tabs__link">
+        <a href="../../infrastructure/" class="md-tabs__link">
           
   
   
@@ -325,7 +347,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../specs/" class="md-tabs__link">
+        <a href="../../specs/" class="md-tabs__link">
           
   
   
@@ -347,7 +369,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../conformance/" class="md-tabs__link">
+        <a href="../../conformance/" class="md-tabs__link">
           
   
   
@@ -369,7 +391,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../guides/" class="md-tabs__link">
+        <a href="../../guides/" class="md-tabs__link">
           
   
   
@@ -391,7 +413,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/" class="md-tabs__link">
+        <a href="../../reference/" class="md-tabs__link">
           
   
   
@@ -413,7 +435,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../about/versioning/" class="md-tabs__link">
+        <a href="../../about/versioning/" class="md-tabs__link">
           
   
   
@@ -449,9 +471,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="ts-stack" class="md-nav__button md-logo" aria-label="ts-stack" data-md-component="logo">
+    <a href="../.." title="ts-stack" class="md-nav__button md-logo" aria-label="ts-stack" data-md-component="logo">
       
-  <img src="../../../assets/images/bsva-linear-blue.png" alt="logo">
+  <img src="../../assets/images/bsva-linear-blue.png" alt="logo">
 
     </a>
     ts-stack
@@ -478,7 +500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -543,7 +565,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../get-started/" class="md-nav__link ">
+            <a href="../../get-started/" class="md-nav__link ">
               
   
   
@@ -594,7 +616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/install/" class="md-nav__link">
+      <a href="../../get-started/install/" class="md-nav__link">
         
   
   
@@ -629,7 +651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/choose-your-stack/" class="md-nav__link">
+      <a href="../../get-started/choose-your-stack/" class="md-nav__link">
         
   
   
@@ -664,7 +686,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../get-started/concepts/" class="md-nav__link">
+      <a href="../../get-started/concepts/" class="md-nav__link">
         
   
   
@@ -724,10 +746,6 @@
       
         
       
-        
-      
-        
-      
     
     
     
@@ -748,14 +766,14 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
   <span class="md-ellipsis">
     
   
-    Packages
+    Architecture
   
 
     
@@ -784,6 +802,431 @@
             <span class="md-nav__icon md-icon"></span>
             
   
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stack Layers
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BEEF (BRC-62)
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BEEF (BRC-62)
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-beef" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why BEEF?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wire-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wire Format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bumps-bsv-unified-merkle-paths-brc-74" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BUMPs — BSV Unified Merkle Paths (BRC-74)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ancestor-transactions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ancestor Transactions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#beef-v2-brc-95" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BEEF V2 (BRC-95)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#streaming-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Streaming Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-in-bsvsdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage in @bsv/sdk
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-beef-appears" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where BEEF Appears
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../brc-100/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-100 Wallet Interface
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Auth
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance Pipeline
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../packages/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Packages
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
     Packages
   
 
@@ -813,23 +1256,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../sdk/" class="md-nav__link ">
+            <a href="../../packages/sdk/" class="md-nav__link ">
               
   
   
@@ -854,14 +1294,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -880,7 +1320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdk/bsv-sdk/" class="md-nav__link">
+      <a href="../../packages/sdk/bsv-sdk/" class="md-nav__link">
         
   
   
@@ -937,29 +1377,28 @@
       
         
       
+        
+      
     
     
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
         
           
-          
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
-      
-        
-        
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../wallet/" class="md-nav__link ">
+            <a href="../../packages/wallet/" class="md-nav__link ">
               
   
   
@@ -984,14 +1423,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1010,7 +1449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/wallet-toolbox/" class="md-nav__link">
+      <a href="../../packages/wallet/wallet-toolbox/" class="md-nav__link">
         
   
   
@@ -1045,7 +1484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/btms/" class="md-nav__link">
+      <a href="../../packages/wallet/btms/" class="md-nav__link">
         
   
   
@@ -1080,7 +1519,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/btms-permission-module/" class="md-nav__link">
+      <a href="../../packages/wallet/btms-permission-module/" class="md-nav__link">
         
   
   
@@ -1115,7 +1554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../wallet/wallet-relay/" class="md-nav__link">
+      <a href="../../packages/wallet/wallet-relay/" class="md-nav__link">
         
   
   
@@ -1143,6 +1582,41 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/wallet/wallet-toolbox-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/wallet-toolbox-examples
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1155,8 +1629,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1174,21 +1646,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../packages/network/" class="md-nav__link ">
               
   
   
@@ -1213,14 +1684,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1236,44 +1707,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/teranode-listener
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../packages/network/teranode-listener/" class="md-nav__link">
         
   
   
@@ -1296,208 +1733,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-provides" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it provides
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#subscribe-with-callbacks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Subscribe with callbacks
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#custom-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Custom configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dynamic-topic-management" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dynamic topic management
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graceful-shutdown" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Graceful shutdown
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key concepts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#topic-types" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Topic types
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-not-to-use-this" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When NOT to use this
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec-conformance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec conformance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-pitfalls" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common pitfalls
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related packages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1542,23 +1777,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../overlays/" class="md-nav__link ">
+            <a href="../../packages/overlays/" class="md-nav__link ">
               
   
   
@@ -1583,14 +1815,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1609,7 +1841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/overlay/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay/" class="md-nav__link">
         
   
   
@@ -1644,7 +1876,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/overlay-express/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-express/" class="md-nav__link">
         
   
   
@@ -1679,7 +1911,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/topics/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-topics/" class="md-nav__link">
         
   
   
@@ -1714,7 +1946,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/overlay-discovery-services/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-discovery-services/" class="md-nav__link">
         
   
   
@@ -1749,7 +1981,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/gasp-core/" class="md-nav__link">
+      <a href="../../packages/overlays/gasp/" class="md-nav__link">
         
   
   
@@ -1784,7 +2016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../overlays/btms-backend/" class="md-nav__link">
+      <a href="../../packages/overlays/btms-backend/" class="md-nav__link">
         
   
   
@@ -1847,23 +2079,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_6" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../messaging/" class="md-nav__link ">
+            <a href="../../packages/messaging/" class="md-nav__link ">
               
   
   
@@ -1881,14 +2110,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_6" id="__nav_3_6_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1907,7 +2136,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/message-box-client/" class="md-nav__link">
+      <a href="../../packages/messaging/message-box-client/" class="md-nav__link">
         
   
   
@@ -1942,7 +2171,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/authsocket/" class="md-nav__link">
+      <a href="../../packages/messaging/authsocket/" class="md-nav__link">
         
   
   
@@ -1977,7 +2206,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/authsocket-client/" class="md-nav__link">
+      <a href="../../packages/messaging/authsocket-client/" class="md-nav__link">
         
   
   
@@ -2012,7 +2241,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../messaging/ts-paymail/" class="md-nav__link">
+      <a href="../../packages/messaging/paymail/" class="md-nav__link">
         
   
   
@@ -2073,23 +2302,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../middleware/" class="md-nav__link ">
+            <a href="../../packages/middleware/" class="md-nav__link ">
               
   
   
@@ -2107,14 +2333,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_7" id="__nav_3_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2133,7 +2359,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/auth-express-middleware/" class="md-nav__link">
+      <a href="../../packages/middleware/auth-express-middleware/" class="md-nav__link">
         
   
   
@@ -2168,7 +2394,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/payment-express-middleware/" class="md-nav__link">
+      <a href="../../packages/middleware/payment-express-middleware/" class="md-nav__link">
         
   
   
@@ -2203,7 +2429,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../middleware/402-pay/" class="md-nav__link">
+      <a href="../../packages/middleware/402-pay/" class="md-nav__link">
         
   
   
@@ -2270,23 +2496,20 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../helpers/" class="md-nav__link ">
+            <a href="../../packages/helpers/" class="md-nav__link ">
               
   
   
@@ -2304,14 +2527,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_8" id="__nav_3_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2330,77 +2553,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/ts-templates/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/templates
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../helpers/did-client/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/did-client
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../helpers/simple/" class="md-nav__link">
+      <a href="../../packages/helpers/simple/" class="md-nav__link">
         
   
   
@@ -2435,7 +2588,77 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/bsv-wallet-helper/" class="md-nav__link">
+      <a href="../../packages/helpers/templates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/templates
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/helpers/did-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/did-client
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/helpers/wallet-helper/" class="md-nav__link">
         
   
   
@@ -2470,7 +2693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/amountinator/" class="md-nav__link">
+      <a href="../../packages/helpers/amountinator/" class="md-nav__link">
         
   
   
@@ -2505,7 +2728,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/fund-wallet/" class="md-nav__link">
+      <a href="../../packages/helpers/fund-wallet/" class="md-nav__link">
         
   
   
@@ -2573,6 +2796,8 @@
       
         
       
+        
+      
     
     
     
@@ -2588,11 +2813,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../infrastructure/" class="md-nav__link ">
+            <a href="../../infrastructure/" class="md-nav__link ">
               
   
   
@@ -2617,14 +2842,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2643,7 +2868,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/message-box-server/" class="md-nav__link">
+      <a href="../../infrastructure/message-box-server/" class="md-nav__link">
         
   
   
@@ -2678,7 +2903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/overlay-server/" class="md-nav__link">
+      <a href="../../infrastructure/overlay-server/" class="md-nav__link">
         
   
   
@@ -2713,7 +2938,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/uhrp-server-basic/" class="md-nav__link">
+      <a href="../../infrastructure/uhrp-server-basic/" class="md-nav__link">
         
   
   
@@ -2748,7 +2973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/uhrp-server-cloud-bucket/" class="md-nav__link">
+      <a href="../../infrastructure/uhrp-server-cloud-bucket/" class="md-nav__link">
         
   
   
@@ -2783,7 +3008,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/wab/" class="md-nav__link">
+      <a href="../../infrastructure/wab/" class="md-nav__link">
         
   
   
@@ -2818,7 +3043,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../infrastructure/wallet-infra/" class="md-nav__link">
+      <a href="../../infrastructure/wallet-infra/" class="md-nav__link">
         
   
   
@@ -2826,6 +3051,41 @@
     
   
     wallet-infra
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../infrastructure/chaintracks-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    chaintracks-server
   
 
     
@@ -2905,11 +3165,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../specs/" class="md-nav__link ">
+            <a href="../../specs/" class="md-nav__link ">
               
   
   
@@ -2934,14 +3194,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2960,7 +3220,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-100-wallet/" class="md-nav__link">
+      <a href="../../specs/brc-100-wallet/" class="md-nav__link">
         
   
   
@@ -2995,7 +3255,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/overlay-http/" class="md-nav__link">
+      <a href="../../specs/overlay-http/" class="md-nav__link">
         
   
   
@@ -3030,7 +3290,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/message-box-http/" class="md-nav__link">
+      <a href="../../specs/message-box-http/" class="md-nav__link">
         
   
   
@@ -3065,7 +3325,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/authsocket/" class="md-nav__link">
+      <a href="../../specs/authsocket/" class="md-nav__link">
         
   
   
@@ -3100,7 +3360,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-31-auth/" class="md-nav__link">
+      <a href="../../specs/brc-31-auth/" class="md-nav__link">
         
   
   
@@ -3135,7 +3395,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-29-peer-payment/" class="md-nav__link">
+      <a href="../../specs/brc-29-peer-payment/" class="md-nav__link">
         
   
   
@@ -3170,7 +3430,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/brc-121-402/" class="md-nav__link">
+      <a href="../../specs/brc-121-402/" class="md-nav__link">
         
   
   
@@ -3205,7 +3465,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/arc-broadcast/" class="md-nav__link">
+      <a href="../../specs/arc-broadcast/" class="md-nav__link">
         
   
   
@@ -3240,7 +3500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/merkle-service/" class="md-nav__link">
+      <a href="../../specs/merkle-service/" class="md-nav__link">
         
   
   
@@ -3275,7 +3535,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/storage-adapter/" class="md-nav__link">
+      <a href="../../specs/storage-adapter/" class="md-nav__link">
         
   
   
@@ -3310,7 +3570,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/gasp-sync/" class="md-nav__link">
+      <a href="../../specs/gasp-sync/" class="md-nav__link">
         
   
   
@@ -3345,7 +3605,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specs/uhrp/" class="md-nav__link">
+      <a href="../../specs/uhrp/" class="md-nav__link">
         
   
   
@@ -3399,8 +3659,6 @@
       
         
       
-        
-      
     
     
     
@@ -3416,11 +3674,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../conformance/" class="md-nav__link ">
+            <a href="../../conformance/" class="md-nav__link ">
               
   
   
@@ -3445,14 +3703,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3471,7 +3729,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/vectors/" class="md-nav__link">
+      <a href="../../conformance/vectors/" class="md-nav__link">
         
   
   
@@ -3506,7 +3764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/runner-ts/" class="md-nav__link">
+      <a href="../../conformance/runner-ts/" class="md-nav__link">
         
   
   
@@ -3541,42 +3799,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conformance/runner-go/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Go runner
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../conformance/contributing-vectors/" class="md-nav__link">
+      <a href="../../conformance/contributing-vectors/" class="md-nav__link">
         
   
   
@@ -3647,11 +3870,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../guides/" class="md-nav__link ">
+            <a href="../../guides/" class="md-nav__link ">
               
   
   
@@ -3676,14 +3899,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3702,7 +3925,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/wallet-aware-app/" class="md-nav__link">
+      <a href="../../guides/wallet-aware-app/" class="md-nav__link">
         
   
   
@@ -3737,7 +3960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/run-overlay-node/" class="md-nav__link">
+      <a href="../../guides/run-overlay-node/" class="md-nav__link">
         
   
   
@@ -3772,7 +3995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/peer-to-peer-messaging/" class="md-nav__link">
+      <a href="../../guides/peer-to-peer-messaging/" class="md-nav__link">
         
   
   
@@ -3807,7 +4030,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guides/http-402-payments/" class="md-nav__link">
+      <a href="../../guides/http-402-payments/" class="md-nav__link">
         
   
   
@@ -3872,11 +4095,11 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../reference/" class="md-nav__link ">
+            <a href="../../reference/" class="md-nav__link ">
               
   
   
@@ -3901,14 +4124,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3927,7 +4150,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/brc-index/" class="md-nav__link">
+      <a href="../../reference/brc-index/" class="md-nav__link">
         
   
   
@@ -3977,6 +4200,8 @@
       
         
       
+        
+      
     
     
     
@@ -3992,10 +4217,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
             
   
   
@@ -4013,8 +4238,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4031,7 +4256,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/versioning/" class="md-nav__link">
+      <a href="../../about/versioning/" class="md-nav__link">
         
   
   
@@ -4066,7 +4291,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/contributing/" class="md-nav__link">
+      <a href="../../about/contributing/" class="md-nav__link">
         
   
   
@@ -4101,7 +4326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../about/doc-agent/" class="md-nav__link">
+      <a href="../../about/doc-agent/" class="md-nav__link">
         
   
   
@@ -4121,6 +4346,34 @@
     <span class="md-status md-status--stable"></span>
   
 
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Sources
+  
+
+    
+  </span>
+  
   
 
       </a>
@@ -4163,10 +4416,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
+  <a href="#why-beef" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install
+        Why BEEF?
       
     </span>
   </a>
@@ -4174,10 +4427,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#wire-format" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick start
+        Wire Format
       
     </span>
   </a>
@@ -4185,10 +4438,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-provides" class="md-nav__link">
+  <a href="#bumps-bsv-unified-merkle-paths-brc-74" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it provides
+        BUMPs — BSV Unified Merkle Paths (BRC-74)
       
     </span>
   </a>
@@ -4196,71 +4449,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-patterns" class="md-nav__link">
+  <a href="#ancestor-transactions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common patterns
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Common patterns">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#subscribe-with-callbacks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Subscribe with callbacks
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#custom-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Custom configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dynamic-topic-management" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dynamic topic management
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#graceful-shutdown" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Graceful shutdown
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#key-concepts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Key concepts
+        Ancestor Transactions
       
     </span>
   </a>
@@ -4268,10 +4460,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#topic-types" class="md-nav__link">
+  <a href="#beef-v2-brc-95" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Topic types
+        BEEF V2 (BRC-95)
       
     </span>
   </a>
@@ -4279,10 +4471,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this" class="md-nav__link">
+  <a href="#streaming-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use this
+        Streaming Validation
       
     </span>
   </a>
@@ -4290,10 +4482,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-use-this" class="md-nav__link">
+  <a href="#usage-in-bsvsdk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When NOT to use this
+        Usage in @bsv/sdk
       
     </span>
   </a>
@@ -4301,10 +4493,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spec-conformance" class="md-nav__link">
+  <a href="#where-beef-appears" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Spec conformance
+        Where BEEF Appears
       
     </span>
   </a>
@@ -4312,32 +4504,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#common-pitfalls" class="md-nav__link">
+  <a href="#related" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common pitfalls
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related packages
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference
+        Related
       
     </span>
   </a>
@@ -4364,163 +4534,72 @@
   
 
 
-<h1 id="bsvts-p2p">@bsv/ts-p2p<a class="headerlink" href="#bsvts-p2p" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p>TypeScript library for subscribing to Teranode P2P topics (blocks, subtrees, mining updates) via libp2p private DHT network.</p>
-</blockquote>
-<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>npm<span class="w"> </span>install<span class="w"> </span>@bsv/ts-p2p
+<h1 id="beef-background-evaluation-extended-format-brc-62">BEEF — Background Evaluation Extended Format (BRC-62)<a class="headerlink" href="#beef-background-evaluation-extended-format-brc-62" title="Permanent link">&para;</a></h1>
+<p>BEEF is the standardized binary format for peer-to-peer transaction exchange on BSV. It bundles a transaction with the Merkle proofs needed to verify its inclusion in the chain, enabling Simplified Payment Verification (SPV) without a full node.</p>
+<h2 id="why-beef">Why BEEF?<a class="headerlink" href="#why-beef" title="Permanent link">&para;</a></h2>
+<p>Traditional transaction relay requires a recipient to either:
+- Trust the sender ("this transaction is valid"), or
+- Query a full node to verify inputs</p>
+<p>BEEF eliminates both requirements. The sender includes all proof material inline; the recipient validates against block headers it already has (from a Chaintracks server or equivalent).</p>
+<h2 id="wire-format">Wire Format<a class="headerlink" href="#wire-format" title="Permanent link">&para;</a></h2>
+<p>A BEEF package always begins with the 4-byte version header <code>0100BEEF</code> (little-endian <code>0xBEEF0001</code>).</p>
+<p>The payload is ordered specifically to support streaming validation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[0100BEEF version header]
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[BUMP structures — BSV Unified Merkle Paths (BRC-74)]
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>[Ancestor transactions — the minimal set of parents reaching a mined anchor]
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[The final transaction being evaluated]
 </code></pre></div>
-<h2 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">TeranodeListener</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/ts-p2p&#39;</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">blockCallback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">Uint8Array</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">from</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`New block from </span><span class="si">${</span><span class="kr">from</span><span class="si">}</span><span class="sb">:`</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">}</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">subtreeCallback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="o">:</span><span class="w"> </span><span class="kt">Uint8Array</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">from</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`Subtree update from </span><span class="si">${</span><span class="kr">from</span><span class="si">}</span><span class="sb">:`</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">}</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1">// Create listener with callbacks</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="kd">const</span><span class="w"> </span><span class="nx">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TeranodeListener</span><span class="p">({</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="s1">&#39;bitcoin/mainnet-block&#39;</span><span class="o">:</span><span class="w"> </span><span class="nx">blockCallback</span><span class="p">,</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span><span class="s1">&#39;bitcoin/mainnet-subtree&#39;</span><span class="o">:</span><span class="w"> </span><span class="nx">subtreeCallback</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="p">})</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Listener started, waiting for messages...&#39;</span><span class="p">)</span>
-</code></pre></div>
-<h2 id="what-it-provides">What it provides<a class="headerlink" href="#what-it-provides" title="Permanent link">&para;</a></h2>
+<p>This ordering is deliberate: a recipient can begin verifying Merkle roots against its block header service as soon as the BUMPs arrive, before the full payload has been received.</p>
+<h2 id="bumps-bsv-unified-merkle-paths-brc-74">BUMPs — BSV Unified Merkle Paths (BRC-74)<a class="headerlink" href="#bumps-bsv-unified-merkle-paths-brc-74" title="Permanent link">&para;</a></h2>
+<p>A BUMP is an optimized Merkle proof format. Key properties:</p>
 <ul>
-<li><strong>TeranodeListener</strong> — Class-based API for subscribing to P2P topics with callbacks</li>
-<li><strong>startSubscriber</strong> — Legacy function-based API for backward compatibility</li>
-<li><strong>Private DHT network</strong> — Uses pre-shared key (PSK) for secure peer-to-peer communication</li>
-<li><strong>Gossipsub</strong> — Efficient pub/sub messaging for blockchain events</li>
-<li><strong>Bootstrap peer discovery</strong> — Connects to known peers and discovers more dynamically</li>
-<li><strong>Static peer support</strong> — Explicitly configured peers maintained across restarts</li>
-<li><strong>Multiple topics</strong> — Subscribe to blocks, subtrees, mining updates, handshakes, rejected transactions</li>
-<li><strong>Dynamic subscription</strong> — Add/remove topic callbacks at runtime</li>
+<li>Uses <strong>block height</strong> as a lookup target rather than block hash, minimizing byte size.</li>
+<li>Supports <strong>compounding</strong> — multiple transaction proofs can be merged into a single BUMP structure when they appear in the same block, sharing common Merkle tree nodes.</li>
 </ul>
-<h2 id="common-patterns">Common patterns<a class="headerlink" href="#common-patterns" title="Permanent link">&para;</a></h2>
-<h3 id="subscribe-with-callbacks">Subscribe with callbacks<a class="headerlink" href="#subscribe-with-callbacks" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TeranodeListener</span><span class="p">({</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="s1">&#39;bitcoin/mainnet-block&#39;</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="p">,</span><span class="w"> </span><span class="kr">from</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Block received:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="s1">&#39;bitcoin/mainnet-subtree&#39;</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="p">,</span><span class="w"> </span><span class="kr">from</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Subtree:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">})</span>
-</code></pre></div>
-<h3 id="custom-configuration">Custom configuration<a class="headerlink" href="#custom-configuration" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TeranodeListener</span><span class="p">(</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="p">{</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="s1">&#39;teranode/blocks&#39;</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="p">,</span><span class="w"> </span><span class="kr">from</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">      </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Block:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="p">}</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="p">},</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="p">{</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nx">topics</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;teranode/blocks&#39;</span><span class="p">],</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nx">listenAddresses</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;/ip4/0.0.0.0/tcp/4000&#39;</span><span class="p">],</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nx">dhtProtocolID</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;/custom-protocol&#39;</span><span class="p">,</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nx">bootstrapPeers</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;multiaddr-of-peer-1&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;multiaddr-of-peer-2&#39;</span><span class="p">]</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="p">)</span>
-</code></pre></div>
-<h3 id="dynamic-topic-management">Dynamic topic management<a class="headerlink" href="#dynamic-topic-management" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TeranodeListener</span><span class="p">({</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="s1">&#39;bitcoin/mainnet-block&#39;</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="p">,</span><span class="w"> </span><span class="kr">from</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Block:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="p">})</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1">// Add more topics later</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nx">listener</span><span class="p">.</span><span class="nx">addTopicCallback</span><span class="p">(</span><span class="s1">&#39;bitcoin/mainnet-subtree&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">topic</span><span class="p">,</span><span class="w"> </span><span class="kr">from</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;Subtree:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">)</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">})</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1">// Unsubscribe from a topic</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="nx">listener</span><span class="p">.</span><span class="nx">removeTopicCallback</span><span class="p">(</span><span class="s1">&#39;bitcoin/mainnet-block&#39;</span><span class="p">)</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1">// Access underlying libp2p node</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="kd">const</span><span class="w"> </span><span class="nx">node</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">listener</span><span class="p">.</span><span class="nx">getNode</span><span class="p">()</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="c1">// Check connected peer count</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="kd">const</span><span class="w"> </span><span class="nx">peerCount</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">listener</span><span class="p">.</span><span class="nx">getConnectedPeerCount</span><span class="p">()</span>
-</code></pre></div>
-<h3 id="graceful-shutdown">Graceful shutdown<a class="headerlink" href="#graceful-shutdown" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">listener</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TeranodeListener</span><span class="p">(</span><span class="nx">callbacks</span><span class="p">,</span><span class="w"> </span><span class="nx">config</span><span class="p">)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">// Clean shutdown</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">await</span><span class="w"> </span><span class="nx">listener</span><span class="p">.</span><span class="nx">stop</span><span class="p">()</span>
-</code></pre></div>
-<h2 id="key-concepts">Key concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Private DHT network</strong> — Uses pre-shared key (PSK) for closed, authenticated P2P network</li>
-<li><strong>libp2p gossipsub</strong> — Pub/sub messaging layer for efficient blockchain event distribution</li>
-<li><strong>Topic-based subscriptions</strong> — Subscribe to specific Teranode topics (e.g., <code>bitcoin/mainnet-block</code>)</li>
-<li><strong>Bootstrap peers</strong> — Known peers to connect to initially; discover more peers from there</li>
-<li><strong>Static peers</strong> — Explicitly configured peers maintained for reliable connections</li>
-<li><strong>Peer discovery</strong> — libp2p discovers peers via bootstrap and pubsub peer discovery protocol</li>
-<li><strong>Message callbacks</strong> — Each topic has own async callback for processing events</li>
-<li><strong>Graceful shutdown</strong> — <code>.stop()</code> method for clean connection teardown</li>
-</ul>
-<h2 id="topic-types">Topic types<a class="headerlink" href="#topic-types" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>bitcoin/mainnet-bestblock</code> — Best block message</li>
-<li><code>bitcoin/mainnet-block</code> — Block solution found</li>
-<li><code>bitcoin/mainnet-subtree</code> — Subtree created</li>
-<li><code>bitcoin/mainnet-mining_on</code> — Mining enabled</li>
-<li><code>bitcoin/mainnet-handshake</code> — Peer connects</li>
-<li><code>bitcoin/mainnet-rejected_tx</code> — Transaction rejected</li>
-<li><strong>Testnet variants</strong> — Replace <code>mainnet</code> with <code>testnet</code> for testnet topics</li>
-</ul>
-<h2 id="when-to-use-this">When to use this<a class="headerlink" href="#when-to-use-this" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Real-time monitoring of blockchain events</li>
-<li>Listening for new blocks and transactions</li>
-<li>Monitoring mining status and peer connections</li>
-<li>Building blockchain applications that react to network events</li>
-<li>Running as part of an overlay service infrastructure</li>
-</ul>
-<h2 id="when-not-to-use-this">When NOT to use this<a class="headerlink" href="#when-not-to-use-this" title="Permanent link">&para;</a></h2>
-<ul>
-<li>For transaction broadcasting — use transaction submission endpoints</li>
-<li>For UTXO queries — use explorer APIs or full-node RPC</li>
-<li>For historical blockchain data — use indexers like @bsv/overlay</li>
-<li>Without need for real-time updates — use batch query APIs</li>
-</ul>
-<h2 id="spec-conformance">Spec conformance<a class="headerlink" href="#spec-conformance" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>libp2p v2.9+</strong> — Uses modern libp2p API</li>
-<li><strong>Gossipsub</strong> — Standard pubsub protocol for message distribution</li>
-<li><strong>DHT (Kademlia)</strong> — Distributed peer discovery</li>
-<li><strong>Noise protocol</strong> — Modern encryption for libp2p connections</li>
-<li><strong>PSK (Pre-Shared Key)</strong> — Private network isolation via PNET</li>
-</ul>
-<h2 id="common-pitfalls">Common pitfalls<a class="headerlink" href="#common-pitfalls" title="Permanent link">&para;</a></h2>
+<p>The <code>MerklePath</code> class in <code>@bsv/sdk</code> implements BRC-74 encoding, decoding, and compound path operations.</p>
+<h2 id="ancestor-transactions">Ancestor Transactions<a class="headerlink" href="#ancestor-transactions" title="Permanent link">&para;</a></h2>
+<p>BEEF includes the minimal set of parent transactions required to reach a mined anchor on the longest chain. Each included ancestor either:
+- Has a BUMP (is confirmed), or
+- Has its own ancestors included in the package</p>
+<p>This creates a proof chain: the final transaction → unconfirmed parents → confirmed ancestors with BUMPs.</p>
+<h2 id="beef-v2-brc-95">BEEF V2 (BRC-95)<a class="headerlink" href="#beef-v2-brc-95" title="Permanent link">&para;</a></h2>
+<p>BRC-95 is a revised BEEF format that extends BRC-62. Both versions are supported by <code>@bsv/sdk</code>. Check <code>Beef.version</code> to distinguish them at runtime.</p>
+<h2 id="streaming-validation">Streaming Validation<a class="headerlink" href="#streaming-validation" title="Permanent link">&para;</a></h2>
+<p>The ordering of BEEF enables a pipeline:</p>
 <ol>
-<li><strong>Node.js 18+ required</strong> — Modern async/await and crypto features</li>
-<li><strong>ES modules only</strong> — Package is ESM; use <code>.mjs</code> files or set <code>"type": "module"</code> in package.json</li>
-<li><strong>Teranode mainnet defaults</strong> — Without config, connects to official Teranode mainnet</li>
-<li><strong>PSK hex format</strong> — <code>sharedKey</code> must be hex-encoded; library auto-formats to PSK</li>
-<li><strong>Static peer connection</strong> — If unreachable, may spam logs; consider retry logic</li>
-<li><strong>Message data format</strong> — Teranode messages are raw <code>Uint8Array</code>; caller must deserialize (typically BSV transaction/block)</li>
-<li><strong>Blocking callbacks</strong> — Slow callbacks queue messages; consider async processing</li>
-<li><strong>Network requirements</strong> — Requires TCP connectivity on configured listen ports</li>
+<li>Receiver begins parsing BUMPs immediately.</li>
+<li>BUMPs are verified against block headers (Chaintracks). This can happen before the transactions arrive.</li>
+<li>Ancestor transactions are validated in order, each checking its inputs against the already-validated chain.</li>
+<li>Final transaction is evaluated with all inputs proven.</li>
 </ol>
-<h2 id="related-packages">Related packages<a class="headerlink" href="#related-packages" title="Permanent link">&para;</a></h2>
+<p>Any failure in the chain aborts early without processing the remaining bytes.</p>
+<h2 id="usage-in-bsvsdk">Usage in @bsv/sdk<a class="headerlink" href="#usage-in-bsvsdk" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Beef</span><span class="p">,</span><span class="w"> </span><span class="nx">Transaction</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1">// Build a BEEF from a transaction and proof</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">beef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Beef</span><span class="p">()</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nx">beef</span><span class="p">.</span><span class="nx">mergeTransaction</span><span class="p">(</span><span class="nx">tx</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nx">beef</span><span class="p">.</span><span class="nx">mergeBump</span><span class="p">(</span><span class="nx">bump</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kd">const</span><span class="w"> </span><span class="nx">bytes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">beef</span><span class="p">.</span><span class="nx">toBinary</span><span class="p">()</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1">// Parse and validate</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kd">const</span><span class="w"> </span><span class="nx">parsed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Beef</span><span class="p">.</span><span class="nx">fromBinary</span><span class="p">(</span><span class="nx">bytes</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="kd">const</span><span class="w"> </span><span class="nx">isValid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">parsed</span><span class="p">.</span><span class="nx">verify</span><span class="p">(</span><span class="nx">chaintracker</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="where-beef-appears">Where BEEF Appears<a class="headerlink" href="#where-beef-appears" title="Permanent link">&para;</a></h2>
+<p>BEEF is used throughout the stack wherever transactions cross system boundaries:</p>
 <ul>
-<li><a href="../../overlays/overlay/">@bsv/overlay</a> — Can use TeranodeListener for transaction submission</li>
-<li><a href="https://github.com/bsv-blockchain/ts-sdk">@bsv/sdk</a> — Transaction and block deserialization</li>
-<li><a href="../../overlays/overlay-express/">@bsv/overlay-express</a> — Overlay services can integrate with network</li>
+<li><strong>BRC-100 <code>createAction</code> / <code>internalizeAction</code></strong> — Actions return BEEF; the recipient wallet calls <code>internalizeAction</code> with the BEEF to credit funds.</li>
+<li><strong>Overlay submission</strong> — All transactions submitted to an overlay via <code>engine.submit()</code> must be in BEEF format.</li>
+<li><strong>BRC-121 (HTTP 402)</strong> — Micropayment sent in HTTP headers is BEEF-encoded.</li>
+<li><strong>BRC-29 (Peer payment)</strong> — Payment transaction transmitted as BEEF.</li>
+<li><strong>GASP sync</strong> — Overlay nodes exchange BEEF during graph synchronization.</li>
 </ul>
-<h2 id="reference">Reference<a class="headerlink" href="#reference" title="Permanent link">&para;</a></h2>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://bsv-blockchain.github.io/ts-stack/api/ts-p2p/">API reference (TypeDoc)</a></li>
-<li><a href="https://github.com/bsv-blockchain/ts-p2p">Source on GitHub</a></li>
-<li><a href="https://www.npmjs.com/package/@bsv/ts-p2p">npm</a></li>
-<li><a href="https://docs.libp2p.io/">libp2p documentation</a></li>
+<li><a href="../brc-100/">BRC-100 Wallet Interface</a> — <code>internalizeAction</code> and <code>createAction</code> use BEEF</li>
+<li><a href="../../conformance/">Conformance vectors</a> — <code>conformance/vectors/sdk/transactions/</code></li>
+<li><a href="../../packages/sdk/bsv-sdk/">MerklePath TypeDoc</a> — <code>@bsv/sdk</code> MerklePath and Beef classes</li>
 </ul>
 
 
@@ -4544,7 +4623,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:37:36 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     
@@ -4554,7 +4633,7 @@
     <span class="md-icon" title="Created">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 03:30:19 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     
@@ -4629,10 +4708,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

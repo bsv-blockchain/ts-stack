@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="BSV TypeScript monorepo — 27 production packages for building payment, identity, and data apps">
+        <meta name="description" content="BSV TypeScript monorepo — production packages for building payment, identity, and data apps on BSV">
       
       
       
@@ -16,7 +16,7 @@
         <link rel="prev" href="../choose-your-stack/">
       
       
-        <link rel="next" href="../../packages/">
+        <link rel="next" href="../../architecture/">
       
       
         
@@ -266,6 +266,28 @@
     
   
   Get Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Architecture
 
         </a>
       </li>
@@ -741,10 +763,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#beef-binary-encoded-extended-format" class="md-nav__link">
+  <a href="#the-foundation-bsvsdk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BEEF (Binary Encoded Extended Format)
+        The Foundation: @bsv/sdk
       
     </span>
   </a>
@@ -752,10 +774,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#overlay" class="md-nav__link">
+  <a href="#beef-background-evaluation-extended-format-brc-62" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overlay
+        BEEF — Background Evaluation Extended Format (BRC-62)
       
     </span>
   </a>
@@ -763,33 +785,55 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#topic-manager" class="md-nav__link">
+  <a href="#brc-100-the-wallet-interface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Topic Manager
+        BRC-100 — The Wallet Interface
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#brc-100-wallet-interface" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BRC-100 (Wallet Interface)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BRC-100 (Wallet Interface)">
+    <nav class="md-nav" aria-label="BRC-100 — The Wallet Interface">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#brc-100-methods" class="md-nav__link">
+  <a href="#actual-method-surface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BRC-100 Methods
+        Actual method surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#labels-vs-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labels vs. tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batching-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batching workflows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privileged-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privileged mode
       
     </span>
   </a>
@@ -802,10 +846,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spv-simplified-payment-verification" class="md-nav__link">
+  <a href="#the-wallet-toolbox" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SPV (Simplified Payment Verification)
+        The Wallet Toolbox
       
     </span>
   </a>
@@ -813,10 +857,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#identity-key" class="md-nav__link">
+  <a href="#bsvsimple-the-application-layer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Identity Key
+        @bsv/simple — The Application Layer
       
     </span>
   </a>
@@ -824,10 +868,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#transaction-vs-identity-key" class="md-nav__link">
+  <a href="#overlays" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Transaction vs. Identity Key
+        Overlays
       
     </span>
   </a>
@@ -835,10 +879,104 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#protocol-vs-metadata" class="md-nav__link">
+  <a href="#identity-and-mutual-authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Protocol vs. Metadata
+        Identity and Mutual Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Identity and Mutual Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#brc-103-brc-104-peer-mutual-auth-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BRC-103 / BRC-104 — Peer mutual-auth framework
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#brc-31-http-mutual-auth-handshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BRC-31 — HTTP mutual-auth handshake
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#messaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Messaging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#http-402-payments-brc-121" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP 402 Payments (BRC-121)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uhrp-universal-hash-resolution-protocol-brc-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UHRP — Universal Hash Resolution Protocol (BRC-26)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#arc-and-chaintracks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ARC and Chaintracks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance
       
     </span>
   </a>
@@ -895,6 +1033,274 @@
       
         
       
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../architecture/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/layers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stack Layers
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/beef/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BEEF (BRC-62)
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/brc-100/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    BRC-100 Wallet Interface
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/identity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Auth
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance Pipeline
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
         
       
         
@@ -914,7 +1320,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -943,14 +1349,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -992,7 +1398,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_2" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1021,14 +1427,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_2" id="__nav_4_2_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_2">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1104,6 +1510,8 @@
       
         
       
+        
+      
     
     
     
@@ -1119,7 +1527,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1148,14 +1556,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1307,6 +1715,41 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/wallet/wallet-toolbox-examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/wallet-toolbox-examples
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1345,7 +1788,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_4" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1374,14 +1817,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1400,7 +1843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../packages/network/ts-p2p/" class="md-nav__link">
+      <a href="../../packages/network/teranode-listener/" class="md-nav__link">
         
   
   
@@ -1476,7 +1919,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1505,14 +1948,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1601,7 +2044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../packages/overlays/topics/" class="md-nav__link">
+      <a href="../../packages/overlays/overlay-topics/" class="md-nav__link">
         
   
   
@@ -1671,7 +2114,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../packages/overlays/gasp-core/" class="md-nav__link">
+      <a href="../../packages/overlays/gasp/" class="md-nav__link">
         
   
   
@@ -1778,7 +2221,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_6" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1800,14 +2243,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1931,7 +2374,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../packages/messaging/ts-paymail/" class="md-nav__link">
+      <a href="../../packages/messaging/paymail/" class="md-nav__link">
         
   
   
@@ -2001,7 +2444,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -2023,14 +2466,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_7" id="__nav_3_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2195,7 +2638,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -2217,14 +2660,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_8" id="__nav_3_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2243,7 +2686,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../../packages/helpers/ts-templates/" class="md-nav__link">
+      <a href="../../packages/helpers/simple/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    @bsv/simple
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../packages/helpers/templates/" class="md-nav__link">
         
   
   
@@ -2313,42 +2791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../packages/helpers/simple/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    @bsv/simple
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../packages/helpers/bsv-wallet-helper/" class="md-nav__link">
+      <a href="../../packages/helpers/wallet-helper/" class="md-nav__link">
         
   
   
@@ -2486,6 +2929,8 @@
       
         
       
+        
+      
     
     
     
@@ -2501,7 +2946,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -2530,14 +2975,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2759,6 +3204,41 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../infrastructure/chaintracks-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    chaintracks-server
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--stable"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2818,7 +3298,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -2847,14 +3327,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3312,8 +3792,6 @@
       
         
       
-        
-      
     
     
     
@@ -3329,7 +3807,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3358,14 +3836,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3427,41 +3905,6 @@
     
   
     TS runner
-  
-
-    
-  </span>
-  
-  
-    
-  
-  
-    <span class="md-status md-status--stable"></span>
-  
-
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../conformance/runner-go/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Go runner
   
 
     
@@ -3560,7 +4003,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3589,14 +4032,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3785,7 +4228,7 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3814,14 +4257,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3890,6 +4333,8 @@
       
         
       
+        
+      
     
     
     
@@ -3905,10 +4350,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_10" >
         
           
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
             
   
   
@@ -3926,8 +4371,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4042,6 +4487,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4076,10 +4549,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#beef-binary-encoded-extended-format" class="md-nav__link">
+  <a href="#the-foundation-bsvsdk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BEEF (Binary Encoded Extended Format)
+        The Foundation: @bsv/sdk
       
     </span>
   </a>
@@ -4087,10 +4560,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#overlay" class="md-nav__link">
+  <a href="#beef-background-evaluation-extended-format-brc-62" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overlay
+        BEEF — Background Evaluation Extended Format (BRC-62)
       
     </span>
   </a>
@@ -4098,33 +4571,55 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#topic-manager" class="md-nav__link">
+  <a href="#brc-100-the-wallet-interface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Topic Manager
+        BRC-100 — The Wallet Interface
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#brc-100-wallet-interface" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BRC-100 (Wallet Interface)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="BRC-100 (Wallet Interface)">
+    <nav class="md-nav" aria-label="BRC-100 — The Wallet Interface">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#brc-100-methods" class="md-nav__link">
+  <a href="#actual-method-surface" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BRC-100 Methods
+        Actual method surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#labels-vs-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labels vs. tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batching-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batching workflows
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#privileged-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privileged mode
       
     </span>
   </a>
@@ -4137,10 +4632,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spv-simplified-payment-verification" class="md-nav__link">
+  <a href="#the-wallet-toolbox" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SPV (Simplified Payment Verification)
+        The Wallet Toolbox
       
     </span>
   </a>
@@ -4148,10 +4643,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#identity-key" class="md-nav__link">
+  <a href="#bsvsimple-the-application-layer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Identity Key
+        @bsv/simple — The Application Layer
       
     </span>
   </a>
@@ -4159,10 +4654,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#transaction-vs-identity-key" class="md-nav__link">
+  <a href="#overlays" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Transaction vs. Identity Key
+        Overlays
       
     </span>
   </a>
@@ -4170,10 +4665,104 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#protocol-vs-metadata" class="md-nav__link">
+  <a href="#identity-and-mutual-authentication" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Protocol vs. Metadata
+        Identity and Mutual Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Identity and Mutual Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#brc-103-brc-104-peer-mutual-auth-framework" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BRC-103 / BRC-104 — Peer mutual-auth framework
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#brc-31-http-mutual-auth-handshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BRC-31 — HTTP mutual-auth handshake
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#messaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Messaging
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#http-402-payments-brc-121" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP 402 Payments (BRC-121)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#uhrp-universal-hash-resolution-protocol-brc-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UHRP — Universal Hash Resolution Protocol (BRC-26)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#arc-and-chaintracks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ARC and Chaintracks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance
       
     </span>
   </a>
@@ -4212,100 +4801,114 @@
 
 
 <h1 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h1>
-<p>ts-stack uses several concepts from the BSV protocol and the ecosystem. Understanding them helps you choose the right packages and architecture for your app.</p>
-<p><img alt="Concepts overview: a transaction wrapped in BEEF (with SPV merkle proof) signed by a BRC-100 wallet flows into an Overlay Node where the Topic Manager admits it and the Lookup Service indexes it for application queries — identity keys tie everything together" src="../../assets/diagrams/concepts-overview.svg" /></p>
-<h2 id="beef-binary-encoded-extended-format">BEEF (Binary Encoded Extended Format)<a class="headerlink" href="#beef-binary-encoded-extended-format" title="Permanent link">&para;</a></h2>
-<p>BEEF is a binary format that bundles a transaction together with all the merkle proofs needed to prove it's in the chain. Instead of saying "trust me, this transaction is in the chain," you send BEEF to another system and they can verify it immediately using Simplified Payment Verification (SPV).</p>
-<p><strong>Why it matters:</strong> BEEF lets you move transactions and proof between systems without requiring a trusted intermediary. You can hand a BEEF payload to a wallet, an overlay, or another app and they can verify it themselves.</p>
-<p><strong>In ts-stack:</strong> The <a href="../../packages/sdk/">SDK</a> has native BEEF encoding and decoding. Use it whenever you're passing transactions between systems.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Transaction</span><span class="p">,</span><span class="w"> </span><span class="nx">Beef</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;@bsv/sdk&#39;</span><span class="p">;</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">beef</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">Beef</span><span class="p">.</span><span class="nx">fromTransaction</span><span class="p">(</span><span class="nx">tx</span><span class="p">,</span><span class="w"> </span><span class="nx">merkleProof</span><span class="p">);</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kd">const</span><span class="w"> </span><span class="nx">verified</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">beef</span><span class="p">.</span><span class="nx">verify</span><span class="p">();</span>
-</code></pre></div>
-<h2 id="overlay">Overlay<a class="headerlink" href="#overlay" title="Permanent link">&para;</a></h2>
-<p>An overlay is a service that indexes and serves a specific slice of on-chain data, so applications don't have to scan the entire chain to find what they need. Examples include:</p>
+<p>ts-stack uses several foundational concepts from the BSV protocol. Understanding them helps you choose the right packages and architecture for your app.</p>
+<h2 id="the-foundation-bsvsdk">The Foundation: @bsv/sdk<a class="headerlink" href="#the-foundation-bsvsdk" title="Permanent link">&para;</a></h2>
+<p>Everything rests on <code>@bsv/sdk</code> — a zero-dependency library containing:</p>
 <ul>
-<li>A token registry overlay that indexes all BTMS token transactions</li>
-<li>An identity overlay that keeps a directory of public keys and identity metadata</li>
-<li>A file storage overlay (UHRP) that indexes data inscriptions</li>
+<li>secp256k1 and secp256r1 elliptic curve operations</li>
+<li>Hashing utilities (SHA-256, RIPEMD-160, HMAC)</li>
+<li>Bitcoin Script engine (interpreter + templates)</li>
+<li>Transaction construction and serialization</li>
+<li>BEEF encoding/decoding (BRC-62)</li>
+<li>Merkle path computation (BRC-74)</li>
+<li>Key derivation (BRC-42)</li>
 </ul>
-<p><strong>In ts-stack:</strong> The <a href="../../packages/overlays/overlay/">Overlay</a> and <a href="../../packages/overlays/overlay-express/">Overlay Express</a> packages let you run your own overlay. Applications connect to overlays through the <a href="../../specs/overlay-http/">Overlay HTTP</a> spec.</p>
-<h2 id="topic-manager">Topic Manager<a class="headerlink" href="#topic-manager" title="Permanent link">&para;</a></h2>
-<p>Inside an overlay, a topic manager validates which transactions belong to a topic and maintains that topic's state. Different topic managers implement different protocols:</p>
-<ul>
-<li><strong>UHRP Topic Manager</strong> — Stores and retrieves files by hash</li>
-<li><strong>BTMS Topic Manager</strong> — Manages token issuance and transfers</li>
-<li><strong>Custom Topic Manager</strong> — Implement your own protocol</li>
-</ul>
-<p><strong>In ts-stack:</strong> The <a href="../../packages/overlays/topics/">Overlay Topics</a> package provides topic manager patterns. Each topic manager is responsible for validating transactions before the overlay indexes them.</p>
-<h2 id="brc-100-wallet-interface">BRC-100 (Wallet Interface)<a class="headerlink" href="#brc-100-wallet-interface" title="Permanent link">&para;</a></h2>
-<p>BRC-100 is a standard interface that wallets implement. It defines the RPC surface for signing, encrypting, authenticating, and (optionally) managing keys. An app using BRC-100 can work with any BRC-100-compliant wallet.</p>
-<p><strong>Why it matters:</strong> Instead of writing wallet integration logic for each wallet provider, you implement BRC-100 once and work with all of them.</p>
-<p><strong>In ts-stack:</strong> The <a href="../../packages/wallet/wallet-toolbox/">Wallet Toolbox</a> and <a href="../../packages/wallet/wallet-relay/">Wallet Relay</a> packages implement BRC-100 from both the app and wallet sides.</p>
-<h3 id="brc-100-methods">BRC-100 Methods<a class="headerlink" href="#brc-100-methods" title="Permanent link">&para;</a></h3>
-<ul>
-<li><strong><code>sign(message)</code></strong> — Sign arbitrary data with a key</li>
-<li><strong><code>encrypt(plaintext)</code></strong> — Encrypt data for a recipient's public key</li>
-<li><strong><code>decrypt(ciphertext)</code></strong> — Decrypt data sent to you</li>
-<li><strong><code>authenticate(payload)</code></strong> — Sign a challenge to prove you control a key</li>
-<li><strong><code>getKeys()</code></strong> — List available keys (if wallet manages them)</li>
-</ul>
-<h2 id="spv-simplified-payment-verification">SPV (Simplified Payment Verification)<a class="headerlink" href="#spv-simplified-payment-verification" title="Permanent link">&para;</a></h2>
-<p>Proof that a transaction is in the chain without downloading the whole chain. SPV uses merkle proofs: you have a transaction, its position in a block, the merkle root, and a chain of merkle siblings all the way up to the block header.</p>
-<p><strong>In ts-stack:</strong> The <a href="../../packages/sdk/">SDK</a> validates merkle proofs in BEEF format. Pass BEEF to <code>Beef.verify()</code> and it checks the proof without needing a full node.</p>
-<h2 id="identity-key">Identity Key<a class="headerlink" href="#identity-key" title="Permanent link">&para;</a></h2>
-<p>A long-lived public key that represents a user, service, or application across the stack. Unlike transaction keys (which rotate for privacy), identity keys are stable and reusable.</p>
-<p><strong>Why it matters:</strong>
-- Apps can authenticate users with a single identity key
-- Users can prove they sent a message or transaction
-- Overlays can validate that submissions come from trusted sources
-- Messaging systems can route encrypted messages to a recipient's identity key</p>
-<p><strong>In ts-stack:</strong> Every authenticated operation uses an identity key. The <a href="../../packages/messaging/authsocket/">Authsocket</a> and <a href="../../packages/middleware/auth-express-middleware/">Auth Middleware</a> packages build on identity keys.</p>
-<h2 id="transaction-vs-identity-key">Transaction vs. Identity Key<a class="headerlink" href="#transaction-vs-identity-key" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Aspect</th>
-<th>Transaction Key</th>
-<th>Identity Key</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Lifetime</td>
-<td>Single transaction</td>
-<td>Long-lived (months/years)</td>
-</tr>
-<tr>
-<td>Reuse</td>
-<td>No (privacy)</td>
-<td>Yes (authentication)</td>
-</tr>
-<tr>
-<td>Discovery</td>
-<td>Derived from inputs, not known beforehand</td>
-<td>Published, discoverable</td>
-</tr>
-<tr>
-<td>Use case</td>
-<td>Spending UTXO control</td>
-<td>Authentication, encryption, messaging</td>
-</tr>
-</tbody>
-</table>
-<h2 id="protocol-vs-metadata">Protocol vs. Metadata<a class="headerlink" href="#protocol-vs-metadata" title="Permanent link">&para;</a></h2>
-<p>On BSV, data is stored in two places:</p>
+<p>Zero-dependency means no transitive supply-chain risk. The cryptographic primitives have undergone third-party security auditing.</p>
+<h2 id="beef-background-evaluation-extended-format-brc-62">BEEF — Background Evaluation Extended Format (BRC-62)<a class="headerlink" href="#beef-background-evaluation-extended-format-brc-62" title="Permanent link">&para;</a></h2>
+<p>BEEF is the standardized binary format for peer-to-peer transaction exchange. It bundles a transaction together with the Merkle proofs needed to prove it is mined in the chain, enabling Simplified Payment Verification (SPV) without a full node.</p>
+<p>A BEEF package begins with the 4-byte version header <strong><code>0100BEEF</code></strong> and is ordered deliberately for streaming validation:</p>
 <ol>
-<li><strong>On-chain (Bitcoin Script)</strong> — The actual transaction outputs that can be spent</li>
-<li><strong>Metadata (OP_RETURN)</strong> — Non-spendable data in transaction outputs</li>
+<li><strong>BSV Unified Merkle Paths (BUMP / BRC-74)</strong> — Merkle proofs linking transactions to block headers</li>
+<li><strong>Ancestor transactions</strong> — The minimal set of parent transactions needed to reach a mined anchor</li>
+<li><strong>The final transaction</strong> — The transaction being evaluated</li>
 </ol>
-<p>Topic managers validate metadata to determine which transactions belong to a topic. The actual token balance or file content lives in metadata, but spending rights live in the Script outputs.</p>
+<p>This ordering lets a recipient begin verifying Merkle roots against a header service (such as Chaintracks) before the entire payload has arrived.</p>
+<p><strong>In ts-stack:</strong> <code>@bsv/sdk</code> has native BEEF encoding and decoding. Pass BEEF wherever you hand transactions between systems — wallets, overlays, messaging layers.</p>
+<h2 id="brc-100-the-wallet-interface">BRC-100 — The Wallet Interface<a class="headerlink" href="#brc-100-the-wallet-interface" title="Permanent link">&para;</a></h2>
+<p>BRC-100 is a vendor-neutral boundary that separates application business logic from wallet and key management. An app implementing BRC-100 works with any compliant wallet (BSV Desktop, BSV Browser, or a server wallet built with <code>@bsv/wallet-toolbox</code>) without modification.</p>
+<h3 id="actual-method-surface">Actual method surface<a class="headerlink" href="#actual-method-surface" title="Permanent link">&para;</a></h3>
+<p>The BRC-100 interface defines methods for actions, outputs, keys, encryption, and HMACs. The primary methods are:</p>
+<ul>
+<li><strong><code>createAction()</code></strong> — Build and sign a transaction; returns a <code>signableTransaction</code> with a <code>.reference</code> handle</li>
+<li><strong><code>signAction({ reference })</code></strong> — Complete signing using the <code>signableTransaction.reference</code> from <code>createAction</code></li>
+<li><strong><code>abortAction()</code></strong> — Cancel an in-progress action</li>
+<li><strong><code>listActions()</code></strong> — Query transactions by <strong>label</strong> (transaction-level metadata)</li>
+<li><strong><code>listOutputs()</code></strong> — Query outputs by <strong>tag</strong> (output-level metadata) and basket</li>
+<li><strong><code>internalizeAction()</code></strong> — Internalize an incoming payment (BEEF) into the wallet</li>
+<li><strong><code>getPublicKey()</code></strong> — Derive a public key using BRC-42</li>
+<li><strong><code>encrypt()</code> / <code>decrypt()</code></strong> — Symmetric and asymmetric encryption</li>
+<li><strong><code>createHmac()</code> / <code>verifyHmac()</code></strong> — HMAC operations</li>
+<li><strong><code>createSignature()</code> / <code>verifySignature()</code></strong> — Raw signing and verification</li>
+<li><strong><code>acquireCertificate()</code> / <code>listCertificates()</code> / <code>proveCertificate()</code> / <code>relinquishCertificate()</code></strong> — Identity certificate lifecycle</li>
+</ul>
+<h3 id="labels-vs-tags">Labels vs. tags<a class="headerlink" href="#labels-vs-tags" title="Permanent link">&para;</a></h3>
+<p><strong>Labels</strong> are transaction-level metadata. They categorize whole Actions and are searched via <code>listActions</code>.</p>
+<p><strong>Tags</strong> are output-level metadata. They mark specific UTXOs within a basket and are searched via <code>listOutputs</code>.</p>
+<p>Do not conflate them — they apply at different granularities.</p>
+<h3 id="batching-workflows">Batching workflows<a class="headerlink" href="#batching-workflows" title="Permanent link">&para;</a></h3>
+<p><code>createAction</code> supports advanced chaining:</p>
+<ul>
+<li><strong><code>noSend: true</code></strong> — Prepares a transaction for later without broadcasting. Use to assemble multiple coordinated transactions before submitting them together.</li>
+<li><strong><code>sendWith: [...]</code></strong> — Couples the current transaction with a list of previously <code>noSend</code> transactions, broadcasting them atomically.</li>
+</ul>
+<h3 id="privileged-mode">Privileged mode<a class="headerlink" href="#privileged-mode" title="Permanent link">&para;</a></h3>
+<p>All keys are derived via BKDS (BRC-42). The interface additionally supports a secondary <strong>Privileged Mode</strong> keyring for highly sensitive operations (e.g., identity key signing). Privileged-mode operations require elevated permission within the wallet UX and ensure identity keys never leave the secure environment.</p>
+<h2 id="the-wallet-toolbox">The Wallet Toolbox<a class="headerlink" href="#the-wallet-toolbox" title="Permanent link">&para;</a></h2>
+<p><code>@bsv/wallet-toolbox</code> is a modular toolkit for building BRC-100-compliant wallets. It is not a single monolithic wallet — it provides composable pieces:</p>
+<ul>
+<li><strong><code>WalletStorageManager</code></strong> — Orchestrates multiple persistence providers (SQL/Knex, IndexedDB, or Remote) with active/backup failover and incremental synchronization</li>
+<li>Storage providers: <code>KnexWalletStorage</code> (SQLite/MySQL/PostgreSQL), <code>IndexedDBWalletStorage</code> (browser), <code>RemoteWalletStorage</code> (HTTPS relay)</li>
+<li><strong><code>Monitor</code></strong> daemon — Polls confirmations, acquires Merkle proofs, rebroadcasts stalled transactions</li>
+<li><strong>Key managers</strong> — <code>PrivilegedKeyManager</code>, <code>ShamirWalletManager</code> with Shamir secret sharing</li>
+<li><strong>Network services</strong> — ARC, Chaintracks, WhatsOnChain integration</li>
+</ul>
+<p>Wallet builders assemble these into a BRC-100 wallet. App developers interact only with the resulting BRC-100 interface.</p>
+<h2 id="bsvsimple-the-application-layer">@bsv/simple — The Application Layer<a class="headerlink" href="#bsvsimple-the-application-layer" title="Permanent link">&para;</a></h2>
+<p><code>@bsv/simple</code> is a high-level wrapper for developers who need to move fast without deep blockchain knowledge. It abstracts script construction, key management, BEEF, and signing behind intuitive methods.</p>
+<p>Two entry points:</p>
+<ul>
+<li><strong><code>@bsv/simple/browser</code></strong> — Connects to browser-based wallets (BSV Browser) via the BRC-100 <code>WalletClient</code> substrate over <code>localhost</code> or <code>window.postMessage</code>. Exports: <code>createWallet</code>, <code>Wallet</code>, <code>Overlay</code>, <code>Certifier</code>, <code>DID</code>, <code>CredentialSchema</code>, <code>CredentialIssuer</code>, <code>MemoryRevocationStore</code>.</li>
+<li><strong><code>@bsv/simple/server</code></strong> — Manages server-side wallets for automated agents with file-based persistence. Can be deployed as an MCP (Model Context Protocol) server. Exports: <code>ServerWallet</code>, <code>ServerWalletManager</code>, <code>FileRevocationStore</code>, handler factories, <code>JsonFileStore</code>, <code>IdentityRegistry</code>, <code>DIDResolverService</code>.</li>
+</ul>
+<h2 id="overlays">Overlays<a class="headerlink" href="#overlays" title="Permanent link">&para;</a></h2>
+<p>An overlay is a shared-context layer: servers index, store, and provide lookup for a specific subset of transactions associated with a particular topic. Multiple applications can subscribe to the same overlay topic, giving them a unified view of that on-chain data. <!-- audio: ts-stack.m4a @ 00:00 --></p>
+<p><strong>Example — a to-do topic overlay:</strong> The topic requires transaction outputs with a specific format containing a to-do item and associated monetary value. Any application using that topic sees the same to-do list. If a user adds a to-do item in one application, it immediately appears in every other application connected to the same overlay, because they share that on-chain context. <!-- audio: ts-stack.m4a @ 00:00 --></p>
+<p>Inside an overlay:</p>
+<ul>
+<li><strong>Topic Manager</strong> — Validates which transactions belong to a topic (admittance rules). Implements <code>validateTransaction</code> and <code>admitOutput</code>.</li>
+<li><strong>Lookup Service</strong> — Manages the lifecycle of admitted outputs and exposes a query interface for client applications.</li>
+<li><strong>GASP (Graph-Aware Sync Protocol)</strong> — Synchronization mechanism between overlay nodes so multiple servers stay in sync.</li>
+</ul>
+<p>Discovery uses <strong>SHIP</strong> (Submit Host Interconnect Protocol) and <strong>SLAP</strong> (Service Lookup Access Protocol).</p>
+<p><code>@bsv/overlay-express</code> wraps the Overlay Engine as an Express server, handling database management and discovery automatically.</p>
+<h2 id="identity-and-mutual-authentication">Identity and Mutual Authentication<a class="headerlink" href="#identity-and-mutual-authentication" title="Permanent link">&para;</a></h2>
+<h3 id="brc-103-brc-104-peer-mutual-auth-framework">BRC-103 / BRC-104 — Peer mutual-auth framework<a class="headerlink" href="#brc-103-brc-104-peer-mutual-auth-framework" title="Permanent link">&para;</a></h3>
+<p>BRC-103 defines the underlying mutual-authentication primitive: a <code>Peer</code> framework that operates over any transport (WebSocket, HTTP, or direct byte streams). BRC-104 is the message-layer transport option used with BRC-103.</p>
+<h3 id="brc-31-http-mutual-auth-handshake">BRC-31 — HTTP mutual-auth handshake<a class="headerlink" href="#brc-31-http-mutual-auth-handshake" title="Permanent link">&para;</a></h3>
+<p>BRC-31 is the HTTP variant: it specifies the <code>x-bsv-auth-*</code> request/response headers that implement the mutual-auth challenge-response over standard HTTP. BRC-31 is built on BRC-103/104.</p>
+<p><code>@bsv/auth-express-middleware</code> implements BRC-31 for Express servers.<br />
+<code>@bsv/authsocket</code> implements BRC-103/104 over WebSocket.</p>
+<h3 id="identity-keys">Identity keys<a class="headerlink" href="#identity-keys" title="Permanent link">&para;</a></h3>
+<p>An identity key is a long-lived public key (BRC-42 derived) representing a user, service, or application. Unlike transaction keys (which rotate for privacy), identity keys are stable and reusable for authentication and message routing.</p>
+<h2 id="messaging">Messaging<a class="headerlink" href="#messaging" title="Permanent link">&para;</a></h2>
+<p><code>@bsv/message-box-client</code> and the MessageBox server implement a store-and-forward substrate for encrypted peer-to-peer messages using BRC-103/104 mutual authentication.</p>
+<p><code>@bsv/authsocket</code> / <code>@bsv/authsocket-client</code> provide a live authenticated WebSocket channel over the same identity primitives.</p>
+<h2 id="http-402-payments-brc-121">HTTP 402 Payments (BRC-121)<a class="headerlink" href="#http-402-payments-brc-121" title="Permanent link">&para;</a></h2>
+<p>BRC-121 defines a stateless settlement-gated HTTP protocol. A server challenges a client with a <code>402 Payment Required</code> response; the client sends a BEEF-encoded micropayment in the next request header. No session state — the payment is self-contained in headers.</p>
+<p><code>@bsv/402-pay</code> implements the client side. <code>@bsv/payment-express-middleware</code> implements the server middleware.</p>
+<h2 id="uhrp-universal-hash-resolution-protocol-brc-26">UHRP — Universal Hash Resolution Protocol (BRC-26)<a class="headerlink" href="#uhrp-universal-hash-resolution-protocol-brc-26" title="Permanent link">&para;</a></h2>
+<p>UHRP maps file hashes to CDN URLs, enabling decentralized content-addressed storage. Files are registered by submitting a UHRP transaction to an overlay; resolvers return the URL for a given hash.</p>
+<p><code>@bsv/overlay-topics</code> includes the UHRP Topic Manager and Lookup Service.</p>
+<h2 id="arc-and-chaintracks">ARC and Chaintracks<a class="headerlink" href="#arc-and-chaintracks" title="Permanent link">&para;</a></h2>
+<p><strong>ARC (Arcade)</strong> is the standardized interface for broadcasting transactions to miners. <code>@bsv/sdk</code> includes <code>ArcBroadcaster</code> implementing this spec.</p>
+<p><strong>Chaintracks</strong> facilitates block header management and Merkle root acquisition by listening to BSV peer-to-peer node messages. It is the header service against which BEEF Merkle proofs are validated. <code>@bsv/sdk</code> includes a Chaintracks client; the full Chaintracks Server is deployed separately.</p>
+<h2 id="conformance">Conformance<a class="headerlink" href="#conformance" title="Permanent link">&para;</a></h2>
+<p>The TypeScript stack is the <strong>canonical reference implementation</strong> for the BSV ecosystem. Conformance vectors (JSON test files in <code>conformance/vectors/</code>) are derived from this codebase and define expected behavior for every supported protocol. Implementations in Go, Python, and Rust consume the same vectors to verify cross-language compatibility.</p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../choose-your-stack/">Choose Your Stack</a></strong> — See which packages implement these concepts</li>
-<li><strong><a href="../../specs/">Specs</a></strong> — Deep dive into BRC standards</li>
-<li><strong><a href="../../guides/">Guides</a></strong> — See concepts in action</li>
+<li><strong><a href="../choose-your-stack/">Choose Your Stack</a></strong> — Pick the right packages for your use case</li>
+<li><strong><a href="../../specs/">Specs</a></strong> — Machine-readable protocol contracts</li>
+<li><strong><a href="../../guides/">Guides</a></strong> — Runnable walkthroughs</li>
 </ul>
 
 
@@ -4329,7 +4932,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 04:22:05 UTC">April 29, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="April 29, 2026 18:32:47 UTC">April 29, 2026</span>
   </span>
 
     

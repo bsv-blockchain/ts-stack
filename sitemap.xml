@@ -13,7 +13,35 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/about/sources/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
          <loc>https://bsv-blockchain.github.io/ts-stack/about/versioning/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/architecture/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/architecture/beef/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/architecture/brc-100/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/architecture/conformance/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/architecture/identity/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/architecture/layers/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -22,10 +50,6 @@
     </url>
     <url>
          <loc>https://bsv-blockchain.github.io/ts-stack/conformance/contributing-vectors/</loc>
-         <lastmod>2026-04-29</lastmod>
-    </url>
-    <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/conformance/runner-go/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -77,6 +101,10 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/infrastructure/chaintracks-server/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
          <loc>https://bsv-blockchain.github.io/ts-stack/infrastructure/message-box-server/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
@@ -113,10 +141,6 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/helpers/bsv-wallet-helper/</loc>
-         <lastmod>2026-04-29</lastmod>
-    </url>
-    <url>
          <loc>https://bsv-blockchain.github.io/ts-stack/packages/helpers/did-client/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
@@ -129,7 +153,11 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/helpers/ts-templates/</loc>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/helpers/templates/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/helpers/wallet-helper/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -149,7 +177,7 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/messaging/ts-paymail/</loc>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/messaging/paymail/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -173,7 +201,7 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/network/ts-p2p/</loc>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/network/teranode-listener/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -185,7 +213,7 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/overlays/gasp-core/</loc>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/overlays/gasp/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -197,11 +225,11 @@
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/overlays/overlay/</loc>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/overlays/overlay-topics/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
-         <loc>https://bsv-blockchain.github.io/ts-stack/packages/overlays/topics/</loc>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/overlays/overlay/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
@@ -226,6 +254,10 @@
     </url>
     <url>
          <loc>https://bsv-blockchain.github.io/ts-stack/packages/wallet/wallet-relay/</loc>
+         <lastmod>2026-04-29</lastmod>
+    </url>
+    <url>
+         <loc>https://bsv-blockchain.github.io/ts-stack/packages/wallet/wallet-toolbox-examples/</loc>
          <lastmod>2026-04-29</lastmod>
     </url>
     <url>
