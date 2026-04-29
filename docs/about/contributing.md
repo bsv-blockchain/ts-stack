@@ -46,7 +46,8 @@ The project uses **pnpm workspaces** for multi-package management.
 ts-stack/
   packages/          # 27 npm packages
   conformance/       # Test vectors and runners
-  docs/              # MkDocs documentation
+  docs/              # Documentation source (Markdown)
+  docs-site/         # Vite+React+MDX docs site
   .github/workflows/ # CI/CD pipelines
 ```
 
@@ -296,10 +297,13 @@ Template:
 
 Help improve docs:
 
-1. Find unclear sections in `/docs`
-2. Make the content clearer
-3. Test code examples
-4. Submit a PR to `docs/` directory
+1. Find unclear sections in `docs/`
+2. Edit the relevant `.md` file
+3. Preview locally: `pnpm docs:dev` → `http://localhost:5173`
+4. Submit a PR — CI validates frontmatter and builds the site automatically
+
+**Do not delete the `gh-pages` branch** — it hosts the TypeDoc `/api/` tree that
+the deploy workflow merges into the artifact before publishing.
 
 See [Versioning Policy](./versioning.md) for documentation maintenance.
 
