@@ -13,6 +13,10 @@ tags: ["spec", "auth", "brc-103", "brc-31"]
 
 > BRC-31 (implemented via BRC-103 `Peer` + BRC-104 HTTP transport) enables cryptographic handshakes between client and server. Both parties prove identity using ECDSA signatures, establishing a forward-secret session where every message is signed and verified. No shared passwords or certificates required—only identity public keys.
 
+## Interactive spec
+
+<iframe src="../assets/asyncapi/brc31/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="BRC-31 AsyncAPI Specification" loading="lazy"></iframe>
+
 ## At a glance
 
 | Field | Value |

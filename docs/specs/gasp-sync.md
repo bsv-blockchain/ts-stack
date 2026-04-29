@@ -13,6 +13,10 @@ tags: ["spec", "sync", "overlay", "gasp"]
 
 > GASP enables two overlay nodes to efficiently synchronize transaction state by walking the transaction graph together. Instead of broadcasting individual transactions, nodes exchange UTXO lists, then request only missing transaction ancestry and descendancy. Merkle proof validation ensures legitimacy without trusting peers.
 
+## Interactive spec
+
+<iframe src="../assets/asyncapi/gasp/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="GASP AsyncAPI Specification" loading="lazy"></iframe>
+
 ## At a glance
 
 | Field | Value |

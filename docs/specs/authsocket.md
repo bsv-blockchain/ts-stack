@@ -13,6 +13,10 @@ tags: ["spec", "messaging", "websocket"]
 
 > AuthSocket wraps Socket.IO with BRC-103 mutual authentication. Every WebSocket connection undergoes a cryptographic handshake, then all application-level messages are automatically signed by the server and verified by the client (and vice versa). No shared secrets required—only identity public keys.
 
+## Interactive spec
+
+<iframe src="../assets/asyncapi/authsocket/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="AuthSocket AsyncAPI Specification" loading="lazy"></iframe>
+
 ## At a glance
 
 | Field | Value |

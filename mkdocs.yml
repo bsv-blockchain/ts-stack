@@ -7,20 +7,12 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  logo: assets/images/bsva-linear-blue.png
+  icon:
+    logo: material/code-braces
   palette:
-    - scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+    scheme: slate
+    primary: custom
+    accent: custom
   font:
     text: Inter
     code: JetBrains Mono
@@ -38,6 +30,12 @@ theme:
 extra_css:
   - assets/stylesheets/extra.css
 
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+
+hooks:
+  - docs/hooks.py
+
 plugins:
   - search
   - git-revision-date-localized:
@@ -46,7 +44,11 @@ plugins:
 markdown_extensions:
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite

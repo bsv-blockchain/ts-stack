@@ -1,4 +1,4 @@
-asyncapi: "3.0.0"
+asyncapi: "3.1.0"
 
 info:
   title: GASP — Graph Aware Sync Protocol
@@ -43,7 +43,7 @@ defaultContentType: application/json
 # Channels
 # ---------------------------------------------------------------------------
 channels:
-  gasp/initialRequest:
+  gaspInitialRequest:
     address: gasp/initialRequest
     description: |
       Initiator sends its sync parameters.  The responder replies on the
@@ -52,7 +52,7 @@ channels:
       GASPInitialRequest:
         $ref: "#/components/messages/GASPInitialRequest"
 
-  gasp/initialResponse:
+  gaspInitialResponse:
     address: gasp/initialResponse
     description: |
       Responder sends back its list of known UTXOs and the timestamp from
@@ -61,7 +61,7 @@ channels:
       GASPInitialResponse:
         $ref: "#/components/messages/GASPInitialResponse"
 
-  gasp/initialReply:
+  gaspInitialReply:
     address: gasp/initialReply
     description: |
       Initiator (if operating in bidirectional mode) sends the set of UTXOs
@@ -70,7 +70,7 @@ channels:
       GASPInitialReply:
         $ref: "#/components/messages/GASPInitialReply"
 
-  gasp/requestNode:
+  gaspRequestNode:
     address: gasp/requestNode
     description: |
       Either party requests a specific graph node (transaction + output) from
@@ -79,7 +79,7 @@ channels:
       GASPNodeRequest:
         $ref: "#/components/messages/GASPNodeRequest"
 
-  gasp/node:
+  gaspNode:
     address: gasp/node
     description: |
       The responding party delivers the requested GASPNode (raw transaction,
@@ -88,7 +88,7 @@ channels:
       GASPNode:
         $ref: "#/components/messages/GASPNode"
 
-  gasp/submitNode:
+  gaspSubmitNode:
     address: gasp/submitNode
     description: |
       A party submits a node it is trying to push to the counterparty.
@@ -98,7 +98,7 @@ channels:
       GASPNode:
         $ref: "#/components/messages/GASPNode"
 
-  gasp/nodeResponse:
+  gaspNodeResponse:
     address: gasp/nodeResponse
     description: |
       Response to a submitted node; specifies which additional input transactions
@@ -115,61 +115,61 @@ operations:
   sendInitialRequest:
     action: send
     channel:
-      $ref: "#/channels/gasp/initialRequest"
+      $ref: "#/channels/gaspInitialRequest"
     summary: Initiator sends sync parameters to the responder.
     messages:
-      - $ref: "#/channels/gasp/initialRequest/messages/GASPInitialRequest"
+      - $ref: "#/channels/gaspInitialRequest/messages/GASPInitialRequest"
 
   receiveInitialResponse:
     action: receive
     channel:
-      $ref: "#/channels/gasp/initialResponse"
+      $ref: "#/channels/gaspInitialResponse"
     summary: Initiator receives the responder's UTXO list and since timestamp.
     messages:
-      - $ref: "#/channels/gasp/initialResponse/messages/GASPInitialResponse"
+      - $ref: "#/channels/gaspInitialResponse/messages/GASPInitialResponse"
 
   sendInitialReply:
     action: send
     channel:
-      $ref: "#/channels/gasp/initialReply"
+      $ref: "#/channels/gaspInitialReply"
     summary: |
       Initiator (bidirectional mode only) sends UTXOs the responder is missing.
     messages:
-      - $ref: "#/channels/gasp/initialReply/messages/GASPInitialReply"
+      - $ref: "#/channels/gaspInitialReply/messages/GASPInitialReply"
 
   requestNode:
     action: send
     channel:
-      $ref: "#/channels/gasp/requestNode"
+      $ref: "#/channels/gaspRequestNode"
     summary: Request a specific transaction node from the counterparty.
     messages:
-      - $ref: "#/channels/gasp/requestNode/messages/GASPNodeRequest"
+      - $ref: "#/channels/gaspRequestNode/messages/GASPNodeRequest"
 
   deliverNode:
     action: receive
     channel:
-      $ref: "#/channels/gasp/node"
+      $ref: "#/channels/gaspNode"
     summary: Receive a requested graph node from the counterparty.
     messages:
-      - $ref: "#/channels/gasp/node/messages/GASPNode"
+      - $ref: "#/channels/gaspNode/messages/GASPNode"
 
   submitNode:
     action: send
     channel:
-      $ref: "#/channels/gasp/submitNode"
+      $ref: "#/channels/gaspSubmitNode"
     summary: Push a graph node to the counterparty for ingestion.
     messages:
-      - $ref: "#/channels/gasp/submitNode/messages/GASPNode"
+      - $ref: "#/channels/gaspSubmitNode/messages/GASPNode"
 
   receiveNodeResponse:
     action: receive
     channel:
-      $ref: "#/channels/gasp/nodeResponse"
+      $ref: "#/channels/gaspNodeResponse"
     summary: |
       Receive the counterparty's response to a submitted node, listing any
       additional input transactions needed to complete the graph.
     messages:
-      - $ref: "#/channels/gasp/nodeResponse/messages/GASPNodeResponse"
+      - $ref: "#/channels/gaspNodeResponse/messages/GASPNodeResponse"
 
 # ---------------------------------------------------------------------------
 # Components

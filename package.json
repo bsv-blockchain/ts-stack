@@ -9,7 +9,12 @@
     "clean": "pnpm -r run clean",
     "sync-versions": "node scripts/sync-versions.mjs",
     "check-versions": "node scripts/check-versions.mjs",
-    "conformance": "node conformance/runner/src/runner.js"
+    "conformance": "node conformance/runner/src/runner.js",
+    "docs:asyncapi": "node scripts/generate-asyncapi-html.mjs"
+  },
+  "devDependencies": {
+    "@asyncapi/generator": "^2.8.4",
+    "@asyncapi/html-template": "^3.5.6"
   },
   "engines": {
     "node": ">=20",

@@ -140,8 +140,7 @@ Add a function to check available outputs before creating an action:
 ```typescript
 export async function checkBalance(wallet: any) {
   // List all unspent outputs (UTXOs)
-  const outputs = await wallet.listOutputs({
-    includeSpent: false,  // Only unspent outputs
+  const { outputs } = await wallet.listOutputs({
     basket: 'default'
   })
   
@@ -243,8 +242,7 @@ async function main() {
   
   // Step 2: Check balance before creating action
   console.log('\nStep 2: Checking balance...')
-  const balance = await wallet.listOutputs({
-    includeSpent: false,
+  const { outputs: balance } = await wallet.listOutputs({
     basket: 'default'
   })
   
@@ -262,7 +260,7 @@ async function main() {
       outputDescription: 'recipient payment'
     }]
   })
-  console.log('Action created with ID:', action.id)
+  console.log('Action created, reference:', action.signableTransaction?.reference)
   
   // Step 4: Sign the action
   console.log('\nStep 4: Signing action...')
@@ -281,7 +279,7 @@ async function main() {
   
   // Step 6: Query transaction history
   console.log('\nStep 6: Listing recent actions...')
-  const actions = await wallet.listActions({
+  const { actions } = await wallet.listActions({
     limit: 5
   })
   console.log(`Found ${actions.length} recent transactions`)

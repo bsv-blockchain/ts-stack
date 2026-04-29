@@ -13,6 +13,10 @@ tags: ["spec", "payments", "brc-29"]
 
 > BRC-29 defines how to send a peer-to-peer payment: derive a unique payment address from sender and recipient identity keys (using BRC-42 key derivation), construct a transaction with one or more P2PKH outputs to those addresses, and transmit the transaction via any transport (HTTP, WebSocket, message box). The receiver then internalizes the transaction into their wallet.
 
+## Interactive spec
+
+<iframe src="../assets/asyncapi/brc29/index.html" style="width:100%;min-height:800px;border:none;background:#011627;border-radius:8px;" title="BRC-29 AsyncAPI Specification" loading="lazy"></iframe>
+
 ## At a glance
 
 | Field | Value |

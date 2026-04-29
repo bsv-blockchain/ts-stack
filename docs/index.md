@@ -12,7 +12,6 @@ tags: []
 
 <div class="bsv-hero" markdown="0">
   <div class="bsv-hero__inner">
-    <img class="bsv-hero__logo" src="assets/images/bsva-stacked-blue.svg" alt="BSV Association" />
     <h1 class="bsv-hero__title">Unleash the potential of <em>data-on-chain</em></h1>
     <p class="bsv-hero__lede">
       A TypeScript stack for building apps that move money, store data, and authenticate users on BSV.
@@ -30,7 +29,39 @@ tags: []
 
 ## Architecture
 
-![ts-stack architecture diagram showing Application sitting on top of Middleware, Messaging, and Overlays, which all rest on Wallet & Relay, Network, SDK, and finally the BSV Chain](assets/diagrams/stack-architecture.svg)
+```mermaid
+flowchart TD
+    subgraph APP["Application Layer"]
+        SIMPLE_B["@bsv/simple/browser\nbrowser apps — connects to user wallet"]
+        SIMPLE_S["@bsv/simple/server\nself-custodial server agents"]
+    end
+
+    BRC100(["BRC-100 interface"])
+
+    subgraph WALLET["Wallet Builder Toolkit"]
+        WT["@bsv/wallet-toolbox\nstorage backends · Monitor · key managers · signing bridge"]
+    end
+
+    subgraph ADJACENT["Adjacent Capabilities"]
+        direction LR
+        OV["Overlays\n@bsv/overlay\n@bsv/overlay-express\n@bsv/overlay-topics\n@bsv/gasp"]
+        MSG["Messaging\n@bsv/message-box-client\n@bsv/authsocket\n@bsv/paymail"]
+        MW["Middleware\n@bsv/auth-express-middleware\n@bsv/402-pay\n@bsv/payment-express-middleware"]
+        INFRA["Infrastructure\nARC · Chaintracks\nWAB · WalletInfra"]
+    end
+
+    subgraph SDK["Foundation"]
+        BSVSDK["@bsv/sdk\nsecp256k1 · hashing · Script · transactions\nBEEF BRC-62 · BUMP BRC-74 · BRC-42 key derivation\nARC broadcaster · Chaintracks client"]
+    end
+
+    SIMPLE_B --> BRC100
+    SIMPLE_S --> BRC100
+    BRC100 --> WT
+    WT --> BSVSDK
+    OV --> BSVSDK
+    MSG --> BSVSDK
+    MW --> BSVSDK
+```
 
 ## Domain Overview
 

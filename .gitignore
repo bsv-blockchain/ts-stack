@@ -23,3 +23,6 @@ docs/assets/images/Logo_Guidelines_Jan2026.pdf
 
 # Internal working artifacts (audio transcripts, fact tables)
 docs/_internal/
+
+# AsyncAPI generator local cache (dependencies installed on-demand by generate-asyncapi-html.mjs)
+.asyncapi-gen-cache/

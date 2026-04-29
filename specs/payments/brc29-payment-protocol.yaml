@@ -1,4 +1,4 @@
-asyncapi: "3.0.0"
+asyncapi: "3.1.0"
 
 info:
   title: BRC-29 Simple Authenticated BSV P2PKH Payment Protocol
@@ -22,7 +22,7 @@ defaultContentType: application/json
 # Channels
 # ---------------------------------------------------------------------------
 channels:
-  payment/send:
+  paymentSend:
     address: payment/send
     description: |
       Logical channel representing a sender delivering a BRC-29 payment message
@@ -33,7 +33,7 @@ channels:
       paymentMessage:
         $ref: "#/components/messages/PaymentMessage"
 
-  payment/acknowledge:
+  paymentAcknowledge:
     address: payment/acknowledge
     description: |
       Logical channel representing the recipient acknowledging acceptance or
@@ -49,18 +49,18 @@ operations:
   sendPayment:
     action: send
     channel:
-      $ref: "#/channels/payment/send"
+      $ref: "#/channels/paymentSend"
     summary: Sender delivers a BRC-29 payment message to the recipient.
     messages:
-      - $ref: "#/channels/payment/send/messages/paymentMessage"
+      - $ref: "#/channels/paymentSend/messages/paymentMessage"
 
   receiveAck:
     action: receive
     channel:
-      $ref: "#/channels/payment/acknowledge"
+      $ref: "#/channels/paymentAcknowledge"
     summary: Sender receives payment acceptance or rejection from the recipient.
     messages:
-      - $ref: "#/channels/payment/acknowledge/messages/paymentAck"
+      - $ref: "#/channels/paymentAcknowledge/messages/paymentAck"
 
 # ---------------------------------------------------------------------------
 # Components
