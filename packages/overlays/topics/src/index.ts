@@ -6,6 +6,12 @@ export type { AnyRecord, AnyQuery } from './any/types.js'
 export { default as AnyTopicManager } from './any/AnyTopicManager.js'
 export { default as createAnyLookupService } from './any/AnyLookupService.js'
 
+// btms
+export type { BTMSQuery, BTMSRecord, BTMSLookupResult } from './btms/types.js'
+export { btmsProtocol } from './btms/types.js'
+export { default as BTMSTopicManager } from './btms/BTMSTopicManager.js'
+export { default as createBTMSLookupService } from './btms/BTMSLookupService.js'
+
 // apps
 export type { AppCatalogQuery, PublishedAppMetadata, AppCatalogRecord } from './apps/types.js'
 export { default as AppsTopicManager } from './apps/AppsTopicManager.js'
