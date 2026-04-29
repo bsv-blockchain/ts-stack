@@ -1073,7 +1073,7 @@ importers:
         specifier: ^5.2.2
         version: 5.9.3
 
-  packages/overlays/overlay-express-examples:
+  packages/overlays/overlay-server:
     dependencies:
       '@bsv/overlay':
         specifier: ^2.0.2

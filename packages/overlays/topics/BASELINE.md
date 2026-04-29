@@ -55,7 +55,7 @@
 | basketmap, certmap, protomap | registry-services (has StorageManager classes) |
 | kvstore | kvstore-services (history/pagination support) |
 | ump | ump-services (v3 token format support) |
-| all others | overlay-express-examples (sole implementation) |
+| all others | overlay-server (sole implementation) |
 
 ## Dependencies
 
@@ -71,5 +71,5 @@
 - [x] desktopintegrity, monsterbattle, utility-tokens — tested
 - [x] All 19 topic pairs have at least one integration test
 - [ ] Build passes on CI
-- [x] overlay-express-examples imports cleanly
+- [x] overlay-server imports cleanly
 - [x] All *-services packages re-export from this package

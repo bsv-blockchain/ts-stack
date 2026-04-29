@@ -1,4 +1,4 @@
-# BASELINE — overlay-express-examples
+# BASELINE — overlay-server
 
 > Captured: 2026-04-24. Reflects state at time of ts-stack migration.
 
@@ -6,7 +6,7 @@
 | Field | Value |
 |-------|-------|
 | Package | `overlay-express-examples` |
-| Path | `packages/overlays/overlay-express-examples` |
+| Path | `packages/overlays/overlay-server` |
 | npm | [overlay-express-examples](https://www.npmjs.com/package/overlay-express-examples) |
 | Version | 2.1.6 |
 | Criticality | **Tier 3** — non-critical example code; no production consumers |

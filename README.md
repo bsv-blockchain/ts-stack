@@ -8,7 +8,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 
 | Domain | Path | Packages |
 |--------|------|----------|
-| **SDK** | `packages/sdk/` | 2 |
+| **SDK** | `packages/sdk/` | 3 |
 | **Wallet** | `packages/wallet/` | 9 |
 | **Network** | `packages/network/` | 1 |
 | **Overlays** | `packages/overlays/` | 10 |
@@ -52,7 +52,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 |---------|-----|
 | [overlay-services](packages/overlays/overlay-services) | [@bsv/overlay](https://www.npmjs.com/package/@bsv/overlay) |
 | [overlay-express](packages/overlays/overlay-express) | [@bsv/overlay-express](https://www.npmjs.com/package/@bsv/overlay-express) |
-| [overlay-express-examples](packages/overlays/overlay-express-examples) | `@bsv/overlay-express-examples` *(private)* |
+| [overlay-server](packages/overlays/overlay-server) | `@bsv/overlay-express-examples` *(private)* |
 | [overlay-discovery-services](packages/overlays/overlay-discovery-services) | [@bsv/overlay-discovery-services](https://www.npmjs.com/package/@bsv/overlay-discovery-services) |
 | [gasp-core](packages/overlays/gasp-core) | [@bsv/gasp](https://www.npmjs.com/package/@bsv/gasp) |
 | [storage-server](packages/overlays/storage-server) | [@bsv/uhrp-storage-server](https://www.npmjs.com/package/@bsv/uhrp-storage-server) |
