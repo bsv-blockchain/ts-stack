@@ -50,7 +50,10 @@ const stripAudioComments: import('vite').Plugin = {
   },
 }
 
+const BASE = '/ts-stack/'
+
 export default defineConfig({
+  base: BASE,
   plugins: [
     stripAudioComments,
     {
@@ -63,7 +66,7 @@ export default defineConfig({
               type: 'element',
               tagName: 'iframe',
               properties: {
-                src: `/assets/asyncapi/${node.slug}/index.html`,
+                src: `${BASE}assets/asyncapi/${node.slug}/index.html`,
                 style: 'width: 100%; min-height: 900px; border: none; background: #011627; border-radius: 8px;',
                 title: `AsyncAPI Specification (${node.slug})`,
                 loading: 'lazy',

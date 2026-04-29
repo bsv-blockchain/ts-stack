@@ -21,7 +21,8 @@ let pagefindPromise: Promise<Pagefind> | null = null
 
 function loadPagefind(): Promise<Pagefind> {
   if (!pagefindPromise) {
-    pagefindPromise = import(/* @vite-ignore */ '/_pagefind/pagefind.js') as Promise<Pagefind>
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+    pagefindPromise = import(/* @vite-ignore */ `${base}/_pagefind/pagefind.js`) as Promise<Pagefind>
   }
   return pagefindPromise
 }

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import styles from './Footer.module.css'
 
 export default function Footer() {
@@ -10,8 +11,8 @@ export default function Footer() {
         </span>
         <nav className={styles.links} aria-label="Footer navigation">
           <a href="https://github.com/bsv-blockchain/ts-stack">GitHub</a>
-          <a href="/about/contributing/">Contributing</a>
-          <a href="/about/versioning/">Versioning</a>
+          <Link to="/about/contributing/">Contributing</Link>
+          <Link to="/about/versioning/">Versioning</Link>
         </nav>
       </div>
     </footer>
