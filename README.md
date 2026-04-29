@@ -84,7 +84,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [simple](packages/helpers/simple) | [@bsv/simple](https://www.npmjs.com/package/@bsv/simple) |
 | [bsv-wallet-helper](packages/helpers/bsv-wallet-helper) | [@bsv/wallet-helper](https://www.npmjs.com/package/@bsv/wallet-helper) |
 | [amountinator](packages/helpers/amountinator) | [@bsv/amountinator](https://www.npmjs.com/package/@bsv/amountinator) |
-| [fund-metanet](packages/helpers/fund-metanet) | `@bsv/fund-metanet` *(private)* |
+| [fund-wallet](packages/helpers/fund-wallet) | `@bsv/fund-wallet` |
 
 ---
 

@@ -1,4 +1,4 @@
-# fund-metanet
+# fund-wallet
 
 A command-line tool to fund a Metanet wallet with Bitcoin SV (BSV).
 
@@ -7,7 +7,7 @@ A command-line tool to fund a Metanet wallet with Bitcoin SV (BSV).
 This tool can be run directly using npx without installation:
 
 ```bash
-npx fund-metanet
+npx fund-wallet
 ```
 
 Or install globally:
@@ -23,7 +23,7 @@ npm install -g fund-metanet
 Run the tool with command-line arguments for quick, non-interactive funding:
 
 ```bash
-npx fund-metanet --chain <network> --private-key <hex> [OPTIONS]
+npx fund-wallet --chain <network> --private-key <hex> [OPTIONS]
 ```
 
 #### Required Arguments
@@ -41,7 +41,7 @@ npx fund-metanet --chain <network> --private-key <hex> [OPTIONS]
 Run without arguments to use interactive prompts:
 
 ```bash
-npx fund-metanet
+npx fund-wallet
 ```
 
 The tool will prompt you for:
@@ -55,7 +55,7 @@ The tool will prompt you for:
 Display usage information:
 
 ```bash
-npx fund-metanet --help
+npx fund-wallet --help
 ```
 
 ## Examples
@@ -63,7 +63,7 @@ npx fund-metanet --help
 ### Fund a wallet with 1000 satoshis
 
 ```bash
-npx fund-metanet \
+npx fund-wallet \
   --chain main \
   --private-key 0123456789abcdef... \
   --satoshis 1000
@@ -74,7 +74,7 @@ npx fund-metanet \
 Omit the `--satoshis` argument to check the balance without funding:
 
 ```bash
-npx fund-metanet \
+npx fund-wallet \
   --chain main \
   --private-key 0123456789abcdef...
 ```
@@ -82,7 +82,7 @@ npx fund-metanet \
 ### Use a custom storage provider
 
 ```bash
-npx fund-metanet \
+npx fund-wallet \
   --chain main \
   --private-key 0123456789abcdef... \
   --storage-url https://store-us-1.bsvb.tech \
@@ -92,7 +92,7 @@ npx fund-metanet \
 ### Test network example
 
 ```bash
-npx fund-metanet \
+npx fund-wallet \
   --chain test \
   --private-key 0123456789abcdef... \
   --satoshis 10000

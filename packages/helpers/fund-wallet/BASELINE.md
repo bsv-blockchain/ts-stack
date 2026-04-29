@@ -1,12 +1,12 @@
-# BASELINE — @bsv/fund-metanet
+# BASELINE — @bsv/fund-wallet
 
 > Captured: 2026-04-24. Reflects state at time of ts-stack migration.
 
 ## Identity
 | Field | Value |
 |-------|-------|
-| Package | `@bsv/fund-metanet` |
-| Path | `packages/helpers/fund-metanet` |
+| Package | `@bsv/fund-wallet` |
+| Path | `packages/helpers/fund-wallet` |
 | npm | *(private — CLI tool, not published as library)* |
 | Version | 1.3.1 |
 | Criticality | **Tier 3** — developer CLI utility; funds a Metanet wallet with BSV |

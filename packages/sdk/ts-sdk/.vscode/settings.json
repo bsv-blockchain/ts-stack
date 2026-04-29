@@ -1,7 +1,0 @@
-{
-    "standard.engine": "ts-standard",
-    "sonarlint.connectedMode.project": {
-        "connectionId": "bsv",
-        "projectKey": "bsv-blockchain_ts-sdk"
-    }
-}

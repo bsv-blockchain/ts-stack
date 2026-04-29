@@ -1,6 +1,6 @@
 {
-  "name": "@bsv/fund-metanet",
-  "private": true,
+  "name": "@bsv/fund-wallet",
+  "private": false,
   "version": "1.3.1",
   "description": "fund a metanet wallet",
   "license": "ISC",
@@ -9,6 +9,9 @@
   "main": "dist/index.js",
   "bin": {
     "fund-metanet": "./dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
