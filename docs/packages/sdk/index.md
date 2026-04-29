@@ -11,61 +11,98 @@ status: stable
 tags: ["domain", "sdk"]
 ---
 
-# SDK
+# SDK Domain
 
-The foundation of ts-stack. Core cryptographic primitives and transaction building.
+The foundation of ts-stack. Contains core cryptographic primitives, Bitcoin Script execution, transaction building and signing, network broadcasting, and lightweight SPV verification. This is the base layer that all other ts-stack packages build on top of.
+
+The SDK is intentionally standalone with zero runtime dependencies — it works in both Node.js and modern browsers using native crypto APIs. It provides both low-level primitives (for fine-grained control) and high-level helpers (for common workflows).
 
 ## Packages in this Domain
 
-- [@bsv/sdk](./bsv-sdk.md) — Keys, signatures, transactions, BEEF, SPV
+| Package | Purpose |
+|---------|---------|
+| [@bsv/sdk](./bsv-sdk.md) | Cryptographic primitives, script building, transactions, BEEF, SPV, wallet interface types, broadcasting, and overlay tools |
 
-## What You Can Do
+## Common Use Cases
 
-- Generate and manage private keys
-- Sign and verify cryptographic signatures
-- Build and serialize transactions
-- Create and validate Simplified Payment Verification (SPV) proofs
-- Encode and decode BEEF (Binary Encoded Extended Format)
-- Work with Bitcoin Script
+### I'm building an application that needs to handle Bitcoin transactions
+Start with [@bsv/sdk](./bsv-sdk.md) for transaction building, signing, and broadcasting. If you need persistent state and balance tracking, layer [@bsv/wallet-toolbox](../wallet/wallet-toolbox.md) on top.
 
-## When to Use
+### I'm building a wallet application
+Use [@bsv/sdk](./bsv-sdk.md) for cryptographic operations and [@bsv/wallet-toolbox](../wallet/wallet-toolbox.md) for the full BRC-100 wallet implementation with storage and signing.
 
-Every project using ts-stack starts with the SDK. It's the foundational layer for:
+### I'm working with tokens
+Use [@bsv/sdk](./bsv-sdk.md) for low-level script control, or [@bsv/btms](../wallet/btms.md) for higher-level token abstraction.
 
-- Transaction building and broadcasting
-- Key management (if you're not using a wallet)
-- Signature verification (for authentication)
-- SPV proof validation
+### I need to verify a transaction (SPV)
+[@bsv/sdk](./bsv-sdk.md) provides full SPV support with `MerklePath` for merkle proof verification without downloading full blocks.
+
+### I need to encode data on-chain
+[@bsv/sdk](./bsv-sdk.md)'s `PushDrop` class encodes multi-field data in locking scripts, used by overlay protocols like BTMS.
 
 ## Key Concepts
 
-- **Private Key** — Secret key that controls UTXOs and signs data
-- **Public Key** — Derived from private key, shared with others
-- **Transaction** — Collection of inputs (money in) and outputs (money out)
-- **UTXO** — Unspent transaction output you can spend
-- **BEEF** — Format that bundles a transaction with merkle proofs
-- **SPV** — Verify a transaction is in the chain without the full chain
-- **Script** — Bitcoin Script that controls who can spend an output
+- **Private Key** — 256-bit secret that controls UTXOs and signs transactions. Must never be exposed.
+- **Public Key** — Elliptic curve point derived from private key. Used for address generation and signature verification.
+- **Script** — Bitcoin Script bytecode that defines spending conditions. Locking scripts (on outputs) constrain who can spend; unlocking scripts (in inputs) prove authorization.
+- **Transaction** — Atomic unit of blockchain state change. Contains inputs (references to previous outputs) and outputs (new UTXOs).
+- **UTXO** — Unspent Transaction Output. Identified by (txid, outputIndex). Spending requires a valid unlocking script.
+- **Signature** — ECDSA signature with sighash byte indicating which transaction fields are committed to. Used to prove authorization.
+- **Merkle Proof** — Cryptographic proof that a transaction is included in a specific block. Enables SPV without full chain download.
+- **BEEF** — BRC-62 envelope format. Bundles transaction(s) with merkle proofs for offline verification and atomic transmission.
+- **Wallet Interface (BRC-100)** — Standardized interface that all wallets implement. Apps can work with any wallet without code changes.
+- **Overlay** — Layer-2 protocol using on-chain anchors (PushDrop) to build services without modifying Bitcoin consensus.
 
 ## Quick Example
 
-\`\`\`typescript
-import { PrivateKey, Transaction } from '@bsv/sdk';
+```typescript
+import { PrivateKey, P2PKH, Transaction } from '@bsv/sdk'
 
-// Create a key
-const key = PrivateKey.fromRandom();
+// Create a private key
+const key = PrivateKey.fromRandom()
 
-// Build a transaction
-const tx = new Transaction().addInput(...).addOutput(...);
+// Build and sign a transaction
+const tx = new Transaction(1, [
+  {
+    sourceTransaction: Transaction.fromHex('...'),
+    sourceOutputIndex: 0,
+    unlockingScriptTemplate: new P2PKH().unlock(key)
+  }
+], [
+  {
+    lockingScript: new P2PKH().lock(key.toAddress()),
+    satoshis: 5000
+  }
+])
 
-// Sign it
-const signature = key.sign(tx);
+// Sign and broadcast
+await tx.sign()
+const response = await tx.broadcast()
+console.log('Broadcasted:', response.txid)
+```
 
-// Encode as BEEF for transmission
-const beef = Beef.fromTransaction(tx, proofs);
-\`\`\`
+## What Each Package Provides
+
+### @bsv/sdk
+- Elliptic curve cryptography (secp256k1), ECDSA signatures, key derivation (BRC-42/43)
+- 20+ script templates and Bitcoin Script interpreter
+- Transaction builder with fee estimation and broadcasting
+- Network integration (ARC, WhatsOnChain, Teranode)
+- SPV merkle proof verification
+- BRC-100 wallet interface types and WalletClient factory
+- Message signing (BRC-18), TOTP, BEEF encoding/decoding
+- Storage and KV store abstractions
+- Overlay protocol integration (topics, remittance, identity, registry)
+
+## When to Use SDK vs. Higher Layers
+
+- **Use SDK directly** if: You're building a stateless app, you only need transaction building, you want fine-grained Script control, you're implementing a custom wallet
+- **Use Wallet Toolbox** if: You need persistent storage, background monitoring, full BRC-100 wallet, Shamir key sharing, permission management
+- **Use BTMS** if: You're working with tokens, you want token-specific abstractions like issuance/transfer/burn
+- **Use Wallet Relay** if: You need mobile-to-desktop wallet pairing without local key storage
 
 ## Next Steps
 
-- **[@bsv/sdk](./bsv-sdk.md)** — Full API reference
-- **[Guides](../../guides/index.md)** — Hands-on examples
+- **[@bsv/sdk](./bsv-sdk.md)** — Full API reference and code examples
+- **[Wallet Domain](../wallet/index.md)** — Higher-layer packages for persistence and key management
+- **Guides** — Hands-on examples (coming soon)

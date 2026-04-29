@@ -17,7 +17,7 @@ tags: [messaging, websocket, brc-31, auth]
 
 # @bsv/authsocket
 
-Server-side BRC-31 authenticated WebSocket — accept real-time connections from clients who prove their identity via Bitcoin signature.
+> Server-side BRC-103 mutual authentication wrapper for Socket.IO. Enforces cryptographic signing and verification on all WebSocket messages, enabling peer-to-peer identity verification and certificate exchange.
 
 ## Install
 
@@ -28,59 +28,124 @@ npm install @bsv/authsocket
 ## Quick start
 
 ```typescript
-import { AuthSocket } from '@bsv/authsocket';
-import express from 'express';
-import http from 'http';
+import { AuthSocketServer } from '@bsv/authsocket'
+import { ProtoWallet } from '@bsv/sdk'
+import http from 'http'
 
-const app = express();
-const server = http.createServer(app);
-const authSocket = new AuthSocket(server);
+const server = http.createServer()
+const serverWallet = new ProtoWallet('my-private-key-hex')
+const io = new AuthSocketServer(server, { wallet: serverWallet, cors: { origin: '*' } })
 
-// Accept authenticated connections
-authSocket.on('connection', (socket, identity) => {
-  console.log('User connected:', identity.publicKey);
-  
-  socket.on('message', (msg) => {
-    console.log('Message from', identity.publicKey, ':', msg);
-  });
-});
+io.on('connection', (socket) => {
+  console.log('Authenticated socket:', socket.id)
 
-server.listen(3000);
+  socket.on('chatMessage', (msg) => {
+    console.log('Verified message:', msg)
+  })
+
+  socket.emit('chatMessage', { from: socket.id, text: 'Hello client' })
+})
+
+server.listen(3000)
 ```
 
 ## What it provides
 
-- **BRC-31 authentication** — Verify connections with Bitcoin signatures
-- **WebSocket upgrade** — Secure WebSocket connections with crypto identity
-- **Connection events** — Listen for connect/disconnect/message events
-- **Identity verification** — Access verified public key and identity
-- **Binary support** — Send/receive binary data over WebSocket
-- **Automatic reconnection** — Built-in reconnect logic with exponential backoff
-- **Rate limiting** — Configurable per-connection message rate limits
-- **Middleware hooks** — Extensible authentication pipeline
+- **AuthSocketServer** — Wraps HTTP server to add BRC-103 authentication to Socket.IO
+- **AuthSocket** — Socket wrapper with auto-signing and verification on all messages
+- **BRC-103 handshake** — Nonce-based challenge-response mutual authentication
+- **Session management** — Tracks nonces and authentication state per socket
+- **Certificate exchange** — Support for requesting and verifying certificates during handshake
+- **Message signing** — Every message auto-signed with server wallet; every inbound message verified
+- **Automatic re-dispatch** — Special `'authMessage'` channel for BRC-103 frames; user code sees normal Socket.IO events
 
-## When to use
+## Common patterns
 
-- Building real-time applications that need cryptographic identity
-- Creating chat or notification systems with verified users
-- Implementing game servers with signature-based authentication
-- Building collaborative tools where users prove their identity
-- Replacing traditional JWT/session auth with Bitcoin signatures
+### Server setup with certificate requests
 
-## When not to use
+```typescript
+import { AuthSocketServer } from '@bsv/authsocket'
+import { ProtoWallet } from '@bsv/sdk'
 
-- For simple WebSocket communication without auth — use ws library
-- If you need certificate-based TLS auth — use server TLS instead
-- For REST APIs — use @bsv/auth-express-middleware
-- For one-way broadcasts — use Server-Sent Events instead
+const wallet = new ProtoWallet(privateKeyHex)
+const io = new AuthSocketServer(server, {
+  wallet,
+  cors: { origin: '*' },
+  certificatesToRequest: {
+    certifiers: ['<33-byte-pubkey-hex>'],
+    types: {
+      'age-verification': ['dateOfBirth', 'country']
+    }
+  }
+})
 
-## API reference
+io.on('connection', (socket) => {
+  socket.on('message', (data) => {
+    // All messages already verified
+  })
+  socket.emit('response', { authenticated: true })
+})
+```
 
-Full TypeScript API documentation: [TypeDoc](https://bsv-blockchain.github.io/ts-stack/api/authsocket/)
+### Receiving authenticated messages
+
+```typescript
+io.on('connection', (socket) => {
+  // Messages are automatically verified before reaching here
+  socket.on('userAction', (action) => {
+    console.log('Verified action from', socket.id, ':', action)
+  })
+
+  // Send authenticated response
+  socket.emit('status', { result: 'success' })
+})
+```
+
+## Key concepts
+
+- **BRC-103 mutual authentication** — Nonce-based challenge-response with signatures
+- **Ephemeral sockets** — Each Socket.IO connection creates new BRC-103 `Peer`
+- **Session management** — Tracks nonces and auth state per socket via `SessionManager`
+- **Certificate exchange** — Optional verifiable certificates during handshake
+- **Message signing** — Outbound messages signed; inbound messages verified automatically
+- **Special auth channel** — `'authMessage'` channel for BRC-103 frames; user code sees normal Socket.IO events
+
+## When to use this
+
+- Real-time applications requiring cryptographic identity verification
+- Peer-to-peer communication with mutual authentication needs
+- Applications where you need to verify sender identity without certificates
+- Message-oriented services with signature-based security
+
+## When NOT to use this
+
+- Simple WebSocket communication without authentication — use Socket.IO directly
+- If you need TLS certificate-based security — configure server TLS instead
+- REST APIs with request/response auth — use `@bsv/auth-express-middleware`
+- One-way broadcast channels — Server-Sent Events may be simpler
+
+## Spec conformance
+
+- **BRC-103** (Peer-to-Peer Mutual Authentication): Full handshake, nonce exchange, signature verification
+- Uses BRC-103 `Peer` and `Transport` abstractions from SDK
+- Session manager implements nonce replay protection
+
+## Common pitfalls
+
+1. **Wallet must be BRC-100 compatible** — needs `sign()` and `verify()` methods
+2. **Certificate requests are optional** — if you don't request them, handshake is faster
+3. **No auto-reconnect on server side** — client-side library handles reconnection logic
+4. **Each socket is separate peer** — nonce state is per-socket; don't mix them
+5. **CORS must be set explicitly** — Socket.IO requires `cors` config for browser clients
 
 ## Related packages
 
-- @bsv/authsocket-client — Client library for connecting
-- @bsv/auth-express-middleware — Express middleware for HTTP requests
-- @bsv/sdk — Signature verification primitives
-- @bsv/wallet-toolbox — Wallet for client authentication
+- **@bsv/authsocket-client** — Client-side counterpart; send messages to this server
+- **@bsv/auth-express-middleware** — HTTP authentication for REST endpoints
+- **@bsv/message-box-client** — Store-and-forward messaging using AuthSocketClient internally
+
+## Reference
+
+- [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/authsocket/)
+- [Source on GitHub](https://github.com/bsv-blockchain/authsocket)
+- [npm](https://www.npmjs.com/package/@bsv/authsocket)

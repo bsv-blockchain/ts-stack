@@ -17,7 +17,7 @@ tags: [middleware, express, payment, brc-121, 402]
 
 # @bsv/payment-express-middleware
 
-Express middleware for HTTP 402 payment gating — require on-chain payment before serving a response to clients.
+> Express.js middleware for HTTP 402 Payment Required micropayment gating. Builds on top of BRC-103 auth middleware to monetize API endpoints by requiring BSV satoshi payments derived using BRC-29 key derivation.
 
 ## Install
 
@@ -28,36 +28,119 @@ npm install @bsv/payment-express-middleware
 ## Quick start
 
 ```typescript
-import express from 'express';
-import { paymentMiddleware } from '@bsv/payment-express-middleware';
+import express from 'express'
+import bodyParser from 'body-parser'
+import { createAuthMiddleware } from '@bsv/auth-express-middleware'
+import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
 
-const app = express();
-
-// Protect routes with payment requirement
-app.get('/premium/data', 
-  paymentMiddleware({ amount: 1000 }), // 1000 satoshis
-  (req, res) => {
-    res.json({
-      data: 'This content requires payment'
-    });
+const wallet = new Wallet({ /* config */ })
+const authMiddleware = createAuthMiddleware({ wallet })
+const paymentMiddleware = createPaymentMiddleware({
+  wallet,
+  calculateRequestPrice: async (req) => {
+    return 50 // 50 satoshis per request
   }
-);
+})
 
-app.listen(3000);
+const app = express()
+app.use(bodyParser.json())
+app.use(authMiddleware)
+app.use(paymentMiddleware)
+
+app.post('/somePaidEndpoint', (req, res) => {
+  res.json({
+    message: 'Payment received, request authorized',
+    amount: req.payment.satoshisPaid
+  })
+})
+
+app.listen(3000)
 ```
 
 ## What it provides
 
-- **HTTP 402 response** — Send 402 Payment Required with invoice
-- **Invoice generation** — Create payment invoices for requests
-- **Payment verification** — Verify on-chain payments before serving
-- **Amount configuration** — Set per-route or global payment amounts
-- **Payment timeout** — Wait for payment with timeout
-- **Multiple outputs** — Specify multiple payment destinations
-- **Custom metadata** — Embed request metadata in invoice
-- **Broadcast integration** — Verify payments via Teranode or similar
+- **createPaymentMiddleware** — Express middleware factory for 402 payment gating
+- **HTTP 402 Payment Required** — Responds with 402 when payment needed
+- **BRC-29 derivation** — Payment output derived from `derivationPrefix` + `derivationSuffix`
+- **Nonce reuse prevention** — Each 402 response includes fresh `derivationPrefix`
+- **Wallet integration** — Validates payment using `wallet.internalizeAction()` method
+- **Dynamic pricing** — `calculateRequestPrice` function per endpoint/request
+- **Payment object** — `req.payment` with `satoshisPaid`, `accepted`, `tx` fields
+- **Response headers** — `x-bsv-payment-*` headers with invoice details
 
-## When to use
+## Common patterns
+
+### Basic payment gating
+
+```typescript
+import express from 'express'
+import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+
+const paymentMiddleware = createPaymentMiddleware({
+  wallet,
+  calculateRequestPrice: async (req) => {
+    return 100 // 100 satoshis per request
+  }
+})
+
+const app = express()
+app.use(authMiddleware)
+app.use(paymentMiddleware)
+
+app.get('/content', (req, res) => {
+  if (req.payment.accepted) {
+    res.json({ content: 'Premium content here' })
+  }
+})
+```
+
+### Dynamic pricing
+
+```typescript
+const paymentMiddleware = createPaymentMiddleware({
+  wallet,
+  calculateRequestPrice: async (req) => {
+    if (req.path === '/premium') return 500  // premium costs 500 sats
+    if (req.path === '/free') return 0      // free content
+    return 100  // default 100 sats
+  }
+})
+```
+
+### Chained with auth middleware
+
+```typescript
+const app = express()
+app.use(bodyParser.json())
+
+// Auth first
+app.use(createAuthMiddleware({ wallet }))
+
+// Then payment
+app.use(createPaymentMiddleware({
+  wallet,
+  calculateRequestPrice: async (req) => 100
+}))
+
+// Routes now require both auth AND payment
+app.post('/api/paid-endpoint', (req, res) => {
+  // req.auth.identityKey is authenticated
+  // req.payment.satoshisPaid was received
+  res.json({ result: 'success' })
+})
+```
+
+## Key concepts
+
+- **402 Payment Required** — HTTP status code signaling payment is needed
+- **Micropayments** — Small satoshi amounts (1-1000 typical) for API access
+- **BRC-29 derivation** — Payment output derived from `derivationPrefix` + `derivationSuffix`
+- **Nonce reuse prevention** — Each 402 response includes fresh `derivationPrefix`
+- **Wallet integration** — Server validates payment using `wallet.internalizeAction()` method
+- **Auth prerequisite** — Assumes `req.auth.identityKey` set by auth middleware
+- **Transaction format** — Client sends BSV transaction as base64 in header
+
+## When to use this
 
 - Monetizing API endpoints with micropayments
 - Creating pay-per-request services
@@ -65,20 +148,38 @@ app.listen(3000);
 - Implementing dynamic pricing based on request
 - Creating subscription-like services with per-use charges
 
-## When not to use
+## When NOT to use this
 
-- For traditional subscription billing — use Stripe or similar
-- If you need complex payment workflows — use a payment processor
-- For free public APIs — skip this middleware
-- For offline payment tracking — use a database instead
+- Traditional subscription billing — use Stripe or similar
+- Complex payment workflows — use a payment processor
+- Free public APIs — skip this middleware
+- Offline payment tracking — use a database instead
 
-## API reference
+## Spec conformance
 
-Full TypeScript API documentation: [TypeDoc](https://bsv-blockchain.github.io/ts-stack/api/payment-express-middleware/)
+- **HTTP 402 Payment Required** — Uses standard 402 status code
+- **BRC-29** (Payment Derivation): Uses BRC-29 nonce/derivation model for payment address generation
+- **BRC-100** (Wallet interface): Requires wallet implementing `internalizeAction()` method
+- **BRC-104** — Builds on top of BRC-104 HTTP auth transport
+
+## Common pitfalls
+
+1. **Auth middleware must run first** — Payment middleware expects `req.auth.identityKey`
+2. **Wallet must implement `internalizeAction()`** — Critical method for validating and accepting payments
+3. **Nonce verification required** — Middleware verifies `derivationPrefix` matches server's private key
+4. **Transaction format strict** — Client sends `x-bsv-payment` header as JSON with transaction
+5. **Replay protection essential** — Wallet should reject duplicate `derivationPrefix` values
+6. **HTTPS recommended** — No encryption; use TLS to protect payment transactions
+7. **Pricing consistency** — If `calculateRequestPrice` is async, ensure no timing side-effects
 
 ## Related packages
 
-- @bsv/402-pay — Client for paying 402 responses
-- @bsv/auth-express-middleware — Authentication middleware
-- @bsv/sdk — Transaction building for invoices
-- @bsv/teranode-listener — Payment verification
+- **@bsv/402-pay** — Client-side handler for paying 402 responses
+- **@bsv/auth-express-middleware** — Required for authentication before payment
+- **@bsv/sdk** — Nonce creation/verification, wallet interface, transaction utilities
+
+## Reference
+
+- [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/payment-express-middleware/)
+- [Source on GitHub](https://github.com/bsv-blockchain/payment-express-middleware)
+- [npm](https://www.npmjs.com/package/@bsv/payment-express-middleware)
