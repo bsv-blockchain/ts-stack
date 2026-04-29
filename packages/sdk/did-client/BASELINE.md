@@ -6,7 +6,7 @@
 | Field | Value |
 |-------|-------|
 | Package | `@bsv/did-client` |
-| Path | `packages/overlays/did-client` |
+| Path | `packages/sdk/did-client` |
 | npm | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 | Version | 1.1.2 |
 | Criticality | **Tier 3** — non-critical DID resolution client; failure isolated to DID lookup domain |

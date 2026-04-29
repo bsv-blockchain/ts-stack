@@ -11,7 +11,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | **SDK** | `packages/sdk/` | 3 |
 | **Wallet** | `packages/wallet/` | 9 |
 | **Network** | `packages/network/` | 1 |
-| **Overlays** | `packages/overlays/` | 10 |
+| **Overlays** | `packages/overlays/` | 9 |
 | **Messaging** | `packages/messaging/` | 6 |
 | **Middleware** | `packages/middleware/` | 3 |
 | **Helpers** | `packages/helpers/` | 4 |
@@ -28,6 +28,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 |---------|-----|
 | [ts-sdk](packages/sdk/ts-sdk) | [@bsv/sdk](https://www.npmjs.com/package/@bsv/sdk) |
 | [ts-templates](packages/sdk/ts-templates) | [@bsv/templates](https://www.npmjs.com/package/@bsv/templates) |
+| [did-client](packages/sdk/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 
 ### Wallet — `packages/wallet/`
 | Package | npm |
@@ -57,7 +58,6 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 | [gasp-core](packages/overlays/gasp-core) | [@bsv/gasp](https://www.npmjs.com/package/@bsv/gasp) |
 | [storage-server](packages/overlays/storage-server) | [@bsv/uhrp-storage-server](https://www.npmjs.com/package/@bsv/uhrp-storage-server) |
 | [lite-storage-server](packages/overlays/lite-storage-server) | `@bsv/uhrp-lite` *(private)* |
-| [did-client](packages/overlays/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 | [btms-backend](packages/overlays/btms-backend) | `@bsv/btms-backend` *(private)* |
 | [topics](packages/overlays/topics) | [@bsv/overlay-topics](https://www.npmjs.com/package/@bsv/overlay-topics) |
 
