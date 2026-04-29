@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 60" role="img" aria-label="BSV Blockchain">
+  <title>BSV Blockchain</title>
+  <!-- Wordmark only — no background pill so it sits cleanly on the deep-blue header bar -->
+  <g font-family="'Avenir Next', 'Futura', 'Codec Pro', 'Helvetica Neue', Arial, sans-serif" font-weight="800" letter-spacing="1.2">
+    <text x="6" y="40" font-size="32" fill="#1c2c8a">BSV</text>
+    <text x="78" y="40" font-size="32" fill="#3a55ff">BLOCKCHAIN</text>
+  </g>
+</svg>

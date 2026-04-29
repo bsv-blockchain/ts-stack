@@ -4,21 +4,21 @@
   <desc id="desc">Application subscribes to TeranodeListener, which uses libp2p (private DHT + gossipsub) over TCP/Noise to connect to Teranode peers in the BSV P2P network.</desc>
   <style>
     .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
-    .box-accent { fill: rgba(255,107,0,0.08); stroke: #FF6B00; stroke-width: 1.75; }
-    .box-amber { fill: rgba(255,179,0,0.10); stroke: #FFB300; stroke-width: 1.5; }
+    .box-accent { fill: rgba(58,85,255,0.12); stroke: #0a3afd; stroke-width: 1.75; }
+    .box-amber { fill: rgba(28,44,138,0.06); stroke: #94a3b8; stroke-width: 1.5; }
     .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-    .arrow-orange { stroke: #FF6B00; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
-    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1F2937; }
+    .arrow-orange { stroke: #0a3afd; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1c2c8a; }
     .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
     .label-mono { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: #4B5563; }
-    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #FF6B00; letter-spacing: 0.5px; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #0a3afd; letter-spacing: 0.5px; }
   </style>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
       <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
     </marker>
     <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#FF6B00"/>
+      <path d="M0,0 L0,6 L9,3 z" fill="#0a3afd"/>
     </marker>
   </defs>
 
@@ -32,7 +32,7 @@
   <!-- TeranodeListener -->
   <rect x="220" y="120" width="460" height="130" rx="8" class="box-amber"/>
   <text x="450" y="146" text-anchor="middle" class="title">TeranodeListener</text>
-  <line x1="240" y1="158" x2="660" y2="158" stroke="#FFB300" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="240" y1="158" x2="660" y2="158" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
   <text x="240" y="184" class="label">• Topic callbacks</text>
   <text x="240" y="206" class="label">• Dynamic add / remove</text>
   <text x="240" y="228" class="label">• Async message handlers</text>

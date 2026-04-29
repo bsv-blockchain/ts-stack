@@ -10,9 +10,23 @@ status: stable
 tags: []
 ---
 
-# ts-stack
+<div class="bsv-hero" markdown="0">
+  <div class="bsv-hero__inner">
+    <div class="bsv-hero__eyebrow">BSV Blockchain · TypeScript Stack</div>
+    <h1 class="bsv-hero__title">Unleash the potential of <em>data-on-chain</em></h1>
+    <p class="bsv-hero__lede">
+      A TypeScript stack for building apps that move money, store data, and authenticate users on BSV.
+      27 packages covering crypto primitives, wallets, overlay networks, and HTTP middleware — wired
+      together so you can ship in TypeScript without writing your own protocol code.
+    </p>
+    <a class="bsv-hero__cta" href="get-started/">
+      Get started in 3 steps
+      <span class="bsv-hero__cta-arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+</div>
 
-A TypeScript stack for building apps that move money, store data, and authenticate users on BSV. 27 packages covering crypto primitives, wallets, overlay networks, and HTTP middleware — wired together so you can ship in TypeScript without writing your own protocol code.
+# ts-stack
 
 ## Architecture
 
