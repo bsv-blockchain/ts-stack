@@ -7,13 +7,15 @@ last_updated: "2026-04-28"
 
 # Helpers Domain
 
-Utility libraries and helper tools for common BSV operations. Includes script templates, DID resolution, simplified APIs, and development utilities.
+Utility libraries and helper tools for common BSV operations. Includes high-level wallet APIs, transaction builders, script templates, DID management, and development tools.
 
 ## Packages
 
-- **@bsv/templates** — Locking/unlocking script templates for common BSV patterns
-- **@bsv/did-client** — DID (Decentralized Identifier) client for resolving BSV DIDs
-- **@bsv/simple** — Simplified high-level API for common BSV operations
-- **@bsv/wallet-helper** — Transaction builder helpers for wallet-toolbox
-- **@bsv/amountinator** — Satoshi ↔ BSV conversion utilities
-- **@bsv/fund-wallet** — Dev/test utility for funding wallets from faucet
+| Package | Purpose |
+|---------|---------|
+| [@bsv/simple](/docs/packages/helpers/simple.md) | High-level wallet API for browser and server — manage payments, tokens, inscriptions, DIDs, and credentials |
+| [@bsv/wallet-helper](/docs/packages/helpers/bsv-wallet-helper.md) | Fluent transaction builder with BRC-29 derivation and ordinal support |
+| [@bsv/templates](/docs/packages/helpers/ts-templates.md) | Low-level script templates (OpReturn, MultiPushDrop, P2MSKH) with lock/unlock patterns |
+| [@bsv/did-client](/docs/packages/helpers/did-client.md) | DID client for creating, revoking, and querying on-chain DIDs with overlay broadcast |
+| [@bsv/amountinator](/docs/packages/helpers/amountinator.md) | Multi-currency converter (SATS↔BSV↔15+ fiat) with exchange rate caching |
+| [@bsv/fund-wallet](/docs/packages/helpers/fund-wallet.md) | CLI faucet for funding wallets from Metanet Desktop during development and testing |

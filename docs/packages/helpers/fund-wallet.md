@@ -17,7 +17,7 @@ tags: [helpers, testing, faucet, development]
 
 # @bsv/fund-wallet
 
-Dev/test utility for funding BSV wallets from a faucet — useful in CI, development, and testing environments.
+> Command-line faucet/funding tool for development and testing — funds a remote wallet with satoshis from a local Metanet Desktop wallet via private key derivation.
 
 ## Install
 
@@ -27,59 +27,120 @@ npm install @bsv/fund-wallet
 
 ## Quick start
 
-```typescript
-import { fundWallet } from '@bsv/fund-wallet';
+```bash
+# Check balance only
+npx fund-wallet \
+  --chain main \
+  --private-key 0123456789abcdef...
 
-// Fund a test wallet
-const txid = await fundWallet({
-  address: 'your-test-address',
-  amount: 10000, // satoshis
-  faucetUrl: 'https://faucet.example.com'
-});
+# Fund with 10,000 satoshis
+npx fund-wallet \
+  --chain test \
+  --private-key <hex> \
+  --satoshis 10000
 
-console.log('Funded with transaction:', txid);
+# Custom storage provider
+npx fund-wallet \
+  --chain main \
+  --private-key <hex> \
+  --storage-url https://custom-store.example.com \
+  --satoshis 5000
 
-// Wait for confirmation
-const confirmed = await fundWallet.waitForConfirmation(txid, {
-  timeout: 30000 // 30 seconds
-});
-
-console.log('Confirmed:', confirmed);
+# Interactive mode (no args)
+npx fund-wallet
+# Prompts: chain? storage URL? private key? satoshis?
 ```
 
 ## What it provides
 
-- **Faucet funding** — Request satoshis from a test faucet
-- **Multiple faucets** — Support various faucet APIs
-- **Amount control** — Request specific amounts
-- **Confirmation wait** — Wait for funding confirmation
-- **Error handling** — Graceful handling of faucet failures
-- **Rate limiting** — Respect faucet rate limits
-- **Retry logic** — Automatic retry on transient failures
-- **Testnet/mainnet** — Support different networks
+- **CLI-only tool** — No TypeScript programmatic API; command-line only
+- **Balance check** — Query remote wallet balance without signing
+- **Funding** — Send satoshis from local Metanet Desktop wallet to remote wallet
+- **Private key support** — Hex-encoded private keys for local source wallet
+- **Network selection** — Support for testnet or mainnet
+- **Custom storage** — Specify custom storage provider URL
+- **Interactive mode** — Prompts if no arguments provided
+- **Transaction details** — Prints TXID and WhatsOnChain link on success
 
-## When to use
+## Common patterns
+
+### Check balance only (no Metanet Desktop needed)
+```bash
+npx fund-wallet \
+  --chain main \
+  --private-key <hex>
+```
+
+### Fund wallet (Metanet Desktop must be running)
+```bash
+npx fund-wallet \
+  --chain test \
+  --private-key <hex> \
+  --satoshis 10000
+```
+
+### Using custom storage provider
+```bash
+npx fund-wallet \
+  --chain main \
+  --private-key <hex> \
+  --storage-url https://custom-store.example.com \
+  --satoshis 5000
+```
+
+### Interactive mode
+```bash
+npx fund-wallet
+# Answer prompts for chain, key, satoshis, etc.
+```
+
+## Key concepts
+
+- **Metanet Desktop** — Local BRC-100 wallet application; must be running to send funds
+- **Remote Wallet** — The destination wallet at `--storage-url`
+- **Balance Check** — Read-only; queries remote storage without signing
+- **Key Derivation** — Derives identity key from private key via @bsv/sdk
+- **Transaction Internalization** — Remote wallet internalizes the BEEF transaction into its baskets
+- **Test vs Main** — Argument determines network; affects key derivation and endpoints
+
+## When to use this
 
 - Testing applications that need funded wallets
 - CI/CD pipelines for integration tests
 - Development environments needing test funds
-- Automated testing of transaction flows
-- Creating test fixtures with funded addresses
+- Quick balance checks on remote wallets
+- Seeding wallets for local testing
 
-## When not to use
+## When NOT to use this
 
 - For production applications — use real funds
-- On mainnet in production — only for real testnet/stagenet
+- When Metanet Desktop is not available — balance check only works then
 - For long-term fund storage — faucets are temporary
-- When you need precise amount control — use manual funding
+- On mainnet with real funds — only for testnet/stagenet
 
-## API reference
+## Spec conformance
 
-Full TypeScript API documentation: [TypeDoc](https://bsv-blockchain.github.io/ts-stack/api/fund-wallet/)
+- **BRC-100** — Wallet interface (Metanet Desktop provider)
+- **BRC-29** — Key derivation (identity key from private key)
+- **BEEF** — Broadcast-Everything-BEEF transaction format
+- **BSV Testnet/Mainnet** — Network selection via `--chain` flag
+
+## Common pitfalls
+
+- **Metanet Desktop not running** — If `--satoshis` provided but Metanet Desktop not running, tool fails
+- **Private key format** — Must be valid hex string; invalid format rejected upfront
+- **Network mismatch** — Testnet key used with main network storage = 0 balance
+- **Storage URL validation** — Must start with `https://`; HTTP not allowed for security
+- **Interactive mode parsing** — Yes/No prompts are case-insensitive; numeric inputs must be valid integers
 
 ## Related packages
 
-- @bsv/wallet-toolbox — Wallet being funded
-- @bsv/sdk — Transaction verification
-- @bsv/teranode-listener — Monitor funded transactions
-- @bsv/simple — Simple transactions with funded wallets
+- [@bsv/amountinator](/docs/packages/helpers/amountinator.md) — Could enhance output with currency conversion
+- [@bsv/simple](/docs/packages/helpers/simple.md) — Wallet that may use funded address
+- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Private key and transaction utilities
+
+## Reference
+
+- [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/fund-wallet/)
+- [Source on GitHub](https://github.com/bsv-blockchain/fund-wallet)
+- [npm](https://www.npmjs.com/package/@bsv/fund-wallet)
