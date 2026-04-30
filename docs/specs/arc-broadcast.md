@@ -11,7 +11,7 @@ tags: ["spec", "broadcast", "arc"]
 
 # ARC Broadcast API
 
-> ARC (Authoritative Registration Centre) is the miner-facing transaction broadcast service. Clients submit raw transactions or batches to ARC nodes, receive structured responses with transaction status codes, and can optionally register callbacks for Merkle proof delivery when transactions confirm.
+> ARC (Authoritative Response Component) is the miner-facing transaction broadcast service. Clients submit raw transactions or batches to ARC nodes, receive structured responses with transaction status codes, and can optionally register callbacks for Merkle proof delivery when transactions confirm.
 
 ## At a glance
 
