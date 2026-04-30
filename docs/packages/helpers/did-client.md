@@ -41,7 +41,7 @@ const didClient = new DIDClient({
 })
 
 // Create a DID token
-const subjectPublicKey = '02abc123...'  // Public key of identity subject
+const subjectPublicKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 const createResult = await didClient.createDID(
   'sn-12345-abc',  // Serial number
   subjectPublicKey,
@@ -72,7 +72,7 @@ if (createResult.status === 'success') {
 ```typescript
 const createResult = await didClient.createDID(
   'sn-12345-abc',  // Serial number (Base64-encoded identifier)
-  '02abc123...',   // Subject public key
+  '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366',
   {
     derivationPrefix: Utils.toBase64(Random(10)),
     derivationSuffix: Utils.toBase64(Random(10))

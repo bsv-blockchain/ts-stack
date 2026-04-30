@@ -3,8 +3,8 @@ id: home
 title: ts-stack
 kind: meta
 version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 7
 status: stable
 tags: []
@@ -12,14 +12,13 @@ tags: []
 
 <div class="bsv-hero" markdown="0">
   <div class="bsv-hero__inner">
-    <h1 class="bsv-hero__title">Unleash the potential of <em>data-on-chain</em></h1>
+    <h1 class="bsv-hero__title">BSV application infrastructure in TypeScript</h1>
     <p class="bsv-hero__lede">
-      A TypeScript stack for building apps that move money, store data, and authenticate users on BSV.
-      27 packages covering crypto primitives, wallets, overlay networks, and HTTP middleware — wired
-      together so you can ship in TypeScript without writing your own protocol code.
+      Reference packages, protocol specs, infrastructure contracts, and conformance vectors for building wallet-aware BSV applications.
+      Use it as an app developer, a wallet implementer, or the baseline another language implementation must match.
     </p>
     <a class="bsv-hero__cta" href="get-started/">
-      Get started in 3 steps
+      Choose your entry point
       <span class="bsv-hero__cta-arrow" aria-hidden="true">&rarr;</span>
     </a>
   </div>
@@ -27,95 +26,67 @@ tags: []
 
 # ts-stack
 
-## Architecture
+This repository is the TypeScript reference stack for BSV application development. It contains:
 
-```mermaid
-flowchart TD
-    subgraph APP["Application Layer"]
-        SIMPLE_B["@bsv/simple/browser\nbrowser apps — connects to user wallet"]
-        SIMPLE_S["@bsv/simple/server\nself-custodial server agents"]
-    end
+- **Packages**: `@bsv/sdk`, wallet tooling, overlays, messaging, middleware, and helper APIs.
+- **Infrastructure specs**: deployable services such as Wallet Infra, Message Box, overlays, UHRP, WAB, and Chaintracks.
+- **Protocol references**: human-readable pages backed by JSON Schema, OpenAPI, and AsyncAPI artifacts in `specs/`.
+- **Conformance assets**: vectors in `conformance/vectors/` that other implementations can run to prove compatibility.
 
-    BRC100(["BRC-100 interface"])
+![BRC-100 desktop and mobile request flows](./assets/diagrams/brc100-wallet-flows.svg)
 
-    subgraph WALLET["Wallet Builder Toolkit"]
-        WT["@bsv/wallet-toolbox\nstorage backends · Monitor · key managers · signing bridge"]
-    end
+## Start Here
 
-    subgraph ADJACENT["Adjacent Capabilities"]
-        direction LR
-        OV["Overlays\n@bsv/overlay\n@bsv/overlay-express\n@bsv/overlay-topics\n@bsv/gasp"]
-        MSG["Messaging\n@bsv/message-box-client\n@bsv/authsocket\n@bsv/paymail"]
-        MW["Middleware\n@bsv/auth-express-middleware\n@bsv/402-pay\n@bsv/payment-express-middleware"]
-        INFRA["Infrastructure\nARC · Chaintracks\nWAB · WalletInfra"]
-    end
+| You are | Use first | Why |
+|---------|-----------|-----|
+| Web application developer | [`@bsv/simple/browser`](./get-started/index.md) | Connects to a local BRC-100 wallet without putting keys in app code. |
+| Backend or automation developer | [`@bsv/simple/server`](./get-started/choose-your-stack.md#server-agent-automated-self-custodial) | Runs a self-custodial server wallet from a private key and storage endpoint. |
+| Wallet developer | [`@bsv/wallet-toolbox`](./packages/wallet/wallet-toolbox.md) | Reference components for building a BRC-100 wallet. |
+| Protocol engineer | [`@bsv/sdk`](./packages/sdk/bsv-sdk.md) | Core crypto, scripts, transactions, BEEF, BUMP, and wallet interface types. |
+| Technical evaluator | [Architecture](./architecture/index.md) and [Conformance](./conformance/index.md) | Shows boundaries, current coverage, and what other implementations must match. |
 
-    subgraph SDK["Foundation"]
-        BSVSDK["@bsv/sdk\nsecp256k1 · hashing · Script · transactions\nBEEF BRC-62 · BUMP BRC-74 · BRC-42 key derivation\nARC broadcaster · Chaintracks client"]
-    end
-
-    SIMPLE_B --> BRC100
-    SIMPLE_S --> BRC100
-    BRC100 --> WT
-    WT --> BSVSDK
-    OV --> BSVSDK
-    MSG --> BSVSDK
-    MW --> BSVSDK
-```
-
-## Domain Overview
-
-| Domain | Packages | Description |
-|--------|----------|-------------|
-| **SDK** | 1 | Core cryptographic and transaction primitives for working with BSV |
-| **Wallet** | 4 | Key management, balance tracking, and signing — local or via wallet service |
-| **Network** | 1 | Broadcast transactions and query BSV nodes through a typed client |
-| **Overlays** | 7 | Run and consume overlay services that index on-chain data (tokens, identities, files) |
-| **Messaging** | 4 | Authenticated messages between identities using cryptographic signatures |
-| **Middleware** | 3 | Drop-in Express middleware for payment-gating and identity verification |
-| **Helpers** | 6 | Shared utilities, codecs, templates, and adapters |
-
-## Quick Install
-
-```bash
-npm install @bsv/simple @bsv/sdk
-```
-
-Connect to a user's wallet and send a payment:
+## Minimal App Example
 
 ```typescript
 import { createWallet } from '@bsv/simple/browser'
 
 const wallet = await createWallet()
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 const result = await wallet.pay({
   to: recipientIdentityKey,
-  satoshis: 1000,
+  satoshis: 1000
 })
-console.log('txid:', result.txid)
+
+console.log(result.txid)
 ```
 
-For protocol-level work (keys, scripts, transactions, BEEF), use `@bsv/sdk` directly. See [Choose Your Stack](./get-started/choose-your-stack.md) for the full decision guide.
+For raw BRC-100 work, use `WalletClient` from `@bsv/sdk` and call methods such as [`createAction`](./specs/brc-100-wallet.md#createaction), [`signAction`](./specs/brc-100-wallet.md#signaction), and [`listOutputs`](./specs/brc-100-wallet.md#listoutputs) directly.
 
-## What's Next?
+## Package Domains
 
-- **[Get Started](./get-started/index.md)** — Connect a wallet and send your first payment
-- **[Choose Your Stack](./get-started/choose-your-stack.md)** — Decision guide based on what you're building
-- **[Package Index](./packages/index.md)** — Browse all 27 packages and their APIs
-- **[Guides](./guides/index.md)** — Wallets, overlays, messaging, payments — how-to walkthroughs
-- **[Specs](./specs/index.md)** — Protocol specifications for interoperability
+| Domain | Packages | What they cover |
+|--------|----------|-----------------|
+| SDK | `@bsv/sdk` | Crypto, scripts, transactions, BEEF/BUMP, BRC-100 types, wallet substrates. |
+| Wallet | `@bsv/wallet-toolbox`, BTMS, permission module, wallet relay | Wallet implementation, storage, signing, permissions, token flows, mobile pairing. |
+| Overlays | `@bsv/overlay`, `@bsv/overlay-express`, topics, discovery, GASP | Shared on-chain context, topic validation, lookup services, sync. |
+| Messaging | Message Box, Authsocket, Paymail | Store-and-forward messages, live authenticated channels, identity-based addressing. |
+| Middleware | Auth, HTTP 402, payment express | Express middleware for identity and payment-gated APIs. |
+| Helpers | `@bsv/simple`, templates, DID, wallet helper, amount utilities | Higher-level developer ergonomics on top of the core protocols. |
 
-## Features
+## Important References
 
-- **27 production-ready packages** — From keys and signatures to wallets and overlays
-- **100% TypeScript** — Full type safety across the stack
-- **Monorepo architecture** — Packages work together seamlessly with shared dependencies
-- **No protocol code to write** — BRC standards, BEEF format, SPV proofs already included
-- **Enterprise patterns** — Message-signing, identity keys, access control middleware built-in
-- **UHRP file storage** — Store and retrieve files on BSV through overlay topics
-- **Multi-wallet support** — BRC-100 standard interface works with any BRC-100 wallet
+- [BRC-100 Wallet Interface](./specs/brc-100-wallet.md) - linkable method reference with request and response shapes.
+- [Choose Your Stack](./get-started/choose-your-stack.md) - which package to start with for each use case.
+- [Stack Layers](./architecture/layers.md) - how packages and infrastructure fit together.
+- [Infrastructure](./infrastructure/index.md) - service status and deployed endpoint names.
+- [Vector Catalog](./conformance/vectors.md) - current conformance coverage and file paths.
 
-## About ts-stack
+## Source Discipline
 
-ts-stack is maintained by the BSV blockchain community. The monorepo lives at [github.com/bsv-blockchain/ts-stack](https://github.com/bsv-blockchain/ts-stack).
+Examples in this docs tree should be backed by one of:
 
-See [Versioning](./about/versioning.md) for release cadence and [Contributing](./about/contributing.md) for how to report bugs or submit PRs.
+- `packages/*/*/docs/` package documentation.
+- `packages/sdk/src/wallet/Wallet.interfaces.ts` and `specs/sdk/brc-100-wallet.json`.
+- `packages/wallet/wallet-toolbox-examples/src/` for wallet action flows.
+- `conformance/META.json` and `conformance/vectors/` for compatibility claims.
+- `bsva-infra-flux` deployment manifests for public infrastructure endpoint names.

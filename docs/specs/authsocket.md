@@ -3,8 +3,8 @@ id: spec-authsocket
 title: AuthSocket WebSocket Protocol
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 status: stable
 tags: ["spec", "messaging", "websocket"]
 ---
@@ -77,10 +77,14 @@ After handshake, client and server exchange high-level events. All messages are 
 ```typescript
 import http from 'http'
 import { AuthSocketServer } from '@bsv/authsocket'
-import { SetupWallet } from '@bsv/wallet-toolbox'
+import { ServerWallet } from '@bsv/simple/server'
 
 const server = http.createServer()
-const wallet = await SetupWallet({ env: 'main' })
+const wallet = await ServerWallet.create({
+  privateKey: process.env.SERVER_PRIVATE_KEY!,
+  network: 'main',
+  storageUrl: 'https://store-us-1.bsvb.tech'
+})
 
 // 1. Wrap HTTP server with BRC-103 authentication
 const io = new AuthSocketServer(server, {
@@ -112,7 +116,9 @@ Example: Client subscription
 
 ```typescript
 import { MessageBoxClient } from '@bsv/message-box-client'
+import { WalletClient } from '@bsv/sdk'
 
+const wallet = new WalletClient('auto', 'example.com')
 const msgBox = new MessageBoxClient({ walletClient: wallet })
 
 // Automatically handles BRC-103 handshake
@@ -132,13 +138,7 @@ msgBox.socket.emit('sendMessage', {
 
 ## Conformance vectors
 
-AuthSocket conformance is tested in `conformance/vectors/messaging/authsocket/`:
-
-- BRC-103 handshake on connection
-- Signature generation and verification
-- Event serialization/deserialization
-- Room subscription logic
-- Nonce management and freshness
+There is no standalone AuthSocket vector directory in the current conformance corpus. Related portable coverage lives in `conformance/vectors/messaging/brc31/authrite-signature.json`; AuthSocket-specific behavior is covered by the package tests and the AsyncAPI artifact linked below.
 
 ## Implementations in ts-stack
 

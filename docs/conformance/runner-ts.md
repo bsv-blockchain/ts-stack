@@ -3,251 +3,118 @@ id: conformance-runner-ts
 title: "TypeScript Runner"
 kind: conformance
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
-tags: [conformance, runner, typescript, jest]
+tags: [conformance, runner, typescript]
 ---
 
 # TypeScript Runner
 
-Run conformance vectors in TypeScript using Jest.
+This repo has two TypeScript-side conformance entry points. Use the structural runner to validate the corpus itself; use the Jest runner to execute supported vectors against `@bsv/sdk`.
 
-## Quick Start
+## Structural Runner
 
-Run all conformance tests:
+Root command:
 
-```bash
-cd /Users/personal/git/ts-stack
-pnpm conformance
-```
-
-## Usage
-
-### Run all vectors
 ```bash
 pnpm conformance
 ```
 
-### Run specific domain
-```bash
-pnpm conformance --domain wallet/brc100
-pnpm conformance --domain sdk/crypto
+Implementation:
+
+```text
+conformance/runner/src/runner.js
 ```
 
-### Run specific file
-```bash
-pnpm conformance conformance/vectors/wallet/brc100/getPublicKey-happy-path.json
-```
+What it does:
 
-### Filter by tag
-```bash
-pnpm conformance --tag happy-path
-pnpm conformance --tag edge-case
-pnpm conformance --tag regression
-```
+- recursively loads `*.json` under `conformance/vectors/`
+- checks required top-level and per-vector fields
+- writes JSON and JUnit reports under `conformance/runner/reports/`
+- supports selecting a different vector root
 
-### Watch mode (development)
-```bash
-pnpm conformance --watch
-```
+Supported flags:
 
-### Generate coverage report
-```bash
-pnpm conformance --coverage
-```
+| Flag | Meaning |
+|---|---|
+| `--validate-only` | Load and validate vector files without writing execution-style results |
+| `--vectors <dir>` | Use a vector root other than `conformance/vectors` |
+| `--report <path>` | Write JUnit XML to the supplied path |
 
-### Verbose output
-```bash
-pnpm conformance --verbose
-```
-
-### Compare with Go runner
-```bash
-pnpm conformance:compare ts-results-2026-04-28.json go-results-2026-04-28.json
-```
-
-## Output Format
-
-Test runner produces JSON report:
-
-```json
-{
-  "timestamp": "2026-04-28T10:30:00Z",
-  "runId": "ts-run-1234567890",
-  "runner": "typescript",
-  "totalVectors": 260,
-  "passed": 258,
-  "failed": 2,
-  "skipped": 0,
-  "duration_ms": 45230,
-  "vectorResults": [
-    {
-      "vector": "wallet/brc100/getPublicKey-happy-path",
-      "status": "PASS",
-      "duration_ms": 12,
-      "assertions": 3
-    },
-    {
-      "vector": "wallet/brc100/createAction-invalid-inputs",
-      "status": "FAIL",
-      "duration_ms": 5,
-      "error": "Expected satoshis to be BigInt, got string"
-    }
-  ]
-}
-```
-
-## Implementation
-
-The runner uses Jest with custom reporter.
-
-Configuration at `conformance/jest.config.js`:
-
-```javascript
-module.exports = {
-  preset: 'ts-jest',
-  testEnvironment: 'node',
-  testMatch: ['**/conformance/vectors/**/*.test.ts'],
-  reporters: [
-    'default',
-    ['<rootDir>/conformance/reporters/json-reporter.ts', {
-      outputFile: 'conformance/results/ts-results-latest.json'
-    }]
-  ]
-};
-```
-
-## Test Generation
-
-Vectors are automatically converted to Jest tests.
-
-A vector file like:
-
-```json
-{
-  "name": "BRC-100 getPublicKey happy path",
-  "domain": "wallet/brc100",
-  "inputs": {
-    "derivationKey": "m/44'/0'/0'/0/0"
-  },
-  "expectedOutput": {
-    "publicKey": "02a1b2c3..."
-  }
-}
-```
-
-Becomes a test:
-
-```typescript
-describe('wallet/brc100', () => {
-  test('getPublicKey happy path', async () => {
-    const wallet = new Wallet();
-    const result = await wallet.getPublicKey('m/44\'/0\'/0\'/0/0');
-    expect(result).toEqual('02a1b2c3...');
-  });
-});
-```
-
-## Debugging
-
-### Run single test
-```bash
-jest --testNamePattern="getPublicKey happy path"
-```
-
-### Debug in VSCode
-Add to `.vscode/launch.json`:
-
-```json
-{
-  "type": "node",
-  "request": "launch",
-  "name": "Debug Conformance",
-  "program": "${workspaceFolder}/node_modules/.bin/jest",
-  "args": ["--runInBand", "--testPathPattern=conformance"],
-  "console": "integratedTerminal"
-}
-```
-
-Then press F5 to debug.
-
-### Inspect actual vs expected
-```bash
-pnpm conformance --verbose --domain wallet/brc100 2>&1 | grep -A20 "FAIL"
-```
-
-## Performance Tuning
-
-### Parallel execution
-```bash
-pnpm conformance --workers=8
-```
-
-### Sequential (slower, better for debugging)
-```bash
-pnpm conformance --runInBand
-```
-
-### Skip slow tests
-```bash
-pnpm conformance --testNamePattern="^((?!slow).)*$"
-```
-
-## Environment Setup
-
-Ensure you have:
-
-- Node.js 18+
-- pnpm 8+
-- Dependencies installed: `pnpm install`
+Examples:
 
 ```bash
-node --version  # v18.0.0 or higher
-pnpm --version  # 8.0.0 or higher
+pnpm conformance --validate-only
+pnpm conformance --vectors conformance/vectors/wallet/brc100
+pnpm conformance --report conformance/runner/reports/results.xml
 ```
 
-## Troubleshooting
+## TypeScript/Jest Behavior Runner
 
-### Tests timeout
-Increase Jest timeout in test file:
-
-```typescript
-jest.setTimeout(10000);  // 10 seconds
-```
-
-### Import errors
-Clear cache:
+Command:
 
 ```bash
-pnpm conformance --clearCache
+pnpm --filter @bsv/conformance-runner-ts test
 ```
 
-### Out of memory
-Reduce workers:
+Implementation:
+
+```text
+conformance/runner/ts/runner.test.ts
+```
+
+What it does:
+
+- loads the same JSON vector corpus
+- dispatches recognized categories into `@bsv/sdk`
+- creates Jest tests keyed by vector IDs
+- skips vectors marked as skipped or `parity_class: "intended"`
+- treats unrecognized categories as documented gaps in that runner
+
+This runner is useful when you want TypeScript behavior assertions. It is not the command behind `pnpm conformance`; that root command uses the structural runner above.
+
+## Unsupported Flags
+
+The root structural runner does not implement `--domain`, `--tag`, `--watch`, `--coverage`, `--workers`, or `--verbose`. Use `--vectors <dir>` for coarse subset runs, or Jest's own filtering when running `@bsv/conformance-runner-ts`.
+
+## Debugging A Vector
+
+Start by validating the smallest directory that contains the vector:
 
 ```bash
-pnpm conformance --workers=2
+pnpm conformance --vectors conformance/vectors/wallet/brc100
 ```
 
-## Continuous Integration
+Then inspect the fixture:
 
-The runner is configured for CI in `.github/workflows/conformance.yml`:
+```bash
+sed -n '1,220p' conformance/vectors/wallet/brc100/getpublickey.json
+```
+
+For SDK behavior mismatches, compare the vector input against the package source and package-level docs before changing expected output. For wallet interface behavior, compare against `packages/sdk/src/wallet/Wallet.interfaces.ts` and the [BRC-100 method reference](../specs/brc-100-wallet.md).
+
+## CI Use
 
 ```yaml
-- name: Run TS Conformance
-  run: pnpm conformance
-  
-- name: Upload Results
-  uses: actions/upload-artifact@v3
+- name: Validate conformance vectors
+  run: pnpm conformance --report conformance/runner/reports/results.xml
+
+- name: Run TypeScript conformance behavior tests
+  run: pnpm --filter @bsv/conformance-runner-ts test
+
+- name: Upload conformance reports
+  uses: actions/upload-artifact@v4
   with:
-    name: ts-conformance-results
-    path: conformance/results/ts-results-*.json
+    name: ts-conformance-reports
+    path: |
+      conformance/runner/reports/report.json
+      conformance/runner/reports/results.xml
 ```
 
 ## Next Steps
 
-- [Vector Catalog](./vectors.md) — Browse available vectors
-- [Go Runner](https://github.com/bsv-blockchain/go-sdk) — Run vectors in Go
-- [Contributing](./contributing-vectors.md) — Add new vectors
+- [Vector Catalog](./vectors.md) — Current corpus and coverage
+- [BRC-100 Wallet Interface](../specs/brc-100-wallet.md) — Linkable wallet method reference
+- [Contributing Vectors](./contributing-vectors.md) — Add or refine portable fixtures

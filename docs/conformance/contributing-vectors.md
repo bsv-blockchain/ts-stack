@@ -3,8 +3,8 @@ id: conformance-contributing
 title: "Contributing Vectors"
 kind: conformance
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: [conformance, contributing, vectors]
@@ -12,240 +12,122 @@ tags: [conformance, contributing, vectors]
 
 # Contributing Conformance Vectors
 
-New test vectors are required for bug fixes to the SDK or wallet packages. This ensures regressions are caught in the future.
+Add vectors when a behavior must be portable across SDKs, wallets, or language implementations. Bug fixes should include a regression vector whenever the bug can be reproduced with deterministic inputs.
 
-## When to Add Vectors
+## When To Add Vectors
 
-Required for:
-- **Bug fixes** — Prevent regression
-- **New features** — Define expected behavior
-- **Edge cases** — Ensure consistent handling
-- **Performance issues** — Benchmark the fix
+Required:
 
-Optional for:
-- Documentation changes
-- Refactoring (no behavior change)
-- Dependency updates
+- bug fixes that affect serialized output, cryptography, keys, scripts, transactions, wallet method behavior, or BRC behavior
+- new protocol features
+- edge cases that other languages are likely to implement independently
+- clarified behavior where previous docs/specs were ambiguous
 
-## Vector Format
+Usually unnecessary:
 
-Create a JSON file with this schema:
+- documentation-only changes
+- internal refactors with no behavior change
+- dependency updates that do not change public behavior
+
+## File Format
+
+Every vector file is a JSON object with metadata and a `vectors` array:
 
 ```json
 {
-  "name": "Test case name",
-  "description": "What this tests and why",
-  "domain": "sdk/crypto|sdk/keys|wallet/brc100|wallet/brc29|wallet/utxo|messaging/brc31|messaging/authsocket|...",
-  "spec": "BRC-100|BRC-31|BRC-29|BRC-42|...",
-  "inputs": {
-    "field1": "value1",
-    "field2": 123,
-    "field3": true,
-    "field4": {
-      "nested": "object"
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.getpublickey",
+  "name": "BRC-100 WalletInterface.getPublicKey",
+  "brc": ["BRC-100"],
+  "version": "1.0.0",
+  "reference_impl": "ts-sdk@2.0.14",
+  "parity_class": "required",
+  "vectors": [
+    {
+      "id": "wallet.brc100.getpublickey.1",
+      "description": "identityKey=true returns the wallet identity key",
+      "input": {
+        "root_key": "0000000000000000000000000000000000000000000000000000000000000001",
+        "args": { "identityKey": true }
+      },
+      "expected": {
+        "publicKey": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+      },
+      "tags": ["happy-path", "brc-100", "identity"]
     }
-  },
-  "expectedOutput": {
-    "result": "expected value",
-    "or": "multiple fields"
-  },
-  "tags": ["happy-path|edge-case|error-handling|performance"],
-  "notes": "Optional notes about the test"
+  ]
 }
 ```
 
-### Required Fields
-- `name` — Short, descriptive test name
-- `domain` — Which subsystem it tests
-- `inputs` — Test input data
-- `expectedOutput` — Expected result
+Use `input` and `expected`, not `inputs` and `expectedOutput`.
 
-### Optional Fields
-- `description` — Longer explanation
-- `spec` — BRC standard if applicable
-- `tags` — Categories (happy-path, edge-case, etc.)
-- `notes` — Implementation notes
+## Naming Rules
 
-## File Naming
+File-level IDs use dot-separated namespaces:
 
-Use kebab-case, descriptive names:
-
-```
-good:
-  getPublicKey-happy-path.json
-  createAction-no-outputs.json
-  brc31-nonce-mismatch.json
-
-bad:
-  test1.json
-  vector.json
-  foo.json
+```text
+sdk.crypto.ecdsa
+sdk.keys.key-derivation
+wallet.brc100.getpublickey
+wallet.brc29.payment-derivation
 ```
 
-## Directory Structure
+Vector IDs should be stable and unique within the file. Existing IDs should not be renamed after publication.
 
-Place vectors in the appropriate domain directory:
+## Directory Selection
 
-```
+Use an existing directory where possible:
+
+```text
 conformance/vectors/
-  sdk/
-    crypto/
-      sign-happy-path.json
-      sign-invalid-key.json
-      verify-good-signature.json
-      verify-bad-signature.json
-    keys/
-      brc42-derivation.json
-      bip32-path.json
-    transactions/
-      ...
-  wallet/
-    brc100/
-      getPublicKey-happy-path.json
-      createAction-invalid-outputs.json
-    brc29/
-      key-derivation.json
-    utxo/
-      ...
-  messaging/
-    brc31/
-      ...
-    authsocket/
-      ...
+  messaging/brc31/
+  regressions/
+  sdk/compat/
+  sdk/crypto/
+  sdk/keys/
+  sdk/scripts/
+  sdk/transactions/
+  wallet/brc100/
+  wallet/brc29/
 ```
 
-## Example: Bug Fix Vectors
+Create a new directory only when the behavior does not fit an existing domain. If you add a new file, update `conformance/META.json` in the same PR.
 
-When fixing a bug, add vectors that would have caught it.
+## Adding A Vector To An Existing File
 
-**Bug**: `createAction` doesn't validate satoshis are positive
-
-**Vector file**: `conformance/vectors/wallet/brc100/createAction-negative-satoshis.json`
-
-```json
-{
-  "name": "createAction rejects negative satoshis",
-  "description": "Ensure createAction validates output satoshis are positive (GH-1234)",
-  "domain": "wallet/brc100",
-  "spec": "BRC-100",
-  "inputs": {
-    "walletId": "test-wallet",
-    "description": "Test transaction",
-    "outputs": [
-      {
-        "script": "76a91412345678901234567890123456789012345678ab88ac",
-        "satoshis": -1000
-      }
-    ]
-  },
-  "expectedOutput": {
-    "error": "ValidationError",
-    "message": "Output satoshis must be positive"
-  },
-  "tags": ["edge-case", "validation"],
-  "notes": "Bug fix for GH-1234: negative satoshis should be rejected"
-}
-```
-
-## Example: Feature Vectors
-
-When adding a new feature, define its behavior.
-
-**Feature**: Add `getBalance()` method to BRC-100 WalletInterface
-
-**Vector file**: `conformance/vectors/wallet/brc100/getBalance-happy-path.json`
-
-```json
-{
-  "name": "getBalance returns total wallet balance",
-  "description": "New BRC-100 method to get total balance across all keys",
-  "domain": "wallet/brc100",
-  "spec": "BRC-100",
-  "inputs": {
-    "walletId": "test-wallet"
-  },
-  "expectedOutput": {
-    "balanceSatoshis": 5000000,
-    "unconfirmedSatoshis": 100000,
-    "confirmedSatoshis": 4900000
-  },
-  "tags": ["happy-path", "new-feature"],
-  "notes": "New BRC-100 method, PR #456"
-}
-```
-
-## Running Your New Vectors
-
-### TypeScript
-```bash
-pnpm conformance conformance/vectors/wallet/brc100/createAction-negative-satoshis.json
-```
-
-### Go
-```bash
-cd conformance/go
-go test -v ./wallet/brc100 -run TestCreateActionNegativeSatoshis
-```
-
-## Validation
-
-Before committing, validate your vector:
+1. Open the relevant JSON file.
+2. Append a new object to the `vectors` array.
+3. Use deterministic test inputs only.
+4. Generate the expected value from the reference TypeScript implementation.
+5. Add tags that explain the BRC, method, and case type.
+6. Run validation:
 
 ```bash
-pnpm conformance:validate conformance/vectors/wallet/brc100/createAction-negative-satoshis.json
+pnpm conformance --validate-only
 ```
 
-Checks:
-- Valid JSON syntax
-- Required fields present
-- Domain and tags are recognized
-- Input/output structure matches schema
-
-## PR Requirements
-
-When submitting a PR with vector changes:
-
-1. **Add vectors for bug fixes** — Required
-2. **Add vectors for new features** — Required
-3. **Verify tests pass** — `pnpm conformance` must pass 100%
-4. **Run both runners** — TS and Go must both pass
-5. **Update vector count** — Update spec pages if new domain
-
-## Vector Coverage Goals
-
-- SDK: 80+ vectors (currently complete)
-- Wallet: 90+ vectors (currently complete)
-- Messaging: 60+ vectors (currently complete)
-- Regressions: 30+ vectors (growing as issues found)
-
-## Troubleshooting
-
-### Vector not running
-Check domain is in `conformance/vectors/` directory:
+7. If the TypeScript/Jest runner supports the category, run:
 
 ```bash
-ls conformance/vectors/wallet/brc100/
+pnpm --filter @bsv/conformance-runner-ts test
 ```
 
-### Type mismatch errors
-Ensure input types match expected types in implementation.
+## Adding A Regression Vector
 
-Go is type-strict; use proper types:
+Regression vectors live under `conformance/vectors/regressions/`. Include enough metadata in the file to explain:
 
-```json
-{
-  "satoshis": 1000,        // number
-  "active": true,           // boolean
-  "message": "hello",       // string
-  "values": [1, 2, 3]      // array
-}
-```
+- the original issue or bug ID
+- the previous incorrect behavior
+- the expected fixed behavior
+- the BRC or subsystem affected
 
-### Test passes TS but fails Go (or vice versa)
-This indicates a compatibility issue. Investigate and fix the implementation.
+Then update the `regression_index` in `conformance/META.json`.
 
-## Next Steps
+## Review Checklist
 
-- [Vector Catalog](./vectors.md) — Browse existing vectors
-- [TS Runner](./runner-ts.md) — Run and debug
-- [Go Runner](https://github.com/bsv-blockchain/go-sdk) — Run in Go
+- The vector can be understood without reading implementation code.
+- All binary values use the encoding already used by that vector file.
+- No production private keys, mnemonics, credentials, or funded keys are included.
+- The vector ID and file ID are stable.
+- `pnpm conformance --validate-only` passes.
+- The relevant package tests or TypeScript/Jest conformance runner pass when applicable.

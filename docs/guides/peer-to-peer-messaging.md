@@ -3,8 +3,8 @@ id: guide-p2p-messaging
 title: "Peer-to-Peer Messaging"
 kind: guide
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: [guide, messaging, encryption, brc-103]
@@ -60,7 +60,7 @@ export async function getWallet() {
   const wallet = new WalletClient()
   
   // Get your identity public key
-  const publicKey = await wallet.getPublicKey()
+  const { publicKey } = await wallet.getPublicKey({ identityKey: true })
   console.log('Your identity:', publicKey)
   
   return wallet
@@ -264,7 +264,7 @@ async function main() {
   // Step 1: Initialize wallet
   console.log('Step 1: Initializing wallet...')
   const wallet = new WalletClient()
-  const myPublicKey = await wallet.getPublicKey()
+  const { publicKey: myPublicKey } = await wallet.getPublicKey({ identityKey: true })
   console.log('Your identity:', myPublicKey)
   
   // Step 2: Initialize message box client
@@ -278,7 +278,7 @@ async function main() {
   
   // Step 3: Send a message to a peer
   console.log('\nStep 3: Sending message...')
-  const recipientKey = '0277a2b...' // Replace with actual peer public key
+  const recipientKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
   await msgBoxClient.sendMessage({
     recipient: recipientKey,
     messageBox: 'inbox',

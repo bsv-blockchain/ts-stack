@@ -3,8 +3,8 @@ id: guide-wallet-aware
 title: "Build a Wallet-Aware App"
 kind: guide
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: [guide, wallet, brc-100, typescript]
@@ -12,325 +12,162 @@ tags: [guide, wallet, brc-100, typescript]
 
 # Build a Wallet-Aware App
 
-> Learn how to integrate the BRC-100 wallet standard into your TypeScript application. You'll connect to wallet storage, create transactions, sign them, and broadcast to the network.
+> Add wallet capabilities to a web app without putting private keys in the app. The app talks to a BRC-100 wallet; the wallet chooses spendable outputs, signs, and returns the result.
 
-**Time:** ~20 minutes
-**Prerequisites:** Node.js ≥ 20, basic TypeScript, familiarity with Bitcoin transactions
+**Time:** ~15 minutes
+**Prerequisites:** Node.js 20+, TypeScript, and a local BRC-100 wallet such as BSV Desktop or BSV Browser.
 
-## What you'll build
+![BRC-100 wallet flows for desktop localhost HTTP and mobile postMessage bridge](../assets/diagrams/brc100-wallet-flows.svg)
 
-A complete Node.js application that initializes a wallet, creates a transaction that sends satoshis to an address, signs it, and broadcasts it to the network. By the end, you'll understand how to integrate wallet functionality into any app.
+## What You Are Building
 
-## Prerequisites
+A browser app that can:
 
-- Node.js 20+ installed
-- npm or pnpm package manager
-- Basic understanding of Bitcoin transactions and UTXOs
-- A test environment (we'll use testnet by default)
+- connect to the user's wallet through `WalletClient`
+- request the wallet identity key
+- create a payment transaction
+- create and list basket outputs
+- drop down to raw BRC-100 methods when the helper layer is too small
 
-## Step 1 — Install wallet-toolbox and SDK
+For the complete method shapes, keep the [BRC-100 wallet interface](../specs/brc-100-wallet.md) open. It has linkable sections for [`createAction`](../specs/brc-100-wallet.md#createaction), [`signAction`](../specs/brc-100-wallet.md#signaction), [`listOutputs`](../specs/brc-100-wallet.md#listoutputs), and the other wallet methods.
 
-Initialize a new project and add the required packages.
+## Step 1 - Install
 
 ```bash
-mkdir my-wallet-app && cd my-wallet-app
-npm init -y
-npm install @bsv/sdk @bsv/wallet-toolbox typescript ts-node @types/node
-npx tsc --init
+npm install @bsv/sdk @bsv/simple
 ```
 
-Create a `tsconfig.json` with ES2020 target:
+Use `@bsv/simple/browser` when you want ergonomic app helpers. Use `@bsv/sdk` directly when you need the full BRC-100 interface.
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+## Step 2 - Connect To The User Wallet
+
+```typescript
+import { WalletClient } from '@bsv/sdk'
+
+const wallet = new WalletClient('auto', 'example.com')
+
+const { publicKey } = await wallet.getPublicKey({
+  identityKey: true
+})
+
+console.log('User identity key:', publicKey)
+```
+
+`'auto'` tries the supported wallet substrates for the runtime. On desktop, that can resolve to a local wallet service. In an embedded mobile browser, it can resolve through a postMessage-style bridge.
+
+## Step 3 - Use The Simple Browser Helper
+
+```typescript
+import { createWallet } from '@bsv/simple/browser'
+
+const appWallet = await createWallet()
+const status = await appWallet.getStatus()
+
+console.log(status.identityKey)
+```
+
+The simple helper is for common app workflows. It keeps the first integration small and still exposes the underlying BRC-100 client:
+
+```typescript
+const rawWallet = appWallet.getClient()
+```
+
+## Step 4 - Create A Payment
+
+For identity-based payments, use the high-level helper:
+
+```typescript
+const result = await appWallet.pay({
+  to: '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366',
+  satoshis: 1000,
+  description: 'Coffee'
+})
+
+console.log(result.txid)
+```
+
+For custom outputs, use `createAction` directly:
+
+```typescript
+import { P2PKH, PublicKey, WalletClient } from '@bsv/sdk'
+
+const wallet = new WalletClient('auto', 'example.com')
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+
+const lockingScript = new P2PKH()
+  .lock(PublicKey.fromString(recipientIdentityKey).toAddress())
+  .toHex()
+
+const action = await wallet.createAction({
+  description: 'Pay recipient',
+  outputs: [{
+    satoshis: 1000,
+    lockingScript,
+    outputDescription: 'payment to recipient'
+  }]
+})
+
+console.log(action.txid)
+```
+
+For ordinary wallet-selected inputs, `createAction` signs and processes the transaction by default. Use [`signAction`](../specs/brc-100-wallet.md#signaction) only when you deliberately create a signable action that needs custom unlocking scripts.
+
+## Step 5 - Create And List Basket Outputs
+
+Baskets are wallet-managed output groups. They are useful for app-owned tokens, tickets, receipts, and other spendable state.
+
+```typescript
+const token = await appWallet.createToken({
+  basket: 'event tickets',
+  satoshis: 1,
+  data: {
+    type: 'event-ticket',
+    eventId: 'demo-2026'
   }
-}
+})
+
+console.log(token.txid)
 ```
 
-## Step 2 — Set up a wallet with default storage
-
-Create a file `wallet.ts` that initializes a wallet with SQLite storage (default for Node.js):
+Use the raw BRC-100 client when you need exact output queries:
 
 ```typescript
-import { SetupWallet } from '@bsv/wallet-toolbox'
+const outputs = await appWallet.getClient().listOutputs({
+  basket: 'event tickets',
+  include: 'entire transactions',
+  limit: 10
+})
 
-export async function initializeWallet() {
-  const wallet = await SetupWallet({
-    env: 'test'  // testnet
-  })
-  
-  console.log('Wallet initialized with default storage')
-  return wallet
-}
+console.log(outputs.totalOutputs)
 ```
 
-The `SetupWallet` factory function creates a fully initialized wallet with sensible defaults, including:
-- SQLite storage (stored in `./wallet.db`)
-- Test network (testnet) configuration
-- Automatic service discovery (ARC, WhatsOnChain, Chaintracks)
-- Built-in monitoring daemon
+## Step 6 - Choose The Right Runtime
 
-## Step 3 — Create a transaction action
+| Runtime | What The App Does | What The Wallet Does |
+|---|---|---|
+| BSV Desktop | App calls the wallet through the desktop substrate or localhost HTTP | Desktop wallet selects outputs, may use Wallet Infra, signs locally |
+| BSV Browser | Embedded web app calls through a postMessage/native bridge | Mobile wallet selects outputs and signs on device |
+| Server agent | Server code uses a service wallet | Server wallet signs with a configured private key and storage endpoint |
+| Wallet implementation | Implements BRC-100 methods | Must match the interface and conformance vectors |
 
-Create `createPayment.ts` to define a function that creates a transaction action:
+For server-side automation, use `@bsv/simple/server`:
 
 ```typescript
-import { SetupWallet } from '@bsv/wallet-toolbox'
+import { ServerWallet } from '@bsv/simple/server'
 
-export async function createPaymentAction(wallet: any) {
-  // Create an action: this is a transaction intent before signing
-  const action = await wallet.createAction({
-    description: 'Send test payment',
-    outputs: [{
-      satoshis: 5000,  // 5000 satoshis
-      lockingScript: '76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac',  // P2PKH example
-      outputDescription: 'payment to recipient'
-    }]
-  })
-  
-  console.log('Action created:', action)
-  return action
-}
+const wallet = await ServerWallet.create({
+  privateKey: process.env.SERVER_PRIVATE_KEY!,
+  network: 'main',
+  storageUrl: 'https://store-us-1.bsvb.tech'
+})
 ```
 
-An `Action` in the wallet is a high-level transaction intent. The wallet:
-- Selects appropriate UTXOs automatically
-- Calculates fees
-- Constructs the full transaction
-- Returns a `SignableTransaction` reference
+## When To Use Wallet-Toolbox
 
-This design protects privacy: the app doesn't see which UTXOs were selected, and the wallet can optimize coin selection.
+Most web apps should start with `@bsv/simple/browser` or `WalletClient`. Reach for [`@bsv/wallet-toolbox`](../packages/wallet/wallet-toolbox.md) when you are building wallet software, testing custom storage, or experimenting with signing/storage internals.
 
-## Step 4 — Sign the action with the wallet
+Wallet builders should also read:
 
-Create `signPayment.ts` to sign the action:
-
-```typescript
-import { SetupWallet } from '@bsv/wallet-toolbox'
-
-export async function signAndBroadcast(wallet: any, action: any) {
-  // Sign the action using wallet keys
-  const signedAction = await wallet.signAction({
-    reference: action.signableTransaction.reference
-  })
-  
-  console.log('Action signed:', signedAction)
-  
-  // The wallet now has a signed transaction ready to broadcast
-  return signedAction
-}
-```
-
-When you call `signAction()`, the wallet:
-1. Retrieves the signed transaction from storage
-2. Verifies all signatures are present
-3. Returns the fully signed transaction (ready for broadcast)
-
-## Step 5 — Query wallet balance and UTXOs
-
-Add a function to check available outputs before creating an action:
-
-```typescript
-export async function checkBalance(wallet: any) {
-  // List all unspent outputs (UTXOs)
-  const { outputs } = await wallet.listOutputs({
-    basket: 'default'
-  })
-  
-  // Calculate total satoshis available
-  const totalSats = outputs.reduce((sum: number, output: any) => 
-    sum + output.satoshis, 0)
-  
-  console.log(`Available balance: ${totalSats} satoshis`)
-  console.log(`Available UTXOs: ${outputs.length}`)
-  
-  return { outputs, totalSats }
-}
-```
-
-`listOutputs()` queries the wallet's stored outputs and their spent status. This lets you:
-- See how many satoshis are available
-- Check which outputs can be spent
-- Understand the wallet's coin composition
-
-## Step 6 — Monitor transaction confirmations
-
-Add background monitoring to track when transactions confirm:
-
-```typescript
-import { Monitor } from '@bsv/wallet-toolbox'
-
-export async function setupMonitoring(wallet: any) {
-  // Create a monitor daemon
-  const monitor = new Monitor(wallet.storage, wallet.services, {
-    pollIntervalMs: 10000  // Check every 10 seconds
-  })
-  
-  // Start monitoring
-  await monitor.startTasks()
-  
-  console.log('Monitor started — will track confirmations automatically')
-  
-  // Monitor will automatically:
-  // - Detect when pending transactions confirm
-  // - Acquire merkle proofs for SPV verification
-  // - Rebroadcast transactions that stalled
-  // - Update wallet state without app intervention
-  
-  return monitor
-}
-```
-
-The Monitor daemon runs in the background and continuously:
-1. Polls pending transactions for confirmation
-2. Detects chain reorganizations
-3. Acquires merkle proofs
-4. Updates wallet state automatically
-
-This eliminates polling boilerplate from your application code.
-
-## Step 7 — Integrate with the SDK's Transaction API
-
-For advanced use cases, bridge the wallet to the SDK's `Transaction` class:
-
-```typescript
-import { Transaction } from '@bsv/sdk'
-import { WalletSigner } from '@bsv/wallet-toolbox'
-
-export async function advancedSigning(wallet: any) {
-  // Create a WalletSigner adapter
-  const signer = new WalletSigner(wallet)
-  
-  // Create a transaction using SDK
-  const tx = new Transaction()
-  // ... add inputs/outputs to tx ...
-  
-  // Sign using wallet (private keys stay in wallet)
-  await tx.sign([signer])
-  
-  // Broadcast to network
-  const result = await tx.broadcast()
-  console.log('Broadcast result:', result)
-  
-  return result
-}
-```
-
-`WalletSigner` is an adapter that bridges the wallet's private keys to the SDK's transaction signing interface, allowing you to use SDK `Transaction` objects while keeping keys secure in the wallet.
-
-## Putting it all together
-
-Create `main.ts` that ties everything together:
-
-```typescript
-import { SetupWallet } from '@bsv/wallet-toolbox'
-import { Monitor } from '@bsv/wallet-toolbox'
-
-async function main() {
-  // Step 1: Initialize wallet
-  console.log('Step 1: Initializing wallet...')
-  const wallet = await SetupWallet({
-    env: 'test'  // testnet
-  })
-  
-  // Step 2: Check balance before creating action
-  console.log('\nStep 2: Checking balance...')
-  const { outputs: balance } = await wallet.listOutputs({
-    basket: 'default'
-  })
-  
-  const totalSats = balance.reduce((sum: number, output: any) => 
-    sum + output.satoshis, 0)
-  console.log(`Available: ${totalSats} satoshis across ${balance.length} UTXOs`)
-  
-  // Step 3: Create a transaction action
-  console.log('\nStep 3: Creating payment action...')
-  const action = await wallet.createAction({
-    description: 'Send 5000 satoshis',
-    outputs: [{
-      satoshis: 5000,
-      lockingScript: '76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac',
-      outputDescription: 'recipient payment'
-    }]
-  })
-  console.log('Action created, reference:', action.signableTransaction?.reference)
-  
-  // Step 4: Sign the action
-  console.log('\nStep 4: Signing action...')
-  const signed = await wallet.signAction({
-    reference: action.signableTransaction.reference
-  })
-  console.log('Action signed and ready to broadcast')
-  
-  // Step 5: Start background monitoring
-  console.log('\nStep 5: Starting transaction monitor...')
-  const monitor = new Monitor(wallet.storage, wallet.services, {
-    pollIntervalMs: 10000  // Check every 10 seconds
-  })
-  await monitor.startTasks()
-  console.log('Monitor running — will track confirmations automatically')
-  
-  // Step 6: Query transaction history
-  console.log('\nStep 6: Listing recent actions...')
-  const { actions } = await wallet.listActions({
-    limit: 5
-  })
-  console.log(`Found ${actions.length} recent transactions`)
-  
-  console.log('\nWallet app complete! Monitor is running in background.')
-  console.log('Press Ctrl+C to stop.')
-  
-  // Keep process alive while monitor runs
-  await new Promise(() => {})
-}
-
-main().catch(console.error)
-```
-
-Run this with:
-
-```bash
-npx ts-node main.ts
-```
-
-This complete example:
-1. Initializes a wallet with SQLite storage
-2. Checks available balance
-3. Creates a transaction action
-4. Signs it with wallet keys
-5. Starts background monitoring for confirmations
-6. Queries the action history
-
-## Troubleshooting
-
-**"Module not found: @bsv/wallet-toolbox"**
-→ Run `npm install @bsv/wallet-toolbox` and verify the package is listed in package.json
-
-**"Storage backend mismatch" error**
-→ Don't try to use `KnexWalletStorage` with IndexedDB in browser; use `SetupClient` for browser wallets instead
-
-**Monitor not updating confirmations**
-→ Ensure the monitor is running (`await monitor.startTasks()`). Without it, you must manually poll `listActions()` for status updates
-
-**Wallet state seems stale**
-→ Multiple monitor instances on the same storage will race and corrupt state. Use only one monitor per wallet instance
-
-**"Key manager initialization order" error**
-→ If using a custom `PrivilegedKeyManager`, initialize it *before* calling `Setup()`
-
-**Action reference not valid**
-→ `SignableTransaction` references expire quickly. Create a new action and sign immediately; don't cache the reference
-
-## What to read next
-
-- **[Wallet-Toolbox Package Reference](../packages/wallet/wallet-toolbox.md)** — Full API documentation and configuration options
-- **[BRC-100 Wallet Standard](../specs/brc-100-wallet.md)** — The standard your wallet implements
-- **[HTTP 402 Payments Guide](http-402-payments.md)** — Monetize your app by accepting payments
-- **[SDK Documentation](../packages/sdk)** — The @bsv/sdk crypto primitives and transaction API
+- [BRC-100 Wallet Interface](../specs/brc-100-wallet.md)
+- [Wallet Toolbox](../packages/wallet/wallet-toolbox.md)
+- [Conformance Vector Catalog](../conformance/vectors.md)

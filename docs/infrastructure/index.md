@@ -3,8 +3,8 @@ id: infra-overview
 title: "Infrastructure"
 kind: meta
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: [infrastructure, deployment, reference-implementations, ts-stack]
@@ -69,6 +69,22 @@ Infrastructure components are deployed services — not npm packages, but applic
 - Optional Cloud SQL for metadata
 - Graceful shutdown via SIGTERM
 
+## Reference Endpoint Names
+
+The public BSVA deployment names are driven by the cluster `app_suffix`. For the `us-1` cluster, use these examples in docs, demos, and test configuration:
+
+| Component | Pattern | `us-1` Endpoint |
+|---|---|---|
+| Wallet Infrastructure | `store-${app_suffix}.bsvb.tech` | `https://store-us-1.bsvb.tech` |
+| Message Box | `message-box-${app_suffix}.bsvb.tech` | `https://message-box-us-1.bsvb.tech` |
+| Overlay | `overlay-${app_suffix}.bsvb.tech` | `https://overlay-us-1.bsvb.tech` |
+| UHRP | `uhrp-${app_suffix}.bsvb.tech` | `https://uhrp-us-1.bsvb.tech` |
+| WAB | `wab-${app_suffix}.bsvb.tech` | `https://wab-us-1.bsvb.tech` |
+| Chaintracks | `chaintracks-${app_suffix}.bsvb.tech` | `https://chaintracks-us-1.bsvb.tech` |
+| Chaintracks CDN | `chaintracks-cdn-${app_suffix}.bsvb.tech` | `https://chaintracks-cdn-us-1.bsvb.tech` |
+| Merkle Service | `merkle-service-${app_suffix}.bsvb.tech` | `https://merkle-service-us-1.bsvb.tech` |
+| Arcade | `arcade-${app_suffix}.bsvb.tech` | `https://arcade-us-1.bsvb.tech` |
+
 ## Common Requirements
 
 All infrastructure services:
@@ -108,4 +124,4 @@ All infrastructure services:
 
 - [ts-stack GitHub](https://github.com/bsv-blockchain/ts-stack)
 - Each service has GitHub links in its documentation
-- [BRC Standards](https://github.com/bitcoin-sv/brc) – Authentication (BRC-103), Wallet Interface (BRC-100), Payment (BRC-100), etc.
+- [BRC Standards](https://github.com/bitcoin-sv/BRCs) – Authentication (BRC-103), Wallet Interface (BRC-100), Payments (BRC-29/BRC-121), and related specifications

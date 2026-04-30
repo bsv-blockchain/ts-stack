@@ -3,8 +3,8 @@ id: architecture-conformance
 title: Conformance Pipeline
 kind: meta
 version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: ["architecture", "conformance", "cross-language"]
@@ -12,100 +12,91 @@ tags: ["architecture", "conformance", "cross-language"]
 
 # Conformance Pipeline
 
-The TypeScript stack is the **canonical reference implementation** for the BSV protocol ecosystem. This page explains how that role works in practice.
+The TypeScript stack is the reference implementation for this repository's portable SDK and wallet behavior. Conformance vectors are the bridge from that implementation to other languages.
 
-## What "Canonical Reference" Means
+## What "Reference" Means
 
-Every protocol operation that the TS SDK performs is expressed as a JSON test vector: a structured record of inputs and the expected outputs that a correct implementation must produce. These vectors are committed to `conformance/vectors/` and represent the ground truth for the protocol.
+A behavior becomes portable when it is captured as a deterministic JSON vector. Each vector contains inputs, expected outputs, BRC metadata, and stable IDs. A new SDK implementation can read the same file and prove that it produces the same result.
 
-Other language implementations (Go, Python, Rust) validate their own correctness by running the same vectors and comparing outputs. A divergence indicates a protocol-level incompatibility.
+This is most useful for behavior that must match byte-for-byte:
 
-This means:
-
-- A transaction built by a Go wallet is guaranteed to be valid to a TypeScript overlay
-- A BEEF encoded by a Rust implementation is guaranteed to parse in TypeScript
-- Key derivation in Python produces identical keys to key derivation in TypeScript
+- key derivation and public key generation
+- hashes, HMACs, signatures, encryption outputs
+- transaction and MerklePath serialization
+- BRC-29 payment derivation
+- BRC-100 wallet crypto method behavior
 
 ## Pipeline Flow
 
-```
-TypeScript SDK (canonical)
-        │
-        │  produces
-        ▼
+```text
+TypeScript reference behavior
+        |
+        | captured as deterministic fixtures
+        v
 conformance/vectors/*.json
-        │
-        ├──► TypeScript Jest runner  (conformance/runner/ts/runner.test.ts)
-        │         validates TS SDK against its own vectors
-        │
-        ├──► Go runner               (bsv-blockchain/go-sdk, consuming these vectors)
-        │         validates Go SDK
-        │
-        ├──► Python runner           (planned)
-        │
-        └──► Rust runner             (planned)
+        |
+        +--> Node structural runner
+        |    conformance/runner/src/runner.js
+        |    validates JSON shape and writes reports
+        |
+        +--> TypeScript/Jest behavior runner
+        |    conformance/runner/ts/runner.test.ts
+        |    dispatches supported vectors into @bsv/sdk
+        |
+        +--> Other language runners
+             consume the same JSON corpus and compare outputs
 ```
 
-All runners consume the same vector corpus from this repository (via sparse checkout or published artifact). A passing run means the implementation is protocol-compatible with TypeScript.
+The corpus metadata is in `conformance/META.json`: file count, vector count, BRC coverage, and regression index.
 
-## Vector Format
+## Current Coverage
 
-Each vector is a JSON file at `conformance/vectors/<domain>/<operation>.json`, validated against `conformance/schema/vector.schema.json` (JSON Schema 2020-12):
+The current corpus has **260 vectors across 33 files**:
 
-```json
-{
-  "id": "brc42-key-derivation-happy-path",
-  "parity_class": "BRC-42",
-  "domain": "sdk/keys",
-  "inputs": {
-    "rootKey": "...",
-    "derivationPath": "m/44'/0'/0'/0/0"
-  },
-  "expectedOutput": {
-    "publicKey": "02a1b2c3d4e5f6..."
-  }
-}
-```
+- `sdk/crypto/` — 99 vectors
+- `sdk/keys/` — 43 vectors
+- `sdk/transactions/` — 31 vectors
+- `sdk/scripts/` — 20 vectors
+- `sdk/compat/` — 9 vectors
+- `wallet/brc100/` — 15 vectors
+- `wallet/brc29/` — 3 vectors
+- `messaging/brc31/` — 4 vectors
+- `regressions/` — 36 vectors
 
-The corpus metadata is in `conformance/META.json`: total vectors, BRC coverage map, regression index.
+## Running The Pipeline
 
-## Coverage
-
-260 vectors across 33 files, organized by domain:
-
-- `sdk/keys/` — BRC-42 key derivation
-- `sdk/crypto/` — Signatures and hashing
-- `sdk/transactions/` — BRC-74 Merkle paths
-- `sdk/scripts/` — Script interpreter edge cases
-- `sdk/compat/` — BRC-77 Bitcoin Signed Message compatibility
-- `wallet/brc100/` — `getPublicKey`, `createHmac`, `createSignature`, `encrypt`
-- `wallet/brc29/` — BRC-29 payment key derivation
-- `messaging/brc31/` — BRC-31 authrite signature format
-- `regressions/` — 12 historical bugs fixed across TS and Go implementations
-
-## Running the TypeScript Suite
+Run structural validation and report generation:
 
 ```bash
-# From the repo root
 pnpm conformance
 ```
 
-Runs `conformance/runner/ts/runner.test.ts` via Jest. Reports land in `conformance/runner/reports/`.
+Run only structural validation:
+
+```bash
+pnpm conformance --validate-only
+```
+
+Run a subset directory:
+
+```bash
+pnpm conformance --vectors conformance/vectors/wallet/brc100
+```
+
+Run the TypeScript/Jest dispatcher:
+
+```bash
+pnpm --filter @bsv/conformance-runner-ts test
+```
 
 ## Adding Vectors
 
-See [Contributing Vectors](../conformance/contributing-vectors.md). The general principle: when a new protocol behavior is added to the TS SDK, a vector must accompany it. Cases pending vectorization are tracked in `conformance/REGRESSION_QUEUE.md`.
+When a protocol behavior is added or clarified, add a vector in the same PR as the behavior change. When a bug is fixed, add a regression vector that would have failed before the fix.
 
-## Language Implementations
-
-| Language | Status | Repository |
-|----------|--------|------------|
-| TypeScript | Reference (canonical) | `bsv-blockchain/ts-stack` |
-| Go | Available, runner migrating to go-sdk repo | `bsv-blockchain/go-sdk` |
-| Python | Planned | — |
-| Rust | Planned | — |
+See [Contributing Vectors](../conformance/contributing-vectors.md) for the file format and review checklist.
 
 ## Related
 
-- [Conformance Testing](../conformance/index.md) — Detailed runner docs
-- [BRC Standards Index](../reference/brc-index.md) — What each BRC covers in the conformance corpus
+- [Conformance Testing](../conformance/index.md)
+- [Vector Catalog](../conformance/vectors.md)
+- [BRC Standards Index](../reference/brc-index.md)

@@ -5,8 +5,8 @@ kind: package
 domain: sdk
 version: "2.0.14"
 npm: "@bsv/sdk"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: ["sdk", "crypto", "transactions"]
@@ -96,25 +96,34 @@ const tx = new Transaction(1, [
 await tx.sign()
 ```
 
-### Use wallet interface for multi-signature or hardware signing
+### Connect to a BRC-100 wallet
 
 ```typescript
-import { WalletClient, Transaction, CreateActionArgs } from '@bsv/sdk'
+import { P2PKH, PublicKey, WalletClient } from '@bsv/sdk'
 
-const wallet = WalletClient()  // Connect to browser/desktop wallet
-const tx = new Transaction()
-tx.addOutput({ satoshis: 1000, ... })
+const wallet = new WalletClient('auto', 'example.com')
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+const lockingScript = new P2PKH()
+  .lock(PublicKey.fromString(recipientIdentityKey).toAddress())
+  .toHex()
 
-// Use wallet for signing instead of local key
-const actionResult = await wallet.createAction({
-  description: 'Payment transaction',
-  outputs: tx.outputs.map(o => ({ ...o, outputDescription: 'payment' }))
+const { publicKey } = await wallet.getPublicKey({
+  identityKey: true
 })
 
-const signResult = await wallet.signAction({
-  actionReference: actionResult.signableTransaction.reference
+const action = await wallet.createAction({
+  description: 'Create payment',
+  outputs: [{
+    lockingScript,
+    satoshis: 1000,
+    outputDescription: 'Payment output'
+  }]
 })
+
+console.log(publicKey, action.txid)
 ```
+
+`WalletClient` implements the BRC-100 method surface. It discovers a wallet substrate such as BSV Desktop over localhost or BSV Browser over a postMessage bridge.
 
 ### Verify SPV with merkle proof
 

@@ -98,15 +98,15 @@ Wallet builders compose these into a BRC-100 `Wallet`. The resulting object is t
 
 ## Application Layer: @bsv/simple
 
-`@bsv/simple` is the recommended entry point for most application developers. The primary interface for BSV application development is **`WalletClient`** — the object returned by `@bsv/simple/browser`. Application developers instantiate `WalletClient` in their own code; within a browser app it connects to the user's wallet over `localhost` or `window.postMessage`, discovers whichever BRC-100 wallet is available, and exposes the full wallet interface (`createAction`, `listOutputs`, etc.) without the app ever holding private keys. <!-- audio: ts-stack.m4a @ 00:00 -->
+`@bsv/simple` is the recommended entry point for most application developers. `@bsv/simple/browser` returns a high-level browser wallet that wraps the SDK `WalletClient`; advanced callers can access the raw BRC-100 client with `wallet.getClient()`. Within a browser app, that client discovers an available wallet over localhost, postMessage, JSON API, or another supported substrate and exposes methods such as `createAction` and `listOutputs` without the app ever holding private keys. <!-- audio: ts-stack.m4a @ 00:00 -->
 
 `@bsv/wallet-toolbox` is for developers building wallets, not applications. If you have a strong opinion about wallet UX or are building a competing wallet implementation, `wallet-toolbox` is where you start. <!-- audio: ts-stack.m4a @ 00:00 -->
 
 Two entry points in `@bsv/simple`:
 
-**`@bsv/simple/browser`** — `WalletClient` substrate. Communicates with the user's BSV Browser wallet via BRC-100 over `localhost` or `window.postMessage`. The app never holds private keys. Methods: `createWallet`, `Wallet`, `Overlay`, `Certifier`, `DID`, `CredentialSchema`, `CredentialIssuer`, `MemoryRevocationStore`.
+**`@bsv/simple/browser`** — Browser entry point. Communicates with the user's BRC-100 wallet over localhost, postMessage, or another SDK wallet substrate. The app never holds private keys. Exports include `createWallet`, `Wallet`, `Overlay`, `Certifier`, `DID`, `CredentialSchema`, `CredentialIssuer`, and `MemoryRevocationStore`.
 
-**`@bsv/simple/server`** — Manages a self-custodial server wallet backed by file persistence. Suitable for automated agents, backend services, and MCP servers. Methods: `ServerWallet`, `ServerWalletManager`, `FileRevocationStore`, handler factories for identity registry, DID resolver, credentials.
+**`@bsv/simple/server`** — Manages a self-custodial server wallet from a private key, using a wallet storage endpoint such as Wallet Infra. Suitable for automated agents, backend services, and MCP servers. Exports include `ServerWallet`, `ServerWalletManager`, `FileRevocationStore`, handler factories, `JsonFileStore`, `IdentityRegistry`, and `DIDResolverService`.
 
 ## Direct service access
 

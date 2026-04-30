@@ -3,8 +3,8 @@ id: choose-your-stack
 title: Choose Your Stack
 kind: meta
 version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: ["decision-guide"]
@@ -12,26 +12,25 @@ tags: ["decision-guide"]
 
 # Choose Your Stack
 
-Start from what you're building and pick the right entry point.
+Start from who controls the keys and how close you need to be to the protocol.
 
-## Primary question: who manages keys?
+```text
+Browser app using a user's wallet?
+  -> @bsv/simple/browser
 
+Backend agent with its own key?
+  -> @bsv/simple/server
+
+Wallet implementation or wallet infrastructure?
+  -> @bsv/wallet-toolbox + BRC-100 spec
+
+Protocol, crypto, scripts, transactions, BEEF, or conformance?
+  -> @bsv/sdk
 ```
-Are you building a wallet (you manage keys)?
-  YES → @bsv/wallet-toolbox
-  NO  → Is this a browser app or server agent?
-          BROWSER → @bsv/simple/browser
-          SERVER  → @bsv/simple/server
-          PROTOCOL LEVEL → @bsv/sdk
-```
 
----
+## Browser App
 
-## App Developer — browser or server agent
-
-The fastest entry point for most developers.
-
-### Browser app (connects to user's wallet)
+Use this when the user already has a local BRC-100 wallet such as BSV Desktop or BSV Browser.
 
 ```bash
 npm install @bsv/simple
@@ -41,16 +40,20 @@ npm install @bsv/simple
 import { createWallet } from '@bsv/simple/browser'
 
 const wallet = await createWallet()
-const result = await wallet.pay({ to: recipientIdentityKey, satoshis: 1000 })
-console.log('Paid:', result.txid)
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+const result = await wallet.pay({
+  to: recipientIdentityKey,
+  satoshis: 1000
+})
+
+console.log(result.txid)
 ```
 
-`@bsv/simple/browser` connects to the user's BSV Browser wallet over `localhost` or `window.postMessage` via the BRC-100 interface. Your app never touches private keys.
+The web app does not hold private keys. The wallet client finds an available substrate and forwards BRC-100 calls to the user's wallet application.
 
-**Resources:**
-- [@bsv/simple](../packages/helpers/simple.md)
+## Server Agent
 
-### Server agent (automated, self-custodial)
+Use this for automated services, bots, funding agents, or test harnesses where the service owns a key.
 
 ```bash
 npm install @bsv/simple
@@ -59,140 +62,66 @@ npm install @bsv/simple
 ```typescript
 import { ServerWallet } from '@bsv/simple/server'
 
-const wallet = await ServerWallet.create({ storageDir: './wallet-data' })
+const wallet = await ServerWallet.create({
+  privateKey: process.env.SERVER_PRIVATE_KEY!,
+  network: 'main',
+  storageUrl: 'https://store-us-1.bsvb.tech'
+})
 ```
 
-`@bsv/simple/server` manages a server-side wallet with file-based persistence. Suitable for automated agents, bots, and backend funding operations. Can be deployed as an MCP server.
-
-**Resources:**
-- [@bsv/simple](../packages/helpers/simple.md)
-
----
+Use a secret manager for `SERVER_PRIVATE_KEY`. Use a region-specific Wallet Infra endpoint when you operate your own deployment.
 
 ## Wallet Builder
 
-You're building a BRC-100-compliant wallet — handling key storage, signing flows, and UTXO management yourself.
+Use `@bsv/wallet-toolbox` when you are building a BRC-100 wallet, extending wallet storage, implementing permission UX, or porting the model to another language.
 
 ```bash
 npm install @bsv/wallet-toolbox
 ```
 
-`@bsv/wallet-toolbox` is the modular toolkit. Use `WalletStorageManager` to assemble a wallet from persistence providers (SQL/Knex, IndexedDB, Remote) and network services (ARC, Chaintracks). The `Wallet` class it produces is BRC-100-compliant and can be used anywhere a BRC-100 interface is expected.
+The toolbox contains the reference pieces: `Wallet`, `WalletStorageManager`, storage providers, `WalletSigner`, `Services`, `Monitor`, key managers, permissions, and test utilities such as `MockChain`.
 
-**Resources:**
+Read these together:
+
 - [@bsv/wallet-toolbox](../packages/wallet/wallet-toolbox.md)
-- [Guide: Build a Wallet-Aware App](../guides/wallet-aware-app.md)
-
----
+- [BRC-100 Wallet Interface](../specs/brc-100-wallet.md)
+- [Wallet action examples](../packages/wallet/wallet-toolbox-examples.md)
 
 ## Protocol Engineer
 
-You need direct access to cryptographic primitives, transaction construction, or BEEF encoding.
+Use `@bsv/sdk` for direct access to the core primitives.
 
 ```bash
 npm install @bsv/sdk
 ```
 
-Zero-dependency. Includes: secp256k1/r1, hashing, Script engine, transaction builder, BEEF (BRC-62), Merkle paths (BRC-74), BRC-42 key derivation, ARC broadcaster, Chaintracks client.
+The SDK provides secp256k1/r1 cryptography, hashing, scripts, transactions, BEEF (BRC-62), BUMP/Merkle paths (BRC-74), BRC-42 key derivation, ARC broadcasting, Chaintracks clients, BRC-100 interfaces, and wallet substrates.
 
-**Resources:**
-- [@bsv/sdk](../packages/sdk/bsv-sdk.md)
+## Service Operator
 
----
+Use the infrastructure docs when you need shared services rather than npm packages.
 
-## By Capability
-
-### Running an Overlay Node
-
-```bash
-npm install @bsv/overlay @bsv/overlay-express
-```
-
-Index on-chain data and serve it to applications via the Overlay HTTP spec. Implement Topic Managers and Lookup Services; `@bsv/overlay-express` wraps the Engine as an Express server.
-
-**Resources:**
-- [@bsv/overlay](../packages/overlays/overlay.md)
-- [@bsv/overlay-express](../packages/overlays/overlay-express.md)
-- [Guide: Run an Overlay Node](../guides/run-overlay-node.md)
-
-### Token System (BTMS / PushDrop)
-
-```bash
-npm install @bsv/btms @bsv/btms-permission-module
-```
-
-Issue, transfer, and manage UTXO-based tokens (BRC-48 PushDrop protocol). `@bsv/btms-backend` is the overlay-server-side shell; core BTMS logic lives in `@bsv/overlay-topics`.
-
-**Resources:**
-- [@bsv/btms](../packages/wallet/btms.md)
-- [@bsv/btms-permission-module](../packages/wallet/btms-permission-module.md)
-
-### Authenticated Messaging
-
-```bash
-npm install @bsv/authsocket @bsv/authsocket-client
-```
-
-Live authenticated WebSocket channel using BRC-103/104 mutual authentication. For store-and-forward messaging use `@bsv/message-box-client` against a MessageBox server.
-
-**Resources:**
-- [@bsv/authsocket](../packages/messaging/authsocket.md)
-- [@bsv/authsocket-client](../packages/messaging/authsocket-client.md)
-- [Guide: Peer-to-Peer Messaging](../guides/peer-to-peer-messaging.md)
-
-### Payment-Gated HTTP API (HTTP 402 / BRC-121)
-
-```bash
-npm install @bsv/auth-express-middleware @bsv/402-pay
-```
-
-Server challenges with `402 Payment Required`; client resends with BEEF micropayment in headers. Single round-trip, stateless.
-
-**Resources:**
-- [@bsv/auth-express-middleware](../packages/middleware/auth-express-middleware.md)
-- [@bsv/402-pay](../packages/middleware/402-pay.md)
-- [Guide: HTTP 402 Payments](../guides/http-402-payments.md)
-
-### Paymail
-
-```bash
-npm install @bsv/paymail
-```
-
-Paymail discovery protocol — look up payment addresses by human-readable handle.
-
-**Resources:**
-- [@bsv/paymail](../packages/messaging/paymail.md)
-
-### File Storage (UHRP)
-
-```bash
-npm install @bsv/overlay-topics
-```
-
-Run a UHRP overlay that maps file hashes to CDN URLs (BRC-26). Includes the UHRP Topic Manager and Lookup Service.
-
-**Resources:**
-- [@bsv/overlay-topics](../packages/overlays/overlay-topics.md)
-- [Spec: UHRP](../specs/uhrp.md)
-
----
+| Service | First page |
+|---------|------------|
+| Wallet state and UTXO storage | [Wallet Infra](../infrastructure/wallet-infra.md) |
+| Store-and-forward encrypted messages | [Message Box Server](../infrastructure/message-box-server.md) |
+| Shared on-chain topic lookup | [Overlay Server](../infrastructure/overlay-server.md) |
+| Content-addressed files | [UHRP servers](../infrastructure/uhrp-server-basic.md) |
+| Wallet authentication backend | [WAB](../infrastructure/wab.md) |
+| Block headers and Merkle roots | [Chaintracks Server](../infrastructure/chaintracks-server.md) |
 
 ## Decision Matrix
 
-| What you're building | Start with | Typically adds |
-|----------------------|------------|----------------|
-| Browser app | `@bsv/simple/browser` | `@bsv/message-box-client` |
-| Server agent | `@bsv/simple/server` | `@bsv/402-pay` |
-| BRC-100 wallet | `@bsv/wallet-toolbox` | `@bsv/sdk` |
-| Protocol / SDK work | `@bsv/sdk` | — |
-| Overlay node | `@bsv/overlay` | `@bsv/overlay-express`, `@bsv/overlay-topics` |
-| Token system | `@bsv/btms` | `@bsv/overlay`, `@bsv/btms-backend` |
-| Authenticated API | `@bsv/auth-express-middleware` | `@bsv/sdk` |
-| Payment-gated API | `@bsv/402-pay` | `@bsv/auth-express-middleware` |
-| Paymail | `@bsv/paymail` | `@bsv/sdk` |
-| File storage (UHRP) | `@bsv/overlay-topics` | `@bsv/overlay`, `@bsv/overlay-express` |
+| What you're building | Start with | Usually adds |
+|----------------------|------------|--------------|
+| Browser app | `@bsv/simple/browser` | `@bsv/message-box-client`, overlays |
+| Server agent | `@bsv/simple/server` | `@bsv/402-pay`, Message Box |
+| BRC-100 wallet | `@bsv/wallet-toolbox` | Wallet Infra, WAB, Chaintracks |
+| Protocol library | `@bsv/sdk` | Conformance vectors |
+| Overlay node | `@bsv/overlay`, `@bsv/overlay-express` | `@bsv/overlay-topics`, GASP |
+| Token system | `@bsv/btms`, `@bsv/btms-permission-module` | Overlay topics, wallet permissions |
+| Authenticated API | `@bsv/auth-express-middleware` | BRC-100 wallet |
+| Payment-gated API | `@bsv/402-pay` | `@bsv/payment-express-middleware` |
+| File storage | `@bsv/overlay-topics` | UHRP server |
 
-## All Packages
-
-See [Packages](../packages/index.md) for the full list.
+See [Packages](../packages/index.md) for the complete package list.

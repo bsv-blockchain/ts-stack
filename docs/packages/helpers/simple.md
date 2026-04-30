@@ -31,6 +31,7 @@ npm install @bsv/simple
 import { createWallet } from '@bsv/simple/browser'
 
 const wallet = await createWallet()
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 
 // Send a payment via MessageBox P2P
 const result = await wallet.pay({
@@ -117,7 +118,7 @@ await serverWallet.receiveDirectPayment({
 - **Basket** — Logical grouping of outputs for wallet organization
 - **Identity key** — Compressed public key hex (66 chars) for P2P messaging
 - **BRC-29 derivation** — Automatic hierarchical key derivation without exposing private keys
-- **MessageBox** — P2P payment and message transport via Babbage
+- **MessageBox** — P2P payment and message transport via a Message Box server
 - **Overlay** — SHIP/SLAP network for broadcast and lookup services
 - **Verifiable Credentials** — W3C format for attestations with revocation support
 

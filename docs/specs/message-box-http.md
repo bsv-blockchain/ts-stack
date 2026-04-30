@@ -3,8 +3,8 @@ id: spec-message-box-http
 title: MessageBox Server HTTP API
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 status: stable
 tags: ["spec", "messaging"]
 ---
@@ -70,18 +70,18 @@ tags: ["spec", "messaging"]
 
 ```typescript
 import { MessageBoxClient } from '@bsv/message-box-client'
-import { SetupWallet } from '@bsv/wallet-toolbox'
+import { WalletClient } from '@bsv/sdk'
 
-const wallet = await SetupWallet({ env: 'main' })
+const wallet = new WalletClient('auto', 'example.com')
 
 const msgBox = new MessageBoxClient({
   walletClient: wallet,
-  host: 'https://messagebox.babbage.systems'
+  host: 'https://message-box-us-1.bsvb.tech'
 })
 
 // 1. Send message (auto-encrypted with AES-256-GCM)
 await msgBox.sendMessage({
-  recipient: '02abc123...',  // Recipient's public key
+  recipient: '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366',
   messageBox: 'general_inbox',
   body: 'Hello! This is encrypted and only you can read it.'
 })
@@ -119,14 +119,7 @@ await msgBox.listenForLiveMessages({
 
 ## Conformance vectors
 
-MessageBox conformance is tested in `conformance/vectors/messaging/message-box/`:
-
-- AES-256-GCM encryption/decryption
-- BRC-31 authentication on all endpoints
-- Message storage and retrieval
-- Acknowledge/delete functionality
-- WebSocket live message delivery
-- Host discovery via overlay network
+There is no standalone MessageBox vector directory in the current conformance corpus. Related portable coverage lives in `conformance/vectors/messaging/brc31/authrite-signature.json`; MessageBox client/server behavior is covered by package tests and the OpenAPI artifact linked below.
 
 ## Implementations in ts-stack
 

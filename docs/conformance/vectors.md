@@ -3,8 +3,8 @@ id: conformance-vectors
 title: "Vector Catalog"
 kind: conformance
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: [conformance, vectors, catalog]
@@ -12,234 +12,138 @@ tags: [conformance, vectors, catalog]
 
 # Vector Catalog
 
-Browse conformance vectors by domain and specification.
+The conformance corpus is the shared test fixture set for TypeScript and other implementations. It is intentionally implementation-neutral: each JSON file defines inputs, expected outputs, metadata, and the specification area it exercises.
+
+Current corpus: **260 vectors across 33 JSON files**, last indexed on 2026-04-28 in `conformance/META.json`.
+
+## Repository Layout
+
+```text
+conformance/vectors/
+  messaging/brc31/authrite-signature.json
+  regressions/*.json
+  sdk/compat/bsm.json
+  sdk/crypto/{aes,ecdsa,ecies,hash160,hmac,ripemd160,sha256,signature}.json
+  sdk/keys/{key-derivation,private-key,public-key}.json
+  sdk/scripts/evaluation.json
+  sdk/transactions/{merkle-path,serialization}.json
+  wallet/brc100/{createhmac,createsignature,encrypt,getpublickey}.json
+  wallet/brc29/payment-derivation.json
+```
 
 ## Vector Format
 
-Each vector is a JSON file with this schema:
+Vector files use one top-level object with metadata and a `vectors` array. A typical file looks like this:
 
 ```json
 {
-  "name": "Test case name",
-  "description": "What this tests",
-  "domain": "sdk/crypto|sdk/keys|wallet/brc100|messaging/brc31|...",
-  "spec": "BRC-100|BRC-31|BRC-29|...",
-  "inputs": {
-    "field1": "value1",
-    "field2": "value2"
+  "metadata": {
+    "name": "BRC-100 WalletInterface.getPublicKey",
+    "domain": "wallet",
+    "spec": "BRC-100",
+    "version": "1.0.0"
   },
-  "expectedOutput": {
-    "result": "expected value"
-  },
-  "tags": ["happy-path|edge-case|error-handling"]
+  "vectors": [
+    {
+      "id": "brc100-getpublickey-identity",
+      "description": "Returns the wallet identity key",
+      "input": { "args": { "identityKey": true } },
+      "expected": { "publicKey": "..." },
+      "tags": ["wallet", "brc100"]
+    }
+  ]
 }
 ```
 
-## SDK Vectors (80 total)
+Always inspect the target JSON file before porting a vector to another language; some files include fixtures, deterministic keys, expected errors, or protocol-specific notes.
 
-### Cryptography (sdk/crypto) — 30 vectors
-ECDSA signatures, hashing, verification
+## Coverage By Directory
 
-Location: `conformance/vectors/sdk/crypto/`
+| Directory | Vector Count | What It Covers |
+|---|---:|---|
+| `sdk/crypto` | 99 | AES, ECDSA, ECIES, HMAC, hash160, RIPEMD-160, SHA-256, signatures |
+| `sdk/keys` | 43 | BRC-42 derivation, private key behavior, public key behavior |
+| `sdk/transactions` | 31 | Transaction serialization and BRC-74 merkle paths |
+| `sdk/scripts` | 20 | Script evaluation edge cases |
+| `sdk/compat` | 9 | BRC-77 BSM compatibility |
+| `messaging/brc31` | 4 | Authrite/BRC-31 signatures |
+| `wallet/brc29` | 3 | BRC-29 payment derivation |
+| `wallet/brc100` | 15 | BRC-100 method fixtures currently available |
+| `regressions` | 36 | Reproductions for historical bugs across SDK implementations |
 
-- Happy path: Sign and verify message
-- Deterministic nonces: Same signature for same input
-- Invalid signatures: Rejection of bad signatures
-- Edge cases: Empty message, max size message
-- Performance: Bulk signing
+## Wallet BRC-100
 
-### Key Derivation (sdk/keys) — 25 vectors
-BRC-42 and BIP-32 key paths
+Current BRC-100 conformance coverage is focused on deterministic crypto and key methods:
 
-Location: `conformance/vectors/sdk/keys/`
+| File | Vectors | Methods |
+|---|---:|---|
+| `wallet/brc100/getpublickey.json` | 4 | `getPublicKey` |
+| `wallet/brc100/createhmac.json` | 4 | `createHmac`, `verifyHmac` |
+| `wallet/brc100/createsignature.json` | 4 | `createSignature`, `verifySignature` |
+| `wallet/brc100/encrypt.json` | 3 | `encrypt`, `decrypt` |
 
-- BRC-42 derivation: Public/private key derivation
-- BIP-32 paths: m/44'/0'/0'/0/0 style paths
-- Hardened keys: ' suffix behavior
-- Key matching: Public key from private
-- Error handling: Invalid path strings
+Use the [BRC-100 wallet method reference](../specs/brc-100-wallet.md) for the full interface shape. Use this catalog to see which parts already have portable fixtures.
 
-### Transactions (sdk/transactions) — 15 vectors
-Transaction serialization and deserialization
+## Coverage By BRC
 
-Location: `conformance/vectors/sdk/transactions/`
+| BRC | Current Vector Areas | Status |
+|---|---|---|
+| BRC-29 | `wallet/brc29/payment-derivation.json` | available |
+| BRC-31 | `messaging/brc31/authrite-signature.json` | available |
+| BRC-42 | `sdk/keys/key-derivation.json`, key fixtures | available |
+| BRC-74 | `sdk/transactions/merkle-path.json` | available |
+| BRC-77 | `sdk/compat/bsm.json` | available |
+| BRC-100 | `wallet/brc100/*.json` | partial |
 
-- UTXO format: Input/output structures
-- Script types: P2PKH, P2PK, custom
-- Serialization: Hex encoding/decoding
-- Large transactions: Multiple inputs/outputs
-- Validation: Bad format detection
+## Regression Fixtures
 
-### Merkle Paths (sdk/merkle) — 10 vectors
-Merkle proof computation and verification
+Regression files reproduce bugs found in TypeScript or other SDKs so new implementations can prove they do not repeat them.
 
-Location: `conformance/vectors/sdk/merkle/`
-
-- Path computation: Leaf to root proof
-- Path verification: Root matching
-- Multiple transactions: Batch proofs
-- Edge cases: Single-leaf tree
-
-## Wallet Vectors (90 total)
-
-### BRC-100 Interface (wallet/brc100) — 50 vectors
-WalletInterface method behavior
-
-Location: `conformance/vectors/wallet/brc100/`
-
-- getPublicKey: Key retrieval
-- createAction: Transaction building
-- signAction: Signing behavior
-- encrypt/decrypt: Encryption round-trips
-- createHmac: Authentication codes
-- Determinism: Same inputs = same outputs
-- Error handling: Invalid parameters
-
-### BRC-29 Peer Payment (wallet/brc29) — 20 vectors
-Payment key derivation
-
-Location: `conformance/vectors/wallet/brc29/`
-
-- Key derivation: Nonce-based derivation
-- Determinism: Both parties same key
-- Different nonces: Different outputs
-- Edge cases: Null nonces, max nonces
-
-### UTXO Management (wallet/utxo) — 15 vectors
-UTXO tracking and spending
-
-Location: `conformance/vectors/wallet/utxo/`
-
-- UTXO selection: Change calculation
-- Spending: Mark as spent
-- Double spend prevention
-- Balance calculation
-
-### Action Signing (wallet/actions) — 5 vectors
-Transaction action workflow
-
-Location: `conformance/vectors/wallet/actions/`
-
-- Create and sign flow
-- Multiple signatures
-- Action state transitions
-
-## Messaging Vectors (60 total)
-
-### BRC-31 Auth (messaging/brc31) — 15 vectors
-Mutual authentication protocol
-
-Location: `conformance/vectors/messaging/brc31/`
-
-- Handshake completion: Full auth flow
-- Signature validation: Correct signatures only
-- Nonce exchange: Fresh nonces required
-- Replay protection: Same nonce rejected
-- Timing: Timestamp validation
-
-### Authsocket (messaging/authsocket) — 20 vectors
-WebSocket authentication
-
-Location: `conformance/vectors/messaging/authsocket/`
-
-- Connection handshake
-- Message framing
-- Signature verification
-- Connection state
-
-### Message Box (messaging/messagebox) — 15 vectors
-Encrypted message storage
-
-Location: `conformance/vectors/messaging/messagebox/`
-
-- Send message: Happy path
-- Receive message: Retrieval
-- Encryption: Round-trip
-- Metadata: Correct structure
-
-### Paymail (messaging/paymail) — 10 vectors
-Paymail protocol compliance
-
-Location: `conformance/vectors/messaging/paymail/`
-
-- Discovery: Getting payment address
-- Payment capability: Output generation
-- Error handling: Invalid requests
-
-## Regression Vectors (30 total)
-
-Historical bugs and fixes
-
-Location: `conformance/vectors/regressions/`
-
-- Bug ID tracking (e.g., `CVE-2026-1234`)
-- Reproduction case
-- Fix verification
-- Performance benchmarks
-
-## Coverage by BRC
-
-| BRC | Vectors | Status |
-|-----|---------|--------|
-| BRC-29 | 20 | Stable |
-| BRC-31 | 15 | Stable |
-| BRC-42 | 25 | Stable |
-| BRC-74 | 10 | Stable |
-| BRC-100 | 50 | Stable |
-| BRC-121 | 5 | Stable |
-| Other | 80 | Stable |
+| Regression | Source Issue |
+|---|---|
+| `beef-v2-txid-panic` | `go-sdk#306` |
+| `privatekey-modular-reduction` | `ts-sdk#31` |
+| `merkle-path-odd-node` | `go-sdk#298` |
+| `uhrp-url-parity` | `go-sdk#310` |
+| `script-lshift-truncation` | `ts-sdk#493` |
+| `script-shift-endianness` | `ts-sdk#377` |
+| `tx-sequence-zero-sighash` | `ts-sdk#371` |
+| `script-writebin-empty` | `ts-sdk#336` |
+| `script-fromasm-numeric-token` | `ts-sdk#42` |
+| `fee-model-mismatch` | `go-sdk#267` |
+| `bip276-hex-decode` | `go-sdk#286` |
+| `beef-isvalid-hydration` | `go-sdk#167` |
 
 ## Running Vectors
 
-### Select domain
+Run the complete corpus:
+
 ```bash
-pnpm conformance --domain wallet/brc100
-pnpm conformance --domain sdk/crypto
+pnpm conformance
 ```
 
-### Filter by tag
+Validate JSON structure only:
+
 ```bash
-pnpm conformance --tag happy-path
-pnpm conformance --tag edge-case
+pnpm conformance --validate-only
 ```
 
-### Specific file
+Run a directory subset:
+
 ```bash
-pnpm conformance conformance/vectors/wallet/brc100/getPublicKey.json
+pnpm conformance --vectors conformance/vectors/wallet/brc100
 ```
 
-## Vector Structure in Repository
+Write a JUnit report:
 
-```
-conformance/vectors/
-  sdk/
-    crypto/
-      sign-happy-path.json
-      sign-deterministic.json
-      verify-invalid-signature.json
-    keys/
-      brc42-derivation.json
-      bip32-paths.json
-    transactions/
-      utxo-format.json
-  wallet/
-    brc100/
-      getPublicKey-happy-path.json
-      createAction-with-outputs.json
-    brc29/
-      key-derivation.json
-    utxo/
-      selection.json
-  messaging/
-    brc31/
-      handshake-complete.json
-      nonce-exchange.json
-    authsocket/
-      websocket-handshake.json
-  regressions/
-    cve-2026-1234.json
+```bash
+pnpm conformance --report conformance/runner/reports/results.xml
 ```
 
-## Adding New Vectors
+## Porting To Another Implementation
 
-See [Contributing Vectors](./contributing-vectors.md) for detailed instructions on adding test cases.
+1. Read `conformance/META.json` to confirm the corpus version and current vector list.
+2. Start with deterministic SDK vectors before stateful wallet vectors.
+3. Treat `wallet/brc100` as method-level fixtures, not as a complete wallet behavior test suite yet.
+4. Preserve vector IDs and expected error semantics when adding a runner for another language.
+5. Add new vectors to the corpus first when you find a behavioral ambiguity, then update each runner.

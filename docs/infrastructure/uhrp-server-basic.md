@@ -56,7 +56,7 @@ None.
 | PRICE_PER_GB_MO | No | Monthly storage price per GB (e.g., `0.03`) |
 | HOSTING_DOMAIN | No | Public domain for server advertisement (e.g., `localhost:8080` or `https://uhrp.example.com`) |
 | BSV_NETWORK | No | Target blockchain network (e.g., `mainnet` or `testnet`) |
-| WALLET_STORAGE_URL | No | Wallet storage endpoint for key derivation (e.g., `https://storage.babbage.systems`) |
+| WALLET_STORAGE_URL | No | Wallet storage endpoint for key derivation (e.g., `https://store-us-1.bsvb.tech`) |
 | SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
 | HTTP_PORT | No | Express server port (default: 8080) |
 | NODE_ENV | No | `development` or `production` |

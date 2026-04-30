@@ -62,7 +62,7 @@ Clients connect with identity-based authentication, send and receive messages th
 | ROUTING_PREFIX | No | Optional path prefix for all routes (e.g., `/api`) |
 | ENABLE_WEBSOCKETS | No | Set to `'true'` to enable real-time messaging (default true) |
 | LOGGING_ENABLED | No | Set to `'true'` for verbose debug logging |
-| WALLET_STORAGE_URL | No | URL of wallet storage service (e.g., `https://storage.babbage.systems`) |
+| WALLET_STORAGE_URL | No | URL of wallet storage service (e.g., `https://store-us-1.bsvb.tech`) |
 | KNEX_DB_CLIENT | No | Database client (default: `mysql`) |
 | KNEX_DB_CONNECTION | Yes | JSON connection config: `{"host":"localhost","port":3306,"user":"root","password":"...","database":"messagebox-backend"}` |
 | MIGRATE_KEY | No | Optional key to authorize migration operations |

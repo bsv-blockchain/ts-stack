@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" role="img" aria-labelledby="title desc">
+  <title id="title">BRC-100 wallet request flows</title>
+  <desc id="desc">Desktop and mobile application flows: web apps call a BRC-100 wallet client; BSV Desktop receives requests over localhost, while BSV Browser receives requests through a postMessage bridge into the native wallet. Wallets may use Wallet Infra and network services while keys remain local.</desc>
+  <style>
+    .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+    .panel-dark { fill: #eef2ff; stroke: #64748b; stroke-width: 1.5; }
+    .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.5; }
+    .box-strong { fill: #eff6ff; stroke: #0a3afd; stroke-width: 2; }
+    .box-wallet { fill: #ecfeff; stroke: #0891b2; stroke-width: 2; }
+    .box-infra { fill: #fefce8; stroke: #a16207; stroke-width: 1.75; }
+    .title { font: 700 18px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #172554; }
+    .subtitle { font: 600 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #334155; }
+    .label { font: 12px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #475569; }
+    .mono { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: #0f172a; }
+    .small { font: 11px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #64748b; }
+    .arrow { stroke: #64748b; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+    .arrow-blue { stroke: #0a3afd; stroke-width: 2; fill: none; marker-end: url(#arrow-blue); }
+    .arrow-cyan { stroke: #0891b2; stroke-width: 2; fill: none; marker-end: url(#arrow-cyan); }
+    .arrow-gold { stroke: #a16207; stroke-width: 1.7; fill: none; marker-end: url(#arrow-gold); stroke-dasharray: 5 5; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#0a3afd"/>
+    </marker>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#0891b2"/>
+    </marker>
+    <marker id="arrow-gold" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#a16207"/>
+    </marker>
+  </defs>
+
+  <rect x="30" y="30" width="1040" height="310" rx="10" class="panel"/>
+  <text x="55" y="66" class="title">Desktop flow: web app to BSV Desktop</text>
+  <text x="55" y="90" class="label">The app asks for a wallet action. BSV Desktop receives the BRC-100 call on localhost, keeps keys local, and may use remote infrastructure for wallet state.</text>
+
+  <rect x="70" y="125" width="190" height="105" rx="8" class="box-strong"/>
+  <text x="165" y="155" text-anchor="middle" class="subtitle">Web application</text>
+  <text x="90" y="183" class="mono">await wallet.createAction(...)</text>
+  <text x="90" y="207" class="small">@bsv/simple or WalletClient</text>
+
+  <line x1="260" y1="177" x2="365" y2="177" class="arrow-blue"/>
+  <text x="285" y="164" class="mono">HTTP localhost</text>
+  <text x="293" y="202" class="small">BRC-100 substrate</text>
+
+  <rect x="365" y="112" width="240" height="132" rx="8" class="box-wallet"/>
+  <text x="485" y="142" text-anchor="middle" class="subtitle">BSV Desktop</text>
+  <text x="385" y="170" class="label">Local wallet process</text>
+  <text x="385" y="192" class="label">Selects outputs from baskets</text>
+  <text x="385" y="214" class="label">Signs transaction on device</text>
+
+  <line x1="605" y1="177" x2="720" y2="177" class="arrow-gold"/>
+  <text x="632" y="164" class="mono">HTTPS</text>
+  <text x="618" y="202" class="small">if configured</text>
+
+  <rect x="720" y="112" width="260" height="132" rx="8" class="box-infra"/>
+  <text x="850" y="142" text-anchor="middle" class="subtitle">Wallet Infra</text>
+  <text x="742" y="170" class="mono">https://store-us-1.bsvb.tech</text>
+  <text x="742" y="194" class="label">UTXO state, baskets, labels</text>
+  <text x="742" y="216" class="label">Certificate and wallet metadata</text>
+
+  <path d="M485 244 C485 282, 178 282, 178 231" class="arrow-cyan"/>
+  <text x="285" y="276" class="mono">signed AtomicBEEF + txid</text>
+
+  <rect x="58" y="270" width="995" height="44" rx="8" class="panel-dark"/>
+  <text x="80" y="297" class="label">Key boundary: private keys remain inside BSV Desktop. The web app receives results, not key material or unrestricted storage access.</text>
+
+  <rect x="30" y="380" width="1040" height="300" rx="10" class="panel"/>
+  <text x="55" y="416" class="title">Mobile flow: web app inside BSV Browser</text>
+  <text x="55" y="440" class="label">The same BRC-100 method surface works on mobile, but the transport is a postMessage bridge from the embedded browser to native wallet code.</text>
+
+  <rect x="70" y="475" width="190" height="105" rx="8" class="box-strong"/>
+  <text x="165" y="505" text-anchor="middle" class="subtitle">Embedded web app</text>
+  <text x="90" y="533" class="mono">wallet.createAction(...)</text>
+  <text x="90" y="557" class="small">runs in WebView</text>
+
+  <line x1="260" y1="527" x2="375" y2="527" class="arrow-blue"/>
+  <text x="282" y="514" class="mono">postMessage</text>
+  <text x="297" y="552" class="small">BRC-100 bridge</text>
+
+  <rect x="375" y="462" width="240" height="132" rx="8" class="box-wallet"/>
+  <text x="495" y="492" text-anchor="middle" class="subtitle">BSV Browser</text>
+  <text x="395" y="520" class="label">Native mobile wallet</text>
+  <text x="395" y="542" class="label">Finds spendable outputs</text>
+  <text x="395" y="564" class="label">Signs on device</text>
+
+  <line x1="615" y1="527" x2="720" y2="527" class="arrow-gold"/>
+  <text x="642" y="514" class="mono">HTTPS</text>
+  <text x="628" y="552" class="small">if configured</text>
+
+  <rect x="720" y="462" width="260" height="132" rx="8" class="box-infra"/>
+  <text x="850" y="492" text-anchor="middle" class="subtitle">Network services</text>
+  <text x="742" y="520" class="label">Wallet Infra for state</text>
+  <text x="742" y="542" class="label">ARC for broadcast</text>
+  <text x="742" y="564" class="label">Chaintracks for headers/proofs</text>
+
+  <path d="M495 594 C495 632, 178 632, 178 581" class="arrow-cyan"/>
+  <text x="306" y="626" class="mono">response via postMessage</text>
+</svg>

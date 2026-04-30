@@ -58,7 +58,7 @@ None; HTTP-only with background advertising worker.
 | SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
 | HOSTING_DOMAIN | No | Public HTTPS domain for advertising (e.g., `https://uhrp-storage.example.com`) |
 | BSV_NETWORK | No | Target blockchain network (`main`, `test`, or `regtest`) |
-| WALLET_STORAGE_URL | No | Wallet storage endpoint (e.g., `https://storage.babbage.systems`) |
+| WALLET_STORAGE_URL | No | Wallet storage endpoint (e.g., `https://store-us-1.bsvb.tech`) |
 | PRICE_PER_GB_MO | No | Monthly storage price per GB for billing |
 | ENABLE_PAYMENT_MIDDLEWARE | No | Set to `'true'` to require payment for uploads |
 | GOOGLE_CLOUD_PROJECT | No | GCP project ID (auto-detected from service account if available) |

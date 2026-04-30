@@ -6,8 +6,8 @@ domain: middleware
 version: "2.0.2"
 source_repo: "bsv-blockchain/payment-express-middleware"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/payment-express-middleware"
 repo: "https://github.com/bsv-blockchain/payment-express-middleware"
@@ -22,7 +22,7 @@ tags: [middleware, express, payment, brc-121, "402"]
 ## Install
 
 ```bash
-npm install @bsv/payment-express-middleware
+npm install @bsv/payment-express-middleware @bsv/auth-express-middleware @bsv/simple
 ```
 
 ## Quick start
@@ -32,8 +32,13 @@ import express from 'express'
 import bodyParser from 'body-parser'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import { ServerWallet } from '@bsv/simple/server'
 
-const wallet = new Wallet({ /* config */ })
+const wallet = await ServerWallet.create({
+  privateKey: process.env.SERVER_PRIVATE_KEY!,
+  network: 'main',
+  storageUrl: 'https://store-us-1.bsvb.tech'
+})
 const authMiddleware = createAuthMiddleware({ wallet })
 const paymentMiddleware = createPaymentMiddleware({
   wallet,

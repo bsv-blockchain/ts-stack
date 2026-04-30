@@ -6,8 +6,8 @@ domain: messaging
 version: "2.1.1"
 source_repo: "bsv-blockchain/message-box-client"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/message-box-client"
 repo: "https://github.com/bsv-blockchain/message-box-client"
@@ -103,7 +103,7 @@ await peerPay.listenForLivePayments({
 
 // Send 50,000 sats
 await peerPay.sendLivePayment({
-  recipient: '0277a2b...e3f4',
+  recipient: '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366',
   amount: 50000
 })
 ```

@@ -126,7 +126,7 @@ const response = await authFetch.fetch('https://server.com/protected', {
 })
 
 const data = await response.json()
-console.log(data.message)  // "Hello, 02abc123..."
+console.log(data.message)  // "Hello, 025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366"
 ```
 
 ## Example: WebSocket with AuthSocket

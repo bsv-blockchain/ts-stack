@@ -3,8 +3,8 @@ id: guide-http-402
 title: "HTTP 402 Payment Gating"
 kind: guide
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: [guide, payments, http-402, brc-121, monetization]
@@ -43,7 +43,7 @@ Set up two separate projects:
 mkdir payment-server && cd payment-server
 npm init -y
 npm install express body-parser @bsv/sdk @bsv/payment-express-middleware \
-  @bsv/auth-express-middleware @bsv/wallet-toolbox dotenv
+  @bsv/auth-express-middleware @bsv/simple dotenv
 npm install -D typescript ts-node @types/express @types/node
 
 # Client (in separate directory)
@@ -75,15 +75,17 @@ import express from 'express'
 import bodyParser from 'body-parser'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { SetupWallet } from '@bsv/wallet-toolbox'
+import { ServerWallet } from '@bsv/simple/server'
 import dotenv from 'dotenv'
 
 dotenv.config()
 
 async function setupServer() {
   // 1. Initialize wallet
-  const wallet = await SetupWallet({
-    env: 'test'  // testnet
+  const wallet = await ServerWallet.create({
+    privateKey: process.env.SERVER_PRIVATE_KEY!,
+    network: 'main',
+    storageUrl: 'https://store-us-1.bsvb.tech'
   })
   
   // 2. Create auth middleware
@@ -275,11 +277,15 @@ import express from 'express'
 import bodyParser from 'body-parser'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
-import { SetupWallet } from '@bsv/wallet-toolbox'
+import { ServerWallet } from '@bsv/simple/server'
 
 async function main() {
   // Setup wallet
-  const wallet = await SetupWallet({ env: 'test' })
+  const wallet = await ServerWallet.create({
+    privateKey: process.env.SERVER_PRIVATE_KEY!,
+    network: 'main',
+    storageUrl: 'https://store-us-1.bsvb.tech'
+  })
   
   // Setup middleware
   const authMiddleware = createAuthMiddleware({ wallet })
@@ -373,7 +379,7 @@ npx ts-node main.ts
 → Payment middleware expects `req.auth.identityKey` set by auth middleware. Ensure auth runs before payment in middleware chain
 
 **"Wallet must implement internalizeAction()"**
-→ Server wallet must have `internalizeAction()` method for validating payments. Use `SetupWallet()` or custom BRC-100 wallet
+→ Server wallet must have `internalizeAction()` for validating payments. Use `ServerWallet.create()` from `@bsv/simple/server` or another BRC-100 wallet implementation
 
 **"Nonce verification failed"**
 → Client must use exact `derivationPrefix` from 402 response. Don't modify or cache the prefix across requests

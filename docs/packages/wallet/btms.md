@@ -81,7 +81,7 @@ for (const asset of assets) {
 ### Send tokens to recipient
 
 ```typescript
-const recipientIdentityKey = '03abc123...'  // Recipient's public key
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 const sendResult = await btms.send(
   'abc123...def.0',  // Asset ID from issuance
   recipientIdentityKey,
@@ -117,7 +117,7 @@ const resultAll = await btms.burn('abc123...def.0')
 ### Prove token ownership for collateral or escrow
 
 ```typescript
-const verifierKey = '03def456...'  // Party to prove to
+const verifierKey = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 const proof = await btms.proveOwnership(
   'abc123...def.0',
   500,  // Amount to prove

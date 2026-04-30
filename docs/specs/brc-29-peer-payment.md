@@ -3,8 +3,8 @@ id: spec-brc-29-peer-payment
 title: BRC-29 Simple Authenticated P2P Payment Protocol
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 status: stable
 tags: ["spec", "payments", "brc-29"]
 ---
@@ -48,7 +48,7 @@ tags: ["spec", "payments", "brc-29"]
    - Wraps in Atomic BEEF (BRC-95) format
    - Sends transaction via HTTP/WebSocket/message box
 
-3. **Recipient → Sender** (acknowledgment) — Recipient calls `wallet.internalizeAction()` to import transaction. If merged successfully, responds with acknowledgment (ACCEPTED or REJECTED).
+3. **Recipient → Sender** (acknowledgment) — Recipient calls `wallet.internalizeAction()` to import transaction outputs. If the wallet accepts the payment, the recipient responds with acknowledgment (ACCEPTED or REJECTED).
 
 ## Key types / channels
 
@@ -73,42 +73,57 @@ tags: ["spec", "payments", "brc-29"]
 
 ```typescript
 import { MessageBoxClient } from '@bsv/message-box-client'
-import { SetupWallet } from '@bsv/wallet-toolbox'
-import { Transaction, P2PKH } from '@bsv/sdk'
+import { P2PKH, PublicKey, Utils, WalletClient } from '@bsv/sdk'
+import { brc29ProtocolID } from '@bsv/wallet-toolbox-client'
 
-const wallet = await SetupWallet({ env: 'main' })
-const msgBox = new MessageBoxClient({ walletClient: wallet })
+const wallet = new WalletClient('auto', 'example.com')
+const msgBox = new MessageBoxClient({
+  walletClient: wallet,
+  host: 'https://message-box-us-1.bsvb.tech'
+})
 
 // 1. Get recipient's identity key (from Paymail or direct exchange)
-const recipientKey = '02abc123...'
+const recipientKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+const derivationPrefix = 'server-provided-prefix'
+const derivationSuffix = 'client-created-suffix'
+const keyID = `${derivationPrefix} ${derivationSuffix}`
+const { publicKey: paymentPublicKey } = await wallet.getPublicKey({
+  protocolID: brc29ProtocolID,
+  keyID,
+  counterparty: recipientKey
+})
+const lockingScript = new P2PKH()
+  .lock(PublicKey.fromString(paymentPublicKey).toAddress())
+  .toHex()
 
-// 2. Create payment action
+// 2. Create and process the payment action
 const action = await wallet.createAction({
   description: 'P2P payment to alice',
   outputs: [
     {
       satoshis: 10000,
-      lockingScript: new P2PKH().lock(recipientKey).toHex(),
-      outputDescription: 'payment to alice'
+      lockingScript,
+      outputDescription: 'payment to alice',
+      customInstructions: JSON.stringify({
+        derivationPrefix,
+        derivationSuffix,
+        recipientKey
+      })
     }
   ]
 })
 
-// 3. Sign the transaction
-const signed = await wallet.signAction({
-  actionReference: action.signableTransaction.reference
-})
-
-// 4. Wrap in Atomic BEEF and send via message box
-const beef = signed.tx.toBeef()  // BRC-95 format
-
+// 3. Send the AtomicBEEF via message box
 await msgBox.sendMessage({
   recipient: recipientKey,
   messageBox: 'payment_inbox',
   body: JSON.stringify({
     type: 'payment',
-    beef: beef.toHex(),
+    beef: Utils.toBase64(action.tx!),
     amount: 10000,
+    derivationPrefix,
+    derivationSuffix,
+    outputIndex: 0,
     memo: 'Thanks for the coffee!'
   })
 })
@@ -125,27 +140,30 @@ for (const msg of messages) {
   
   // Internalize the BEEF transaction
   const result = await wallet.internalizeAction({
-    tx: Beef.fromHex(payment.beef),
+    tx: Utils.toArray(payment.beef, 'base64'),
+    outputs: [{
+      outputIndex: payment.outputIndex,
+      protocol: 'wallet payment',
+      paymentRemittance: {
+        derivationPrefix: payment.derivationPrefix,
+        derivationSuffix: payment.derivationSuffix,
+        senderIdentityKey: msg.sender
+      }
+    }],
     description: `Received from sender: ${payment.memo}`
   })
   
-  if (result.isMerge) {
-    console.log('Already seen this tx')
-  } else {
-    console.log('New transaction internalized')
-  }
+  console.log('Payment accepted:', result.accepted)
 }
 ```
 
 ## Conformance vectors
 
-BRC-29 conformance is tested in `conformance/vectors/payments/brc29/`:
+BRC-29 conformance is tested in `conformance/vectors/wallet/brc29/payment-derivation.json`:
 
 - Key derivation with BRC-42 (prefix/suffix parsing)
 - Correct P2PKH output generation
-- Transaction format (Atomic BEEF)
-- Payment message schema validation
-- `isMerge` handling on internalization
+- Deterministic payment public keys
 
 ## Implementations in ts-stack
 

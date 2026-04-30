@@ -3,8 +3,8 @@ id: get-started
 title: Get Started
 kind: meta
 version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: ["onboarding"]
@@ -12,81 +12,95 @@ tags: ["onboarding"]
 
 # Get Started
 
-Most apps on ts-stack start with `@bsv/simple` — one import, full access to payments, tokens, identity, and messaging. This guide gets you from zero to your first on-chain action in three steps.
+Most application developers should start above the BRC-100 boundary. Your app asks a wallet to do something; the wallet keeps keys, output selection, signing, and storage under its control.
 
 ## Step 1: Install
 
 ```bash
-npm install @bsv/simple @bsv/sdk
+npm install @bsv/simple
 ```
 
-`@bsv/sdk` is a required peer dependency. It provides the cryptographic primitives and transaction engine that `@bsv/simple` builds on.
+Use `@bsv/sdk` directly only when you need protocol-level control over keys, scripts, transactions, BEEF, BUMP, or the raw BRC-100 `WalletClient`.
 
-## Step 2: Connect a Wallet
+## Step 2: Connect to a User Wallet
 
-### Browser app (user's wallet)
-
-Your app connects to the user's BSV wallet extension over `localhost` or `window.postMessage`. Your code never holds private keys.
+Browser apps use `@bsv/simple/browser`. Under the hood it creates a BRC-100 wallet client and discovers an available wallet substrate such as BSV Desktop over localhost or BSV Browser over a postMessage bridge.
 
 ```typescript
 import { createWallet } from '@bsv/simple/browser'
 
 const wallet = await createWallet()
-console.log('Connected:', wallet.getIdentityKey())
+
+console.log(wallet.getIdentityKey())
+console.log(wallet.getAddress())
 ```
 
-`createWallet()` prompts the user to approve the connection via their browser wallet. Once approved, all wallet methods are available.
+Private keys stay in the user's wallet application. The web app receives method results such as transaction IDs, AtomicBEEF bytes, public keys, signatures, or listed outputs depending on the method called.
 
-### Server agent (self-custodial)
+## Step 3: Do Something Useful
 
-A server wallet manages its own keys with file-based persistence — suitable for bots, automated agents, and backend funding.
+Send a peer-to-peer payment to an identity key:
+
+```typescript
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+const result = await wallet.pay({
+  to: recipientIdentityKey,
+  satoshis: 1000
+})
+
+console.log(result.txid)
+```
+
+Create and inspect an encrypted PushDrop token in a basket:
+
+```typescript
+const created = await wallet.createToken({
+  data: { type: 'reward', points: 100 },
+  basket: 'rewards'
+})
+
+const tokens = await wallet.listTokenDetails('rewards')
+console.log(created.txid, tokens[0]?.outpoint)
+```
+
+Get the raw BRC-100 wallet client when you need the method-level interface:
+
+```typescript
+const client = wallet.getClient()
+
+const { outputs } = await client.listOutputs({
+  basket: 'rewards',
+  include: 'locking scripts',
+  includeCustomInstructions: true
+})
+
+console.log(outputs.length)
+```
+
+## Server Agents
+
+Server-side agents use `@bsv/simple/server`. They manage their own key and can connect to Wallet Infra for storage.
 
 ```typescript
 import { ServerWallet } from '@bsv/simple/server'
 
-const wallet = await ServerWallet.create({ storageDir: './wallet-data' })
-console.log('Ready:', wallet.getIdentityKey())
-```
-
-## Step 3: Do Something Useful
-
-### Send a payment
-
-```typescript
-const result = await wallet.pay({
-  to: '02abc123...',   // recipient identity key
-  satoshis: 1000,
-  memo: 'Hello BSV'
-})
-console.log('txid:', result.txid)
-```
-
-### Create and query a token
-
-```typescript
-const token = await wallet.createToken({
-  data: { type: 'reward', points: 100 },
-  basket: 'my-tokens'
+const wallet = await ServerWallet.create({
+  privateKey: process.env.SERVER_PRIVATE_KEY!,
+  network: 'main',
+  storageUrl: 'https://store-us-1.bsvb.tech'
 })
 
-const tokens = await wallet.listTokenDetails('my-tokens')
-for (const t of tokens) {
-  console.log(t.outpoint, t.data)
-}
+console.log(wallet.getIdentityKey())
 ```
 
-### Inscribe data on-chain
-
-```typescript
-const inscription = await wallet.inscribeText('Hello blockchain!')
-console.log('txid:', inscription.txid)
-```
+Do not generate and discard a production private key at runtime. Persist it in your secret manager and pass it as `SERVER_PRIVATE_KEY`.
 
 ## What to Read Next
 
-| Guide | What you'll learn |
-|-------|-------------------|
-| [Install](./install.md) | Entry points, framework setup, TypeScript config |
-| [Choose Your Stack](./choose-your-stack.md) | Pick the right packages for what you're building |
-| [Key Concepts](./concepts.md) | BEEF, BRC-100, wallets, overlays, identity |
-| [Guides](../guides/index.md) | Wallets, overlays, messaging, HTTP 402 payments |
+| Need | Read |
+|------|------|
+| Pick packages by use case | [Choose Your Stack](./choose-your-stack.md) |
+| Understand BEEF, wallets, overlays, and BRC-100 | [Key Concepts](./concepts.md) |
+| See every BRC-100 method shape | [BRC-100 Wallet Interface](../specs/brc-100-wallet.md) |
+| Build a wallet or wallet-like implementation | [@bsv/wallet-toolbox](../packages/wallet/wallet-toolbox.md) |
+| Test another implementation against this repo | [Conformance](../conformance/index.md) |

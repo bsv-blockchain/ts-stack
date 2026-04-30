@@ -3,8 +3,8 @@ id: spec-storage-adapter
 title: Wallet Storage Adapter Interface
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 status: stable
 tags: ["spec", "wallet", "storage"]
 ---
@@ -46,9 +46,9 @@ tags: ["spec", "wallet", "storage"]
    - Transactional writes
 
 3. **StorageProvider** — Includes wallet operations
-   - `createAction(outputs)` — Build unsigned transaction
-   - `signAction(reference)` — Sign transaction
-   - `internalizeAction(tx)` — Import external transaction
+   - `createAction(outputs)` — Build and process wallet actions
+   - `signAction(reference, spends)` — Complete a signable action with caller-supplied unlocking scripts
+   - `internalizeAction(tx, outputs)` — Import external transaction outputs
    - Leverages tables from lower layers
 
 **Tables** (examples from StorageReaderWriter):
@@ -65,8 +65,8 @@ tags: ["spec", "wallet", "storage"]
 | GET | `/storage/v1/actions` | List transactions | `?basket=default&limit=100` | `[ { txid, status, created } ]` |
 | POST | `/storage/v1/actions` | Create unsigned tx | `{ outputs: [...], description }` | `{ reference }` |
 | POST | `/storage/v1/actions/{reference}/sign` | Sign transaction | `{ optionalCertificates }` | `{ signatures, tx }` |
-| POST | `/storage/v1/actions/internalize` | Import external tx | `{ beef, description }` | `{ isMerge }` |
-| GET | `/storage/v1/outputs` | List UTXOs | `?includeSpent=false` | `[ { txid, vout, satoshis, script } ]` |
+| POST | `/storage/v1/actions/internalize` | Import external tx | `{ tx, outputs, description }` | `{ accepted }` |
+| GET | `/storage/v1/outputs` | List outputs by basket/query | `?basket=default` | `[ { outpoint, satoshis, lockingScript } ]` |
 | GET | `/storage/v1/certificates` | List certificates | (none) | `[ { cert } ]` |
 | POST | `/storage/v1/permissions` | Grant app permission | `{ appId, protocolId, capability }` | OK |
 
@@ -78,12 +78,13 @@ All requests carry `x-bsv-auth-*` headers (BRC-31 mutual auth).
 import { SetupClient } from '@bsv/wallet-toolbox'
 
 // 1. Connect to remote wallet storage
-const wallet = await SetupClient({
-  endpointUrl: 'https://wallet-server.example.com',
-  storageProvider: 'remote'  // Uses HTTP remote adapter
+const wallet = await SetupClient.createWalletClientNoEnv({
+  chain: 'main',
+  rootKeyHex: process.env.WALLET_ROOT_KEY_HEX!,
+  storageUrl: 'https://store-us-1.bsvb.tech'
 })
 
-// 2. Create action (runs on server, keys stay server-side)
+// 2. Create and process an action
 const action = await wallet.createAction({
   description: 'Send 10000 sats',
   outputs: [{
@@ -93,29 +94,16 @@ const action = await wallet.createAction({
   }]
 })
 
-// 3. Sign action (keys never leave server)
-const signed = await wallet.signAction({
-  actionReference: action.signableTransaction.reference
-})
-
-// 4. Submit to network (app decides)
-await arc.broadcast(signed.tx)
-
-// 5. Query wallet state from any device
+// 3. Query wallet state from any device using the same storage backend
 const outputs = await wallet.listOutputs({
-  includeSpent: false
+  basket: 'default',
+  limit: 10
 })
 ```
 
 ## Conformance vectors
 
-Storage Adapter conformance is tested in `conformance/vectors/wallet/storage/`:
-
-- CRUD operations on all tables (actions, outputs, certificates, permissions)
-- Query filtering and sorting
-- Transaction atomicity (all-or-nothing writes)
-- BRC-31 authentication on all endpoints
-- Remote-local consistency (state syncs correctly)
+There is no standalone storage-adapter vector directory in the current conformance corpus. Storage behavior is verified by wallet-toolbox package tests; portable wallet method fixtures currently live under `conformance/vectors/wallet/brc100/`.
 
 ## Implementations in ts-stack
 
