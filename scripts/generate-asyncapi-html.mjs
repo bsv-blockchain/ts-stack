@@ -15,6 +15,7 @@
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { readFileSync, writeFileSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -46,6 +47,27 @@ const SPECS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Dark theme CSS injected into generated HTML (template has no dark mode param)
+// ---------------------------------------------------------------------------
+const DARK_CSS = `<style>
+body,html{background:#0c0c14!important;color:#e2e8f0!important}
+.bg-white{background-color:#14141f!important}
+.bg-gray-100{background-color:#1a1a2a!important}
+.bg-gray-200{background-color:#202035!important}
+.bg-gray-800{background-color:#1a1a2a!important}
+.text-gray-700{color:#c9d1d9!important}
+.text-gray-600{color:#8b949e!important}
+.text-gray-500{color:#6e7681!important}
+.text-gray-200{color:#e6edf3!important}
+</style>`;
+
+function injectDarkTheme(htmlPath) {
+  const html = readFileSync(htmlPath, 'utf-8');
+  if (html.includes('DARK_CSS_INJECTED')) return;
+  writeFileSync(htmlPath, html.replace('</head>', `<style>/* DARK_CSS_INJECTED */</style>` + DARK_CSS + '\n</head>'));
+}
+
+// ---------------------------------------------------------------------------
 // Generate all specs
 // ---------------------------------------------------------------------------
 async function main() {
@@ -65,6 +87,7 @@ async function main() {
         templateParams: { singleFile: 'true' },
       });
       await g.generateFromFile(specAbs);
+      injectDarkTheme(resolve(outAbs, 'index.html'));
       console.log('  done.\n');
       ok++;
     } catch (err) {
