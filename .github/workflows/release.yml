@@ -28,7 +28,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build all packages
-        run: pnpm -r run build
+        run: pnpm -r --filter '!@bsv/ts-stack' run build
 
       - name: Publish changed packages
         # No token needed — npm authenticates via GitHub OIDC.
