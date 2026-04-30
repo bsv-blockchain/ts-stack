@@ -61,11 +61,12 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cancelSession = useCallback(() => {
-    clientRef.current?.destroy()
+    const client = clientRef.current
     clientRef.current = null
     setSession(null)
     setError(null)
     setLog([])
+    if (client) void client.disconnect()
   }, [])
 
   const sendRequest = useCallback(
@@ -87,8 +88,9 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
     return () => {
       clearTimeout(timer)
       createdRef.current = false
-      clientRef.current?.destroy()
+      const client = clientRef.current
       clientRef.current = null
+      if (client) void client.disconnect()
     }
   }, [createSession]) // eslint-disable-line react-hooks/exhaustive-deps
 

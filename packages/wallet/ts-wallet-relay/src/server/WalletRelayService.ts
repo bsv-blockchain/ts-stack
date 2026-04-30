@@ -10,6 +10,7 @@ import type { Server } from 'node:http'
 type RouterLike = {
   get(path: string, handler: (req: Request, res: Response) => void): unknown
   post(path: string, handler: (req: Request, res: Response) => void): unknown
+  delete(path: string, handler: (req: Request, res: Response) => void): unknown
 }
 import { PROTOCOL_ID } from '../types.js'
 import type { WalletLike, WireEnvelope, RpcResponse } from '../types.js'
@@ -98,15 +99,17 @@ const MOBILE_AUTH_TIMEOUT_MS = 15_000
  * Next.js / custom framework (omit `app`, call methods from your route handlers):
  * ```ts
  * const relay = new WalletRelayService({ server, wallet, relayUrl, origin })
- * // In GET /api/session:        relay.createSession()
- * // In GET /api/session/:id:    relay.getSession(id)
- * // In POST /api/request/:id:   relay.sendRequest(id, method, params)
+ * // In GET    /api/session:        relay.createSession()
+ * // In GET    /api/session/:id:    relay.getSession(id)
+ * // In POST   /api/request/:id:   relay.sendRequest(id, method, params)
+ * // In DELETE /api/session/:id:   relay.deleteSession(id, desktopToken)
  * ```
  *
  * Express auto-registered routes:
- *   GET  /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET  /api/session/:id    — return { sessionId, status, relay }
- *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
+ *   GET    /api/session        — create session, return { sessionId, status, qrDataUrl }
+ *   GET    /api/session/:id    — return { sessionId, status, relay }
+ *   POST   /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
+ *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
 export class WalletRelayService {
   private readonly sessions: QRSessionManager
@@ -171,6 +174,8 @@ export class WalletRelayService {
       if (role === 'mobile') {
         const authTimer = this.mobileAuthTimers.get(topic)
         if (authTimer) { clearTimeout(authTimer); this.mobileAuthTimers.delete(topic) }
+        // Skip if already expired — this was a deliberate deleteSession(), not an unexpected drop
+        if (this.sessions.getSession(topic)?.status === 'expired') return
         this.sessions.setStatus(topic, 'disconnected')
         this.rejectPendingForSession(topic)
         this.opts.onSessionDisconnected?.(topic)
@@ -254,6 +259,20 @@ export class WalletRelayService {
     })
   }
 
+  /**
+   * Terminate a session from the desktop side: closes the mobile's WebSocket,
+   * rejects in-flight requests, and marks the session expired.
+   * Throws if the session is not found or the token is invalid.
+   */
+  deleteSession(sessionId: string, desktopToken: string): void {
+    const session = this.sessions.getSession(sessionId)
+    if (!session) throw new Error('Session not found')
+    if (session.desktopToken !== desktopToken) throw new Error('Invalid desktop token')
+    this.relay.disconnectMobile(sessionId)
+    this.rejectPendingForSession(sessionId)
+    this.sessions.setStatus(sessionId, 'expired')
+  }
+
   /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
   stop(): void {
     for (const timer of this.mobileAuthTimers.values()) clearTimeout(timer)
@@ -314,6 +333,21 @@ export class WalletRelayService {
           }
           res.status(status).json({ error: msg })
         })
+    })
+
+    app.delete('/api/session/:id', (req: Request, res: Response) => {
+      const token = req.headers['x-desktop-token'] as string | undefined
+      if (!token) { res.status(401).json({ error: 'Missing desktop token' }); return }
+      try {
+        this.deleteSession(req.params['id'] as string, token)
+        res.status(204).end()
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed'
+        const status = msg === 'Invalid desktop token' ? 401
+          : msg === 'Session not found' ? 404
+          : 500
+        res.status(status).json({ error: msg })
+      }
     })
   }
 

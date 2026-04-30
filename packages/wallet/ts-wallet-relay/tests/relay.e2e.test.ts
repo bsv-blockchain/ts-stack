@@ -377,6 +377,143 @@ describe('WalletRelayService E2E', () => {
     })
   })
 
+  // ── Session termination ──────────────────────────────────────────────────────
+
+  describe('session termination', () => {
+    it('deleteSession() marks the session expired', async () => {
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+      service.deleteSession(created.sessionId, created.desktopToken)
+
+      expect(service.getSession(created.sessionId)?.status).toBe('expired')
+      mobile.disconnect()
+    }, 10_000)
+
+    it('deleteSession() rejects in-flight requests immediately', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const created = await service.createSession()
+
+      const mobile = await pairMobile(
+        created.pairingUri, mobileWallet,
+        () => new Promise(() => { /* intentionally never resolves */ }),
+      )
+
+      const requestPromise = service.sendRequest(
+        created.sessionId, 'getPublicKey', {}, created.desktopToken
+      )
+
+      // Give the request one tick to register as pending on the server
+      await new Promise(r => setTimeout(r, 50))
+
+      service.deleteSession(created.sessionId, created.desktopToken)
+
+      await expect(requestPromise).rejects.toThrow()
+      mobile.disconnect()
+    }, 10_000)
+
+    it('deleteSession() throws for an unknown session', () => {
+      expect(() => service.deleteSession('no-such-id', 'token')).toThrow('Session not found')
+    })
+
+    it('deleteSession() throws for an invalid desktop token', async () => {
+      const created = await service.createSession()
+      expect(() => service.deleteSession(created.sessionId, 'wrong-token')).toThrow('Invalid desktop token')
+    })
+
+    it('DELETE /api/session/:id returns 204 and marks session expired', async () => {
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+      const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
+        method: 'DELETE',
+        headers: { 'X-Desktop-Token': created.desktopToken },
+      })
+
+      expect(res.status).toBe(204)
+      expect(service.getSession(created.sessionId)?.status).toBe('expired')
+      mobile.disconnect()
+    }, 10_000)
+
+    it('DELETE /api/session/:id returns 401 with wrong token', async () => {
+      const created = await service.createSession()
+
+      const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
+        method: 'DELETE',
+        headers: { 'X-Desktop-Token': 'wrong-token' },
+      })
+
+      expect(res.status).toBe(401)
+    }, 10_000)
+
+    it('DELETE /api/session/:id returns 401 with missing token', async () => {
+      const created = await service.createSession()
+
+      const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
+        method: 'DELETE',
+      })
+
+      expect(res.status).toBe(401)
+    }, 10_000)
+
+    it('DELETE /api/session/:id returns 404 for unknown session', async () => {
+      const res = await fetch(`${baseUrl}/api/session/does-not-exist`, {
+        method: 'DELETE',
+        headers: { 'X-Desktop-Token': 'any-token' },
+      })
+
+      expect(res.status).toBe(404)
+    }, 10_000)
+
+    it('onSessionDisconnected does not fire after deleteSession', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const disconnectedIds: string[] = []
+
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        onSessionDisconnected: id => disconnectedIds.push(id),
+      })
+      try {
+        const created = await svc.createSession()
+        const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+        svc.deleteSession(created.sessionId, created.desktopToken)
+
+        // Allow the WS close event to propagate through the server
+        await new Promise(r => setTimeout(r, 100))
+
+        expect(disconnectedIds).not.toContain(created.sessionId)
+        mobile.disconnect()
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('POST /api/request on a deleted session returns 400', async () => {
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+      service.deleteSession(created.sessionId, created.desktopToken)
+
+      const res = await fetch(`${baseUrl}/api/request/${created.sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Desktop-Token': created.desktopToken,
+        },
+        body: JSON.stringify({ method: 'getPublicKey', params: {} }),
+      })
+
+      expect(res.status).toBe(400)
+      mobile.disconnect()
+    }, 10_000)
+  })
+
   // ── Error cases ──────────────────────────────────────────────────────────────
 
   describe('error handling', () => {

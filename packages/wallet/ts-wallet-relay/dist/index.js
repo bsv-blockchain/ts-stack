@@ -438,6 +438,7 @@ var WalletRelayService = class {
           clearTimeout(authTimer);
           this.mobileAuthTimers.delete(topic);
         }
+        if (this.sessions.getSession(topic)?.status === "expired") return;
         this.sessions.setStatus(topic, "disconnected");
         this.rejectPendingForSession(topic);
         this.opts.onSessionDisconnected?.(topic);
@@ -508,6 +509,19 @@ var WalletRelayService = class {
       this.pending.set(rpc.id, { sessionId, resolve, reject, timer });
     });
   }
+  /**
+   * Terminate a session from the desktop side: closes the mobile's WebSocket,
+   * rejects in-flight requests, and marks the session expired.
+   * Throws if the session is not found or the token is invalid.
+   */
+  deleteSession(sessionId, desktopToken) {
+    const session = this.sessions.getSession(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.desktopToken !== desktopToken) throw new Error("Invalid desktop token");
+    this.relay.disconnectMobile(sessionId);
+    this.rejectPendingForSession(sessionId);
+    this.sessions.setStatus(sessionId, "expired");
+  }
   /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
   stop() {
     for (const timer of this.mobileAuthTimers.values()) clearTimeout(timer);
@@ -564,6 +578,21 @@ var WalletRelayService = class {
         }
         res.status(status).json({ error: msg });
       });
+    });
+    app.delete("/api/session/:id", (req, res) => {
+      const token = req.headers["x-desktop-token"];
+      if (!token) {
+        res.status(401).json({ error: "Missing desktop token" });
+        return;
+      }
+      try {
+        this.deleteSession(req.params["id"], token);
+        res.status(204).end();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed";
+        const status = msg === "Invalid desktop token" ? 401 : msg === "Session not found" ? 404 : 500;
+        res.status(status).json({ error: msg });
+      }
     });
   }
   // ── Inbound message handling ──────────────────────────────────────────────────

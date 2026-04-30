@@ -288,6 +288,25 @@ var WalletRelayClient = class {
       throw relayErr;
     }
   }
+  /**
+   * Terminate the session server-side (closes the mobile's WebSocket, marks session
+   * expired), then clean up locally. Fire-and-forget safe — errors are swallowed so
+   * local teardown always completes.
+   *
+   * Prefer this over `destroy()` when you want the mobile app to be notified.
+   */
+  async disconnect() {
+    if (this._session?.sessionId && this._desktopToken) {
+      try {
+        await fetch(`${this._apiUrl}/session/${this._session.sessionId}`, {
+          method: "DELETE",
+          headers: { "X-Desktop-Token": this._desktopToken }
+        });
+      } catch {
+      }
+    }
+    this.destroy();
+  }
   /** Stop polling and clean up resources. Call this on component unmount. */
   destroy() {
     this._stopPolling();
@@ -405,11 +424,12 @@ function useWalletRelayClient(options) {
     return ensureClient().createSession();
   }, []);
   const cancelSession = (0, import_react2.useCallback)(() => {
-    clientRef.current?.destroy();
+    const client = clientRef.current;
     clientRef.current = null;
     setSession(null);
     setError(null);
     setLog([]);
+    if (client) void client.disconnect();
   }, []);
   const sendRequest = (0, import_react2.useCallback)(
     async (method, params) => ensureClient().sendRequest(method, params),
@@ -429,8 +449,9 @@ function useWalletRelayClient(options) {
     return () => {
       clearTimeout(timer);
       createdRef.current = false;
-      clientRef.current?.destroy();
+      const client = clientRef.current;
       clientRef.current = null;
+      if (client) void client.disconnect();
     };
   }, [createSession]);
   const wallet = session?.status === "connected" ? clientRef.current?.wallet ?? null : null;

@@ -1,7 +1,7 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
 import React from 'react';
 import { WalletInterface, WalletClient } from '@bsv/sdk';
-import { a as WalletRelayClientOptions } from './WalletRelayClient-B01uejZU.cjs';
+import { a as WalletRelayClientOptions } from './WalletRelayClient-CqfjvQpH.cjs';
 import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-BIOdtOVN.cjs';
 
 type QRPairingCodeProps = {

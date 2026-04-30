@@ -133,6 +133,7 @@ declare class WalletRequestHandler {
 type RouterLike = {
     get(path: string, handler: (req: Request, res: Response) => void): unknown;
     post(path: string, handler: (req: Request, res: Response) => void): unknown;
+    delete(path: string, handler: (req: Request, res: Response) => void): unknown;
 };
 
 interface WalletRelayServiceOptions {
@@ -202,15 +203,17 @@ interface WalletRelayServiceOptions {
  * Next.js / custom framework (omit `app`, call methods from your route handlers):
  * ```ts
  * const relay = new WalletRelayService({ server, wallet, relayUrl, origin })
- * // In GET /api/session:        relay.createSession()
- * // In GET /api/session/:id:    relay.getSession(id)
- * // In POST /api/request/:id:   relay.sendRequest(id, method, params)
+ * // In GET    /api/session:        relay.createSession()
+ * // In GET    /api/session/:id:    relay.getSession(id)
+ * // In POST   /api/request/:id:   relay.sendRequest(id, method, params)
+ * // In DELETE /api/session/:id:   relay.deleteSession(id, desktopToken)
  * ```
  *
  * Express auto-registered routes:
- *   GET  /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET  /api/session/:id    — return { sessionId, status, relay }
- *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
+ *   GET    /api/session        — create session, return { sessionId, status, qrDataUrl }
+ *   GET    /api/session/:id    — return { sessionId, status, relay }
+ *   POST   /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
+ *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
 declare class WalletRelayService {
     private readonly opts;
@@ -244,6 +247,12 @@ declare class WalletRelayService {
      * Rejects if the session is not connected or if the mobile doesn't respond within 30 s.
      */
     sendRequest(sessionId: string, method: string, params: unknown, desktopToken?: string): Promise<RpcResponse>;
+    /**
+     * Terminate a session from the desktop side: closes the mobile's WebSocket,
+     * rejects in-flight requests, and marks the session expired.
+     * Throws if the session is not found or the token is invalid.
+     */
+    deleteSession(sessionId: string, desktopToken: string): void;
     /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
     stop(): void;
     /**

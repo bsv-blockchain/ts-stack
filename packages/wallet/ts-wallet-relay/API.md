@@ -46,7 +46,7 @@ new WalletRelayService(options: WalletRelayServiceOptions)
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `app` | `RouterLike` | No | — | Express-compatible app with `get` and `post` methods. REST routes are registered on it. Omit when using Next.js or another framework — call `createSession()`, `getSession()`, and `sendRequest()` from your own route handlers instead. Uses a structural duck-type to avoid nominal type conflicts in monorepos. |
+| `app` | `RouterLike` | No | — | Express-compatible app with `get`, `post`, and `delete` methods. REST routes are registered on it. Omit when using Next.js or another framework — call `createSession()`, `getSession()`, `sendRequest()`, and `deleteSession()` from your own route handlers instead. Uses a structural duck-type to avoid nominal type conflicts in monorepos. |
 | `server` | `http.Server` | **Yes** | — | HTTP server. The WebSocket upgrade handler is attached here. |
 | `wallet` | `WalletLike` | **Yes** | — | Backend wallet for encrypting/decrypting messages. Use `ProtoWallet` with a stable private key: `new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))`. The same key must be used across restarts — the mobile derives its ECDH shared secret from the backend identity key embedded in the QR code. |
 | `relayUrl` | `string` | No | `process.env.RELAY_URL` → `ws://localhost:3000` | `ws://` or `wss://` base URL of this server. Returned by `GET /api/session/:id` so the mobile can resolve it after scanning the QR. Not embedded in the QR itself. |
@@ -99,6 +99,20 @@ Encrypts an RPC call, sends it to the paired mobile wallet over WebSocket, and w
 
 ---
 
+**`deleteSession(sessionId, desktopToken)`**
+
+```ts
+deleteSession(sessionId: string, desktopToken: string): void
+```
+
+Terminates a session from the desktop side: closes the mobile's WebSocket (the mobile app is notified and transitions to `'disconnected'`), rejects any in-flight RPC requests immediately, and marks the session `'expired'`.
+
+Throws `'Session not found'` if the session does not exist, or `'Invalid desktop token'` if the token does not match the one issued at session creation.
+
+The primary use case is **logout**: call this when the user ends their app session so the mobile is notified immediately rather than waiting for the server-side TTL to expire. If you are using `useWalletRelayClient`, call `cancelSession()` instead — it calls `disconnect()` on the client, which sends this request automatically.
+
+---
+
 **`stop()`**
 
 ```ts
@@ -111,13 +125,16 @@ Stops the session GC timer and closes the WebSocket server. Call on process shut
 
 #### Registered routes
 
-| Method | Path | Body | Response |
-|--------|------|------|----------|
+| Method | Path | Body / Auth | Response |
+|--------|------|-------------|----------|
 | `GET` | `/api/session` | — | `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
 | `GET` | `/api/session/:id` | — | `{ sessionId, status, relay }` |
-| `POST` | `/api/request/:id` | `{ method: string, params: unknown }` | `RpcResponse` |
+| `POST` | `/api/request/:id` | Body: `{ method, params }` · Header: `X-Desktop-Token` | `RpcResponse` |
+| `DELETE` | `/api/session/:id` | Header: `X-Desktop-Token` | `204 No Content` |
 
 `GET /api/session/:id` is called by the mobile app after scanning the QR to resolve the relay WebSocket URL. The mobile trusts this response because it is served over HTTPS from the origin embedded in the QR.
+
+`DELETE /api/session/:id` closes the mobile's WebSocket connection server-side. The mobile app receives a close event and knows the session has ended. Returns `401` if the token is missing or wrong, `404` if the session does not exist.
 
 ---
 
@@ -225,13 +242,25 @@ try {
 
 ---
 
+**`disconnect()`**
+
+```ts
+disconnect(): Promise<void>
+```
+
+Terminates the session server-side then cleans up locally. Sends `DELETE /api/session/:id` with the desktop token so the backend closes the mobile's WebSocket and marks the session expired. Errors from the server call are swallowed — local teardown always completes.
+
+Prefer `disconnect()` over `destroy()` when you want the mobile app to be notified that the session has ended (for example, on user logout). Falls back to `destroy()`-only behaviour if there is no active session or desktop token.
+
+---
+
 **`destroy()`**
 
 ```ts
 destroy(): void
 ```
 
-Stops the polling interval. Call on component unmount or teardown.
+Stops the polling interval and clears the desktop token. Local cleanup only — the server session remains active and the mobile is not notified. Prefer `disconnect()` when the mobile should be notified.
 
 ---
 
@@ -470,7 +499,7 @@ All options are optional.
 | `log` | `RequestLogEntry[]` | Request history, newest first. |
 | `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
 | `createSession` | `() => Promise<SessionInfo>` | Create a new session and restart polling. Safe to call multiple times — replaces the existing session. |
-| `cancelSession` | `() => void` | Stop polling, destroy the client, and reset all state to `null`. Call on unmount when leaving a QR page to prevent the poll interval from running in the background. A subsequent `createSession()` starts fresh. |
+| `cancelSession` | `() => void` | Resets all state to `null`, then calls `disconnect()` on the client (fire-and-forget). This terminates the session server-side and closes the mobile's WebSocket so the mobile app is notified. Call this on unmount when leaving a QR page, or on user logout. A subsequent `createSession()` starts fresh. |
 | `sendRequest` | `(method: string, params?: unknown) => Promise<WalletResponse>` | Send an RPC call to the paired mobile. Throws if no session is active. |
 | `wallet` | `Pick<WalletInterface, WalletMethodName> \| null` | Drop-in `WalletInterface` proxy when connected, `null` otherwise. See [wallet proxy](#wallet-proxy). |
 

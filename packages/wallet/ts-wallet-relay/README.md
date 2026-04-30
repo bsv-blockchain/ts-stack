@@ -127,13 +127,14 @@ new WalletRelayService({ app, server, wallet })
 server.listen(3000)
 ```
 
-That's the entire backend. `WalletRelayService` registers three REST routes and the `/ws` WebSocket endpoint automatically:
+That's the entire backend. `WalletRelayService` registers four REST routes and the `/ws` WebSocket endpoint automatically:
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/session` | Create session, return `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
 | `GET` | `/api/session/:id` | Poll session status |
 | `POST` | `/api/request/:id` | Send a wallet RPC call to the paired mobile |
+| `DELETE` | `/api/session/:id` | Terminate session — closes the mobile's WebSocket so the mobile app is notified |
 
 `relayUrl` and `origin` are optional — they default to `process.env.RELAY_URL` / `process.env.ORIGIN`, then `ws://localhost:3000` / `http://localhost:5173`.
 
@@ -236,6 +237,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const info = relay.getSession(params.id)
   if (!info) return Response.json({ error: 'Session not found' }, { status: 404 })
   return Response.json(info)
+}
+
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const token = req.headers.get('x-desktop-token') ?? undefined
+  if (!token) return Response.json({ error: 'Missing desktop token' }, { status: 401 })
+  try {
+    relay.deleteSession(params.id, token)
+    return new Response(null, { status: 204 })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed'
+    const status = msg === 'Invalid desktop token' ? 401 : msg === 'Session not found' ? 404 : 500
+    return Response.json({ error: msg }, { status })
+  }
 }
 ```
 
