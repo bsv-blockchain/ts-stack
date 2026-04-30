@@ -21,6 +21,9 @@ Browser app using a user's wallet?
 Backend agent with its own key?
   -> @bsv/simple/server
 
+Coming from another chain and want to build transactions explicitly?
+  -> @bsv/wallet-helper
+
 Wallet implementation or wallet infrastructure?
   -> @bsv/wallet-toolbox + BRC-100 spec
 
@@ -50,6 +53,22 @@ console.log(result.txid)
 ```
 
 The web app does not hold private keys. The wallet client finds an available substrate and forwards BRC-100 calls to the user's wallet application.
+
+## Transaction Builder
+
+Use `@bsv/wallet-helper` when you want to construct transactions directly, but you do not want to drop all the way into raw `WalletClient.createAction` and `signAction` calls.
+
+This is often the clearest starting point for developers coming from other blockchain stacks: you can think in terms of explicit transaction outputs, scripts, ordinals, metadata, inputs, and change, while the user's BRC-100 wallet still controls keys and signing.
+
+```bash
+npm install @bsv/wallet-helper
+```
+
+Read this with the BRC-100 method reference when you need to understand what the builder sends to the wallet:
+
+- [@bsv/wallet-helper](../packages/helpers/wallet-helper.md)
+- [`createAction`](../specs/brc-100-wallet.md#createaction)
+- [`signAction`](../specs/brc-100-wallet.md#signaction)
 
 ## Server Agent
 
@@ -115,6 +134,7 @@ Use the infrastructure docs when you need shared services rather than npm packag
 | What you're building | Start with | Usually adds |
 |----------------------|------------|--------------|
 | Browser app | `@bsv/simple/browser` | `@bsv/message-box-client`, overlays |
+| Transaction-building app | `@bsv/wallet-helper` | `@bsv/templates`, BRC-100 method reference |
 | Server agent | `@bsv/simple/server` | `@bsv/402-pay`, Message Box |
 | BRC-100 wallet | `@bsv/wallet-toolbox` | Wallet Infra, WAB, Chaintracks |
 | Protocol library | `@bsv/sdk` | Conformance vectors |

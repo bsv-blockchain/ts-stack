@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc">
   <title id="title">BRC-100 wallet request flows</title>
-  <desc id="desc">Desktop and mobile application flows: web apps call a BRC-100 wallet client; BSV Desktop receives requests over localhost, while BSV Browser receives requests through a postMessage bridge into the native wallet. Wallets may use Wallet Infra and network services while keys remain local.</desc>
+  <desc id="desc">Desktop and mobile application flows: web apps call a BRC-100 wallet client; BSV Desktop receives requests over localhost and may use Wallet Infra, while BSV Browser receives requests through a postMessage bridge into the native wallet and uses a local wallet database.</desc>
   <style>
     .panel { fill: #101624; stroke: #2a3a52; stroke-width: 1.5; }
     .panel-dark { fill: #0b1120; stroke: #475569; stroke-width: 1.5; }
     .box-strong { fill: rgba(37, 99, 235, 0.18); stroke: #60a5fa; stroke-width: 2; }
     .box-wallet { fill: rgba(8, 145, 178, 0.18); stroke: #22d3ee; stroke-width: 2; }
     .box-infra { fill: rgba(180, 83, 9, 0.18); stroke: #f59e0b; stroke-width: 1.75; }
+    .box-local { fill: rgba(16, 185, 129, 0.14); stroke: #34d399; stroke-width: 1.75; }
     .title { font: 700 22px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
     .subtitle { font: 700 15px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
     .label { font: 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #cbd5e1; }
@@ -82,18 +83,18 @@
   <rect x="465" y="577" width="300" height="145" rx="9" class="box-wallet"/>
   <text x="615" y="613" text-anchor="middle" class="subtitle">BSV Browser</text>
   <text x="492" y="645" class="label">Native mobile wallet</text>
-  <text x="492" y="672" class="label">Finds spendable outputs</text>
+  <text x="492" y="672" class="label">Reads local spendable outputs</text>
   <text x="492" y="699" class="label">Signs on device</text>
 
-  <line x1="765" y1="650" x2="900" y2="650" class="arrow-gold"/>
-  <text x="802" y="632" class="mono">HTTPS</text>
-  <text x="794" y="679" class="small">if configured</text>
+  <line x1="765" y1="650" x2="900" y2="650" class="arrow-cyan"/>
+  <text x="832" y="632" text-anchor="middle" class="mono">local storage</text>
+  <text x="832" y="679" text-anchor="middle" class="small">on device</text>
 
-  <rect x="900" y="577" width="310" height="145" rx="9" class="box-infra"/>
-  <text x="1055" y="613" text-anchor="middle" class="subtitle">Network services</text>
-  <text x="925" y="645" class="label">Wallet Infra for state</text>
-  <text x="925" y="672" class="label">ARC for broadcast</text>
-  <text x="925" y="699" class="label">Chaintracks for headers/proofs</text>
+  <rect x="900" y="577" width="310" height="145" rx="9" class="box-local"/>
+  <text x="1055" y="613" text-anchor="middle" class="subtitle">Local wallet database</text>
+  <text x="925" y="645" class="label">No remote storage provider</text>
+  <text x="925" y="672" class="label">Outputs, baskets, labels</text>
+  <text x="925" y="699" class="label">Wallet and certificate metadata</text>
 
   <path d="M615 722 C615 760, 207 760, 207 711" class="arrow-cyan"/>
   <text x="383" y="744" class="mono">response via postMessage</text>

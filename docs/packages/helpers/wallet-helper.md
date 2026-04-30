@@ -6,8 +6,8 @@ domain: helpers
 version: "0.0.6"
 source_repo: "bsv-blockchain/wallet-helper"
 source_commit: "unknown"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 npm: "https://www.npmjs.com/package/@bsv/wallet-helper"
 repo: "https://github.com/bsv-blockchain/wallet-helper"
@@ -18,6 +18,10 @@ tags: [helpers, wallet, transaction-builder]
 # @bsv/wallet-helper
 
 > Fluent transaction builder and wallet-compatible script templates for BSV — construct multi-output transactions (P2PKH, ordinals, custom) with method chaining, BRC-29 key derivation, and no private key exposure.
+
+`@bsv/wallet-helper` is a good starting point for developers coming from other blockchain ecosystems who expect to build transactions explicitly. It gives you a transaction-builder shape for outputs, scripts, ordinals, metadata, inputs, and change, while still delegating keys and signing to a BRC-100 wallet.
+
+Use it when `@bsv/simple` feels too task-oriented, but raw `@bsv/sdk` `WalletClient.createAction` / `signAction` calls are more protocol surface than you want to handle directly.
 
 ## Install
 
@@ -110,6 +114,7 @@ const ordResult = await new TransactionBuilder(wallet, "Mint ordinal")
 
 ## When to use this
 
+- You are coming from another blockchain stack and want an explicit transaction-building workflow
 - Building transactions with method chaining
 - Creating complex multi-output transactions readably
 - Working with ordinals and inscriptions
@@ -143,7 +148,7 @@ const ordResult = await new TransactionBuilder(wallet, "Mint ordinal")
 
 - [@bsv/simple](simple.md) — High-level wallet operations
 - [@bsv/templates](templates.md) — Low-level script templates
-- [@bsv/sdk](https://github.com/bsv-blockchain/sdk-ts) — Core transaction building
+- [@bsv/sdk](../sdk/bsv-sdk.md) — Core primitives, raw transactions, and the BRC-100 `WalletClient`
 
 ## Reference
 

@@ -23,7 +23,7 @@ BRC-100 is the wallet-to-application interface. Application code can ask for act
 Two common substrates use the same method surface:
 
 - **BSV Desktop**: a web app calls a wallet client; the request reaches a localhost wallet server; BSV Desktop selects outputs, signs locally, optionally uses Wallet Infra, and returns the result.
-- **BSV Browser**: the web app runs inside an embedded browser; the request crosses a postMessage bridge into the native mobile wallet; signing happens on-device and the result returns over the bridge.
+- **BSV Browser**: the web app runs inside an embedded browser; the request crosses a postMessage bridge into the native mobile wallet; wallet state comes from a local database, signing happens on-device, and the result returns over the bridge.
 
 For a method-level contract, link directly to [BRC-100 Wallet Interface](../specs/brc-100-wallet.md). For example: [`createAction`](../specs/brc-100-wallet.md#createaction), [`signAction`](../specs/brc-100-wallet.md#signaction), [`internalizeAction`](../specs/brc-100-wallet.md#internalizeaction), and [`listOutputs`](../specs/brc-100-wallet.md#listoutputs).
 

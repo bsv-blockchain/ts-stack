@@ -22,6 +22,8 @@ npm install @bsv/simple
 
 Use `@bsv/sdk` directly only when you need protocol-level control over keys, scripts, transactions, BEEF, BUMP, or the raw BRC-100 `WalletClient`.
 
+If you are coming from another blockchain stack and want to build transactions explicitly, start with [`@bsv/wallet-helper`](../packages/helpers/wallet-helper.md). It is more technical than `@bsv/simple`, but easier to work with than direct `WalletClient.createAction` and `signAction` calls.
+
 ## Step 2: Connect to a User Wallet
 
 Browser apps use `@bsv/simple/browser`. Under the hood it creates a BRC-100 wallet client and discovers an available wallet substrate such as BSV Desktop over localhost or BSV Browser over a postMessage bridge.
@@ -100,6 +102,7 @@ Do not generate and discard a production private key at runtime. Persist it in y
 | Need | Read |
 |------|------|
 | Pick packages by use case | [Choose Your Stack](./choose-your-stack.md) |
+| Build explicit transactions with a wallet | [@bsv/wallet-helper](../packages/helpers/wallet-helper.md) |
 | Understand BEEF, wallets, overlays, and BRC-100 | [Key Concepts](./concepts.md) |
 | See every BRC-100 method shape | [BRC-100 Wallet Interface](../specs/brc-100-wallet.md) |
 | Build a wallet or wallet-like implementation | [@bsv/wallet-toolbox](../packages/wallet/wallet-toolbox.md) |

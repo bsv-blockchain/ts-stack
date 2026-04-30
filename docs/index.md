@@ -28,6 +28,7 @@ This repository is the TypeScript reference stack for BSV application developmen
 | You are | Use first | Why |
 |---------|-----------|-----|
 | Web application developer | [`@bsv/simple/browser`](./get-started/index.md) | Connects to a local BRC-100 wallet without putting keys in app code. |
+| Developer coming from another chain | [`@bsv/wallet-helper`](./packages/helpers/wallet-helper.md) | Builds explicit transactions with a fluent builder while the wallet keeps keys and signing. |
 | Backend or automation developer | [`@bsv/simple/server`](./get-started/choose-your-stack.md#server-agent-automated-self-custodial) | Runs a self-custodial server wallet from a private key and storage endpoint. |
 | Wallet developer | [`@bsv/wallet-toolbox`](./packages/wallet/wallet-toolbox.md) | Reference components for building a BRC-100 wallet. |
 | Protocol engineer | [`@bsv/sdk`](./packages/sdk/bsv-sdk.md) | Core crypto, scripts, transactions, BEEF, BUMP, and wallet interface types. |
@@ -59,7 +60,7 @@ For raw BRC-100 work, use `WalletClient` from `@bsv/sdk` and call methods such a
 | Overlays | `@bsv/overlay`, `@bsv/overlay-express`, topics, discovery, GASP | Shared on-chain context, topic validation, lookup services, sync. |
 | Messaging | Message Box, Authsocket, Paymail | Store-and-forward messages, live authenticated channels, identity-based addressing. |
 | Middleware | Auth, HTTP 402, payment express | Express middleware for identity and payment-gated APIs. |
-| Helpers | `@bsv/simple`, templates, DID, wallet helper, amount utilities | Higher-level developer ergonomics on top of the core protocols. |
+| Helpers | `@bsv/simple`, `@bsv/wallet-helper`, templates, DID, amount utilities | Higher-level developer ergonomics, including wallet-aware app helpers and fluent transaction building. |
 
 ## Important References
 
