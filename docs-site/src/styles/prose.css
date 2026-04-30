@@ -2,7 +2,9 @@
   font-size: 0.9375rem;
   line-height: 1.75;
   color: var(--dev-fg);
+  width: 100%;
   max-width: var(--content-max);
+  margin-inline: auto;
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {

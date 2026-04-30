@@ -52,6 +52,8 @@
 
 .site-toc {
   display: none;
+  width: var(--toc-w);
+  flex: 0 0 var(--toc-w);
 }
 
 @media (min-width: 1480px) {
