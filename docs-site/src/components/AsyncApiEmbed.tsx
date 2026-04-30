@@ -17,7 +17,7 @@ export default function AsyncApiEmbed({ slug, title, height = 900 }: Props) {
   return (
     <div className={styles.wrapper}>
       <iframe
-        src={`/assets/asyncapi/${slug}/index.html`}
+        src={`${import.meta.env.BASE_URL}assets/asyncapi/${slug}/index.html`}
         title={title ?? labels[slug] ?? slug}
         style={{ minHeight: height }}
         className={styles.frame}

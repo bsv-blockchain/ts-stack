@@ -7,10 +7,181 @@ import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
 import rehypeSlug from 'rehype-slug'
 import rehypeAutolinkHeadings from 'rehype-autolink-headings'
 import rehypeShiki from '@shikijs/rehype'
-import { resolve, dirname } from 'path'
+import { createReadStream, cpSync, existsSync, statSync } from 'fs'
+import { resolve, dirname, extname, join, relative } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const BASE = '/ts-stack/'
+const DOCS_ROOT = resolve(__dirname, '../docs')
+const DOCS_ASSETS = resolve(DOCS_ROOT, 'assets')
+
+const assetMimeTypes: Record<string, string> = {
+  '.gif': 'image/gif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+}
+
+function docsAssetPathFromUrl(url: string | undefined) {
+  const pathname = (url ?? '').split('?')[0]
+  const assetPath = pathname.startsWith(`${BASE}assets/`)
+    ? pathname.slice(BASE.length)
+    : pathname.startsWith('/assets/')
+      ? pathname.slice(1)
+      : null
+
+  if (!assetPath?.match(/^assets\/(?:diagrams|images)\//)) return null
+  return decodeURIComponent(assetPath.slice('assets/'.length))
+}
+
+function resolveDocsAsset(assetPath: string) {
+  const file = resolve(DOCS_ASSETS, assetPath)
+  const rel = relative(DOCS_ASSETS, file)
+  if (rel.startsWith('..') || rel.startsWith('/')) return null
+  return file
+}
+
+function docsAssetsPlugin(): import('vite').Plugin {
+  return {
+    name: 'docs-assets',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const assetPath = docsAssetPathFromUrl(req.url)
+        if (!assetPath) return next()
+
+        const file = resolveDocsAsset(assetPath)
+        if (!file || !existsSync(file) || !statSync(file).isFile()) return next()
+
+        res.setHeader('Content-Type', assetMimeTypes[extname(file).toLowerCase()] ?? 'application/octet-stream')
+        createReadStream(file).pipe(res)
+      })
+    },
+    closeBundle() {
+      const distAssets = resolve(__dirname, 'dist/assets')
+      for (const folder of ['diagrams', 'images']) {
+        cpSync(join(DOCS_ASSETS, folder), join(distAssets, folder), {
+          recursive: true,
+          filter: (source) => !source.split(/[/\\]/).some((part) => part.startsWith('.')),
+        })
+      }
+    },
+  }
+}
+
+function isExternalHref(href: string) {
+  return /^(?:https?:|data:|mailto:|#|\/\/)/.test(href)
+}
+
+function splitUrlSuffix(url: string) {
+  const suffixIndex = url.search(/[?#]/)
+  if (suffixIndex === -1) return { pathname: url, suffix: '' }
+  return {
+    pathname: url.slice(0, suffixIndex),
+    suffix: url.slice(suffixIndex),
+  }
+}
+
+function docsRouteFromMarkdownPath(relPath: string) {
+  if (relPath === 'index.md') return ''
+  if (relPath.endsWith('/index.md')) return relPath.slice(0, -'index.md'.length)
+  return `${relPath.slice(0, -'.md'.length)}/`
+}
+
+function routeForMarkdownFile(file: string, suffix: string) {
+  const relPath = relative(DOCS_ROOT, file).replace(/\\/g, '/')
+  if (relPath.startsWith('../') || relPath === '..' || relPath.startsWith('/') || !relPath.endsWith('.md')) {
+    return null
+  }
+
+  return `${BASE}${docsRouteFromMarkdownPath(relPath)}${suffix}`
+}
+
+function resolveDocsHrefPath(pathname: string, sourceFile: string) {
+  const normalized = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
+  const targetPath = pathname.startsWith('/docs/')
+    ? resolve(DOCS_ROOT, pathname.slice('/docs/'.length))
+    : pathname.startsWith('/')
+      ? resolve(DOCS_ROOT, pathname.slice(1))
+      : resolve(dirname(sourceFile), normalized)
+
+  if (pathname.endsWith('.md')) return targetPath
+
+  if (/\.[a-z0-9]+$/i.test(pathname)) return null
+
+  const directFile = `${targetPath}.md`
+  if (existsSync(directFile)) return directFile
+
+  const indexFile = join(targetPath, 'index.md')
+  if (existsSync(indexFile)) return indexFile
+
+  return null
+}
+
+function sourceFilePath(file: Record<string, unknown> | undefined) {
+  if (typeof file?.path === 'string') return file.path
+  const history = file?.history
+  if (Array.isArray(history)) {
+    const last = history[history.length - 1]
+    if (typeof last === 'string') return last
+  }
+  return resolve(DOCS_ROOT, 'index.md')
+}
+
+function normalizeDocsPageHref(href: string, sourceFile: string) {
+  if (isExternalHref(href)) return href
+
+  const { pathname, suffix } = splitUrlSuffix(href)
+  if (!pathname || pathname.startsWith(BASE)) return href
+
+  const targetFile = resolveDocsHrefPath(pathname, sourceFile)
+  if (!targetFile) return href
+
+  return routeForMarkdownFile(targetFile, suffix) ?? href
+}
+
+function normalizeDocsAssetSrc(src: string) {
+  if (isExternalHref(src)) return src
+
+  const match = src.match(/(?:^|\/)(assets\/(?:diagrams|images)\/[^?#]+)/)
+  if (!match) return src
+
+  const assetPath = match[1]
+  const suffix = src.slice(src.indexOf(assetPath) + assetPath.length)
+  return `${BASE}${assetPath}${suffix}`
+}
+
+function rehypeDocsPaths() {
+  return (tree: Record<string, unknown>, file: Record<string, unknown>) => {
+    rewriteDocsPaths(tree, sourceFilePath(file))
+  }
+}
+
+function rewriteDocsPaths(node: Record<string, unknown>, sourceFile: string) {
+  if (node.type === 'element' && node.tagName === 'a') {
+    const properties = node.properties as Record<string, unknown> | undefined
+    if (properties && typeof properties.href === 'string') {
+      properties.href = normalizeDocsPageHref(properties.href, sourceFile)
+    }
+  }
+
+  if (node.type === 'element' && node.tagName === 'img') {
+    const properties = node.properties as Record<string, unknown> | undefined
+    if (properties && typeof properties.src === 'string') {
+      properties.src = normalizeDocsAssetSrc(properties.src)
+    }
+  }
+
+  const children = node.children
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      if (child && typeof child === 'object') rewriteDocsPaths(child as Record<string, unknown>, sourceFile)
+    }
+  }
+}
 
 /**
  * Remark plugin: find `html` MDAST nodes that contain known JSX component
@@ -50,12 +221,11 @@ const stripAudioComments: import('vite').Plugin = {
   },
 }
 
-const BASE = '/ts-stack/'
-
 export default defineConfig({
   base: BASE,
   plugins: [
     stripAudioComments,
+    docsAssetsPlugin(),
     {
       enforce: 'pre',
       ...mdx({
@@ -76,6 +246,7 @@ export default defineConfig({
           },
         },
         rehypePlugins: [
+          rehypeDocsPaths,
           rehypeSlug,
           [rehypeAutolinkHeadings, { behavior: 'wrap' }],
           [rehypeShiki, {
