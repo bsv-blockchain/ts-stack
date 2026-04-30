@@ -228,6 +228,8 @@ async function updateReqsFromAggregateResults (
       case 'success':
         newReqStatus = 'unmined'
         newTxStatus = 'unproven'
+        // Mark as broadcast so proof-timeout resets to rebroadcast rather than invalid
+        req.wasBroadcast = true
         break
       case 'doubleSpend':
         newReqStatus = 'doubleSpend'

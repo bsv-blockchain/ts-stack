@@ -59,6 +59,16 @@ export interface MonitorOptions {
   unprovenAttemptsLimitMain: number
 
   /**
+   * Maximum number of times a broadcast transaction may be reset to 'unsent' for
+   * rebroadcast after proof check timeout (circuit breaker).
+   *
+   * Default 0 means unlimited — the tx is rebroadcast indefinitely until a proof
+   * is found. Set to a positive integer to cap rebroadcast cycles; once the limit
+   * is reached the req is marked 'invalid'.
+   */
+  maxRebroadcastAttempts: number
+
+  /**
    * Stable callback token for ARC SSE event streaming.
    * When set, TaskArcadeSSE will open an SSE connection to Arcade's
    * /events endpoint and receive real-time transaction status updates.
@@ -104,6 +114,7 @@ export class Monitor {
       abandonedMsecs: 1000 * 60 * 5,
       unprovenAttemptsLimitTest: 100,
       unprovenAttemptsLimitMain: 144,
+      maxRebroadcastAttempts: 0,
       chaintracks: services.options.chaintracks,
       chaintracksWithEvents: chaintracks,
       startupTaskMode

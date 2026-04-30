@@ -310,7 +310,9 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
       notify: this.api.notify,
       notified: this.api.notified,
       attempts: this.api.attempts,
-      batch: this.api.batch
+      batch: this.api.batch,
+      wasBroadcast: this.wasBroadcast,
+      rebroadcastAttempts: this.rebroadcastAttempts
     }
     if (storage.isStorageProvider()) {
       const sp = storage as StorageProvider
@@ -432,6 +434,22 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
 
   set batch (v: string | undefined) {
     this.api.batch = v
+  }
+
+  get wasBroadcast (): boolean {
+    return this.api.wasBroadcast ?? false
+  }
+
+  set wasBroadcast (v: boolean) {
+    this.api.wasBroadcast = v
+  }
+
+  get rebroadcastAttempts (): number {
+    return this.api.rebroadcastAttempts ?? 0
+  }
+
+  set rebroadcastAttempts (v: number) {
+    this.api.rebroadcastAttempts = v
   }
 
   override get id () {

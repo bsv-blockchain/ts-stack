@@ -156,12 +156,34 @@ export async function getProofs (
         ? task.monitor.options.unprovenAttemptsLimitMain
         : task.monitor.options.unprovenAttemptsLimitTest
     if (!ignoreStatus && req.attempts > limit) {
-      log += ` too many failed attempts ${req.attempts}, resetting to unsent for rebroadcast\n`
-      req.notified = false
-      req.status = 'unsent'
-      req.attempts = 0
-      await req.updateStorageDynamicProperties(task.storage)
-      // NOT added to invalid[] — TaskSendWaiting will pick this up and rebroadcast
+      const maxRebroadcast = task.monitor.options.maxRebroadcastAttempts ?? 0
+      if (req.wasBroadcast) {
+        // Tx was successfully broadcast — reset to unsent for rebroadcast rather than marking invalid.
+        // The tx may still be in the mempool (e.g. held by an adversarial empty-block miner).
+        req.rebroadcastAttempts++
+        if (maxRebroadcast > 0 && req.rebroadcastAttempts >= maxRebroadcast) {
+          // Circuit breaker: too many rebroadcast cycles, give up
+          log += ` too many failed attempts ${req.attempts} and rebroadcast limit ${maxRebroadcast} reached, marking invalid\n`
+          req.notified = false
+          req.status = 'invalid'
+          await req.updateStorageDynamicProperties(task.storage)
+          invalid.push(reqApi)
+        } else {
+          log += ` too many failed attempts ${req.attempts}, resetting to unsent for rebroadcast (cycle ${req.rebroadcastAttempts})\n`
+          req.notified = false
+          req.status = 'unsent'
+          req.attempts = 0
+          await req.updateStorageDynamicProperties(task.storage)
+          // NOT added to invalid[] — TaskSendWaiting will pick this up and rebroadcast
+        }
+      } else {
+        // Was never successfully broadcast — correctly mark as invalid
+        log += ` too many failed attempts ${req.attempts} and tx was never broadcast, marking invalid\n`
+        req.notified = false
+        req.status = 'invalid'
+        await req.updateStorageDynamicProperties(task.storage)
+        invalid.push(reqApi)
+      }
       continue
     }
 

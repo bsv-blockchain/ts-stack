@@ -127,6 +127,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         case 'SEEN_ON_NETWORK': {
           if (['unsent', 'sending', 'callback'].includes(req.status)) {
             req.status = 'unmined'
+            req.wasBroadcast = true
             req.addHistoryNote(note)
             await req.updateStorageDynamicProperties(this.storage)
             const ids = req.notify.transactionIds
