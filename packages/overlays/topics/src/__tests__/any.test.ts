@@ -14,6 +14,8 @@ import { AnyLookupService } from '../any/AnyLookupService.js'
 import { AnyStorage } from '../any/AnyStorage.js'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
 
+const mongoMemoryServerOptions = { instance: { launchTimeout: 60000 } }
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -86,8 +88,8 @@ describe('AnyLookupService (MongoDB)', () => {
   let service: AnyLookupService
 
   beforeAll(async () => {
-    jest.setTimeout(30000)
-    mongod = await MongoMemoryServer.create()
+    jest.setTimeout(60000)
+    mongod = await MongoMemoryServer.create(mongoMemoryServerOptions)
     client = new MongoClient(mongod.getUri())
     await client.connect()
     db = client.db('test_any')

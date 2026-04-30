@@ -31,6 +31,8 @@ import { HelloWorldLookupService } from '../hello/HelloWorldLookupService.js'
 import { HelloWorldStorage } from '../hello/HelloWorldStorage.js'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
 
+const mongoMemoryServerOptions = { instance: { launchTimeout: 60000 } }
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -185,8 +187,8 @@ describe('HelloWorldLookupService (MongoDB)', () => {
   let service: HelloWorldLookupService
 
   beforeAll(async () => {
-    jest.setTimeout(30000)
-    mongod = await MongoMemoryServer.create()
+    jest.setTimeout(60000)
+    mongod = await MongoMemoryServer.create(mongoMemoryServerOptions)
     client = new MongoClient(mongod.getUri())
     await client.connect()
     db = client.db('test_hello')
