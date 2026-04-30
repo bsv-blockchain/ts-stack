@@ -1,5 +1,5 @@
-import { BTMSLookupService } from '../BTMSLookupService'
-import { BTMSStorageManager } from '../BTMSStorageManager'
+import { BTMSLookupService } from '../BTMSLookupService.js'
+import { BTMSStorageManager } from '../BTMSStorageManager.js'
 import { LockingScript, PrivateKey, PublicKey, Transaction, Utils } from '@bsv/sdk'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
 

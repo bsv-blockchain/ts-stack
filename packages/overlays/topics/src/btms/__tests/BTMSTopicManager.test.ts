@@ -1,4 +1,4 @@
-import BTMSTopicManager from '../BTMSTopicManager'
+import BTMSTopicManager from '../BTMSTopicManager.js'
 import { LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils } from '@bsv/sdk'
 
 /**
