@@ -289,6 +289,123 @@ describe('Monitor tests', () => {
     }
   })
 
+  test('6b TaskCheckForProofs rebroadcasts broadcast txs until circuit breaker is exhausted', async () => {
+    const ctxs: TestWallet<{}>[] = []
+    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6b'))
+
+    for (const { activeStorage: storage, monitor } of ctxs) {
+      if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
+
+      monitor.lastNewHeader = {
+        height: 999999999,
+        hash: '',
+        time: 0,
+        version: 0,
+        previousHash: '',
+        merkleRoot: '',
+        bits: 0,
+        nonce: 0
+      }
+      monitor.options.unprovenAttemptsLimitTest = 10
+      monitor.options.maxRebroadcastAttempts = 2
+      monitor._tasks.push(new TaskCheckForProofs(monitor, 1))
+
+      const req0 = verifyTruthy((await storage.findProvenTxReqs({ partial: { status: 'unmined' } }))[0])
+      const reqId = req0.provenTxReqId
+
+      const runProofCheck = async () => {
+        TaskCheckForProofs.checkNow = true
+        await monitor.runTask('CheckForProofs')
+      }
+
+      await storage.updateProvenTxReq(reqId, { attempts: 11, wasBroadcast: true, rebroadcastAttempts: 0 })
+      await runProofCheck()
+
+      let req = verifyOne(await storage.findProvenTxReqs({ partial: { provenTxReqId: reqId } }))
+      expect(req.status).toBe('unsent')
+      expect(req.attempts).toBe(0)
+      expect(req.rebroadcastAttempts).toBe(1)
+
+      await storage.updateProvenTxReq(reqId, { status: 'unmined', attempts: 11 })
+      await runProofCheck()
+
+      req = verifyOne(await storage.findProvenTxReqs({ partial: { provenTxReqId: reqId } }))
+      expect(req.status).toBe('unsent')
+      expect(req.attempts).toBe(0)
+      expect(req.rebroadcastAttempts).toBe(2)
+
+      await storage.updateProvenTxReq(reqId, { status: 'unmined', attempts: 11 })
+      await runProofCheck()
+
+      req = verifyOne(await storage.findProvenTxReqs({ partial: { provenTxReqId: reqId } }))
+      expect(req.status).toBe('invalid')
+      expect(req.attempts).toBe(11)
+      expect(req.rebroadcastAttempts).toBe(2)
+    }
+
+    for (const ctx of ctxs) {
+      await ctx.storage.destroy()
+    }
+  })
+
+  test('6c EntityProvenTx.fromReq secondary timeout uses rebroadcast accounting', async () => {
+    const ctxs: TestWallet<{}>[] = []
+    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6c'))
+
+    _tu.mockMerklePathServicesAsCallback(ctxs, async () => ({ name: 'mock' }))
+
+    for (const { activeStorage: storage, monitor } of ctxs) {
+      if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
+
+      monitor.lastNewHeader = {
+        height: 999999999,
+        hash: '',
+        time: 0,
+        version: 0,
+        previousHash: '',
+        merkleRoot: '',
+        bits: 0,
+        nonce: 0
+      }
+      monitor.options.maxRebroadcastAttempts = 2
+      monitor._tasks.push(new TaskCheckForProofs(monitor, 1))
+
+      const req0 = verifyTruthy((await storage.findProvenTxReqs({ partial: { status: 'unmined' } }))[0])
+      const reqId = req0.provenTxReqId
+      const oldCreatedAt = new Date(Date.now() - 61 * Monitor.oneMinute)
+
+      const runProofCheck = async () => {
+        TaskCheckForProofs.checkNow = true
+        await monitor.runTask('CheckForProofs')
+      }
+
+      await storage.updateProvenTxReq(reqId, {
+        created_at: oldCreatedAt,
+        attempts: 9,
+        wasBroadcast: true,
+        rebroadcastAttempts: 1
+      })
+      await runProofCheck()
+
+      let req = verifyOne(await storage.findProvenTxReqs({ partial: { provenTxReqId: reqId } }))
+      expect(req.status).toBe('unsent')
+      expect(req.attempts).toBe(0)
+      expect(req.rebroadcastAttempts).toBe(2)
+
+      await storage.updateProvenTxReq(reqId, { status: 'unmined', attempts: 9 })
+      await runProofCheck()
+
+      req = verifyOne(await storage.findProvenTxReqs({ partial: { provenTxReqId: reqId } }))
+      expect(req.status).toBe('invalid')
+      expect(req.attempts).toBe(9)
+      expect(req.rebroadcastAttempts).toBe(2)
+    }
+
+    for (const ctx of ctxs) {
+      await ctx.storage.destroy()
+    }
+  })
+
   const mockGetMerklePathResults: GetMerklePathResult[] = [
     {
       name: 'WoCTsc',
@@ -535,6 +652,40 @@ describe('Monitor tests', () => {
       monitor._tasks.push(task)
       const log = await monitor.runTask('ReviewStatus')
       //console.log(log)
+    }
+
+    for (const ctx of ctxs) {
+      await ctx.storage.destroy()
+    }
+  })
+
+  test('7b TaskReviewStatus does not restore inputs for live mempool reqs', async () => {
+    const ctxs: TestWallet<{}>[] = []
+    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest7b'))
+
+    for (const { activeStorage: storage, monitor } of ctxs) {
+      if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
+
+      const reqApi = verifyTruthy((await storage.findProvenTxReqs({ partial: { status: 'unmined' } }))[0])
+      const req = new EntityProvenTxReq(reqApi)
+      const transactionId = verifyTruthy(req.notify.transactionIds?.[0])
+      const inputsBefore = await storage.findOutputs({ partial: { spentBy: transactionId } })
+
+      expect(inputsBefore.length).toBeGreaterThan(0)
+      expect(inputsBefore.every(o => o.spendable === false)).toBe(true)
+
+      // Simulate a partially reconciled old state: transaction failed while the
+      // ProvenTxReq is still live in the mempool.
+      await storage.updateProvenTxReq(reqApi.provenTxReqId, { wasBroadcast: false })
+      await storage.updateTransaction(transactionId, { status: 'failed', provenTxId: undefined })
+
+      const task = new TaskReviewStatus(monitor, 1, 1000 * 5)
+      monitor._tasks.push(task)
+      await monitor.runTask('ReviewStatus')
+
+      const inputsAfter = await storage.findOutputs({ partial: { spentBy: transactionId } })
+      expect(inputsAfter.map(o => o.outputId).sort()).toEqual(inputsBefore.map(o => o.outputId).sort())
+      expect(inputsAfter.every(o => o.spendable === false)).toBe(true)
     }
 
     for (const ctx of ctxs) {

@@ -266,7 +266,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   static async fromReq (
     req: EntityProvenTxReq,
     gmpResult: GetMerklePathResult,
-    countsAsAttempt: boolean
+    countsAsAttempt: boolean,
+    maxRebroadcastAttempts = 0
   ): Promise<EntityProvenTx | undefined> {
     if (!req.txid) throw new WERR_MISSING_PARAMETER('req.txid')
     if (!req.rawTx) throw new WERR_MISSING_PARAMETER('req.rawTx')
@@ -292,17 +293,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
           const limit = EntityProvenTx.getProofAttemptsLimit
           const { attempts } = req
           req.addHistoryNote({ what: 'getMerklePathGiveUp', attempts, limit, ageInMinutes }, true)
-          req.notified = false
-          if (req.wasBroadcast) {
-            // Tx was successfully broadcast — reset to unsent for rebroadcast rather than marking invalid.
-            // The tx may still be in the mempool (e.g. held by an adversarial empty-block miner)
-            // and marking it invalid causes a double-spend when inputs are restored to spendable.
-            req.status = 'unsent'
-            req.attempts = 0
-          } else {
-            // Was never successfully broadcast — correctly mark as invalid
-            req.status = 'invalid'
-          }
+          req.applyProofTimeout(maxRebroadcastAttempts)
         }
       }
       return undefined

@@ -81,6 +81,9 @@ export class KnexMigrations implements MigrationSource<string> {
           table.boolean('wasBroadcast').notNullable().defaultTo(false)
           table.integer('rebroadcastAttempts').unsigned().notNullable().defaultTo(0)
         })
+        await knex('proven_tx_reqs')
+          .whereIn('status', ['unmined', 'callback', 'unconfirmed', 'completed'])
+          .update({ wasBroadcast: true })
       },
       async down (knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {
