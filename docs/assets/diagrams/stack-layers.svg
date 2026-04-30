@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 760" role="img" aria-labelledby="title desc">
+  <title id="title">ts-stack layers</title>
+  <desc id="desc">Three primary stack layers: application APIs, the BRC-100 wallet interface boundary, wallet builder toolkit, and the @bsv/sdk foundation.</desc>
+  <style>
+    .panel { fill: #101624; stroke: #2a3a52; stroke-width: 1.5; }
+    .layer-app { fill: rgba(37, 99, 235, 0.17); stroke: #60a5fa; stroke-width: 2; }
+    .layer-wallet { fill: rgba(8, 145, 178, 0.18); stroke: #22d3ee; stroke-width: 2; }
+    .layer-sdk { fill: rgba(180, 83, 9, 0.18); stroke: #f59e0b; stroke-width: 2; }
+    .boundary { fill: rgba(255, 157, 0, 0.09); stroke: #f59e0b; stroke-width: 1.75; stroke-dasharray: 8 6; }
+    .module { fill: rgba(15, 23, 42, 0.72); stroke: #334155; stroke-width: 1.25; }
+    .label-bg { fill: #101624; stroke: #2a3a52; stroke-width: 1; }
+    .title { font: 700 25px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 700 16px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
+    .label { font: 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #cbd5e1; }
+    .small { font: 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+    .mono { font: 14px ui-monospace, "SF Mono", Menlo, monospace; fill: #e0f2fe; }
+    .mono-amber { font: 14px ui-monospace, "SF Mono", Menlo, monospace; fill: #ffd28a; }
+    .arrow { stroke: #22d3ee; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+    .arrow-muted { stroke: #64748b; stroke-width: 1.8; fill: none; marker-end: url(#arrow-muted); }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="35" y="30" width="1370" height="700" rx="12" class="panel"/>
+  <text x="70" y="78" class="title">ts-stack layers</text>
+  <text x="70" y="110" class="label">Apps stay above the wallet boundary. Wallet implementations own signing, storage, key derivation, and output selection.</text>
+
+  <rect x="110" y="150" width="1220" height="140" rx="12" class="layer-app"/>
+  <text x="720" y="184" text-anchor="middle" class="subtitle">Application layer</text>
+  <text x="720" y="210" text-anchor="middle" class="small">Developer-facing APIs for browser apps and service agents</text>
+
+  <rect x="165" y="230" width="350" height="42" rx="8" class="module"/>
+  <text x="340" y="257" text-anchor="middle" class="mono">@bsv/simple/browser</text>
+
+  <rect x="545" y="230" width="350" height="42" rx="8" class="module"/>
+  <text x="720" y="257" text-anchor="middle" class="mono">@bsv/simple/server</text>
+
+  <rect x="925" y="230" width="350" height="42" rx="8" class="module"/>
+  <text x="1100" y="257" text-anchor="middle" class="mono">@bsv/wallet-helper</text>
+
+  <line x1="720" y1="290" x2="720" y2="334" class="arrow"/>
+  <rect x="540" y="314" width="360" height="46" rx="9" class="boundary"/>
+  <text x="720" y="333" text-anchor="middle" class="mono-amber">BRC-100 wallet interface</text>
+  <text x="720" y="352" text-anchor="middle" class="small">createAction, signAction, listOutputs, keys, certificates</text>
+
+  <line x1="720" y1="360" x2="720" y2="404" class="arrow"/>
+  <rect x="110" y="400" width="1220" height="145" rx="12" class="layer-wallet"/>
+  <text x="720" y="435" text-anchor="middle" class="subtitle">Wallet builder toolkit</text>
+  <text x="720" y="461" text-anchor="middle" class="small">Composable implementation pieces for BRC-100 wallets such as BSV Desktop and BSV Browser</text>
+
+  <rect x="165" y="486" width="235" height="38" rx="8" class="module"/>
+  <text x="282" y="511" text-anchor="middle" class="mono">@bsv/wallet-toolbox</text>
+
+  <rect x="430" y="486" width="235" height="38" rx="8" class="module"/>
+  <text x="548" y="511" text-anchor="middle" class="small">storage providers</text>
+
+  <rect x="695" y="486" width="235" height="38" rx="8" class="module"/>
+  <text x="812" y="511" text-anchor="middle" class="small">WalletSigner + Services</text>
+
+  <rect x="960" y="486" width="235" height="38" rx="8" class="module"/>
+  <text x="1078" y="511" text-anchor="middle" class="small">Monitor + key managers</text>
+
+  <line x1="720" y1="545" x2="720" y2="589" class="arrow-muted"/>
+  <rect x="110" y="585" width="1220" height="120" rx="12" class="layer-sdk"/>
+  <text x="720" y="620" text-anchor="middle" class="subtitle">Foundation: @bsv/sdk</text>
+  <text x="720" y="646" text-anchor="middle" class="small">Zero-dependency primitives used by every layer above</text>
+
+  <text x="210" y="676" class="label">secp256k1/r1</text>
+  <text x="385" y="676" class="label">hashing</text>
+  <text x="505" y="676" class="label">Script engine</text>
+  <text x="680" y="676" class="label">transactions</text>
+  <text x="850" y="676" class="label">BEEF / BUMP</text>
+  <text x="1030" y="676" class="label">BRC-42 derivation</text>
+  <text x="1205" y="676" class="label">ARC / Chaintracks</text>
+</svg>

@@ -3,8 +3,8 @@ id: architecture-layers
 title: Stack Layers
 kind: meta
 version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: ["architecture", "layers"]
@@ -14,45 +14,20 @@ tags: ["architecture", "layers"]
 
 The stack is organized in three primary layers with supporting components that connect horizontally.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   APPLICATION LAYER                              │
-│        @bsv/simple/browser    @bsv/simple/server                │
-│    (connects to browser wallet)  (self-custodial agent)         │
-└────────────────────────┬────────────────────────────────────────┘
-                         │ BRC-100 interface
-┌────────────────────────▼────────────────────────────────────────┐
-│              WALLET BUILDER TOOLKIT                              │
-│                  @bsv/wallet-toolbox                             │
-│   WalletStorageManager + persistence providers + Monitor        │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────────┐
-│                   FOUNDATION: @bsv/sdk                           │
-│   secp256k1/r1 · hashing · Script engine · transactions         │
-│   BEEF (BRC-62) · BUMP (BRC-74) · BRC-42 key derivation         │
-│   ARC broadcaster · Chaintracks client                          │
-└─────────────────────────────────────────────────────────────────┘
+![ts-stack layers diagram showing application APIs above the BRC-100 wallet boundary, wallet builder toolkit components below it, and @bsv/sdk as the foundation](../assets/diagrams/stack-layers.svg)
 
-Adjacent capabilities (use the BRC-100 interface or @bsv/sdk directly):
+## Adjacent Capabilities
 
-  DATA OVERLAYS                          P2P MESSAGING & PAYMENTS
-  @bsv/overlay                           @bsv/message-box-client
-  @bsv/overlay-express                   @bsv/authsocket
-  @bsv/overlay-topics                    @bsv/paymail
-  Topic Manager / Lookup Service         BRC-29 payment derivation
-  SHIP/SLAP discovery                    BRC-103/104 mutual auth
+These packages are not a fourth vertical layer. They sit alongside the main stack and usually connect through the BRC-100 wallet interface, `@bsv/sdk` primitives, or direct service APIs.
 
-  IDENTITY                               MONETIZATION
-  @bsv/auth-express-middleware           @bsv/402-pay
-  BRC-31 HTTP handshake                  @bsv/payment-express-middleware
-  BRC-103/104 Peer framework             BRC-121 HTTP 402
-
-  TOKENS                                 STORAGE
-  @bsv/btms                              @bsv/overlay-topics (UHRP)
-  @bsv/btms-permission-module            Universal Hash Resolution (BRC-26)
-  BRC-48 PushDrop protocol
-```
+| Capability | Packages | What it provides | Connects through |
+|------------|----------|------------------|------------------|
+| Data overlays | @bsv/overlay, @bsv/overlay-express, @bsv/overlay-topics | Topic managers, lookup services, SHIP/SLAP discovery, and shared on-chain context | `@bsv/sdk` transactions, overlay services |
+| P2P messaging and payments | @bsv/message-box-client, @bsv/authsocket, @bsv/paymail | Store-and-forward encrypted messages, live authenticated channels, BRC-29 payment derivation | BRC-100 wallet, BRC-103/104 auth |
+| Identity | @bsv/auth-express-middleware, @bsv/authsocket | BRC-31 HTTP handshake and peer identity framework | BRC-100 wallet, BRC-103/104 peer framework |
+| Monetization | @bsv/402-pay, @bsv/payment-express-middleware | HTTP 402 payment-gated APIs and micropayment middleware | BRC-100 wallet, BRC-121 HTTP 402 |
+| Tokens | @bsv/btms, @bsv/btms-permission-module | Token metadata, wallet permission display context, and BRC-48 PushDrop flows | BRC-100 wallet, overlay topics |
+| Storage | @bsv/overlay-topics, UHRP | Universal Hash Resolution for content-addressed files | UHRP servers, BRC-26 |
 
 ## Foundation: @bsv/sdk
 
