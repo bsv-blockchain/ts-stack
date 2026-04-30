@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 940" role="img" aria-labelledby="title desc">
   <title id="title">BRC-100 wallet request flows</title>
   <desc id="desc">Desktop and mobile application flows: web apps call a BRC-100 wallet client; BSV Desktop receives requests over localhost and may use Wallet Infra, while BSV Browser receives requests through a postMessage bridge into the native wallet and uses a local wallet database.</desc>
   <style>
@@ -9,8 +9,9 @@
     .box-wallet { fill: rgba(8, 145, 178, 0.18); stroke: #22d3ee; stroke-width: 2; }
     .box-infra { fill: rgba(180, 83, 9, 0.18); stroke: #f59e0b; stroke-width: 1.75; }
     .box-local { fill: rgba(16, 185, 129, 0.14); stroke: #34d399; stroke-width: 1.75; }
-    .title { font: 700 22px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
-    .subtitle { font: 700 15px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
+    .label-bg { fill: #101624; stroke: #2a3a52; stroke-width: 1; }
+    .title { font: 700 24px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 700 16px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
     .label { font: 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #cbd5e1; }
     .mono { font: 14px ui-monospace, "SF Mono", Menlo, monospace; fill: #e0f2fe; }
     .small { font: 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
@@ -30,72 +31,80 @@
     </marker>
   </defs>
 
-  <rect x="35" y="30" width="1210" height="360" rx="12" class="panel"/>
-  <text x="65" y="72" class="title">Desktop flow: web app to BSV Desktop</text>
-  <text x="65" y="102" class="label">The app asks for a wallet action. BSV Desktop receives the BRC-100 call on localhost, keeps keys local,</text>
-  <text x="65" y="124" class="label">and may use remote infrastructure for wallet state.</text>
+  <rect x="35" y="30" width="1370" height="415" rx="12" class="panel"/>
+  <text x="70" y="78" class="title">Desktop flow: web app to BSV Desktop</text>
+  <text x="70" y="112" class="label">The app asks for a wallet action. BSV Desktop receives the BRC-100 call on localhost, keeps keys local,</text>
+  <text x="70" y="134" class="label">and may use remote infrastructure for wallet state.</text>
 
-  <rect x="70" y="165" width="275" height="120" rx="9" class="box-strong"/>
-  <text x="207" y="200" text-anchor="middle" class="subtitle">Web application</text>
-  <text x="95" y="230" class="mono">await wallet.createAction(...)</text>
-  <text x="95" y="257" class="small">@bsv/simple or WalletClient</text>
+  <rect x="70" y="185" width="330" height="120" rx="9" class="box-strong"/>
+  <text x="235" y="220" text-anchor="middle" class="subtitle">Web application</text>
+  <text x="100" y="250" class="mono">await wallet.createAction(...)</text>
+  <text x="100" y="277" class="small">@bsv/simple or WalletClient</text>
 
-  <line x1="345" y1="225" x2="465" y2="225" class="arrow-blue"/>
-  <text x="372" y="207" class="mono">HTTP localhost</text>
-  <text x="382" y="254" class="small">BRC-100 substrate</text>
+  <line x1="400" y1="245" x2="565" y2="245" class="arrow-blue"/>
+  <rect x="414" y="206" width="136" height="62" rx="8" class="label-bg"/>
+  <text x="482" y="228" text-anchor="middle" class="mono">HTTP</text>
+  <text x="482" y="250" text-anchor="middle" class="mono">localhost</text>
+  <text x="482" y="285" text-anchor="middle" class="small">BRC-100 substrate</text>
 
-  <rect x="465" y="152" width="300" height="145" rx="9" class="box-wallet"/>
-  <text x="615" y="188" text-anchor="middle" class="subtitle">BSV Desktop</text>
-  <text x="492" y="220" class="label">Local wallet process</text>
-  <text x="492" y="247" class="label">Selects outputs from baskets</text>
-  <text x="492" y="274" class="label">Signs transaction on device</text>
+  <rect x="565" y="170" width="340" height="155" rx="9" class="box-wallet"/>
+  <text x="735" y="207" text-anchor="middle" class="subtitle">BSV Desktop</text>
+  <text x="600" y="240" class="label">Local wallet process</text>
+  <text x="600" y="267" class="label">Selects outputs from baskets</text>
+  <text x="600" y="294" class="label">Signs transaction on device</text>
 
-  <line x1="765" y1="225" x2="900" y2="225" class="arrow-gold"/>
-  <text x="802" y="207" class="mono">HTTPS</text>
-  <text x="794" y="254" class="small">if configured</text>
+  <line x1="905" y1="245" x2="1060" y2="245" class="arrow-gold"/>
+  <rect x="936" y="207" width="92" height="60" rx="8" class="label-bg"/>
+  <text x="982" y="229" text-anchor="middle" class="mono">HTTPS</text>
+  <text x="982" y="263" text-anchor="middle" class="small">if configured</text>
 
-  <rect x="900" y="152" width="310" height="145" rx="9" class="box-infra"/>
-  <text x="1055" y="188" text-anchor="middle" class="subtitle">Wallet Infra</text>
-  <text x="925" y="220" class="mono">https://store-us-1.bsvb.tech</text>
-  <text x="925" y="247" class="label">UTXO state, baskets, labels</text>
-  <text x="925" y="274" class="label">Certificate and wallet metadata</text>
+  <rect x="1060" y="170" width="310" height="155" rx="9" class="box-infra"/>
+  <text x="1215" y="207" text-anchor="middle" class="subtitle">Wallet Infra</text>
+  <text x="1090" y="240" class="mono">https://store-us-1.bsvb.tech</text>
+  <text x="1090" y="267" class="label">UTXO state, baskets, labels</text>
+  <text x="1090" y="294" class="label">Certificate and wallet metadata</text>
 
-  <path d="M615 297 C615 325, 207 325, 207 286" class="arrow-cyan"/>
-  <text x="355" y="310" class="mono">signed AtomicBEEF + txid</text>
+  <path d="M735 325 C735 375, 235 375, 235 306" class="arrow-cyan"/>
+  <rect x="374" y="350" width="222" height="28" rx="8" class="label-bg"/>
+  <text x="485" y="369" text-anchor="middle" class="mono">signed AtomicBEEF + txid</text>
 
-  <rect x="65" y="334" width="1150" height="44" rx="8" class="panel-dark"/>
-  <text x="92" y="362" class="label">Key boundary: private keys remain inside BSV Desktop. The web app receives results, not key material or unrestricted storage access.</text>
+  <rect x="70" y="392" width="1300" height="40" rx="8" class="panel-dark"/>
+  <text x="95" y="417" class="label">Key boundary: private keys remain inside BSV Desktop. The web app receives results, not key material or unrestricted storage access.</text>
 
-  <rect x="35" y="455" width="1210" height="355" rx="12" class="panel"/>
-  <text x="65" y="497" class="title">Mobile flow: web app inside BSV Browser</text>
-  <text x="65" y="527" class="label">The same BRC-100 method surface works on mobile, but the transport is a postMessage bridge from the</text>
-  <text x="65" y="549" class="label">embedded browser to native wallet code.</text>
+  <rect x="35" y="500" width="1370" height="405" rx="12" class="panel"/>
+  <text x="70" y="548" class="title">Mobile flow: web app inside BSV Browser</text>
+  <text x="70" y="582" class="label">The same BRC-100 method surface works on mobile, but the transport is a postMessage bridge from the</text>
+  <text x="70" y="604" class="label">embedded browser to native wallet code.</text>
 
-  <rect x="70" y="590" width="275" height="120" rx="9" class="box-strong"/>
-  <text x="207" y="625" text-anchor="middle" class="subtitle">Embedded web app</text>
-  <text x="95" y="655" class="mono">wallet.createAction(...)</text>
-  <text x="95" y="682" class="small">runs in WebView</text>
+  <rect x="70" y="660" width="330" height="120" rx="9" class="box-strong"/>
+  <text x="235" y="695" text-anchor="middle" class="subtitle">Embedded web app</text>
+  <text x="100" y="725" class="mono">wallet.createAction(...)</text>
+  <text x="100" y="752" class="small">runs in WebView</text>
 
-  <line x1="345" y1="650" x2="465" y2="650" class="arrow-blue"/>
-  <text x="374" y="632" class="mono">postMessage</text>
-  <text x="385" y="679" class="small">BRC-100 bridge</text>
+  <line x1="400" y1="720" x2="565" y2="720" class="arrow-blue"/>
+  <rect x="420" y="681" width="124" height="62" rx="8" class="label-bg"/>
+  <text x="482" y="704" text-anchor="middle" class="mono">postMessage</text>
+  <text x="482" y="738" text-anchor="middle" class="small">BRC-100 bridge</text>
 
-  <rect x="465" y="577" width="300" height="145" rx="9" class="box-wallet"/>
-  <text x="615" y="613" text-anchor="middle" class="subtitle">BSV Browser</text>
-  <text x="492" y="645" class="label">Native mobile wallet</text>
-  <text x="492" y="672" class="label">Reads local spendable outputs</text>
-  <text x="492" y="699" class="label">Signs on device</text>
+  <rect x="565" y="645" width="340" height="155" rx="9" class="box-wallet"/>
+  <text x="735" y="682" text-anchor="middle" class="subtitle">BSV Browser</text>
+  <text x="600" y="715" class="label">Native mobile wallet</text>
+  <text x="600" y="742" class="label">Reads local spendable outputs</text>
+  <text x="600" y="769" class="label">Signs on device</text>
 
-  <line x1="765" y1="650" x2="900" y2="650" class="arrow-cyan"/>
-  <text x="832" y="632" text-anchor="middle" class="mono">local storage</text>
-  <text x="832" y="679" text-anchor="middle" class="small">on device</text>
+  <line x1="905" y1="720" x2="1060" y2="720" class="arrow-cyan"/>
+  <rect x="924" y="681" width="116" height="62" rx="8" class="label-bg"/>
+  <text x="982" y="704" text-anchor="middle" class="mono">local</text>
+  <text x="982" y="726" text-anchor="middle" class="mono">storage</text>
+  <text x="982" y="760" text-anchor="middle" class="small">on device</text>
 
-  <rect x="900" y="577" width="310" height="145" rx="9" class="box-local"/>
-  <text x="1055" y="613" text-anchor="middle" class="subtitle">Local wallet database</text>
-  <text x="925" y="645" class="label">No remote storage provider</text>
-  <text x="925" y="672" class="label">Outputs, baskets, labels</text>
-  <text x="925" y="699" class="label">Wallet and certificate metadata</text>
+  <rect x="1060" y="645" width="310" height="155" rx="9" class="box-local"/>
+  <text x="1215" y="682" text-anchor="middle" class="subtitle">Local wallet database</text>
+  <text x="1090" y="715" class="label">No remote storage provider</text>
+  <text x="1090" y="742" class="label">Outputs, baskets, labels</text>
+  <text x="1090" y="769" class="label">Wallet and certificate metadata</text>
 
-  <path d="M615 722 C615 760, 207 760, 207 711" class="arrow-cyan"/>
-  <text x="383" y="744" class="mono">response via postMessage</text>
+  <path d="M735 800 C735 852, 235 852, 235 781" class="arrow-cyan"/>
+  <rect x="382" y="828" width="206" height="28" rx="8" class="label-bg"/>
+  <text x="485" y="847" text-anchor="middle" class="mono">response via postMessage</text>
 </svg>
