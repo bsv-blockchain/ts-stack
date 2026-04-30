@@ -17,7 +17,7 @@
   color: var(--dev-fg-muted);
   padding: 0 0 0.5rem;
   margin-bottom: 0.25rem;
-  border-bottom: 1px solid var(--dev-border);
+  border-bottom: 1px solid rgba(255, 157, 0, 0.12);
 }
 
 .list {
@@ -52,6 +52,6 @@
 }
 
 .link.active {
-  color: var(--dev-cyan);
-  border-left-color: var(--dev-cyan);
+  color: var(--dev-orange-2);
+  border-left-color: var(--dev-orange);
 }

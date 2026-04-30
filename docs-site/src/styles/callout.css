@@ -1,10 +1,11 @@
 .callout {
-  border-radius: 6px;
-  border: 1px solid var(--dev-border-hi);
-  border-left: 3px solid var(--dev-cyan);
-  background: var(--dev-surface-2);
-  margin: 1.25rem 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 157, 0, 0.16);
+  border-left: 3px solid var(--dev-orange);
+  background: linear-gradient(180deg, rgba(255, 157, 0, 0.055), rgba(255, 255, 255, 0.018));
+  margin: 1.5rem 0;
   overflow: hidden;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
 }
 
 .callout-title {
@@ -13,22 +14,22 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid var(--dev-border);
+  background: rgba(255, 157, 0, 0.045);
+  border-bottom: 1px solid rgba(255, 157, 0, 0.12);
   padding: 0.5rem 0.875rem;
-  color: var(--dev-cyan);
+  color: var(--dev-orange-2);
 }
 
 .callout-body {
   padding: 0.75rem 0.875rem;
   font-size: 0.875rem;
-  color: rgba(226, 232, 240, 0.85);
+  color: rgba(244, 240, 235, 0.86);
 }
 
 .callout-body p:first-child { margin-top: 0; }
 .callout-body p:last-child { margin-bottom: 0; }
 
-.callout.note    { border-left-color: var(--dev-cyan);   }
+.callout.note    { border-left-color: var(--dev-orange); }
 .callout.info    { border-left-color: var(--dev-cyan);   }
 .callout.tip     { border-left-color: var(--dev-green);  }
 .callout.success { border-left-color: var(--dev-green);  }
@@ -37,7 +38,7 @@
 .callout.error   { border-left-color: var(--dev-red);    }
 .callout.example { border-left-color: var(--dev-violet); }
 
-.callout.note .callout-title,
+.callout.note .callout-title { color: var(--dev-orange-2); }
 .callout.info .callout-title { color: var(--dev-cyan); }
 
 .callout.tip .callout-title,

@@ -10,19 +10,7 @@ status: stable
 tags: []
 ---
 
-<div class="bsv-hero" markdown="0">
-  <div class="bsv-hero__inner">
-    <h1 class="bsv-hero__title">BSV application infrastructure in TypeScript</h1>
-    <p class="bsv-hero__lede">
-      Reference packages, protocol specs, infrastructure contracts, and conformance vectors for building wallet-aware BSV applications.
-      Use it as an app developer, a wallet implementer, or the baseline another language implementation must match.
-    </p>
-    <a class="bsv-hero__cta" href="get-started/">
-      Choose your entry point
-      <span class="bsv-hero__cta-arrow" aria-hidden="true">&rarr;</span>
-    </a>
-  </div>
-</div>
+<HomeHero />
 
 # ts-stack
 

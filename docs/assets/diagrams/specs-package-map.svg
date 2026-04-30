@@ -3,15 +3,15 @@
   <title id="title">Specs to Packages Map</title>
   <desc id="desc">Each BSV protocol specification (left) is implemented by one or more ts-stack packages (right). BRC-100 maps to wallet-toolbox and sdk; BRC-31 maps to authsocket and middleware; etc.</desc>
   <style>
-    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
-    .box-spec { fill: rgba(28,44,138,0.06); stroke: #94a3b8; stroke-width: 1.5; }
-    .box-pkg { fill: rgba(58,85,255,0.12); stroke: #0a3afd; stroke-width: 1.5; }
-    .link { stroke: #6B7280; stroke-width: 1.25; fill: none; opacity: 0.6; }
-    .link-orange { stroke: #0a3afd; stroke-width: 1.25; fill: none; opacity: 0.7; }
-    .title { font: 600 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1c2c8a; }
-    .label { font: 11px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
-    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #0a3afd; letter-spacing: 0.5px; }
-    .col-head { font: 700 14px ui-sans-serif, system-ui, sans-serif; fill: #0a3afd; }
+    .box { fill: rgba(15, 23, 42, 0.72); stroke: #334155; stroke-width: 1.5; }
+    .box-spec { fill: rgba(180, 83, 9, 0.14); stroke: #f59e0b; stroke-width: 1.5; }
+    .box-pkg { fill: rgba(8, 145, 178, 0.18); stroke: #22d3ee; stroke-width: 1.5; }
+    .link { stroke: #94a3b8; stroke-width: 1.25; fill: none; opacity: 0.72; }
+    .link-orange { stroke: #22d3ee; stroke-width: 1.25; fill: none; opacity: 0.82; }
+    .title { font: 600 13px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
+    .label { font: 11px ui-sans-serif, system-ui, sans-serif; fill: #cbd5e1; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #22d3ee; letter-spacing: 0.5px; }
+    .col-head { font: 700 14px ui-sans-serif, system-ui, sans-serif; fill: #22d3ee; }
   </style>
 
   <text x="160" y="30" text-anchor="middle" class="col-head">SPECIFICATIONS</text>

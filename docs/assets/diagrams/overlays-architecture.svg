@@ -3,21 +3,21 @@
   <title id="title">Overlay Node Architecture</title>
   <desc id="desc">An overlay node: HTTP server (OverlayExpress) wraps an Engine that orchestrates topic managers, lookup services, and storage, alongside a Janitor service for SHIP/SLAP host validation.</desc>
   <style>
-    .box { fill: rgba(120,120,130,0.08); stroke: #6B7280; stroke-width: 1.5; }
-    .box-accent { fill: rgba(58,85,255,0.12); stroke: #0a3afd; stroke-width: 1.75; }
-    .box-amber { fill: rgba(28,44,138,0.06); stroke: #94a3b8; stroke-width: 1.5; }
-    .arrow { stroke: #6B7280; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-    .arrow-orange { stroke: #0a3afd; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
-    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #1c2c8a; }
-    .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #4B5563; }
-    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #0a3afd; letter-spacing: 0.5px; }
+    .box { fill: rgba(15, 23, 42, 0.72); stroke: #334155; stroke-width: 1.5; }
+    .box-accent { fill: rgba(8, 145, 178, 0.18); stroke: #22d3ee; stroke-width: 1.75; }
+    .box-amber { fill: rgba(180, 83, 9, 0.14); stroke: #f59e0b; stroke-width: 1.5; }
+    .arrow { stroke: #94a3b8; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .arrow-orange { stroke: #22d3ee; stroke-width: 1.75; fill: none; marker-end: url(#arrow-orange); }
+    .title { font: 600 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; }
+    .label { font: 12px ui-sans-serif, system-ui, sans-serif; fill: #cbd5e1; }
+    .heading { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #22d3ee; letter-spacing: 0.5px; }
   </style>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#6B7280"/>
+      <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/>
     </marker>
     <marker id="arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#0a3afd"/>
+      <path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/>
     </marker>
   </defs>
 

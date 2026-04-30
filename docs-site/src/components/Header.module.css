@@ -67,7 +67,7 @@
 .logoIcon {
   font-family: var(--dev-font-mono);
   font-size: 0.85rem;
-  color: var(--dev-cyan);
+  color: var(--dev-orange);
   font-weight: 700;
 }
 
@@ -96,13 +96,13 @@
 
 .navLink:hover {
   color: var(--dev-fg);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 157, 0, 0.06);
   text-decoration: none;
 }
 
 .navLink.active {
-  color: var(--dev-cyan);
-  background: var(--dev-cyan-dim);
+  color: var(--dev-orange-2);
+  background: var(--dev-orange-dim);
 }
 
 .right {
@@ -123,7 +123,7 @@
 
 .githubLink:hover {
   color: var(--dev-fg);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 157, 0, 0.06);
 }
 
 @media (max-width: 900px) {

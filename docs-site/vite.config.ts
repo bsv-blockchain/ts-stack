@@ -206,6 +206,10 @@ function liftInChildren(children: Array<Record<string, unknown>>) {
         children[i] = { type: 'asyncApiEmbed', slug: asyncApiMatch[1] }
         continue
       }
+      if ((node.value as string).match(/<HomeHero\s*\/>/)) {
+        children[i] = { type: 'homeHero' }
+        continue
+      }
     }
     const childList = node.children
     if (Array.isArray(childList)) liftInChildren(childList as Array<Record<string, unknown>>)
@@ -232,6 +236,55 @@ export default defineConfig({
         remarkPlugins: [remarkGfm, remarkFrontmatter, remarkMdxFrontmatter, remarkLiftHtmlComponents],
         remarkRehypeOptions: {
           handlers: {
+            homeHero: () => ({
+              type: 'element',
+              tagName: 'div',
+              properties: { className: ['bsv-hero'] },
+              children: [{
+                type: 'element',
+                tagName: 'div',
+                properties: { className: ['bsv-hero__inner'] },
+                children: [
+                  {
+                    type: 'element',
+                    tagName: 'div',
+                    properties: { className: ['bsv-hero__title'] },
+                    children: [
+                      {
+                        type: 'element',
+                        tagName: 'span',
+                        properties: {},
+                        children: [{ type: 'text', value: 'BSV' }],
+                      },
+                      { type: 'text', value: ' application infrastructure in TypeScript' },
+                    ],
+                  },
+                  {
+                    type: 'element',
+                    tagName: 'p',
+                    properties: { className: ['bsv-hero__lede'] },
+                    children: [{
+                      type: 'text',
+                      value: 'Reference packages, protocol specs, infrastructure contracts, and conformance vectors for building wallet-aware BSV applications. Use it as an app developer, a wallet implementer, or the baseline another language implementation must match.',
+                    }],
+                  },
+                  {
+                    type: 'element',
+                    tagName: 'a',
+                    properties: { className: ['bsv-hero__cta'], href: `${BASE}get-started/` },
+                    children: [
+                      { type: 'text', value: 'Choose your entry point' },
+                      {
+                        type: 'element',
+                        tagName: 'span',
+                        properties: { className: ['bsv-hero__cta-arrow'], ariaHidden: 'true' },
+                        children: [{ type: 'text', value: '->' }],
+                      },
+                    ],
+                  },
+                ],
+              }],
+            }),
             asyncApiEmbed: (_state: unknown, node: Record<string, unknown>) => ({
               type: 'element',
               tagName: 'iframe',

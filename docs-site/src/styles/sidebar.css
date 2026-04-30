@@ -11,7 +11,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--dev-fg-muted);
+  color: rgba(167, 165, 180, 0.82);
   padding: 0.8rem 1rem 0.35rem;
   display: block;
 }
@@ -20,7 +20,7 @@
   display: block;
   font-size: 0.8rem;
   font-weight: 400;
-  color: rgba(226, 232, 240, 0.6);
+  color: rgba(244, 240, 235, 0.58);
   padding: 0.28rem 1rem;
   border-radius: 4px;
   margin: 1px 6px;
@@ -30,14 +30,15 @@
 
 .sidebar-link:hover {
   color: var(--dev-fg);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 157, 0, 0.055);
   text-decoration: none;
 }
 
 .sidebar-link.active {
-  color: var(--dev-cyan);
-  background: var(--dev-cyan-dim);
-  font-weight: 500;
+  color: var(--dev-orange-2);
+  background: linear-gradient(90deg, rgba(255, 157, 0, 0.18), rgba(255, 157, 0, 0.05));
+  border: 1px solid rgba(255, 157, 0, 0.12);
+  font-weight: 600;
 }
 
 .sidebar-sub {

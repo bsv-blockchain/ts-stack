@@ -89,13 +89,13 @@ console.log(result.txid)
 For custom outputs, use `createAction` directly:
 
 ```typescript
-import { P2PKH, PublicKey, WalletClient } from '@bsv/sdk'
+import { P2PKH, WalletClient } from '@bsv/sdk'
 
 const wallet = new WalletClient('auto', 'example.com')
-const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
 const lockingScript = new P2PKH()
-  .lock(PublicKey.fromString(recipientIdentityKey).toAddress())
+  .lock(recipientAddress)
   .toHex()
 
 const action = await wallet.createAction({

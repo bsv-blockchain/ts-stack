@@ -8,28 +8,30 @@
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
   font-family: var(--dev-font-body);
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #f1f5f9;
+  letter-spacing: 0;
+  color: var(--dev-fg);
   line-height: 1.25;
 }
 
 .prose h1 {
-  font-size: 2rem;
+  font-size: 2.35rem;
   font-weight: 800;
-  margin: 0 0 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--dev-border);
+  margin: 0 0 1.1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 157, 0, 0.14);
+  color: var(--dev-orange);
 }
 
 .prose h2 {
   font-size: 1.35rem;
   margin: 2.5rem 0 0.75rem;
+  color: var(--dev-orange-2);
 }
 
 .prose h3 {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #cbd5e1;
+  color: #f4f0eb;
   margin: 2rem 0 0.5rem;
 }
 
@@ -50,30 +52,31 @@
 .prose li { margin: 0.25rem 0; }
 
 .prose blockquote {
-  border-left: 3px solid var(--dev-border-hi);
-  background: var(--dev-surface-2);
-  padding: 0.75rem 1rem;
-  border-radius: 0 6px 6px 0;
-  color: rgba(226, 232, 240, 0.65);
-  margin: 1.25rem 0;
+  border: 1px solid rgba(255, 157, 0, 0.18);
+  border-left: 3px solid var(--dev-orange);
+  background: linear-gradient(180deg, rgba(255, 157, 0, 0.055), rgba(255, 255, 255, 0.018));
+  padding: 0.95rem 1rem;
+  border-radius: 8px;
+  color: var(--dev-fg-muted);
+  margin: 1.5rem 0;
 }
 
 .prose hr {
   border: none;
-  border-top: 1px solid var(--dev-border-hi);
+  border-top: 1px solid rgba(255, 157, 0, 0.14);
   margin: 2rem 0;
 }
 
-.prose strong { font-weight: 600; color: #f1f5f9; }
+.prose strong { font-weight: 700; color: var(--dev-fg); }
 .prose em { font-style: italic; }
 
 .prose a {
-  color: var(--dev-cyan);
+  color: var(--dev-orange-2);
   text-decoration: none;
   transition: color 0.12s;
 }
 .prose a:hover {
-  color: #67e8f9;
+  color: #ffc46b;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -83,17 +86,17 @@
   font-size: 0.82em;
   padding: 0.12em 0.4em;
   border-radius: 4px;
-  background: rgba(165, 243, 252, 0.07);
-  color: #a5f3fc;
-  border: 1px solid rgba(165, 243, 252, 0.12);
+  background: rgba(255, 157, 0, 0.08);
+  color: #ffd28a;
+  border: 1px solid rgba(255, 157, 0, 0.18);
 }
 
 .prose pre {
   border-radius: 8px;
   margin: 1.25rem 0;
   overflow: auto;
-  background: var(--dev-surface-2);
-  border: 1px solid var(--dev-border-hi);
+  background: #13141d;
+  border: 1px solid rgba(255, 157, 0, 0.16);
   padding: 1.125rem 1.25rem;
 }
 
@@ -108,16 +111,18 @@
 .prose table {
   font-size: 0.82rem;
   border-collapse: collapse;
-  border: 1px solid var(--dev-border-hi);
+  border: 1px solid rgba(255, 157, 0, 0.12);
   border-radius: 8px;
   overflow: hidden;
   width: 100%;
-  margin: 1.25rem 0;
+  margin: 1.5rem 0;
+  background: rgba(18, 19, 27, 0.72);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
 }
 
 .prose thead tr {
-  background: var(--dev-surface);
-  border-bottom: 1px solid var(--dev-border-hi);
+  background: rgba(255, 157, 0, 0.055);
+  border-bottom: 1px solid rgba(255, 157, 0, 0.14);
 }
 
 .prose thead th {
@@ -133,20 +138,22 @@
 
 .prose tbody td {
   padding: 0.6rem 1rem;
-  border-top: 1px solid var(--dev-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
   color: var(--dev-fg);
   vertical-align: top;
 }
 
 .prose tbody tr:nth-child(odd) {
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(255, 255, 255, 0.018);
 }
 
 .prose tbody tr:hover {
-  background: rgba(34, 211, 238, 0.03);
+  background: rgba(255, 157, 0, 0.045);
 }
 
 .prose img {
   border-radius: 8px;
-  margin: 1.25rem 0;
+  width: 100%;
+  height: auto;
+  margin: 1.75rem 0 2rem;
 }

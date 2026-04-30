@@ -12,7 +12,8 @@ html {
 }
 
 body {
-  background: var(--dev-bg);
+  background:
+    linear-gradient(180deg, #16100d 0%, var(--dev-bg) 18rem, #08090f 100%);
   color: var(--dev-fg);
   font-family: var(--dev-font-body);
   line-height: 1.6;
@@ -21,12 +22,12 @@ body {
 }
 
 a {
-  color: var(--dev-cyan);
+  color: var(--dev-orange-2);
   text-decoration: none;
 }
 
 a:hover {
-  color: #67e8f9;
+  color: #ffc46b;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -38,12 +39,12 @@ img, svg {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.18);
+  background: rgba(255, 157, 0, 0.24);
   color: var(--dev-fg);
 }
 
 :focus-visible {
-  outline: 2px solid var(--dev-cyan);
+  outline: 2px solid var(--dev-orange);
   outline-offset: 2px;
   border-radius: 3px;
 }

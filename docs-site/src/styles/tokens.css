@@ -2,21 +2,31 @@
 
 :root {
   /* surfaces */
-  --dev-bg:         #0c0c14;
-  --dev-surface:    #111119;
-  --dev-surface-2:  #16161f;
-  --dev-border:     #1e1e2e;
-  --dev-border-hi:  #2a2a3d;
+  --dev-bg:         #0d0b0a;
+  --dev-surface:    #12131b;
+  --dev-surface-2:  #171923;
+  --dev-surface-3:  #1d202b;
+  --dev-border:     #27293a;
+  --dev-border-hi:  #373b52;
 
   /* accent */
+  --dev-orange:     #ff9d00;
+  --dev-orange-2:   #ffb020;
+  --dev-orange-dim: rgba(255, 157, 0, 0.12);
+  --dev-orange-glow: rgba(255, 157, 0, 0.28);
   --dev-cyan:       #22d3ee;
-  --dev-cyan-dim:   rgba(34, 211, 238, 0.12);
-  --dev-cyan-glow:  rgba(34, 211, 238, 0.25);
+  --dev-cyan-dim:   rgba(34, 211, 238, 0.1);
+  --dev-cyan-glow:  rgba(34, 211, 238, 0.22);
 
   /* text */
-  --dev-fg:         #e2e8f0;
-  --dev-fg-muted:   #6b7280;
-  --dev-fg-subtle:  #374151;
+  --dev-fg:         #f4f0eb;
+  --dev-fg-muted:   #a7a5b4;
+  --dev-fg-subtle:  #676879;
+
+  /* aliases used by component modules */
+  --dev-bg-elevated: var(--dev-surface-2);
+  --dev-text:        var(--dev-fg);
+  --dev-text-dim:    var(--dev-fg-muted);
 
   /* semantic */
   --dev-yellow:     #fbbf24;
@@ -31,7 +41,7 @@
   /* layout */
   --header-h: 56px;
   --sidebar-w: 260px;
-  --content-max: 820px;
-  --toc-w: 220px;
+  --content-max: 1120px;
+  --toc-w: 200px;
   --gap: 1.5rem;
 }
