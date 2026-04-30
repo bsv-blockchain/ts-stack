@@ -156,11 +156,12 @@ export async function getProofs (
         ? task.monitor.options.unprovenAttemptsLimitMain
         : task.monitor.options.unprovenAttemptsLimitTest
     if (!ignoreStatus && req.attempts > limit) {
-      log += ` too many failed attempts ${req.attempts}\n`
+      log += ` too many failed attempts ${req.attempts}, resetting to unsent for rebroadcast\n`
       req.notified = false
-      req.status = 'invalid'
+      req.status = 'unsent'
+      req.attempts = 0
       await req.updateStorageDynamicProperties(task.storage)
-      invalid.push(reqApi)
+      // NOT added to invalid[] — TaskSendWaiting will pick this up and rebroadcast
       continue
     }
 

@@ -289,12 +289,15 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
         const ageInMinutes = Math.ceil(ageInMsecs < 1 ? 0 : ageInMsecs / (1000 * 60))
 
         if (req.attempts > EntityProvenTx.getProofAttemptsLimit && ageInMinutes > EntityProvenTx.getProofMinutes) {
-          // Start the process of setting transactions to 'failed'
+          // Reset to unsent for rebroadcast instead of marking invalid.
+          // The tx may still be in the mempool (e.g. held by an adversarial empty-block miner)
+          // and marking it invalid causes a double-spend when inputs are restored to spendable.
           const limit = EntityProvenTx.getProofAttemptsLimit
           const { attempts } = req
           req.addHistoryNote({ what: 'getMerklePathGiveUp', attempts, limit, ageInMinutes }, true)
           req.notified = false
-          req.status = 'invalid'
+          req.status = 'unsent'
+          req.attempts = 0
         }
       }
       return undefined

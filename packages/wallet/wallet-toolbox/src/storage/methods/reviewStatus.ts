@@ -57,10 +57,11 @@ export async function reviewStatus (
   })
 
   qs.push({
-    log: 'outputs updated to spendable where spentBy is a transaction with status \'failed\'',
+    log: 'outputs updated to spendable where spentBy is a failed transaction with no live ProvenTxReq',
     /*
         UPDATE outputs SET spentBy = null, spendable = 1
         where exists(select 1 from transactions as t where outputs.spentBy = t.transactionId and t.status = 'failed')
+        and not exists(select 1 from proven_tx_reqs as r where r.txid = t.txid and r.status in ('unmined', 'callback', 'unconfirmed', 'sending', 'unsent'))
         */
     q: k<TableOutput>('outputs')
       .update({ spentBy: null as unknown as undefined, spendable: true })
@@ -68,6 +69,13 @@ export async function reviewStatus (
         this.select(k.raw(1))
           .from('transactions as t')
           .whereRaw('outputs.spentBy = t.transactionId and t.status = \'failed\'')
+          .whereNotExists(function () {
+            // Do not restore inputs if a live ProvenTxReq still exists for this txid
+            // (means the tx may still be in mempool and valid)
+            this.select(k.raw(1))
+              .from('proven_tx_reqs as r')
+              .whereRaw(`r.txid = t.txid and r.status in ('unmined', 'callback', 'unconfirmed', 'sending', 'unsent')`)
+          })
       })
   })
 

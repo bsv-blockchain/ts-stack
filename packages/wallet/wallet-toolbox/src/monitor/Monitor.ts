@@ -102,7 +102,7 @@ export class Monitor {
       msecsWaitPerMerkleProofServiceReq: 500,
       taskRunWaitMsecs: 5000,
       abandonedMsecs: 1000 * 60 * 5,
-      unprovenAttemptsLimitTest: 10,
+      unprovenAttemptsLimitTest: 100,
       unprovenAttemptsLimitMain: 144,
       chaintracks: services.options.chaintracks,
       chaintracksWithEvents: chaintracks,
