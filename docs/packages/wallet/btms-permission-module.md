@@ -29,7 +29,10 @@ npm install @bsv/btms-permission-module
 ## Quick start
 
 ```typescript
-import { BasicTokenModule } from '@bsv/btms-permission-module'
+import { createBtmsModule } from '@bsv/btms-permission-module'
+import { createWallet } from '@bsv/simple'
+
+const wallet = await createWallet()
 
 const requestTokenAccess = async (app: string, message: string): Promise<boolean> => {
   const details = JSON.parse(message)
@@ -41,7 +44,10 @@ const requestTokenAccess = async (app: string, message: string): Promise<boolean
   return approved
 }
 
-const basicTokenModule = new BasicTokenModule(requestTokenAccess)
+const basicTokenModule = createBtmsModule({
+  wallet,
+  promptHandler: requestTokenAccess
+})
 ```
 
 ## What it provides
@@ -57,7 +63,10 @@ const basicTokenModule = new BasicTokenModule(requestTokenAccess)
 ### Simple prompt with confirm dialog (vanilla JS)
 
 ```typescript
-import { BasicTokenModule } from '@bsv/btms-permission-module'
+import { createBtmsModule } from '@bsv/btms-permission-module'
+import { createWallet } from '@bsv/simple'
+
+const wallet = await createWallet()
 
 const requestTokenAccess = async (app: string, message: string): Promise<boolean> => {
   const details = JSON.parse(message)
@@ -69,7 +78,10 @@ const requestTokenAccess = async (app: string, message: string): Promise<boolean
   return approved
 }
 
-const basicTokenModule = new BasicTokenModule(requestTokenAccess)
+const basicTokenModule = createBtmsModule({
+  wallet,
+  promptHandler: requestTokenAccess
+})
 ```
 
 ### Deny-all for programmatic use (no UI needed)
@@ -90,9 +102,12 @@ const module = createBtmsModule({
 
 ```typescript
 import { WalletPermissionsManager } from '@bsv/wallet-toolbox'
-import { BasicTokenModule } from '@bsv/btms-permission-module'
+import { createBtmsModule } from '@bsv/btms-permission-module'
 
-const tokenModule = new BasicTokenModule(myPromptHandler)
+const tokenModule = createBtmsModule({
+  wallet,
+  promptHandler: myPromptHandler
+})
 
 const permissionsManager = new WalletPermissionsManager(wallet, appOrigin, {
   permissionModules: {

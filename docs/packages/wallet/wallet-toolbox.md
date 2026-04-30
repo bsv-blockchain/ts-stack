@@ -50,7 +50,6 @@ npm install @bsv/wallet-toolbox-mobile
 The example package uses the `Setup` class for wallet construction. Create a `.env` with `Setup.makeEnv()`, then load the environment and construct a client wallet:
 
 ```typescript
-import { PublicKey } from '@bsv/sdk'
 import { Setup } from '@bsv/wallet-toolbox'
 
 const env = Setup.getEnv('test')
@@ -73,9 +72,9 @@ console.log(publicKey)
 When every input can be signed by the wallet, `createAction` can return a completed action:
 
 ```typescript
-export async function createP2pkhOutput(toIdentityKey: string) {
+export async function createP2pkhOutput(recipientAddress: string) {
   const lockingScript = Setup
-    .getLockP2PKH(PublicKey.fromString(toIdentityKey).toAddress())
+    .getLockP2PKH(recipientAddress)
     .toHex()
 
   const result = await setup.wallet.createAction({
@@ -94,6 +93,8 @@ export async function createP2pkhOutput(toIdentityKey: string) {
 
   console.log(result.txid, result.tx)
 }
+
+await createP2pkhOutput('1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX')
 ```
 
 When an explicit input needs an unlocking script supplied by the caller, `createAction` returns `signableTransaction`, then `signAction` completes it:

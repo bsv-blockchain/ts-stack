@@ -78,6 +78,8 @@ await wallet.sendMessageBoxPayment(results[0].identityKey, 1000)
 
 ### Create and transfer tokens
 ```typescript
+const recipientIdentityKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+
 // Create token
 const token = await wallet.createToken({
   data: { type: 'loyalty', points: 100 },
@@ -91,7 +93,7 @@ const tokens = await wallet.listTokenDetails('my-tokens')
 await wallet.sendToken({
   basket: 'my-tokens',
   outpoint: tokens[0].outpoint,
-  to: recipientKey
+  to: recipientIdentityKey
 })
 ```
 

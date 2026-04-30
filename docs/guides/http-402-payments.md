@@ -42,8 +42,7 @@ Set up two separate projects:
 # Server
 mkdir payment-server && cd payment-server
 npm init -y
-npm install express body-parser @bsv/sdk @bsv/payment-express-middleware \
-  @bsv/auth-express-middleware @bsv/simple dotenv
+npm install express body-parser @bsv/sdk @bsv/402-pay @bsv/simple dotenv
 npm install -D typescript ts-node @types/express @types/node
 
 # Client (in separate directory)
@@ -66,15 +65,14 @@ Both need TypeScript config:
 }
 ```
 
-## Step 2 — Set up server wallet and auth middleware
+## Step 2 — Set up server wallet and payment middleware
 
 In the server project, create `server.ts`:
 
 ```typescript
 import express from 'express'
 import bodyParser from 'body-parser'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import { createPaymentMiddleware } from '@bsv/402-pay/server'
 import { ServerWallet } from '@bsv/simple/server'
 import dotenv from 'dotenv'
 
@@ -88,32 +86,23 @@ async function setupServer() {
     storageUrl: 'https://store-us-1.bsvb.tech'
   })
   
-  // 2. Create auth middleware
-  // Auth must run first to set req.auth.identityKey
-  const authMiddleware = createAuthMiddleware({
-    wallet,
-    allowUnauthenticated: false
-  })
-  
-  // 3. Create payment middleware
-  // Depends on auth being set first
+  // 2. Create payment middleware
   const paymentMiddleware = createPaymentMiddleware({
     wallet,
-    calculateRequestPrice: async (req) => {
+    calculatePrice: (path) => {
       // Dynamic pricing by route
-      if (req.path === '/api/premium') return 1000  // 1000 satoshis
-      if (req.path === '/api/free') return 0        // Free
+      if (path === '/api/premium') return 1000  // 1000 satoshis
+      if (path === '/api/free') return 0        // Free
       return 100  // Default 100 satoshis
     }
   })
   
-  // 4. Build Express app
+  // 3. Build Express app
   const app = express()
   app.use(bodyParser.json())
-  app.use(authMiddleware)
   app.use(paymentMiddleware)
   
-  // 5. Define routes
+  // 4. Define routes
   app.get('/api/free', (req, res) => {
     res.json({
       message: 'Free content',
@@ -126,7 +115,7 @@ async function setupServer() {
       message: 'Premium content — paid!',
       paid: true,
       satoshisPaid: req.payment?.satoshisPaid || 0,
-      sender: req.auth?.identityKey
+      sender: req.payment?.senderIdentityKey
     })
   })
   
@@ -140,8 +129,8 @@ async function main() {
   
   app.listen(port, () => {
     console.log(`Payment server running on http://localhost:${port}`)
-    console.log('- POST /api/free: No payment required')
-    console.log('- POST /api/premium: Requires 1000 satoshis')
+    console.log('- GET /api/free: No payment required')
+    console.log('- GET /api/premium: Requires 1000 satoshis')
   })
 }
 
@@ -149,21 +138,19 @@ main().catch(console.error)
 ```
 
 The middleware chain:
-1. **Auth middleware** validates client identity (BRC-103)
-2. **Payment middleware** checks if payment required, validates if provided
-3. **Route handler** receives request only if payment verified (or free)
+1. **Payment middleware** checks if payment is required and validates provided payment headers
+2. **Route handler** receives the request only if payment was accepted or the route is free
 
 ## Step 3 — Understand the 402 response
 
 When client requests a paid endpoint without payment, the server responds with 402 and payment details.
 
 The payment middleware automatically:
-- Calculates required satoshis via `calculateRequestPrice()`
+- Calculates required satoshis via `calculatePrice()`
 - Returns 402 status if unpaid
 - Includes headers:
-  - `x-bsv-payment-satoshis-required`: satoshis owed
-  - `x-bsv-payment-derivation-prefix`: nonce for client to derive payment address
-  - `x-bsv-payment-version`: protocol version
+  - `x-bsv-sats`: satoshis owed
+  - `x-bsv-server`: server identity key used by the client for payment derivation
 
 ## Step 4 — Set up client wallet and create 402-pay wrapper
 
@@ -227,8 +214,8 @@ export async function clearPaymentCache(fetch402: any) {
 
 When client calls `fetch402('/api/premium')`:
 1. Sends request (no payment)
-2. Receives 402 with `x-bsv-payment-satoshis-required: 1000`
-3. Derives payment address from server's nonce (BRC-29)
+2. Receives 402 with `x-bsv-sats: 1000` and `x-bsv-server`
+3. Generates a fresh nonce and timestamp, then derives the payment address with BRC-29
 4. Creates and signs payment transaction
 5. Retries request with payment headers
 6. Server validates payment
@@ -275,8 +262,7 @@ Server `main.ts`:
 ```typescript
 import express from 'express'
 import bodyParser from 'body-parser'
-import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
+import { createPaymentMiddleware } from '@bsv/402-pay/server'
 import { ServerWallet } from '@bsv/simple/server'
 
 async function main() {
@@ -288,12 +274,11 @@ async function main() {
   })
   
   // Setup middleware
-  const authMiddleware = createAuthMiddleware({ wallet })
   const paymentMiddleware = createPaymentMiddleware({
     wallet,
-    calculateRequestPrice: async (req) => {
-      if (req.path === '/api/premium') return 1000
-      if (req.path === '/api/free') return 0
+    calculatePrice: (path) => {
+      if (path === '/api/premium') return 1000
+      if (path === '/api/free') return 0
       return 100
     }
   })
@@ -301,7 +286,6 @@ async function main() {
   // Create app
   const app = express()
   app.use(bodyParser.json())
-  app.use(authMiddleware)
   app.use(paymentMiddleware)
   
   // Routes
@@ -376,16 +360,16 @@ npx ts-node main.ts
 ## Troubleshooting
 
 **"Auth middleware must run first"**
-→ Payment middleware expects `req.auth.identityKey` set by auth middleware. Ensure auth runs before payment in middleware chain
+→ This applies to `@bsv/payment-express-middleware`, not `@bsv/402-pay`. The `@bsv/402-pay` middleware is independent and does not require BRC-31 auth.
 
-**"Wallet must implement internalizeAction()"**
-→ Server wallet must have `internalizeAction()` for validating payments. Use `ServerWallet.create()` from `@bsv/simple/server` or another BRC-100 wallet implementation
+**"Wallet must implement getPublicKey() and internalizeAction()"**
+→ Server wallet must expose an identity key and accept wallet-payment internalization. Use `ServerWallet.create()` from `@bsv/simple/server` or another BRC-100 wallet implementation.
 
-**"Nonce verification failed"**
-→ Client must use exact `derivationPrefix` from 402 response. Don't modify or cache the prefix across requests
+**"Payment keeps getting requested"**
+→ The retried request must include `x-bsv-beef`, `x-bsv-sender`, `x-bsv-nonce`, `x-bsv-time`, and `x-bsv-vout`. `create402Fetch()` adds those automatically.
 
 **"Transaction format error"**
-→ Client sends `x-bsv-payment` header as JSON. Ensure BEEF format is valid; invalid transactions are rejected
+→ Client sends the payment transaction as base64 BEEF in `x-bsv-beef`. Ensure the wallet returned `tx` from `createAction()`.
 
 **"Timestamp must be fresh"**
 → `x-bsv-time` must be within ~30 seconds of server time. Check system clocks if repeatedly failing
@@ -394,12 +378,12 @@ npx ts-node main.ts
 → If cache timeout is very long, client may use stale payments for different resources. Use moderate timeout (30 min is safe)
 
 **"Replay protection"**
-→ Server wallet rejects duplicate `derivationPrefix` values. Each payment must use a fresh nonce
+→ Server wallet rejects duplicate payment internalization. Each payment must use a fresh nonce and transaction.
 
 ## What to read next
 
 - **[402-Pay Package Reference](../packages/middleware/402-pay.md)** — Client and server APIs
-- **[Payment Express Middleware](../packages/middleware/payment-express-middleware.md)** — Detailed middleware config
+- **[Payment Express Middleware](../packages/middleware/payment-express-middleware.md)** — Auth-required 402 middleware variant
 - **[BRC-121 Specification](../specs/brc-121-402.md)** — HTTP 402 Payment Required protocol
 - **[BRC-29 Key Derivation](../specs/brc-29-peer-payment.md)** — Payment address generation
 - **[Wallet-Toolbox Reference](../packages/wallet/wallet-toolbox.md)** — Wallet configuration

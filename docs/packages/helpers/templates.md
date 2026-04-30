@@ -28,21 +28,14 @@ npm install @bsv/templates
 ## Quick start
 
 ```typescript
-import { Transaction, PrivateKey } from '@bsv/sdk'
-import { OpReturn, MultiPushDrop, P2MSKH } from '@bsv/templates'
+import { OpReturn } from '@bsv/templates'
 
-// Create OP_RETURN transaction
-const tx = new Transaction()
 const opReturn = new OpReturn()
-tx.addOutput({
-  lockingScript: opReturn.lock(['APP', JSON.stringify({ action: 'vote' })]),
-  satoshis: 0
-})
-await tx.sign()
-console.log(tx.id())
+const lockingScript = opReturn.lock(['APP', JSON.stringify({ action: 'vote' })])
 
-// Decode OP_RETURN data
-const decodedData = OpReturn.decode(tx.outputs[0].lockingScript)
+console.log(lockingScript.toHex())
+
+const decodedData = OpReturn.decode(lockingScript)
 console.log(decodedData)  // ['APP', '{"action":"vote"}']
 ```
 
@@ -56,58 +49,78 @@ console.log(decodedData)  // ['APP', '{"action":"vote"}']
 
 ## Common patterns
 
-### Create and unlock P2PKH lock and unlock
+### Create and decode an OP_RETURN script
 ```typescript
-import { Transaction, PrivateKey } from '@bsv/sdk'
+import { OpReturn } from '@bsv/templates'
 
-const privKey = new PrivateKey()
-const pubkey = privKey.toPublicKey()
-const lockingScript = new OpReturn().lock([pubkey.toHex()])
+const script = new OpReturn().lock(['my-app', 'invoice-paid'])
+const fields = OpReturn.decode(script)
 
-const tx = new Transaction()
-tx.addOutput({ lockingScript, satoshis: 1000 })
-// Sign with privKey to unlock...
+console.log(fields) // ['my-app', 'invoice-paid']
 ```
 
 ### Create MultiPushDrop token with 2 trusted owners
 ```typescript
-const pushDrop = new MultiPushDrop()
+import { SecurityLevel, Utils, type WalletInterface } from '@bsv/sdk'
+import { MultiPushDrop } from '@bsv/templates'
+
+declare const creatorWallet: WalletInterface
+declare const ownerWallet: WalletInterface
+
+const counterparties = [
+  '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5',
+  '03f028892bad7ed57d2fb57bf33081d5cfcf6f9ed3d3d7f159c2e2fff579dc341a'
+]
+const protocolID: [SecurityLevel, string] = [0, 'example token']
+const keyID = 'ticket-1'
+
+const pushDrop = new MultiPushDrop(creatorWallet)
 const lockingScript = await pushDrop.lock(
-  [[1, 2, 3], [4, 5, 6]],  // Two fields
-  [2, 'token'],            // protocol
-  'key-1',
-  ['owner1-pubkey', 'owner2-pubkey'],  // Both can unlock
-  true                     // reasonableness limit
+  [Utils.toArray('ticket', 'utf8'), [1, 2, 3]],
+  protocolID,
+  keyID,
+  counterparties
 )
 
-const tx = new Transaction()
-tx.addOutput({ lockingScript, satoshis: 1 })
+const decoded = MultiPushDrop.decode(lockingScript)
+console.log(decoded.lockingPublicKeys.length) // 2
 
-// Spend MultiPushDrop
-const unlocker = pushDrop.unlock(
-  [2, 'token'],
-  'key-1',
-  ['owner1-pubkey', 'owner2-pubkey']
+// The first owner can build the unlock template for a spending transaction.
+const { publicKey: creatorIdentityKey } = await creatorWallet.getPublicKey({ identityKey: true })
+const unlocker = new MultiPushDrop(ownerWallet).unlock(
+  protocolID,
+  keyID,
+  creatorIdentityKey
 )
-const unlockingScript = await unlocker.sign(tx, 0)
 ```
 
 ### Create 2-of-3 multisig
 ```typescript
-const p2mskh = new P2MSKH(2, 3)
-const multiSigLock = await p2mskh.lock({
-  publicKeys: [pubkey1, pubkey2, pubkey3]
-})
+import { PublicKey, type WalletInterface } from '@bsv/sdk'
+import { P2MSKH } from '@bsv/templates'
 
-const tx = new Transaction()
-tx.addOutput({ lockingScript: multiSigLock, satoshis: 10000 })
+declare const wallet: WalletInterface
 
-// Spend 2-of-3 (need 2 of 3 signatures)
-const multiSigUnlocker = p2mskh.unlock({
-  publicKeys: [pubkey1, pubkey2, pubkey3],
-  signingKeys: [privkey1, privkey2]  // Supply 2 of 3 private keys
-})
-const unlockingScript = await multiSigUnlocker.sign(tx, 0)
+const pubkey1 = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+const pubkey2 = '03f028892bad7ed57d2fb57bf33081d5cfcf6f9ed3d3d7f159c2e2fff579dc341a'
+const pubkey3 = '02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9'
+const pubkeys = [
+  PublicKey.fromString(pubkey1),
+  PublicKey.fromString(pubkey2),
+  PublicKey.fromString(pubkey3)
+]
+
+const address = P2MSKH.address(pubkeys, 2)
+const lockingScript = new P2MSKH().lock(address)
+
+// Spending uses wallet-derived signatures. Each signer applies the same
+// customInstructions and passes the prior partial unlocking script onward.
+const customInstructions = {
+  keyID: 'escrow-1',
+  counterparty: 'self',
+  pubkeys: pubkeys.map(pubkey => pubkey.toString())
+}
+const unlocker = new P2MSKH().unlock(wallet, customInstructions)
 ```
 
 ## Key concepts

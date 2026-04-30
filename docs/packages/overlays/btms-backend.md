@@ -30,7 +30,7 @@ npm install @bsv/btms-backend
 ## Quick start
 
 ```typescript
-import { BTMSTopicManager } from '@bsv/btms-backend'
+import { BTMSTopicManager, BTMSLookupServiceFactory } from '@bsv/btms-backend'
 import { MongoClient } from 'mongodb'
 
 const client = new MongoClient('mongodb://localhost:27017')
@@ -44,8 +44,6 @@ const result = await topicManager.identifyAdmissibleOutputs(beef, previousCoins)
 // Returns: { outputsToAdmit: [0, 1], coinsToRetain: [] }
 
 // Create lookup service
-import BTMSLookupServiceFactory from '@bsv/btms-backend'
-
 const lookupService = await BTMSLookupServiceFactory(db)
 
 // Query tokens by asset ID
@@ -71,10 +69,9 @@ const results = await lookupService.lookup({
 
 ```typescript
 import OverlayExpress from '@bsv/overlay-express'
-import { BTMSTopicManager } from '@bsv/btms-backend'
-import BTMSLookupServiceFactory from '@bsv/btms-backend'
+import { BTMSTopicManager, BTMSLookupServiceFactory } from '@bsv/btms-backend'
 
-const server = new OverlayExpress('mynode', privateKey, 'https://example.com')
+const server = new OverlayExpress('mynode', privateKey, 'example.com')
 
 server.configureTopicManager('tm_btms', new BTMSTopicManager())
 await server.configureLookupServiceWithMongo('ls_btms', db => 

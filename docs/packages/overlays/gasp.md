@@ -28,43 +28,67 @@ npm install @bsv/gasp
 ## Quick start
 
 ```typescript
-import { GASP, LogLevel } from '@bsv/gasp'
+import {
+  GASP,
+  LogLevel,
+  type GASPNode,
+  type GASPNodeResponse,
+  type GASPRemote,
+  type GASPStorage
+} from '@bsv/gasp'
 
 // Implement GASPStorage
 class MyStorage implements GASPStorage {
-  async findKnownUTXOs(since, limit?) {
+  async findKnownUTXOs(since: number, limit?: number) {
     return [
       { txid: 'abc...', outputIndex: 0, score: Date.now() },
       { txid: 'def...', outputIndex: 1, score: Date.now() }
     ]
   }
 
-  async hydrateGASPNode(graphID, txid, outputIndex, metadata) {
+  async hydrateGASPNode(
+    graphID: string,
+    txid: string,
+    outputIndex: number,
+    metadata: boolean
+  ): Promise<GASPNode> {
     return {
       graphID,
       rawTx: '0100...',
       outputIndex,
-      proof: 'BUMP_proof...'
+      proof: 'BUMP_proof...',
+      txMetadata: metadata ? 'transaction metadata' : undefined,
+      outputMetadata: metadata ? 'output metadata' : undefined
     }
   }
 
-  async appendToGraph(tx, spentBy?) {
+  async findNeededInputs(tx: GASPNode): Promise<GASPNodeResponse | void> {
+    return
+  }
+
+  async appendToGraph(tx: GASPNode, spentBy?: string) {
     // Store node in temporary graph
   }
 
-  async validateGraphAnchor(graphID) {
+  async validateGraphAnchor(graphID: string) {
     // Confirm graph is anchored in blockchain
   }
 
-  async finalizeGraph(graphID) {
+  async discardGraph(graphID: string) {
+    // Remove temporary graph data after a failed sync
+  }
+
+  async finalizeGraph(graphID: string) {
     // Finalize into persistent storage
   }
 }
 
+declare const remote: GASPRemote
+
 // Initialize and sync
 const gasp = new GASP(
   new MyStorage(),
-  remoteImplementation,
+  remote,
   0,
   '[GASP] ',
   false,
@@ -73,7 +97,7 @@ const gasp = new GASP(
   false
 )
 
-await gasp.sync()
+await gasp.sync('https://peer.example.com')
 ```
 
 ## What it provides
@@ -91,8 +115,16 @@ await gasp.sync()
 ### Implement GASPRemote for HTTP communication
 
 ```typescript
+import {
+  type GASPInitialRequest,
+  type GASPInitialResponse,
+  type GASPNode,
+  type GASPNodeResponse,
+  type GASPRemote
+} from '@bsv/gasp'
+
 class MyRemote implements GASPRemote {
-  async getInitialResponse(request) {
+  async getInitialResponse(request: GASPInitialRequest) {
     const response = await fetch('https://peer.example.com/gasp/initial', {
       method: 'POST',
       body: JSON.stringify(request)
@@ -100,7 +132,7 @@ class MyRemote implements GASPRemote {
     return response.json()
   }
 
-  async getInitialReply(response) {
+  async getInitialReply(response: GASPInitialResponse) {
     const reply = await fetch('https://peer.example.com/gasp/reply', {
       method: 'POST',
       body: JSON.stringify(response)
@@ -108,7 +140,12 @@ class MyRemote implements GASPRemote {
     return reply.json()
   }
 
-  async requestNode(graphID, txid, outputIndex, metadata) {
+  async requestNode(
+    graphID: string,
+    txid: string,
+    outputIndex: number,
+    metadata: boolean
+  ): Promise<GASPNode> {
     const response = await fetch('https://peer.example.com/gasp/node', {
       method: 'POST',
       body: JSON.stringify({ graphID, txid, outputIndex, metadata })
@@ -116,7 +153,7 @@ class MyRemote implements GASPRemote {
     return response.json()
   }
 
-  async submitNode(node) {
+  async submitNode(node: GASPNode): Promise<GASPNodeResponse | void> {
     const response = await fetch('https://peer.example.com/gasp/submit', {
       method: 'POST',
       body: JSON.stringify(node)
@@ -140,7 +177,7 @@ const gaspPullOnly = new GASP(
   false
 )
 
-await gaspPullOnly.sync()
+await gaspPullOnly.sync('https://peer.example.com')
 // Local storage updated, but remote sees no data from us
 ```
 
@@ -158,7 +195,7 @@ const gaspSequential = new GASP(
   true   // sequential = true
 )
 
-await gaspSequential.sync()
+await gaspSequential.sync('https://peer.example.com')
 // One operation at a time to avoid DB locking
 ```
 
@@ -198,7 +235,7 @@ await gaspSequential.sync()
 ## Common pitfalls
 
 1. **Storage method signatures** — All async; must be properly implemented to avoid data races
-2. **Graph ID format** — Must be `txid.outputIndex` (colon-separated)
+2. **Graph ID format** — Must be `txid.outputIndex` (dot-separated)
 3. **findNeededInputs return** — Return `undefined` if no inputs needed; empty object `{}` may cause issues
 4. **Metadata recursion** — If requesting metadata, use carefully to avoid bloat
 5. **Version mismatch** — If remote runs different GASP version, sync fails with error

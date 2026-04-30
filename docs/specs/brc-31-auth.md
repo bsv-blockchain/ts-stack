@@ -87,10 +87,10 @@ After handshake succeeds, every request/response carries:
 ```typescript
 import express from 'express'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
 // 1. Create wallet for signing/verifying
-const wallet = new ProtoWallet(privateKey)
+const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.SERVER_PRIVATE_KEY!))
 
 // 2. Create auth middleware
 const authMiddleware = createAuthMiddleware({
@@ -160,7 +160,7 @@ Client connects with BRC-103 handshake; all WebSocket messages are signed/verifi
 
 ## Conformance vectors
 
-BRC-31 handshake conformance is tested in `conformance/vectors/auth/`:
+BRC-31-related portable coverage currently lives in `conformance/vectors/messaging/brc31/authrite-signature.json`:
 
 - Nonce generation and freshness
 - Signature verification with ECDSA

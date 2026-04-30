@@ -80,32 +80,46 @@ tags: ["spec", "overlay"]
 ## Example: Submit transaction to overlay
 
 ```typescript
-import { Engine } from '@bsv/overlay'
-import { Transaction, Beef } from '@bsv/sdk'
+import { PushDrop, Utils, WalletClient } from '@bsv/sdk'
 
-// 1. Create a transaction with PushDrop outputs
-const tx = new Transaction()
-tx.addOutput({
-  satoshis: 1,
-  lockingScript: PushDrop.createFromFields([
-    'tm_identity',  // Topic name
-    'myIdentity',   // Topic-specific data
-    'myPublicKey'
-  ]).toHex()
-})
-
-// 2. Wrap in BEEF and submit
-const beef = Beef.fromTransaction(tx)
+const wallet = new WalletClient('auto', 'example.com')
 const topics = ['tm_identity']
 
+// 1. Create the topic-specific transaction with a wallet.
+const lockingScript = await new PushDrop(wallet).lock(
+  [
+    Utils.toArray('identity', 'utf8'),
+    Utils.toArray('myIdentity', 'utf8')
+  ],
+  [2, 'identity overlay'],
+  'demo-identity-token',
+  'self',
+  true
+)
+
+const action = await wallet.createAction({
+  description: 'Identity overlay admission',
+  outputs: [{
+    lockingScript: lockingScript.toHex(),
+    satoshis: 1,
+    outputDescription: 'identity token'
+  }],
+  options: { randomizeOutputs: false }
+})
+if (!action.tx) throw new Error('Wallet did not return AtomicBEEF')
+
+// 2. Submit the AtomicBEEF bytes and topic tags to the overlay.
 const response = await fetch('https://overlay.example.com/submit', {
   method: 'POST',
-  headers: { 'x-topics': JSON.stringify(topics) },
-  body: beef.toHex()
+  headers: {
+    'content-type': 'application/octet-stream',
+    'x-topics': JSON.stringify(topics)
+  },
+  body: new Uint8Array(action.tx)
 })
 
 const steak = await response.json()
-console.log(steak.outputs)  // Outputs admitted to tm_identity
+console.log(steak)  // STEAK: outputs admitted to tm_identity
 ```
 
 Example: Query admitted UTXOs
@@ -121,7 +135,7 @@ const lookupResponse = await fetch('https://overlay.example.com/lookup', {
 })
 
 const results = await lookupResponse.json()
-console.log(results.UTXOs)  // Array of UTXOs for this identity
+console.log(results.outputs ?? results)
 ```
 
 ## Conformance vectors

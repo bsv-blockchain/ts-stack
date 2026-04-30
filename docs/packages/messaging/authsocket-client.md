@@ -29,9 +29,9 @@ npm install @bsv/authsocket-client
 
 ```typescript
 import { AuthSocketClient } from '@bsv/authsocket-client'
-import { ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
-const clientWallet = new ProtoWallet('client-private-key-hex')
+const clientWallet = new ProtoWallet(PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'))
 const socket = AuthSocketClient('http://localhost:3000', { wallet: clientWallet })
 
 socket.on('connect', () => {
@@ -64,9 +64,9 @@ socket.on('disconnect', () => {
 
 ```typescript
 import { AuthSocketClient } from '@bsv/authsocket-client'
-import { ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
-const wallet = new ProtoWallet('my-private-key-hex')
+const wallet = new ProtoWallet(PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'))
 const socket = AuthSocketClient('http://localhost:3000', { wallet })
 
 socket.on('connect', () => {

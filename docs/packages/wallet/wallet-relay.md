@@ -56,18 +56,21 @@ server.listen(3000)
 
 ### Create session and get QR code (frontend React)
 
-```typescript
+```tsx
 import { useWalletRelayClient } from '@bsv/wallet-relay/react'
 import { useEffect, useState } from 'react'
 
 function WalletConnection() {
-  const client = useWalletRelayClient('https://relay.example.com')
+  const { createSession } = useWalletRelayClient({
+    apiUrl: 'https://relay.example.com',
+    autoCreate: false
+  })
   const [qrData, setQrData] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
 
   useEffect(() => {
     const setup = async () => {
-      const session = await client.createSession()
+      const session = await createSession()
       setSessionId(session.sessionId)
       setQrData(session.qrDataUrl)  // Base64 PNG
     }
@@ -116,18 +119,21 @@ function WalletConnection() {
 
 ### Use WalletConnectionModal component
 
-```typescript
+```tsx
 import { WalletConnectionModal } from '@bsv/wallet-relay/react'
+import { useState } from 'react'
 
 function App() {
+  const [showQR, setShowQR] = useState(false)
+
   return (
     <>
       <WalletConnectionModal 
-        relayUrl="https://relay.example.com"
-        onConnect={(client, sessionId) => {
-          console.log('Mobile connected, sessionId:', sessionId)
-          // Send wallet requests to mobile
+        onLocalWallet={(wallet) => {
+          console.log('Local wallet connected')
+          // Use WalletClient directly.
         }}
+        onMobileQR={() => setShowQR(true)}
         installUrl="https://desktop.bsvb.tech"
       />
     </>
@@ -138,28 +144,27 @@ function App() {
 ### Send wallet RPC call from desktop to mobile
 
 ```typescript
-import { useWalletRelayClient } from '@bsv/wallet-relay/react'
+import { WalletRelayClient } from '@bsv/wallet-relay/client'
+import { P2PKH } from '@bsv/sdk'
 
-function sendPayment(client: WalletRelayClient, sessionId: string, desktopToken: string) {
-  const request = {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'createAction',
-    params: [{
-      description: 'Send payment',
-      outputs: [{
-        satoshis: 5000,
-        lockingScript: '76a914...'
-      }]
+async function sendPayment(client: WalletRelayClient) {
+  const lockingScript = new P2PKH()
+    .lock('1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX')
+    .toHex()
+
+  const response = await client.sendRequest('createAction', {
+    description: 'Send payment',
+    outputs: [{
+      satoshis: 5000,
+      lockingScript,
+      outputDescription: 'payment output'
     }]
-  }
-
-  const response = await client.sendRequest(sessionId, request, desktopToken)
+  })
   
   if (response.error) {
     console.error('Mobile rejected:', response.error)
   } else {
-    console.log('Action created:', response.result.signableTransaction)
+    console.log('Action created:', response.result)
   }
 }
 ```
@@ -167,27 +172,23 @@ function sendPayment(client: WalletRelayClient, sessionId: string, desktopToken:
 ### Mobile wallet implementation
 
 ```typescript
-import { WalletPairingSession } from '@bsv/wallet-relay/client'
-import { PrivateKey } from '@bsv/sdk'
+import { WalletPairingSession, parsePairingUri } from '@bsv/wallet-relay/client'
 
-const session = new WalletPairingSession({
-  baseUrl: 'https://relay.example.com',
-  identityKey: PrivateKey.fromRandom(),
-  wallet: myWalletInstance
+// Scan desktop QR code to get the pairing URI.
+const { params, error } = parsePairingUri(scannedQR)
+if (!params) throw new Error(error ?? 'Invalid pairing URI')
+
+const session = new WalletPairingSession(myWalletInstance, params, {
+  autoApproveMethods: new Set(['getPublicKey'])
 })
 
-// Scan desktop QR code to get pairingUri
-const { relayUrl, sessionId, sessionKey } = parsePairingUri(scannedQR)
+session.onRequest(async (method, params) => {
+  // Forward approved requests to the local mobile wallet implementation.
+  return (myWalletInstance as any)[method](params)
+})
 
-// Pair with desktop
-await session.pair({ relayUrl, sessionId, sessionKey })
-
-// Listen for incoming requests
-session.onRequest = async (request) => {
-  // Forward to local wallet
-  const result = await myWallet[request.method](request.params)
-  return result
-}
+await session.resolveRelay()
+await session.connect()
 ```
 
 ## Key concepts

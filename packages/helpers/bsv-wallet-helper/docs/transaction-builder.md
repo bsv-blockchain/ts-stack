@@ -15,10 +15,10 @@ A fluent transaction builder for creating BSV transactions with a clean, chainab
 
 `TransactionBuilder` provides a builder pattern for constructing BSV transactions without needing to directly handle private keys or low-level transaction details. It handles:
 
-- Output creation (P2PKH, Ordinal P2PKH, custom scripts, **automatic change**)
+- Output creation (P2PKH, Ordinal P2PKH, custom scripts, explicit change destinations)
 - Input management (spending UTXOs)
-- Automatic fee calculation and change distribution
-- OP_RETURN metadata per output
+- Wallet-backed fee calculation and change handling
+- OP_RETURN data attached to individual outputs
 - Transaction-level options
 - Preview mode for inspection
 
@@ -137,11 +137,11 @@ import { WalletClient } from '@bsv/sdk';
 // Create wallet or use WalletClient
 const wallet = await makeWallet('test', storageURL, privateKeyHex);
 const wallet2 = new WalletClient("auto")
-const recipientPublicKey = '02...'; // Recipient's public key
+const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX';
 
 // Build and execute transaction
 const result = await new TransactionBuilder(wallet, "Payment to Alice")
-  .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 5000, description: "Payment" })
+  .addP2PKHOutput({ address: recipientAddress, satoshis: 5000, description: "Payment" })
   .build();
 
 console.log(`Transaction ID: ${result.txid}`);
@@ -156,7 +156,7 @@ TransactionBuilder uses the builder pattern with method chaining:
 ```typescript
 new TransactionBuilder(wallet, "Description")
   .addP2PKHOutput(...)        // Returns OutputBuilder
-    .addOpReturn([...])        // Returns TransactionBuilder (for next output)
+    .addOpReturn([...])        // Returns OutputBuilder (same output)
   .addOrdinalP2PKHOutput(...)  // Returns OutputBuilder
     .outputDescription("...")  // Returns OutputBuilder (same output)
   .options({...})              // Returns TransactionBuilder
@@ -219,8 +219,9 @@ addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder
 **Parameters:**
 - `params` - Named parameter object with one of:
   - `{ publicKey: string, satoshis: number, description?: string }` - With public key
+  - `{ address: string, satoshis: number, description?: string }` - With BSV address
   - `{ walletParams: WalletDerivationParams, satoshis: number, description?: string }` - With wallet derivation
-  - `{ satoshis: number, description?: string }` - With automatic BRC-29 derivation
+  - `{ satoshis: number, description?: string }` - With automatic BRC-29 derivation for a self-controlled output
 
 **Returns:** `OutputBuilder` for configuring this output
 
@@ -228,6 +229,13 @@ addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder
 ```typescript
 // With public key
 builder.addP2PKHOutput({ publicKey: publicKeyHex, satoshis: 1000, description: "Payment" });
+
+// With address
+builder.addP2PKHOutput({
+  address: '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX',
+  satoshis: 1000,
+  description: "Payment"
+});
 
 // With wallet derivation parameters
 builder.addP2PKHOutput({
@@ -240,16 +248,18 @@ builder.addP2PKHOutput({
   description: "Payment"
 });
 
-// With automatic BRC-29 derivation (recommended for most use cases)
-builder.addP2PKHOutput({ satoshis: 1000, description: "Payment" });
+// With automatic BRC-29 derivation for outputs this wallet controls later
+builder.addP2PKHOutput({ satoshis: 1000, description: "Wallet-controlled output" });
 // Derivation info automatically added to output.customInstructions
 ```
+
+Use a recipient's payment address or ordinary payment public key for recipient outputs. Omitting `address`, `publicKey`, and `walletParams` derives with counterparty `self`, so it is for outputs the same wallet should unlock later.
 
 ---
 
 #### `addChangeOutput()`
 
-Add a change output with automatic satoshi calculation during signing.
+Add an explicit change destination. Normal wallet-funded actions can calculate and manage change through `createAction` / `signAction` without this method; use it when you want the builder to specify the change locking script.
 
 ```typescript
 addChangeOutput(params?: AddChangeOutputParams): OutputBuilder
@@ -259,15 +269,15 @@ addChangeOutput(params?: AddChangeOutputParams): OutputBuilder
 - `params` - Named parameter object with one of:
   - `{ publicKey: string, description?: string }` - With public key
   - `{ walletParams: WalletDerivationParams, description?: string }` - With wallet derivation
-  - `{ description?: string }` - With automatic BRC-29 derivation
+  - `{ description?: string }` - With automatic BRC-29 derivation for a self-controlled change destination
 
 **Returns:** `OutputBuilder` for configuring this output
 
-**Important:** Change outputs require at least one input to be added first.
+**Important:** Explicit change outputs require at least one input to be added first.
 
 **How it works:**
-- During transaction building, the locking script is created but satoshis are left undefined
-- When the transaction is signed, fees are calculated and the remaining balance goes to change outputs
+- During transaction building, the explicit change locking script is created but satoshis are left undefined
+- When the transaction is signed, fees are calculated and the remaining balance goes to explicit change outputs
 - The calculated satoshis are automatically extracted and used in the final transaction
 
 **Important: Spending Change Outputs**
@@ -280,14 +290,14 @@ addChangeOutput(params?: AddChangeOutputParams): OutputBuilder
 import { TransactionBuilder } from '@bsv/wallet-helper';
 import { Transaction } from '@bsv/sdk';
 
-// Create change output with wallet derivation
+// Create an explicit change destination with wallet derivation
 const walletParams = {
   protocolID: [2, 'p2pkh'],
   keyID: '0',
   counterparty: 'self'
 };
 
-const result = await new TransactionBuilder(wallet, "Payment with change")
+const result = await new TransactionBuilder(wallet, "Payment with explicit change")
   .addP2PKHInput({
     sourceTransaction,
     sourceOutputIndex: 0,
@@ -295,7 +305,7 @@ const result = await new TransactionBuilder(wallet, "Payment with change")
     description: "Input"
   })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1000, description: "Payment" })
-  .addChangeOutput({ walletParams, description: "Change" }) // Automatically calculated!
+  .addChangeOutput({ walletParams, description: "Change" }) // Explicit destination; satoshis are calculated
   .build();
 
 // Later: Spend the change output using the SAME parameters
@@ -419,10 +429,10 @@ These methods configure the current output and are available after calling any `
 
 #### `addOpReturn()`
 
-Add OP_RETURN metadata to the current output.
+Add OP_RETURN metadata to the current output. This does not create a separate output; it uses `addOpReturnData` on the locking script for the output returned by the previous `add...Output` call.
 
 ```typescript
-addOpReturn(fields: (string | number[])[]): TransactionBuilder
+addOpReturn(fields: (string | number[])[]): OutputBuilder
 ```
 
 **Parameters:**
@@ -431,7 +441,7 @@ addOpReturn(fields: (string | number[])[]): TransactionBuilder
   - Hex string (detected and preserved)
   - Byte array (converted to hex)
 
-**Returns:** `TransactionBuilder` (ready for next output or build)
+**Returns:** `OutputBuilder` for configuring the same output, adding another output, or building
 
 **Throws:** `Error` if fields is empty or not an array
 
@@ -488,7 +498,7 @@ builder.addP2PKHOutput({ publicKey, satoshis: 5000 })
 
 Set custom instructions for the current output. This field can contain application-specific data in string format.
 
-**Note:** If using automatic BRC-29 derivation (by omitting `addressOrParams`), the derivation information will be automatically appended after your custom instructions.
+**Note:** If using automatic BRC-29 derivation (by omitting `address`, `publicKey`, and `walletParams`), the derivation information will be automatically appended after your custom instructions.
 
 ```typescript
 customInstructions(value: string): OutputBuilder
@@ -507,15 +517,15 @@ customInstructions(value: string): OutputBuilder
 builder.addP2PKHOutput({ publicKey, satoshis: 1000 })
   .customInstructions(JSON.stringify({ orderId: 12345, customerId: 'abc' }));
 
-// With BRC-29 auto-derivation - derivation info is appended
-builder.addP2PKHOutput({ satoshis: 1000 })  // Uses BRC-29 derivation
+// With BRC-29 auto-derivation for a self-controlled output - derivation info is appended
+builder.addP2PKHOutput({ satoshis: 1000 })  // Uses counterparty 'self'
   .customInstructions('app-data')
   .basket("payments");
 // Result: customInstructions = 'app-data' + '{"derivationPrefix":"...","derivationSuffix":"..."}'
 
 // Chain with other output methods
-builder.addChangeOutput()  // Auto-derived change
-  .customInstructions('{"changeType":"auto"}')
+builder.addChangeOutput()  // Explicit self-derived change destination
+  .customInstructions('{"changeType":"explicit"}')
   .basket("change-outputs");
 ```
 
@@ -972,13 +982,13 @@ const params = {
   counterparty: 'self' as WalletCounterparty
 };
 
-// Simple payment with wallet-derived output
-const result = await new TransactionBuilder(wallet, "Derived payment")
-  .addP2PKHOutput({ walletParams: params, satoshis: 1000, description: "Payment to self" })
+// Self-controlled wallet-derived output
+const result = await new TransactionBuilder(wallet, "Derived wallet output")
+  .addP2PKHOutput({ walletParams: params, satoshis: 1000, description: "Output for this wallet" })
   .build();
 
-// With automatic change calculation
-const result2 = await new TransactionBuilder(wallet, "Payment with change")
+// With an explicit change destination
+const result2 = await new TransactionBuilder(wallet, "Payment with explicit change")
   .addP2PKHInput({
     sourceTransaction,
     sourceOutputIndex: 0,
@@ -986,7 +996,7 @@ const result2 = await new TransactionBuilder(wallet, "Payment with change")
     description: "Input"
   })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 1000, description: "Payment" })
-  .addChangeOutput({ walletParams: params, description: "Change" }) // Automatically calculated!
+  .addChangeOutput({ walletParams: params, description: "Change" }) // Controls where change goes
   .build();
 ```
 
@@ -1032,7 +1042,7 @@ const result = await new TransactionBuilder(wallet, "Complex transaction")
 
 ---
 
-### Spending a UTXO with Automatic Change
+### Spending a UTXO with Explicit Change Destination
 
 ```typescript
 // Assume we have a UTXO from a previous transaction
@@ -1052,7 +1062,7 @@ const result = await new TransactionBuilder(wallet, "Spending UTXO")
     description: "Input from previous tx"
   })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 4500, description: "Payment" })
-  .addChangeOutput({ walletParams: utxoParams, description: "Change" }) // Automatically calculated after fees!
+  .addChangeOutput({ walletParams: utxoParams, description: "Change" }) // Controls where change goes
   .build();
 ```
 
@@ -1068,15 +1078,15 @@ TransactionBuilder supports complex chaining patterns:
 const builder = new TransactionBuilder(wallet, "Complex transaction");
 
 // Add first output with metadata
-const afterOutput1 = template
+const afterOutput1 = builder
   .addP2PKHOutput({ publicKey: alice, satoshis: 1000, description: "Payment 1" })
-    .addOpReturn(['data1']); // Returns TransactionBuilder
+    .addOpReturn(['data1']); // Returns OutputBuilder
 
 // Add second output with description and metadata
 const afterOutput2 = afterOutput1
   .addP2PKHOutput({ publicKey: bob, satoshis: 2000 }) // No description yet
     .outputDescription("Payment 2") // Add description
-    .addOpReturn(['data2']); // Returns TransactionBuilder
+    .addOpReturn(['data2']); // Returns OutputBuilder
 
 // Set options and build
 const result = await afterOutput2
@@ -1188,9 +1198,9 @@ const spendResult = await new TransactionBuilder(wallet, "Spending stored UTXO")
 
 ## Best Practices
 
-### 1. Always Store Derivation Parameters (Critical for Change Outputs!)
+### 1. Always Store Derivation Parameters (Critical for Wallet-Derived Outputs!)
 
-When using wallet derivation, store the parameters with your UTXO. This is **especially important for change outputs**:
+When using wallet derivation, store the parameters with your UTXO. This is especially important for explicit change outputs and any output created with counterparty `self`:
 
 ```typescript
 import { TransactionBuilder } from '@bsv/wallet-helper';
@@ -1293,7 +1303,7 @@ try {
 
 ## Common Patterns
 
-### Payment with Automatic Change
+### Payment with Wallet-Managed Change
 
 ```typescript
 const myParams = {
@@ -1302,9 +1312,9 @@ const myParams = {
   counterparty: 'self' as WalletCounterparty
 };
 
-// No need to manually calculate change and fees!
-// addChangeOutput automatically handles fee calculation
-await new TransactionBuilder(wallet, "Payment with change")
+// No need to manually calculate change and fees.
+// createAction/signAction can manage normal wallet change.
+await new TransactionBuilder(wallet, "Payment with wallet-managed change")
   .addP2PKHInput({
     sourceTransaction,
     sourceOutputIndex: 0,
@@ -1312,14 +1322,14 @@ await new TransactionBuilder(wallet, "Payment with change")
     description: "UTXO"
   })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 7000, description: "Payment" })
-  .addChangeOutput({ walletParams: myParams, description: "Change" }) // Automatically: input - payment - fees
   .build();
 ```
 
-### Change Output with Metadata
+### Explicit Change Output with Metadata
 
 ```typescript
-// Change outputs support OP_RETURN just like regular outputs
+// Use addChangeOutput when you need to control the change script.
+// Explicit change outputs support OP_RETURN just like regular outputs.
 await new TransactionBuilder(wallet, "Payment with tracked change")
   .addP2PKHInput({
     sourceTransaction,
@@ -1329,16 +1339,16 @@ await new TransactionBuilder(wallet, "Payment with tracked change")
   })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 5000, description: "Payment" })
   .addChangeOutput({ walletParams: myParams, description: "Change" })
-    .addOpReturn(['APP_ID', JSON.stringify({ changeType: 'auto', timestamp: Date.now() })])
+    .addOpReturn(['APP_ID', JSON.stringify({ changeType: 'explicit', timestamp: Date.now() })])
   .build();
 ```
 
 ---
 
-### Multiple Change Outputs
+### Multiple Explicit Change Outputs
 
 ```typescript
-// You can add multiple change outputs to split change across addresses
+// You can add multiple explicit change outputs to split change across wallet-derived scripts.
 const changeParams1 = { protocolID: [2, 'p2pkh'], keyID: '1', counterparty: 'self' };
 const changeParams2 = { protocolID: [2, 'p2pkh'], keyID: '2', counterparty: 'self' };
 
@@ -1350,8 +1360,8 @@ await new TransactionBuilder(wallet, "Split change")
     description: "Input"
   })
   .addP2PKHOutput({ publicKey: recipientPublicKey, satoshis: 3000, description: "Payment" })
-  .addChangeOutput({ walletParams: changeParams1, description: "Change 1" }) // Gets calculated change / 2
-  .addChangeOutput({ walletParams: changeParams2, description: "Change 2" }) // Gets calculated change / 2
+  .addChangeOutput({ walletParams: changeParams1, description: "Change 1" })
+  .addChangeOutput({ walletParams: changeParams2, description: "Change 2" })
   .build();
 ```
 

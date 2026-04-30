@@ -82,14 +82,12 @@ tags: ["spec", "broadcast", "arc"]
 ```typescript
 import { Transaction, ARC } from '@bsv/sdk'
 
-// 1. Create and sign transaction
-const tx = new Transaction()
-tx.addInput(sourceTransaction, 0, unlockingScript)
-tx.addOutput({ satoshis: 10000, lockingScript: p2pkhScript })
-await tx.sign()
+// 1. Load a signed transaction. BEEF is preferred when the source
+// transaction data is available because ARC can receive Extended Format.
+const tx = Transaction.fromHexBEEF('0100beef01fe87730e000402070282f861969...')
 
 // 2. Create ARC broadcaster with optional callback
-const arc = new ARC({
+const arc = new ARC('https://arc.example.com', {
   apiKey: 'your-arc-api-key',
   callbackUrl: 'https://yourapp.com/arc-callback',
   callbackToken: 'secret-token-for-validation'
@@ -98,12 +96,12 @@ const arc = new ARC({
 // 3. Submit to ARC
 const response = await arc.broadcast(tx)
 
-if (response.txStatus === 'SENT_TO_NETWORK') {
+if (response.status === 'success') {
   console.log('Transaction accepted:', response.txid)
-} else if (response.txStatus === 'DOUBLE_SPEND_ATTEMPTED') {
-  console.log('Double-spend detected:', response.competingTxs)
+} else if (response.code === 'DOUBLE_SPEND_ATTEMPTED') {
+  console.log('Double-spend detected:', response.more?.competingTxs)
 } else {
-  console.log('Broadcast failed:', response.txStatus, response.extraInfo)
+  console.log('Broadcast failed:', response.code, response.description)
 }
 ```
 
@@ -113,7 +111,7 @@ Server receives POST to `X-CallbackUrl`:
 
 ```typescript
 // POST /arc-callback
-app.post('/arc-callback', (req, res) => {
+app.post('/arc-callback', async (req, res) => {
   const { txid, merkleProof, blockHash, blockHeight } = req.body
   
   // Validate token
@@ -122,7 +120,7 @@ app.post('/arc-callback', (req, res) => {
   }
   
   // Store proof and update wallet state
-  await wallet.handleMerkleProof(txid, merkleProof)
+  await saveMerkleProof({ txid, merkleProof, blockHash, blockHeight })
   
   res.json({ status: 'received' })
 })

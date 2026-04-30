@@ -72,7 +72,10 @@ Any failure in the chain aborts early without processing the remaining bytes.
 ## Usage in @bsv/sdk
 
 ```typescript
-import { Beef, Transaction } from '@bsv/sdk'
+import { Beef, MerklePath, Transaction, WhatsOnChain } from '@bsv/sdk'
+
+declare const tx: Transaction
+declare const bump: MerklePath
 
 // Build a BEEF from a transaction and proof
 const beef = new Beef()
@@ -82,7 +85,7 @@ const bytes = beef.toBinary()
 
 // Parse and validate
 const parsed = Beef.fromBinary(bytes)
-const isValid = await parsed.verify(chaintracker)
+const isValid = await parsed.verify(new WhatsOnChain())
 ```
 
 ## Where BEEF Appears

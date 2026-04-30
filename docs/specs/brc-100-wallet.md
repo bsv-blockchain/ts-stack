@@ -52,7 +52,7 @@ Every method returns `Promise<object>`. Errors are thrown as wallet error object
 Creates a transaction action. The wallet may fund, sign, and process it immediately, or it may return a `signableTransaction` reference when inputs need external unlocking scripts.
 
 ```typescript
-await wallet.createAction(args: CreateActionArgs)
+const result = await wallet.createAction(args)
 ```
 
 Required args:
@@ -116,7 +116,7 @@ const result = await wallet.createAction({
 Completes an action that was created with `createAction` and returned a `signableTransaction`.
 
 ```typescript
-await wallet.signAction(args: SignActionArgs)
+const result = await wallet.signAction(args)
 ```
 
 Required args:

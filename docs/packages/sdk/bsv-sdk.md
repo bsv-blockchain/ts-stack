@@ -32,6 +32,7 @@ import { PrivateKey, P2PKH, Transaction } from '@bsv/sdk'
 
 const privKey = PrivateKey.fromWif('L5EY1SbTvvPNSdCYQe1EJHfXCBBT4PmnF6CDbzCm9iifZptUvDGB')
 const sourceTransaction = Transaction.fromHex('0200000001...')  // Previous tx hex
+const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
 const tx = new Transaction(1, [
   {
@@ -41,8 +42,11 @@ const tx = new Transaction(1, [
   }
 ], [
   {
+    lockingScript: new P2PKH().lock(recipientAddress),
+    satoshis: 5000
+  },
+  {
     lockingScript: new P2PKH().lock(privKey.toAddress()),
-    satoshis: 5000,
     change: true
   }
 ])
@@ -59,7 +63,7 @@ const broadcast = await tx.broadcast()
 - **Script templates** — `P2PKH` (Pay-to-Public-Key-Hash), `P2PK`, `P2SH`, `PushDrop` for overlay protocols
 - **Transaction building** — `Transaction`, `Input`, `Output`, complete builder with signing and broadcasting
 - **Fee models** — `SatoshisPerKilobyte`, `LivePolicy` for network-aware fee estimation
-- **Network integration** — `ARC`, `WhatsOnChainBroadcaster`, `Teranode` broadcasters; `DefaultChainTracker`, `WhatsOnChainChainTracker`
+- **Network integration** — `ARC`, `WhatsOnChainBroadcaster`, `Teranode` broadcasters; `defaultChainTracker`, `WhatsOnChain`
 - **SPV verification** — `MerklePath` for merkle inclusion proofs
 - **BEEF envelopes** — `Beef` (BRC-62) for atomic transaction batches with proofs
 - **Message signing** — BRC-18 signed messages
@@ -78,6 +82,7 @@ import { PrivateKey, P2PKH, Transaction } from '@bsv/sdk'
 
 const privKey = PrivateKey.fromWif('L5EY1SbTvvPNSdCYQe1EJHfXCBBT4PmnF6CDbzCm9iifZptUvDGB')
 const sourceTransaction = Transaction.fromHex('0200000001...')
+const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
 const tx = new Transaction(1, [
   {
@@ -87,12 +92,16 @@ const tx = new Transaction(1, [
   }
 ], [
   {
-    lockingScript: new P2PKH().lock(privKey.toAddress()),
+    lockingScript: new P2PKH().lock(recipientAddress),
     satoshis: 5000,
+  },
+  {
+    lockingScript: new P2PKH().lock(privKey.toAddress()),
     change: true
   }
 ])
 
+await tx.fee()
 await tx.sign()
 ```
 
@@ -160,11 +169,25 @@ if (await tx.verify(chainTracker)) {
 ### Encode data on-chain with PushDrop
 
 ```typescript
-import { PushDrop, Script } from '@bsv/sdk'
+import { PushDrop, Utils, WalletClient } from '@bsv/sdk'
 
-const tokenFields = ['myAssetId', '100', JSON.stringify({ name: 'MyToken' })]
-const tokenScript = PushDrop.createFromFields(tokenFields)
-const output = { lockingScript: tokenScript, satoshis: 1 }
+const wallet = new WalletClient('auto', 'example.com')
+const pushDrop = new PushDrop(wallet)
+
+const lockingScript = await pushDrop.lock(
+  [
+    Utils.toArray('myAssetId', 'utf8'),
+    Utils.toArray('100', 'utf8'),
+    Utils.toArray(JSON.stringify({ name: 'MyToken' }), 'utf8')
+  ],
+  [2, 'my app token'],
+  'asset-1',
+  'self',
+  true,
+  false
+)
+
+const output = { lockingScript: lockingScript.toHex(), satoshis: 1 }
 ```
 
 ## Key concepts

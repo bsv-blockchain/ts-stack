@@ -118,15 +118,18 @@ const resultAll = await btms.burn('abc123...def.0')
 
 ```typescript
 const verifierKey = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
-const proof = await btms.proveOwnership(
+const proofResult = await btms.proveOwnership(
   'abc123...def.0',
   500,  // Amount to prove
   verifierKey
 )
+if (!proofResult.success || !proofResult.proof) {
+  throw new Error(proofResult.error ?? 'Unable to prove ownership')
+}
 
 // Send proof to verifier...
 // Verifier validates:
-const verified = await btms.verifyOwnership(proof)
+const verified = await btms.verifyOwnership(proofResult.proof)
 if (verified.valid) {
   console.log(`Verified ${verified.amount} tokens from ${verified.prover}`)
 }

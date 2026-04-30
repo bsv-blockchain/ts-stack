@@ -82,14 +82,14 @@ version: "1.0.0"  # Documentation version
 Automated tools check if docs match the current npm version:
 
 ```bash
-# Check all doc versions
-pnpm docs:check-versions
+# Check workspace cross-package versions
+pnpm check-versions
 
-# Update version in all docs
-pnpm docs:update-version @bsv/sdk 1.2.3
+# Rewrite workspace dependency references to current package versions
+pnpm sync-versions
 
-# Compare doc version vs npm
-pnpm docs:version-diff @bsv/sdk
+# Validate docs frontmatter and relative links
+pnpm --filter docs-site validate
 ```
 
 ## Review Cadence
@@ -131,20 +131,22 @@ Automated agents flag stale pages and create issues/PRs to update them.
 When a package releases a new version:
 
 ```bash
-pnpm docs:update-version @bsv/sdk 2.0.0
+pnpm sync-versions
+pnpm check-versions
 ```
 
-This updates all doc pages that reference this package.
+This updates workspace package references and verifies they match the current package versions.
 
 ### Verify Documentation
 
 Check that examples work and links are correct:
 
 ```bash
-pnpm docs:verify
+pnpm --filter docs-site validate
+pnpm docs:build
 
-# Specific page
-pnpm docs:verify docs/specs/brc-100-wallet.md
+# Build only the documentation site
+pnpm --filter docs-site build
 ```
 
 Checks:
@@ -158,9 +160,10 @@ Checks:
 For package documentation, extract TypeDoc:
 
 ```bash
-pnpm docs:extract-api @bsv/sdk
+pnpm --filter @bsv/sdk doc
 
-# Updates docs/packages/sdk.md with latest API
+# Package API docs are then consumed by the docs site build
+pnpm docs:build
 ```
 
 ## Automated Maintenance
@@ -180,13 +183,13 @@ Workflow: `.github/workflows/docs-check.yml`
 
 ```yaml
 - name: Check doc staleness
-  run: pnpm docs:check-staleness
+  run: pnpm check-versions
 
 - name: Verify links
-  run: pnpm docs:verify-links
+  run: pnpm --filter docs-site validate
 
-- name: Check versions
-  run: pnpm docs:check-versions
+- name: Build docs
+  run: pnpm docs:build
 ```
 
 ## Contributing Documentation
@@ -252,11 +255,11 @@ tags: [tag1, tag2]
 All pages are validated on commit:
 
 ```bash
-# Validate specific file
-pnpm docs:validate docs/specs/brc-100-wallet.md
+# Validate frontmatter and relative links
+pnpm --filter docs-site validate
 
-# Validate all docs
-pnpm docs:validate
+# Build static docs and check built links
+pnpm docs:build
 ```
 
 Checks:

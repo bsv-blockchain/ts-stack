@@ -18,7 +18,7 @@ tags: ["overlay", "framework"]
 ## Install
 
 ```bash
-npm install @bsv/overlay
+npm install @bsv/overlay @bsv/overlay-topics
 ```
 
 ## Quick start
@@ -26,26 +26,36 @@ npm install @bsv/overlay
 ```typescript
 import { Engine } from '@bsv/overlay'
 import { KnexStorage } from '@bsv/overlay'
+import { HelloWorldTopicManager, createHelloWorldLookupService } from '@bsv/overlay-topics'
 import { WhatsOnChain } from '@bsv/sdk'
+import type { Knex } from 'knex'
+import type { Db } from 'mongodb'
+
+declare const knex: Knex
+declare const mongoDb: Db
+declare const req: { headers: { 'x-topics'?: string }, body: number[] }
+declare const res: { status: (code: number) => { json: (body: unknown) => void } }
+
+const lookupService = await createHelloWorldLookupService(mongoDb)
 
 // Create and configure an Engine
 const engine = new Engine(
-  { hello: new HelloTopicManager() },
-  { hello: new HelloLookupService({ storageEngine: new HelloStorageEngine({ knex }) }) },
-  new KnexStorage({ knex }),
-  new WhatsOnChain('main', { httpClient: new NodejsHttpClient(https) }),
+  { tm_helloworld: new HelloWorldTopicManager() },
+  { ls_helloworld: lookupService },
+  new KnexStorage(knex),
+  new WhatsOnChain('main'),
   'https://example.com'
 )
 
 // Submit transactions with topics
-const topics = JSON.parse(req.headers['x-topics'])
+const topics = JSON.parse(req.headers['x-topics'] ?? '[]')
 const taggedBEEF = { beef: Array.from(req.body), topics }
 await engine.submit(taggedBEEF, (steak) => res.status(200).json(steak))
 
 // Perform lookups
 const result = await engine.lookup({
-  service: 'ls_hello',
-  query: { /* topic-specific query */ }
+  service: 'ls_helloworld',
+  query: { message: 'hello world' }
 })
 ```
 
@@ -64,9 +74,12 @@ const result = await engine.lookup({
 ### Implementing a TopicManager
 
 ```typescript
+import type { TopicManager } from '@bsv/overlay'
+import { Transaction } from '@bsv/sdk'
+
 class CustomTopicManager implements TopicManager {
   async identifyAdmissibleOutputs(beef, previousCoins) {
-    const tx = new Transaction(beef)
+    const tx = Transaction.fromBEEF(beef)
     return { outputsToAdmit: [0], coinsToRetain: [] }
   }
   
@@ -86,9 +99,11 @@ class CustomTopicManager implements TopicManager {
 ### Implementing a LookupService
 
 ```typescript
+import type { LookupService } from '@bsv/overlay'
+
 class CustomLookupService implements LookupService {
-  readonly admissionMode = 'locking-script'
-  readonly spendNotificationMode = 'none'
+  readonly admissionMode = 'locking-script' as const
+  readonly spendNotificationMode = 'none' as const
   
   async outputAdmittedByTopic(payload) {
     if (payload.mode === 'locking-script') {
@@ -97,8 +112,23 @@ class CustomLookupService implements LookupService {
   }
   
   async lookup(question) {
-    // Return LookupFormula with results
-    return { UTXOs: [...] }
+    // Return a LookupFormula: outpoints that the Engine should hydrate.
+    return []
+  }
+
+  async outputEvicted(txid, outputIndex) {
+    // Remove the UTXO from any service-specific index.
+  }
+
+  async getDocumentation() {
+    return 'Custom lookup service documentation'
+  }
+
+  async getMetaData() {
+    return {
+      name: 'custom lookup',
+      shortDescription: 'A custom lookup service'
+    }
   }
 }
 ```
@@ -106,8 +136,8 @@ class CustomLookupService implements LookupService {
 ### Configuring storage with Knex
 
 ```typescript
-const storage = new KnexStorage({ knex })
-// Migrations automatically applied for SQLite/PostgreSQL/MySQL
+const storage = new KnexStorage(knex)
+// Run the standard KnexStorageMigrations before first use.
 ```
 
 ## Key concepts

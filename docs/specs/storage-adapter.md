@@ -11,7 +11,7 @@ tags: ["spec", "wallet", "storage"]
 
 # Wallet Storage Adapter Interface
 
-> The Storage Adapter defines the HTTP boundary exposed by a remote wallet storage provider. Wallets can offload state to a remote server (via HTTPS) while keeping keys server-side. The adapter implements three storage layers: StorageReader (query-only), StorageReaderWriter (+ mutations), and StorageProvider (+ wallet operations).
+> The Storage Adapter defines the HTTP boundary exposed by a remote wallet storage provider. Wallets can offload state to a remote server (via HTTPS) while keeping keys in the wallet process. The adapter implements three storage layers: StorageReader (query-only), StorageReaderWriter (+ mutations), and StorageProvider (+ wallet operations).
 
 ## At a glance
 
@@ -28,7 +28,7 @@ tags: ["spec", "wallet", "storage"]
 
 **Pluggable storage backends**. Applications shouldn't care whether wallet data lives in SQLite, MySQL, PostgreSQL, IndexedDB, or a remote HTTPS server. The adapter defines a common interface so wallets can transparently swap backends without code changes.
 
-**Privacy via HTTP boundaries**. Remote storage is protected by BRC-31 mutual authentication. Only authenticated clients (wallet owners) can read/write their data. The server never sees private keys (keys stay server-side in a key manager).
+**Privacy via HTTP boundaries**. Remote storage is protected by BRC-31 mutual authentication. Only authenticated clients (wallet owners) can read/write their data. The storage provider holds wallet state, not the user's private keys.
 
 ## Protocol overview
 
@@ -85,11 +85,15 @@ const wallet = await SetupClient.createWalletClientNoEnv({
 })
 
 // 2. Create and process an action
+const lockingScript = SetupClient
+  .getLockP2PKH('1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX')
+  .toHex()
+
 const action = await wallet.createAction({
   description: 'Send 10000 sats',
   outputs: [{
     satoshis: 10000,
-    lockingScript: 'ab12...',
+    lockingScript,
     outputDescription: 'payment'
   }]
 })

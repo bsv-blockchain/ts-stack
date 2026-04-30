@@ -60,6 +60,7 @@ import { PrivateKey, P2PKH, Transaction } from '@bsv/sdk'
 
 // Create a private key
 const key = PrivateKey.fromRandom()
+const recipientAddress = '1EvmsbpAY7nESLkN4ajLTMbvsaQ1HpJPGX'
 
 // Build and sign a transaction
 const tx = new Transaction(1, [
@@ -70,12 +71,17 @@ const tx = new Transaction(1, [
   }
 ], [
   {
-    lockingScript: new P2PKH().lock(key.toAddress()),
+    lockingScript: new P2PKH().lock(recipientAddress),
     satoshis: 5000
+  },
+  {
+    lockingScript: new P2PKH().lock(key.toAddress()),
+    change: true
   }
 ])
 
 // Sign and broadcast
+await tx.fee()
 await tx.sign()
 const response = await tx.broadcast()
 console.log('Broadcasted:', response.txid)

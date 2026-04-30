@@ -219,11 +219,11 @@ For more control, use Authsocket directly:
 
 ```typescript
 import { AuthSocketClient } from '@bsv/authsocket-client'
-import { ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
 export async function connectViaAuthsocket(privateKeyHex: string) {
   // Create authenticated socket
-  const wallet = new ProtoWallet(privateKeyHex)
+  const wallet = new ProtoWallet(PrivateKey.fromHex(privateKeyHex))
   
   const socket = AuthSocketClient('wss://peer.example.com:8080', {
     wallet

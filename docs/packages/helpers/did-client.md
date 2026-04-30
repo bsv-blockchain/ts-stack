@@ -29,7 +29,7 @@ npm install @bsv/did-client
 
 ```typescript
 import { DIDClient } from '@bsv/did-client'
-import { WalletClient } from '@bsv/sdk'
+import { Utils, WalletClient } from '@bsv/sdk'
 
 // Initialize client
 const wallet = new WalletClient()
@@ -42,13 +42,10 @@ const didClient = new DIDClient({
 
 // Create a DID token
 const subjectPublicKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+const serialNumber = Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8'))
 const createResult = await didClient.createDID(
-  'sn-12345-abc',  // Serial number
-  subjectPublicKey,
-  {
-    derivationPrefix: Utils.toBase64(Random(10)),
-    derivationSuffix: Utils.toBase64(Random(10))
-  }
+  serialNumber,
+  subjectPublicKey
 )
 
 if (createResult.status === 'success') {
@@ -68,15 +65,11 @@ if (createResult.status === 'success') {
 
 ## Common patterns
 
-### Create a DID token with derivation params
+### Create a DID token
 ```typescript
 const createResult = await didClient.createDID(
-  'sn-12345-abc',  // Serial number (Base64-encoded identifier)
-  '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366',
-  {
-    derivationPrefix: Utils.toBase64(Random(10)),
-    derivationSuffix: Utils.toBase64(Random(10))
-  }
+  Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8')),
+  '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 )
 
 if (createResult.status === 'success') {
@@ -90,7 +83,7 @@ if (createResult.status === 'success') {
 ```typescript
 const foundDIDs = await didClient.findDID(
   {
-    serialNumber: 'sn-12345-abc',
+    serialNumber: Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8')),
     limit: 10
   },
   { includeBeef: true }
@@ -112,7 +105,7 @@ const byOutpoint = await didClient.findDID({
 ### Revoke DID by serial number
 ```typescript
 const revokeResult = await didClient.revokeDID({
-  serialNumber: 'sn-12345-abc'
+  serialNumber: Utils.toBase64(Utils.toArray('sn-12345-abc', 'utf8'))
 })
 
 if (revokeResult.status === 'success') {

@@ -28,15 +28,18 @@ npm install @bsv/paymail
 ## Quick start
 
 ```typescript
-import { PaymailClient } from '@bsv/paymail'
+import { PaymailClient, PublicProfileCapability } from '@bsv/paymail'
 
 const client = new PaymailClient()
 
 const publicProfile = await client.getPublicProfile('satoshi@myDomain.com')
 console.log(publicProfile.name, publicProfile.avatar)
 
-const capabilities = await client.getCapabilities('myDomain.com')
-console.log(capabilities) // lists all supported BRC-121 capabilities
+const profileEndpoint = await client.ensureCapabilityFor(
+  'myDomain.com',
+  PublicProfileCapability.getCode()
+)
+console.log(profileEndpoint)
 
 const pkiResult = await client.getPki('satoshi@myDomain.com')
 console.log(pkiResult.pubkey) // user's identity key
@@ -65,7 +68,8 @@ const app = express()
 const baseUrl = 'https://myDomain.com'
 
 const publicProfileRoute = new PublicProfileRoute({
-  domainLogicHandler: async (name, domain) => {
+  domainLogicHandler: async (params) => {
+    const { name, domain } = PublicProfileRoute.getNameAndDomain(params)
     const user = await fetchUser(name, domain)
     return {
       name: user.getAlias(),
@@ -76,7 +80,8 @@ const publicProfileRoute = new PublicProfileRoute({
 })
 
 const pkiRoute = new PublicKeyInfrastructureRoute({
-  domainLogicHandler: async (name, domain) => {
+  domainLogicHandler: async (params) => {
+    const { name, domain } = PublicKeyInfrastructureRoute.getNameAndDomain(params)
     const user = await fetchUser(name, domain)
     return {
       bsvalias: '1.0',
@@ -98,7 +103,7 @@ app.listen(3000, () => {
 ### Client capability discovery
 
 ```typescript
-import { PaymailClient } from '@bsv/paymail'
+import { PaymailClient, PublicProfileCapability } from '@bsv/paymail'
 
 const client = new PaymailClient()
 
@@ -107,13 +112,16 @@ const profile = await client.getPublicProfile('alice@example.com')
 console.log(profile.name, profile.avatar)
 
 // Discover all capabilities
-const caps = await client.getCapabilities('example.com')
+const profileEndpoint = await client.ensureCapabilityFor(
+  'example.com',
+  PublicProfileCapability.getCode()
+)
 
 // Get user's public key
 const pki = await client.getPki('alice@example.com')
 
 // Get payment destination
-const p2pDest = await client.getP2pDestinations('alice@example.com', 10000, 'payment')
+const p2pDest = await client.getP2pPaymentDestination('alice@example.com', 10000)
 ```
 
 ## Key concepts

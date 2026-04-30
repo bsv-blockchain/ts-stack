@@ -74,12 +74,11 @@ const listener = new TeranodeListener({
 ```typescript
 const listener = new TeranodeListener(
   {
-    'teranode/blocks': (data, topic, from) => {
+    'bitcoin/mainnet-block': (data, topic, from) => {
       console.log('Block:', data)
     }
   },
   {
-    topics: ['teranode/blocks'],
     listenAddresses: ['/ip4/0.0.0.0/tcp/4000'],
     dhtProtocolID: '/custom-protocol',
     bootstrapPeers: ['multiaddr-of-peer-1', 'multiaddr-of-peer-2']

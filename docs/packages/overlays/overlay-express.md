@@ -28,16 +28,16 @@ import OverlayExpress from '@bsv/overlay-express'
 
 const server = new OverlayExpress(
   'testnode',
-  process.env.SERVER_PRIVATE_KEY,
-  'https://example.com'
+  process.env.SERVER_PRIVATE_KEY!,
+  'example.com'
 )
 
 server.configurePort(8080)
-await server.configureKnex(process.env.KNEX_URL)
-await server.configureMongo(process.env.MONGO_URL)
+await server.configureKnex(process.env.KNEX_URL!)
+await server.configureMongo(process.env.MONGO_URL!)
 
-server.configureTopicManager('tm_hello', new HelloWorldTopicManager())
-await server.configureLookupServiceWithMongo('ls_hello', mongoDb => 
+server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
+await server.configureLookupServiceWithMongo('ls_helloworld', mongoDb =>
   createHelloWorldLookupService(mongoDb)
 )
 
@@ -63,7 +63,7 @@ await server.start()
 const server = new OverlayExpress(
   'mynode',
   privateKey,
-  'https://mynode.example.com'
+  'mynode.example.com'
 )
 
 server.configurePort(3000)
@@ -73,11 +73,11 @@ await server.configureKnex('postgresql://user:pass@localhost/db')
 ### Register multiple topics
 
 ```typescript
-server.configureTopicManager('tm_hello', new HelloWorldTopicManager())
+server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
 server.configureTopicManager('tm_did', new DIDTopicManager())
 
-await server.configureLookupServiceWithMongo('ls_hello', db => createHelloWorldLookupService(db))
+await server.configureLookupServiceWithMongo('ls_helloworld', db => createHelloWorldLookupService(db))
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
 await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
 

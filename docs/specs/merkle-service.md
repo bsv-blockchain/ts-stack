@@ -77,38 +77,34 @@ tags: ["spec", "merkle", "spv"]
 ## Example: Monitor transaction
 
 ```typescript
-import { Transaction, ARC, Merkle​Service } from '@bsv/sdk'
+import { Transaction, WhatsOnChain } from '@bsv/sdk'
 
-// 1. Submit transaction via ARC
-const arc = new ARC()
-const response = await arc.broadcast(tx)
-const txid = response.txid
+// Parse an example BEEF transaction that already includes a merkle path.
+const tx = Transaction.fromHexBEEF('0100beef01fe87730e000402070282f861969...')
 
-// 2. Register callback with Merkle Service
-const merkleService = new MerkleService('https://merkle.example.com')
-await merkleService.watch({
-  txid,
-  callbackUrl: 'https://yourapp.com/merkle-callback'
-})
+const txid = tx.id('hex')
+const chaintracker = new WhatsOnChain()
+const onChain = await tx.merklePath.verify(txid, chaintracker)
 
-// 3. Wait for callback
-// Server receives POST /merkle-callback with { txid, merkleProof, blockHeight, ... }
+if (onChain) console.log('This transaction is proven on chain with SPV.')
 ```
 
 Server-side callback handler:
 
 ```typescript
+import { MerklePath, WhatsOnChain } from '@bsv/sdk'
+
 app.post('/merkle-callback', async (req, res) => {
   const { txid, merkleProof, blockHeight, blockHash } = req.body
-  
-  // Verify proof (SPV)
-  const isValid = await verifyMerkleProof(txid, merkleProof, blockHash)
-  
+
+  const merklePath = MerklePath.fromHex(merkleProof)
+  const chaintracker = new WhatsOnChain()
+  const isValid = await merklePath.verify(txid, chaintracker)
+
   if (isValid) {
-    // Store proof and update transaction status to "confirmed"
-    await wallet.markTransactionConfirmed(txid, merkleProof, blockHeight)
+    await saveMerkleProof({ txid, merkleProof, blockHeight, blockHash })
   }
-  
+
   res.json({ status: 'received' })
 })
 ```
@@ -127,7 +123,7 @@ Merkle Service conformance is tested in `conformance/vectors/merkle/`:
 
 | Package | Notes |
 |---------|-------|
-| @bsv/sdk | `MerkleService` client class for registering transactions and handling callbacks |
+| @bsv/sdk | `Transaction`, `MerklePath`, and `WhatsOnChain` helpers for SPV verification |
 | @bsv/wallet-toolbox | Integrates Merkle Service for obtaining proofs during transaction confirmation |
 | External: Go Merkle Service | Reference implementation (not in ts-stack; run separately) |
 

@@ -273,7 +273,7 @@ When reporting a bug, include:
 
 Template:
 
-```markdown
+````markdown
 ## Bug Report
 
 ### Environment
@@ -291,7 +291,7 @@ Template:
 
 ### Actual
 [Actual behavior]
-```
+````
 
 ## Documentation
 

@@ -120,6 +120,7 @@ import { WalletClient } from '@bsv/sdk'
 
 const wallet = new WalletClient('auto', 'example.com')
 const msgBox = new MessageBoxClient({ walletClient: wallet })
+const recipient = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
 
 // Automatically handles BRC-103 handshake
 await msgBox.listenForLiveMessages({
@@ -131,8 +132,11 @@ await msgBox.listenForLiveMessages({
 })
 
 // Send message (client signs automatically)
-msgBox.socket.emit('sendMessage', {
-  body: 'Hello, live world!'
+await msgBox.sendLiveMessage({
+  recipient,
+  messageBox: 'general_inbox',
+  body: 'Hello, live world!',
+  skipEncryption: true
 })
 ```
 

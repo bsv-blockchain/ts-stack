@@ -61,14 +61,14 @@ import {
   BTMSTopicManager, createBTMSLookupService
 } from '@bsv/overlay-topics'
 
-const server = new OverlayExpress('mynode', privateKey, 'https://example.com')
+const server = new OverlayExpress('mynode', privateKey, 'example.com')
 
-server.configureTopicManager('tm_hello', new HelloWorldTopicManager())
+server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
 server.configureTopicManager('tm_did', new DIDTopicManager())
 server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
 server.configureTopicManager('tm_btms', new BTMSTopicManager())
 
-await server.configureLookupServiceWithMongo('ls_hello', db => createHelloWorldLookupService(db))
+await server.configureLookupServiceWithMongo('ls_helloworld', db => createHelloWorldLookupService(db))
 await server.configureLookupServiceWithMongo('ls_did', db => createDIDLookupService(db))
 await server.configureLookupServiceWithMongo('ls_kvstore', db => createKVStoreLookupService(db))
 await server.configureLookupServiceWithMongo('ls_btms', db => createBTMSLookupService(db))
@@ -83,19 +83,22 @@ await server.start()
 // DID query
 const didResults = await didService.lookup({
   service: 'ls_did',
-  query: { /* topic-specific */ }
+  query: { serialNumber: 'c24tMTIzNDU=' }
 })
 
 // KVStore query
 const kvResults = await kvService.lookup({
   service: 'ls_kvstore',
-  query: { key: 'mykey', owner: '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366' }
+  query: {
+    key: 'mykey',
+    controller: '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
+  }
 })
 
 // Supply chain query
 const scResults = await scService.lookup({
   service: 'ls_supplychain',
-  query: { productId: 'abc123' }
+  query: { chainId: 'abc123' }
 })
 ```
 

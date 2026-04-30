@@ -24,14 +24,43 @@ npm install @bsv/overlay-discovery-services
 ## Quick start
 
 ```typescript
-import { isAdvertisableURI, isValidTopicOrServiceName } from '@bsv/overlay-discovery-services'
+import { Engine, type LookupService, type Storage, type TopicManager } from '@bsv/overlay'
+import {
+  SHIPLookupService,
+  SHIPStorage,
+  SHIPTopicManager,
+  SLAPLookupService,
+  SLAPStorage,
+  SLAPTopicManager,
+  isAdvertisableURI,
+  isValidTopicOrServiceName
+} from '@bsv/overlay-discovery-services'
+import { WhatsOnChain } from '@bsv/sdk'
+import type { Db } from 'mongodb'
 
-// SHIP and SLAP are auto-registered by Engine
+declare const managers: Record<string, TopicManager>
+declare const lookupServices: Record<string, LookupService>
+declare const storage: Storage
+declare const db: Db
+
+const shipStorage = new SHIPStorage(db)
+const slapStorage = new SLAPStorage(db)
+await shipStorage.ensureIndexes()
+await slapStorage.ensureIndexes()
+
 const engine = new Engine(
-  managers,
-  lookupServices,
+  {
+    ...managers,
+    tm_ship: new SHIPTopicManager(),
+    tm_slap: new SLAPTopicManager()
+  },
+  {
+    ...lookupServices,
+    ls_ship: new SHIPLookupService(shipStorage),
+    ls_slap: new SLAPLookupService(slapStorage)
+  },
   storage,
-  chainTracker,
+  new WhatsOnChain('main'),
   'https://mynode.example.com',
   ['https://ship.example.com'],  // SHIP trackers
   ['https://slap.example.com']   // SLAP trackers
@@ -41,8 +70,8 @@ const engine = new Engine(
 const shipResults = await engine.lookup({
   service: 'ls_ship',
   query: {
-    topicName: 'tm_hello',
-    since: Date.now() - 86400000  // Last 24 hours
+    topics: ['tm_hello'],
+    limit: 25
   }
 })
 
@@ -50,8 +79,8 @@ const shipResults = await engine.lookup({
 const slapResults = await engine.lookup({
   service: 'ls_slap',
   query: {
-    serviceName: 'ls_hello',
-    since: Date.now() - 86400000
+    service: 'ls_hello',
+    limit: 25
   }
 })
 ```
@@ -79,21 +108,22 @@ const validName = isValidTopicOrServiceName('tm_custom_topic')
 ### Use WalletAdvertiser for publishing
 
 ```typescript
-const advertiser = new WalletAdvertiser(wallet)
+import { WalletAdvertiser } from '@bsv/overlay-discovery-services'
 
-// Publish SHIP advertisement (host supporting a topic)
-await advertiser.advertiseHost({
-  uri: 'https://mynode.example.com',
-  topicName: 'tm_hello',
-  hostPublicKey: '03abc...'
-})
+const advertiser = new WalletAdvertiser(
+  'main',
+  process.env.SERVER_PRIVATE_KEY!,
+  'https://store-us-1.bsvb.tech',
+  'https://mynode.example.com'
+)
+await advertiser.init()
 
-// Publish SLAP advertisement (service provided)
-await advertiser.advertiseService({
-  uri: 'https://mynode.example.com',
-  serviceName: 'ls_hello',
-  servicePublicKey: '03def...'
-})
+const taggedBEEF = await advertiser.createAdvertisements([
+  { protocol: 'SHIP', topicOrServiceName: 'tm_hello' },
+  { protocol: 'SLAP', topicOrServiceName: 'ls_hello' }
+])
+
+await engine.submit(taggedBEEF)
 ```
 
 ### Discover peers via SHIP/SLAP
@@ -103,18 +133,18 @@ await advertiser.advertiseService({
 const hostDiscovery = await engine.lookup({
   service: 'ls_ship',
   query: {
-    topicName: 'tm_btms'
+    topics: ['tm_btms']
   }
 })
-// Returns: { hosts: [{ uri, hostPublicKey, ... }, ...] }
+// Returns a LookupFormula for matching SHIP advertisement outputs.
 
 const serviceDiscovery = await engine.lookup({
   service: 'ls_slap',
   query: {
-    serviceName: 'ls_kvstore'
+    service: 'ls_kvstore'
   }
 })
-// Returns: { services: [{ uri, servicePublicKey, ... }, ...] }
+// Returns a LookupFormula for matching SLAP advertisement outputs.
 ```
 
 ## Key concepts

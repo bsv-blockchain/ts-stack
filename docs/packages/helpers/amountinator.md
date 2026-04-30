@@ -35,8 +35,8 @@ await converter.initialize()
 
 // Auto-detect input currency, convert to user's preference
 const formatted = await converter.convertAmount('5000')
-console.log(formatted.display)   // e.g. "£3.10"
-console.log(formatted.hoverText) // e.g. "0.00005000 BSV"
+console.log(formatted.formattedAmount) // e.g. "5,000 satoshis"
+console.log(formatted.hoverText)       // present for very small displayed values
 
 // Cleanup (stop auto-refresh)
 converter.dispose()
@@ -64,8 +64,8 @@ await converter.initialize()
 ### Convert with auto-detection
 ```typescript
 const formatted = await converter.convertAmount('5000')  // "5000" or "0.1" or "10 USD"
-console.log(formatted.display)   // formatted for display
-console.log(formatted.value)     // numeric value
+console.log(formatted.formattedAmount) // formatted for display
+console.log(formatted.hoverText)       // optional full value for tiny amounts
 ```
 
 ### Convert between specific currencies

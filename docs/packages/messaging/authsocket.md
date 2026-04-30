@@ -29,21 +29,21 @@ npm install @bsv/authsocket
 
 ```typescript
 import { AuthSocketServer } from '@bsv/authsocket'
-import { ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import http from 'http'
 
 const server = http.createServer()
-const serverWallet = new ProtoWallet('my-private-key-hex')
+const serverWallet = new ProtoWallet(PrivateKey.fromHex('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'))
 const io = new AuthSocketServer(server, { wallet: serverWallet, cors: { origin: '*' } })
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   console.log('Authenticated socket:', socket.id)
 
   socket.on('chatMessage', (msg) => {
     console.log('Verified message:', msg)
   })
 
-  socket.emit('chatMessage', { from: socket.id, text: 'Hello client' })
+  await socket.emit('chatMessage', { from: socket.id, text: 'Hello client' })
 })
 
 server.listen(3000)
@@ -65,13 +65,13 @@ server.listen(3000)
 
 ```typescript
 import { AuthSocketServer } from '@bsv/authsocket'
-import { ProtoWallet } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
-const wallet = new ProtoWallet(privateKeyHex)
+const wallet = new ProtoWallet(PrivateKey.fromHex(privateKeyHex))
 const io = new AuthSocketServer(server, {
   wallet,
   cors: { origin: '*' },
-  certificatesToRequest: {
+  requestedCertificates: {
     certifiers: ['<33-byte-pubkey-hex>'],
     types: {
       'age-verification': ['dateOfBirth', 'country']
@@ -79,25 +79,25 @@ const io = new AuthSocketServer(server, {
   }
 })
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   socket.on('message', (data) => {
     // All messages already verified
   })
-  socket.emit('response', { authenticated: true })
+  await socket.emit('response', { authenticated: true })
 })
 ```
 
 ### Receiving authenticated messages
 
 ```typescript
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   // Messages are automatically verified before reaching here
   socket.on('userAction', (action) => {
     console.log('Verified action from', socket.id, ':', action)
   })
 
   // Send authenticated response
-  socket.emit('status', { result: 'success' })
+  await socket.emit('status', { result: 'success' })
 })
 ```
 

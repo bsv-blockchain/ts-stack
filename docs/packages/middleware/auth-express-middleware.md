@@ -31,10 +31,9 @@ npm install @bsv/auth-express-middleware
 import express from 'express'
 import bodyParser from 'body-parser'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
-import { ProtoWallet } from '@bsv/sdk'
-import { PrivateKey } from '@bsv/sdk'
+import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 
-const wallet = new ProtoWallet(new PrivateKey('...', 16))
+const wallet = new ProtoWallet(PrivateKey.fromHex(process.env.SERVER_PRIVATE_KEY!))
 const authMiddleware = createAuthMiddleware({ wallet, allowUnauthenticated: false })
 
 const app = express()

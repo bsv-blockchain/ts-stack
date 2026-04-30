@@ -72,88 +72,42 @@ tags: ["spec", "payments", "brc-29"]
 ## Example: Send peer-to-peer payment via message box
 
 ```typescript
-import { MessageBoxClient } from '@bsv/message-box-client'
-import { P2PKH, PublicKey, Utils, WalletClient } from '@bsv/sdk'
-import { brc29ProtocolID } from '@bsv/wallet-toolbox-client'
+import { PeerPayClient } from '@bsv/message-box-client'
+import { WalletClient } from '@bsv/sdk'
 
 const wallet = new WalletClient('auto', 'example.com')
-const msgBox = new MessageBoxClient({
+const peerPay = new PeerPayClient({
   walletClient: wallet,
-  host: 'https://message-box-us-1.bsvb.tech'
+  messageBoxHost: 'https://message-box-us-1.bsvb.tech'
 })
 
-// 1. Get recipient's identity key (from Paymail or direct exchange)
+// Get recipient's identity key from Paymail, registry lookup, or direct exchange.
 const recipientKey = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f246216366'
-const derivationPrefix = 'server-provided-prefix'
-const derivationSuffix = 'client-created-suffix'
-const keyID = `${derivationPrefix} ${derivationSuffix}`
-const { publicKey: paymentPublicKey } = await wallet.getPublicKey({
-  protocolID: brc29ProtocolID,
-  keyID,
-  counterparty: recipientKey
-})
-const lockingScript = new P2PKH()
-  .lock(PublicKey.fromString(paymentPublicKey).toAddress())
-  .toHex()
 
-// 2. Create and process the payment action
-const action = await wallet.createAction({
-  description: 'P2P payment to alice',
-  outputs: [
-    {
-      satoshis: 10000,
-      lockingScript,
-      outputDescription: 'payment to alice',
-      customInstructions: JSON.stringify({
-        derivationPrefix,
-        derivationSuffix,
-        recipientKey
-      })
-    }
-  ]
-})
-
-// 3. Send the AtomicBEEF via message box
-await msgBox.sendMessage({
+// Builds the BRC-29 settlement, sends the AtomicBEEF through MessageBox,
+// and includes the derivation remittance the receiver needs to internalize it.
+await peerPay.sendPayment({
   recipient: recipientKey,
-  messageBox: 'payment_inbox',
-  body: JSON.stringify({
-    type: 'payment',
-    beef: Utils.toBase64(action.tx!),
-    amount: 10000,
-    derivationPrefix,
-    derivationSuffix,
-    outputIndex: 0,
-    memo: 'Thanks for the coffee!'
-  })
+  amount: 10000
 })
 ```
 
 Recipient receives and internalizes:
 
 ```typescript
-// Recipient listens for messages
-const messages = await msgBox.listMessages({ messageBox: 'payment_inbox' })
+import { PeerPayClient } from '@bsv/message-box-client'
 
-for (const msg of messages) {
-  const payment = JSON.parse(msg.body)
-  
-  // Internalize the BEEF transaction
-  const result = await wallet.internalizeAction({
-    tx: Utils.toArray(payment.beef, 'base64'),
-    outputs: [{
-      outputIndex: payment.outputIndex,
-      protocol: 'wallet payment',
-      paymentRemittance: {
-        derivationPrefix: payment.derivationPrefix,
-        derivationSuffix: payment.derivationSuffix,
-        senderIdentityKey: msg.sender
-      }
-    }],
-    description: `Received from sender: ${payment.memo}`
-  })
-  
-  console.log('Payment accepted:', result.accepted)
+const peerPay = new PeerPayClient({
+  walletClient: recipientWallet,
+  messageBoxHost: 'https://message-box-us-1.bsvb.tech'
+})
+
+const payments = await peerPay.listIncomingPayments()
+
+for (const payment of payments) {
+  const result = await peerPay.acceptPayment(payment)
+  if (typeof result === 'string') throw new Error(result)
+  console.log('Payment accepted:', result.paymentResult)
 }
 ```
 

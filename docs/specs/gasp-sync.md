@@ -24,7 +24,7 @@ tags: ["spec", "sync", "overlay", "gasp"]
 | Format | AsyncAPI 3.0 |
 | Version | 1.0.0 |
 | Status | stable |
-| Implementations | @bsv/gasp-core |
+| Implementations | @bsv/gasp |
 
 ## What problem this solves
 
@@ -41,7 +41,7 @@ tags: ["spec", "sync", "overlay", "gasp"]
 **Phase 1 — Initial Request/Response**
 
 1. **Initiator → Responder** `GASPInitialRequest`
-   - Initiator's UTXO list (everything it knows)
+   - Protocol version
    - Timestamp (`since`) — initiator wants UTXOs from responder created after this time
    - Limit (max UTXOs to return)
 
@@ -49,10 +49,11 @@ tags: ["spec", "sync", "overlay", "gasp"]
    - Responder's UTXO list (what initiator is missing)
    - Responder's `since` timestamp (what it wants from initiator)
 
-**Phase 2 — Initial Reply (bidirectional only)**
+**Phase 2 — Local UTXO push (bidirectional only)**
 
-3. **Initiator → Responder** `GASPInitialReply`
-   - UTXOs that responder is missing (based on responder's `since` timestamp)
+3. **Initiator → Responder** `submitNode(GASPNode)`
+   - Local UTXOs newer than the responder's `since` timestamp, excluding UTXOs already shared in the initial response
+   - The core implementation exposes `getInitialReply`, but `GASP.sync()` performs the bidirectional push by submitting hydrated graph nodes
 
 **Phase 3 & 4 — Graph Walking**
 
@@ -90,7 +91,15 @@ If the transaction has inputs the requester doesn't have, it requests those too 
 ## Example: Sync two overlay nodes
 
 ```typescript
-import { GASP } from '@bsv/gasp-core'
+import {
+  GASP,
+  type GASPInitialRequest,
+  type GASPInitialResponse,
+  type GASPNode,
+  type GASPNodeResponse,
+  type GASPRemote,
+  type GASPStorage
+} from '@bsv/gasp'
 
 // 1. Implement storage interface
 class MyStorage implements GASPStorage {
@@ -109,11 +118,29 @@ class MyStorage implements GASPStorage {
       rawTx: await getTransactionHex(txid),
       outputIndex,
       proof: await getMerkleProof(txid),
-      txMetadata: {}
+      txMetadata: metadata ? 'transaction metadata' : undefined
     }
   }
-  
-  // ... implement other methods ...
+
+  async findNeededInputs(tx: GASPNode): Promise<GASPNodeResponse | void> {
+    return
+  }
+
+  async appendToGraph(tx: GASPNode, spentBy?: string) {
+    await appendTemporaryGraphNode(tx, spentBy)
+  }
+
+  async validateGraphAnchor(graphID: string) {
+    await assertGraphIsAnchored(graphID)
+  }
+
+  async discardGraph(graphID: string) {
+    await removeTemporaryGraph(graphID)
+  }
+
+  async finalizeGraph(graphID: string) {
+    await promoteTemporaryGraph(graphID)
+  }
 }
 
 // 2. Implement remote peer interface
@@ -126,8 +153,35 @@ class MyRemote implements GASPRemote {
     })
     return response.json()
   }
-  
-  // ... implement other methods ...
+
+  async getInitialReply(response: GASPInitialResponse) {
+    const reply = await fetch('https://peer.example.com/gasp/reply', {
+      method: 'POST',
+      body: JSON.stringify(response)
+    })
+    return reply.json()
+  }
+
+  async requestNode(
+    graphID: string,
+    txid: string,
+    outputIndex: number,
+    metadata: boolean
+  ): Promise<GASPNode> {
+    const response = await fetch('https://peer.example.com/gasp/node', {
+      method: 'POST',
+      body: JSON.stringify({ graphID, txid, outputIndex, metadata })
+    })
+    return response.json()
+  }
+
+  async submitNode(node: GASPNode): Promise<GASPNodeResponse | void> {
+    const response = await fetch('https://peer.example.com/gasp/submit', {
+      method: 'POST',
+      body: JSON.stringify(node)
+    })
+    return response.json()
+  }
 }
 
 // 3. Run sync
@@ -135,7 +189,7 @@ const storage = new MyStorage()
 const remote = new MyRemote()
 const gasp = new GASP(storage, remote)
 
-await gasp.sync()
+await gasp.sync('https://peer.example.com')
 console.log('Sync complete; state is now consistent with peer')
 ```
 
@@ -154,7 +208,7 @@ GASP conformance is tested in `conformance/vectors/sync/gasp/`:
 
 | Package | Notes |
 |---------|-------|
-| @bsv/gasp-core | Core GASP protocol implementation; orchestrates graph walking, validates proofs, manages sync state |
+| @bsv/gasp | Core GASP protocol implementation; orchestrates graph walking, validates proofs, manages sync state |
 | @bsv/overlay | Integrates GASP for syncing state between overlay nodes |
 
 ## Related specs

@@ -29,25 +29,25 @@ npm install @bsv/fund-wallet
 
 ```bash
 # Check balance only
-npx fund-wallet \
+npx fund-metanet \
   --chain main \
   --private-key 0123456789abcdef...
 
 # Fund with 10,000 satoshis
-npx fund-wallet \
+npx fund-metanet \
   --chain test \
   --private-key <hex> \
   --satoshis 10000
 
 # Custom storage provider
-npx fund-wallet \
+npx fund-metanet \
   --chain main \
   --private-key <hex> \
   --storage-url https://custom-store.example.com \
   --satoshis 5000
 
 # Interactive mode (no args)
-npx fund-wallet
+npx fund-metanet
 # Prompts: chain? storage URL? private key? satoshis?
 ```
 
@@ -66,14 +66,14 @@ npx fund-wallet
 
 ### Check balance only (no Metanet Desktop needed)
 ```bash
-npx fund-wallet \
+npx fund-metanet \
   --chain main \
   --private-key <hex>
 ```
 
 ### Fund wallet (Metanet Desktop must be running)
 ```bash
-npx fund-wallet \
+npx fund-metanet \
   --chain test \
   --private-key <hex> \
   --satoshis 10000
@@ -81,7 +81,7 @@ npx fund-wallet \
 
 ### Using custom storage provider
 ```bash
-npx fund-wallet \
+npx fund-metanet \
   --chain main \
   --private-key <hex> \
   --storage-url https://custom-store.example.com \
@@ -90,7 +90,7 @@ npx fund-wallet \
 
 ### Interactive mode
 ```bash
-npx fund-wallet
+npx fund-metanet
 # Answer prompts for chain, key, satoshis, etc.
 ```
 

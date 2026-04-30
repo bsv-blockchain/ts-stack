@@ -34,7 +34,7 @@ By the end, you'll have a running overlay service that other nodes can discover 
 - npm or pnpm
 - MongoDB or SQLite (we'll use MongoDB in this guide; SQLite is simpler for local dev)
 - A private key for the node identity
-- A domain name or hostname for peer discovery (e.g., `https://example.com` or local IP)
+- A domain name or hostname for peer discovery (e.g., `example.com` or `localhost:8080`)
 
 ## Step 1 — Create Express app and install packages
 
@@ -69,7 +69,9 @@ Create `.env`:
 ```bash
 SERVER_PRIVATE_KEY=<your-32-byte-hex-private-key>
 MONGO_URL=mongodb://localhost:27017/overlay-db
-FQDN=http://localhost:8080
+SQLITE_FILE=./overlay.sqlite
+FQDN=localhost:8080
+PUBLIC_URL=http://localhost:8080
 PORT=8080
 NETWORK=test
 ```
@@ -86,7 +88,6 @@ Create `server.ts`:
 
 ```typescript
 import OverlayExpress from '@bsv/overlay-express'
-import { MongoClient } from 'mongodb'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -96,20 +97,27 @@ async function setupServer() {
   const server = new OverlayExpress(
     'my-overlay-node',           // Name
     process.env.SERVER_PRIVATE_KEY!,  // Private key for signing
-    process.env.FQDN || 'http://localhost:8080',  // Advertised domain
+    process.env.FQDN || 'localhost:8080',  // Advertised host, no protocol
     process.env.ADMIN_TOKEN      // Optional admin token
   )
   
   // 2. Configure port
   server.configurePort(parseInt(process.env.PORT || '8080'))
   
-  // 3. Configure MongoDB connection
+  // 3. Configure SQL storage for the overlay engine
+  await server.configureKnex({
+    client: 'sqlite3',
+    connection: { filename: process.env.SQLITE_FILE || './overlay.sqlite' },
+    useNullAsDefault: true
+  })
+
+  // 4. Configure MongoDB connection for lookup services
   await server.configureMongo(process.env.MONGO_URL!)
   
-  // 4. Configure network
-  server.configureNetwork(process.env.NETWORK as 'main' | 'test' || 'test')
+  // 5. Configure network
+  server.configureNetwork((process.env.NETWORK || 'test') as 'main' | 'test')
   
-  console.log('Server configured: port, MongoDB, network')
+  console.log('Server configured: port, SQL storage, MongoDB, network')
   
   return server
 }
@@ -139,8 +147,8 @@ import {
 
 async function registerTopics(server: OverlayExpress) {
   // Register HelloWorld topic (demo)
-  server.configureTopicManager('tm_hello', new HelloWorldTopicManager())
-  await server.configureLookupServiceWithMongo('ls_hello', mongoDb =>
+  server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
+  await server.configureLookupServiceWithMongo('ls_helloworld', mongoDb =>
     createHelloWorldLookupService(mongoDb)
   )
   
@@ -185,7 +193,7 @@ async function configureAdvanced(server: OverlayExpress) {
   
   // Configure web UI
   server.configureWebUI({
-    host: process.env.FQDN,
+    host: process.env.PUBLIC_URL,
     primaryColor: '#0066cc'
   })
   
@@ -205,15 +213,14 @@ async function configureAdvanced(server: OverlayExpress) {
     handler: async () => {
       try {
         // Verify MongoDB is responding
-        const adminDb = server.mongoDb.db('admin')
-        await adminDb.command({ ping: 1 })
+        await server.mongoDb?.command({ ping: 1 })
         return {
           status: 'ok',
           details: { connected: true }
         }
       } catch (e) {
         return {
-          status: 'down',
+          status: 'error',
           details: { error: String(e) }
         }
       }
@@ -254,9 +261,9 @@ async function main() {
     // Retrieve admin token for protected endpoints
     const adminToken = server.getAdminToken()
     console.log(`Admin token: ${adminToken}`)
-    console.log(`\nServer running at ${process.env.FQDN}`)
-    console.log(`Health check: ${process.env.FQDN}/health`)
-    console.log(`API docs: ${process.env.FQDN}/`)
+    console.log(`\nServer running at ${process.env.PUBLIC_URL}`)
+    console.log(`Health check: ${process.env.PUBLIC_URL}/health`)
+    console.log(`API docs: ${process.env.PUBLIC_URL}/`)
     
   } catch (error) {
     console.error('Failed to start overlay node:', error)
@@ -309,17 +316,22 @@ async function main() {
   const server = new OverlayExpress(
     'my-overlay-node',
     process.env.SERVER_PRIVATE_KEY!,
-    process.env.FQDN || 'http://localhost:8080'
+    process.env.FQDN || 'localhost:8080'
   )
   
   // Configure basics
   server.configurePort(parseInt(process.env.PORT || '8080'))
+  await server.configureKnex({
+    client: 'sqlite3',
+    connection: { filename: process.env.SQLITE_FILE || './overlay.sqlite' },
+    useNullAsDefault: true
+  })
   await server.configureMongo(process.env.MONGO_URL!)
-  server.configureNetwork(process.env.NETWORK as 'main' | 'test' || 'test')
+  server.configureNetwork((process.env.NETWORK || 'test') as 'main' | 'test')
   
   // Register topics
-  server.configureTopicManager('tm_hello', new HelloWorldTopicManager())
-  await server.configureLookupServiceWithMongo('ls_hello', mongoDb =>
+  server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
+  await server.configureLookupServiceWithMongo('ls_helloworld', mongoDb =>
     createHelloWorldLookupService(mongoDb)
   )
   
@@ -336,7 +348,7 @@ async function main() {
   // Advanced config
   server.configureEnableGASPSync(true)
   server.configureWebUI({
-    host: process.env.FQDN,
+    host: process.env.PUBLIC_URL,
     primaryColor: '#0066cc'
   })
   
@@ -352,10 +364,10 @@ async function main() {
   await server.start()
   
   const adminToken = server.getAdminToken()
-  console.log(`Overlay node running at ${process.env.FQDN}`)
+  console.log(`Overlay node running at ${process.env.PUBLIC_URL}`)
   console.log(`Admin token: ${adminToken}`)
   console.log(`Topics: hello, kvstore, btms`)
-  console.log(`Health: ${process.env.FQDN}/health`)
+  console.log(`Health: ${process.env.PUBLIC_URL}/health`)
 }
 
 main().catch(console.error)

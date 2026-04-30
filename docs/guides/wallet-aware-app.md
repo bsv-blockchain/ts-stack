@@ -61,7 +61,7 @@ console.log('User identity key:', publicKey)
 import { createWallet } from '@bsv/simple/browser'
 
 const appWallet = await createWallet()
-const status = await appWallet.getStatus()
+const status = appWallet.getStatus()
 
 console.log(status.identityKey)
 ```

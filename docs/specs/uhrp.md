@@ -77,48 +77,58 @@ tags: ["spec", "storage", "content-addressed", "uhrp"]
 ## Example: Upload and retrieve file
 
 ```typescript
-import { StorageUploader, StorageDownloader } from '@bsv/sdk'
+import { StorageUploader, StorageDownloader, WalletClient } from '@bsv/sdk'
 
 // 1. Upload file to UHRP server
-const uploader = new StorageUploader('https://uhrp-server.example.com')
-const file = Buffer.from('Hello, UHRP!')
-const result = await uploader.upload(file)
+const wallet = new WalletClient('auto', 'example.com')
+const uploader = new StorageUploader({
+  storageURL: 'https://uhrp-storage.example.com',
+  wallet
+})
 
-console.log('File stored at:', result.uhrpUrl)  // uhrp://abc123...
+const file = new TextEncoder().encode('Hello, UHRP!')
+const result = await uploader.publishFile({
+  file: { data: file, type: 'text/plain' },
+  retentionPeriod: 7
+})
+
+console.log('File stored at:', result.uhrpURL)  // uhrp://abc123...
 
 // 2. Publish advertisement to overlay (server does this automatically)
 // UHRP server issues a PushDrop transaction to tm_uhrp topic
 
 // 3. Retrieve file later (from any server)
 const downloader = new StorageDownloader()
-const retrieved = await downloader.download(result.hash)
+const retrieved = await downloader.download(result.uhrpURL)
 
-// 4. Verify integrity
-const hash = sha256(retrieved)
-if (hash === result.hash) {
-  console.log('File verified!')
-} else {
-  console.log('Hash mismatch - file corrupted or incorrect')
-}
+// 4. StorageDownloader verifies the content hash before returning data
+console.log(new TextDecoder().decode(retrieved.data))
 ```
 
 Example: Query overlay for file locations
 
 ```typescript
-const overlayClient = new OverlayClient('https://overlay.example.com')
+import { LookupResolver } from '@bsv/sdk'
 
-// 1. Find all servers hosting a file
-const locations = await overlayClient.lookup({
-  service: 'ls_uhrp',
-  query: { hash: 'abc123...' }
+const lookupResolver = new LookupResolver({
+  hostOverrides: {
+    ls_uhrp: ['https://overlay.example.com']
+  }
 })
 
-console.log('File available at:', locations.urls)
-// [ 'https://server1.com/abc123...', 'https://server2.com/abc123...' ]
+// 1. Find all servers hosting a file
+const locations = await lookupResolver.query({
+  service: 'ls_uhrp',
+  query: { uhrpUrl: 'uhrp://abc123...' }
+})
 
-// 2. Download from fastest/closest server
-const downloaded = await fetch(locations.urls[0])
-const data = await downloaded.arrayBuffer()
+if (locations.type !== 'output-list') {
+  throw new Error('UHRP lookup must return an output list')
+}
+
+// StorageDownloader resolves the same output list and decodes the
+// hosted file URLs from the UHRP advertisement outputs.
+console.log('Advertisement outputs:', locations.outputs)
 ```
 
 ## Conformance vectors
@@ -136,7 +146,7 @@ UHRP conformance is tested in `conformance/vectors/storage/uhrp/`:
 | Package | Notes |
 |---------|-------|
 | @bsv/overlay-topics | `UHRPTopicManager` (validates advertisements), `createUHRPLookupService` (indexes hashes) |
-| @bsv/sdk | `StorageUploader`, `StorageDownloader` client classes |
+| @bsv/sdk | `StorageUploader`, `StorageDownloader`, and `LookupResolver` client classes |
 
 ## Related specs
 
