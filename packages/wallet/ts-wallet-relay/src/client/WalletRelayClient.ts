@@ -270,6 +270,7 @@ export class WalletRelayClient {
    * Prefer this over `destroy()` when you want the mobile app to be notified.
    */
   async disconnect(): Promise<void> {
+    this._stopPolling()
     if (this._session?.sessionId && this._desktopToken) {
       try {
         await fetch(`${this._apiUrl}/session/${this._session.sessionId}`, {
@@ -278,7 +279,7 @@ export class WalletRelayClient {
         })
       } catch { /* ignore — local teardown proceeds regardless */ }
     }
-    this.destroy()
+    this._desktopToken = null
   }
 
   /** Stop polling and clean up resources. Call this on component unmount. */
