@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 760" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 840" role="img" aria-labelledby="title desc">
   <title id="title">ts-stack layers</title>
   <desc id="desc">Three primary stack layers: application APIs, the BRC-100 wallet interface boundary, wallet builder toolkit, and the @bsv/sdk foundation.</desc>
   <style>
@@ -28,55 +28,55 @@
     </marker>
   </defs>
 
-  <rect x="35" y="30" width="1370" height="700" rx="12" class="panel"/>
+  <rect x="35" y="30" width="1370" height="780" rx="12" class="panel"/>
   <text x="70" y="78" class="title">ts-stack layers</text>
   <text x="70" y="110" class="label">Apps stay above the wallet boundary. Wallet implementations own signing, storage, key derivation, and output selection.</text>
 
-  <rect x="110" y="150" width="1220" height="140" rx="12" class="layer-app"/>
-  <text x="720" y="184" text-anchor="middle" class="subtitle">Application layer</text>
-  <text x="720" y="210" text-anchor="middle" class="small">Developer-facing APIs for browser apps and service agents</text>
+  <rect x="95" y="155" width="1250" height="160" rx="12" class="layer-app"/>
+  <text x="720" y="198" text-anchor="middle" class="subtitle">Application layer</text>
+  <text x="720" y="226" text-anchor="middle" class="small">Developer-facing APIs for browser apps and service agents</text>
 
-  <rect x="165" y="230" width="350" height="42" rx="8" class="module"/>
-  <text x="340" y="257" text-anchor="middle" class="mono">@bsv/simple/browser</text>
+  <rect x="155" y="255" width="360" height="44" rx="8" class="module"/>
+  <text x="335" y="283" text-anchor="middle" class="mono">@bsv/simple/browser</text>
 
-  <rect x="545" y="230" width="350" height="42" rx="8" class="module"/>
-  <text x="720" y="257" text-anchor="middle" class="mono">@bsv/simple/server</text>
+  <rect x="540" y="255" width="360" height="44" rx="8" class="module"/>
+  <text x="720" y="283" text-anchor="middle" class="mono">@bsv/simple/server</text>
 
-  <rect x="925" y="230" width="350" height="42" rx="8" class="module"/>
-  <text x="1100" y="257" text-anchor="middle" class="mono">@bsv/wallet-helper</text>
+  <rect x="925" y="255" width="360" height="44" rx="8" class="module"/>
+  <text x="1105" y="283" text-anchor="middle" class="mono">@bsv/wallet-helper</text>
 
-  <line x1="720" y1="290" x2="720" y2="334" class="arrow"/>
-  <rect x="540" y="314" width="360" height="46" rx="9" class="boundary"/>
-  <text x="720" y="333" text-anchor="middle" class="mono-amber">BRC-100 wallet interface</text>
-  <text x="720" y="352" text-anchor="middle" class="small">createAction, signAction, listOutputs, keys, certificates</text>
+  <line x1="720" y1="315" x2="720" y2="348" class="arrow"/>
+  <rect x="525" y="358" width="390" height="60" rx="10" class="boundary"/>
+  <text x="720" y="383" text-anchor="middle" class="mono-amber">BRC-100 wallet interface</text>
+  <text x="720" y="405" text-anchor="middle" class="small">createAction, signAction, listOutputs, keys, certificates</text>
 
-  <line x1="720" y1="360" x2="720" y2="404" class="arrow"/>
-  <rect x="110" y="400" width="1220" height="145" rx="12" class="layer-wallet"/>
-  <text x="720" y="435" text-anchor="middle" class="subtitle">Wallet builder toolkit</text>
-  <text x="720" y="461" text-anchor="middle" class="small">Composable implementation pieces for BRC-100 wallets such as BSV Desktop and BSV Browser</text>
+  <line x1="720" y1="418" x2="720" y2="452" class="arrow"/>
+  <rect x="95" y="462" width="1250" height="165" rx="12" class="layer-wallet"/>
+  <text x="720" y="505" text-anchor="middle" class="subtitle">Wallet builder toolkit</text>
+  <text x="720" y="533" text-anchor="middle" class="small">Composable implementation pieces for BRC-100 wallets such as BSV Desktop and BSV Browser</text>
 
-  <rect x="165" y="486" width="235" height="38" rx="8" class="module"/>
-  <text x="282" y="511" text-anchor="middle" class="mono">@bsv/wallet-toolbox</text>
+  <rect x="155" y="568" width="250" height="40" rx="8" class="module"/>
+  <text x="280" y="594" text-anchor="middle" class="mono">@bsv/wallet-toolbox</text>
 
-  <rect x="430" y="486" width="235" height="38" rx="8" class="module"/>
-  <text x="548" y="511" text-anchor="middle" class="small">storage providers</text>
+  <rect x="435" y="568" width="250" height="40" rx="8" class="module"/>
+  <text x="560" y="594" text-anchor="middle" class="small">storage providers</text>
 
-  <rect x="695" y="486" width="235" height="38" rx="8" class="module"/>
-  <text x="812" y="511" text-anchor="middle" class="small">WalletSigner + Services</text>
+  <rect x="715" y="568" width="250" height="40" rx="8" class="module"/>
+  <text x="840" y="594" text-anchor="middle" class="small">WalletSigner + Services</text>
 
-  <rect x="960" y="486" width="235" height="38" rx="8" class="module"/>
-  <text x="1078" y="511" text-anchor="middle" class="small">Monitor + key managers</text>
+  <rect x="995" y="568" width="250" height="40" rx="8" class="module"/>
+  <text x="1120" y="594" text-anchor="middle" class="small">Monitor + key managers</text>
 
-  <line x1="720" y1="545" x2="720" y2="589" class="arrow-muted"/>
-  <rect x="110" y="585" width="1220" height="120" rx="12" class="layer-sdk"/>
-  <text x="720" y="620" text-anchor="middle" class="subtitle">Foundation: @bsv/sdk</text>
-  <text x="720" y="646" text-anchor="middle" class="small">Zero-dependency primitives used by every layer above</text>
+  <line x1="720" y1="627" x2="720" y2="666" class="arrow-muted"/>
+  <rect x="95" y="676" width="1250" height="110" rx="12" class="layer-sdk"/>
+  <text x="720" y="714" text-anchor="middle" class="subtitle">Foundation: @bsv/sdk</text>
+  <text x="720" y="740" text-anchor="middle" class="small">Zero-dependency primitives used by every layer above</text>
 
-  <text x="210" y="676" class="label">secp256k1/r1</text>
-  <text x="385" y="676" class="label">hashing</text>
-  <text x="505" y="676" class="label">Script engine</text>
-  <text x="680" y="676" class="label">transactions</text>
-  <text x="850" y="676" class="label">BEEF / BUMP</text>
-  <text x="1030" y="676" class="label">BRC-42 derivation</text>
-  <text x="1205" y="676" class="label">ARC / Chaintracks</text>
+  <text x="180" y="770" class="label">secp256k1/r1</text>
+  <text x="365" y="770" class="label">hashing</text>
+  <text x="500" y="770" class="label">Script engine</text>
+  <text x="675" y="770" class="label">transactions</text>
+  <text x="850" y="770" class="label">BEEF / BUMP</text>
+  <text x="1030" y="770" class="label">BRC-42 derivation</text>
+  <text x="1200" y="770" class="label">ARC / Chaintracks</text>
 </svg>

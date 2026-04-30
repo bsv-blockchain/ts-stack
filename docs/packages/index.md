@@ -3,8 +3,8 @@ id: packages-index
 title: Packages
 kind: meta
 version: "n/a"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-04-30"
+last_verified: "2026-04-30"
 review_cadence_days: 30
 status: stable
 tags: ["packages"]
@@ -27,7 +27,7 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 **Key management, balance tracking, signing — local or via wallet service.**
 
 - [@bsv/wallet-toolbox](./wallet/wallet-toolbox.md) — BRC-100 wallet client library
-- [@bsv/btms](./wallet/btms.md) — Binary Token Management System (token issuance and transfer)
+- [@bsv/btms](./wallet/btms.md) — Basic Token Management System for token issuance, transfer, receiving, burning, and ownership proofs
 - [@bsv/btms-permission-module](./wallet/btms-permission-module.md) — Token permission checking
 - [@bsv/wallet-relay](./wallet/wallet-relay.md) — Broadcast and query wrapper for wallet synchronization
 
@@ -59,17 +59,22 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 
 ### Middleware
 
-**Drop-in Express middleware for payment-gating and identity verification.**
+**HTTP authentication and payment-gating packages.**
+
+Authenticated Express middleware stack:
 
 - [@bsv/auth-express-middleware](./middleware/auth-express-middleware.md) — Verify identity signatures in Express
-- [@bsv/payment-express-middleware](./middleware/payment-express-middleware.md) — Gate routes behind payment requirements
-- [@bsv/402-pay](./middleware/402-pay.md) — HTTP 402 payment handler
+- [@bsv/payment-express-middleware](./middleware/payment-express-middleware.md) — Gate authenticated Express routes behind payment requirements; requires `@bsv/auth-express-middleware`
+
+Independent HTTP 402 flow:
+
+- [@bsv/402-pay](./middleware/402-pay.md) — HTTP 402 payment handler designed to work without auth middleware
 
 ### Helpers
 
 **Shared utilities, codecs, templates, and adapters.**
 
-- [@bsv/templates](./helpers/templates.md) — Template system for OP_RETURN inscriptions
+- [@bsv/templates](./helpers/templates.md) — Predefined `ScriptTemplate` examples for protocol engineers; `OpReturn` is one template among several
 - [@bsv/did-client](./helpers/did-client.md) — DID resolver (Decentralized Identifiers)
 - [@bsv/simple](./helpers/simple.md) — Simplified API for common operations
 - [@bsv/wallet-helper](./helpers/wallet-helper.md) — Wallet utility functions

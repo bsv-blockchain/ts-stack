@@ -20,14 +20,14 @@
     .arrow-gold { stroke: #f59e0b; stroke-width: 2; fill: none; marker-end: url(#arrow-gold); stroke-dasharray: 6 6; }
   </style>
   <defs>
-    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#60a5fa"/>
+    <marker id="arrow-blue" viewBox="0 0 18 18" markerWidth="18" markerHeight="18" refX="17" refY="9" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M2,2 L17,9 L2,16 z" fill="#60a5fa"/>
     </marker>
-    <marker id="arrow-cyan" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/>
+    <marker id="arrow-cyan" viewBox="0 0 18 18" markerWidth="18" markerHeight="18" refX="17" refY="9" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M2,2 L17,9 L2,16 z" fill="#22d3ee"/>
     </marker>
-    <marker id="arrow-gold" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#f59e0b"/>
+    <marker id="arrow-gold" viewBox="0 0 18 18" markerWidth="18" markerHeight="18" refX="17" refY="9" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M2,2 L17,9 L2,16 z" fill="#f59e0b"/>
     </marker>
   </defs>
 
@@ -64,7 +64,7 @@
   <text x="1090" y="267" class="label">UTXO state, baskets, labels</text>
   <text x="1090" y="294" class="label">Certificate and wallet metadata</text>
 
-  <path d="M735 325 C735 375, 235 375, 235 306" class="arrow-cyan"/>
+  <path d="M735 325 C735 376, 318 384, 247 307" class="arrow-cyan"/>
   <rect x="374" y="350" width="222" height="28" rx="8" class="label-bg"/>
   <text x="485" y="369" text-anchor="middle" class="mono">signed AtomicBEEF + txid</text>
 
@@ -104,7 +104,7 @@
   <text x="1090" y="742" class="label">Outputs, baskets, labels</text>
   <text x="1090" y="769" class="label">Wallet and certificate metadata</text>
 
-  <path d="M735 800 C735 852, 235 852, 235 781" class="arrow-cyan"/>
+  <path d="M735 800 C735 852, 318 861, 247 782" class="arrow-cyan"/>
   <rect x="382" y="828" width="206" height="28" rx="8" class="label-bg"/>
   <text x="485" y="847" text-anchor="middle" class="mono">response via postMessage</text>
 </svg>
