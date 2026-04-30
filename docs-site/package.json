@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/build-manifest.mjs && vite-react-ssg build && pagefind --site dist --output-path dist/_pagefind && node scripts/check-built-links.mjs",
+    "build": "node scripts/build-manifest.mjs && vite-react-ssg build && test -f dist/index.html && pagefind --site dist --output-path dist/_pagefind && node scripts/check-built-links.mjs",
     "preview": "vite preview",
     "validate": "node scripts/validate-frontmatter.mjs && node scripts/check-links.mjs"
   },
