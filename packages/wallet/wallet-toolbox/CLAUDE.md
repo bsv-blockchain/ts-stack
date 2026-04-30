@@ -1,4 +1,4 @@
-# CLAUDE.md — @bsv/wallet-toolbox v2.1.22
+# CLAUDE.md — @bsv/wallet-toolbox v2.1.24
 
 ## Purpose
 The Wallet Toolbox is the reference implementation of the BRC-100 wallet standard. It connects the SDK's cryptographic primitives to real storage backends (SQLite, MySQL, IndexedDB), network services (ARC, WhatsOnChain, Chaintracks), and signing flows to provide a complete, production-ready wallet that developers can use directly or customize for their own wallet apps (like BSV Desktop or BSV Browser).
