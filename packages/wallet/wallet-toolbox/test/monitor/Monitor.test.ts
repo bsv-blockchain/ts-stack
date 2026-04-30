@@ -85,7 +85,7 @@ describe('Monitor tests', () => {
     }
   })
 
-  test.skip('2 TaskPurge', async () => {
+  test('2 TaskPurge', async () => {
     /*
         ** The following code is to test against un-purged data copied from staging-dojo:
         const ctxs: TestWallet<{}>[] = []
@@ -167,7 +167,7 @@ describe('Monitor tests', () => {
     }
   })
 
-  test.skip('4 TaskSendWaiting error', async () => {
+  test('4 TaskSendWaiting error', async () => {
     await runMockedSendWaiting('error', 'monitorTest4')
   })
 
@@ -503,7 +503,7 @@ describe('Monitor tests', () => {
               }
               break
             case 'error': {
-              expect(req.status).toBe('unsent')
+              expect(req.status).toBe('sending')
             }
           }
         }

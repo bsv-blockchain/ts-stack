@@ -1983,7 +1983,7 @@ function mockPostServices(
       const r: PostBeefResult = {
         name: 'mock',
         status: 'success',
-        txidResults: txids.map(txid => ({ txid, status }))
+        txidResults: txids.map(txid => ({ txid, status, ...(status === 'error' ? { serviceError: true } : {}) }))
       }
       return Promise.resolve([r])
     })

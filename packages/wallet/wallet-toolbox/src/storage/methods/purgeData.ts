@@ -132,7 +132,13 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
         mergeToBeef: beef,
         ignoreServices: true
       }
-      if (utxo.txid) await storage.getBeefForTransaction(utxo.txid, options)
+      if (utxo.txid) {
+        try {
+          await storage.getBeefForTransaction(utxo.txid, options)
+        } catch {
+          // UTXO's tx beef not in local storage — skip, the tx has spendable outputs so it won't be purged anyway.
+        }
+      }
     }
     const proofTxids: Record<string, boolean> = {}
     for (const btx of beef.txs) proofTxids[btx.txid] = true
