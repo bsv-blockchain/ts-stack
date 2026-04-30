@@ -31,3 +31,4 @@ docs/_internal/
 docs-site/dist/
 docs-site/.vite/
 docs-site/src/manifest.json
+.worktrees/
