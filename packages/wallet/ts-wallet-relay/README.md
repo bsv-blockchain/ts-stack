@@ -158,7 +158,7 @@ export function App() {
   const [mode, setMode] = useState<'detecting' | 'local' | 'mobile'>('detecting')
 
   // autoCreate: false — only start a backend session when the user picks the mobile path
-  const { session, error, createSession, sendRequest } = useWalletRelayClient({
+  const { session, error, createSession, cancelSession, sendRequest } = useWalletRelayClient({
     autoCreate: false,
   })
 
@@ -166,6 +166,12 @@ export function App() {
     setMode('local')
     // TODO: store wallet and use it in your app
   }, [])
+
+  // Stop polling when the user navigates away from the QR screen
+  useEffect(() => {
+    if (mode !== 'mobile') return
+    return () => { cancelSession() }
+  }, [mode])
 
   return (
     <>
@@ -351,7 +357,7 @@ await session.reconnect(Number(lastSeq ?? 0))
 
 | Export | Description |
 |--------|-------------|
-| `useWalletRelayClient` | Session creation, status polling, `wallet` proxy (drop-in `WalletInterface`), and `sendRequest` — the main hook for QR pairing |
+| `useWalletRelayClient` | Session creation, status polling, `wallet` proxy (drop-in `WalletInterface`), `cancelSession` for cleanup on navigation, and `sendRequest` — the main hook for QR pairing |
 | `WalletConnectionModal` | Detects local wallet; shows install link + mobile QR button if none found |
 | `QRDisplay` | QR image with status badge and session refresh |
 | `QRPairingCode` | Tappable QR that opens the `wallet://pair?…` deeplink directly |

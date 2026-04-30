@@ -445,7 +445,7 @@ Peer dependency: `react >= 17`
 React hook wrapping [`WalletRelayClient`](#walletrelayclient) with React state. The primary integration point for web apps — replaces the scaffolded `useWalletSession` template hook.
 
 ```tsx
-const { session, log, error, createSession, sendRequest } = useWalletRelayClient()
+const { session, log, error, createSession, cancelSession, sendRequest } = useWalletRelayClient()
 ```
 
 #### Options
@@ -470,6 +470,7 @@ All options are optional.
 | `log` | `RequestLogEntry[]` | Request history, newest first. |
 | `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
 | `createSession` | `() => Promise<SessionInfo>` | Create a new session and restart polling. Safe to call multiple times — replaces the existing session. |
+| `cancelSession` | `() => void` | Stop polling, destroy the client, and reset all state to `null`. Call on unmount when leaving a QR page to prevent the poll interval from running in the background. A subsequent `createSession()` starts fresh. |
 | `sendRequest` | `(method: string, params?: unknown) => Promise<WalletResponse>` | Send an RPC call to the paired mobile. Throws if no session is active. |
 | `wallet` | `Pick<WalletInterface, WalletMethodName> \| null` | Drop-in `WalletInterface` proxy when connected, `null` otherwise. See [wallet proxy](#wallet-proxy). |
 

@@ -373,6 +373,13 @@ function useWalletRelayClient(options) {
     setError(null);
     return ensureClient().createSession();
   }, []);
+  const cancelSession = useCallback2(() => {
+    clientRef.current?.destroy();
+    clientRef.current = null;
+    setSession(null);
+    setError(null);
+    setLog([]);
+  }, []);
   const sendRequest = useCallback2(
     async (method, params) => ensureClient().sendRequest(method, params),
     []
@@ -396,7 +403,7 @@ function useWalletRelayClient(options) {
     };
   }, [createSession]);
   const wallet = session?.status === "connected" ? clientRef.current?.wallet ?? null : null;
-  return { session, log, error, createSession, sendRequest, wallet };
+  return { session, log, error, createSession, cancelSession, sendRequest, wallet };
 }
 
 // src/react/QRDisplay.tsx

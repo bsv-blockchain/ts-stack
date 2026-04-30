@@ -99,7 +99,10 @@ type UseWalletRelayClientOptions = Omit<WalletRelayClientOptions, 'onSessionChan
  * Replaces the template's `useWalletSession` hook — drop-in with a cleaner API.
  *
  * ```tsx
- * const { session, log, error, createSession, sendRequest } = useWalletRelayClient()
+ * const { session, log, error, createSession, cancelSession, sendRequest } = useWalletRelayClient()
+ *
+ * // Stop polling and reset state (e.g. on page navigation away from a QR screen):
+ * useEffect(() => () => { cancelSession() }, [])
  *
  * // With options:
  * const { session } = useWalletRelayClient({ apiUrl: 'https://api.example.com', autoCreate: false })
@@ -110,6 +113,7 @@ declare function useWalletRelayClient(options?: UseWalletRelayClientOptions): {
     log: RequestLogEntry[];
     error: string | null;
     createSession: () => Promise<SessionInfo>;
+    cancelSession: () => void;
     sendRequest: (method: WalletMethodName, params?: unknown) => Promise<WalletResponse>;
     wallet: Pick<WalletInterface, "getPublicKey" | "encrypt" | "decrypt" | "createSignature" | "revealCounterpartyKeyLinkage" | "createHmac" | "verifyHmac" | "verifySignature" | "createAction" | "signAction" | "listActions" | "internalizeAction" | "listOutputs" | "acquireCertificate" | "listCertificates" | "relinquishCertificate"> | null;
 };

@@ -20,7 +20,10 @@ export type UseWalletRelayClientOptions = Omit<
  * Replaces the template's `useWalletSession` hook — drop-in with a cleaner API.
  *
  * ```tsx
- * const { session, log, error, createSession, sendRequest } = useWalletRelayClient()
+ * const { session, log, error, createSession, cancelSession, sendRequest } = useWalletRelayClient()
+ *
+ * // Stop polling and reset state (e.g. on page navigation away from a QR screen):
+ * useEffect(() => () => { cancelSession() }, [])
  *
  * // With options:
  * const { session } = useWalletRelayClient({ apiUrl: 'https://api.example.com', autoCreate: false })
@@ -57,6 +60,14 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
     return ensureClient().createSession()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const cancelSession = useCallback(() => {
+    clientRef.current?.destroy()
+    clientRef.current = null
+    setSession(null)
+    setError(null)
+    setLog([])
+  }, [])
+
   const sendRequest = useCallback(
     async (method: WalletMethodName, params?: unknown): Promise<WalletResponse> =>
       ensureClient().sendRequest(method, params),
@@ -85,5 +96,5 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   const wallet: Pick<WalletInterface, WalletMethodName> | null =
     session?.status === 'connected' ? (clientRef.current?.wallet ?? null) : null
 
-  return { session, log, error, createSession, sendRequest, wallet }
+  return { session, log, error, createSession, cancelSession, sendRequest, wallet }
 }
