@@ -67,7 +67,7 @@ jobs:
             -o conformance/generated/messaging/types.gen.d.ts
 
       # ── Python types (datamodel-code-generator / pydantic v2) ────────────
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install datamodel-code-generator
