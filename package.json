@@ -16,18 +16,19 @@
     "docs:preview": "pnpm --filter docs-site preview"
   },
   "devDependencies": {
-    "@asyncapi/generator": "^2.8.4",
+    "@asyncapi/generator": "^3.2.1",
     "@asyncapi/html-template": "^3.5.6"
   },
   "engines": {
-    "node": ">=20",
+    "node": ">=24",
     "pnpm": ">=9"
   },
   "packageManager": "pnpm@9.0.0",
   "pnpm": {
     "overrides": {
       "jest-environment-node": "^30.3.0",
-      "jest-mock": "^30.3.0"
+      "jest-mock": "^30.3.0",
+      "tar": ">=7.5.8"
     }
   }
 }
