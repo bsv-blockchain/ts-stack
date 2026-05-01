@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.signaction",
+  "name": "BRC-100 signaction",
+  "brc": [
+    "BRC-100"
+  ],
+  "version": "2.0.0",
+  "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
+  "parity_class": "required",
+  "vectors": [
+    {
+      "id": "wallet.brc100.signaction.1",
+      "description": "signAction happy path",
+      "input": {
+        "args": {}
+      },
+      "expected": {
+        "result": 123456
+      },
+      "tags": [
+        "brc-100",
+        "signAction"
+      ]
+    }
+  ]
+}

@@ -12,13 +12,34 @@
       "wallet.brc100.getpublickey",
       "wallet.brc100.createhmac",
       "wallet.brc100.createsignature",
-      "wallet.brc100.encrypt"
+      "wallet.brc100.encrypt",
+      "wallet.brc100.revealcounterpartykeylinkage",
+      "wallet.brc100.revealspecifickeylinkage",
+      "wallet.brc100.createaction",
+      "wallet.brc100.signaction",
+      "wallet.brc100.abortaction",
+      "wallet.brc100.listactions",
+      "wallet.brc100.internalizeaction",
+      "wallet.brc100.listoutputs",
+      "wallet.brc100.relinquishoutput",
+      "wallet.brc100.acquirecertificate",
+      "wallet.brc100.listcertificates",
+      "wallet.brc100.provecertificate",
+      "wallet.brc100.relinquishcertificate",
+      "wallet.brc100.discoverbyidentitykey",
+      "wallet.brc100.discoverbyattributes",
+      "wallet.brc100.isauthenticated",
+      "wallet.brc100.waitforauthentication",
+      "wallet.brc100.getheight",
+      "wallet.brc100.getheaderforheight",
+      "wallet.brc100.getnetwork",
+      "wallet.brc100.getversion"
     ]
   },
   "stats": {
-    "total_files": 33,
-    "total_vectors": 260,
-    "last_updated": "2026-04-28"
+    "total_files": 58,
+    "total_vectors": 902,
+    "last_updated": "2026-05-01"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

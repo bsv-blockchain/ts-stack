@@ -68,7 +68,7 @@ Always inspect the target JSON file before porting a vector to another language;
 | `sdk/compat` | 9 | BRC-77 BSM compatibility |
 | `messaging/brc31` | 4 | Authrite/BRC-31 signatures |
 | `wallet/brc29` | 3 | BRC-29 payment derivation |
-| `wallet/brc100` | 15 | BRC-100 method fixtures currently available |
+| `wallet/brc100` | 632 | BRC-100 full interface (25 files, all 27+ methods, 100% coverage) |
 | `regressions` | 36 | Reproductions for historical bugs across SDK implementations |
 
 ## Wallet BRC-100
@@ -77,10 +77,7 @@ Current BRC-100 conformance coverage is focused on deterministic crypto and key 
 
 | File | Vectors | Methods |
 |---|---:|---|
-| `wallet/brc100/getpublickey.json` | 4 | `getPublicKey` |
-| `wallet/brc100/createhmac.json` | 4 | `createHmac`, `verifyHmac` |
-| `wallet/brc100/createsignature.json` | 4 | `createSignature`, `verifySignature` |
-| `wallet/brc100/encrypt.json` | 3 | `encrypt`, `decrypt` |
+| `wallet/brc100/*.json` (25 files) | 632 | Full `WalletInterface`: getPublicKey, create/verifyHmac/Signature, encrypt/decrypt, revealKeyLinkage*, create/sign/abortAction, listActions, internalizeAction, list/relinquishOutputs, acquire/list/prove/relinquishCertificates, discover*, isAuthenticated, waitForAuthentication, getHeight/Header/Network/Version (100% coverage) |
 
 Use the [BRC-100 wallet method reference](../specs/brc-100-wallet.md) for the full interface shape. Use this catalog to see which parts already have portable fixtures.
 
@@ -93,7 +90,7 @@ Use the [BRC-100 wallet method reference](../specs/brc-100-wallet.md) for the fu
 | BRC-42 | `sdk/keys/key-derivation.json`, key fixtures | available |
 | BRC-74 | `sdk/transactions/merkle-path.json` | available |
 | BRC-77 | `sdk/compat/bsm.json` | available |
-| BRC-100 | `wallet/brc100/*.json` | partial |
+| BRC-100 | `wallet/brc100/*.json` (25 files) | full (100%) |
 
 ## Regression Fixtures
 

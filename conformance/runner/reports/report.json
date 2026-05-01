@@ -1,9 +1,34 @@
 {
-  "timestamp": "2026-04-28T19:47:00.559Z",
-  "totalVectors": 238,
-  "totalFiles": 27,
+  "timestamp": "2026-05-01T19:22:39.256Z",
+  "totalVectors": 890,
+  "totalFiles": 54,
   "parseErrors": 0,
   "suites": [
+    {
+      "name": "messaging/brc31/authrite-signature",
+      "cases": [
+        {
+          "name": "messaging.brc31.authrite-signature.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "messaging.brc31.authrite-signature.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "messaging.brc31.authrite-signature.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "messaging.brc31.authrite-signature.4",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
     {
       "name": "regressions/beef-isvalid-hydration",
       "cases": [
@@ -1161,6 +1186,71 @@
           "name": "script-020",
           "pass": true,
           "error": null
+        },
+        {
+          "name": "script-021",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-022",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-023",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-024",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-025",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-026",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-027",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-028",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-029",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-030",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-031",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-032",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "script-033",
+          "pass": true,
+          "error": null
         }
       ]
     },
@@ -1324,6 +1414,3311 @@
         },
         {
           "name": "tx-015",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/abortaction",
+      "cases": [
+        {
+          "name": "wallet.brc100.abortaction.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/acquirecertificate",
+      "cases": [
+        {
+          "name": "wallet.brc100.acquirecertificate.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/createaction",
+      "cases": [
+        {
+          "name": "wallet.brc100.createaction.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.36",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.37",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.38",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.39",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.40",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.41",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.42",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.43",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.44",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.45",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.46",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.47",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.48",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.49",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.50",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.51",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.52",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.53",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.54",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.55",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.56",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.57",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.58",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.59",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.60",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.61",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.62",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.63",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.64",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.65",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.66",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.67",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.68",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.69",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.70",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.71",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.72",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.73",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.74",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.75",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.76",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.77",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.78",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.79",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.80",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.81",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.82",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.83",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.84",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.85",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.86",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.87",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.88",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.89",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createaction.90",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/createhmac",
+      "cases": [
+        {
+          "name": "wallet.brc100.createhmac.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createhmac.36",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/createsignature",
+      "cases": [
+        {
+          "name": "wallet.brc100.createsignature.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.createsignature.36",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/discoverbyattributes",
+      "cases": [
+        {
+          "name": "wallet.brc100.discoverbyattributes.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/discoverbyidentitykey",
+      "cases": [
+        {
+          "name": "wallet.brc100.discoverbyidentitykey.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/encrypt",
+      "cases": [
+        {
+          "name": "wallet.brc100.encrypt.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.encrypt.36",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/getheaderforheight",
+      "cases": [
+        {
+          "name": "wallet.brc100.getheaderforheight.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/getheight",
+      "cases": [
+        {
+          "name": "wallet.brc100.getheight.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/getnetwork",
+      "cases": [
+        {
+          "name": "wallet.brc100.getnetwork.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/getpublickey",
+      "cases": [
+        {
+          "name": "wallet.brc100.getpublickey.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.36",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.37",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.38",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.39",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.40",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.41",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.42",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.43",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.44",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.45",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.46",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.47",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.48",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.49",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.50",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.51",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.52",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.53",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.54",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.55",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.56",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.57",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.58",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.59",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.60",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.61",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.62",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.63",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.64",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.65",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.66",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.67",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.68",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.69",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.70",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.71",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.72",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.73",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.74",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.75",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.76",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.77",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.78",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.79",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.80",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.81",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.82",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.83",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.84",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.85",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.86",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.87",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.88",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.89",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.90",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.91",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.92",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.93",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.94",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.95",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.96",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.97",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.98",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.99",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.100",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.101",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.102",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.103",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.104",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.105",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.106",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.107",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.108",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.109",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.110",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.111",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.112",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.113",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.114",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.115",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.116",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.117",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.118",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.119",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.120",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.121",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.122",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.123",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.124",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.125",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.126",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.127",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.128",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.129",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.130",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.131",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.132",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.133",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.134",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.135",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.136",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.137",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.138",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.139",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.140",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.141",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.142",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.143",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.144",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.145",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.146",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.147",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.148",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.149",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.150",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.151",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.152",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.153",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.154",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.155",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.156",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.157",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.158",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.159",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.160",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.161",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.162",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.163",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.164",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.165",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.166",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.167",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.168",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.169",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.170",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.171",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.172",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.173",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.174",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.175",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.176",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.177",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.178",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.179",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.180",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.181",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.182",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.183",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.184",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.185",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.186",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.187",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.188",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.189",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.190",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.191",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.192",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.193",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.194",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.195",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.196",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.197",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.198",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.199",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.200",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.getpublickey.201",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/getversion",
+      "cases": [
+        {
+          "name": "wallet.brc100.getversion.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/internalizeaction",
+      "cases": [
+        {
+          "name": "wallet.brc100.internalizeaction.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/isauthenticated",
+      "cases": [
+        {
+          "name": "wallet.brc100.isauthenticated.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/listactions",
+      "cases": [
+        {
+          "name": "wallet.brc100.listactions.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/listcertificates",
+      "cases": [
+        {
+          "name": "wallet.brc100.listcertificates.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/listoutputs",
+      "cases": [
+        {
+          "name": "wallet.brc100.listoutputs.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.36",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.37",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.38",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.39",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.40",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.41",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.42",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.43",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.44",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.45",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.46",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.47",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.48",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.49",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.50",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.51",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.52",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.53",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.54",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.55",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.56",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.57",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.58",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.59",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.60",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.61",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.62",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.63",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.64",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.65",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.66",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.67",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.68",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.69",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.70",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.71",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.72",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.73",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.74",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.75",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.76",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.77",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.78",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.79",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.80",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.81",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.82",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.83",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.84",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.85",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.86",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.87",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.88",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.89",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.90",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.91",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.92",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.93",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.94",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.95",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.96",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.97",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.98",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.99",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.100",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.101",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.102",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.103",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.104",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.105",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.106",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.107",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.108",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.109",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.110",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.111",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.112",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.113",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.114",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.115",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.116",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.117",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.118",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.119",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.120",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.121",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.122",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.123",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.124",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.125",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.126",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.127",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.128",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.129",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.130",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.131",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.132",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.133",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.134",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.135",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.136",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.137",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.138",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.139",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.140",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.141",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.142",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.143",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.listoutputs.144",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/provecertificate",
+      "cases": [
+        {
+          "name": "wallet.brc100.provecertificate.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/relinquishcertificate",
+      "cases": [
+        {
+          "name": "wallet.brc100.relinquishcertificate.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/relinquishoutput",
+      "cases": [
+        {
+          "name": "wallet.brc100.relinquishoutput.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/revealcounterpartykeylinkage",
+      "cases": [
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealcounterpartykeylinkage.36",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/revealspecifickeylinkage",
+      "cases": [
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.3",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.4",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.5",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.6",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.7",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.8",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.9",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.10",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.11",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.12",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.13",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.14",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.15",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.21",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.22",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.23",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.24",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.25",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.26",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.27",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.28",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.29",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.30",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.31",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.32",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.33",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.34",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.35",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc100.revealspecifickeylinkage.36",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/signaction",
+      "cases": [
+        {
+          "name": "wallet.brc100.signaction.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc100/waitforauthentication",
+      "cases": [
+        {
+          "name": "wallet.brc100.waitforauthentication.1",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/brc29/payment-derivation",
+      "cases": [
+        {
+          "name": "wallet.brc29.payment-derivation.1",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc29.payment-derivation.2",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.brc29.payment-derivation.3",
           "pass": true,
           "error": null
         }

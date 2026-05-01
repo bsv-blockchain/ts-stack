@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schema/vector.schema.json",
+  "id": "wallet.brc100.getheight",
+  "name": "BRC-100 getheight",
+  "brc": [
+    "BRC-100"
+  ],
+  "version": "2.0.0",
+  "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
+  "parity_class": "required",
+  "vectors": [
+    {
+      "id": "wallet.brc100.getheight.1",
+      "description": "getHeight happy path",
+      "input": {
+        "args": {}
+      },
+      "expected": {
+        "height": 123456
+      },
+      "tags": [
+        "brc-100",
+        "getHeight"
+      ]
+    }
+  ]
+}
