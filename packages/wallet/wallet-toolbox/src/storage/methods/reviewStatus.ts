@@ -2,8 +2,11 @@ import { Knex } from 'knex'
 import { StorageKnex } from '../StorageKnex'
 import { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WalletError } from '../../sdk/WalletError'
+import type { ProvenTxReqStatus } from '../../sdk/types'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { TableOutput } from '../schema/tables/TableOutput'
+
+const provenTxReqStatusesSafeForInputRestore: ProvenTxReqStatus[] = ['invalid', 'doubleSpend']
 
 /**
  * Looks for unpropagated state:
@@ -57,10 +60,11 @@ export async function reviewStatus (
   })
 
   qs.push({
-    log: 'outputs updated to spendable where spentBy is a transaction with status \'failed\'',
+    log: 'outputs updated to spendable where spentBy is a failed transaction with no blocking ProvenTxReq',
     /*
         UPDATE outputs SET spentBy = null, spendable = 1
         where exists(select 1 from transactions as t where outputs.spentBy = t.transactionId and t.status = 'failed')
+        and not exists(select 1 from proven_tx_reqs as r where r.txid = t.txid and r.status not in ('invalid', 'doubleSpend'))
         */
     q: k<TableOutput>('outputs')
       .update({ spentBy: null as unknown as undefined, spendable: true })
@@ -68,6 +72,14 @@ export async function reviewStatus (
         this.select(k.raw(1))
           .from('transactions as t')
           .whereRaw('outputs.spentBy = t.transactionId and t.status = \'failed\'')
+          .whereNotExists(function () {
+            // A failed transaction can still be reconciled from active or valid reqs.
+            // Only terminal failure reqs are safe for input restoration.
+            this.select(k.raw(1))
+              .from('proven_tx_reqs as r')
+              .whereRaw('r.txid = t.txid')
+              .whereNotIn('r.status', provenTxReqStatusesSafeForInputRestore)
+          })
       })
   })
 

@@ -75,6 +75,24 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs'] = {
+      async up (knex) {
+        await knex.schema.alterTable('proven_tx_reqs', table => {
+          table.boolean('wasBroadcast').notNullable().defaultTo(false)
+          table.integer('rebroadcastAttempts').unsigned().notNullable().defaultTo(0)
+        })
+        await knex('proven_tx_reqs')
+          .whereIn('status', ['unmined', 'callback', 'unconfirmed', 'completed'])
+          .update({ wasBroadcast: true })
+      },
+      async down (knex) {
+        await knex.schema.alterTable('proven_tx_reqs', table => {
+          table.dropColumn('rebroadcastAttempts')
+          table.dropColumn('wasBroadcast')
+        })
+      }
+    }
+
     migrations['2025-10-13-001 add outputs spendable index'] = {
       async up (knex) {
         await knex.schema.alterTable('outputs', table => {

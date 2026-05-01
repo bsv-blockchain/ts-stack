@@ -69,6 +69,40 @@ describe('ProvenTxReq class method tests', () => {
     })
   })
 
+  test('2b_wasBroadcast_derives_from_status_and_history', () => {
+    const fromStatus = new EntityProvenTxReq({
+      provenTxReqId: 0,
+      created_at: new Date(),
+      updated_at: new Date(),
+      txid: '',
+      rawTx: [],
+      history: '{}',
+      notify: '{}',
+      attempts: 0,
+      status: 'unmined',
+      notified: false,
+      wasBroadcast: false
+    })
+    expect(fromStatus.wasBroadcast).toBe(true)
+
+    const fromHistory = new EntityProvenTxReq({
+      provenTxReqId: 0,
+      created_at: new Date(),
+      updated_at: new Date(),
+      txid: '',
+      rawTx: [],
+      history: JSON.stringify({
+        notes: [{ what: 'status', status_was: 'sending', status_now: 'callback' }]
+      }),
+      notify: '{}',
+      attempts: 0,
+      status: 'invalid',
+      notified: false,
+      wasBroadcast: false
+    })
+    expect(fromHistory.wasBroadcast).toBe(true)
+  })
+
   // Test: updateStorage method
   test('3_updateStorage', async () => {
     const ctx = ctxs[0]

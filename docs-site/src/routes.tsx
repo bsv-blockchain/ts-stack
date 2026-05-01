@@ -24,13 +24,21 @@ function mdRoute(docPath: string): string {
     .replace(/\.md$/, '/')
 }
 
-const docRoutes: RouteObject[] = Object.keys(pages).map(key => ({
-  path: mdRoute(key),
-  element: page(pages[key]),
-}))
+// vite-react-ssg requires parent route to have path '/' so it can discover
+// the root route for pre-rendering. Child paths must be relative (no leading /).
+const docRoutes: RouteObject[] = Object.keys(pages).map(key => {
+  const absPath = mdRoute(key)
+  if (absPath === '/') {
+    // Root index.md → React Router index route so RootLayout renders at /
+    return { index: true, element: page(pages[key]) } as RouteObject
+  }
+  // Strip leading / to make path relative to the '/' parent
+  return { path: absPath.slice(1), element: page(pages[key]) }
+})
 
 export const routes: RouteObject[] = [
   {
+    path: '/',
     element: <RootLayout />,
     children: [
       ...docRoutes,

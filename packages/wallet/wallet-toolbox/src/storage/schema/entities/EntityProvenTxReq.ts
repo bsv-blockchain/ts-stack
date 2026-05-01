@@ -8,6 +8,8 @@ import { TableProvenTxReq, TableProvenTxReqDynamics } from '../tables/TableProve
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 
 export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
+  static readonly wasBroadcastStatuses: ProvenTxReqStatus[] = ['unmined', 'callback', 'unconfirmed', 'completed']
+
   static async fromStorageTxid (
     storage: EntityStorage,
     txid: string,
@@ -310,7 +312,9 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
       notify: this.api.notify,
       notified: this.api.notified,
       attempts: this.api.attempts,
-      batch: this.api.batch
+      batch: this.api.batch,
+      wasBroadcast: this.wasBroadcast,
+      rebroadcastAttempts: this.rebroadcastAttempts
     }
     if (storage.isStorageProvider()) {
       const sp = storage as StorageProvider
@@ -352,6 +356,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
       this.addHistoryNote({ what: 'status', status_was: this.api.status, status_now: v })
       this.api.status = v
     }
+    if (EntityProvenTxReq.wasBroadcastStatuses.includes(v)) this.wasBroadcast = true
   }
 
   get provenTxReqId () {
@@ -432,6 +437,45 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
 
   set batch (v: string | undefined) {
     this.api.batch = v
+  }
+
+  get wasBroadcast (): boolean {
+    const wasBroadcast = this.api.wasBroadcast as boolean | number | undefined
+    if (wasBroadcast === true || wasBroadcast === 1) return true
+    if (EntityProvenTxReq.wasBroadcastStatuses.includes(this.status)) return true
+    const h = this.getHistorySummary()
+    return h.setToUnmined || h.setToCallback || h.setToUnconfirmed || h.setToCompleted
+  }
+
+  set wasBroadcast (v: boolean) {
+    this.api.wasBroadcast = v
+  }
+
+  get rebroadcastAttempts (): number {
+    return this.api.rebroadcastAttempts ?? 0
+  }
+
+  set rebroadcastAttempts (v: number) {
+    this.api.rebroadcastAttempts = v
+  }
+
+  applyProofTimeout (maxRebroadcastAttempts = 0): { action: 'invalid' | 'rebroadcast', rebroadcastAttempts: number } {
+    this.notified = false
+
+    if (!this.wasBroadcast) {
+      this.status = 'invalid'
+      return { action: 'invalid', rebroadcastAttempts: this.rebroadcastAttempts }
+    }
+
+    if (maxRebroadcastAttempts > 0 && this.rebroadcastAttempts >= maxRebroadcastAttempts) {
+      this.status = 'invalid'
+      return { action: 'invalid', rebroadcastAttempts: this.rebroadcastAttempts }
+    }
+
+    this.rebroadcastAttempts = this.rebroadcastAttempts + 1
+    this.status = 'unsent'
+    this.attempts = 0
+    return { action: 'rebroadcast', rebroadcastAttempts: this.rebroadcastAttempts }
   }
 
   override get id () {

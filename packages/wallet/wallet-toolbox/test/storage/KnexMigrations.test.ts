@@ -83,4 +83,42 @@ describe('KnexMigrations tests', () => {
       expect(r.maxOutputScript).toBe(1000)
     }
   })
+
+  test('3 backfills wasBroadcast for live ProvenTxReq statuses', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratebackfilltest.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+
+    try {
+      await knex.schema.createTable('proven_tx_reqs', table => {
+        table.increments('provenTxReqId')
+        table.string('status', 16).notNullable()
+      })
+      await knex('proven_tx_reqs').insert([
+        { status: 'unmined' },
+        { status: 'callback' },
+        { status: 'unconfirmed' },
+        { status: 'completed' },
+        { status: 'sending' },
+        { status: 'invalid' }
+      ])
+
+      const source = new KnexMigrations('test', 'backfill migration test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration('2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs')
+      await migration.up(knex)
+
+      const rows = await knex('proven_tx_reqs').select('status', 'wasBroadcast', 'rebroadcastAttempts')
+      const byStatus = Object.fromEntries(rows.map(row => [row.status, row]))
+
+      for (const status of ['unmined', 'callback', 'unconfirmed', 'completed']) {
+        expect(Boolean(byStatus[status].wasBroadcast)).toBe(true)
+        expect(byStatus[status].rebroadcastAttempts).toBe(0)
+      }
+      for (const status of ['sending', 'invalid']) {
+        expect(Boolean(byStatus[status].wasBroadcast)).toBe(false)
+        expect(byStatus[status].rebroadcastAttempts).toBe(0)
+      }
+    } finally {
+      await knex.destroy()
+    }
+  })
 })

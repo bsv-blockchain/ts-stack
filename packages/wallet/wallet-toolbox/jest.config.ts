@@ -13,7 +13,7 @@ export default async (): Promise<Config> => {
     // Speed up by restricting to module (source files) extensions used.
     moduleFileExtensions: ['ts', 'js'],
     // excluded source files...
-    modulePathIgnorePatterns: ['out/src', 'out/test'],
+    modulePathIgnorePatterns: ['out/src', 'out/test', '/dist/cjs/'],
     // Default is 'node'
     testEnvironment: 'node',
     // default [ '**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)' ]
