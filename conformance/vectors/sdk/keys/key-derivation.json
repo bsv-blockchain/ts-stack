@@ -3,7 +3,7 @@
   "id": "sdk.keys.key-derivation",
   "name": "Private and public key derivation (BRC-42)",
   "brc": "BRC-42",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "reference_impl": "packages/sdk/ts-sdk/src/primitives/PrivateKey.ts",
   "parity_class": "keys",
   "vectors": [
@@ -17,7 +17,11 @@
         "privkey_hex_roundtrip": "0000000000000000000000000000000000000000000000000000000000000001",
         "note": "PrivateKey.test.ts validKeys[0]: fromHex → toHex round-trip equals original"
       },
-      "tags": ["private-key", "roundtrip", "boundary"]
+      "tags": [
+        "private-key",
+        "roundtrip",
+        "boundary"
+      ]
     },
     {
       "id": "key-002",
@@ -29,7 +33,11 @@
         "privkey_hex_roundtrip": "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140",
         "note": "PrivateKey.test.ts validKeys[1]: fromHex → toHex round-trip equals original"
       },
-      "tags": ["private-key", "roundtrip", "boundary"]
+      "tags": [
+        "private-key",
+        "roundtrip",
+        "boundary"
+      ]
     },
     {
       "id": "key-003",
@@ -41,7 +49,10 @@
         "privkey_hex_roundtrip": "8a2f85e08360a04c8a36b7c22c5e9e9a0d3bcf2f95c97db2b8bd90fc5f5ff66a",
         "note": "PrivateKey.test.ts validKeys[2]"
       },
-      "tags": ["private-key", "roundtrip"]
+      "tags": [
+        "private-key",
+        "roundtrip"
+      ]
     },
     {
       "id": "key-004",
@@ -53,7 +64,10 @@
         "privkey_hex_roundtrip": "1b5a8f2392e6959a7de2b0a58f8a64cc528c9bfc1788ee0d32e1455063e71545",
         "note": "PrivateKey.test.ts validKeys[3]"
       },
-      "tags": ["private-key", "roundtrip"]
+      "tags": [
+        "private-key",
+        "roundtrip"
+      ]
     },
     {
       "id": "key-005",
@@ -67,7 +81,11 @@
         "derived_private_key_hex": "761656715bbfa172f8f9f58f5af95d9d0dfd69014cfdcacc9a245a10ff8893ef",
         "note": "BRC42.private.vectors.ts vector #1; recipientPrivKey.deriveChild(senderPubKey, invoiceNumber)"
       },
-      "tags": ["brc42", "key-derivation", "private"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
     },
     {
       "id": "key-006",
@@ -81,7 +99,11 @@
         "derived_private_key_hex": "09f2b48bd75f4da6429ac70b5dce863d5ed2b350b6f2119af5626914bdb7c276",
         "note": "BRC42.private.vectors.ts vector #2"
       },
-      "tags": ["brc42", "key-derivation", "private"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
     },
     {
       "id": "key-007",
@@ -95,7 +117,11 @@
         "derived_private_key_hex": "7114cd9afd1eade02f76703cc976c241246a2f26f5c4b7a3a0150ecc745da9f0",
         "note": "BRC42.private.vectors.ts vector #3"
       },
-      "tags": ["brc42", "key-derivation", "private"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
     },
     {
       "id": "key-008",
@@ -109,7 +135,11 @@
         "derived_private_key_hex": "f1d6fb05da1225feeddd1cf4100128afe09c3c1aadbffbd5c8bd10d329ef8f40",
         "note": "BRC42.private.vectors.ts vector #4"
       },
-      "tags": ["brc42", "key-derivation", "private"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
     },
     {
       "id": "key-009",
@@ -123,7 +153,11 @@
         "derived_private_key_hex": "c5677c533f17c30f79a40744b18085632b262c0c13d87f3848c385f1389f79a6",
         "note": "BRC42.private.vectors.ts vector #5"
       },
-      "tags": ["brc42", "key-derivation", "private"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
     },
     {
       "id": "key-010",
@@ -137,7 +171,11 @@
         "derived_public_key_hex": "03c1bf5baadee39721ae8c9882b3cf324f0bf3b9eb3fc1b8af8089ca7a7c2e669f",
         "note": "BRC42.public.vectors.ts vector #1; recipientPubKey.deriveChild(senderPrivKey, invoiceNumber)"
       },
-      "tags": ["brc42", "key-derivation", "public"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
     },
     {
       "id": "key-011",
@@ -151,7 +189,11 @@
         "derived_public_key_hex": "0398cdf4b56a3b2e106224ff3be5253afd5b72de735d647831be51c713c9077848",
         "note": "BRC42.public.vectors.ts vector #2"
       },
-      "tags": ["brc42", "key-derivation", "public"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
     },
     {
       "id": "key-012",
@@ -165,7 +207,11 @@
         "derived_public_key_hex": "0273eec9380c1a11c5a905e86c2d036e70cbefd8991d9a0cfca671f5e0bbea4a3c",
         "note": "BRC42.public.vectors.ts vector #3"
       },
-      "tags": ["brc42", "key-derivation", "public"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
     },
     {
       "id": "key-013",
@@ -179,7 +225,11 @@
         "derived_public_key_hex": "034c5c6bf2e52e8de8b2eb75883090ed7d1db234270907f1b0d1c2de1ddee5005d",
         "note": "BRC42.public.vectors.ts vector #4"
       },
-      "tags": ["brc42", "key-derivation", "public"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
     },
     {
       "id": "key-014",
@@ -193,7 +243,11 @@
         "derived_public_key_hex": "03304b41cfa726096ffd9d8907fe0835f888869eda9653bca34eb7bcab870d3779",
         "note": "BRC42.public.vectors.ts vector #5"
       },
-      "tags": ["brc42", "key-derivation", "public"]
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
     },
     {
       "id": "key-015",
@@ -207,7 +261,11 @@
         "pubkey_der_prefix": "02 or 03",
         "note": "PublicKey.additional.test.ts: toDER returns 33 bytes / 66 hex chars starting with 02 or 03"
       },
-      "tags": ["public-key", "der", "compressed"]
+      "tags": [
+        "public-key",
+        "der",
+        "compressed"
+      ]
     },
     {
       "id": "key-016",
@@ -220,7 +278,11 @@
         "throws": true,
         "note": "PublicKey.test.ts: new PublicKey('036af27...') throws — DER must be passed via fromString/fromDER"
       },
-      "tags": ["public-key", "negative", "constructor"]
+      "tags": [
+        "public-key",
+        "negative",
+        "constructor"
+      ]
     },
     {
       "id": "key-017",
@@ -235,7 +297,299 @@
         "error_pattern": "Public key not valid for ECDH secret derivation",
         "note": "PublicKey.test.ts: new PublicKey(10, 13).deriveSharedSecret(privKey) throws"
       },
-      "tags": ["public-key", "ecdh", "negative"]
+      "tags": [
+        "public-key",
+        "ecdh",
+        "negative"
+      ]
+    },
+    {
+      "id": "key-018",
+      "description": "BRC-42 private derivation — BRC-43 payment protocol, keyID=1, pair (11111111, 22222222)",
+      "input": {
+        "recipient_private_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "sender_public_key_hex": "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+        "invoice_number": "1-payment-1"
+      },
+      "expected": {
+        "derived_private_key_hex": "23504f59e21ff8182cb50d22b164ccc7d608aae929c884ebc1a84940c9df34ce",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"1-payment-1\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-019",
+      "description": "BRC-42 public derivation — BRC-43 payment protocol, keyID=1, pair (22222222, 11111111)",
+      "input": {
+        "sender_private_key_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "recipient_public_key_hex": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+        "invoice_number": "1-payment-1"
+      },
+      "expected": {
+        "derived_public_key_hex": "034b27ec0a514631fc3f837dfeeb053d73a4750f97c97e90a86702dd1e1bf3874a",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"1-payment-1\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-020",
+      "description": "BRC-42 private derivation — BRC-43 invoice protocol, keyID=1, pair (11111111, 22222222)",
+      "input": {
+        "recipient_private_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "sender_public_key_hex": "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+        "invoice_number": "2-invoice-1"
+      },
+      "expected": {
+        "derived_private_key_hex": "6944b28ab6b33ad1791fe4815632a0c8502891dd1866eb76cc509610a6fda263",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"2-invoice-1\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-021",
+      "description": "BRC-42 public derivation — BRC-43 invoice protocol, keyID=1, pair (22222222, 11111111)",
+      "input": {
+        "sender_private_key_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "recipient_public_key_hex": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+        "invoice_number": "2-invoice-1"
+      },
+      "expected": {
+        "derived_public_key_hex": "03b50c2526918d2d0ead3c80ee9a8c6dc7183f85675ba97c8e4c84c3b3473b349a",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"2-invoice-1\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-022",
+      "description": "BRC-42 private derivation — BRC-43 message-signing protocol, keyID=0, pair (11111111, 22222222)",
+      "input": {
+        "recipient_private_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "sender_public_key_hex": "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+        "invoice_number": "message signing-0"
+      },
+      "expected": {
+        "derived_private_key_hex": "d4309adea3b117753d5e2d1209fedc9ef8e1c970ff27324fe25817decd0728f1",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"message signing-0\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-023",
+      "description": "BRC-42 public derivation — BRC-43 message-signing protocol, keyID=0, pair (22222222, 11111111)",
+      "input": {
+        "sender_private_key_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "recipient_public_key_hex": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+        "invoice_number": "message signing-0"
+      },
+      "expected": {
+        "derived_public_key_hex": "02aa6016ccdb9889ee9244b0a030ea3260e1b80b1bb69559ddab1d52c650befbfd",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"message signing-0\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-024",
+      "description": "BRC-42 private derivation — BRC-43 HMAC protocol, keyID=1, pair (11111111, 22222222)",
+      "input": {
+        "recipient_private_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "sender_public_key_hex": "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+        "invoice_number": "3-hmac-1"
+      },
+      "expected": {
+        "derived_private_key_hex": "a7f23e8c776f58c182b799f6673a643378ff01a6d7406186164811cc7437e18b",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"3-hmac-1\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-025",
+      "description": "BRC-42 public derivation — BRC-43 HMAC protocol, keyID=1, pair (22222222, 11111111)",
+      "input": {
+        "sender_private_key_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "recipient_public_key_hex": "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+        "invoice_number": "3-hmac-1"
+      },
+      "expected": {
+        "derived_public_key_hex": "032b25fd9eaa06e4fc8493a71dd99743041d02b108c30b483acf55b52903f5a1f7",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"3-hmac-1\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-026",
+      "description": "BRC-42 private derivation — BRC-43 payment protocol, keyID=1, pair (aaaaaaaa, bbbbbbbb)",
+      "input": {
+        "recipient_private_key_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sender_public_key_hex": "0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+        "invoice_number": "1-payment-1"
+      },
+      "expected": {
+        "derived_private_key_hex": "cc9460f7d583c2ffaa712b2107e066d09c93c1db735848d8bad548e68f2ea79b",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"1-payment-1\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-027",
+      "description": "BRC-42 public derivation — BRC-43 payment protocol, keyID=1, pair (bbbbbbbb, aaaaaaaa)",
+      "input": {
+        "sender_private_key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "recipient_public_key_hex": "026a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+        "invoice_number": "1-payment-1"
+      },
+      "expected": {
+        "derived_public_key_hex": "03872dbcb5de47648ca63ea51f930dd784a8e0fe9f0e2447939c38baedb68a4eef",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"1-payment-1\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-028",
+      "description": "BRC-42 private derivation — BRC-43 invoice protocol, keyID=1, pair (aaaaaaaa, bbbbbbbb)",
+      "input": {
+        "recipient_private_key_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sender_public_key_hex": "0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+        "invoice_number": "2-invoice-1"
+      },
+      "expected": {
+        "derived_private_key_hex": "674c1b28a6eba798b41ab1bb51ea1f2e82d3bb9a59f5b51a9ce7fd147d5c8bf8",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"2-invoice-1\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-029",
+      "description": "BRC-42 public derivation — BRC-43 invoice protocol, keyID=1, pair (bbbbbbbb, aaaaaaaa)",
+      "input": {
+        "sender_private_key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "recipient_public_key_hex": "026a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+        "invoice_number": "2-invoice-1"
+      },
+      "expected": {
+        "derived_public_key_hex": "02cc724ce1d0a1aa5a15743551c3cf0d1752247c110fef2eb3f1a53f2ec50f3c07",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"2-invoice-1\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-030",
+      "description": "BRC-42 private derivation — BRC-43 message-signing protocol, keyID=0, pair (aaaaaaaa, bbbbbbbb)",
+      "input": {
+        "recipient_private_key_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sender_public_key_hex": "0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+        "invoice_number": "message signing-0"
+      },
+      "expected": {
+        "derived_private_key_hex": "701940475ea8f9689e8882c71d95d97d93c7ad2ff18945b6e06345af5a532f0f",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"message signing-0\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-031",
+      "description": "BRC-42 public derivation — BRC-43 message-signing protocol, keyID=0, pair (bbbbbbbb, aaaaaaaa)",
+      "input": {
+        "sender_private_key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "recipient_public_key_hex": "026a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+        "invoice_number": "message signing-0"
+      },
+      "expected": {
+        "derived_public_key_hex": "02dd19170559dd309e2101f8182923552ec1517b9b1fc7514950da02abe40d078d",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"message signing-0\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
+    },
+    {
+      "id": "key-032",
+      "description": "BRC-42 private derivation — BRC-43 HMAC protocol, keyID=1, pair (aaaaaaaa, bbbbbbbb)",
+      "input": {
+        "recipient_private_key_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sender_public_key_hex": "0268680737c76dabb801cb2204f57dbe4e4579e4f710cd67dc1b4227592c81e9b5",
+        "invoice_number": "3-hmac-1"
+      },
+      "expected": {
+        "derived_private_key_hex": "95c7d0afad0adf6414e9ac93f52b41f93aeedc84ad63ddf67a4bcbaa124cccd5",
+        "note": "recipPrivKey.deriveChild(senderPubKey, \"3-hmac-1\")"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "private"
+      ]
+    },
+    {
+      "id": "key-033",
+      "description": "BRC-42 public derivation — BRC-43 HMAC protocol, keyID=1, pair (bbbbbbbb, aaaaaaaa)",
+      "input": {
+        "sender_private_key_hex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "recipient_public_key_hex": "026a04ab98d9e4774ad806e302dddeb63bea16b5cb5f223ee77478e861bb583eb3",
+        "invoice_number": "3-hmac-1"
+      },
+      "expected": {
+        "derived_public_key_hex": "022cdf97c89b4d737942d6bccf4d3c53884a76b3693b5f8886ec18750e67a4bbfe",
+        "note": "recipPubKey.deriveChild(senderPrivKey, \"3-hmac-1\") == privToPublic(derivedPrivKey)"
+      },
+      "tags": [
+        "brc42",
+        "key-derivation",
+        "public"
+      ]
     }
   ]
 }

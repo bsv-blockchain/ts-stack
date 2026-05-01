@@ -1,24 +1,64 @@
 {
   "version": "1.0.0",
   "description": "BSV cross-language conformance vector corpus",
-  "domains": ["sdk", "wallet", "overlay", "messaging", "broadcast", "auth"],
+  "domains": ["sdk", "wallet", "overlay", "messaging", "broadcast", "auth", "payments", "storage", "sync"],
   "brc_coverage": {
     "BRC-42": ["sdk.keys.key-derivation", "sdk.keys.privatekey", "sdk.keys.publickey", "sdk.crypto.signature"],
-    "BRC-74": ["sdk.transactions.merklepath"],
+    "BRC-74": ["sdk.transactions.merklepath", "broadcast.merklepath"],
     "BRC-77": ["sdk.compat.bsm"],
-    "BRC-31": ["messaging.brc31.authrite-signature"],
-    "BRC-29": ["wallet.brc29.payment-derivation"],
+    "BRC-31": [
+      "messaging.brc31.authrite-signature",
+      "auth.brc31-handshake",
+      "messaging.authsocket"
+    ],
+    "BRC-29": [
+      "wallet.brc29.payment-derivation",
+      "payments.brc29-payment-protocol"
+    ],
     "BRC-100": [
       "wallet.brc100.getpublickey",
       "wallet.brc100.createhmac",
       "wallet.brc100.createsignature",
-      "wallet.brc100.encrypt"
-    ]
+      "wallet.brc100.encrypt",
+      "wallet.brc100.decrypt",
+      "wallet.brc100.verifyhmac",
+      "wallet.brc100.verifysignature",
+      "wallet.brc100.revealcounterpartykeylinkage",
+      "wallet.brc100.revealspecifickeylinkage",
+      "wallet.brc100.createaction",
+      "wallet.brc100.signaction",
+      "wallet.brc100.abortaction",
+      "wallet.brc100.listactions",
+      "wallet.brc100.internalizeaction",
+      "wallet.brc100.listoutputs",
+      "wallet.brc100.relinquishoutput",
+      "wallet.brc100.acquirecertificate",
+      "wallet.brc100.listcertificates",
+      "wallet.brc100.provecertificate",
+      "wallet.brc100.relinquishcertificate",
+      "wallet.brc100.discoverbyidentitykey",
+      "wallet.brc100.discoverbyattributes",
+      "wallet.brc100.isauthenticated",
+      "wallet.brc100.waitforauthentication",
+      "wallet.brc100.getheight",
+      "wallet.brc100.getheaderforheight",
+      "wallet.brc100.getnetwork",
+      "wallet.brc100.getversion",
+      "wallet.storage.adapterconformance"
+    ],
+    "BRC-121": ["payments.brc121"],
+    "BRC-26": ["storage.uhrp-http"],
+    "BRC-62": ["overlay.submit"],
+    "BRC-22": ["overlay.lookup", "overlay.topicmanagement"],
+    "BRC-20": ["broadcast.arcsubmit", "broadcast.merklepath"],
+    "BRC-21": ["sync.gasprotocol"],
+    "merkle-service": ["broadcast.merkle-service"],
+    "message-box": ["messaging.messagebox-http"]
   },
   "stats": {
-    "total_files": 33,
-    "total_vectors": 260,
-    "last_updated": "2026-04-28"
+    "total_files": 71,
+    "total_vectors": 1504,
+    "last_updated": "2026-05-01"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

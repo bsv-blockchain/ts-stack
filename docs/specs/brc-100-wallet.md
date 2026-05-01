@@ -510,7 +510,7 @@ Gets the wallet implementation version string.
 
 ## Conformance
 
-Current BRC-100 conformance vectors cover `getPublicKey`, `createHmac`/`verifyHmac`, `createSignature`/`verifySignature`, and `encrypt`/`decrypt`.
+Current BRC-100 conformance vectors provide 100% coverage of the full `WalletInterface` (632 vectors across 25 files covering all 27+ methods, including actions, outputs, certificates, state queries, and key linkage).
 
 See:
 

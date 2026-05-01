@@ -1,224 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="bsv-conformance" tests="1518" failures="0" errors="0" skipped="0">
-  <testsuite name="auth/brc31-handshake" tests="16" failures="0" errors="0" skipped="0">
-    <testcase name="auth.brc31-handshake.1" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.2" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.3" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.4" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.5" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.6" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.7" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.8" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.9" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.10" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.11" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.12" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.13" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.14" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.15" classname="auth/brc31-handshake" time="0"/>
-    <testcase name="auth.brc31-handshake.16" classname="auth/brc31-handshake" time="0"/>
-  </testsuite>
-  <testsuite name="broadcast/arc-submit" tests="16" failures="0" errors="0" skipped="0">
-    <testcase name="broadcast.arcsubmit.1" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.2" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.3" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.4" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.5" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.6" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.7" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.8" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.9" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.10" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.11" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.12" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.13" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.14" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.15" classname="broadcast/arc-submit" time="0"/>
-    <testcase name="broadcast.arcsubmit.16" classname="broadcast/arc-submit" time="0"/>
-  </testsuite>
-  <testsuite name="broadcast/merkle-path-validation" tests="11" failures="0" errors="0" skipped="0">
-    <testcase name="broadcast.merklepath.1" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.2" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.3" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.4" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.5" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.6" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.7" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.8" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.9" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.10" classname="broadcast/merkle-path-validation" time="0"/>
-    <testcase name="broadcast.merklepath.11" classname="broadcast/merkle-path-validation" time="0"/>
-  </testsuite>
-  <testsuite name="broadcast/merkle-service" tests="15" failures="0" errors="0" skipped="0">
-    <testcase name="broadcast.merkle-service.1" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.2" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.3" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.4" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.5" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.6" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.7" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.8" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.9" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.10" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.11" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.12" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.13" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.14" classname="broadcast/merkle-service" time="0"/>
-    <testcase name="broadcast.merkle-service.15" classname="broadcast/merkle-service" time="0"/>
-  </testsuite>
-  <testsuite name="messaging/authsocket" tests="12" failures="0" errors="0" skipped="0">
-    <testcase name="messaging.authsocket.1" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.2" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.3" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.4" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.5" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.6" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.7" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.8" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.9" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.10" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.11" classname="messaging/authsocket" time="0"/>
-    <testcase name="messaging.authsocket.12" classname="messaging/authsocket" time="0"/>
-  </testsuite>
-  <testsuite name="messaging/brc31/authrite-signature" tests="28" failures="0" errors="0" skipped="0">
+<testsuites name="bsv-conformance" tests="890" failures="0" errors="0" skipped="0">
+  <testsuite name="messaging/brc31/authrite-signature" tests="4" failures="0" errors="0" skipped="0">
     <testcase name="messaging.brc31.authrite-signature.1" classname="messaging/brc31/authrite-signature" time="0"/>
     <testcase name="messaging.brc31.authrite-signature.2" classname="messaging/brc31/authrite-signature" time="0"/>
     <testcase name="messaging.brc31.authrite-signature.3" classname="messaging/brc31/authrite-signature" time="0"/>
     <testcase name="messaging.brc31.authrite-signature.4" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.5" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.6" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.7" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.8" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.9" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.10" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.11" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.12" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.13" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.14" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.15" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.16" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.17" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.18" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.19" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.20" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.21" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.22" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.23" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.24" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.25" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.26" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.27" classname="messaging/brc31/authrite-signature" time="0"/>
-    <testcase name="messaging.brc31.authrite-signature.28" classname="messaging/brc31/authrite-signature" time="0"/>
-  </testsuite>
-  <testsuite name="messaging/message-box-http" tests="21" failures="0" errors="0" skipped="0">
-    <testcase name="messaging.messagebox-http.sendmessage.1" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.sendmessage.2" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.sendmessage.3" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.sendmessage.4" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.sendmessage.5" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.sendmessage.6" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.listmessages.1" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.listmessages.2" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.listmessages.3" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.listmessages.4" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.acknowledgemessage.1" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.acknowledgemessage.2" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.acknowledgemessage.3" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.acknowledgemessage.4" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.setpermission.1" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.setpermission.2" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.setpermission.3" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.getpermission.1" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.getpermission.2" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.listpermissions.1" classname="messaging/message-box-http" time="0"/>
-    <testcase name="messaging.messagebox-http.listpermissions.2" classname="messaging/message-box-http" time="0"/>
-  </testsuite>
-  <testsuite name="overlay/lookup" tests="14" failures="0" errors="0" skipped="0">
-    <testcase name="overlay.lookup.1" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.2" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.3" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.4" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.5" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.6" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.7" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.8" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.9" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.10" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.11" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.12" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.13" classname="overlay/lookup" time="0"/>
-    <testcase name="overlay.lookup.14" classname="overlay/lookup" time="0"/>
-  </testsuite>
-  <testsuite name="overlay/submit" tests="12" failures="0" errors="0" skipped="0">
-    <testcase name="overlay.submit.1" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.2" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.3" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.4" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.5" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.6" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.7" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.8" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.9" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.10" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.11" classname="overlay/submit" time="0"/>
-    <testcase name="overlay.submit.12" classname="overlay/submit" time="0"/>
-  </testsuite>
-  <testsuite name="overlay/topic-management" tests="18" failures="0" errors="0" skipped="0">
-    <testcase name="overlay.topicmanagement.1" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.2" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.3" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.4" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.5" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.6" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.7" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.8" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.9" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.10" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.11" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.12" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.13" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.14" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.15" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.16" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.17" classname="overlay/topic-management" time="0"/>
-    <testcase name="overlay.topicmanagement.18" classname="overlay/topic-management" time="0"/>
-  </testsuite>
-  <testsuite name="payments/brc121" tests="18" failures="0" errors="0" skipped="0">
-    <testcase name="payments.brc121.1" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.2" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.3" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.4" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.5" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.6" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.7" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.8" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.9" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.10" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.11" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.12" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.13" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.14" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.15" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.16" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.17" classname="payments/brc121" time="0"/>
-    <testcase name="payments.brc121.18" classname="payments/brc121" time="0"/>
-  </testsuite>
-  <testsuite name="payments/brc29-payment-protocol" tests="15" failures="0" errors="0" skipped="0">
-    <testcase name="payments.brc29-payment-protocol.1" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.2" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.3" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.4" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.5" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.6" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.7" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.8" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.9" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.10" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.11" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.12" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.13" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.14" classname="payments/brc29-payment-protocol" time="0"/>
-    <testcase name="payments.brc29-payment-protocol.15" classname="payments/brc29-payment-protocol" time="0"/>
   </testsuite>
   <testsuite name="regressions/beef-isvalid-hydration" tests="2" failures="0" errors="0" skipped="0">
     <testcase name="regression.beef.isvalid-hydration.0001" classname="regressions/beef-isvalid-hydration" time="0"/>
@@ -334,29 +120,12 @@
     <testcase name="ecdsa-023" classname="sdk/crypto/ecdsa" time="0"/>
     <testcase name="ecdsa-024" classname="sdk/crypto/ecdsa" time="0"/>
   </testsuite>
-  <testsuite name="sdk/crypto/ecies" tests="22" failures="0" errors="0" skipped="0">
+  <testsuite name="sdk/crypto/ecies" tests="5" failures="0" errors="0" skipped="0">
     <testcase name="sdk.crypto.ecies.1" classname="sdk/crypto/ecies" time="0"/>
     <testcase name="sdk.crypto.ecies.2" classname="sdk/crypto/ecies" time="0"/>
     <testcase name="sdk.crypto.ecies.3" classname="sdk/crypto/ecies" time="0"/>
     <testcase name="sdk.crypto.ecies.4" classname="sdk/crypto/ecies" time="0"/>
     <testcase name="sdk.crypto.ecies.5" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.6" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.7" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.8" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.9" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.10" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.11" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.12" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.13" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.14" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.15" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.16" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.17" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.18" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.19" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.20" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.21" classname="sdk/crypto/ecies" time="0"/>
-    <testcase name="sdk.crypto.ecies.22" classname="sdk/crypto/ecies" time="0"/>
   </testsuite>
   <testsuite name="sdk/crypto/hash160" tests="8" failures="0" errors="0" skipped="0">
     <testcase name="sdk.crypto.hash160.1" classname="sdk/crypto/hash160" time="0"/>
@@ -406,7 +175,7 @@
     <testcase name="sdk.crypto.sha256.13" classname="sdk/crypto/sha256" time="0"/>
     <testcase name="sdk.crypto.sha256.14" classname="sdk/crypto/sha256" time="0"/>
   </testsuite>
-  <testsuite name="sdk/crypto/signature" tests="23" failures="0" errors="0" skipped="0">
+  <testsuite name="sdk/crypto/signature" tests="15" failures="0" errors="0" skipped="0">
     <testcase name="sig-der-001" classname="sdk/crypto/signature" time="0"/>
     <testcase name="sig-der-002" classname="sdk/crypto/signature" time="0"/>
     <testcase name="sig-der-003" classname="sdk/crypto/signature" time="0"/>
@@ -422,16 +191,8 @@
     <testcase name="sig-compact-007" classname="sdk/crypto/signature" time="0"/>
     <testcase name="sig-tocompact-err-001" classname="sdk/crypto/signature" time="0"/>
     <testcase name="sig-tocompact-err-002" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-der-007" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-der-008" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-der-009" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-der-010" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-compact-008" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-compact-009" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-compact-010" classname="sdk/crypto/signature" time="0"/>
-    <testcase name="sig-compact-011" classname="sdk/crypto/signature" time="0"/>
   </testsuite>
-  <testsuite name="sdk/keys/key-derivation" tests="33" failures="0" errors="0" skipped="0">
+  <testsuite name="sdk/keys/key-derivation" tests="17" failures="0" errors="0" skipped="0">
     <testcase name="key-001" classname="sdk/keys/key-derivation" time="0"/>
     <testcase name="key-002" classname="sdk/keys/key-derivation" time="0"/>
     <testcase name="key-003" classname="sdk/keys/key-derivation" time="0"/>
@@ -449,22 +210,6 @@
     <testcase name="key-015" classname="sdk/keys/key-derivation" time="0"/>
     <testcase name="key-016" classname="sdk/keys/key-derivation" time="0"/>
     <testcase name="key-017" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-018" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-019" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-020" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-021" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-022" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-023" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-024" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-025" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-026" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-027" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-028" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-029" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-030" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-031" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-032" classname="sdk/keys/key-derivation" time="0"/>
-    <testcase name="key-033" classname="sdk/keys/key-derivation" time="0"/>
   </testsuite>
   <testsuite name="sdk/keys/private-key" tests="11" failures="0" errors="0" skipped="0">
     <testcase name="privkey-hex-001" classname="sdk/keys/private-key" time="0"/>
@@ -566,64 +311,11 @@
     <testcase name="tx-014" classname="sdk/transactions/serialization" time="0"/>
     <testcase name="tx-015" classname="sdk/transactions/serialization" time="0"/>
   </testsuite>
-  <testsuite name="storage/uhrp-http" tests="15" failures="0" errors="0" skipped="0">
-    <testcase name="storage.uhrp-http.1" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.2" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.3" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.4" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.5" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.6" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.7" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.8" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.9" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.10" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.11" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.12" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.13" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.14" classname="storage/uhrp-http" time="0"/>
-    <testcase name="storage.uhrp-http.15" classname="storage/uhrp-http" time="0"/>
-  </testsuite>
-  <testsuite name="sync/gasp-protocol" tests="20" failures="0" errors="0" skipped="0">
-    <testcase name="sync.gasprotocol.1" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.2" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.3" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.4" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.5" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.6" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.7" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.8" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.9" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.10" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.11" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.12" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.13" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.14" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.15" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.16" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.17" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.18" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.19" classname="sync/gasp-protocol" time="0"/>
-    <testcase name="sync.gasprotocol.20" classname="sync/gasp-protocol" time="0"/>
-  </testsuite>
-  <testsuite name="wallet/brc100/abortaction" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/abortaction" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.abortaction.1" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.2" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.3" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.4" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.5" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.6" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.7" classname="wallet/brc100/abortaction" time="0"/>
-    <testcase name="wallet.brc100.abortaction.8" classname="wallet/brc100/abortaction" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/acquirecertificate" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/acquirecertificate" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.acquirecertificate.1" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.2" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.3" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.4" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.5" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.6" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.7" classname="wallet/brc100/acquirecertificate" time="0"/>
-    <testcase name="wallet.brc100.acquirecertificate.8" classname="wallet/brc100/acquirecertificate" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/createaction" tests="90" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.createaction.1" classname="wallet/brc100/createaction" time="0"/>
@@ -793,82 +485,11 @@
     <testcase name="wallet.brc100.createsignature.35" classname="wallet/brc100/createsignature" time="0"/>
     <testcase name="wallet.brc100.createsignature.36" classname="wallet/brc100/createsignature" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/decrypt" tests="51" failures="0" errors="0" skipped="0">
-    <testcase name="wallet.brc100.decrypt.1" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.2" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.3" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.4" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.5" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.6" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.7" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.8" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.9" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.10" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.11" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.12" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.13" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.14" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.15" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.16" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.17" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.18" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.19" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.20" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.21" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.22" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.23" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.24" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.25" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.26" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.27" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.28" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.29" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.30" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.31" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.32" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.33" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.34" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.35" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.36" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.37" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.38" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.39" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.40" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.41" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.42" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.43" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.44" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.45" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.46" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.47" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.48" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.49" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.50" classname="wallet/brc100/decrypt" time="0"/>
-    <testcase name="wallet.brc100.decrypt.51" classname="wallet/brc100/decrypt" time="0"/>
-  </testsuite>
-  <testsuite name="wallet/brc100/discoverbyattributes" tests="10" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/discoverbyattributes" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.discoverbyattributes.1" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.2" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.3" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.4" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.5" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.6" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.7" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.8" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.9" classname="wallet/brc100/discoverbyattributes" time="0"/>
-    <testcase name="wallet.brc100.discoverbyattributes.10" classname="wallet/brc100/discoverbyattributes" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/discoverbyidentitykey" tests="10" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/discoverbyidentitykey" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.discoverbyidentitykey.1" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.2" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.3" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.4" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.5" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.6" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.7" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.8" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.9" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
-    <testcase name="wallet.brc100.discoverbyidentitykey.10" classname="wallet/brc100/discoverbyidentitykey" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/encrypt" tests="36" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.encrypt.1" classname="wallet/brc100/encrypt" time="0"/>
@@ -908,29 +529,14 @@
     <testcase name="wallet.brc100.encrypt.35" classname="wallet/brc100/encrypt" time="0"/>
     <testcase name="wallet.brc100.encrypt.36" classname="wallet/brc100/encrypt" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/getheaderforheight" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/getheaderforheight" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.getheaderforheight.1" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.2" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.3" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.4" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.5" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.6" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.7" classname="wallet/brc100/getheaderforheight" time="0"/>
-    <testcase name="wallet.brc100.getheaderforheight.8" classname="wallet/brc100/getheaderforheight" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/getheight" tests="5" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/getheight" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.getheight.1" classname="wallet/brc100/getheight" time="0"/>
-    <testcase name="wallet.brc100.getheight.2" classname="wallet/brc100/getheight" time="0"/>
-    <testcase name="wallet.brc100.getheight.3" classname="wallet/brc100/getheight" time="0"/>
-    <testcase name="wallet.brc100.getheight.4" classname="wallet/brc100/getheight" time="0"/>
-    <testcase name="wallet.brc100.getheight.5" classname="wallet/brc100/getheight" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/getnetwork" tests="5" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/getnetwork" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.getnetwork.1" classname="wallet/brc100/getnetwork" time="0"/>
-    <testcase name="wallet.brc100.getnetwork.2" classname="wallet/brc100/getnetwork" time="0"/>
-    <testcase name="wallet.brc100.getnetwork.3" classname="wallet/brc100/getnetwork" time="0"/>
-    <testcase name="wallet.brc100.getnetwork.4" classname="wallet/brc100/getnetwork" time="0"/>
-    <testcase name="wallet.brc100.getnetwork.5" classname="wallet/brc100/getnetwork" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/getpublickey" tests="201" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.getpublickey.1" classname="wallet/brc100/getpublickey" time="0"/>
@@ -1135,59 +741,20 @@
     <testcase name="wallet.brc100.getpublickey.200" classname="wallet/brc100/getpublickey" time="0"/>
     <testcase name="wallet.brc100.getpublickey.201" classname="wallet/brc100/getpublickey" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/getversion" tests="5" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/getversion" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.getversion.1" classname="wallet/brc100/getversion" time="0"/>
-    <testcase name="wallet.brc100.getversion.2" classname="wallet/brc100/getversion" time="0"/>
-    <testcase name="wallet.brc100.getversion.3" classname="wallet/brc100/getversion" time="0"/>
-    <testcase name="wallet.brc100.getversion.4" classname="wallet/brc100/getversion" time="0"/>
-    <testcase name="wallet.brc100.getversion.5" classname="wallet/brc100/getversion" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/internalizeaction" tests="10" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/internalizeaction" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.internalizeaction.1" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.2" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.3" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.4" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.5" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.6" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.7" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.8" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.9" classname="wallet/brc100/internalizeaction" time="0"/>
-    <testcase name="wallet.brc100.internalizeaction.10" classname="wallet/brc100/internalizeaction" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/isauthenticated" tests="5" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/isauthenticated" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.isauthenticated.1" classname="wallet/brc100/isauthenticated" time="0"/>
-    <testcase name="wallet.brc100.isauthenticated.2" classname="wallet/brc100/isauthenticated" time="0"/>
-    <testcase name="wallet.brc100.isauthenticated.3" classname="wallet/brc100/isauthenticated" time="0"/>
-    <testcase name="wallet.brc100.isauthenticated.4" classname="wallet/brc100/isauthenticated" time="0"/>
-    <testcase name="wallet.brc100.isauthenticated.5" classname="wallet/brc100/isauthenticated" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/listactions" tests="16" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/listactions" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.listactions.1" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.2" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.3" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.4" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.5" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.6" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.7" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.8" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.9" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.10" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.11" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.12" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.13" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.14" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.15" classname="wallet/brc100/listactions" time="0"/>
-    <testcase name="wallet.brc100.listactions.16" classname="wallet/brc100/listactions" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/listcertificates" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/listcertificates" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.listcertificates.1" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.2" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.3" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.4" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.5" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.6" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.7" classname="wallet/brc100/listcertificates" time="0"/>
-    <testcase name="wallet.brc100.listcertificates.8" classname="wallet/brc100/listcertificates" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/listoutputs" tests="144" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.listoutputs.1" classname="wallet/brc100/listoutputs" time="0"/>
@@ -1335,33 +902,14 @@
     <testcase name="wallet.brc100.listoutputs.143" classname="wallet/brc100/listoutputs" time="0"/>
     <testcase name="wallet.brc100.listoutputs.144" classname="wallet/brc100/listoutputs" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/provecertificate" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/provecertificate" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.provecertificate.1" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.2" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.3" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.4" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.5" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.6" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.7" classname="wallet/brc100/provecertificate" time="0"/>
-    <testcase name="wallet.brc100.provecertificate.8" classname="wallet/brc100/provecertificate" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/relinquishcertificate" tests="6" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/relinquishcertificate" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.relinquishcertificate.1" classname="wallet/brc100/relinquishcertificate" time="0"/>
-    <testcase name="wallet.brc100.relinquishcertificate.2" classname="wallet/brc100/relinquishcertificate" time="0"/>
-    <testcase name="wallet.brc100.relinquishcertificate.3" classname="wallet/brc100/relinquishcertificate" time="0"/>
-    <testcase name="wallet.brc100.relinquishcertificate.4" classname="wallet/brc100/relinquishcertificate" time="0"/>
-    <testcase name="wallet.brc100.relinquishcertificate.5" classname="wallet/brc100/relinquishcertificate" time="0"/>
-    <testcase name="wallet.brc100.relinquishcertificate.6" classname="wallet/brc100/relinquishcertificate" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/relinquishoutput" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/relinquishoutput" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.relinquishoutput.1" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.2" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.3" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.4" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.5" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.6" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.7" classname="wallet/brc100/relinquishoutput" time="0"/>
-    <testcase name="wallet.brc100.relinquishoutput.8" classname="wallet/brc100/relinquishoutput" time="0"/>
   </testsuite>
   <testsuite name="wallet/brc100/revealcounterpartykeylinkage" tests="36" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.revealcounterpartykeylinkage.1" classname="wallet/brc100/revealcounterpartykeylinkage" time="0"/>
@@ -1439,225 +987,15 @@
     <testcase name="wallet.brc100.revealspecifickeylinkage.35" classname="wallet/brc100/revealspecifickeylinkage" time="0"/>
     <testcase name="wallet.brc100.revealspecifickeylinkage.36" classname="wallet/brc100/revealspecifickeylinkage" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/signaction" tests="8" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/signaction" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.signaction.1" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.2" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.3" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.4" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.5" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.6" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.7" classname="wallet/brc100/signaction" time="0"/>
-    <testcase name="wallet.brc100.signaction.8" classname="wallet/brc100/signaction" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc100/verifyhmac" tests="70" failures="0" errors="0" skipped="0">
-    <testcase name="wallet.brc100.verifyhmac.1" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.2" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.3" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.4" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.5" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.6" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.7" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.8" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.9" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.10" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.11" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.12" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.13" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.14" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.15" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.16" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.17" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.18" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.19" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.20" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.21" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.22" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.23" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.24" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.25" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.26" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.27" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.28" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.29" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.30" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.31" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.32" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.33" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.34" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.35" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.36" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.37" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.38" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.39" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.40" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.41" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.42" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.43" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.44" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.45" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.46" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.47" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.48" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.49" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.50" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.51" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.52" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.53" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.54" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.55" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.56" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.57" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.58" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.59" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.60" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.61" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.62" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.63" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.64" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.65" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.66" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.67" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.68" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.69" classname="wallet/brc100/verifyhmac" time="0"/>
-    <testcase name="wallet.brc100.verifyhmac.70" classname="wallet/brc100/verifyhmac" time="0"/>
-  </testsuite>
-  <testsuite name="wallet/brc100/verifysignature" tests="81" failures="0" errors="0" skipped="0">
-    <testcase name="wallet.brc100.verifysignature.1" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.2" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.3" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.4" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.5" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.6" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.7" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.8" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.9" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.10" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.11" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.12" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.13" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.14" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.15" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.16" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.17" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.18" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.19" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.20" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.21" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.22" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.23" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.24" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.25" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.26" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.27" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.28" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.29" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.30" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.31" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.32" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.33" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.34" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.35" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.36" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.37" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.38" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.39" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.40" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.41" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.42" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.43" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.44" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.45" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.46" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.47" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.48" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.49" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.50" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.51" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.52" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.53" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.54" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.55" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.56" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.57" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.58" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.59" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.60" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.61" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.62" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.63" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.64" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.65" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.66" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.67" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.68" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.69" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.70" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.71" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.72" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.73" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.74" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.75" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.76" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.77" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.78" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.79" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.80" classname="wallet/brc100/verifysignature" time="0"/>
-    <testcase name="wallet.brc100.verifysignature.81" classname="wallet/brc100/verifysignature" time="0"/>
-  </testsuite>
-  <testsuite name="wallet/brc100/waitforauthentication" tests="5" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc100/waitforauthentication" tests="1" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc100.waitforauthentication.1" classname="wallet/brc100/waitforauthentication" time="0"/>
-    <testcase name="wallet.brc100.waitforauthentication.2" classname="wallet/brc100/waitforauthentication" time="0"/>
-    <testcase name="wallet.brc100.waitforauthentication.3" classname="wallet/brc100/waitforauthentication" time="0"/>
-    <testcase name="wallet.brc100.waitforauthentication.4" classname="wallet/brc100/waitforauthentication" time="0"/>
-    <testcase name="wallet.brc100.waitforauthentication.5" classname="wallet/brc100/waitforauthentication" time="0"/>
   </testsuite>
-  <testsuite name="wallet/brc29/payment-derivation" tests="27" failures="0" errors="0" skipped="0">
+  <testsuite name="wallet/brc29/payment-derivation" tests="3" failures="0" errors="0" skipped="0">
     <testcase name="wallet.brc29.payment-derivation.1" classname="wallet/brc29/payment-derivation" time="0"/>
     <testcase name="wallet.brc29.payment-derivation.2" classname="wallet/brc29/payment-derivation" time="0"/>
     <testcase name="wallet.brc29.payment-derivation.3" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.4" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.5" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.6" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.7" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.8" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.9" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.10" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.11" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.12" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.13" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.14" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.15" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.16" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.17" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.18" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.19" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.20" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.21" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.22" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.23" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.24" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.25" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.26" classname="wallet/brc29/payment-derivation" time="0"/>
-    <testcase name="wallet.brc29.payment-derivation.27" classname="wallet/brc29/payment-derivation" time="0"/>
-  </testsuite>
-  <testsuite name="wallet/storage/adapter-conformance" tests="18" failures="0" errors="0" skipped="0">
-    <testcase name="wallet.storage.adapterconformance.1" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.2" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.3" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.4" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.5" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.6" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.7" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.8" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.9" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.10" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.11" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.12" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.13" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.14" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.15" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.16" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.17" classname="wallet/storage/adapter-conformance" time="0"/>
-    <testcase name="wallet.storage.adapterconformance.18" classname="wallet/storage/adapter-conformance" time="0"/>
   </testsuite>
 </testsuites>
