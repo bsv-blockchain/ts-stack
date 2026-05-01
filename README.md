@@ -6,18 +6,18 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 
 ## Domains
 
-| Domain | Path | Packages |
-|--------|------|----------|
-| **SDK** | `packages/sdk/` | 3 |
-| **Wallet** | `packages/wallet/` | 9 |
-| **Network** | `packages/network/` | 1 |
-| **Overlays** | `packages/overlays/` | 9 |
-| **Messaging** | `packages/messaging/` | 6 |
-| **Middleware** | `packages/middleware/` | 3 |
-| **Helpers** | `packages/helpers/` | 4 |
-| **Conformance** | `conformance/` | 1 runner |
+| Domain | Path | Description |
+|--------|------|-------------|
+| **SDK** | `packages/sdk/` | Core crypto, scripts, tx, BRC-100 |
+| **Wallet** | `packages/wallet/` | BRC-100 implementation components |
+| **Network** | `packages/network/` | P2P real-time event listener for Teranode |
+| **Overlays** | `packages/overlays/` | Topic indexing, validation, GASP sync |
+| **Messaging** | `packages/messaging/` | Message Box, Authsocket, Paymail |
+| **Middleware** | `packages/middleware/` | Auth & HTTP 402 for Express |
+| **Helpers** | `packages/helpers/` | `@bsv/simple`, wallet-helper, utilities |
+| **Conformance** | `conformance/` | Vectors for interoperability |
 
-**35 packages** + conformance runner across 7 domains.
+See `docs/packages/index.md` for details (primary developer documentation).
 
 ---
 
@@ -26,9 +26,7 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 ### SDK — `packages/sdk/`
 | Package | npm |
 |---------|-----|
-| [ts-sdk](packages/sdk/ts-sdk) | [@bsv/sdk](https://www.npmjs.com/package/@bsv/sdk) |
-| [ts-templates](packages/sdk/ts-templates) | [@bsv/templates](https://www.npmjs.com/package/@bsv/templates) |
-| [did-client](packages/sdk/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
+| [sdk](packages/sdk) | [@bsv/sdk](https://www.npmjs.com/package/@bsv/sdk) |
 
 ### Wallet — `packages/wallet/`
 | Package | npm |
@@ -82,6 +80,8 @@ BSV TypeScript monorepo — all production TypeScript packages for the BSV block
 |---------|-----|
 | [simple](packages/helpers/simple) | [@bsv/simple](https://www.npmjs.com/package/@bsv/simple) |
 | [bsv-wallet-helper](packages/helpers/bsv-wallet-helper) | [@bsv/wallet-helper](https://www.npmjs.com/package/@bsv/wallet-helper) |
+| [ts-templates](packages/helpers/ts-templates) | [@bsv/templates](https://www.npmjs.com/package/@bsv/templates) |
+| [did-client](packages/helpers/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
 | [amountinator](packages/helpers/amountinator) | [@bsv/amountinator](https://www.npmjs.com/package/@bsv/amountinator) |
 | [fund-wallet](packages/helpers/fund-wallet) | `@bsv/fund-wallet` |
 

@@ -3,8 +3,8 @@ id: packages-index
 title: Packages
 kind: meta
 version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-01"
+last_verified: "2026-05-01"
 review_cadence_days: 30
 status: stable
 tags: ["packages"]
@@ -12,7 +12,7 @@ tags: ["packages"]
 
 # Packages
 
-ts-stack contains 27 production-ready packages organized into 7 domains. Each domain serves a specific part of the stack — from core crypto to business logic.
+ts-stack contains packages organized into 7 domains. Each domain serves a specific part of the stack — from core crypto to business logic. See the top-level README.md for the current package map.
 
 ## Seven Domains
 
@@ -29,13 +29,13 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 - [@bsv/wallet-toolbox](./wallet/wallet-toolbox.md) — BRC-100 wallet client library
 - [@bsv/btms](./wallet/btms.md) — Basic Token Management System for token issuance, transfer, receiving, burning, and ownership proofs
 - [@bsv/btms-permission-module](./wallet/btms-permission-module.md) — Token permission checking
-- [@bsv/wallet-relay](./wallet/wallet-relay.md) — Broadcast and query wrapper for wallet synchronization
+- [@bsv/wallet-relay](./wallet/wallet-relay.md) — Mobile-to-desktop wallet pairing via QR codes + encrypted WebSocket relay
 
 ### Network
 
-**Broadcast transactions and query BSV nodes through a typed client.**
+**P2P Real-time Event Listener for Teranode**
 
-- [@bsv/teranode-listener](./network/teranode-listener.md) — Connect to Teranode and listen for transactions
+- [@bsv/teranode-listener](./network/teranode-listener.md) — Subscribe to Teranode P2P topics (blocks, subtrees, mining) with callbacks (see specs/sync for related)
 
 ### Overlays
 
@@ -45,7 +45,7 @@ ts-stack contains 27 production-ready packages organized into 7 domains. Each do
 - [@bsv/overlay-express](./overlays/overlay-express.md) — HTTP server for the Overlay spec
 - [@bsv/overlay-topics](./overlays/overlay-topics.md) — Topic managers (UHRP, BTMS, custom)
 - [@bsv/overlay-discovery-services](./overlays/overlay-discovery-services.md) — Discover overlays by service type
-- [@bsv/gasp](./overlays/gasp.md) — GASP (Generic Append-only Structured Proofs) sync protocol
+- [@bsv/gasp](./overlays/gasp.md) — Graph Aware Sync Protocol (GASP) for incremental ancestry/descendancy graph sync
 - [@bsv/btms-backend](./overlays/btms-backend.md) — Backend for running a token overlay
 
 ### Messaging

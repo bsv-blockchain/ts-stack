@@ -3,8 +3,8 @@ id: home
 title: ts-stack
 kind: meta
 version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-01"
+last_verified: "2026-05-01"
 review_cadence_days: 7
 status: stable
 tags: []

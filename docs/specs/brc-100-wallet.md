@@ -3,8 +3,8 @@ id: spec-brc-100-wallet
 title: BRC-100 Wallet Interface
 kind: spec
 version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-01"
+last_verified: "2026-05-01"
 status: stable
 tags: ["spec", "wallet", "brc-100"]
 ---
@@ -15,11 +15,11 @@ BRC-100 is the standard application-to-wallet interface used by BSV Desktop, BSV
 
 The authoritative sources for this page are:
 
-- `packages/sdk/src/wallet/Wallet.interfaces.ts`
-- `specs/sdk/brc-100-wallet.json`
+- `packages/sdk/src/wallet/Wallet.interfaces.ts` (TypeScript definitions)
+- `specs/sdk/brc-100-wallet.json` (wire-format schema)
 - [BRC-100 in the BRC repository](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md)
 
-The TypeScript interface passes `originator?: OriginatorDomainNameStringUnder250Bytes` as an optional second method parameter. Wire formats may carry the originator inside the request envelope.
+This MD is a human-readable summary. Implement against the TS interfaces and JSON schema. The TypeScript interface passes `originator?: OriginatorDomainNameStringUnder250Bytes` as an optional second method parameter (wire formats carry it in the request envelope). See `ReviewActionResult` for delayed-broadcast responses.
 
 ## Data Conventions
 
@@ -96,6 +96,7 @@ Returns:
 | `noSendChange` | `OutpointString[]` | When `noSend` produces change for later chained actions. |
 | `sendWithResults` | `SendWithResult[]` | When sending a batch created with `sendWith`. |
 | `signableTransaction` | `{ tx: AtomicBEEF, reference: Base64String }` | When the action needs a follow-up `signAction`. |
+| (ReviewActionResult fields) | `object` | When `acceptDelayedBroadcast: false`; see `ReviewActionResult` (status, competingTxs, etc.) in `Wallet.interfaces.ts`. |
 
 Minimal shape:
 
@@ -238,7 +239,7 @@ Optional args:
 |-------|------|---------|
 | `tags` | `OutputTagStringUnder300Bytes[]` | - |
 | `tagQueryMode` | `'all' | 'any'` | `'any'` |
-| `include` | `'locking scripts' | 'entire transactions'` | - |
+| `include` | `'locking scripts' | 'entire transactions'` | - | Legacy `includeEntireTransactions: boolean` also supported for compatibility; prefer `include` enum. |
 | `includeCustomInstructions` | `boolean` | `false` |
 | `includeTags` | `boolean` | `false` |
 | `includeLabels` | `boolean` | `false` |

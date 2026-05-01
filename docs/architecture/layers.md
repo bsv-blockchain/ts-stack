@@ -3,8 +3,8 @@ id: architecture-layers
 title: Stack Layers
 kind: meta
 version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-01"
+last_verified: "2026-05-01"
 review_cadence_days: 30
 status: stable
 tags: ["architecture", "layers"]
