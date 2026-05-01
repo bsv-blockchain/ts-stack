@@ -266,7 +266,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   static async fromReq (
     req: EntityProvenTxReq,
     gmpResult: GetMerklePathResult,
-    countsAsAttempt: boolean
+    countsAsAttempt: boolean,
+    maxRebroadcastAttempts = 0
   ): Promise<EntityProvenTx | undefined> {
     if (!req.txid) throw new WERR_MISSING_PARAMETER('req.txid')
     if (!req.rawTx) throw new WERR_MISSING_PARAMETER('req.rawTx')
@@ -289,12 +290,10 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
         const ageInMinutes = Math.ceil(ageInMsecs < 1 ? 0 : ageInMsecs / (1000 * 60))
 
         if (req.attempts > EntityProvenTx.getProofAttemptsLimit && ageInMinutes > EntityProvenTx.getProofMinutes) {
-          // Start the process of setting transactions to 'failed'
           const limit = EntityProvenTx.getProofAttemptsLimit
           const { attempts } = req
           req.addHistoryNote({ what: 'getMerklePathGiveUp', attempts, limit, ageInMinutes }, true)
-          req.notified = false
-          req.status = 'invalid'
+          req.applyProofTimeout(maxRebroadcastAttempts)
         }
       }
       return undefined

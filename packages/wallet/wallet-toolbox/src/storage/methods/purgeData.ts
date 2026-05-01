@@ -132,7 +132,15 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
         mergeToBeef: beef,
         ignoreServices: true
       }
-      if (utxo.txid) await storage.getBeefForTransaction(utxo.txid, options)
+      if (utxo.txid) {
+        try {
+          await storage.getBeefForTransaction(utxo.txid, options)
+        } catch (eu: unknown) {
+          const e = WalletError.fromUnknown(eu)
+          if (!isMissingLocalBeefError(e, utxo.txid, storage.chain)) throw eu
+          // UTXO's tx beef not in local storage. Skip it; the tx has spendable outputs so it won't be purged anyway.
+        }
+      }
     }
     const proofTxids: Record<string, boolean> = {}
     for (const btx of beef.txs) proofTxids[btx.txid] = true
@@ -250,4 +258,16 @@ function toSqlWhereDate (d: Date): string {
   s = s.replace('T', ' ')
   s = s.replace('Z', '')
   return s
+}
+
+function isMissingLocalBeefError (e: WalletError, txid: string, chain: string): boolean {
+  if (e.code !== 'WERR_INVALID_PARAMETER') return false
+  const parameter = (e as WalletError & { parameter?: string }).parameter
+  if (
+    parameter === `txid ${txid}` &&
+    e.message === `The txid ${txid} parameter must be valid transaction on chain ${chain}`
+  ) {
+    return true
+  }
+  return parameter === 'txid' && /^The txid parameter must be known to storage\. .+ is not known\.$/.test(e.message)
 }

@@ -32,16 +32,16 @@ jobs:
         run: node scripts/check-versions.mjs
 
       - name: Build all packages
-        # Exclude: example-paymail (example package, not production)
-        run: pnpm -r --filter '!example-paymail' run build
+        # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
+        run: pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run build
 
       - name: Lint all packages
         continue-on-error: true
-        run: pnpm -r run lint --if-present
+        run: pnpm -r --filter '!@bsv/ts-stack' run lint --if-present
 
       - name: Test all packages
-        # Exclude: example-paymail (example package, not production)
-        run: pnpm -r --filter '!example-paymail' run test
+        # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
+        run: pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run test
 
   conformance:
     name: Conformance Vectors

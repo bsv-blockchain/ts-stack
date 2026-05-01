@@ -23,7 +23,7 @@ jobs:
         run: mkdir -p conformance/reports
       - name: Run TS conformance runner
         run: |
-          pnpm --filter @bsv/conformance-runner-ts test -- \
+          pnpm --filter @bsv/conformance-runner-ts test \
             --json --outputFile=../../reports/ts-results.json
         working-directory: ${{ github.workspace }}/conformance/runner/ts
       - name: Upload TS conformance reports

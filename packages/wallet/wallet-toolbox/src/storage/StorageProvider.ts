@@ -798,6 +798,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (update.batch) partial.batch = update.batch
     if (update.history) partial.history = update.history
     if (update.notify) partial.notify = update.notify
+    if (update.wasBroadcast !== undefined) partial.wasBroadcast = update.wasBroadcast ?? false
+    if (Number.isInteger(update.rebroadcastAttempts)) partial.rebroadcastAttempts = update.rebroadcastAttempts ?? 0
 
     return await this.updateProvenTxReq(id, partial, trx)
   }

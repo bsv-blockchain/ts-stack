@@ -30,6 +30,8 @@ import KVStoreLookupServiceFactory from '../kvstore/KVStoreLookupService.js'
 import { KVStoreStorageManager } from '../kvstore/KVStoreStorageManager.js'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
 
+const mongoMemoryServerOptions = { instance: { launchTimeout: 60000 } }
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -263,8 +265,8 @@ describe('KVStoreLookupService (MongoDB)', () => {
   let service: ReturnType<typeof KVStoreLookupServiceFactory>
 
   beforeAll(async () => {
-    jest.setTimeout(30000)
-    mongod = await MongoMemoryServer.create()
+    jest.setTimeout(60000)
+    mongod = await MongoMemoryServer.create(mongoMemoryServerOptions)
     client = new MongoClient(mongod.getUri())
     await client.connect()
     db = client.db('test_kvstore')

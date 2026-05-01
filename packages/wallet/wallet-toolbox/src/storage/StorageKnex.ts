@@ -796,7 +796,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
     const q = this.findProvenTxReqsQuery(args)
     const r = await q
-    return this.validateEntities(r, undefined, ['notified'])
+    return this.validateEntities(r, undefined, ['notified', 'wasBroadcast'])
   }
 
   override async findProvenTxs (args: FindProvenTxsArgs): Promise<TableProvenTx[]> {

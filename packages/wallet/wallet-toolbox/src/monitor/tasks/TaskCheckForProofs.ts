@@ -156,11 +156,23 @@ export async function getProofs (
         ? task.monitor.options.unprovenAttemptsLimitMain
         : task.monitor.options.unprovenAttemptsLimitTest
     if (!ignoreStatus && req.attempts > limit) {
-      log += ` too many failed attempts ${req.attempts}\n`
-      req.notified = false
-      req.status = 'invalid'
-      await req.updateStorageDynamicProperties(task.storage)
-      invalid.push(reqApi)
+      const maxRebroadcast = task.monitor.options.maxRebroadcastAttempts ?? 0
+      const wasBroadcast = req.wasBroadcast
+      const timedOutAttempts = req.attempts
+      const timeout = req.applyProofTimeout(maxRebroadcast)
+      if (timeout.action === 'rebroadcast') {
+        log += ` too many failed attempts ${timedOutAttempts}, resetting to unsent for rebroadcast (cycle ${timeout.rebroadcastAttempts})\n`
+        await req.updateStorageDynamicProperties(task.storage)
+      } else {
+        if (wasBroadcast) {
+          log += ` too many failed attempts ${timedOutAttempts} and rebroadcast limit ${maxRebroadcast} reached, marking invalid\n`
+        } else {
+          // Was never successfully broadcast — correctly mark as invalid
+          log += ` too many failed attempts ${timedOutAttempts} and tx was never broadcast, marking invalid\n`
+        }
+        await req.updateStorageDynamicProperties(task.storage)
+        invalid.push(reqApi)
+      }
       continue
     }
 
@@ -190,7 +202,12 @@ export async function getProofs (
       log += ` ignoring possible proof from very new block at height ${r.header.height} ${r.header.hash}\n`
       continue
     }
-    ptx = await EntityProvenTx.fromReq(req, r, countsAsAttempt && req.status !== 'nosend')
+    ptx = await EntityProvenTx.fromReq(
+      req,
+      r,
+      countsAsAttempt && req.status !== 'nosend',
+      task.monitor.options.maxRebroadcastAttempts ?? 0
+    )
 
     if (ptx != null) {
       // We have a merklePath proof for the request (and a block header)
@@ -226,7 +243,7 @@ export async function getProofs (
         merkleRoot
       })
     } else {
-      if (countsAsAttempt && req.status !== 'nosend') {
+      if (countsAsAttempt && ['callback', 'unmined', 'unknown', 'unconfirmed', 'sending'].includes(req.status)) {
         req.attempts++
       }
     }

@@ -31,6 +31,19 @@ export interface TableProvenTxReq extends TableProvenTxReqDynamics {
   notify: string
   rawTx: number[]
   inputBEEF?: number[]
+  /**
+   * Set to true the first time this req transitions to 'unmined' or 'callback' status,
+   * indicating the transaction was successfully broadcast to the network.
+   * Used to distinguish rebroadcast candidates from transactions that were never sent.
+   * Defaults to false (added by migration 2026-04-30-001).
+   */
+  wasBroadcast?: boolean
+  /**
+   * Count of how many times this req has been reset to 'unsent' for rebroadcast
+   * after proof check timeout. Used by the circuit-breaker (maxRebroadcastAttempts).
+   * Defaults to 0 (added by migration 2026-04-30-001).
+   */
+  rebroadcastAttempts?: number
 }
 
 /**
@@ -62,4 +75,14 @@ export interface TableProvenTxReqDynamics extends sdk.EntityTimeStamp {
    * Parses to `ProvenTxReqNotifyApi`.
    */
   notify: string
+  /**
+   * Set to true the first time this req transitions to 'unmined' or 'callback' status.
+   * Defaults to false (added by migration 2026-04-30-001).
+   */
+  wasBroadcast?: boolean
+  /**
+   * Count of rebroadcast cycles for this req. Used by the circuit-breaker.
+   * Defaults to 0 (added by migration 2026-04-30-001).
+   */
+  rebroadcastAttempts?: number
 }
