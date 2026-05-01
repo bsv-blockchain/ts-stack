@@ -11,16 +11,285 @@
   "vectors": [
     {
       "id": "wallet.brc100.provecertificate.1",
-      "description": "proveCertificate happy path",
+      "description": "proveCertificate reveal single field",
       "input": {
-        "args": {}
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "name"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
       },
       "expected": {
-        "result": 123456
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
       },
       "tags": [
         "brc-100",
-        "proveCertificate"
+        "proveCertificate",
+        "single-field",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.2",
+      "description": "proveCertificate reveal multiple fields",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "name",
+            "email"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "email": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
+        }
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "multi-field"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.3",
+      "description": "proveCertificate reveal all fields",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "name",
+            "email",
+            "age"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "email": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+          "age": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
+        }
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "all-fields"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.4",
+      "description": "proveCertificate privileged request",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "name"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+          "privileged": true,
+          "privilegedReason": "KYC verification required"
+        }
+      },
+      "expected": {
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "privileged"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.5",
+      "description": "proveCertificate field not in certificate",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "nonexistent-field"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        }
+      },
+      "expected": {
+        "error": true
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "error",
+        "invalid-field"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.6",
+      "description": "proveCertificate result shape: keyringForVerifier",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "name"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        },
+        "_schema_note": "result: { keyringForVerifier: Record<fieldName, base64> }"
+      },
+      "expected": {
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "schema"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.7",
+      "description": "proveCertificate with originator",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+            "revocationOutpoint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0",
+            "signature": "a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "fields": {
+              "name": "Alice",
+              "email": "alice@example.com",
+              "age": "30"
+            }
+          },
+          "fieldsToReveal": [
+            "name"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        },
+        "originator": "verifier.example.com"
+      },
+      "expected": {
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "originator"
+      ]
+    },
+    {
+      "id": "wallet.brc100.provecertificate.8",
+      "description": "proveCertificate partial certificate (Partial<WalletCertificate>)",
+      "input": {
+        "args": {
+          "certificate": {
+            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+          },
+          "fieldsToReveal": [
+            "name"
+          ],
+          "verifier": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
+        },
+        "_schema_note": "certificate arg is Partial<WalletCertificate>"
+      },
+      "expected": {
+        "keyringForVerifier": {
+          "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
+      },
+      "tags": [
+        "brc-100",
+        "proveCertificate",
+        "partial-cert"
       ]
     }
   ]

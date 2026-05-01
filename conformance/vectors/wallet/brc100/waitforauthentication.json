@@ -11,16 +11,82 @@
   "vectors": [
     {
       "id": "wallet.brc100.waitforauthentication.1",
-      "description": "waitForAuthentication happy path",
+      "description": "waitForAuthentication resolves when user authenticates",
       "input": {
         "args": {}
       },
       "expected": {
-        "result": 123456
+        "authenticated": true
       },
       "tags": [
         "brc-100",
-        "waitForAuthentication"
+        "waitForAuthentication",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "wallet.brc100.waitforauthentication.2",
+      "description": "waitForAuthentication with originator",
+      "input": {
+        "args": {},
+        "originator": "app.example.com"
+      },
+      "expected": {
+        "authenticated": true
+      },
+      "tags": [
+        "brc-100",
+        "waitForAuthentication",
+        "originator"
+      ]
+    },
+    {
+      "id": "wallet.brc100.waitforauthentication.3",
+      "description": "waitForAuthentication returns AuthenticatedResult",
+      "input": {
+        "args": {},
+        "_schema_note": "always resolves to { authenticated: true } upon success"
+      },
+      "expected": {
+        "authenticated": true
+      },
+      "tags": [
+        "brc-100",
+        "waitForAuthentication",
+        "schema"
+      ]
+    },
+    {
+      "id": "wallet.brc100.waitforauthentication.4",
+      "description": "waitForAuthentication timeout error",
+      "input": {
+        "args": {},
+        "_scenario": "user does not authenticate within timeout period"
+      },
+      "expected": {
+        "error": true,
+        "code": "ERR_AUTHENTICATION_TIMEOUT"
+      },
+      "tags": [
+        "brc-100",
+        "waitForAuthentication",
+        "error"
+      ]
+    },
+    {
+      "id": "wallet.brc100.waitforauthentication.5",
+      "description": "waitForAuthentication wallet closed error",
+      "input": {
+        "args": {},
+        "_scenario": "wallet process closes before authentication completes"
+      },
+      "expected": {
+        "error": true
+      },
+      "tags": [
+        "brc-100",
+        "waitForAuthentication",
+        "error"
       ]
     }
   ]
