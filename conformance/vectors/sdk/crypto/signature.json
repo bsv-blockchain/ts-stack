@@ -2,8 +2,10 @@
   "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
   "id": "sdk.crypto.signature",
   "name": "Signature DER / compact encoding and error paths",
-  "brc": ["BRC-42"],
-  "version": "1.0.0",
+  "brc": [
+    "BRC-42"
+  ],
+  "version": "1.1.0",
   "reference_impl": "packages/sdk/ts-sdk/src/primitives/Signature.ts",
   "parity_class": "required",
   "vectors": [
@@ -21,7 +23,10 @@
         "r_hex": "9f99368049a3297f8e20ae6b8bd99ebec0f97ceada82478da074266cecbcfda3",
         "s_hex": "1c72b222e69565a42ff82757e2360de74fc05827fabe75a7dd22d0397a2c189a"
       },
-      "tags": ["der", "happy-path"]
+      "tags": [
+        "der",
+        "happy-path"
+      ]
     },
     {
       "id": "sig-der-002",
@@ -33,7 +38,11 @@
         "r_hex": "9f99368049a3297f8e20ae6b8bd99ebec0f97ceada82478da074266cecbcfda3",
         "s_hex": "1c72b222e69565a42ff82757e2360de74fc05827fabe75a7dd22d0397a2c189a"
       },
-      "tags": ["der", "roundtrip", "happy-path"]
+      "tags": [
+        "der",
+        "roundtrip",
+        "happy-path"
+      ]
     },
     {
       "id": "sig-der-003",
@@ -46,7 +55,11 @@
         "throws": true,
         "error_pattern": "Signature DER must start with 0x30"
       },
-      "tags": ["der", "error-case", "invalid-input"]
+      "tags": [
+        "der",
+        "error-case",
+        "invalid-input"
+      ]
     },
     {
       "id": "sig-der-004",
@@ -59,33 +72,45 @@
         "throws": true,
         "error_pattern": "Invalid DER entity length"
       },
-      "tags": ["der", "error-case", "invalid-input"]
+      "tags": [
+        "der",
+        "error-case",
+        "invalid-input"
+      ]
     },
     {
       "id": "sig-der-005",
       "description": "fromDER throws when r element has leading 0x00 but next byte does not have high bit set",
       "input": {
         "der_hex": "30080200010201",
-        "note": "r = [0x00, 0x01] — invalid padding; r[1] high bit is 0"
+        "note": "r = [0x00, 0x01] \u2014 invalid padding; r[1] high bit is 0"
       },
       "expected": {
         "throws": true,
         "error_pattern": "Invalid R-value in signature DER"
       },
-      "tags": ["der", "error-case", "invalid-input"]
+      "tags": [
+        "der",
+        "error-case",
+        "invalid-input"
+      ]
     },
     {
       "id": "sig-der-006",
       "description": "fromDER throws when s element has leading 0x00 but next byte does not have high bit set",
       "input": {
         "der_hex": "30080201010200",
-        "note": "r = [0x01], s = [0x00, 0x01] — invalid padding"
+        "note": "r = [0x01], s = [0x00, 0x01] \u2014 invalid padding"
       },
       "expected": {
         "throws": true,
         "error_pattern": "Invalid S-value in signature DER"
       },
-      "tags": ["der", "error-case", "invalid-input"]
+      "tags": [
+        "der",
+        "error-case",
+        "invalid-input"
+      ]
     },
     {
       "id": "sig-compact-001",
@@ -103,7 +128,10 @@
         "compact_length_hex_chars": 130,
         "first_byte": 31
       },
-      "tags": ["compact", "happy-path"]
+      "tags": [
+        "compact",
+        "happy-path"
+      ]
     },
     {
       "id": "sig-compact-002",
@@ -118,7 +146,10 @@
       "expected": {
         "first_byte": 27
       },
-      "tags": ["compact", "happy-path"]
+      "tags": [
+        "compact",
+        "happy-path"
+      ]
     },
     {
       "id": "sig-compact-003",
@@ -131,7 +162,10 @@
         "throws": true,
         "error_pattern": "Invalid Compact Signature"
       },
-      "tags": ["compact", "error-case"]
+      "tags": [
+        "compact",
+        "error-case"
+      ]
     },
     {
       "id": "sig-compact-004",
@@ -144,7 +178,10 @@
         "throws": true,
         "error_pattern": "Invalid Compact Signature"
       },
-      "tags": ["compact", "error-case"]
+      "tags": [
+        "compact",
+        "error-case"
+      ]
     },
     {
       "id": "sig-compact-005",
@@ -158,7 +195,11 @@
         "throws": true,
         "error_pattern": "Invalid Compact Byte"
       },
-      "tags": ["compact", "error-case", "edge-case"]
+      "tags": [
+        "compact",
+        "error-case",
+        "edge-case"
+      ]
     },
     {
       "id": "sig-compact-006",
@@ -172,7 +213,11 @@
         "throws": true,
         "error_pattern": "Invalid Compact Byte"
       },
-      "tags": ["compact", "error-case", "edge-case"]
+      "tags": [
+        "compact",
+        "error-case",
+        "edge-case"
+      ]
     },
     {
       "id": "sig-compact-007",
@@ -184,7 +229,11 @@
         "r_hex": "9f99368049a3297f8e20ae6b8bd99ebec0f97ceada82478da074266cecbcfda3",
         "s_hex": "1c72b222e69565a42ff82757e2360de74fc05827fabe75a7dd22d0397a2c189a"
       },
-      "tags": ["compact", "roundtrip", "happy-path"]
+      "tags": [
+        "compact",
+        "roundtrip",
+        "happy-path"
+      ]
     },
     {
       "id": "sig-tocompact-err-001",
@@ -199,7 +248,10 @@
         "throws": true,
         "error_pattern": "Invalid recovery param"
       },
-      "tags": ["compact", "error-case"]
+      "tags": [
+        "compact",
+        "error-case"
+      ]
     },
     {
       "id": "sig-tocompact-err-002",
@@ -214,7 +266,153 @@
         "throws": true,
         "error_pattern": "Invalid recovery param"
       },
-      "tags": ["compact", "error-case"]
+      "tags": [
+        "compact",
+        "error-case"
+      ]
+    },
+    {
+      "id": "sig-der-007",
+      "description": "toDER returns correct DER for key 2222...2222 and message 0xcafebabe",
+      "input": {
+        "privkey_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "message_hex": "cafebabe",
+        "k": "drbg"
+      },
+      "expected": {
+        "der_hex": "30440220024eb1ae149d315b0fb68b623cf455086aba5c8b92e068682c1ca12dfcdfd65202207dbe86af62a372324b9ec4a35f777227d012b6c042ca800327e16b446d1bc5f3",
+        "der_length_bytes": 70,
+        "r_hex": "024eb1ae149d315b0fb68b623cf455086aba5c8b92e068682c1ca12dfcdfd652",
+        "s_hex": "7dbe86af62a372324b9ec4a35f777227d012b6c042ca800327e16b446d1bc5f3"
+      },
+      "tags": [
+        "der",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "sig-der-008",
+      "description": "fromDER round-trips for key 2222...2222 / cafebabe: parse back to same r and s",
+      "input": {
+        "der_hex": "30440220024eb1ae149d315b0fb68b623cf455086aba5c8b92e068682c1ca12dfcdfd65202207dbe86af62a372324b9ec4a35f777227d012b6c042ca800327e16b446d1bc5f3"
+      },
+      "expected": {
+        "r_hex": "024eb1ae149d315b0fb68b623cf455086aba5c8b92e068682c1ca12dfcdfd652",
+        "s_hex": "7dbe86af62a372324b9ec4a35f777227d012b6c042ca800327e16b446d1bc5f3"
+      },
+      "tags": [
+        "der",
+        "roundtrip",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "sig-der-009",
+      "description": "fromDER throws when input is truncated (missing the s-integer)",
+      "input": {
+        "der_hex": "30200220024eb1ae149d315b0fb68b623cf455086aba5c8b92e068682c1ca12dfcdfd652",
+        "note": "outer length says 32 bytes but only r-element is present"
+      },
+      "expected": {
+        "throws": true
+      },
+      "tags": [
+        "der",
+        "error-case",
+        "truncated"
+      ]
+    },
+    {
+      "id": "sig-der-010",
+      "description": "toDER for key aaaa...aaaa and message 0xf00dbabe",
+      "input": {
+        "privkey_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "message_hex": "f00dbabe",
+        "k": "drbg"
+      },
+      "expected": {
+        "der_hex": "304402204f8a492337a9d7dbf3cd1a09c8dec693cae972cb492492c88919f328532eb93702200697cde870f890caeb94e951c4ed2a874f8ff08d9ed28e629c1e5ce6feb814d8",
+        "der_length_bytes": 70,
+        "r_hex": "4f8a492337a9d7dbf3cd1a09c8dec693cae972cb492492c88919f328532eb937",
+        "s_hex": "0697cde870f890caeb94e951c4ed2a874f8ff08d9ed28e629c1e5ce6feb814d8"
+      },
+      "tags": [
+        "der",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "sig-compact-008",
+      "description": "toCompact with recovery=1, compressed=true has first byte 0x32 (50 decimal)",
+      "input": {
+        "privkey_hex": "1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5",
+        "message_hex": "deadbeef",
+        "k": "drbg",
+        "recovery": 1,
+        "compressed": true
+      },
+      "expected": {
+        "first_byte": 32
+      },
+      "tags": [
+        "compact",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "sig-compact-009",
+      "description": "toCompact with recovery=2, compressed=true has first byte 0x33 (51 decimal)",
+      "input": {
+        "privkey_hex": "1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5",
+        "message_hex": "deadbeef",
+        "k": "drbg",
+        "recovery": 2,
+        "compressed": true
+      },
+      "expected": {
+        "first_byte": 33
+      },
+      "tags": [
+        "compact",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "sig-compact-010",
+      "description": "toCompact with recovery=3, compressed=true has first byte 0x34 (52 decimal)",
+      "input": {
+        "privkey_hex": "1e5edd45de6d22deebef4596b80444ffcc29143839c1dce18db470e25b4be7b5",
+        "message_hex": "deadbeef",
+        "k": "drbg",
+        "recovery": 3,
+        "compressed": true
+      },
+      "expected": {
+        "first_byte": 34
+      },
+      "tags": [
+        "compact",
+        "happy-path"
+      ]
+    },
+    {
+      "id": "sig-compact-011",
+      "description": "toCompact with recovery=0, compressed=true has compact first byte formula: 31 = 27 + 4 + recovery",
+      "input": {
+        "privkey_hex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "message_hex": "cafebabe",
+        "k": "drbg",
+        "recovery": 0,
+        "compressed": true
+      },
+      "expected": {
+        "compact_hex": "1f024eb1ae149d315b0fb68b623cf455086aba5c8b92e068682c1ca12dfcdfd6527dbe86af62a372324b9ec4a35f777227d012b6c042ca800327e16b446d1bc5f3",
+        "first_byte": 31
+      },
+      "tags": [
+        "compact",
+        "happy-path"
+      ]
     }
   ]
 }
