@@ -22,7 +22,7 @@ const ROOT = resolve(__dirname, '..');
 
 // Use createRequire so we can load CJS modules from node_modules
 const require = createRequire(import.meta.url);
-const Generator = require('@asyncapi/generator');
+const { Generator } = require('@asyncapi/generator');
 
 // ---------------------------------------------------------------------------
 // Spec → output mapping
@@ -55,6 +55,8 @@ body,html{background:#0c0c14!important;color:#e2e8f0!important}
 .bg-gray-100{background-color:#1a1a2a!important}
 .bg-gray-200{background-color:#202035!important}
 .bg-gray-800{background-color:#1a1a2a!important}
+.text-gray-900{color:#e6edf3!important}
+.text-gray-800{color:#d0d7de!important}
 .text-gray-700{color:#c9d1d9!important}
 .text-gray-600{color:#8b949e!important}
 .text-gray-500{color:#6e7681!important}
