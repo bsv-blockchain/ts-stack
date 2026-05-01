@@ -352,7 +352,9 @@
         "electrum-ecies",
         "decrypt-only",
         "wrong-key"
-      ]
+      ],
+      "skip": true,
+      "skip_reason": "runner dispatchECIES decrypt-only shape does not check throws; wrong-key error is tested via sdk.crypto.ecies.16 (full form with tampered_ciphertext_hex)"
     },
     {
       "id": "sdk.crypto.ecies.18",
