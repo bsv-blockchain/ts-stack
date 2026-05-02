@@ -55,12 +55,14 @@ body,html{background:#0c0c14!important;color:#e2e8f0!important}
 .bg-gray-100{background-color:#1a1a2a!important}
 .bg-gray-200{background-color:#202035!important}
 .bg-gray-800{background-color:#1a1a2a!important}
-.text-gray-900{color:#e6edf3!important}
-.text-gray-800{color:#d0d7de!important}
-.text-gray-700{color:#c9d1d9!important}
-.text-gray-600{color:#8b949e!important}
-.text-gray-500{color:#6e7681!important}
-.text-gray-200{color:#e6edf3!important}
+.text-gray-900{color:#f0f4f8!important}
+.text-gray-800{color:#e2e8f0!important}
+.text-gray-700{color:#d4dce8!important}
+.text-gray-600{color:#b8c4d4!important}
+.text-gray-500{color:#9aaaba!important}
+.text-gray-200{color:#f0f4f8!important}
+p,li,span,td,th{color:#d4dce8!important}
+h1,h2,h3,h4,h5,h6{color:#e2e8f0!important}
 </style>`;
 
 function injectDarkTheme(htmlPath) {
