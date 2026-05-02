@@ -1,82 +1,99 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 660" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 820" role="img" aria-labelledby="title desc">
   <title id="title">Package Relationships</title>
-  <desc id="desc">Inward dependency flow across ts-stack packages. Application packages such as overlays, messaging, and middleware depend on the wallet layer. The wallet layer depends on infrastructure and the core SDK. Helpers sit beside the application layer and can depend on wallet or SDK packages.</desc>
+  <desc id="desc">Dark technical diagram showing inward package dependency flow. Application packages for overlays, messaging, and middleware depend on the wallet layer. The wallet layer depends on infrastructure and the core SDK. Helper packages sit beside the application layer and have dashed dependencies into wallet and SDK packages.</desc>
+  <style>
+    .panel { fill: #101624; stroke: #2a3a52; stroke-width: 1.5; }
+    .grid-line { stroke: rgba(148, 163, 184, 0.08); stroke-width: 1; }
+    .layer-app { fill: rgba(37, 99, 235, 0.13); stroke: #60a5fa; stroke-width: 1.75; }
+    .layer-wallet { fill: rgba(8, 145, 178, 0.15); stroke: #22d3ee; stroke-width: 1.75; }
+    .layer-infra { fill: rgba(99, 102, 241, 0.12); stroke: #818cf8; stroke-width: 1.5; }
+    .layer-core { fill: rgba(180, 83, 9, 0.17); stroke: #f59e0b; stroke-width: 1.75; }
+    .module { fill: rgba(15, 23, 42, 0.9); stroke: #334155; stroke-width: 1.35; }
+    .module-cyan { fill: rgba(8, 47, 73, 0.85); stroke: #22d3ee; stroke-width: 1.55; }
+    .module-amber { fill: rgba(69, 26, 3, 0.82); stroke: #f59e0b; stroke-width: 1.55; }
+    .module-helper { fill: rgba(30, 41, 59, 0.88); stroke: #94a3b8; stroke-width: 1.35; stroke-dasharray: 7 5; }
+    .title { font: 700 26px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+    .subtitle { font: 14px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+    .layer-label { font: 700 16px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #e2e8f0; letter-spacing: 0.02em; }
+    .node-title { font: 700 17px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #f8fafc; }
+    .pkg { font: 14px ui-monospace, "SF Mono", Menlo, monospace; fill: #cbd5e1; }
+    .pkg-cyan { font: 14px ui-monospace, "SF Mono", Menlo, monospace; fill: #e0f2fe; }
+    .pkg-amber { font: 15px ui-monospace, "SF Mono", Menlo, monospace; fill: #ffd28a; }
+    .tag { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: #94a3b8; letter-spacing: 0.04em; }
+    .legend { font: 12px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #94a3b8; }
+    .edge { stroke: #22d3ee; stroke-width: 2.1; fill: none; marker-end: url(#arrow-cyan); }
+    .edge-muted { stroke: #64748b; stroke-width: 1.9; fill: none; marker-end: url(#arrow-muted); }
+    .edge-dashed { stroke: #94a3b8; stroke-width: 1.8; stroke-dasharray: 7 6; fill: none; marker-end: url(#arrow-muted); }
+  </style>
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9aa0a6"/>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#22d3ee"/>
     </marker>
-    <style>
-      .canvas { fill: #f7f7f6; }
-      .layer { fill: #fbfbfa; stroke: #d8d8d8; stroke-width: 1; }
-      .node { fill: #ffffff; stroke: #d4d4d4; stroke-width: 1; }
-      .edge { fill: none; stroke: #9aa0a6; stroke-width: 1.4; marker-end: url(#arrow); }
-      .edge-dashed { fill: none; stroke: #9aa0a6; stroke-width: 1.4; stroke-dasharray: 3.5 5; marker-end: url(#arrow); }
-      .layer-label { font: 500 17px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #44484c; }
-      .node-title { font: 500 17px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #30343a; }
-      .node-subtitle { font: 400 14px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #30343a; }
-    </style>
+    <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/>
+    </marker>
   </defs>
 
-  <rect class="canvas" x="0" y="0" width="1180" height="660"/>
+  <rect x="35" y="30" width="1370" height="760" rx="12" class="panel"/>
+  <path d="M95 135 H1345 M95 205 H1345 M95 275 H1345 M95 345 H1345 M95 415 H1345 M95 485 H1345 M95 555 H1345 M95 625 H1345 M95 695 H1345" class="grid-line"/>
+  <path d="M165 105 V735 M305 105 V735 M445 105 V735 M585 105 V735 M725 105 V735 M865 105 V735 M1005 105 V735 M1145 105 V735 M1285 105 V735" class="grid-line"/>
 
-  <!-- Application layer -->
-  <rect class="layer" x="24" y="22" width="870" height="158"/>
-  <text class="layer-label" x="459" y="43" text-anchor="middle">Application Layer</text>
+  <text x="70" y="78" class="title">Package dependency flow</text>
+  <text x="70" y="106" class="subtitle">Arrows point inward toward lower-level packages. Dashed lines show cross-cutting helper dependencies.</text>
 
-  <rect class="node" x="58" y="70" width="220" height="58"/>
-  <text class="node-title" x="168" y="96" text-anchor="middle">Overlays</text>
-  <text class="node-subtitle" x="168" y="116" text-anchor="middle">(@bsv/overlay)</text>
+  <rect x="96" y="145" width="1038" height="190" rx="12" class="layer-app"/>
+  <text x="615" y="183" text-anchor="middle" class="layer-label">Application Layer</text>
 
-  <rect class="node" x="326" y="46" width="246" height="106"/>
-  <text class="node-title" x="449" y="80" text-anchor="middle">Messaging</text>
-  <text class="node-subtitle" x="449" y="103" text-anchor="middle">(@bsv/message-box-</text>
-  <text class="node-subtitle" x="449" y="124" text-anchor="middle">client)</text>
+  <rect x="145" y="225" width="260" height="70" rx="8" class="module"/>
+  <text x="275" y="253" text-anchor="middle" class="node-title">Overlays</text>
+  <text x="275" y="277" text-anchor="middle" class="pkg">@bsv/overlay</text>
 
-  <rect class="node" x="620" y="58" width="246" height="82"/>
-  <text class="node-title" x="743" y="91" text-anchor="middle">Middleware</text>
-  <text class="node-subtitle" x="743" y="114" text-anchor="middle">(@bsv/auth-express-</text>
-  <text class="node-subtitle" x="743" y="135" text-anchor="middle">middleware)</text>
+  <rect x="452" y="208" width="290" height="104" rx="8" class="module"/>
+  <text x="597" y="245" text-anchor="middle" class="node-title">Messaging</text>
+  <text x="597" y="270" text-anchor="middle" class="pkg">@bsv/message-box-</text>
+  <text x="597" y="291" text-anchor="middle" class="pkg">client</text>
 
-  <!-- Helpers sit beside the application layer because they are used by apps and packages. -->
-  <rect class="node" x="926" y="70" width="210" height="58"/>
-  <text class="node-title" x="1031" y="96" text-anchor="middle">Helpers</text>
-  <text class="node-subtitle" x="1031" y="116" text-anchor="middle">(@bsv/simple)</text>
+  <rect x="788" y="208" width="290" height="104" rx="8" class="module"/>
+  <text x="933" y="245" text-anchor="middle" class="node-title">Middleware</text>
+  <text x="933" y="270" text-anchor="middle" class="pkg">@bsv/auth-express-</text>
+  <text x="933" y="291" text-anchor="middle" class="pkg">middleware</text>
 
-  <!-- Wallet layer -->
-  <rect class="layer" x="70" y="228" width="940" height="126"/>
-  <text class="layer-label" x="540" y="250" text-anchor="middle">Wallet Layer</text>
+  <rect x="1168" y="225" width="210" height="70" rx="8" class="module-helper"/>
+  <text x="1273" y="253" text-anchor="middle" class="node-title">Helpers</text>
+  <text x="1273" y="277" text-anchor="middle" class="pkg">@bsv/simple</text>
 
-  <rect class="node" x="486" y="254" width="246" height="82"/>
-  <text class="node-title" x="609" y="287" text-anchor="middle">Wallet</text>
-  <text class="node-subtitle" x="609" y="310" text-anchor="middle">(@bsv/wallet-</text>
-  <text class="node-subtitle" x="609" y="331" text-anchor="middle">toolbox)</text>
+  <rect x="182" y="385" width="986" height="150" rx="12" class="layer-wallet"/>
+  <text x="675" y="423" text-anchor="middle" class="layer-label">Wallet Layer</text>
 
-  <!-- Infrastructure layer -->
-  <rect class="layer" x="540" y="406" width="312" height="132"/>
-  <text class="layer-label" x="696" y="429" text-anchor="middle">Infrastructure Layer</text>
+  <rect x="540" y="444" width="270" height="72" rx="8" class="module-cyan"/>
+  <text x="675" y="473" text-anchor="middle" class="node-title">Wallet</text>
+  <text x="675" y="497" text-anchor="middle" class="pkg-cyan">@bsv/wallet-toolbox</text>
 
-  <rect class="node" x="574" y="448" width="244" height="80"/>
-  <text class="node-title" x="696" y="481" text-anchor="middle">Network</text>
-  <text class="node-subtitle" x="696" y="504" text-anchor="middle">(@bsv/teranode-</text>
-  <text class="node-subtitle" x="696" y="522" text-anchor="middle">listener)</text>
+  <rect x="545" y="585" width="340" height="110" rx="12" class="layer-infra"/>
+  <text x="715" y="623" text-anchor="middle" class="layer-label">Infrastructure Layer</text>
 
-  <!-- Core layer -->
-  <rect class="layer" x="484" y="560" width="604" height="82"/>
-  <text class="layer-label" x="786" y="582" text-anchor="middle">Core Layer</text>
+  <rect x="592" y="642" width="246" height="52" rx="8" class="module"/>
+  <text x="715" y="663" text-anchor="middle" class="node-title">Network</text>
+  <text x="715" y="685" text-anchor="middle" class="pkg">@bsv/teranode-listener</text>
 
-  <rect class="node" x="612" y="594" width="166" height="48"/>
-  <text class="node-title" x="695" y="624" text-anchor="middle">SDK (@bsv/sdk)</text>
+  <rect x="455" y="708" width="640" height="82" rx="12" class="layer-core"/>
+  <text x="775" y="735" text-anchor="middle" class="layer-label">Core Layer</text>
 
-  <!-- Inward dependency flow -->
-  <path class="edge" d="M 168 128 L 168 204 C 168 224 190 231 218 237 L 486 290"/>
-  <path class="edge" d="M 449 152 L 449 203 C 449 226 470 239 503 258"/>
-  <path class="edge" d="M 743 140 L 743 203 C 743 226 723 240 689 258"/>
-  <path class="edge" d="M 660 336 C 692 363 696 392 696 446"/>
-  <path class="edge" d="M 555 336 C 520 365 520 548 610 618"/>
-  <path class="edge" d="M 696 528 L 696 592"/>
+  <rect x="625" y="747" width="260" height="43" rx="8" class="module-amber"/>
+  <text x="755" y="774" text-anchor="middle" class="pkg-amber">@bsv/sdk</text>
 
-  <!-- Helper packages are intentionally cross-cutting, so use dashed dependency lines. -->
-  <path class="edge-dashed" d="M 1015 128 C 980 162 985 198 970 218 C 940 252 822 267 733 282"/>
-  <path class="edge-dashed" d="M 1045 128 C 1085 190 1085 316 1084 534 C 1084 560 929 585 778 618"/>
+  <path class="edge" d="M275 295 V345 C275 382 421 393 540 468"/>
+  <path class="edge" d="M597 312 V392 C597 418 616 431 642 443"/>
+  <path class="edge" d="M933 312 V392 C933 419 862 434 809 458"/>
+  <path class="edge-muted" d="M710 516 C756 548 766 591 740 641"/>
+  <path class="edge-muted" d="M650 516 C563 579 564 710 624 768"/>
+  <path class="edge-muted" d="M715 694 V746"/>
+  <path class="edge-dashed" d="M1238 295 C1198 343 1194 373 1157 396 C1093 435 933 445 811 470"/>
+  <path class="edge-dashed" d="M1312 295 C1376 406 1376 652 1302 690 C1225 728 1028 742 886 768"/>
+
+  <line x1="1040" y1="104" x2="1082" y2="104" class="edge"/>
+  <text x="1095" y="109" class="legend">package dependency</text>
+  <line x1="1228" y1="104" x2="1270" y2="104" class="edge-dashed"/>
+  <text x="1284" y="109" class="legend">helper path</text>
 </svg>
