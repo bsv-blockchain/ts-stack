@@ -83,7 +83,7 @@ Independent HTTP 402 flow:
 
 ## Package Relationships
 
-![Package relationships diagram showing how middleware, messaging, and overlays sit on top of wallet and helpers, which depend on network and SDK packages, ultimately connecting to the BSV chain](../assets/diagrams/package-relationships.svg)
+![Package relationships diagram showing an inward dependency flow from application packages to wallet, infrastructure, and core SDK layers, with helpers shown as cross-cutting dashed dependencies](../assets/diagrams/package-relationships.svg)
 
 ## Choosing Packages
 
