@@ -50,18 +50,41 @@ const SPECS = [
 // Dark theme CSS injected into generated HTML (template has no dark mode param)
 // ---------------------------------------------------------------------------
 const DARK_CSS = `<style>
+/* backgrounds */
 body,html{background:#0c0c14!important;color:#e2e8f0!important}
 .bg-white{background-color:#14141f!important}
 .bg-gray-100{background-color:#1a1a2a!important}
 .bg-gray-200{background-color:#202035!important}
 .bg-gray-800{background-color:#1a1a2a!important}
+/* tailwind text utilities */
 .text-gray-900{color:#f0f4f8!important}
 .text-gray-800{color:#e2e8f0!important}
 .text-gray-700{color:#d4dce8!important}
 .text-gray-600{color:#b8c4d4!important}
 .text-gray-500{color:#9aaaba!important}
 .text-gray-200{color:#f0f4f8!important}
-p,li,span,td,th{color:#d4dce8!important}
+/* prose base — template uses #4a5568 (too dark) */
+.aui-root .prose{color:#d4dce8!important}
+.aui-root .prose p,.aui-root .prose li{color:#d4dce8!important}
+/* prose headings — template uses #1a202c (near-black) */
+.aui-root .prose h1,.aui-root .prose h2,.aui-root .prose h3,.aui-root .prose h4{color:#e2e8f0!important}
+/* prose links */
+.aui-root .prose a{color:#7eb8f7!important}
+/* prose strong */
+.aui-root .prose strong{color:#e2e8f0!important}
+/* prose blockquote */
+.aui-root .prose blockquote{color:#c0ccdc!important;border-left-color:#3a4a6a!important}
+/* prose table */
+.aui-root .prose thead{color:#e2e8f0!important}
+.aui-root .prose tbody tr{border-bottom-color:#2a3050!important}
+/* inline code — template uses #1a202c (near-black) */
+.aui-root .prose code{color:#a8d8f0!important;background-color:#1e2338!important;border-radius:3px;padding:.1em .4em}
+.aui-root .prose a code{color:#7eb8f7!important;background-color:#1e2338!important}
+/* pre blocks already have dark bg from hljs Night Owl theme — just ensure contrast */
+.aui-root .prose pre{background-color:#011627!important;color:#d6deeb!important}
+.aui-root .prose pre code{background-color:transparent!important;padding:0!important;color:inherit!important}
+/* general fallbacks */
+p,li,td,th{color:#d4dce8!important}
 h1,h2,h3,h4,h5,h6{color:#e2e8f0!important}
 </style>`;
 
