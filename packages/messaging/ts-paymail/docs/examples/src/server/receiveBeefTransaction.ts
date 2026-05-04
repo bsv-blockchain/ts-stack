@@ -3,6 +3,10 @@ import { Transaction } from '@bsv/sdk'
 import { fetchUser } from '../mockUser.js'
 
 const WocHeadersClient = {
+  currentHeight: async () => {
+    const headers = await (await fetch('https://api.whatsonchain.com/v1/bsv/main/block/headers')).json()
+    return headers[0].height
+  },
   isValidRootForHeight: async (merkleRoot, height) => {
     try {
       const { merkleroot } = await (await fetch(`https://api.whatsonchain.com/v1/bsv/main/block/height/${height}`)).json()

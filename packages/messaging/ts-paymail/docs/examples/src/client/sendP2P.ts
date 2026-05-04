@@ -24,7 +24,6 @@ const client = new PaymailClient();
     {
       sender: sender.getPaymail(),
       pubkey: sender.getIdentityKey(),
-      // @ts-expect-error
       signature: client.createP2PSignature(tx.id('hex') as string, sender.getIdentityPrivateKey()),
       note: 'hello world'
     })
