@@ -1,189 +1,202 @@
 # ts-stack
 
-BSV TypeScript monorepo — all production TypeScript packages for the BSV blockchain stack, organised by domain.
+BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middleware, helpers, infrastructure components, docs, and cross-language conformance vectors.
 
-[![CI](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml)
+[![Build and Test](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml/badge.svg?label=build%20%2B%20test)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml)
+[![Conformance](https://github.com/bsv-blockchain/ts-stack/actions/workflows/conformance.yml/badge.svg)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/conformance.yml)
+[![codecov](https://codecov.io/gh/bsv-blockchain/ts-stack/branch/main/graph/badge.svg)](https://codecov.io/gh/bsv-blockchain/ts-stack)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_ts-stack)
+[![npm version](https://img.shields.io/npm/v/@bsv/sdk?label=%40bsv%2Fsdk&color=brightgreen)](https://www.npmjs.com/package/@bsv/sdk)
 
-## Domains
+## What Lives Here
 
-| Domain | Path | Description |
-|--------|------|-------------|
-| **SDK** | `packages/sdk/` | Core crypto, scripts, tx, BRC-100 |
-| **Wallet** | `packages/wallet/` | BRC-100 implementation components |
-| **Network** | `packages/network/` | P2P real-time event listener for Teranode |
-| **Overlays** | `packages/overlays/` | Topic indexing, validation, GASP sync |
-| **Messaging** | `packages/messaging/` | Message Box, Authsocket, Paymail |
-| **Middleware** | `packages/middleware/` | Auth & HTTP 402 for Express |
-| **Helpers** | `packages/helpers/` | `@bsv/simple`, wallet-helper, utilities |
-| **Conformance** | `conformance/` | Vectors for interoperability |
+| Area | Path | Purpose |
+|---|---|---|
+| SDK | `packages/sdk/` | Zero-dependency crypto, Script, transactions, BEEF, Merkle paths, BRC-100 types |
+| Wallet | `packages/wallet/` | BRC-100 wallet implementation tooling, relay, token modules, examples |
+| Network | `packages/network/` | Teranode P2P topic listener |
+| Overlays | `packages/overlays/` | Overlay framework, HTTP server, topics, discovery, GASP, BTMS backend |
+| Messaging | `packages/messaging/` | Message Box client, Authsocket, Paymail, Paymail examples |
+| Middleware | `packages/middleware/` | Express authentication, payment middleware, HTTP 402 payments |
+| Helpers | `packages/helpers/` | Application entry points, templates, DID, wallet utilities, amount conversion |
+| Conformance | `conformance/` | Language-neutral JSON vectors and runners for SDK, wallet, overlay, messaging, payments, storage, sync |
+| Docs | `docs/`, `docs-site/` | Source docs and the Vite/React documentation site |
+| Infrastructure | `infrastructure components/` | Deployable servers kept outside the pnpm workspace |
 
-See `docs/packages/index.md` for details (primary developer documentation).
+Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders usually start with `@bsv/wallet-toolbox`. Service operators usually start with the overlay, messaging, middleware, or infrastructure packages.
 
----
+## Quick Start
 
-## Package Map
+Prerequisites:
 
-### SDK — `packages/sdk/`
-| Package | npm |
-|---------|-----|
-| [sdk](packages/sdk) | [@bsv/sdk](https://www.npmjs.com/package/@bsv/sdk) |
-
-### Wallet — `packages/wallet/`
-| Package | npm |
-|---------|-----|
-| [wallet-toolbox](packages/wallet/wallet-toolbox) | [@bsv/wallet-toolbox](https://www.npmjs.com/package/@bsv/wallet-toolbox) |
-| [wallet-toolbox/client](packages/wallet/wallet-toolbox/client) | [@bsv/wallet-toolbox-client](https://www.npmjs.com/package/@bsv/wallet-toolbox-client) |
-| [wallet-toolbox/mobile](packages/wallet/wallet-toolbox/mobile) | [@bsv/wallet-toolbox-mobile](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile) |
-| [wallet-toolbox-examples](packages/wallet/wallet-toolbox-examples) | `@bsv/wallet-toolbox-examples` *(private)* |
-| [wallet-infra](packages/wallet/wallet-infra) | `@bsv/wallet-infra` *(private)* |
-| [ts-wallet-relay](packages/wallet/ts-wallet-relay) | [@bsv/wallet-relay](https://www.npmjs.com/package/@bsv/wallet-relay) |
-| [btms](packages/wallet/btms) | [@bsv/btms](https://www.npmjs.com/package/@bsv/btms) |
-| [btms-permission-module](packages/wallet/btms-permission-module) | [@bsv/btms-permission-module](https://www.npmjs.com/package/@bsv/btms-permission-module) |
-| [wab](packages/wallet/wab) | `@bsv/wab-server` *(private)* |
-
-### Network — `packages/network/`
-| Package | npm |
-|---------|-----|
-| [ts-p2p](packages/network/ts-p2p) | [@bsv/teranode-listener](https://www.npmjs.com/package/@bsv/teranode-listener) |
-
-### Overlays — `packages/overlays/`
-| Package | npm |
-|---------|-----|
-| [overlay-services](packages/overlays/overlay-services) | [@bsv/overlay](https://www.npmjs.com/package/@bsv/overlay) |
-| [overlay-express](packages/overlays/overlay-express) | [@bsv/overlay-express](https://www.npmjs.com/package/@bsv/overlay-express) |
-| [overlay-server](packages/overlays/overlay-server) | `@bsv/overlay-express-examples` *(private)* |
-| [overlay-discovery-services](packages/overlays/overlay-discovery-services) | [@bsv/overlay-discovery-services](https://www.npmjs.com/package/@bsv/overlay-discovery-services) |
-| [gasp-core](packages/overlays/gasp-core) | [@bsv/gasp](https://www.npmjs.com/package/@bsv/gasp) |
-| [storage-server](packages/overlays/storage-server) | [@bsv/uhrp-storage-server](https://www.npmjs.com/package/@bsv/uhrp-storage-server) |
-| [lite-storage-server](packages/overlays/lite-storage-server) | `@bsv/uhrp-lite` *(private)* |
-| [btms-backend](packages/overlays/btms-backend) | `@bsv/btms-backend` *(private)* |
-| [topics](packages/overlays/topics) | [@bsv/overlay-topics](https://www.npmjs.com/package/@bsv/overlay-topics) |
-
-### Messaging — `packages/messaging/`
-| Package | npm |
-|---------|-----|
-| [message-box-server](packages/messaging/message-box-server) | `@bsv/messagebox-server` *(private)* |
-| [message-box-client](packages/messaging/message-box-client) | [@bsv/message-box-client](https://www.npmjs.com/package/@bsv/message-box-client) |
-| [authsocket](packages/messaging/authsocket) | [@bsv/authsocket](https://www.npmjs.com/package/@bsv/authsocket) |
-| [authsocket-client](packages/messaging/authsocket-client) | [@bsv/authsocket-client](https://www.npmjs.com/package/@bsv/authsocket-client) |
-| [ts-paymail](packages/messaging/ts-paymail) | [@bsv/paymail](https://www.npmjs.com/package/@bsv/paymail) |
-
-### Middleware — `packages/middleware/`
-| Package | npm |
-|---------|-----|
-| [auth-express-middleware](packages/middleware/auth-express-middleware) | [@bsv/auth-express-middleware](https://www.npmjs.com/package/@bsv/auth-express-middleware) |
-| [payment-express-middleware](packages/middleware/payment-express-middleware) | [@bsv/payment-express-middleware](https://www.npmjs.com/package/@bsv/payment-express-middleware) |
-| [402-pay](packages/middleware/402-pay) | [@bsv/402-pay](https://www.npmjs.com/package/@bsv/402-pay) |
-
-### Helpers — `packages/helpers/`
-| Package | npm |
-|---------|-----|
-| [simple](packages/helpers/simple) | [@bsv/simple](https://www.npmjs.com/package/@bsv/simple) |
-| [bsv-wallet-helper](packages/helpers/bsv-wallet-helper) | [@bsv/wallet-helper](https://www.npmjs.com/package/@bsv/wallet-helper) |
-| [ts-templates](packages/helpers/ts-templates) | [@bsv/templates](https://www.npmjs.com/package/@bsv/templates) |
-| [did-client](packages/helpers/did-client) | [@bsv/did-client](https://www.npmjs.com/package/@bsv/did-client) |
-| [amountinator](packages/helpers/amountinator) | [@bsv/amountinator](https://www.npmjs.com/package/@bsv/amountinator) |
-| [fund-wallet](packages/helpers/fund-wallet) | `@bsv/fund-wallet` |
-
----
-
-## Development
-
-### Prerequisites
-
-- Node.js ≥ 20
-- pnpm ≥ 9
-
-### Setup
+- Node.js >= 22
+- pnpm >= 9; this repo is pinned to `pnpm@10.33.2`
 
 ```sh
 pnpm install
+pnpm build
+pnpm test
 ```
 
-### Build all packages
+Useful root commands:
+
+| Command | What it does |
+|---|---|
+| `pnpm build` | Builds every workspace package except the private root package |
+| `pnpm test` | Runs every workspace package test script |
+| `pnpm lint` | Runs every workspace package lint script |
+| `pnpm check-versions` | Verifies cross-package dependency references |
+| `pnpm sync-versions` | Updates stale cross-package dependency references |
+| `pnpm conformance` | Runs the structural conformance vector runner |
+| `pnpm docs:dev` | Starts the documentation site |
+| `pnpm docs:build` | Builds and validates the documentation site |
+| `pnpm docs:asyncapi` | Regenerates bundled AsyncAPI HTML assets |
+
+To work on one package:
 
 ```sh
-pnpm -r run build
+pnpm --filter @bsv/sdk build
+pnpm --filter @bsv/sdk test
+pnpm --filter @bsv/sdk run test:coverage
 ```
 
-### Test all packages
+## Package Map
+
+### SDK
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/sdk`](packages/sdk) | [`@bsv/sdk`](https://www.npmjs.com/package/@bsv/sdk) | Core primitives: keys, signatures, Script, transactions, BEEF, Merkle paths, BRC-100 types |
+
+### Wallet
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/wallet/wallet-toolbox`](packages/wallet/wallet-toolbox) | [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) | BRC-100 wallet storage, signer, services, and builder toolkit |
+| [`packages/wallet/wallet-toolbox/client`](packages/wallet/wallet-toolbox/client) | [`@bsv/wallet-toolbox-client`](https://www.npmjs.com/package/@bsv/wallet-toolbox-client) | Client-only wallet storage |
+| [`packages/wallet/wallet-toolbox/mobile`](packages/wallet/wallet-toolbox/mobile) | [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile) | Mobile/client wallet storage |
+| [`packages/wallet/wallet-toolbox-examples`](packages/wallet/wallet-toolbox-examples) | [`@bsv/wallet-toolbox-examples`](https://www.npmjs.com/package/@bsv/wallet-toolbox-examples) | Wallet toolbox examples |
+| [`packages/wallet/ts-wallet-relay`](packages/wallet/ts-wallet-relay) | [`@bsv/wallet-relay`](https://www.npmjs.com/package/@bsv/wallet-relay) | Mobile-to-desktop wallet pairing relay |
+| [`packages/wallet/btms`](packages/wallet/btms) | [`@bsv/btms`](https://www.npmjs.com/package/@bsv/btms) | Basic Token Management System |
+| [`packages/wallet/btms-permission-module`](packages/wallet/btms-permission-module) | [`@bsv/btms-permission-module`](https://www.npmjs.com/package/@bsv/btms-permission-module) | Token permission display and checks |
+
+### Network
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/network/ts-p2p`](packages/network/ts-p2p) | [`@bsv/teranode-listener`](https://www.npmjs.com/package/@bsv/teranode-listener) | Teranode P2P topic subscription client |
+
+### Overlays
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/overlays/overlay`](packages/overlays/overlay) | [`@bsv/overlay`](https://www.npmjs.com/package/@bsv/overlay) | Core overlay services and transaction validation |
+| [`packages/overlays/overlay-express`](packages/overlays/overlay-express) | [`@bsv/overlay-express`](https://www.npmjs.com/package/@bsv/overlay-express) | Express HTTP server for overlay services |
+| [`packages/overlays/overlay-discovery-services`](packages/overlays/overlay-discovery-services) | [`@bsv/overlay-discovery-services`](https://www.npmjs.com/package/@bsv/overlay-discovery-services) | Overlay service discovery |
+| [`packages/overlays/topics`](packages/overlays/topics) | [`@bsv/overlay-topics`](https://www.npmjs.com/package/@bsv/overlay-topics) | Canonical topic managers and lookup services |
+| [`packages/overlays/gasp-core`](packages/overlays/gasp-core) | [`@bsv/gasp`](https://www.npmjs.com/package/@bsv/gasp) | Graph Aware Sync Protocol |
+| [`packages/overlays/btms-backend`](packages/overlays/btms-backend) | `@bsv/btms-backend` private | BTMS overlay backend |
+
+### Messaging
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/messaging/message-box-client`](packages/messaging/message-box-client) | [`@bsv/message-box-client`](https://www.npmjs.com/package/@bsv/message-box-client) | P2P message box client |
+| [`packages/messaging/authsocket`](packages/messaging/authsocket) | [`@bsv/authsocket`](https://www.npmjs.com/package/@bsv/authsocket) | Server-side authenticated WebSocket protocol |
+| [`packages/messaging/authsocket-client`](packages/messaging/authsocket-client) | [`@bsv/authsocket-client`](https://www.npmjs.com/package/@bsv/authsocket-client) | Authenticated WebSocket client |
+| [`packages/messaging/ts-paymail`](packages/messaging/ts-paymail) | [`@bsv/paymail`](https://www.npmjs.com/package/@bsv/paymail) | Paymail protocol library |
+| [`packages/messaging/ts-paymail/docs/examples`](packages/messaging/ts-paymail/docs/examples) | `example-paymail` workspace example | Paymail documentation examples |
+
+### Middleware
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/middleware/auth-express-middleware`](packages/middleware/auth-express-middleware) | [`@bsv/auth-express-middleware`](https://www.npmjs.com/package/@bsv/auth-express-middleware) | Mutual-authentication middleware for Express |
+| [`packages/middleware/payment-express-middleware`](packages/middleware/payment-express-middleware) | [`@bsv/payment-express-middleware`](https://www.npmjs.com/package/@bsv/payment-express-middleware) | Payment-gated Express routes |
+| [`packages/middleware/402-pay`](packages/middleware/402-pay) | [`@bsv/402-pay`](https://www.npmjs.com/package/@bsv/402-pay) | BRC-121 HTTP 402 server middleware and client |
+
+### Helpers
+
+| Path | Package | Role |
+|---|---|---|
+| [`packages/helpers/simple`](packages/helpers/simple) | [`@bsv/simple`](https://www.npmjs.com/package/@bsv/simple) | Recommended high-level browser/server application API |
+| [`packages/helpers/bsv-wallet-helper`](packages/helpers/bsv-wallet-helper) | [`@bsv/wallet-helper`](https://www.npmjs.com/package/@bsv/wallet-helper) | Wallet helper functions |
+| [`packages/helpers/ts-templates`](packages/helpers/ts-templates) | [`@bsv/templates`](https://www.npmjs.com/package/@bsv/templates) | Script templates |
+| [`packages/helpers/did-client`](packages/helpers/did-client) | [`@bsv/did-client`](https://www.npmjs.com/package/@bsv/did-client) | DID resolver client |
+| [`packages/helpers/amountinator`](packages/helpers/amountinator) | [`@bsv/amountinator`](https://www.npmjs.com/package/@bsv/amountinator) | Satoshi/BSV conversion and formatting |
+| [`packages/helpers/fund-wallet`](packages/helpers/fund-wallet) | [`@bsv/fund-wallet`](https://www.npmjs.com/package/@bsv/fund-wallet) | Testnet/devnet wallet funding helper |
+
+### Infrastructure Components
+
+These deployable projects are not included in `pnpm-workspace.yaml`; they keep their original server layout under `infrastructure components/`.
+
+| Path | Package | Role |
+|---|---|---|
+| [`infrastructure components/message-box-server`](infrastructure%20components/message-box-server) | `@bsv/messagebox-server` private | Message box server |
+| [`infrastructure components/overlay-server`](infrastructure%20components/overlay-server) | `@bsv/overlay-express-examples` private | Overlay server deployment |
+| [`infrastructure components/uhrp-server-basic`](infrastructure%20components/uhrp-server-basic) | [`@bsv/uhrp-lite`](https://www.npmjs.com/package/@bsv/uhrp-lite) | Basic UHRP storage host |
+| [`infrastructure components/uhrp-server-cloud-bucket`](infrastructure%20components/uhrp-server-cloud-bucket) | [`@bsv/uhrp-storage-server`](https://www.npmjs.com/package/@bsv/uhrp-storage-server) | UHRP storage server for cloud bucket deployments |
+| [`infrastructure components/wallet-infra`](infrastructure%20components/wallet-infra) | `@bsv/wallet-infra` private | UTXO management server |
+| [`infrastructure components/wab`](infrastructure%20components/wab) | `@bsv/wab-server` private | Wallet Authentication Backend |
+
+## Conformance Vectors
+
+The conformance corpus is the portable contract for other BSV libraries and nodes to test against. Vectors live under [`conformance/vectors`](conformance/vectors), use [`conformance/schema/vector.schema.json`](conformance/schema/vector.schema.json), and are indexed by [`conformance/META.json`](conformance/META.json).
+
+Important entry points:
+
+| Path or command | Purpose |
+|---|---|
+| `pnpm conformance` | Runs the structural vector runner |
+| `pnpm conformance --validate-only` | Validates vector files without executing behavior |
+| `pnpm --filter @bsv/conformance-runner-ts test` | Runs the TypeScript/Jest dispatcher for supported vectors |
+| [`conformance/VECTOR-FORMAT.md`](conformance/VECTOR-FORMAT.md) | Vector envelope and field rules |
+| [`docs/conformance`](docs/conformance) | User-facing conformance docs |
+
+CI publishes the `conformance-vectors` artifact from `main` so downstream SDKs can consume the same vector set.
+
+## Documentation
+
+Documentation source lives in [`docs`](docs). The local site lives in [`docs-site`](docs-site).
 
 ```sh
-pnpm -r run test
+pnpm docs:dev
+pnpm docs:build
+pnpm docs:preview
 ```
 
-### Lint all packages
+Package-level docs start at [`docs/packages/index.md`](docs/packages/index.md). Architecture docs start at [`docs/architecture/index.md`](docs/architecture/index.md).
+
+## Quality Gates
+
+The main CI workflow builds, lints, tests, generates SDK coverage, uploads Codecov coverage, and runs SonarCloud. The workflow expects the organization secrets already used by the BSV repositories:
+
+- `CODECOV_TOKEN`
+- `SONAR_TOKEN`
+
+Coverage upload is currently based on the SDK LCOV report and normalized to repo-root paths by [`scripts/normalize-lcov-paths.mjs`](scripts/normalize-lcov-paths.mjs). Root configuration lives in [`codecov.yml`](codecov.yml) and [`sonar-project.properties`](sonar-project.properties).
+
+## Releases
+
+Releases use GitHub Actions with npm OIDC provenance; no static npm token is required. Push a tag matching `*/v*` for a package release, or `v*` for a rare monorepo-wide release. The release workflow builds the workspace and publishes packages changed since `origin/main`.
+
+Each published package must be configured as an npm trusted publisher:
+
+- Owner: `bsv-blockchain`
+- Repository: `ts-stack`
+- Workflow: `release.yml`
+- Environment: leave blank
+
+## Updating Imported Packages
+
+Many packages were imported with `git subtree` and retain their upstream history. When pulling upstream changes, use the actual prefix from the package map:
 
 ```sh
-pnpm -r run lint
+git subtree pull --prefix=packages/sdk <remote> <branch>
 ```
 
-All packages use [ts-standard](https://github.com/standard/ts-standard) — no separate prettier config.
-
-### Check cross-package version alignment
-
-```sh
-pnpm check-versions
-```
-
-### Sync stale cross-package version refs
-
-```sh
-pnpm sync-versions
-```
-
-### Run conformance vectors
-
-```sh
-pnpm conformance
-```
-
----
-
-## Architecture
-
-Each domain has a clear boundary. Dependencies only flow inward toward the SDK:
-
-```
-Overlays / Messaging / Middleware
-         ↓
-       Wallet
-         ↓
-       Network
-         ↓
-        SDK
-```
-
-Helpers are used by any domain. Conformance tests all domains against shared vector sets.
-
----
-
-## Updating packages (git subtree)
-
-Each package was added via `git subtree` — full commit history is preserved. To pull upstream changes for a package:
-
-```sh
-git subtree pull --prefix=packages/sdk/ts-sdk ~/git/ts/ts-sdk master
-```
-
----
-
-## Releasing
-
-Releases use GitHub Actions with npm OIDC provenance — no static token required. Tag a package to trigger publish:
-
-```sh
-git tag packages/sdk/ts-sdk/v2.1.0
-git push origin packages/sdk/ts-sdk/v2.1.0
-```
-
-Each published package must be configured as a trusted publisher on npmjs.org:
-- **Owner:** `bsv-blockchain`
-- **Repository:** `ts-stack`
-- **Workflow:** `release.yml`
-
----
+Keep unrelated package history and generated artifacts out of the same change when possible.
 
 ## License
 
-See individual package directories for license terms.
+See the individual package directories for license terms.

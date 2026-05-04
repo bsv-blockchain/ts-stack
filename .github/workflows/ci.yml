@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -16,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
@@ -42,6 +48,28 @@ jobs:
       - name: Test all packages
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
         run: pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run test
+
+      - name: Generate SDK coverage
+        run: |
+          pnpm --filter @bsv/sdk run test:coverage
+          node scripts/normalize-lcov-paths.mjs packages/sdk/coverage/lcov.info packages/sdk
+
+      - name: Upload SDK coverage to Codecov
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/sdk/coverage/lcov.info
+          flags: sdk
+          name: ts-stack-sdk
+          slug: bsv-blockchain/ts-stack
+          fail_ci_if_error: true
+
+      - name: SonarCloud scan
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: SonarSource/sonarqube-scan-action@v7
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   conformance:
     name: Conformance Vectors
