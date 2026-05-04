@@ -33,6 +33,6 @@
     "@bsv/sdk": "^2.0.14",
     "@bsv/wallet-toolbox-client": "^2.1.18",
     "@types/node": "^25.6.0",
-    "typescript": "^5.2.2"
+    "typescript": "^6.0.3"
   }
 }

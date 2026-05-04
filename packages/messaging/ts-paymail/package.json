@@ -105,7 +105,7 @@
     "@bsv/sdk": "^2.0.14",
     "@types/jest": "^30.0.0",
     "cross-fetch": "^4.1.0",
-    "express": "^5.1.0",
+    "express": "^5.2.1",
     "jest": "^30.3.0",
     "joi": "^18.0.1",
     "node-fetch": "^3",
@@ -113,7 +113,7 @@
     "ts-jest": "^29.4.9",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@jest/globals": "^30.3.0",
