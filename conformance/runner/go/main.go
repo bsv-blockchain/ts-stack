@@ -15,17 +15,17 @@ import (
 	"strings"
 	"time"
 
-	ecprim "github.com/bsv-blockchain/go-sdk/primitives/ec"
-	primaesgcm "github.com/bsv-blockchain/go-sdk/primitives/aesgcm"
-	primhash "github.com/bsv-blockchain/go-sdk/primitives/hash"
-	goecies "github.com/bsv-blockchain/go-sdk/compat/ecies"
+	gochainhash "github.com/bsv-blockchain/go-sdk/chainhash"
 	gobsm "github.com/bsv-blockchain/go-sdk/compat/bsm"
+	goecies "github.com/bsv-blockchain/go-sdk/compat/ecies"
+	primaesgcm "github.com/bsv-blockchain/go-sdk/primitives/aesgcm"
+	ecprim "github.com/bsv-blockchain/go-sdk/primitives/ec"
+	primhash "github.com/bsv-blockchain/go-sdk/primitives/hash"
 	goscript "github.com/bsv-blockchain/go-sdk/script"
 	gointerpreter "github.com/bsv-blockchain/go-sdk/script/interpreter"
 	goscriptflag "github.com/bsv-blockchain/go-sdk/script/interpreter/scriptflag"
 	gostorage "github.com/bsv-blockchain/go-sdk/storage"
 	gotx "github.com/bsv-blockchain/go-sdk/transaction"
-	gochainhash "github.com/bsv-blockchain/go-sdk/chainhash"
 )
 
 // ─── Vector file schema ───────────────────────────────────────────────────────
@@ -77,11 +77,11 @@ type JUnitSuite struct {
 }
 
 type JUnitCase struct {
-	Name      string      `xml:"name,attr"`
-	Classname string      `xml:"classname,attr"`
-	Time      string      `xml:"time,attr"`
-	Failure   *JUnitFail  `xml:"failure,omitempty"`
-	Skipped   *JUnitSkip  `xml:"skipped,omitempty"`
+	Name      string     `xml:"name,attr"`
+	Classname string     `xml:"classname,attr"`
+	Time      string     `xml:"time,attr"`
+	Failure   *JUnitFail `xml:"failure,omitempty"`
+	Skipped   *JUnitSkip `xml:"skipped,omitempty"`
 }
 
 type JUnitFail struct {
@@ -2125,6 +2125,10 @@ func findAndDeleteBytes(haystack, needle []byte) []byte {
 
 // dispatchEvaluation handles sdk/scripts/evaluation vectors.
 func dispatchEvaluation(input, expected map[string]interface{}) (Status, string) {
+	if fixtureType := getString(input, "fixture_type"); strings.HasPrefix(fixtureType, "node-") {
+		return StatusNotImplemented, fmt.Sprintf("%s vectors require node fixture runner support", fixtureType)
+	}
+
 	// ── operation-keyed vectors (writeBn, writeBn_range, findAndDelete) ─────────
 	if op := getString(input, "operation"); op != "" {
 		switch op {
@@ -2532,7 +2536,7 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 						l := int(scriptBytes[pos]) | int(scriptBytes[pos+1])<<8 | int(scriptBytes[pos+2])<<16 | int(scriptBytes[pos+3])<<24
 						pos += 4 + l
 					}
-				// other opcodes: no extra data bytes
+					// other opcodes: no extra data bytes
 				}
 			}
 			if pos >= len(scriptBytes) {
@@ -2867,10 +2871,10 @@ func writeJSONReport(reportPath string, allResults []Result) error {
 func main() {
 	// Default vectors path relative to the runner binary location.
 	defaultVectors := filepath.Join(filepath.Dir(os.Args[0]), "..", "..", "vectors")
-	vectorsDir    := flag.String("vectors", defaultVectors, "path to vectors directory")
-	reportPath    := flag.String("report", "", "JUnit XML report output path (optional)")
+	vectorsDir := flag.String("vectors", defaultVectors, "path to vectors directory")
+	reportPath := flag.String("report", "", "JUnit XML report output path (optional)")
 	jsonReportPath := flag.String("json-report", "", "JSON summary report output path (optional)")
-	validateOnly  := flag.Bool("validate-only", false, "validate JSON format only, do not execute vectors")
+	validateOnly := flag.Bool("validate-only", false, "validate JSON format only, do not execute vectors")
 	flag.Parse()
 
 	files, err := findJSONFiles(*vectorsDir)

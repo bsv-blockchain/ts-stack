@@ -1,6 +1,6 @@
 # Conformance Vectors
 
-Each `.json` file in this directory (or subdirectories) is a suite of test vectors. scripts/evaluation.json now includes 50+ additional vectors (IDs script-021+) from spend.valid.vectors.ts, script.valid.vectors.ts and Bitcoin Script edge cases for cross-library parity.
+Each `.json` file in this directory (or subdirectories) is a suite of test vectors. `sdk/scripts/evaluation.json` includes normalized SV Node and Teranode script fixtures for cross-library parity, with original source commits and SHA-256 checksums recorded in the file metadata.
 
 ## Format
 

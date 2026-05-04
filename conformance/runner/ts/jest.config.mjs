@@ -18,6 +18,10 @@ export default {
     }]
   },
   moduleNameMapper: {
+    '^@bsv/sdk$': '<rootDir>/../../../packages/sdk/mod.ts',
+    '^@bsv/sdk/storage$': '<rootDir>/../../../packages/sdk/src/storage/index.ts',
+    '^@bsv/sdk/compat/(.*)$': '<rootDir>/../../../packages/sdk/src/compat/$1.ts',
+    '^@bsv/sdk/primitives/(.*)$': '<rootDir>/../../../packages/sdk/src/primitives/$1.ts',
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   testMatch: ['**/*.test.ts'],

@@ -52,13 +52,14 @@
     "BRC-22": ["overlay.lookup", "overlay.topicmanagement"],
     "BRC-20": ["broadcast.arcsubmit", "broadcast.merklepath"],
     "BRC-21": ["sync.gasprotocol"],
+    "BRC-14": ["sdk.scripts.evaluation"],
     "merkle-service": ["broadcast.merkle-service"],
     "message-box": ["messaging.messagebox-http"]
   },
   "stats": {
     "total_files": 71,
-    "total_vectors": 1504,
-    "last_updated": "2026-05-01"
+    "total_vectors": 6601,
+    "last_updated": "2026-05-04"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

@@ -26,6 +26,7 @@ import {
   Signature,
   BigNumber,
   SymmetricKey,
+  TransactionSignature,
   Spend,
   Script,
   LockingScript,
@@ -88,6 +89,17 @@ function getString (m: Record<string, unknown>, key: string): string {
 
 function getBool (m: Record<string, unknown>, key: string): boolean {
   return m[key] === true
+}
+
+function getNumber (m: Record<string, unknown>, key: string, fallback = 0): number {
+  const v = m[key]
+  return typeof v === 'number' ? v : fallback
+}
+
+function getStringArray (m: Record<string, unknown>, key: string): string[] {
+  const v = m[key]
+  if (!Array.isArray(v)) return []
+  return v.filter((item): item is string => typeof item === 'string')
 }
 
 // ── Glob all JSON files recursively ───────────────────────────────────────────
@@ -1025,10 +1037,178 @@ function dispatchBSM (
   }
 }
 
+const ZERO_TXID = '0000000000000000000000000000000000000000000000000000000000000000'
+
+function emptyUnlockingScript (): UnlockingScript {
+  return UnlockingScript.fromBinary([])
+}
+
+function buildCreditingTransaction (lockingScript: LockingScript, amount: number): Transaction {
+  return new Transaction(
+    1,
+    [{
+      sourceTXID: ZERO_TXID,
+      sourceOutputIndex: 0xffffffff,
+      unlockingScript: new UnlockingScript([{ op: OP.OP_0 }, { op: OP.OP_0 }]),
+      sequence: 0xffffffff
+    }],
+    [{ lockingScript, satoshis: amount }],
+    0
+  )
+}
+
+function dispatchNodeScriptFixture (
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const amount = getNumber(input, 'amount_satoshis')
+  const lockingScript = LockingScript.fromHex(getString(input, 'script_pubkey_hex'))
+  const sigHex = getString(input, 'script_sig_hex')
+  const unlockingScript = sigHex === '' ? emptyUnlockingScript() : UnlockingScript.fromHex(sigHex)
+  const creditTx = buildCreditingTransaction(lockingScript, amount)
+
+  const spend = new Spend({
+    sourceTXID: creditTx.id('hex'),
+    sourceOutputIndex: 0,
+    sourceSatoshis: amount,
+    lockingScript,
+    transactionVersion: getNumber(input, 'tx_version', 1),
+    otherInputs: [],
+    outputs: [{ lockingScript: new LockingScript(), satoshis: amount }],
+    inputIndex: 0,
+    unlockingScript,
+    inputSequence: 0xffffffff,
+    lockTime: 0,
+    verifyFlags: getString(input, 'flags_csv')
+  })
+
+  let valid = false
+  try {
+    valid = spend.validate()
+  } catch (_e) {
+    valid = false
+  }
+  expect(valid).toBe(getBool(expected, 'valid'))
+}
+
+function dispatchNodeSighashFixture (
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const tx = Transaction.fromHex(getString(input, 'tx_hex'))
+  const inputIndex = getNumber(input, 'input_index')
+  const txInput = tx.inputs[inputIndex]
+  const otherInputs = [...tx.inputs]
+  otherInputs.splice(inputIndex, 1)
+
+  const params = {
+    sourceTXID: txInput.sourceTXID ?? '',
+    sourceOutputIndex: txInput.sourceOutputIndex,
+    sourceSatoshis: 0,
+    transactionVersion: tx.version,
+    otherInputs,
+    outputs: tx.outputs,
+    inputIndex,
+    subscript: Script.fromHex(getString(input, 'script_hex')),
+    inputSequence: txInput.sequence ?? 0xffffffff,
+    lockTime: tx.lockTime,
+    scope: getNumber(input, 'hash_type')
+  }
+
+  const regular = Hash.hash256(TransactionSignature.format({
+    ...params,
+    ignoreChronicle: getStringArray(input, 'sources').includes('teranode')
+  })).reverse()
+  const original = Hash.hash256(TransactionSignature.formatOTDA(params)).reverse()
+
+  expect(bytesToHex(regular)).toBe(getString(expected, 'regular_hash'))
+  expect(bytesToHex(original)).toBe(getString(expected, 'original_hash'))
+}
+
+function validateNodeTransactionSpend (
+  tx: Transaction,
+  prevouts: Array<Record<string, unknown>>,
+  flags: string,
+  inputIndex: number
+): boolean {
+  const txInput = tx.inputs[inputIndex]
+  const prevout = prevouts.find(candidate =>
+    getString(candidate, 'txid') === txInput.sourceTXID &&
+    (getNumber(candidate, 'vout') >>> 0) === txInput.sourceOutputIndex
+  )
+  if (prevout === undefined || txInput.unlockingScript === undefined) {
+    throw new Error(`Missing prevout fixture for input ${inputIndex}`)
+  }
+
+  const otherInputs = [...tx.inputs]
+  otherInputs.splice(inputIndex, 1)
+  const spend = new Spend({
+    sourceTXID: txInput.sourceTXID ?? '',
+    sourceOutputIndex: txInput.sourceOutputIndex,
+    sourceSatoshis: getNumber(prevout, 'amount_satoshis'),
+    lockingScript: LockingScript.fromHex(getString(prevout, 'script_pubkey_hex')),
+    transactionVersion: tx.version,
+    otherInputs,
+    outputs: tx.outputs,
+    inputIndex,
+    unlockingScript: txInput.unlockingScript,
+    inputSequence: txInput.sequence ?? 0xffffffff,
+    lockTime: tx.lockTime,
+    verifyFlags: flags
+  })
+  return spend.validate()
+}
+
+function dispatchNodeTransactionFixture (
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  let tx: Transaction
+  try {
+    tx = Transaction.fromHex(getString(input, 'tx_hex'))
+    expect(bytesToHex(tx.toBinary())).toBe(getString(input, 'tx_hex'))
+  } catch (e) {
+    if (getBool(expected, 'valid')) throw e
+    return
+  }
+
+  const prevouts = Array.isArray(input.prevouts)
+    ? input.prevouts as Array<Record<string, unknown>>
+    : []
+  const flagStrings = getStringArray(input, 'flag_strings')
+  let rejectedSpendCases = 0
+
+  for (const flags of flagStrings) {
+    for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
+      try {
+        const valid = validateNodeTransactionSpend(tx, prevouts, flags, inputIndex)
+        if (!valid) rejectedSpendCases++
+        if (getBool(expected, 'valid')) expect(valid).toBe(true)
+      } catch (e) {
+        if (getBool(expected, 'valid')) throw e
+        rejectedSpendCases++
+      }
+    }
+  }
+
+  if (!getBool(expected, 'valid')) {
+    expect(rejectedSpendCases).toBeGreaterThan(0)
+  }
+}
+
 function dispatchEvaluation (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
+  switch (getString(input, 'fixture_type')) {
+    case 'node-script':
+      return dispatchNodeScriptFixture(input, expected)
+    case 'node-sighash':
+      return dispatchNodeSighashFixture(input, expected)
+    case 'node-transaction':
+      return dispatchNodeTransactionFixture(input, expected)
+  }
+
   const op = getString(input, 'operation')
 
   if (op !== '') {

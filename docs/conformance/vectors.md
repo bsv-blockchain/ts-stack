@@ -14,7 +14,7 @@ tags: [conformance, vectors, catalog]
 
 The conformance corpus is the shared test fixture set for TypeScript and other implementations. It is intentionally implementation-neutral: each JSON file defines inputs, expected outputs, metadata, and the specification area it exercises.
 
-Current corpus: **260 vectors across 33 JSON files**, last indexed on 2026-04-28 in `conformance/META.json`.
+Current corpus: **6,601 vectors across 71 JSON files**, last indexed on 2026-05-04 in `conformance/META.json`.
 
 ## Repository Layout
 
@@ -61,14 +61,14 @@ Always inspect the target JSON file before porting a vector to another language;
 
 | Directory | Vector Count | What It Covers |
 |---|---:|---|
-| `sdk/crypto` | 99 | AES, ECDSA, ECIES, HMAC, hash160, RIPEMD-160, SHA-256, signatures |
-| `sdk/keys` | 43 | BRC-42 derivation, private key behavior, public key behavior |
+| `sdk/crypto` | 124 | AES, ECDSA, ECIES, HMAC, hash160, RIPEMD-160, SHA-256, signatures |
+| `sdk/keys` | 59 | BRC-42 derivation, private key behavior, public key behavior |
 | `sdk/transactions` | 31 | Transaction serialization and BRC-74 merkle paths |
-| `sdk/scripts` | 20 | Script evaluation edge cases |
+| `sdk/scripts` | 5,116 | Script parsing, encoding, sighash, and SV Node/Teranode script-interpreter fixtures |
 | `sdk/compat` | 9 | BRC-77 BSM compatibility |
-| `messaging/brc31` | 4 | Authrite/BRC-31 signatures |
-| `wallet/brc29` | 3 | BRC-29 payment derivation |
-| `wallet/brc100` | 632 | BRC-100 full interface (25 files, all 27+ methods, 100% coverage) |
+| `messaging/brc31` | 28 | Authrite/BRC-31 signatures |
+| `wallet/brc29` | 27 | BRC-29 payment derivation |
+| `wallet/brc100` | 950 | BRC-100 full interface (25 files, all 27+ methods, 100% coverage) |
 | `regressions` | 36 | Reproductions for historical bugs across SDK implementations |
 
 ## Wallet BRC-100
@@ -77,7 +77,7 @@ Current BRC-100 conformance coverage is focused on deterministic crypto and key 
 
 | File | Vectors | Methods |
 |---|---:|---|
-| `wallet/brc100/*.json` (25 files) | 632 | Full `WalletInterface`: getPublicKey, create/verifyHmac/Signature, encrypt/decrypt, revealKeyLinkage*, create/sign/abortAction, listActions, internalizeAction, list/relinquishOutputs, acquire/list/prove/relinquishCertificates, discover*, isAuthenticated, waitForAuthentication, getHeight/Header/Network/Version (100% coverage) |
+| `wallet/brc100/*.json` (25 files) | 950 | Full `WalletInterface`: getPublicKey, create/verifyHmac/Signature, encrypt/decrypt, revealKeyLinkage*, create/sign/abortAction, listActions, internalizeAction, list/relinquishOutputs, acquire/list/prove/relinquishCertificates, discover*, isAuthenticated, waitForAuthentication, getHeight/Header/Network/Version (100% coverage) |
 
 Use the [BRC-100 wallet method reference](../specs/brc-100-wallet.md) for the full interface shape. Use this catalog to see which parts already have portable fixtures.
 
@@ -91,6 +91,7 @@ Use the [BRC-100 wallet method reference](../specs/brc-100-wallet.md) for the fu
 | BRC-74 | `sdk/transactions/merkle-path.json` | available |
 | BRC-77 | `sdk/compat/bsm.json` | available |
 | BRC-100 | `wallet/brc100/*.json` (25 files) | full (100%) |
+| BRC-14 | `sdk/scripts/evaluation.json` | available, including SV Node and Teranode fixtures |
 
 ## Regression Fixtures
 
@@ -143,4 +144,5 @@ pnpm conformance --report conformance/runner/reports/results.xml
 2. Start with deterministic SDK vectors before stateful wallet vectors.
 3. Treat `wallet/brc100` as method-level fixtures, not as a complete wallet behavior test suite yet.
 4. Preserve vector IDs and expected error semantics when adding a runner for another language.
-5. Add new vectors to the corpus first when you find a behavioral ambiguity, then update each runner.
+5. For node-derived script fixtures, consume the normalized hex fields; original node ASM is retained for provenance.
+6. Add new vectors to the corpus first when you find a behavioral ambiguity, then update each runner.
