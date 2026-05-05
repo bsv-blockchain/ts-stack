@@ -41,10 +41,11 @@ const LEGACY_KEY_TYPE = 'EcdsaSecp256k1VerificationKey2019'
 // ============================================================================
 
 function base64url (bytes: number[]): string {
-  return Utils.toBase64(bytes)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  let encoded = Utils.toBase64(bytes).split('+').join('-').split('/').join('_')
+  while (encoded.endsWith('=')) {
+    encoded = encoded.slice(0, -1)
+  }
+  return encoded
 }
 
 function pubKeyToJwk (compressedHex: string): { kty: string, crv: string, x: string, y: string } {

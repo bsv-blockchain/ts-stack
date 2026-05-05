@@ -80,7 +80,6 @@
 }
 
 .resultExcerpt {
-  display: block;
   font-size: 0.8rem;
   color: var(--dev-text-dim);
   line-height: 1.4;

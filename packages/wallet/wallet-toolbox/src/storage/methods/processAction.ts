@@ -250,7 +250,8 @@ async function validateCommitNewTxToStorageArgs (
     throw new WERR_INVALID_OPERATION('Parsing serialized transaction failed.')
   }
   if (params.txid !== tx.id('hex')) { throw new WERR_INVALID_OPERATION('Hash of serialized transaction doesn\'t match expected txid') }
-  if (!(await storage.getServices()).nLockTimeIsFinal(tx)) {
+  const services = await storage.getServices()
+  if (!(await services.nLockTimeIsFinal(tx))) {
     throw new WERR_INVALID_OPERATION(`This transaction is not final.
          Ensure that the transaction meets the rules for being a finalized
          which can be found at https://wiki.bitcoinsv.io/index.php/NLocktime_and_nSequence`)

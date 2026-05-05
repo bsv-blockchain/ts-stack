@@ -53,7 +53,7 @@ const server = http.createServer(app)
 // relayUrl defaults to process.env.RELAY_URL ?? 'ws://localhost:3000'
 // origin   defaults to process.env.ORIGIN   ?? 'http://localhost:5173'
 
-new WalletRelayService({ app, server, wallet })
+app.locals.walletRelayService = new WalletRelayService({ app, server, wallet })
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server    → http://0.0.0.0:${PORT}`)

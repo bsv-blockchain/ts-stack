@@ -17,6 +17,7 @@ import { Beef, BEEF_V1 } from './Beef.js'
 import P2PKH from '../script/templates/P2PKH.js'
 import type { WalletInterface, DescriptionString5to50Bytes, CreateActionOptions } from '../wallet/Wallet.interfaces.js'
 import TransactionSignature from '../primitives/TransactionSignature.js'
+import Random from '../primitives/Random.js'
 
 /**
  * Represents a complete Bitcoin transaction. This class encapsulates all the details
@@ -536,7 +537,7 @@ export default class Transaction {
   }
 
   private benfordNumber (min: number, max: number): number {
-    const d = Math.floor(Math.random() * 9) + 1
+    const d = Random(1)[0] % 9 + 1
     return Math.floor(
       min + ((max - min) * Math.log10(1 + 1 / d)) / Math.log10(10)
     )

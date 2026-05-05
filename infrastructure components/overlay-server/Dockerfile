@@ -6,17 +6,22 @@ WORKDIR /app
 
 # Copy package.json and package-lock.json
 COPY package*.json .
+COPY tsconfig.json .
 
 # Install dependencies
 RUN npm install
 
-# Copy the entire application code into the container
-COPY . .
+# Copy application source code into the container
+COPY src ./src
 
 # Expose the application port
 EXPOSE 8080
 
 RUN npm run build
+
+RUN chown -R node:node /app
+
+USER node
 
 # Start the application
 CMD ["npm", "start"]

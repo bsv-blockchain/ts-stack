@@ -16,11 +16,11 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
+      - uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3
         with:
           node-version: 16
-      - uses: RafikFarhad/push-to-gcr-github-action@v4.1
+      - uses: RafikFarhad/push-to-gcr-github-action@241707854fb71f655ec4e2a98bb16505f218bcc2 # v4.1
         with:
           gcloud_service_key: ${{ secrets.DOCKER_REGISTRY_PUSH_KEY }}
           registry: ${{ env.GCR_HOST }}
@@ -39,10 +39,10 @@ jobs:
           COMMISSION_FEE: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_COMMISSION_FEE || secrets.STAGING_COMMISSION_FEE }}
           COMMISSION_PUBLIC_KEY: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_COMMISSION_PUBLIC_KEY || secrets.STAGING_COMMISSION_PUBLIC_KEY }}
           FEE_MODEL: ${{      env.CURRENT_BRANCH =='production' && secrets.PROD_FEE_MODEL || secrets.STAGING_FEE_MODEL }}
-      - uses: google-github-actions/auth@v1
+      - uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 # v1
         with:
           credentials_json: ${{ secrets.gcp_deploy_creds }}
-      - uses: google-github-actions/deploy-cloudrun@v1
+      - uses: google-github-actions/deploy-cloudrun@e62f655d5754bec48078a72edc015367b01ee97b # v1
         with:
           metadata: "service.${{ env.CURRENT_BRANCH }}.yaml"
           region: us-west1

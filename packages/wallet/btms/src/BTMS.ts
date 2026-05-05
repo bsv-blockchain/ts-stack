@@ -2213,7 +2213,7 @@ export class BTMS {
         sorted = [...eligible].sort((a, b) => a.token.amount - b.token.amount)
         break
       case 'random':
-        sorted = [...eligible].sort(() => Math.random() - 0.5)
+        sorted = BTMS.shuffle(eligible)
         break
       case 'exact-match':
         // Try to find exact match first
@@ -2227,7 +2227,7 @@ export class BTMS {
             sorted = [...eligible].sort((a, b) => a.token.amount - b.token.amount)
             break
           case 'random':
-            sorted = [...eligible].sort(() => Math.random() - 0.5)
+            sorted = BTMS.shuffle(eligible)
             break
           case 'largest-first':
           default:
@@ -2359,7 +2359,7 @@ export class BTMS {
 
     // Shuffle to avoid predictable ordering
     for (let i = outputs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
+      const j = BTMS.randomInt(i + 1)
         ;[outputs[i], outputs[j]] = [outputs[j], outputs[i]]
     }
 
@@ -2373,8 +2373,34 @@ export class BTMS {
    */
   private static benfordNumber(min: number, max: number): number {
     if (max <= min) return min
-    const d = Math.floor(Math.random() * 9) + 1
+    const d = BTMS.randomInt(9) + 1
     return Math.floor(min + ((max - min) * Math.log10(1 + 1 / d)) / Math.log10(10))
+  }
+
+  private static shuffle<T>(items: T[]): T[] {
+    const shuffled = [...items]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = BTMS.randomInt(i + 1)
+        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    return shuffled
+  }
+
+  private static randomInt(maxExclusive: number): number {
+    if (maxExclusive <= 0) return 0
+    const maxUint32 = 0x100000000
+    const limit = maxUint32 - (maxUint32 % maxExclusive)
+
+    while (true) {
+      const bytes = Random(4)
+      const value = (
+        (bytes[0] << 24) |
+        (bytes[1] << 16) |
+        (bytes[2] << 8) |
+        bytes[3]
+      ) >>> 0
+      if (value < limit) return value % maxExclusive
+    }
   }
 
 }

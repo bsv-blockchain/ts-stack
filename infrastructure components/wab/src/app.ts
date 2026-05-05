@@ -9,6 +9,7 @@ import { AccountDeletionController } from "./controllers/AccountDeletionControll
 import { ShareController } from "./controllers/ShareController"
 
 const app = express()
+app.disable('x-powered-by')
 
 // Alternatively, you could add custom middleware to set headers and handle OPTIONS:
 app.use((req, res, next) => {

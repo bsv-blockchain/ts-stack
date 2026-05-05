@@ -1,4 +1,5 @@
 import { AuthMethod, AuthPayload, AuthResult } from "./AuthMethod";
+import { randomInt } from "crypto";
 
 /**
  * DevConsoleAuthMethod
@@ -27,7 +28,7 @@ export class DevConsoleAuthMethod extends AuthMethod {
         }
 
         // Generate a 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = randomInt(100000, 1000000).toString();
         
         // Store OTP with 10-minute expiration
         const expiresAt = Date.now() + (10 * 60 * 1000);

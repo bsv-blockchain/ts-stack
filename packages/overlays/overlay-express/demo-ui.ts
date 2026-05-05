@@ -5,6 +5,7 @@ const main = async () => {
 
     // We'll make a new server for our overlay node.
     const server = express()
+    server.disable('x-powered-by')
 
     server.get('/', (req, res) => {
         res.send(makeUserInterface({ host: 'http://localhost:8080' }))

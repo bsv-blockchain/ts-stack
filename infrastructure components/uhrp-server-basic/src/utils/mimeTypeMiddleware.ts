@@ -10,6 +10,7 @@ import { Utils } from '@bsv/sdk'
 const mimeTypeCache = new Map<string, string>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes in milliseconds
 const cacheTimestamps = new Map<string, number>()
+const CDN_ROOT = path.resolve(__dirname, '../../public/cdn')
 
 /**
  * Fallback MIME type mapping based on common file extensions
@@ -148,8 +149,27 @@ function detectMimeTypeFromContent(filePath: string): string {
     }
 
     return 'application/octet-stream'
-  } catch (error) {
+  } catch {
     return 'application/octet-stream'
+  }
+}
+
+function resolveCdnFilePath(objectIdentifier: string): string | null {
+  try {
+    const decodedIdentifier = decodeURIComponent(objectIdentifier)
+    if (!decodedIdentifier || decodedIdentifier.includes('\0')) {
+      return null
+    }
+
+    const filePath = path.resolve(CDN_ROOT, decodedIdentifier)
+    const relativePath = path.relative(CDN_ROOT, filePath)
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      return null
+    }
+
+    return filePath
+  } catch {
+    return null
   }
 }
 
@@ -169,10 +189,8 @@ export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: N
     return next()
   }
 
-  const filePath = path.join(__dirname, '../../public/cdn', objectIdentifier)
-  
-  // Check if file exists
-  if (!fs.existsSync(filePath)) {
+  const filePath = resolveCdnFilePath(objectIdentifier)
+  if (filePath == null) {
     return next()
   }
 
@@ -188,10 +206,13 @@ export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: N
     // Set the content type header
     res.setHeader('Content-Type', mimeType || 'application/octet-stream')
     
-    // Send the file
-    res.sendFile(filePath)
+    res.sendFile(filePath, error => {
+      if (error != null) {
+        next()
+      }
+    })
   } catch (error) {
-    console.error('Error in CDN MIME type middleware:', error)
+    console.error('Error in CDN MIME type middleware')
     next()
   }
 }

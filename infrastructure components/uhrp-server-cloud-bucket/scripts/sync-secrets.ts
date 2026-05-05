@@ -112,13 +112,22 @@ function getRepoFromGit(): string {
     const url = execSync("git config --get remote.origin.url")
       .toString()
       .trim();
-    // handles git@github.com:org/repo.git or https://github.com/org/repo.git
-    const match = url.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
-    if (match) return match[1];
+    if (url.startsWith("git@github.com:")) {
+      return stripGitSuffix(url.slice("git@github.com:".length));
+    }
+    const parsed = new URL(url);
+    if (parsed.hostname === "github.com") {
+      const repo = parsed.pathname.split("/").filter(Boolean).join("/");
+      return stripGitSuffix(repo);
+    }
   } catch {}
   throw new Error(
     "Unable to determine repo from git config. Pass --repo instead."
   );
+}
+
+function stripGitSuffix(repo: string): string {
+  return repo.endsWith(".git") ? repo.slice(0, -4) : repo;
 }
 
 function bulkSetSecrets(
@@ -128,7 +137,7 @@ function bulkSetSecrets(
 ) {
   const tmp = join(process.cwd(), `.tmp_${env}_secrets_${Date.now()}.env`);
   const lines = Object.entries(kv).map(
-    ([k, v]) => `${k}=${v.replace(/\n/g, "\\n")}`
+    ([k, v]) => `${k}=${v.split("\n").join("\\n")}`
   );
   writeFileSync(tmp, lines.join("\n"));
   const res = spawnSync(

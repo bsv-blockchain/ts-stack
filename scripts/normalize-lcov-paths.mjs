@@ -9,15 +9,29 @@ if (lcovPath == null || sourcePrefix == null) {
   process.exit(1)
 }
 
-const prefix = sourcePrefix.replace(/\\/g, '/').replace(/\/+$/, '')
+const slashify = (value) => value.replaceAll('\\', '/')
+
+const trimTrailingSlashes = (value) => {
+  let end = value.length
+  while (end > 0 && value[end - 1] === '/') end -= 1
+  return value.slice(0, end)
+}
+
+const trimLeadingSlashes = (value) => {
+  let start = 0
+  while (start < value.length && value[start] === '/') start += 1
+  return value.slice(start)
+}
+
+const prefix = trimTrailingSlashes(slashify(sourcePrefix))
 const content = readFileSync(lcovPath, 'utf8')
 const cwd = process.cwd()
 
 const normalizePath = (filePath) => {
-  let normalized = filePath.replace(/\\/g, '/')
+  let normalized = slashify(filePath)
 
   if (isAbsolute(normalized)) {
-    const relativePath = relative(cwd, normalized).replace(/\\/g, '/')
+    const relativePath = slashify(relative(cwd, normalized))
     if (!relativePath.startsWith('..')) {
       normalized = relativePath
     }
@@ -27,12 +41,15 @@ const normalizePath = (filePath) => {
     return normalized
   }
 
-  return `${prefix}/${normalized}`.replace(/\/+/g, '/')
+  return `${prefix}/${trimLeadingSlashes(normalized)}`
 }
 
 const normalized = content
-  .split(/\r?\n/)
-  .map(line => line.startsWith('SF:') ? `SF:${normalizePath(line.slice(3))}` : line)
+  .split('\n')
+  .map(rawLine => {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+    return line.startsWith('SF:') ? `SF:${normalizePath(line.slice(3))}` : line
+  })
   .join('\n')
 
 writeFileSync(lcovPath, normalized)

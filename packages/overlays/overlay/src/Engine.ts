@@ -1086,7 +1086,7 @@ export class Engine {
       }
 
       // Delete any stale outputs that were consumed as inputs
-      output.outputsConsumed.map(async (outputIdentifier) => {
+      await Promise.all(output.outputsConsumed.map(async (outputIdentifier) => {
         const staleOutput = await this.storage.findOutput(outputIdentifier.txid, outputIdentifier.outputIndex, output.topic)
 
         // Make sure an output was found
@@ -1103,7 +1103,7 @@ export class Engine {
 
         // Find previousUTXO history
         return await this.deleteUTXODeep(staleOutput)
-      })
+      }))
     } catch (error) {
       throw new Error(`Failed to delete all stale outputs: ${error as string} `)
     }

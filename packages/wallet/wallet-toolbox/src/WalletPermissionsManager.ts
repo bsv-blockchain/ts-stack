@@ -2304,51 +2304,53 @@ export class WalletPermissionsManager implements WalletInterface {
       })
     }
 
-    return await new Promise<boolean>(async (resolve, reject) => {
+    const requestPromise = new Promise<boolean>((resolve, reject) => {
       this.activeRequests.set(key, {
         request: preparedRequest,
         pending: [{ resolve, reject }]
       })
-
-      try {
-        // Fire the relevant onXXXRequested event (which one depends on r.type)
-        switch (preparedRequest.type) {
-          case 'protocol':
-            await this.callEvent('onProtocolPermissionRequested', {
-              ...preparedRequest,
-              counterparty: preparedRequest.protocolID?.[0] === 1 ? undefined : preparedRequest.counterparty,
-              requestID: key
-            })
-            break
-          case 'basket':
-            await this.callEvent('onBasketAccessRequested', {
-              ...preparedRequest,
-              requestID: key
-            })
-            break
-          case 'certificate':
-            await this.callEvent('onCertificateAccessRequested', {
-              ...preparedRequest,
-              requestID: key
-            })
-            break
-          case 'spending':
-            await this.callEvent('onSpendingAuthorizationRequested', {
-              ...preparedRequest,
-              requestID: key
-            })
-            break
-        }
-      } catch (e) {
-        const matching = this.activeRequests.get(key)
-        if (matching != null) {
-          for (const p of matching.pending) {
-            p.reject(e)
-          }
-          this.activeRequests.delete(key)
-        }
-      }
     })
+
+    try {
+      // Fire the relevant onXXXRequested event (which one depends on r.type)
+      switch (preparedRequest.type) {
+        case 'protocol':
+          await this.callEvent('onProtocolPermissionRequested', {
+            ...preparedRequest,
+            counterparty: preparedRequest.protocolID?.[0] === 1 ? undefined : preparedRequest.counterparty,
+            requestID: key
+          })
+          break
+        case 'basket':
+          await this.callEvent('onBasketAccessRequested', {
+            ...preparedRequest,
+            requestID: key
+          })
+          break
+        case 'certificate':
+          await this.callEvent('onCertificateAccessRequested', {
+            ...preparedRequest,
+            requestID: key
+          })
+          break
+        case 'spending':
+          await this.callEvent('onSpendingAuthorizationRequested', {
+            ...preparedRequest,
+            requestID: key
+          })
+          break
+      }
+    } catch (e) {
+      const matching = this.activeRequests.get(key)
+      if (matching != null) {
+        for (const p of matching.pending) {
+          p.reject(e)
+        }
+        this.activeRequests.delete(key)
+      }
+    }
+
+    return await requestPromise
   }
 
   /* ---------------------------------------------------------------------

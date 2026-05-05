@@ -5,6 +5,8 @@ WORKDIR /app
 
 # Copy package files first for better layer caching
 COPY package*.json ./
+COPY tsconfig*.json ./
+COPY knexfile.ts ./
 
 # Install all dependencies (including dev deps for build)
 RUN npm install
@@ -12,8 +14,8 @@ RUN npm install
 # Install global tools (optional, depends on how you're running knex)
 RUN npm install -g knex typescript
 
-# Copy remaining source code
-COPY . .
+# Copy source code required for compilation
+COPY src ./src
 
 # Build the TypeScript project
 RUN npm run build
@@ -34,18 +36,20 @@ RUN apk add --no-cache nginx && \
 WORKDIR /app
 
 # Copy package files and install production deps only
-COPY package*.json ./
+COPY --chown=node:node package*.json ./
 RUN npm ci --omit=dev
 
 # Copy built output from builder
-COPY --from=builder /app/out ./out
-COPY --from=builder /app/knexfile.js ./knexfile.js
+COPY --from=builder --chown=node:node /app/out ./out
+COPY --from=builder --chown=node:node /app/knexfile.js ./knexfile.js
 
 # Copy nginx config
 COPY ./nginx.conf /etc/nginx/nginx.conf
 
 # Expose the API port
 EXPOSE 8080
+
+USER node
 
 # Start the app
 CMD [ "node", "out/src/index.js" ]

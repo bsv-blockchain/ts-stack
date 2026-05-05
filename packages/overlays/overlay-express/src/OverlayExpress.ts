@@ -393,7 +393,7 @@ export default class OverlayExpress {
 
   /**
    * Configure Knex (SQL) database connection.
-   * @param config - Knex configuration object, or MySQL connection string (e.g. mysql://overlayAdmin:overlay123@mysql:3306/overlay).
+   * @param config - Knex configuration object, or a MySQL connection string loaded from configuration.
    */
   async configureKnex (config: Knex.Knex.Config | string): Promise<void> {
     if (typeof config === 'string') {

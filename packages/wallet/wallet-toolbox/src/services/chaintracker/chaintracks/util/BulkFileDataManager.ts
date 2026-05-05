@@ -62,13 +62,12 @@ export class BulkFileDataManager {
   readonly fromKnownSourceUrl?: string
 
   constructor (options: BulkFileDataManagerOptions | Chain) {
-    if (typeof options === 'object') options = options
-    else options = BulkFileDataManager.createDefaultOptions(options)
-    this.chain = options.chain
-    this.maxPerFile = options.maxPerFile
-    this.maxRetained = options.maxRetained
-    this.fromKnownSourceUrl = options.fromKnownSourceUrl
-    this.fetch = options.fetch
+    const resolvedOptions = typeof options === 'object' ? options : BulkFileDataManager.createDefaultOptions(options)
+    this.chain = resolvedOptions.chain
+    this.maxPerFile = resolvedOptions.maxPerFile
+    this.maxRetained = resolvedOptions.maxRetained
+    this.fromKnownSourceUrl = resolvedOptions.fromKnownSourceUrl
+    this.fetch = resolvedOptions.fetch
 
     this.deleteBulkFilesNoLock()
   }

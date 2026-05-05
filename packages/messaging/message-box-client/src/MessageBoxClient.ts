@@ -1089,7 +1089,7 @@ export class MessageBoxClient {
   ): Promise<SendListResult> {
     await this.assertInitialized()
 
-    const { recipients, messageBox, body, skipEncryption } = params
+    const { recipients, messageBox, body } = params
     if (!Array.isArray(recipients) || recipients.length === 0) {
       throw new Error('You must provide at least one recipient!')
     }
@@ -1143,7 +1143,10 @@ export class MessageBoxClient {
     }
 
     // pick the host to POST to
-    const finalHost = (overrideHost ?? await this.resolveHostForRecipient(allowedRecipients[0])).replace(/\/+$/, '')
+    let finalHost = overrideHost ?? await this.resolveHostForRecipient(allowedRecipients[0])
+    while (finalHost.endsWith('/')) {
+      finalHost = finalHost.slice(0, -1)
+    }
     const singleDeliveryKey = deliveryAgentIdentityKeyByHost[finalHost] ??
       Object.values(deliveryAgentIdentityKeyByHost)[0]
 
@@ -1169,15 +1172,9 @@ export class MessageBoxClient {
       return Array.from(hmac.hmac).map(b => b.toString(16).padStart(2, '0')).join('')
     })
 
-    // 7) Body: for batch route the server expects a single shared body
-    // NOTE: If you need per-recipient encryption, we must change the server payload shape.
-    let finalBody: string
-    if (skipEncryption === true) {
-      finalBody = typeof body === 'string' ? body : JSON.stringify(body)
-    } else {
-      // safest for now: send plaintext; the recipients can decrypt payload fields client-side if needed
-      finalBody = typeof body === 'string' ? body : JSON.stringify(body)
-    }
+    // 7) Body: for batch route the server expects a single shared body.
+    // Per-recipient encryption requires a different server payload shape.
+    const finalBody = typeof body === 'string' ? body : JSON.stringify(body)
 
     // 8) ONE batch payment with server output at index 0
     const paymentData = await this.createMessagePaymentBatch(
@@ -1818,7 +1815,7 @@ export class MessageBoxClient {
   ): Promise<R[]> {
     if (items.length === 0) return []
     if (!Number.isFinite(limit) || limit >= items.length) {
-      return await Promise.all(items.map(fn))
+      return await Promise.all(items.map((item, index) => fn(item, index)))
     }
 
     const workerCount = Math.max(1, Math.min(limit, items.length))
@@ -2145,7 +2142,7 @@ export class MessageBoxClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(
-          `Failed to get quote: HTTP ${response.status} - ${String(errorData.description) ?? response.statusText}`
+          `Failed to get quote: HTTP ${response.status} - ${typeof errorData.description === 'string' ? errorData.description : response.statusText}`
         )
       }
 
@@ -2218,7 +2215,7 @@ export class MessageBoxClient {
       if (!resp.ok) {
         const errorData = await resp.json().catch(() => ({}))
         throw new Error(
-          `Failed to get quote (host ${host}): HTTP ${resp.status} - ${String(errorData.description) ?? resp.statusText}`
+          `Failed to get quote (host ${host}): HTTP ${resp.status} - ${typeof errorData.description === 'string' ? errorData.description : resp.statusText}`
         )
       }
 
@@ -2533,7 +2530,7 @@ export class MessageBoxClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      const description = String(errorData.description) ?? response.statusText
+      const description = typeof errorData.description === 'string' ? errorData.description : response.statusText
       throw new Error(`Failed to register device: HTTP ${response.status} - ${description}`)
     }
 
@@ -2581,7 +2578,7 @@ export class MessageBoxClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      const description = String(errorData.description) ?? response.statusText
+      const description = typeof errorData.description === 'string' ? errorData.description : response.statusText
       throw new Error(`Failed to list devices: HTTP ${response.status} - ${description}`)
     }
 

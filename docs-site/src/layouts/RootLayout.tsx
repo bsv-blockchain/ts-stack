@@ -24,12 +24,16 @@ export default function RootLayout() {
             <Sidebar />
           </div>
           {sidebarOpen && (
-            <div
+            <button
+              type="button"
+              aria-label="Close navigation"
               style={{
                 position: 'fixed',
                 inset: 0,
                 zIndex: 49,
                 background: 'rgba(0,0,0,0.5)',
+                border: 0,
+                padding: 0,
               }}
               onClick={() => setSidebarOpen(false)}
             />

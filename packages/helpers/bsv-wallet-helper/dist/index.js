@@ -857,13 +857,13 @@ function hasOpReturnData(input) {
 function getScriptType(input) {
   validateInput(input, "getScriptType");
   try {
-    if (typeof input === "string" ? isOrdinal(input) : isOrdinal(input)) {
+    if (isOrdinal(input)) {
       return "Ordinal";
     }
-    if (typeof input === "string" ? isP2PKH(input) : isP2PKH(input)) {
+    if (isP2PKH(input)) {
       return "P2PKH";
     }
-    if (typeof input === "string" ? hasOpReturnData(input) : hasOpReturnData(input)) {
+    if (hasOpReturnData(input)) {
       const hex = typeof input === "string" ? input : scriptToHex(input);
       if (hex.startsWith("6a")) {
         return "OpReturn";
@@ -878,7 +878,7 @@ function extractInscriptionData(input) {
   validateInput(input, "extractInscriptionData");
   const script = typeof input === "string" ? import_sdk8.Script.fromHex(input) : input;
   const chunks = script.chunks;
-  if (typeof input === "string" ? !hasOrd(input) : !hasOrd(input)) {
+  if (!hasOrd(input)) {
     return null;
   }
   const endifIndex = chunks.findIndex((chunk) => chunk.op === 104);
@@ -920,7 +920,7 @@ function extractInscriptionData(input) {
 }
 function extractMapMetadata(input) {
   validateInput(input, "extractMapMetadata");
-  if (typeof input === "string" ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
+  if (!hasOpReturnData(input)) {
     return null;
   }
   const script = typeof input === "string" ? import_sdk8.Script.fromHex(input) : input;
@@ -982,7 +982,7 @@ function extractMapMetadata(input) {
 }
 function extractOpReturnData(input) {
   validateInput(input, "extractOpReturnData");
-  if (typeof input === "string" ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
+  if (!hasOpReturnData(input)) {
     return null;
   }
   const script = typeof input === "string" ? import_sdk8.Script.fromHex(input) : input;

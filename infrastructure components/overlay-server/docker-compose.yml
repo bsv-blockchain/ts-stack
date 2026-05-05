@@ -7,8 +7,8 @@ services:
     volumes:
       - mongo_data:/data/db
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD}
 
   mysql:
     image: mysql:8
@@ -16,10 +16,10 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: example
-      MYSQL_DATABASE: appdb
-      MYSQL_USER: appuser
-      MYSQL_PASSWORD: apppass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-appdb}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -34,15 +34,15 @@ services:
     ports:
       - "8080:8080"
     environment:
-      MONGO_URL: mongodb://root:example@mongodb:27017
-      KNEX_URL: mysql://appuser:apppass@mysql:3306/appdb
-      SERVER_PRIVATE_KEY: 6f552333a2dd110ba07c60f9888ec903a3ef62b7f43983c285dd760a7456eb33
+      MONGO_URL: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD}@mongodb:27017
+      KNEX_URL: mysql://${MYSQL_USER:-appuser}:${MYSQL_PASSWORD:?set MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-appdb}
+      SERVER_PRIVATE_KEY: ${SERVER_PRIVATE_KEY:?set SERVER_PRIVATE_KEY}
       WALLET_STORAGE_URL: https://store-us-1.bsvb.tech
       HOSTING_URL: https://your.overlay.network
-      ARC_API_KEY: mainnet_8af332fafbc44ab158c4133242ac2621
+      ARC_API_KEY: ${ARC_API_KEY:-}
       NETWORK: main
       NODE_NAME: your-overlay-node
-      ADMIN_TOKEN: 0f9888ec903a
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
       GASP_ENABLED: "false"
     command: ["npm", "run", "start"]
 
@@ -52,7 +52,7 @@ services:
     depends_on:
       - overlay-server
     environment:
-      ADMIN_TOKEN: 0f9888ec903a
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
     entrypoint: /bin/sh
     command:
       - -c
@@ -64,4 +64,3 @@ services:
 volumes:
   mongo_data:
   mysql_data:
-
