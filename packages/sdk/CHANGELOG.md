@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [2.1.0 - 2026-05-04](#210---2026-05-04)
+  - ts-stack hereon
 - [2.0.14 - 2026-04-22](#2014---2026-04-22)
 - [2.0.13 - 2026-03-19](#2013---2026-03-19)
 - [2.0.10 - 2026-03-17](#2010---2026-03-17)
@@ -219,6 +221,13 @@ All notable changes to this project will be documented in this file. The format 
 ### Fixed
 
 ### Security
+
+---
+
+## [2.1.0] - 2026-05-04
+
+### Changed
+- Published `@bsv/sdk` from the `ts-stack` monorepo release workflow for the first time.
 
 ---
 
