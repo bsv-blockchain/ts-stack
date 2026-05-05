@@ -584,7 +584,7 @@ export class MessageBoxClient {
 
     try {
       Logger.log(`[MB CLIENT] Joining WebSocket room: ${roomId}`)
-      await this.socket?.emit('joinRoom', roomId)
+      this.socket?.emit('joinRoom', roomId)
       this.joinedRooms.add(roomId)
       Logger.log(`[MB CLIENT] Successfully joined room: ${roomId}`)
     } catch (error) {

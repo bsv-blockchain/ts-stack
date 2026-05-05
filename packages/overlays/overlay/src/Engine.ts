@@ -193,7 +193,7 @@ export class Engine {
         // Identify previous coins admitted to this specific topic
         const previousCoins: number[] = []
         const outputPromises = tx.inputs.map(async (input, i) => {
-          const previousTXID = input.sourceTXID !== undefined ? input.sourceTXID : input.sourceTransaction?.id('hex')
+          const previousTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
           if (previousTXID !== undefined) {
             // Check if the previous output was admitted to this specific topic
             const output = await this.storage.findOutput(previousTXID, input.sourceOutputIndex, topic)

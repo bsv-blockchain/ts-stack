@@ -8,20 +8,17 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
-RUN npm i -g tsx typescript
+RUN npm install -g tsx@4 typescript@5 --ignore-scripts
 
 # Install dependencies
-RUN npm install
-
+RUN npm ci --ignore-scripts
 
 # Copy source code
 COPY src ./src
 COPY demo.ts ./
 
 # Build the TypeScript code
-RUN npm run build
-
-RUN chown -R node:node /app
+RUN npm run build && chown -R node:node /app
 
 # Expose the P2P port (9901 by default)
 EXPOSE 9901

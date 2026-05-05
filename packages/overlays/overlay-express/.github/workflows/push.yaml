@@ -24,7 +24,7 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         registry-url: 'https://registry.npmjs.org'
-    - run: npm ci
+    - run: npm ci --ignore-scripts
     - run: npm run lint:ci --if-present
     - run: npm run test:coverage --if-present
     - name: Upload coverage to Codecov
@@ -49,7 +49,7 @@ jobs:
       with:
         node-version: '24'
         registry-url: 'https://registry.npmjs.org'
-    - run: npm ci
+    - run: npm ci --ignore-scripts
     - run: npm run build
     - name: Check if version already published
       id: check-version
