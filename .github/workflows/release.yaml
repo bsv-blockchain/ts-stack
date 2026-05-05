@@ -55,6 +55,6 @@ jobs:
         # on npmjs.org: package settings → Publishing → Add trusted publisher
         #   Owner: bsv-blockchain
         #   Repository: ts-stack
-        #   Workflow: release.yml
+        #   Workflow: release.yaml
         #   Environment: (leave blank)
         run: pnpm -r --filter="${{ steps.publish-filter.outputs.filter }}" publish --access public --no-git-checks --provenance

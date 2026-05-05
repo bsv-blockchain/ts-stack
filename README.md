@@ -178,13 +178,13 @@ Coverage upload is currently based on the SDK LCOV report and normalized to repo
 
 ## Releases
 
-Releases use GitHub Actions with npm OIDC provenance; no static npm token is required. Push a tag matching `*/v*` for a package release, or `v*` for a rare monorepo-wide release. The release workflow builds the workspace and publishes packages changed since `origin/main`.
+Releases use GitHub Actions with npm OIDC provenance; no static npm token is required. Push a tag matching `<package-path>/v*` for a package release, or `v*` for a rare monorepo-wide release. Package tags publish the package at the tagged path; monorepo-wide tags publish packages changed since `origin/main`.
 
 Each published package must be configured as an npm trusted publisher:
 
 - Owner: `bsv-blockchain`
 - Repository: `ts-stack`
-- Workflow: `release.yml`
+- Workflow: `release.yaml`
 - Environment: leave blank
 
 ## Updating Imported Packages

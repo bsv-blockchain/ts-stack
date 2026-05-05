@@ -235,7 +235,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/ts-sdk.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/sdk"
   },
   "keywords": [
     "BSV",
@@ -247,9 +248,9 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/ts-sdk/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-sdk#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk#readme",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@jest/globals": "^30.3.0",
