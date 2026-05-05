@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - '*/v*'         # e.g. packages/sdk/ts-sdk/v1.2.3
+      - '**/v*'        # e.g. packages/sdk/v1.2.3
       - 'v*'           # monorepo-wide tag (rare)
 
 jobs:
@@ -15,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
@@ -30,7 +32,24 @@ jobs:
       - name: Build all packages
         run: pnpm -r --filter '!@bsv/ts-stack' run build
 
-      - name: Publish changed packages
+      - name: Resolve publish filter
+        id: publish-filter
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" == v* ]]; then
+            echo "filter=...[origin/main]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          package_path="${tag%/v*}"
+          if [[ "$package_path" == "$tag" || ! -f "$package_path/package.json" ]]; then
+            echo "Could not resolve package path from tag: $tag" >&2
+            exit 1
+          fi
+
+          echo "filter=./$package_path" >> "$GITHUB_OUTPUT"
+
+      - name: Publish packages
         # No token needed — npm authenticates via GitHub OIDC.
         # Each package must have this repo configured as a trusted publisher
         # on npmjs.org: package settings → Publishing → Add trusted publisher
@@ -38,4 +57,4 @@ jobs:
         #   Repository: ts-stack
         #   Workflow: release.yml
         #   Environment: (leave blank)
-        run: pnpm -r --filter='...[origin/main]' publish --access public --no-git-checks --provenance
+        run: pnpm -r --filter="${{ steps.publish-filter.outputs.filter }}" publish --access public --no-git-checks --provenance

@@ -27,6 +27,41 @@ for (const pkg of pkgList) {
   }
 }
 
+function parseVersion (version) {
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
+  if (!match) return null
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3])
+  }
+}
+
+function compareVersion (a, b) {
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
+}
+
+function caretUpperBound (version) {
+  if (version.major > 0) {
+    return { major: version.major + 1, minor: 0, patch: 0 }
+  }
+  if (version.minor > 0) {
+    return { major: 0, minor: version.minor + 1, patch: 0 }
+  }
+  return { major: 0, minor: 0, patch: version.patch + 1 }
+}
+
+function acceptsWorkspaceVersion (range, wsVersion) {
+  if (range === 'workspace:*' || range === `^${wsVersion}`) return true
+  if (!range.startsWith('^')) return false
+
+  const min = parseVersion(range.slice(1))
+  const current = parseVersion(wsVersion)
+  if (!min || !current) return false
+
+  return compareVersion(current, min) >= 0 && compareVersion(current, caretUpperBound(min)) < 0
+}
+
 let stale = 0
 
 for (const pkg of pkgList) {
@@ -44,8 +79,7 @@ for (const pkg of pkgList) {
     for (const [dep, range] of Object.entries(d[field])) {
       const wsVersion = workspaceMap[dep]
       if (!wsVersion) continue
-      const expected = `^${wsVersion}`
-      if (range !== expected && range !== 'workspace:*') {
+      if (!acceptsWorkspaceVersion(range, wsVersion)) {
         console.log(`STALE  ${d.name}  ${dep}  ${range}  (current: ${wsVersion})`)
         stale++
       }
