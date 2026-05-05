@@ -36,7 +36,7 @@ RUN apk add --no-cache nginx && \
 WORKDIR /app
 
 # Copy package files and install production deps only
-COPY --chown=node:node package*.json ./
+COPY --chown=node:node --chmod=0444 package*.json ./
 RUN npm ci --omit=dev
 
 # Copy built output from builder
