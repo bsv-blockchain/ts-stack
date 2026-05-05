@@ -4,14 +4,11 @@
     "moduleDetection": "force",
     "target": "es2019",
     "module": "commonjs",
-    "moduleResolution": "node",
     "rootDir": "./",
-    "baseUrl": "./",
     "outDir": "./dist/cjs",
     "strict": false,
     "isolatedModules": true,
     "strictNullChecks": false,
-    "downlevelIteration": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
@@ -19,11 +16,8 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "paths": {
-      "@bsv/paymail": ["node_modules/@bsv/paymail"]
-    }
+    "esModuleInterop": true
   },
-  "include": ["src", "node_modules/@bsv/paymail"],
+  "include": ["src"],
   "exclude": ["dist", "*/**/__tests"]
 }
