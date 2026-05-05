@@ -59,6 +59,17 @@ import {
 const DEFAULT_MAINNET_HOST = 'https://message-box-us-1.bsvb.tech'
 const DEFAULT_TESTNET_HOST = DEFAULT_MAINNET_HOST
 
+type MessageBoxRecipientQuote = MessageBoxMultiQuote['quotesByRecipient'][number]
+type MessageBoxQuoteStatus = MessageBoxRecipientQuote['status']
+
+interface MessageBoxMultiQuoteAccumulator {
+  quotesByRecipient: MessageBoxRecipientQuote[]
+  blockedRecipients: Set<PubKeyHex>
+  deliveryAgentIdentityKeyByHost: Record<string, string>
+  deliveryFees: number
+  recipientFees: number
+}
+
 /**
  * @class MessageBoxClient
  * @description
@@ -2124,173 +2135,244 @@ export class MessageBoxClient {
     params: GetQuoteParams,
     overrideHost?: string
   ): Promise<MessageBoxQuote | MessageBoxMultiQuote> {
-    // ---------- SINGLE RECIPIENT (back-compat) ----------
-    if (!Array.isArray(params.recipient)) {
-      const finalHost = overrideHost ?? await this.resolveHostForRecipient(params.recipient)
-      const queryParams = new URLSearchParams({
-        recipient: params.recipient,
-        messageBox: params.messageBox
-      })
-
-      Logger.log('[MB CLIENT] Getting messageBox quote (single)...')
-      console.log('HELP IM QUOTING', `${finalHost}/permissions/quote?${queryParams.toString()}`)
-      const response = await this.authFetch.fetch(
-        `${finalHost}/permissions/quote?${queryParams.toString()}`,
-        { method: 'GET' }
-      )
-      console.log('server response from getquote]', response)
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(
-          `Failed to get quote: HTTP ${response.status} - ${typeof errorData.description === 'string' ? errorData.description : response.statusText}`
-        )
-      }
-
-      const { status, description, quote } = await response.json()
-      if (status === 'error') {
-        throw new Error(description ?? 'Failed to get quote')
-      }
-
-      const deliveryAgentIdentityKey = response.headers.get('x-bsv-auth-identity-key')
-      console.log('deliveryAgentIdentityKey', deliveryAgentIdentityKey)
-      if (deliveryAgentIdentityKey == null) {
-        throw new Error('Failed to get quote: Delivery agent did not provide their identity key')
-      }
-
-      return {
-        recipientFee: quote.recipientFee,
-        deliveryFee: quote.deliveryFee,
-        deliveryAgentIdentityKey
-      }
+    if (Array.isArray(params.recipient)) {
+      return this.getMultiMessageBoxQuote(params.recipient, params.messageBox, overrideHost)
     }
 
-    // ---------- MULTI RECIPIENTS ----------
-    const recipients = params.recipient
+    return this.getSingleMessageBoxQuote(params.recipient, params.messageBox, overrideHost)
+  }
+
+  private async getSingleMessageBoxQuote(
+    recipient: string,
+    messageBox: string,
+    overrideHost?: string
+  ): Promise<MessageBoxQuote> {
+    const finalHost = overrideHost ?? await this.resolveHostForRecipient(recipient)
+    const queryParams = new URLSearchParams({
+      recipient,
+      messageBox
+    })
+
+    Logger.log('[MB CLIENT] Getting messageBox quote (single)...')
+    console.log('HELP IM QUOTING', `${finalHost}/permissions/quote?${queryParams.toString()}`)
+    const response = await this.authFetch.fetch(
+      `${finalHost}/permissions/quote?${queryParams.toString()}`,
+      { method: 'GET' }
+    )
+    console.log('server response from getquote]', response)
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(
+        `Failed to get quote: HTTP ${response.status} - ${typeof errorData.description === 'string' ? errorData.description : response.statusText}`
+      )
+    }
+
+    const { status, description, quote } = await response.json()
+    if (status === 'error') {
+      throw new Error(description ?? 'Failed to get quote')
+    }
+
+    const deliveryAgentIdentityKey = response.headers.get('x-bsv-auth-identity-key')
+    console.log('deliveryAgentIdentityKey', deliveryAgentIdentityKey)
+    if (deliveryAgentIdentityKey == null) {
+      throw new Error('Failed to get quote: Delivery agent did not provide their identity key')
+    }
+
+    return {
+      recipientFee: quote.recipientFee,
+      deliveryFee: quote.deliveryFee,
+      deliveryAgentIdentityKey
+    }
+  }
+
+  private async getMultiMessageBoxQuote(
+    recipients: PubKeyHex[],
+    messageBox: string,
+    overrideHost?: string
+  ): Promise<MessageBoxMultiQuote> {
     if (recipients.length === 0) {
       throw new Error('At least one recipient is required.')
     }
 
     Logger.log('[MB CLIENT] Getting messageBox quotes (multi)...')
     console.log('[MB CLIENT] Getting messageBox quotes (multi)...')
-    // Resolve host per recipient (unless caller forces overrideHost)
-    // Group recipients by host so we call each overlay once.
-    const hostGroups = new Map<string, PubKeyHex[]>()
+    const hostGroups = await this.groupQuoteRecipientsByHost(recipients, overrideHost)
+    const accumulator = this.createMultiQuoteAccumulator()
 
-    const resolvedHosts = overrideHost != null
-      ? recipients.map(() => overrideHost)
-      : await this.mapWithConcurrency(recipients, 8, async (r) => await this.resolveHostForRecipient(r))
+    await Promise.all(Array.from(hostGroups.entries()).map(async ([host, group]) => {
+      const payload = await this.fetchQuotePayloadForHost(host, group, messageBox, accumulator)
+      this.mergeQuotePayload(payload, host, group, messageBox, accumulator)
+    }))
 
-    for (let i = 0; i < recipients.length; i++) {
-      const r = recipients[i]
-      const host = resolvedHosts[i]
-      const list = hostGroups.get(host)
-      if (list != null) list.push(r)
-      else hostGroups.set(host, [r])
-    }
-
-    const deliveryAgentIdentityKeyByHost: Record<string, string> = {}
-    const quotesByRecipient: Array<{
-      recipient: PubKeyHex
-      messageBox: string
-      deliveryFee: number
-      recipientFee: number
-      status: 'blocked' | 'always_allow' | 'payment_required'
-    }> = []
-    const blockedRecipients: PubKeyHex[] = []
-
-    let totalDeliveryFees = 0
-    let totalRecipientFees = 0
-
-    // Helper to fetch one host group
-    const fetchGroup = async (host: string, groupRecipients: PubKeyHex[]) => {
-      const qp = new URLSearchParams()
-      for (const r of groupRecipients) qp.append('recipient', r)
-      qp.set('messageBox', params.messageBox)
-
-      const url = `${host}/permissions/quote?${qp.toString()}`
-      Logger.log('[MB CLIENT] Multi-quote GET:', url)
-
-      const resp = await this.authFetch.fetch(url, { method: 'GET' })
-
-      if (!resp.ok) {
-        const errorData = await resp.json().catch(() => ({}))
-        throw new Error(
-          `Failed to get quote (host ${host}): HTTP ${resp.status} - ${typeof errorData.description === 'string' ? errorData.description : resp.statusText}`
-        )
-      }
-
-      const deliveryAgentKey = resp.headers.get('x-bsv-auth-identity-key')
-      if (!deliveryAgentKey) {
-        throw new Error(`Failed to get quote (host ${host}): missing delivery agent identity key`)
-      }
-      deliveryAgentIdentityKeyByHost[host] = deliveryAgentKey
-
-      const payload = await resp.json()
-
-      // Server supports both shapes. For multi we expect:
-      //  { quotesByRecipient, totals, blockedRecipients }
-      if (Array.isArray(payload?.quotesByRecipient)) {
-        // merge quotes
-        for (const q of payload.quotesByRecipient) {
-          quotesByRecipient.push({
-            recipient: q.recipient,
-            messageBox: q.messageBox,
-            deliveryFee: q.deliveryFee,
-            recipientFee: q.recipientFee,
-            status: q.status
-          })
-          // aggregate client-side totals as well (in case we hit multiple hosts)
-          totalDeliveryFees += q.deliveryFee
-          if (q.recipientFee === -1) {
-            if (!blockedRecipients.includes(q.recipient)) blockedRecipients.push(q.recipient)
-          } else {
-            totalRecipientFees += q.recipientFee
-          }
-        }
-
-        // Also merge server totals if present (they are per-host); we already aggregated above,
-        // so we don’t need to use payload.totals except for sanity/logging.
-        if (Array.isArray(payload?.blockedRecipients)) {
-          for (const br of payload.blockedRecipients) {
-            if (!blockedRecipients.includes(br)) blockedRecipients.push(br)
-          }
-        }
-      } else if (payload?.quote) {
-        // Defensive: if an overlay still returns single-quote shape for multi (shouldn’t),
-        // we map it to each recipient in the group uniformly.
-        for (const r of groupRecipients) {
-          const { deliveryFee, recipientFee } = payload.quote
-          const status =
-            recipientFee === -1 ? 'blocked' : recipientFee === 0 ? 'always_allow' : 'payment_required'
-          quotesByRecipient.push({
-            recipient: r,
-            messageBox: params.messageBox,
-            deliveryFee,
-            recipientFee,
-            status
-          })
-          totalDeliveryFees += deliveryFee
-          if (recipientFee === -1) blockedRecipients.push(r)
-          else totalRecipientFees += recipientFee
-        }
-      } else {
-        throw new Error(`Unexpected quote response shape from host ${host}`)
-      }
-    }
-
-    // Run all host groups (in parallel, but you can limit if needed)
-    await Promise.all(Array.from(hostGroups.entries()).map(async ([host, group]) => await fetchGroup(host, group)))
+    const { deliveryFees, recipientFees } = accumulator
 
     return {
-      quotesByRecipient,
+      quotesByRecipient: accumulator.quotesByRecipient,
       totals: {
-        deliveryFees: totalDeliveryFees,
-        recipientFees: totalRecipientFees,
-        totalForPayableRecipients: totalDeliveryFees + totalRecipientFees
+        deliveryFees,
+        recipientFees,
+        totalForPayableRecipients: deliveryFees + recipientFees
       },
-      blockedRecipients,
-      deliveryAgentIdentityKeyByHost
+      blockedRecipients: Array.from(accumulator.blockedRecipients),
+      deliveryAgentIdentityKeyByHost: accumulator.deliveryAgentIdentityKeyByHost
     }
+  }
+
+  private createMultiQuoteAccumulator(): MessageBoxMultiQuoteAccumulator {
+    return {
+      quotesByRecipient: [],
+      blockedRecipients: new Set(),
+      deliveryAgentIdentityKeyByHost: {},
+      deliveryFees: 0,
+      recipientFees: 0
+    }
+  }
+
+  private async groupQuoteRecipientsByHost(
+    recipients: PubKeyHex[],
+    overrideHost?: string
+  ): Promise<Map<string, PubKeyHex[]>> {
+    const resolvedHosts = overrideHost != null
+      ? recipients.map(() => overrideHost)
+      : await this.mapWithConcurrency(recipients, 8, (recipient) => this.resolveHostForRecipient(recipient))
+    const hostGroups = new Map<string, PubKeyHex[]>()
+
+    for (let i = 0; i < recipients.length; i++) {
+      const host = resolvedHosts[i]
+      const list = hostGroups.get(host) ?? []
+      list.push(recipients[i])
+      hostGroups.set(host, list)
+    }
+
+    return hostGroups
+  }
+
+  private async fetchQuotePayloadForHost(
+    host: string,
+    groupRecipients: PubKeyHex[],
+    messageBox: string,
+    accumulator: MessageBoxMultiQuoteAccumulator
+  ): Promise<unknown> {
+    const qp = new URLSearchParams()
+    for (const recipient of groupRecipients) qp.append('recipient', recipient)
+    qp.set('messageBox', messageBox)
+
+    const url = `${host}/permissions/quote?${qp.toString()}`
+    Logger.log('[MB CLIENT] Multi-quote GET:', url)
+
+    const response = await this.authFetch.fetch(url, { method: 'GET' })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(
+        `Failed to get quote (host ${host}): HTTP ${response.status} - ${typeof errorData.description === 'string' ? errorData.description : response.statusText}`
+      )
+    }
+
+    const deliveryAgentKey = response.headers.get('x-bsv-auth-identity-key')
+    if (deliveryAgentKey == null) {
+      throw new Error(`Failed to get quote (host ${host}): missing delivery agent identity key`)
+    }
+    accumulator.deliveryAgentIdentityKeyByHost[host] = deliveryAgentKey
+
+    return response.json()
+  }
+
+  private mergeQuotePayload(
+    payload: unknown,
+    host: string,
+    groupRecipients: PubKeyHex[],
+    messageBox: string,
+    accumulator: MessageBoxMultiQuoteAccumulator
+  ): void {
+    if (this.isMultiQuotePayload(payload)) {
+      this.mergeRecipientQuotes(payload, accumulator)
+      return
+    }
+
+    if (this.isSingleQuotePayload(payload)) {
+      this.mergeSingleQuotePayload(payload, groupRecipients, messageBox, accumulator)
+      return
+    }
+
+    throw new Error(`Unexpected quote response shape from host ${host}`)
+  }
+
+  private isMultiQuotePayload(payload: unknown): payload is {
+    quotesByRecipient: MessageBoxRecipientQuote[]
+    blockedRecipients?: PubKeyHex[]
+  } {
+    return typeof payload === 'object' &&
+      payload != null &&
+      Array.isArray((payload as { quotesByRecipient?: unknown }).quotesByRecipient)
+  }
+
+  private isSingleQuotePayload(payload: unknown): payload is {
+    quote: Pick<MessageBoxRecipientQuote, 'deliveryFee' | 'recipientFee'>
+  } {
+    return typeof payload === 'object' &&
+      payload != null &&
+      (payload as { quote?: unknown }).quote != null
+  }
+
+  private mergeRecipientQuotes(
+    payload: { quotesByRecipient: MessageBoxRecipientQuote[], blockedRecipients?: PubKeyHex[] },
+    accumulator: MessageBoxMultiQuoteAccumulator
+  ): void {
+    for (const quote of payload.quotesByRecipient) {
+      accumulator.quotesByRecipient.push({
+        recipient: quote.recipient,
+        messageBox: quote.messageBox,
+        deliveryFee: quote.deliveryFee,
+        recipientFee: quote.recipientFee,
+        status: quote.status
+      })
+      accumulator.deliveryFees += quote.deliveryFee
+      this.addRecipientFee(quote.recipient, quote.recipientFee, accumulator)
+    }
+
+    for (const recipient of payload.blockedRecipients ?? []) {
+      accumulator.blockedRecipients.add(recipient)
+    }
+  }
+
+  private mergeSingleQuotePayload(
+    payload: { quote: Pick<MessageBoxRecipientQuote, 'deliveryFee' | 'recipientFee'> },
+    groupRecipients: PubKeyHex[],
+    messageBox: string,
+    accumulator: MessageBoxMultiQuoteAccumulator
+  ): void {
+    const { deliveryFee, recipientFee } = payload.quote
+    const status = this.statusForRecipientFee(recipientFee)
+
+    for (const recipient of groupRecipients) {
+      accumulator.quotesByRecipient.push({
+        recipient,
+        messageBox,
+        deliveryFee,
+        recipientFee,
+        status
+      })
+      accumulator.deliveryFees += deliveryFee
+      this.addRecipientFee(recipient, recipientFee, accumulator)
+    }
+  }
+
+  private addRecipientFee(
+    recipient: PubKeyHex,
+    recipientFee: number,
+    accumulator: MessageBoxMultiQuoteAccumulator
+  ): void {
+    if (recipientFee === -1) {
+      accumulator.blockedRecipients.add(recipient)
+      return
+    }
+
+    accumulator.recipientFees += recipientFee
+  }
+
+  private statusForRecipientFee(recipientFee: number): MessageBoxQuoteStatus {
+    if (recipientFee === -1) return 'blocked'
+    return recipientFee === 0 ? 'always_allow' : 'payment_required'
   }
 
   /**
