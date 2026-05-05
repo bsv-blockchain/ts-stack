@@ -40,13 +40,13 @@ LABEL org.opencontainers.image.documentation="https://github.com/bsv-blockchain/
 WORKDIR /app
 
 # Copy package files for reference
-COPY --chown=node:node package*.json ./
+COPY --chown=node:node --chmod=0444 package*.json ./
 
 # Copy the compiled TypeScript output
-COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node --chmod=0555 /app/dist ./dist
 
 # Copy node_modules from builder (includes compiled native bindings)
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node --chmod=0555 /app/node_modules ./node_modules
 
 # Expose port
 EXPOSE 8080
