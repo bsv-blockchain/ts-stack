@@ -31,7 +31,6 @@ export class MockTransaction {
   public outputs: any[] = []
   public fee: number = 0
 
-  constructor () {}
   static fromAtomicBEEF () {
     // Mocked below
   }
@@ -81,9 +80,6 @@ export class MockLockingScript {
  */
 export class MockPushDrop {
   // Typically we might store the wallet reference, but we can skip for now.
-  constructor () {
-    //
-  }
 
   // Decodes a LockingScript into some {fields: number[][], protocol...} or undefined
   static decode (script: MockLockingScript): { fields: number[][] } | undefined {
