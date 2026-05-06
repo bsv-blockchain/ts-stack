@@ -9,8 +9,6 @@ import { wait } from '../../../../utility/utilityHelpers'
 export class ChaintracksFetch implements ChaintracksFetchApi {
   httpClient: HttpClient = defaultHttpClient()
 
-  constructor () {}
-
   async download (url: string): Promise<Uint8Array> {
     for (let retry = 0; ; retry++) {
       const response = await fetch(url, {
