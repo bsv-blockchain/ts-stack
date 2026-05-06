@@ -1,5 +1,5 @@
 import { Knex } from 'knex'
-import { StorageKnex } from '../StorageKnex'
+import type { StorageKnex } from '../StorageKnex'
 import { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WalletError } from '../../sdk/WalletError'
 import type { ProvenTxReqStatus } from '../../sdk/types'

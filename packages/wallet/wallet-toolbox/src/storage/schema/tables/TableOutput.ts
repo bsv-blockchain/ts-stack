@@ -1,6 +1,7 @@
 import { Base64String, DescriptionString5to50Bytes, PubKeyHex } from '@bsv/sdk'
-import { TableOutputBasket, TableOutputTag } from '.'
-import { sdk } from '../../../index.client'
+import { TableOutputBasket } from './TableOutputBasket'
+import { TableOutputTag } from './TableOutputTag'
+import * as sdk from '../../../sdk'
 
 export interface TableOutput extends sdk.EntityTimeStamp {
   created_at: Date

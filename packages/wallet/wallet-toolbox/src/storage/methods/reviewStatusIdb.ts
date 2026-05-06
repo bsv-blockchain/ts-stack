@@ -1,4 +1,4 @@
-import { sdk } from '../../index.client'
+import * as sdk from '../../sdk'
 import { StorageIdb } from '../StorageIdb'
 
 /**

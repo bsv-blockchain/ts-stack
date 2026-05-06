@@ -1,4 +1,4 @@
-import { sdk } from '../../../index.client'
+import * as sdk from '../../../sdk'
 
 export interface TableOutputTagMap extends sdk.EntityTimeStamp {
   created_at: Date
