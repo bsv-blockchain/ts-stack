@@ -135,11 +135,6 @@ export function base64ToArray (msg: string): number[] {
     s = s.slice(0, padIndex)
   }
 
-  // if (s.length % 4 === 1)
-  // {
-  //   throw new Error("Invalid base64 length")
-  // }
-
   const result: number[] = []
   let bitBuffer = 0
   let bitCount = 0

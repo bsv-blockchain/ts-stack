@@ -117,7 +117,6 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
 
   async getChain (): Promise<Chain> {
     return this.chain
-    // return await this.getJson('/getChain')
   }
 
   async isListening (): Promise<boolean> {

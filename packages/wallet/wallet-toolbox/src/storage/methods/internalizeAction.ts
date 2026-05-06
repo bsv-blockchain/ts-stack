@@ -284,18 +284,6 @@ class InternalizeActionContext {
     if (btx == null) throw new WERR_INVALID_PARAMETER('tx', `valid AtomicBEEF with newest txid of ${txid}`)
     const tx = btx.tx!
 
-    /*
-    for (const i of tx.inputs) {
-      if (!i.sourceTXID)
-        throw new WERR_INTERNAL('beef Transactions must have sourceTXIDs')
-      if (!i.sourceTransaction) {
-        const btx = ab.findTxid(i.sourceTXID)
-        if (!btx)
-          throw new WERR_INVALID_PARAMETER('tx', `valid AtomicBEEF and contain input transaction with txid ${i.sourceTXID}`);
-        i.sourceTransaction = btx.tx
-      }
-    }
-    */
 
     return { ab, tx, txid }
   }

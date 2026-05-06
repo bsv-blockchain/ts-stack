@@ -139,14 +139,12 @@ export async function WocHeadersBulkListener (
   const ws = new WebSocket(webSocketUrl)
 
   ws.onopen = function (this, evt) {
-    // logger(`WoC ${new Date().toISOString()} addHeaders from ${fromHeight} on ${chain}`)
     // This is required to trigger connect on server side.
     ws.send(JSON.stringify({}))
     wsIsOpen = true
   }
 
   ws.onerror = function (this, evt) {
-    // if (evt.message.startsWith('getaddrinfo ENOTFOUND')) {
     let code = -1
     switch (evt.message) {
       case 'Unexpected server response: 403':
@@ -165,12 +163,10 @@ export async function WocHeadersBulkListener (
   ws.onclose = function (this, ev) {
     // ok should be true if we got the last header, false otherwise.
     // error will have been called with anything abnormal...
-    // logger(`WoC ${new Date().toISOString()} addHeaders input service closed`)
     done = true
   }
 
   ws.onmessage = function (this, ev) {
-    // console.log("onmessage:", JSON.stringify(ev.data));
     processData(ev.data)
   }
 
@@ -358,25 +354,13 @@ export async function WocHeadersLiveListener (
 
   const ws = new WebSocket(webSocketUrl)
 
-  /*
-    function startPing() {
-        const pingInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send('ping');
-            }
-        }, 30000); // Ping every 30 seconds
-    }
-    */
-
   ws.onopen = function (this, evt) {
-    // logger(`WoC ${new Date().toISOString()} listening for new headers`)
     // This is required to trigger connect on server side.
     ws.send(JSON.stringify({}))
     wsIsOpen = true
   }
 
   ws.onerror = function (this, evt) {
-    // if (evt.message.startsWith('getaddrinfo ENOTFOUND')) {
     let code = -1
     switch (evt.message) {
       case 'Unexpected server response: 403':
@@ -395,17 +379,13 @@ export async function WocHeadersLiveListener (
   ws.onclose = function (this, ev) {
     // ok should be true if we got the last header, false otherwise.
     // error will have been called with anything abnormal...
-    // logger(`WoC ${new Date().toISOString()} listening for new headers service closed`)
     done = true
   }
 
   ws.onmessage = function (this, ev) {
-    // console.log("onmessage:", JSON.stringify(ev.data));
     processData(ev.data)
     msecsWithoutPing = 0
   }
-
-  // startPing()
 
   const waitMsecs = 1000
   let sinceLastSentPing = 0

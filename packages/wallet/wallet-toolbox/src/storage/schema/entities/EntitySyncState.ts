@@ -398,8 +398,6 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
       maxUpdated_at = maxDate(maxUpdated_at, me.esm.maxUpdated_at)
       // If any entity type either did not report results or if there were at least one, then we aren't done.
       if (me.stateArray === undefined || me.stateArray.length > 0) done = false
-      // if (me.stateArray !== undefined && me.stateArray.length > 0)
-      //    console.log(`merged ${me.stateArray?.length} ${me.esm.entityName} ${r.inserts} inserted, ${r.updates} updated`);
     }
 
     if (done) {

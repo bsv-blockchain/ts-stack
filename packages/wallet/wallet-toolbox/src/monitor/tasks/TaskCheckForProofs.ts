@@ -67,7 +67,6 @@ export class TaskCheckForProofs extends WalletMonitorTask {
       log += `${reqs.length} reqs with status 'callback', 'unmined', 'sending', 'unknown', or 'unconfirmed'\n`
       const r = await getProofs(this, reqs, 2, countsAsAttempt, false, maxAcceptableHeight)
       log += `${r.log}\n`
-      // console.log(log);
       if (reqs.length < limit) break
       offset += limit
     }

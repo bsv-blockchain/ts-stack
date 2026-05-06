@@ -169,12 +169,6 @@ export async function listOutputsIdb (
       outpoint: `${o.txid}.${o.vout}`
     }
     r.outputs.push(wo)
-    // if (vargs.includeBasket && o.basketId) {
-    //    if (!basketsById[o.basketId]) {
-    //        basketsById[o.basketId] = verifyTruthy(await dsk.findOutputBasketId(o.basketId!, trx))
-    //    }
-    //    wo.basket = basketsById[o.basketId].name
-    // }
     if (vargs.includeCustomInstructions && o.customInstructions) wo.customInstructions = o.customInstructions
     if (vargs.includeLabels && o.txid) {
       if (labelsByTxid[o.txid] === undefined) {

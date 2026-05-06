@@ -935,8 +935,6 @@ export interface DiscoverByAttributesArgs {
   seekPermission?: BooleanDefaultTrue
 }
 
-// export interface AcquireCertificateResult extends WalletCertificate {}
-
 /**
  * Every method of the `Wallet` interface has a return value of the form `Promise<object>`.
  * When errors occur, an exception object may be thrown which must conform to the `WalletErrorObject` interface.

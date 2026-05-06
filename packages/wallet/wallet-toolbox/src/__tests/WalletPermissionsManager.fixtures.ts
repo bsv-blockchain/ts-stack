@@ -175,15 +175,6 @@ export const MockUtils = {
     return btoa(binaryStr)
   }
 }
-/*
-export const MockValidation = {
-  validateCreateActionArgs: (args: object) => {
-    return {
-      isSignAction: false
-    }
-  }
-}
-*/
 
 /**
  * Mocks for Random

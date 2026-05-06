@@ -182,9 +182,6 @@ export async function listActions (
   if (vargs.includeLabels || vargs.includeInputs || vargs.includeOutputs) {
     await Promise.all(
       txs.map(async (tx, i) => {
-        // let i = -1
-        // for (const tx of txs) {
-        //    i++
         const action = r.actions[i]
         if (vargs.includeLabels) {
           action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
