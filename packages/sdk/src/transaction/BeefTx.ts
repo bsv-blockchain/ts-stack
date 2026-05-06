@@ -1,7 +1,7 @@
 import { hash256 } from '../primitives/Hash.js'
 import { Reader, Writer, toHex, toArray, ReaderUint8Array, WriterUint8Array } from '../primitives/utils.js'
 import Transaction from './Transaction.js'
-import { BEEF_V2, TX_DATA_FORMAT } from './Beef.js'
+import { BEEF_V2, TX_DATA_FORMAT } from './BeefConstants.js'
 
 /**
  * A single bitcoin transaction associated with a `Beef` validity proof set.

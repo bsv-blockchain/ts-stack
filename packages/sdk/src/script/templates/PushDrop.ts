@@ -1,4 +1,7 @@
-import { ScriptTemplate, LockingScript, UnlockingScript, OP } from '../index.js'
+import type ScriptTemplate from '../ScriptTemplate.js'
+import LockingScript from '../LockingScript.js'
+import UnlockingScript from '../UnlockingScript.js'
+import OP from '../OP.js'
 import {
   Utils,
   Hash,

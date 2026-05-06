@@ -4,15 +4,9 @@ import ChainTracker from './ChainTracker.js'
 import BeefTx from './BeefTx.js'
 import { Reader, Writer, toHex, toArray, verifyNotNull, ReaderUint8Array, WriterUint8Array, toUint8Array } from '../primitives/utils.js'
 import { hash256 } from '../primitives/Hash.js'
+import { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT } from './BeefConstants.js'
 
-export const BEEF_V1 = 4022206465 // 0100BEEF in LE order
-export const BEEF_V2 = 4022206466 // 0200BEEF in LE order
-export const ATOMIC_BEEF = 0x01010101 // 01010101
-export enum TX_DATA_FORMAT {
-  RAWTX = 0, // rawtx without BUMP
-  RAWTX_AND_BUMP_INDEX = 1, // rawtx with bump index
-  TXID_ONLY = 2, // txid only
-}
+export { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT }
 
 /*
  * BEEF standard: BRC-62: Background Evaluation Extended Format (BEEF) Transactions

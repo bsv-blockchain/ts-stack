@@ -1,5 +1,5 @@
 import { LookupResolver } from '../overlay-tools/index.js'
-import { StorageUtils } from './index.js'
+import * as StorageUtils from './StorageUtils.js'
 import PushDrop from '../script/templates/PushDrop.js'
 import Transaction from '../transaction/Transaction.js'
 import { Hash, Utils } from '../primitives/index.js'
