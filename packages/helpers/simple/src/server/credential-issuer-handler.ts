@@ -40,7 +40,7 @@ function createIssuerFactory (
 
     issuerInitPromise = (async () => {
       const { CredentialIssuer } = await import('../modules/credentials')
-      const { generatePrivateKey } = await import('../server')
+      const { generatePrivateKey } = await import('./generate-private-key')
 
       const savedData = keyStore.load()
       const privateKey = process.env[envVar] ?? savedData?.privateKey ?? generatePrivateKey()

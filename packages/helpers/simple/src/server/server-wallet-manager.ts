@@ -49,8 +49,8 @@ export class ServerWalletManager {
     if (this.initPromise != null) return await this.initPromise
 
     this.initPromise = (async () => {
-      const { ServerWallet } = await import('../server')
-      const { generatePrivateKey } = await import('../server')
+      const { ServerWallet } = await import('./server-wallet')
+      const { generatePrivateKey } = await import('./generate-private-key')
 
       const savedData = this.store.load()
       const privateKey = process.env[this.envVar] ?? savedData?.privateKey ?? generatePrivateKey()
