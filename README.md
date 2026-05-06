@@ -5,7 +5,9 @@ BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middle
 [![Build and Test](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml/badge.svg?label=build%20%2B%20test)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml)
 [![Conformance](https://github.com/bsv-blockchain/ts-stack/actions/workflows/conformance.yml/badge.svg)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/conformance.yml)
 [![codecov](https://codecov.io/gh/bsv-blockchain/ts-stack/branch/main/graph/badge.svg)](https://codecov.io/gh/bsv-blockchain/ts-stack)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=bsv-blockchain_ts-stack)
+[![Security](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=security_rating)](https://sonarcloud.io/component_measures?metric=security_rating&id=bsv-blockchain_ts-stack)
+[![Reliability](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=reliability_rating)](https://sonarcloud.io/component_measures?metric=reliability_rating&id=bsv-blockchain_ts-stack)
+[![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=sqale_rating)](https://sonarcloud.io/component_measures?metric=sqale_rating&id=bsv-blockchain_ts-stack)
 [![npm version](https://img.shields.io/npm/v/@bsv/sdk?label=%40bsv%2Fsdk&color=brightgreen)](https://www.npmjs.com/package/@bsv/sdk)
 
 ## What Lives Here
