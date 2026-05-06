@@ -224,6 +224,68 @@ function isSurrogatePair (msg: string, i: number): boolean {
 }
 
 /**
+ * Encode a single UTF-16 code unit (and possibly its surrogate partner)
+ * into UTF-8 bytes, appending them to `out`.
+ *
+ * Returns the index of the last consumed code unit so the caller can
+ * advance its loop variable when a surrogate pair is consumed.
+ *
+ * Inspired by stringToUtf8ByteArray() in closure-library by Google
+ * https://github.com/google/closure-library/blob/8598d87242af59aac233270742c8984e2b2bdbe0/closure/goog/crypt/crypt#L117-L143
+ * Apache License 2.0
+ * https://github.com/google/closure-library/blob/master/LICENSE
+ */
+function appendUtf8CodeUnit (msg: string, i: number, out: number[]): number {
+  let c = msg.charCodeAt(i)
+  if (c < 128) {
+    out.push(c)
+    return i
+  }
+  if (c < 2048) {
+    out.push((c >> 6) | 192, (c & 63) | 128)
+    return i
+  }
+  if (isSurrogatePair(msg, i)) {
+    c = 0x10000 + ((c & 0x03ff) << 10) + (msg.charCodeAt(i + 1) & 0x03ff)
+    out.push(
+      (c >> 18) | 240,
+      ((c >> 12) & 63) | 128,
+      ((c >> 6) & 63) | 128,
+      (c & 63) | 128
+    )
+    return i + 1
+  }
+  out.push((c >> 12) | 224, ((c >> 6) & 63) | 128, (c & 63) | 128)
+  return i
+}
+
+function utf8StringToArray (msg: string): number[] {
+  const res: number[] = []
+  for (let i = 0; i < msg.length; i++) {
+    i = appendUtf8CodeUnit(msg, i, res)
+  }
+  return res
+}
+
+function hexStringToArray (msg: string): number[] {
+  assertValidHex(msg)
+  const normalized = normalizeHex(msg)
+  const res: number[] = []
+  for (let i = 0; i < normalized.length; i += 2) {
+    res.push(Number.parseInt(normalized[i] + normalized[i + 1], 16))
+  }
+  return res
+}
+
+function numberArrayToByteArray (msg: number[]): number[] {
+  const res: number[] = []
+  for (let i = 0; i < msg.length; i++) {
+    res[i] = msg[i] | 0
+  }
+  return res
+}
+
+/**
  *
  * @param msg
  * @param enc Optional. Encoding to use if msg is string. Default is 'utf8'.
@@ -239,47 +301,10 @@ export function toArray (
   if (!(msg as unknown as boolean)) {
     return []
   }
-  const res: number[] = []
   if (typeof msg === 'string') {
-    if (enc !== 'hex') {
-      // Inspired by stringToUtf8ByteArray() in closure-library by Google
-      // https://github.com/google/closure-library/blob/8598d87242af59aac233270742c8984e2b2bdbe0/closure/goog/crypt/crypt#L117-L143
-      // Apache License 2.0
-      // https://github.com/google/closure-library/blob/master/LICENSE
-      let p = 0
-      for (let i = 0; i < msg.length; i++) {
-        let c = msg.charCodeAt(i)
-        if (c < 128) {
-          res[p++] = c
-        } else if (c < 2048) {
-          res[p++] = (c >> 6) | 192
-          res[p++] = (c & 63) | 128
-        } else if (isSurrogatePair(msg, i)) {
-          c = 0x10000 + ((c & 0x03ff) << 10) + (msg.charCodeAt(++i) & 0x03ff)
-          res[p++] = (c >> 18) | 240
-          res[p++] = ((c >> 12) & 63) | 128
-          res[p++] = ((c >> 6) & 63) | 128
-          res[p++] = (c & 63) | 128
-        } else {
-          res[p++] = (c >> 12) | 224
-          res[p++] = ((c >> 6) & 63) | 128
-          res[p++] = (c & 63) | 128
-        }
-      }
-    } else {
-      assertValidHex(msg)
-      msg = normalizeHex(msg)
-      for (let i = 0; i < msg.length; i += 2) {
-        res.push(Number.parseInt(msg[i] + msg[i + 1], 16))
-      }
-    }
-  } else {
-    msg = msg as number[]
-    for (let i = 0; i < msg.length; i++) {
-      res[i] = msg[i] | 0
-    }
+    return enc === 'hex' ? hexStringToArray(msg) : utf8StringToArray(msg)
   }
-  return res
+  return numberArrayToByteArray(msg as number[])
 }
 
 /**
