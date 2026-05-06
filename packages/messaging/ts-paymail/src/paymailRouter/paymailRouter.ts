@@ -75,7 +75,7 @@ export default class PaymailRouter {
   private addWellKnownRouter (): void {
     this.router.get('/.well-known/bsvalias', (req, res) => {
       const capabilities = this.routes.reduce((map, route) => {
-        const endpoint = route.getEndpoint().replace(/:paymail/g, '{alias}@{domain.tld}').replace(/:pubkey/g, '{pubkey}')
+        const endpoint = route.getEndpoint().split(':paymail').join('{alias}@{domain.tld}').split(':pubkey').join('{pubkey}')
         map[route.getCode()] = this.joinUrl(this.baseUrl, this.getBasePath(), endpoint)
         return map
       }, {})
@@ -89,7 +89,15 @@ export default class PaymailRouter {
   }
 
   private joinUrl (...parts: string[]): string {
-    return parts.map(part => part.replace(/(^\/+|\/+$)/g, '')).join('/')
+    return parts.map(part => this.trimSlashes(part)).join('/')
+  }
+
+  private trimSlashes (part: string): string {
+    let start = 0
+    let end = part.length
+    while (start < end && part[start] === '/') start += 1
+    while (end > start && part[end - 1] === '/') end -= 1
+    return part.slice(start, end)
   }
 
   private getBasePath (): string {

@@ -24,14 +24,29 @@ function walk(dir) {
 const files = walk(DOCS_ROOT)
 let errors = 0
 
+function extractMarkdownLinks(content) {
+  const links = []
+  let offset = 0
+  while (offset < content.length) {
+    const labelEnd = content.indexOf('](', offset)
+    if (labelEnd === -1) break
+
+    const linkStart = labelEnd + 2
+    const linkEnd = content.indexOf(')', linkStart)
+    if (linkEnd === -1) break
+
+    links.push(content.slice(linkStart, linkEnd))
+    offset = linkEnd + 1
+  }
+  return links
+}
+
 for (const file of files) {
   const content = readFileSync(file, 'utf8')
   const dir = dirname(file)
 
-  const linkPattern = /\[([^\]]*)\]\(([^)]+)\)/g
-  let match
-  while ((match = linkPattern.exec(content)) !== null) {
-    const href = match[2].split('#')[0].split('?')[0]
+  for (const link of extractMarkdownLinks(content)) {
+    const href = link.split('#')[0].split('?')[0]
     if (!href) continue
     if (href.startsWith('http') || href.startsWith('//') || href.startsWith('mailto:')) continue
     if (!href.endsWith('.md') && !href.includes('/')) continue

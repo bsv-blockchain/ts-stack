@@ -106,6 +106,8 @@ export function isP2PKH (script: LockingScript | Script): boolean
  */
 export function isP2PKH (hex: string): boolean
 
+export function isP2PKH (input: LockingScript | Script | string): boolean
+
 export function isP2PKH (input: LockingScript | Script | string): boolean {
   validateInput(input, 'isP2PKH')
 
@@ -179,6 +181,8 @@ export function isOrdinal (script: LockingScript | Script): boolean
  */
 export function isOrdinal (hex: string): boolean
 
+export function isOrdinal (input: LockingScript | Script | string): boolean
+
 export function isOrdinal (input: LockingScript | Script | string): boolean {
   validateInput(input, 'isOrdinal')
 
@@ -238,6 +242,8 @@ export function hasOrd (script: LockingScript | Script): boolean
  */
 export function hasOrd (hex: string): boolean
 
+export function hasOrd (input: LockingScript | Script | string): boolean
+
 export function hasOrd (input: LockingScript | Script | string): boolean {
   validateInput(input, 'hasOrd')
 
@@ -284,6 +290,8 @@ export function hasOpReturnData (script: LockingScript | Script): boolean
  * }
  */
 export function hasOpReturnData (hex: string): boolean
+
+export function hasOpReturnData (input: LockingScript | Script | string): boolean
 
 export function hasOpReturnData (input: LockingScript | Script | string): boolean {
   validateInput(input, 'hasOpReturnData')
@@ -374,18 +382,18 @@ export function getScriptType (input: LockingScript | Script | string): ScriptTy
     // Check in order of specificity (most specific first)
 
     // 1. Check for Ordinal (BSV-20 + P2PKH)
-    if (typeof input === 'string' ? isOrdinal(input) : isOrdinal(input)) {
+    if (isOrdinal(input)) {
       return 'Ordinal'
     }
 
     // 2. Check for pure P2PKH
-    if (typeof input === 'string' ? isP2PKH(input) : isP2PKH(input)) {
+    if (isP2PKH(input)) {
       return 'P2PKH'
     }
 
     // 3. Check for OP_RETURN only scripts (no other locking mechanism)
     // We consider it "OpReturn" type if it has OP_RETURN but isn't P2PKH or Ordinal
-    if (typeof input === 'string' ? hasOpReturnData(input) : hasOpReturnData(input)) {
+    if (hasOpReturnData(input)) {
       // If it has OP_RETURN and we've already ruled out P2PKH and Ordinal,
       // it's likely an OP_RETURN-only script
       const hex = typeof input === 'string' ? input : scriptToHex(input)
@@ -452,7 +460,7 @@ export function extractInscriptionData (input: LockingScript | Script | string):
   const chunks = script.chunks
 
   // Check if this has an ordinal envelope
-  if (typeof input === 'string' ? !hasOrd(input) : !hasOrd(input)) {
+  if (!hasOrd(input)) {
     return null // No ordinal envelope, not an error
   }
 
@@ -570,7 +578,7 @@ export function extractMapMetadata (input: LockingScript | Script | string): MAP
   validateInput(input, 'extractMapMetadata')
 
   // Must have OP_RETURN data
-  if (typeof input === 'string' ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
+  if (!hasOpReturnData(input)) {
     return null
   }
 
@@ -693,7 +701,7 @@ export function extractOpReturnData (hex: string): string[] | null
 export function extractOpReturnData (input: LockingScript | Script | string): string[] | null {
   validateInput(input, 'extractOpReturnData')
 
-  if (typeof input === 'string' ? !hasOpReturnData(input) : !hasOpReturnData(input)) {
+  if (!hasOpReturnData(input)) {
     return null
   }
 

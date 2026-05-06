@@ -41,7 +41,7 @@ export class SLAPTopicManager implements TopicManager {
           const topic = Utils.toUTF8(result.fields[3])
           if (!isValidTopicOrServiceName(topic)) continue // Topic or service name must be valid
           if (!topic.startsWith('ls_')) continue // SLAP only accepts "ls_" (lookup service) advertisements
-          if (!isTokenSignatureCorrectlyLinked(result.lockingPublicKey, result.fields)) continue // Signatures must be properly linked
+          if (!(await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, result.fields))) continue // Signatures must be properly linked
 
           outputsToAdmit.push(i)
         } catch (error) {

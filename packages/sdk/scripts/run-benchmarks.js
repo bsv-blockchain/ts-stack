@@ -59,8 +59,6 @@ const BENCHMARKS = [
   }
 ]
 
-const LINE_REGEX = /^([^:\n]+?):\s*([\d.]+)ms\b/gm
-
 function parseArgs () {
   const args = process.argv.slice(2)
   const options = {
@@ -131,10 +129,15 @@ async function runBenchmarkCommand (repo, scriptPath, args, label) {
 
 function parseMetrics (output) {
   const metrics = {}
-  let match
-  while ((match = LINE_REGEX.exec(output)) !== null) {
-    const name = match[1].trim()
-    const value = Number(match[2])
+  for (const line of output.split('\n')) {
+    const separator = line.indexOf(':')
+    if (separator === -1) continue
+
+    const name = line.slice(0, separator).trim()
+    const rawValue = line.slice(separator + 1).trim()
+    if (!rawValue.endsWith('ms')) continue
+
+    const value = Number(rawValue.slice(0, -2))
     if (!Number.isNaN(value)) {
       metrics[name] = value
     }

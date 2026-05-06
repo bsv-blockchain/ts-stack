@@ -54,16 +54,16 @@ export class ChaintracksKnexMigrations implements MigrationSource<string> {
           table.increments('headerId')
           table.integer('previousHeaderId').unsigned().references('headerId').inTable(liveHeadersTableName)
           table.binary('previousHash', 32)
-          table.integer('height').unsigned().notNullable
-          table.boolean('isActive').notNullable
-          table.boolean('isChainTip').notNullable
-          table.binary('hash', 32).notNullable
-          table.binary('chainWork', 32).notNullable
-          table.integer('version').unsigned().notNullable
-          table.binary('merkleRoot', 32).notNullable
-          table.integer('time').unsigned().notNullable
-          table.integer('bits').unsigned().notNullable
-          table.integer('nonce').unsigned().notNullable
+          table.integer('height').unsigned().notNullable()
+          table.boolean('isActive').notNullable()
+          table.boolean('isChainTip').notNullable()
+          table.binary('hash', 32).notNullable()
+          table.binary('chainWork', 32).notNullable()
+          table.integer('version').unsigned().notNullable()
+          table.binary('merkleRoot', 32).notNullable()
+          table.integer('time').unsigned().notNullable()
+          table.integer('bits').unsigned().notNullable()
+          table.integer('nonce').unsigned().notNullable()
 
           table.unique(['hash'])
           table.index(['previousHeaderId'])

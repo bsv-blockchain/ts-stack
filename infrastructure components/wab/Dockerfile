@@ -10,10 +10,11 @@ WORKDIR /app
 
 # Copy only the manifest files first for better caching
 COPY package*.json ./
+COPY tsconfig.json ./
 RUN npm ci
 
-# Copy the rest of the code
-COPY . ./
+# Copy the source needed for the build
+COPY src ./src
 
 # Build the TypeScript project
 RUN npm run build
@@ -39,16 +40,18 @@ LABEL org.opencontainers.image.documentation="https://github.com/bsv-blockchain/
 WORKDIR /app
 
 # Copy package files for reference
-COPY package*.json ./
+COPY --chown=node:node --chmod=0444 package*.json ./
 
 # Copy the compiled TypeScript output
-COPY --from=builder /app/dist ./dist
+COPY --from=builder --chown=node:node --chmod=0555 /app/dist ./dist
 
 # Copy node_modules from builder (includes compiled native bindings)
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node --chmod=0555 /app/node_modules ./node_modules
 
 # Expose port
 EXPOSE 8080
+
+USER node
 
 # Start command
 CMD ["node", "dist/server.js"]

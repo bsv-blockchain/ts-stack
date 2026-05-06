@@ -1197,6 +1197,7 @@ declare function isP2PKH(script: LockingScript | Script): boolean;
  * }
  */
 declare function isP2PKH(hex: string): boolean;
+declare function isP2PKH(input: LockingScript | Script | string): boolean;
 /**
  * Checks if a locking script contains a BSV-20 Ordinal inscription envelope with P2PKH.
  *
@@ -1232,6 +1233,7 @@ declare function isOrdinal(script: LockingScript | Script): boolean;
  * }
  */
 declare function isOrdinal(hex: string): boolean;
+declare function isOrdinal(input: LockingScript | Script | string): boolean;
 /**
  * Checks if a locking script contains a BSV-20 Ordinal inscription envelope.
  *
@@ -1267,6 +1269,7 @@ declare function hasOrd(script: LockingScript | Script): boolean;
  * }
  */
 declare function hasOrd(hex: string): boolean;
+declare function hasOrd(input: LockingScript | Script | string): boolean;
 /**
  * Checks if a locking script contains OP_RETURN data.
  *
@@ -1297,6 +1300,7 @@ declare function hasOpReturnData(script: LockingScript | Script): boolean;
  * }
  */
 declare function hasOpReturnData(hex: string): boolean;
+declare function hasOpReturnData(input: LockingScript | Script | string): boolean;
 /**
  * Type representing the different script types that can be detected
  */

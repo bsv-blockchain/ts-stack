@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import express, { Request, Response, NextFunction } from 'express'
 import bodyparser from 'body-parser'
-import prettyjson from 'prettyjson'
 import { PrivateKey } from '@bsv/sdk'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { createPaymentMiddleware } from '@bsv/payment-express-middleware'
@@ -14,6 +13,7 @@ const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
 
 const app = express()
+app.disable('x-powered-by')
 app.use(bodyparser.json({ limit: '1gb', type: 'application/json' }))
 
 // This allows the API to be used when CORS is enforced
@@ -31,13 +31,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 })
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log(`[${req.method}] <- ${req.url}`);
-  const logObject = { ...req.body }
-  console.log(prettyjson.render(logObject, { keysColor: 'blue' }))
+  console.log('Incoming request')
   const originalJson = res.json.bind(res)
   res.json = (json: any) => {
-    console.log(`[${req.method}] -> ${req.url}`)
-    console.log(prettyjson.render(json, { keysColor: 'green' }))
+    console.log('Outgoing JSON response')
     return originalJson(json)
   }
   next()
@@ -70,7 +67,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     !req.secure &&
     req.get('x-forwarded-proto') !== 'https'
   ) {
-    return res.redirect('https://' + req.get('host') + req.url)
+    return res.status(426).json({
+      status: 'error',
+      code: 'ERR_HTTPS_REQUIRED',
+      description: 'HTTPS is required for this route.'
+    })
   }
   next()
 });
@@ -147,7 +148,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     })
 
     app.use((req, res) => {
-      console.log('404', req.url)
+      console.log('Route not found')
       res.status(404).json({
         status: 'error',
         code: 'ERR_ROUTE_NOT_FOUND',

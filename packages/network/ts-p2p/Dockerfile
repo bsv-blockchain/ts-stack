@@ -6,24 +6,27 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY tsconfig.json ./
 
-RUN npm i -g tsx typescript
+RUN npm install -g tsx@4 typescript@5 --ignore-scripts
 
 # Install dependencies
-RUN npm install
-
+RUN npm ci --ignore-scripts
 
 # Copy source code
-COPY . .
+COPY src ./src
+COPY demo.ts ./
 
 # Build the TypeScript code
-RUN npm run build
+RUN npm run build && chown -R node:node /app
 
 # Expose the P2P port (9901 by default)
 EXPOSE 9901
 
 # Set environment variables for better container compatibility
 ENV NODE_ENV=production
+
+USER node
 
 # Run the demo
 CMD ["npm", "run", "demo"]

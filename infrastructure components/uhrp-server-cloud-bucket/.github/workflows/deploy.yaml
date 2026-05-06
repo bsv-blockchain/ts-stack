@@ -65,20 +65,20 @@ jobs:
 
       - name: Login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_PASSWORD != '' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_PASSWORD }}
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           credentials_json: ${{ secrets.GCR_PUSH_KEY }}
 
       - name: Setup gcloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
       - name: Configure Docker Auth for GCR
         run: gcloud auth configure-docker ${{ env.GCR_HOST }} --quiet
@@ -114,7 +114,7 @@ jobs:
 
       - name: "Authenticate with GCP"
         id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           credentials_json: ${{ secrets.GCP_STORAGE_CREDS }}
       - name: "Determine bucket region from Cloud Storage"
@@ -123,7 +123,7 @@ jobs:
           REGION=$(gcloud storage buckets describe gs://$GCP_BUCKET_NAME --format='value(location)' | tr '[:upper:]' '[:lower:]')
           echo "Bucket $GCP_BUCKET_NAME is in region: $REGION"
           echo "region=$REGION" >> "$GITHUB_OUTPUT"
-      - uses: google-github-actions/deploy-cloudrun@v1
+      - uses: google-github-actions/deploy-cloudrun@e62f655d5754bec48078a72edc015367b01ee97b # v1
         with:
           metadata: "service.${{ env.CURRENT_BRANCH }}.yaml"
           region: ${{ steps.bucket.outputs.region }}

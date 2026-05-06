@@ -193,7 +193,7 @@ export class Engine {
         // Identify previous coins admitted to this specific topic
         const previousCoins: number[] = []
         const outputPromises = tx.inputs.map(async (input, i) => {
-          const previousTXID = input.sourceTXID !== undefined ? input.sourceTXID : input.sourceTransaction?.id('hex')
+          const previousTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
           if (previousTXID !== undefined) {
             // Check if the previous output was admitted to this specific topic
             const output = await this.storage.findOutput(previousTXID, input.sourceOutputIndex, topic)
@@ -1086,7 +1086,7 @@ export class Engine {
       }
 
       // Delete any stale outputs that were consumed as inputs
-      output.outputsConsumed.map(async (outputIdentifier) => {
+      await Promise.all(output.outputsConsumed.map(async (outputIdentifier) => {
         const staleOutput = await this.storage.findOutput(outputIdentifier.txid, outputIdentifier.outputIndex, output.topic)
 
         // Make sure an output was found
@@ -1103,7 +1103,7 @@ export class Engine {
 
         // Find previousUTXO history
         return await this.deleteUTXODeep(staleOutput)
-      })
+      }))
     } catch (error) {
       throw new Error(`Failed to delete all stale outputs: ${error as string} `)
     }

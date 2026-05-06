@@ -22,6 +22,7 @@ spec:
       labels:
         io.kompose.service: mysql
     spec:
+      automountServiceAccountToken: false
       containers:
         - env:
             - name: MYSQL_DATABASE
@@ -37,6 +38,14 @@ spec:
           ports:
             - containerPort: 3306
               protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 1Gi
+              ephemeral-storage: 2Gi
           volumeMounts:
             - mountPath: /var/lib/mysql
               name: mysql-data

@@ -181,11 +181,11 @@ export class BTMS {
       const args: CreateActionArgs = {
         description: `Issue ${amount} ${tokenName}`,
         labels: [
-          `${BTMS_LABEL_PREFIX}type issue` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}direction incoming` as LabelStringUnder300Bytes,
+          `${BTMS_LABEL_PREFIX}type issue`,
+          `${BTMS_LABEL_PREFIX}direction incoming`,
           timestampLabel,
           monthLabel,
-          `${BTMS_LABEL_PREFIX}counterparty ${counterparty}` as LabelStringUnder300Bytes
+          `${BTMS_LABEL_PREFIX}counterparty ${counterparty}`
         ],
         outputs: [
           {
@@ -202,7 +202,7 @@ export class BTMS {
               timestampTag,
               monthTag,
               `btms_counterparty_${counterparty}`
-            ] as OutputTagStringUnder300Bytes[]
+            ]
           }
         ],
         options: {
@@ -225,15 +225,15 @@ export class BTMS {
       await this.wallet.internalizeAction({
         tx: createResult.tx,
         labels: [
-          `${BTMS_LABEL_PREFIX}type issue` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}direction incoming` as LabelStringUnder300Bytes,
+          `${BTMS_LABEL_PREFIX}type issue`,
+          `${BTMS_LABEL_PREFIX}direction incoming`,
           timestampLabel,
           monthLabel,
-          `${BTMS_LABEL_PREFIX}assetId ${assetId}` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}counterparty ${counterparty}` as LabelStringUnder300Bytes
+          `${BTMS_LABEL_PREFIX}assetId ${assetId}`,
+          `${BTMS_LABEL_PREFIX}counterparty ${counterparty}`
         ],
         outputs: [{
-          outputIndex: 0 as PositiveIntegerOrZero,
+          outputIndex: 0,
           protocol: 'basket insertion',
           insertionRemittance: {
             basket: BTMS_BASKET,
@@ -248,7 +248,7 @@ export class BTMS {
               monthTag,
               `btms_assetid_${assetId}`,
               `btms_counterparty_${counterparty}`
-            ] as OutputTagStringUnder300Bytes[]
+            ]
           }
         }],
         description: `Issue ${amount} ${tokenName}`
@@ -270,7 +270,7 @@ export class BTMS {
     } catch (error) {
       return {
         success: false,
-        txid: '' as TXIDHexString,
+        txid: '',
         assetId: '',
         outputIndex: 0,
         amount,
@@ -358,7 +358,7 @@ export class BTMS {
         metadata,
         false
       )
-      const recipientScriptHex = recipientScript.toHex() as HexString
+      const recipientScriptHex = recipientScript.toHex()
 
       outputs.push({
         satoshis: DEFAULT_TOKEN_SATOSHIS,
@@ -375,7 +375,7 @@ export class BTMS {
           monthTag,
           `btms_assetid_${assetId}`,
           `btms_counterparty_${recipient}`
-        ] as OutputTagStringUnder300Bytes[]
+        ]
       })
 
       // Change outputs (if needed)
@@ -418,14 +418,14 @@ export class BTMS {
               timestampTag,
               monthTag,
               `btms_assetid_${assetId}`
-            ] as OutputTagStringUnder300Bytes[]
+            ]
           })
         }
       }
 
       // Build inputs
       const inputs = selected.map(u => ({
-        outpoint: u.outpoint as OutpointString,
+        outpoint: u.outpoint,
         unlockingScriptLength: 74,
         inputDescription: `Spend ${u.token.amount} tokens`
       }))
@@ -442,12 +442,12 @@ export class BTMS {
       const createArgs: CreateActionArgs = {
         description: `Send ${amount} tokens to ${recipient.slice(0, 8)}...`,
         labels: [
-          `${BTMS_LABEL_PREFIX}type send` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}direction outgoing` as LabelStringUnder300Bytes,
+          `${BTMS_LABEL_PREFIX}type send`,
+          `${BTMS_LABEL_PREFIX}direction outgoing`,
           timestampLabel,
           monthLabel,
-          `${BTMS_LABEL_PREFIX}assetId ${assetId}` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}counterparty ${recipient}` as LabelStringUnder300Bytes
+          `${BTMS_LABEL_PREFIX}assetId ${assetId}`,
+          `${BTMS_LABEL_PREFIX}counterparty ${recipient}`
         ],
         inputBEEF: completeInputBeef.toBinary(),
         inputs,
@@ -501,7 +501,7 @@ export class BTMS {
     } catch (error) {
       return {
         success: false,
-        txid: '' as TXIDHexString,
+        txid: '',
         tokenForRecipient: {} as TokenForRecipient,
         error: error instanceof Error ? error.message : 'Unknown error'
       }
@@ -619,7 +619,7 @@ export class BTMS {
               timestampTag,
               monthTag,
               `btms_assetid_${assetId}`
-            ] as OutputTagStringUnder300Bytes[]
+            ]
           })
         }
       }
@@ -627,7 +627,7 @@ export class BTMS {
       // Build inputs - note: inputDescription should reflect what's happening to the tokens
       // The actual burn amount is amountToBurn, change goes back to user
       const inputs = selected.map((u, i) => ({
-        outpoint: u.outpoint as OutpointString,
+        outpoint: u.outpoint,
         unlockingScriptLength: 74,
         inputDescription: i === 0
           ? `Burn ${amountToBurn} tokens (from UTXO with ${u.token.amount})`
@@ -646,12 +646,12 @@ export class BTMS {
       const createArgs: CreateActionArgs = {
         description: `Burn ${amountToBurn} tokens of ${assetId.slice(0, 8)}...`,
         labels: [
-          `${BTMS_LABEL_PREFIX}type burn` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}direction incoming` as LabelStringUnder300Bytes,
+          `${BTMS_LABEL_PREFIX}type burn`,
+          `${BTMS_LABEL_PREFIX}direction incoming`,
           timestampLabel,
           monthLabel,
-          `${BTMS_LABEL_PREFIX}assetId ${assetId}` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}counterparty ${counterparty}` as LabelStringUnder300Bytes
+          `${BTMS_LABEL_PREFIX}assetId ${assetId}`,
+          `${BTMS_LABEL_PREFIX}counterparty ${counterparty}`
         ],
         inputBEEF: completeInputBeef.toBinary(),
         inputs,
@@ -700,7 +700,7 @@ export class BTMS {
 
           const txData = Array.isArray(signResult.tx) ? signResult.tx : Utils.toArray(signResult.tx)
           const finalTx = Transaction.fromAtomicBEEF(txData)
-          const txid = finalTx.id('hex') as TXIDHexString
+          const txid = finalTx.id('hex')
 
           return {
             success: true,
@@ -716,7 +716,7 @@ export class BTMS {
     } catch (error) {
       return {
         success: false,
-        txid: '' as TXIDHexString,
+        txid: '',
         assetId,
         amountBurned: 0,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -831,16 +831,16 @@ export class BTMS {
       await this.wallet.internalizeAction({
         tx: token.beef,
         labels: [
-          `${BTMS_LABEL_PREFIX}type receive` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}direction incoming` as LabelStringUnder300Bytes,
+          `${BTMS_LABEL_PREFIX}type receive`,
+          `${BTMS_LABEL_PREFIX}direction incoming`,
           timestampLabel,
           monthLabel,
-          `${BTMS_LABEL_PREFIX}assetId ${token.assetId}` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}counterparty ${token.sender}` as LabelStringUnder300Bytes
+          `${BTMS_LABEL_PREFIX}assetId ${token.assetId}`,
+          `${BTMS_LABEL_PREFIX}counterparty ${token.sender}`
         ],
         outputs: [
           {
-            outputIndex: token.outputIndex as PositiveIntegerOrZero,
+            outputIndex: token.outputIndex,
             protocol: 'basket insertion',
             insertionRemittance: {
               basket: BTMS_BASKET,
@@ -852,7 +852,7 @@ export class BTMS {
                 monthTag,
                 `btms_assetid_${token.assetId}`,
                 `btms_counterparty_${token.sender}`
-              ] as OutputTagStringUnder300Bytes[]
+              ]
             }
           }
         ],
@@ -991,13 +991,13 @@ export class BTMS {
             monthTag,
             `btms_assetid_${token.assetId}`,
             `btms_counterparty_${token.sender}`
-          ] as OutputTagStringUnder300Bytes[]
+          ]
         }
       ]
 
       const inputs = [
         {
-          outpoint: `${token.txid}.${token.outputIndex}` as OutpointString,
+          outpoint: `${token.txid}.${token.outputIndex}`,
           unlockingScriptLength: 74,
           inputDescription: `Refund ${token.amount} tokens`
         }
@@ -1006,12 +1006,12 @@ export class BTMS {
       const createArgs: CreateActionArgs = {
         description: `Refund ${token.amount} tokens to ${token.sender.slice(0, 8)}...`,
         labels: [
-          `${BTMS_LABEL_PREFIX}type send` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}direction outgoing` as LabelStringUnder300Bytes,
+          `${BTMS_LABEL_PREFIX}type send`,
+          `${BTMS_LABEL_PREFIX}direction outgoing`,
           timestampLabel,
           monthLabel,
-          `${BTMS_LABEL_PREFIX}assetId ${token.assetId}` as LabelStringUnder300Bytes,
-          `${BTMS_LABEL_PREFIX}counterparty ${token.sender}` as LabelStringUnder300Bytes
+          `${BTMS_LABEL_PREFIX}assetId ${token.assetId}`,
+          `${BTMS_LABEL_PREFIX}counterparty ${token.sender}`
         ],
         inputBEEF: completeInputBeef.toBinary(),
         inputs,
@@ -1052,7 +1052,7 @@ export class BTMS {
       const tokenForRecipient: TokenForRecipient = {
         txid,
         outputIndex: 0,
-        lockingScript: refundScript.toHex() as HexString,
+        lockingScript: refundScript.toHex(),
         amount: token.amount,
         satoshis: DEFAULT_TOKEN_SATOSHIS,
         beef: signedTx,
@@ -1085,7 +1085,7 @@ export class BTMS {
     } catch (error) {
       return {
         success: false,
-        txid: '' as TXIDHexString,
+        txid: '',
         assetId: token.assetId,
         amount: token.amount,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -1303,7 +1303,7 @@ export class BTMS {
     // Query wallet actions filtered by assetId label, including outputs and inputs to get token amounts
     const result: ListActionsResult = await this.wallet.listActions({
       labels: [
-        `${BTMS_LABEL_PREFIX}assetId ${assetId}` as LabelStringUnder300Bytes
+        `${BTMS_LABEL_PREFIX}assetId ${assetId}`
       ],
       labelQueryMode: 'all',
       includeLabels: true,
@@ -1345,7 +1345,7 @@ export class BTMS {
       // Extract counterparty from labels
       const counterpartyLabel = labelPayloads.find(l => l.startsWith('counterparty '))
       if (counterpartyLabel) {
-        counterparty = counterpartyLabel.replace('counterparty ', '') as PubKeyHex
+        counterparty = counterpartyLabel.replace('counterparty ', '')
       }
 
       const timestampLabel = labelPayloads.find(l => l.startsWith('timestamp '))
@@ -1429,7 +1429,7 @@ export class BTMS {
       }
 
       transactions.push({
-        txid: action.txid as TXIDHexString,
+        txid: action.txid,
         type,
         direction,
         amount,
@@ -1484,14 +1484,14 @@ export class BTMS {
           const outputIndex = Number(outputIndexStr)
           const canonicalAssetId = BTMSToken.computeAssetId(txid, outputIndex)
 
-          let scriptHex: LockingScript | HexString | undefined
+          let scriptHex: HexString | undefined
           if (includeBeef) {
             // When includeBeef is true, lockingScript is not returned - get it from the transaction
             if (!page.BEEF) {
               continue
             }
             const tx = Transaction.fromBEEF(page.BEEF, txid)
-            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript
+            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript.toHex() as HexString
           } else {
             // When includeBeef is false, use the returned lockingScript
             scriptHex = output.lockingScript
@@ -1514,10 +1514,10 @@ export class BTMS {
 
           tokens.push({
             outpoint: output.outpoint,
-            txid: txid as TXIDHexString,
+            txid: txid,
             outputIndex,
             satoshis: output.satoshis,
-            lockingScript: scriptHex as HexString,
+            lockingScript: scriptHex,
             customInstructions: output.customInstructions,
             token: decoded,
             spendable: true,
@@ -1688,9 +1688,9 @@ export class BTMS {
           },
           keyID,
           linkage: {
-            prover: linkageResult.prover as PubKeyHex,
-            verifier: linkageResult.verifier as PubKeyHex,
-            counterparty: linkageResult.counterparty as PubKeyHex,
+            prover: linkageResult.prover,
+            verifier: linkageResult.verifier,
+            counterparty: linkageResult.counterparty,
             encryptedLinkage: linkageResult.encryptedLinkage,
             encryptedLinkageProof: linkageResult.encryptedLinkageProof,
             proofType: linkageResult.proofType
@@ -1872,7 +1872,7 @@ export class BTMS {
       const { publicKey } = await this.wallet.getPublicKey({
         identityKey: true
       })
-      this.cachedIdentityKey = publicKey as PubKeyHex
+      this.cachedIdentityKey = publicKey
     }
     return this.cachedIdentityKey
   }
@@ -1881,22 +1881,22 @@ export class BTMS {
     const now = new Date()
     const year = now.getUTCFullYear()
     const month = String(now.getUTCMonth() + 1).padStart(2, '0')
-    return `${BTMS_LABEL_PREFIX}month ${year}-${month}` as LabelStringUnder300Bytes
+    return `${BTMS_LABEL_PREFIX}month ${year}-${month}`
   }
 
   private getTimestampLabel(): LabelStringUnder300Bytes {
-    return `${BTMS_LABEL_PREFIX}timestamp ${Date.now()}` as LabelStringUnder300Bytes
+    return `${BTMS_LABEL_PREFIX}timestamp ${Date.now()}`
   }
 
   private getMonthTag(): OutputTagStringUnder300Bytes {
     const now = new Date()
     const year = now.getUTCFullYear()
     const month = String(now.getUTCMonth() + 1).padStart(2, '0')
-    return `btms_month_${year}-${month}` as OutputTagStringUnder300Bytes
+    return `btms_month_${year}-${month}`
   }
 
   private getTimestampTag(): OutputTagStringUnder300Bytes {
-    return `btms_timestamp_${Date.now()}` as OutputTagStringUnder300Bytes
+    return `btms_timestamp_${Date.now()}`
   }
 
   private async buildSpendsForInputs(
@@ -1932,7 +1932,7 @@ export class BTMS {
 
     const txData = Array.isArray(signResult.tx) ? signResult.tx : Utils.toArray(signResult.tx)
     const finalTx = Transaction.fromAtomicBEEF(txData)
-    const txid = finalTx.id('hex') as TXIDHexString
+    const txid = finalTx.id('hex')
 
     await this.broadcastWithRetry(finalTx, `txid ${txid}`)
 
@@ -2213,7 +2213,7 @@ export class BTMS {
         sorted = [...eligible].sort((a, b) => a.token.amount - b.token.amount)
         break
       case 'random':
-        sorted = [...eligible].sort(() => Math.random() - 0.5)
+        sorted = BTMS.shuffle(eligible)
         break
       case 'exact-match':
         // Try to find exact match first
@@ -2227,7 +2227,7 @@ export class BTMS {
             sorted = [...eligible].sort((a, b) => a.token.amount - b.token.amount)
             break
           case 'random':
-            sorted = [...eligible].sort(() => Math.random() - 0.5)
+            sorted = BTMS.shuffle(eligible)
             break
           case 'largest-first':
           default:
@@ -2359,7 +2359,7 @@ export class BTMS {
 
     // Shuffle to avoid predictable ordering
     for (let i = outputs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
+      const j = BTMS.randomInt(i + 1)
         ;[outputs[i], outputs[j]] = [outputs[j], outputs[i]]
     }
 
@@ -2373,8 +2373,34 @@ export class BTMS {
    */
   private static benfordNumber(min: number, max: number): number {
     if (max <= min) return min
-    const d = Math.floor(Math.random() * 9) + 1
+    const d = BTMS.randomInt(9) + 1
     return Math.floor(min + ((max - min) * Math.log10(1 + 1 / d)) / Math.log10(10))
+  }
+
+  private static shuffle<T>(items: T[]): T[] {
+    const shuffled = [...items]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = BTMS.randomInt(i + 1)
+        ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    return shuffled
+  }
+
+  private static randomInt(maxExclusive: number): number {
+    if (maxExclusive <= 0) return 0
+    const maxUint32 = 0x100000000
+    const limit = maxUint32 - (maxUint32 % maxExclusive)
+
+    while (true) {
+      const bytes = Random(4)
+      const value = (
+        (bytes[0] << 24) |
+        (bytes[1] << 16) |
+        (bytes[2] << 8) |
+        bytes[3]
+      ) >>> 0
+      if (value < limit) return value % maxExclusive
+    }
   }
 
 }

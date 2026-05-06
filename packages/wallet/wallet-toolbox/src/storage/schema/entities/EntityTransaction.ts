@@ -241,7 +241,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
     ) { return false }
 
     if (
-      !eo.provenTxId !== !ei.provenTxId ||
+      (eo.provenTxId == null) !== (ei.provenTxId == null) ||
       (ei.provenTxId && eo.provenTxId !== ((syncMap != null) ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
     ) { return false }
 

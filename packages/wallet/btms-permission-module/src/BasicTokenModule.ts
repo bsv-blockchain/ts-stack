@@ -950,9 +950,10 @@ export class BasicTokenModule implements PermissionsModule {
       for (const label of args.labels) {
         if (typeof label === 'string') {
           // Parse p-label format: "p btms assetId <assetId>"
-          const match = label.match(/^p btms assetId (.+)$/)
-          if (match && match[1]) {
-            assetId = match[1]
+          const labelPrefix = 'p btms assetId '
+          const parsedAssetId = label.startsWith(labelPrefix) ? label.slice(labelPrefix.length).trim() : ''
+          if (parsedAssetId) {
+            assetId = parsedAssetId
             break
           }
         }
@@ -978,9 +979,12 @@ export class BasicTokenModule implements PermissionsModule {
 
     if (args.basket && typeof args.basket === 'string') {
       // Parse p-basket format: "p btms" or with asset ID
-      const match = args.basket.match(/^p btms(?:\s+(.+))?$/)
-      if (match && match[1]) {
-        assetId = match[1]
+      const basketPrefix = 'p btms'
+      if (args.basket === basketPrefix) {
+        assetId = undefined
+      } else if (args.basket.startsWith(`${basketPrefix} `)) {
+        const parsedAssetId = args.basket.slice(basketPrefix.length).trim()
+        assetId = parsedAssetId || undefined
       }
     }
 

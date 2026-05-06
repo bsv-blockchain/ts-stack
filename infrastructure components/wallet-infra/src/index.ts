@@ -227,7 +227,7 @@ try {
   // Conditionally start nginx
   if (ENABLE_NGINX === 'true') {
     console.log('Spawning nginx...')
-    spawn('nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
+    spawn('/usr/sbin/nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
     console.log('nginx is up!')
   }
 } catch (error) {

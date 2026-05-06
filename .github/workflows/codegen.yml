@@ -6,20 +6,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   generate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       # ── Go types (oapi-codegen) ───────────────────────────────────────────
       # NOTE: oapi-codegen does not yet support OpenAPI 3.1 nullable syntax
       # (type: [string, null]). Steps are continue-on-error until resolved.
       # Upstream: https://github.com/oapi-codegen/oapi-codegen/issues/373
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.22'
       - name: Install oapi-codegen
@@ -47,7 +46,7 @@ jobs:
             > conformance/generated/messaging/types.gen.go
 
       # ── TypeScript types (openapi-typescript) ────────────────────────────
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24'
       - name: Generate TS types from overlay spec
@@ -67,7 +66,7 @@ jobs:
             -o conformance/generated/messaging/types.gen.d.ts
 
       # ── Python types (datamodel-code-generator / pydantic v2) ────────────
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: '3.12'
       - name: Install datamodel-code-generator
@@ -118,7 +117,7 @@ jobs:
           EOF
 
       # ── Single commit for all generated files ────────────────────────────
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5
         with:
           commit_message: "chore(codegen): regenerate types from OpenAPI specs"
           file_pattern: "conformance/generated/**"

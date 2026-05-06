@@ -66,7 +66,10 @@ export default class HTTPWalletJSON implements WalletInterface {
         : undefined
 
       if (!isBrowser && origin === undefined) {
-        console.error('Originator is required in Node.js environments')
+        throw new Error(
+          'HTTPWalletJSON: originator is required when using the HTTP substrate in Node.js. ' +
+          'Pass an originator (e.g. "example.com") to the constructor.'
+        )
       }
 
       const res = await (

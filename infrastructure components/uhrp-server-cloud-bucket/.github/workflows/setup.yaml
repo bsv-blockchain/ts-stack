@@ -14,11 +14,6 @@ on:
         required: true
         default: us-west1
 
-permissions:
-  contents: write
-  id-token: write
-  actions: write
-
 env:
   ENV_NAME: ${{ github.event.inputs.env }} # staging | production
   REGION: ${{ github.event.inputs.region }} # e.g., us-west1
@@ -26,6 +21,10 @@ env:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      id-token: write
     environment: ${{ github.event.inputs.env }}
     env:
       GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
@@ -35,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       # ----- load env-scoped config secrets (unchanged from your deploy) -----
       - name: Load environment config
@@ -47,11 +46,13 @@ jobs:
 
       # ----- authenticate with bootstrap owner key -----
       - name: Write bootstrap key
+        env:
+          GCP_BOOTSTRAP_KEY: ${{ secrets.GCP_BOOTSTRAP_KEY }}
         run: |
-          echo '${{ secrets.GCP_BOOTSTRAP_KEY }}' > $RUNNER_TEMP/bootstrap.json
+          printf '%s' "$GCP_BOOTSTRAP_KEY" > "$RUNNER_TEMP/bootstrap.json"
 
       - name: Auth to GCP (bootstrap)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           credentials_json: ${{ secrets.GCP_BOOTSTRAP_KEY }}
       - name: Fill PROJECT_ID from auth context (fallback)
@@ -67,16 +68,19 @@ jobs:
           fi
 
       - name: Setup gcloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
         with:
           project_id: ${{ env.GOOGLE_PROJECT_ID }}
 
       - name: Select token for GitHub API
+        env:
+          GH_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+          GH_TOKEN_FALLBACK: ${{ github.token }}
         run: |
-          if [ -n "${{ secrets.GH_ADMIN_TOKEN }}" ]; then
-            echo "GH_TOKEN=${{ secrets.GH_ADMIN_TOKEN }}" >> $GITHUB_ENV
+          if [ -n "$GH_ADMIN_TOKEN" ]; then
+            echo "GH_TOKEN=$GH_ADMIN_TOKEN" >> "$GITHUB_ENV"
           else
-            echo "GH_TOKEN=${{ github.token }}" >> $GITHUB_ENV
+            echo "GH_TOKEN=$GH_TOKEN_FALLBACK" >> "$GITHUB_ENV"
           fi
 
       - name: Ensure GitHub CLI is installed

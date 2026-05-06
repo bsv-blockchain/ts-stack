@@ -7,6 +7,10 @@ import { WERR_REVIEW_ACTIONS } from '../../WERR_REVIEW_ACTIONS'
 // Helpers
 // ---------------------------------------------------------------------------
 
+const TEST_ORIGINATOR = 'example.com'
+const TEST_ORIGIN_HEADER = 'http://example.com'
+const BASE_URL = 'http://localhost:3321'
+
 /** Build a minimal fetch mock that resolves with a JSON-shaped Response. */
 function makeFetch(
   body: unknown,
@@ -24,19 +28,23 @@ function makeNetworkErrorFetch(message = 'Network failure'): jest.Mock {
   return jest.fn().mockRejectedValue(new Error(message))
 }
 
+function makeClient(mockFetch: jest.Mock): HTTPWalletJSON {
+  return new HTTPWalletJSON(TEST_ORIGINATOR, BASE_URL, mockFetch as unknown as typeof fetch)
+}
+
 // ---------------------------------------------------------------------------
 // Constructor
 // ---------------------------------------------------------------------------
 
 describe('HTTPWalletJSON – constructor', () => {
   it('stores the provided baseUrl', () => {
-    const client = new HTTPWalletJSON('example.com', 'http://my-server:9000')
+    const client = new HTTPWalletJSON(TEST_ORIGINATOR, 'http://my-server:9000')
     expect(client.baseUrl).toBe('http://my-server:9000')
   })
 
   it('uses http://localhost:3321 as the default baseUrl', () => {
-    const client = new HTTPWalletJSON('example.com')
-    expect(client.baseUrl).toBe('http://localhost:3321')
+    const client = new HTTPWalletJSON(TEST_ORIGINATOR)
+    expect(client.baseUrl).toBe(BASE_URL)
   })
 
   it('stores the originator', () => {
@@ -44,14 +52,9 @@ describe('HTTPWalletJSON – constructor', () => {
     expect(client.originator).toBe('wallet.example.com')
   })
 
-  it('accepts undefined originator', () => {
-    const client = new HTTPWalletJSON(undefined)
-    expect(client.originator).toBeUndefined()
-  })
-
   it('stores the custom httpClient', () => {
     const mockFetch = jest.fn()
-    const client = new HTTPWalletJSON('example.com', 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = new HTTPWalletJSON(TEST_ORIGINATOR, BASE_URL, mockFetch as unknown as typeof fetch)
     expect(client.httpClient).toBe(mockFetch)
   })
 })
@@ -63,13 +66,13 @@ describe('HTTPWalletJSON – constructor', () => {
 describe('HTTPWalletJSON – api() successful responses', () => {
   it('POSTs to the correct URL and returns the parsed body', async () => {
     const mockFetch = makeFetch({ version: '1.0.0.0.0.0.0' })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     const result = await client.getVersion({})
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe('http://localhost:3321/getVersion')
+    expect(url).toBe(`${BASE_URL}/getVersion`)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({})
     expect(result).toEqual({ version: '1.0.0.0.0.0.0' })
@@ -77,7 +80,7 @@ describe('HTTPWalletJSON – api() successful responses', () => {
 
   it('sets Accept and Content-Type headers', async () => {
     const mockFetch = makeFetch({ height: 800000 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await client.getHeight({})
 
@@ -85,16 +88,26 @@ describe('HTTPWalletJSON – api() successful responses', () => {
     const headers = init.headers as Record<string, string>
     expect(headers['Accept']).toBe('application/json')
     expect(headers['Content-Type']).toBe('application/json')
+    expect(headers['Origin']).toBe(TEST_ORIGIN_HEADER)
+    expect(headers['Originator']).toBe(TEST_ORIGIN_HEADER)
   })
 
   it('serialises args as JSON in the request body', async () => {
     const mockFetch = makeFetch({ actions: [], totalActions: 0 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await client.listActions({ labels: ['test-label'] })
 
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(init.body as string)).toEqual({ labels: ['test-label'] })
+  })
+
+  it('throws before making a request in Node when originator is missing', async () => {
+    const mockFetch = makeFetch({ version: '1.0.0.0.0.0.0' })
+    const client = new HTTPWalletJSON(undefined, BASE_URL, mockFetch as unknown as typeof fetch)
+
+    await expect(client.getVersion({})).rejects.toThrow('HTTPWalletJSON: originator is required')
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 })
 
@@ -111,7 +124,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       message: 'The description parameter must be at least 5 length.',
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await expect(client.createAction({ description: 'x' })).rejects.toThrow(WERR_INVALID_PARAMETER)
 
@@ -133,7 +146,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       message: 'Custom server message for lockingScript.',
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     try {
       await client.createAction({ description: 'hello world' })
@@ -151,7 +164,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       moreSatoshisNeeded: 2000,
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(WERR_INSUFFICIENT_FUNDS)
 
@@ -174,7 +187,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
       txid: 'abc123',
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(WERR_REVIEW_ACTIONS)
 
@@ -190,7 +203,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
 
   it('throws a generic Error when the server returns a non-400 error status', async () => {
     const mockFetch = makeFetch({ message: 'Internal Server Error' }, { ok: false, status: 500 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await expect(client.getVersion({})).rejects.toThrow(Error)
 
@@ -205,7 +218,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
 
   it('falls back to "HTTP Client error <status>" when the 500 body has no message', async () => {
     const mockFetch = makeFetch({}, { ok: false, status: 503 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     try {
       await client.getVersion({})
@@ -219,7 +232,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
     // code 99 is unrecognised – falls through to the generic error path
     const errorBody = { isError: true, code: 99, message: 'Unknown problem' }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await expect(client.getVersion({})).rejects.toThrow(Error)
   })
@@ -232,7 +245,7 @@ describe('HTTPWalletJSON – api() error responses', () => {
 describe('HTTPWalletJSON – network errors', () => {
   it('propagates a fetch rejection as-is', async () => {
     const mockFetch = makeNetworkErrorFetch('Failed to fetch')
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     await expect(client.getVersion({})).rejects.toThrow('Failed to fetch')
   })
@@ -248,7 +261,7 @@ describe('HTTPWalletJSON – method routing', () => {
 
   beforeEach(() => {
     mockFetch = makeFetch({})
-    client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    client = makeClient(mockFetch)
   })
 
   const expectCallName = async (method: () => Promise<unknown>, expectedPath: string) => {
@@ -470,7 +483,7 @@ describe('HTTPWalletJSON – response body passthrough', () => {
   it('returns the exact JSON body from a successful getVersion call', async () => {
     const expected = { version: '1.0.0.0.0.0.0' }
     const mockFetch = makeFetch(expected)
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     const result = await client.getVersion({})
     expect(result).toEqual(expected)
@@ -479,7 +492,7 @@ describe('HTTPWalletJSON – response body passthrough', () => {
   it('returns the exact JSON body from a successful listActions call', async () => {
     const expected = { totalActions: 2, actions: [{ txid: 'aa', status: 'completed' }] }
     const mockFetch = makeFetch(expected)
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     const result = await client.listActions({ labels: [] })
     expect(result).toEqual(expected)
@@ -488,7 +501,7 @@ describe('HTTPWalletJSON – response body passthrough', () => {
   it('returns the exact JSON body from a successful getNetwork call', async () => {
     const expected = { network: 'mainnet' as const }
     const mockFetch = makeFetch(expected)
-    const client = new HTTPWalletJSON(undefined, 'http://localhost:3321', mockFetch as unknown as typeof fetch)
+    const client = makeClient(mockFetch)
 
     const result = await client.getNetwork({})
     expect(result).toEqual(expected)

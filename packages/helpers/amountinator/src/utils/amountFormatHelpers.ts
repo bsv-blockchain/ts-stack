@@ -1,3 +1,25 @@
+function groupIntegerPart(integerPart: string, separator: string): string {
+  const sign = integerPart.startsWith('-') ? '-' : ''
+  const digits = sign ? integerPart.slice(1) : integerPart
+  const groups: string[] = []
+
+  for (let end = digits.length; end > 0; end -= 3) {
+    groups.unshift(digits.slice(Math.max(0, end - 3), end))
+  }
+
+  return sign + groups.join(separator)
+}
+
+function trimInsignificantZeros(fixed: string): string {
+  if (!fixed.includes('.')) return fixed
+
+  let trimmed = fixed
+  while (trimmed.endsWith('0')) {
+    trimmed = trimmed.slice(0, -1)
+  }
+  return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed
+}
+
 /**
  * Formats a numerical amount with a specified currency and optional formatting options.
  * 
@@ -34,16 +56,16 @@ export function formatAmountWithCurrency(amount: number, currency: string, optio
   let fixed = amount.toFixed(decimals)
 
   if (decimalPlaces === undefined) {
-    fixed = fixed.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '')
+    fixed = trimInsignificantZeros(fixed)
   }
 
   let [integerPart, decimalPart] = fixed.split('.')
 
   // Format the integer part with underscores or commas
   if (useUnderscores) {
-    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '_')
+    integerPart = groupIntegerPart(integerPart, '_')
   } else if (useCommas) {
-    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    integerPart = groupIntegerPart(integerPart, ',')
   }
 
   // Construct the full number string with decimal part conditionally added

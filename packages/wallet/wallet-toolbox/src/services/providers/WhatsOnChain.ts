@@ -355,7 +355,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       details: []
     }
 
-    for (let retry = 0; ; retry++) {
+    for (let retry = 0; retry <= 2; retry++) {
       const url: string = ''
 
       try {
@@ -408,12 +408,14 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         return r
       } catch (eu: unknown) {
         const e = WalletError.fromUnknown(eu)
-        if (e.code !== 'ECONNRESET' || retry > 2) {
+        if (e.code !== 'ECONNRESET' || retry >= 2) {
           r.error = new WERR_INTERNAL(`service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(eu))}`)
           return r
         }
       }
     }
+
+    return r
   }
 
   async getScriptHashConfirmedHistory (hash: string): Promise<GetScriptHashHistoryResult> {
@@ -429,7 +431,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
 
     const url = `${this.URL}/script/${hash}/confirmed/history`
 
-    for (let retry = 0; ; retry++) {
+    for (let retry = 0; retry <= 2; retry++) {
       try {
         const requestOptions = {
           method: 'GET',
@@ -467,7 +469,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         return r
       } catch (eu: unknown) {
         const e = WalletError.fromUnknown(eu)
-        if (e.code !== 'ECONNRESET' || retry > 2) {
+        if (e.code !== 'ECONNRESET' || retry >= 2) {
           r.error = new WERR_INTERNAL(
             `WoC getScriptHashConfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(eu))}`
           )

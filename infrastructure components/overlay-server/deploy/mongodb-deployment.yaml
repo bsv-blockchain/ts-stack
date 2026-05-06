@@ -22,6 +22,7 @@ spec:
       labels:
         io.kompose.service: mongodb
     spec:
+      automountServiceAccountToken: false
       containers:
         - env:
             - name: MONGO_INITDB_ROOT_PASSWORD
@@ -33,6 +34,14 @@ spec:
           ports:
             - containerPort: 27017
               protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 512Mi
+              ephemeral-storage: 2Gi
           volumeMounts:
             - mountPath: /data/db
               name: mongo-data

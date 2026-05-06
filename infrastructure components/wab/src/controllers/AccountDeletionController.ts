@@ -6,6 +6,7 @@
  */
 
 import { Request, Response } from "express";
+import { randomBytes } from "crypto";
 import { UserService } from "../services/UserService";
 import { AuthMethod } from "../auth-methods/AuthMethod";
 import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
@@ -79,7 +80,7 @@ export class AccountDeletionController {
       const user = await UserService.findUserByConfig(methodType, config);
 
       // Use a temporary key for this deletion process
-      const deletionKey = `deletion_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const deletionKey = `deletion_${Date.now()}_${randomBytes(9).toString("hex")}`;
 
       // Always send the same response to prevent enumeration attacks
       if (user) {

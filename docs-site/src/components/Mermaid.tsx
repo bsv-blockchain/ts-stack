@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import styles from './Mermaid.module.css'
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
 
 export default function Mermaid({ code }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  const renderId = useId().replaceAll(':', '')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function Mermaid({ code }: Props) {
         fontFamily: "'JetBrains Mono', monospace",
       })
 
-      const id = 'mermaid-' + Math.random().toString(36).slice(2)
+      const id = `mermaid-${renderId}`
       mermaid
         .render(id, code)
         .then(({ svg }) => {

@@ -20,6 +20,7 @@ spec:
       labels:
         io.kompose.service: app
     spec:
+      automountServiceAccountToken: false
       containers:
         - args:
             - npm
@@ -27,7 +28,10 @@ spec:
             - start
           env:
             - name: KNEX_URL
-              value: mysql://appuser:apppass@mysql:3306/appdb
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: knex-url
             - name: MONGO_URL
               value: mongodb://root:example@mongodb:27017
             - name: SERVER_PRIVATE_KEY
@@ -43,4 +47,12 @@ spec:
           ports:
             - containerPort: 3000
               protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+              ephemeral-storage: 1Gi
+            limits:
+              memory: 512Mi
+              ephemeral-storage: 2Gi
       restartPolicy: Always
