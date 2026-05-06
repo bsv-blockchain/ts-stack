@@ -9,8 +9,7 @@ COPY package*.json ./
 COPY tsconfig.json ./
 
 # Install dependencies
-RUN npm install -g tsx@4.21.0 typescript@5.8.3 --ignore-scripts \
-  && npm ci --ignore-scripts
+RUN npm ci --ignore-scripts
 
 # Copy source code
 COPY src ./src
