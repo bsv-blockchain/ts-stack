@@ -34,8 +34,8 @@ jobs:
           path: conformance/reports/
           retention-days: 30
 
-      # Published so downstream SDKs (go-sdk etc.) can fetch vectors in their own CI.
-      # See conformance/GO_PLAN.md for migration status.
+      # Published so downstream SDKs can fetch the shared conformance corpus
+      # and run their own language-specific runners in their own CI.
       - name: Publish conformance vectors
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
