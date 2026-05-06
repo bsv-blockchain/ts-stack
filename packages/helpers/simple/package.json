@@ -26,6 +26,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "lint": "ts-standard --fix src/**/*.ts",
     "lint:ci": "ts-standard src/**/*.ts",
     "prepublishOnly": "npm run build"
