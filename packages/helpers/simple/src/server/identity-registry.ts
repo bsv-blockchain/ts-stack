@@ -5,7 +5,7 @@
  * createIdentityRegistryHandler() returns Next.js App Router compatible { GET, POST }.
  */
 
-import { join } from 'path'
+import { join } from 'node:path'
 import {
   IdentityRegistryConfig,
   IdentityRegistryStore,

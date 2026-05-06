@@ -191,9 +191,9 @@ export class Bitails {
         const n: ReqHistoryNote = { ...nne(), what: 'postRawsError' }
         r.notes!.push(n)
       }
-    } catch (eu: unknown) {
+    } catch (error_: unknown) {
       r.status = 'error'
-      const e = WalletError.fromUnknown(eu)
+      const e = WalletError.fromUnknown(error_)
       const { code, description } = e
       r.notes!.push({ ...nne(), what: 'postRawsCatch', code, description })
     }
@@ -239,8 +239,8 @@ export class Bitails {
           r.notes!.push({ ...nne(), what: 'getMerklePathNoHeader', target: p.target })
         }
       }
-    } catch (eu: unknown) {
-      const e = WalletError.fromUnknown(eu)
+    } catch (error_: unknown) {
+      const e = WalletError.fromUnknown(error_)
       const { code, description } = e
       r.notes!.push({ ...nn(), what: 'getMerklePathCatch', code, description })
       r.error = e

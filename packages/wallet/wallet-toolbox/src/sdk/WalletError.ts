@@ -145,7 +145,7 @@ export class WalletError extends Error implements WalletErrorObject {
    * @param error
    * @returns stringified JSON representation of the error such that it can be desirialized to a WalletError.
    */
-  static unknownToJson (error: unknown | WalletError): string {
+  static unknownToJson (error: unknown): string {
     let json: string | undefined
     let e: WalletError | undefined
     const t = typeof error

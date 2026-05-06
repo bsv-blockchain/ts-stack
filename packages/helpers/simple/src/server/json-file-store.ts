@@ -3,7 +3,7 @@
  * Used by identity registry, server wallet manager, and credential issuer handler.
  */
 
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 
 export class JsonFileStore<T> {
   constructor (private readonly filePath: string) {}

@@ -35,7 +35,7 @@ export default class Script {
       const token = tokens[i]
       let opCode
       let opCodeNum: number = 0
-      if (token.startsWith('OP_') && typeof OP[token] !== 'undefined') {
+      if (token.startsWith('OP_') && OP[token] !== undefined) {
         opCode = token
         opCodeNum = OP[token]
       }
@@ -691,7 +691,7 @@ export default class Script {
   private _chunkToString (chunk: ScriptChunk): string {
     const op = chunk.op
     let str = ''
-    if (typeof chunk.data === 'undefined') {
+    if (chunk.data === undefined) {
       const val = OP[op] as string
       str = `${str} ${val}`
     } else {

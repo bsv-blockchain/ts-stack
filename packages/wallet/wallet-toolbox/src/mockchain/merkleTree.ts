@@ -13,7 +13,11 @@ export function computeMerkleRoot (txids: string[]): string {
   }
 
   // Convert txids to byte arrays (reverse to little-endian for hashing)
-  let level: number[][] = txids.map(txid => asArray(txid).reverse())
+  let level: number[][] = txids.map(txid => {
+    const txidBytes = asArray(txid)
+    txidBytes.reverse()
+    return txidBytes
+  })
 
   while (level.length > 1) {
     const next: number[][] = []
@@ -21,14 +25,17 @@ export function computeMerkleRoot (txids: string[]): string {
       const left = level[i]
       const right = i + 1 < level.length ? level[i + 1] : level[i] // duplicate last if odd
       const combined = [...left, ...right]
-      const hash = doubleSha256BE(combined).reverse() // doubleSha256BE returns BE, reverse to LE for next level
+      const hash = doubleSha256BE(combined) // doubleSha256BE returns BE, reverse to LE for next level
+      hash.reverse()
       next.push(hash)
     }
     level = next
   }
 
   // Final root in LE, reverse to BE for return
-  return asString(level[0].reverse())
+  const root = [...level[0]]
+  root.reverse()
+  return asString(root)
 }
 
 /**
@@ -111,8 +118,10 @@ export function computeMerklePath (txids: string[], targetIndex: number, blockHe
     // Compute next level hashes
     const nextLevel: string[] = []
     for (let i = 0; i < levelTxids.length; i += 2) {
-      const left = asArray(levelTxids[i]).reverse()
-      const right = i + 1 < levelTxids.length ? asArray(levelTxids[i + 1]).reverse() : left
+      const left = asArray(levelTxids[i])
+      left.reverse()
+      const right = i + 1 < levelTxids.length ? asArray(levelTxids[i + 1]) : left
+      if (right !== left) right.reverse()
       const combined = [...left, ...right]
       const hash = doubleSha256BE(combined) // returns BE
       nextLevel.push(asString(hash))

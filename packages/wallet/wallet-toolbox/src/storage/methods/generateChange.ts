@@ -4,8 +4,6 @@ import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { validateStorageFeeModel } from '../StorageProvider'
 import { transactionSize } from './utils'
-import { Wallet, WalletLogger } from '../../index.client'
-
 /**
  * An output of this satoshis amount will be adjusted to the largest fundable amount.
  */
@@ -396,14 +394,14 @@ export async function generateChangeSdk (
     }
 
     return r
-  } catch (eu: unknown) {
-    const e = WalletError.fromUnknown(eu)
-    if (e.code === 'WERR_INSUFFICIENT_FUNDS') throw eu
+  } catch (error_: unknown) {
+    const e = WalletError.fromUnknown(error_)
+    if (e.code === 'WERR_INSUFFICIENT_FUNDS') throw error_
 
     // Capture the params in cloud run log which has a 100k text length limit per line.
     // logGenerateChangeSdkParams(params, eu)
 
-    throw eu
+    throw error_
   }
 }
 

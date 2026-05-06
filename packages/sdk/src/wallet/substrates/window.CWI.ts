@@ -40,12 +40,12 @@ export default class WindowCWISubstrate implements WalletInterface {
   private readonly CWI: WalletInterface
   constructor() {
     if (typeof window !== 'object') {
-      throw new Error(
+      throw new TypeError(
         'The window.CWI substrate requires a global window object.'
       )
     }
     if (typeof window.CWI !== 'object') {
-      throw new Error(
+      throw new TypeError(
         'The window.CWI interface does not appear to be bound to the window object.'
       )
     }
@@ -258,7 +258,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       keyID?: KeyIDStringUnder800Bytes
       privileged?: BooleanDefaultFalse
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       forSelf?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -314,7 +314,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -328,7 +328,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -342,7 +342,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -357,7 +357,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -372,7 +372,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -388,7 +388,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       forSelf?: BooleanDefaultFalse
       privileged?: BooleanDefaultFalse
     },
@@ -406,7 +406,7 @@ export default class WindowCWISubstrate implements WalletInterface {
       signature: HexString
       fields: Record<CertificateFieldNameUnder50Bytes, string>
       certifier: PubKeyHex
-      keyringRevealer: PubKeyHex | 'certifier'
+      keyringRevealer: PubKeyHex
       keyringForSubject: Record<CertificateFieldNameUnder50Bytes, Base64String>
       acquisitionProtocol: 'direct' | 'issuance'
       certifierUrl?: string

@@ -218,8 +218,8 @@ export class ARC {
         }
         r.notes!.push(n)
       }
-    } catch (eu: unknown) {
-      const e = WalletError.fromUnknown(eu)
+    } catch (error_: unknown) {
+      const e = WalletError.fromUnknown(error_)
       r.status = 'error'
       r.serviceError = true
       r.data = `${e.code} ${e.message}`

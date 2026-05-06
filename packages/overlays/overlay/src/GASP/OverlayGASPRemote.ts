@@ -30,7 +30,7 @@ export class OverlayGASPRemote implements GASPRemote {
 
     // Validate and return the response in the correct format
     if (!Array.isArray(result.UTXOList) || typeof result.since !== 'number') {
-      throw new Error('Invalid response format')
+      throw new TypeError('Invalid response format')
     }
 
     return {
@@ -77,7 +77,7 @@ export class OverlayGASPRemote implements GASPRemote {
 
     // Validate and return the response in the correct format
     if (typeof result.graphID !== 'string' || typeof result.rawTx !== 'string' || typeof result.outputIndex !== 'number') {
-      throw new Error('Invalid response format')
+      throw new TypeError('Invalid response format')
     }
 
     const gaspNode: GASPNode = {

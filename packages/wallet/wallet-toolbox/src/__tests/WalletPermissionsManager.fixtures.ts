@@ -155,7 +155,7 @@ export const MockUtils = {
     if (encoding === 'hex') {
       const arr: number[] = []
       for (let i = 0; i < str.length; i += 2) {
-        arr.push(parseInt(str.substr(i, 2), 16))
+        arr.push(Number.parseInt(str.substr(i, 2), 16))
       }
       return arr
     } else if (encoding === 'base64') {
@@ -193,7 +193,7 @@ export const MockValidation = {
  * Mocks for Random
  */
 export const MockRandom = (size: number): number[] => {
-  return [...require('crypto').randomBytes(size)]
+  return [...require('node:crypto').randomBytes(size)]
 }
 
 /**

@@ -26,11 +26,9 @@ RUN cp out/knexfile.js ./knexfile.js
 # ---- Production stage ----
 FROM node:20-alpine
 
-# Ensure all OS packages are up to date (patch CVEs in base image)
-RUN apk upgrade --no-cache
-
-# Install nginx
-RUN apk add --no-cache nginx && \
+# Ensure all OS packages are up to date (patch CVEs in base image) and install nginx
+RUN apk upgrade --no-cache && \
+    apk add --no-cache nginx && \
     chown -R nginx:www-data /var/lib/nginx
 
 WORKDIR /app

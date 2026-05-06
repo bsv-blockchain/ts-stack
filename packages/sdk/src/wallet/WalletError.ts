@@ -25,7 +25,7 @@ export class WalletError extends Error {
    * @returns stringified JSON representation of the error such that it can be deserialized to a WalletError.
    */
   static unknownToJson (error: any): string {
-    let e: any | undefined
+    let e: any
     if (error.isError === true && String(error.name).startsWith('WERR_')) {
       e = {
         name: error.name,

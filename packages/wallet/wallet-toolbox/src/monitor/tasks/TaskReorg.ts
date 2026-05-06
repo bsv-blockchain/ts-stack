@@ -1,5 +1,3 @@
-import { TableProvenTx } from '../../index.client'
-import { BlockHeader } from '../../services/chaintracker/chaintracks/Api/BlockHeaderApi'
 import { DeactivedHeader, Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 

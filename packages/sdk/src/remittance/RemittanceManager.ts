@@ -419,7 +419,7 @@ export class RemittanceManager {
    */
   async startListening (hostOverride?: string): Promise<void> {
     if (typeof this.comms.listenForLiveMessages !== 'function') {
-      throw new Error('CommsLayer does not support live message listening')
+      throw new TypeError('CommsLayer does not support live message listening')
     }
 
     await this.comms.listenForLiveMessages({
@@ -1083,7 +1083,7 @@ export class RemittanceManager {
       case 'identityVerificationRequest': {
         const payload = env.payload as IdentityVerificationRequest
         if (typeof payload !== 'object') {
-          throw new Error('Identity verification request payload missing data')
+          throw new TypeError('Identity verification request payload missing data')
         }
 
         if (this.cfg.identityLayer == null) {
@@ -1117,7 +1117,7 @@ export class RemittanceManager {
       case 'identityVerificationResponse': {
         const payload = env.payload as IdentityVerificationResponse
         if (typeof payload !== 'object') {
-          throw new Error('Identity verification response payload missing data')
+          throw new TypeError('Identity verification response payload missing data')
         }
 
         if (this.cfg.identityLayer == null) {
@@ -1155,7 +1155,7 @@ export class RemittanceManager {
       case 'identityVerificationAcknowledgment': {
         const payload = env.payload as IdentityVerificationAcknowledgment
         if (typeof payload !== 'object') {
-          throw new Error('Identity verification acknowledgment payload missing data')
+          throw new TypeError('Identity verification acknowledgment payload missing data')
         }
 
         thread.identity.acknowledgmentReceived = true
@@ -1168,7 +1168,7 @@ export class RemittanceManager {
       case 'invoice': {
         const invoice = env.payload as Invoice
         if (typeof invoice !== 'object') {
-          throw new Error('Invoice payload missing invoice data')
+          throw new TypeError('Invoice payload missing invoice data')
         }
 
         thread.invoice = invoice
@@ -1181,7 +1181,7 @@ export class RemittanceManager {
       case 'settlement': {
         const settlement = env.payload as Settlement
         if (typeof settlement !== 'object') {
-          throw new Error('Settlement payload missing settlement data')
+          throw new TypeError('Settlement payload missing settlement data')
         }
 
         if (this.shouldRequireIdentityBeforeSettlement(thread) && !thread.flags.hasIdentified) {
@@ -1253,7 +1253,7 @@ export class RemittanceManager {
       case 'receipt': {
         const receipt = env.payload as Receipt
         if (typeof receipt !== 'object') {
-          throw new Error('Receipt payload missing receipt data')
+          throw new TypeError('Receipt payload missing receipt data')
         }
 
         thread.receipt = receipt
@@ -1275,7 +1275,7 @@ export class RemittanceManager {
       case 'termination': {
         const payload = env.payload as Termination
         if (typeof payload !== 'object') {
-          throw new Error('Termination payload missing data')
+          throw new TypeError('Termination payload missing data')
         }
         thread.termination = payload
         thread.lastError = { message: payload.message, at: this.now() }
@@ -1575,7 +1575,7 @@ export class RemittanceManager {
 
   private requireMyIdentityKey (errMsg: string): PubKeyHex {
     if (typeof this.myIdentityKey !== 'string') {
-      throw new Error(errMsg)
+      throw new TypeError(errMsg)
     }
     return this.myIdentityKey
   }

@@ -159,7 +159,7 @@ export class StorageServer {
         if (typeof (this as any)[method] === 'function') {
           // if you wanted to handle certain methods on the server class itself
           // e.g. this['someServerMethod'](params)
-          throw new Error('Server method dispatch not used in this approach.')
+          throw new TypeError('Server method dispatch not used in this approach.')
         } else if (typeof (this.storage as any)[method] === 'function') {
           // method is on the walletStorage:
           // Find user
@@ -241,10 +241,10 @@ export class StorageServer {
             }
 
             return res.json({ jsonrpc: '2.0', result, id })
-          } catch (eu: unknown) {
-            logWalletError(eu, logger, 'error executing requested method')
+          } catch (error_: unknown) {
+            logWalletError(error_, logger, 'error executing requested method')
             logger?.flush?.()
-            throw eu
+            throw error_
           }
         } else {
           // Unknown method

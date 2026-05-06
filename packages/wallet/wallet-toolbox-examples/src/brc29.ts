@@ -1,4 +1,5 @@
-import { Beef, PrivateKey, PublicKey, SignActionArgs } from '@bsv/sdk'
+import { Beef, SignActionArgs } from '@bsv/sdk'
+
 import {
   randomBytesBase64,
   ScriptTemplateBRC29,

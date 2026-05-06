@@ -212,7 +212,7 @@ export default class BigNumber {
     this._nominalWordLength = 1
     this.red = null
 
-    if (number === undefined) number = 0
+    number ??= 0
 
     if (number === null) { this._initializeState(0n, 0); return }
     if (typeof number === 'bigint') { this._initializeState(number < 0n ? -number : number, number < 0n ? 1 : 0); this.normSign(); return }
@@ -241,7 +241,7 @@ export default class BigNumber {
           const bytes: number[] = []; let hexStr = numStr
           if (hexStr.length % 2 !== 0) hexStr = '0' + hexStr
           for (let i = 0; i < hexStr.length; i += 2) {
-            const byteHex = hexStr.substring(i, i + 2); const byteVal = parseInt(byteHex, 16)
+            const byteHex = hexStr.substring(i, i + 2); const byteVal = Number.parseInt(byteHex, 16)
             if (isNaN(byteVal)) throw new Error('Invalid character in ' + hexStr)
             bytes.push(byteVal)
           }
@@ -1279,8 +1279,8 @@ export default class BigNumber {
     if (maxNumSize !== undefined && num.length > maxNumSize) throw new Error('script number overflow')
     if (num.length === 0) return new BigNumber(0n)
     if (requireMinimal) {
-      if ((num[num.length - 1] & 0x7f) === 0) {
-        if (num.length <= 1 || (num[num.length - 2] & 0x80) === 0) {
+      if ((num.at(-1) & 0x7f) === 0) {
+        if (num.length <= 1 || (num.at(-2) & 0x80) === 0) {
           throw new Error('non-minimally encoded script number')
         }
       }

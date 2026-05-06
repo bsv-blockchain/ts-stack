@@ -3,7 +3,7 @@ import bodyParser from 'body-parser'
 import { CompletedProtoWallet, MasterCertificate, PrivateKey, RequestedCertificateSet, SessionManager, VerifiableCertificate } from '@bsv/sdk'
 import { MockWallet } from './MockWallet'
 import { createAuthMiddleware } from '../index'
-import { Server, createServer } from 'http'
+import { Server, createServer } from 'node:http'
 // May be necessary when testing depending on your environment:
 // import * as crypto from 'crypto'
 // global.self = { crypto }

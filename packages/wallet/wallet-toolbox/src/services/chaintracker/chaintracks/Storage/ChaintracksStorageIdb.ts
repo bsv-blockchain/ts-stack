@@ -5,14 +5,14 @@ import {
 } from '../Api/ChaintracksStorageApi'
 import { ChaintracksStorageBase } from './ChaintracksStorageBase'
 import { LiveBlockHeader } from '../Api/BlockHeaderApi'
-import { addWork, convertBitsToWork, isMoreWork, serializeBaseBlockHeader } from '../util/blockHeaderUtilities'
+import { addWork, convertBitsToWork, isMoreWork } from '../util/blockHeaderUtilities'
+
 import { HeightRange } from '../util/HeightRange'
-import { BulkFilesReaderStorage } from '../util/BulkFilesReader'
-import { ChaintracksFetch } from '../util/ChaintracksFetch'
 import { Chain } from '../../../../sdk/types'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
 import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
-import { IDBPDatabase, IDBPObjectStore, IDBPTransaction, openDB } from 'idb'
+import { IDBPDatabase, IDBPTransaction, openDB } from 'idb'
+
 import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
 
 interface ChaintracksIdbData {

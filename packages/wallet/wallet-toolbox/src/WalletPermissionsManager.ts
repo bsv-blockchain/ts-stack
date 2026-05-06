@@ -2505,9 +2505,9 @@ export class WalletPermissionsManager implements WalletInterface {
           continue
         }
 
-        const expiryDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
-        const secLevelDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secLevelRaw)), 10) as
+        const secLevelDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secLevelRaw)), 10) as
           | 0
           | 1
           | 2
@@ -2528,7 +2528,7 @@ export class WalletPermissionsManager implements WalletInterface {
         return {
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           satoshis: out.satoshis,
           originator,
@@ -2599,9 +2599,9 @@ export class WalletPermissionsManager implements WalletInterface {
           continue
         }
 
-        const expiryDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
-        const secLevelDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secLevelRaw)), 10) as
+        const secLevelDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secLevelRaw)), 10) as
           | 0
           | 1
           | 2
@@ -2673,7 +2673,7 @@ export class WalletPermissionsManager implements WalletInterface {
           continue
         }
 
-        const expiryDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(basketRaw))
         if (basketDecoded !== basket) continue
         if (!includeExpired && this.isTokenExpired(expiryDecoded)) continue
@@ -2681,7 +2681,7 @@ export class WalletPermissionsManager implements WalletInterface {
         return {
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           satoshis: out.satoshis,
           originator,
@@ -2730,7 +2730,7 @@ export class WalletPermissionsManager implements WalletInterface {
           continue
         }
 
-        const expiryDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
         const typeDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
         const verifierDec = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
@@ -2752,7 +2752,7 @@ export class WalletPermissionsManager implements WalletInterface {
         return {
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           satoshis: out.satoshis,
           originator,
@@ -2798,12 +2798,12 @@ export class WalletPermissionsManager implements WalletInterface {
         const normalizedDomain = this.normalizeOriginator(domainDecoded)
         if (normalizedDomain !== originator) continue
         const amtDecodedStr = Utils.toUTF8(await this.decryptPermissionTokenField(amtRaw))
-        const authorizedAmount = parseInt(amtDecodedStr, 10)
+        const authorizedAmount = Number.parseInt(amtDecodedStr, 10)
 
         return {
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           satoshis: out.satoshis,
           originator,
@@ -3410,9 +3410,9 @@ export class WalletPermissionsManager implements WalletInterface {
           continue
         }
 
-        const expiryDec = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDec = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const privDec = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
-        const secDec = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secRaw)), 10) as 0 | 1 | 2
+        const secDec = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secRaw)), 10) as 0 | 1 | 2
         const protoDec = Utils.toUTF8(await this.decryptPermissionTokenField(protoRaw))
         const cptyDec = Utils.toUTF8(await this.decryptPermissionTokenField(cptyRaw))
 
@@ -3420,7 +3420,7 @@ export class WalletPermissionsManager implements WalletInterface {
         tokens.push({
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           satoshis: out.satoshis,
           originator: normalizedDomain,
@@ -3506,13 +3506,13 @@ export class WalletPermissionsManager implements WalletInterface {
         if ((originFilter != null) && normalizedDomain !== originFilter.normalized) {
           continue
         }
-        const expiryDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const basketDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(basketRaw))
         seen.add(out.outpoint)
         tokens.push({
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           satoshis: out.satoshis,
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           originator: normalizedDomain,
@@ -3571,11 +3571,11 @@ export class WalletPermissionsManager implements WalletInterface {
       const [domainRaw, amtRaw] = dec.fields
       const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
       const amtDecodedStr = Utils.toUTF8(await this.decryptPermissionTokenField(amtRaw))
-      const authorizedAmount = parseInt(amtDecodedStr, 10)
+      const authorizedAmount = Number.parseInt(amtDecodedStr, 10)
       tokens.push({
         tx: tx.toBEEF(),
         txid: out.outpoint.split('.')[0],
-        outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+        outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
         satoshis: out.satoshis,
         outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
         originator: domainDecoded,
@@ -3667,7 +3667,7 @@ export class WalletPermissionsManager implements WalletInterface {
         if ((originFilter != null) && normalizedDomain !== originFilter.normalized) {
           continue
         }
-        const expiryDecoded = parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
         const typeDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
         const verifierDec = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
@@ -3677,7 +3677,7 @@ export class WalletPermissionsManager implements WalletInterface {
         tokens.push({
           tx: tx.toBEEF(),
           txid: out.outpoint.split('.')[0],
-          outputIndex: parseInt(out.outpoint.split('.')[1], 10),
+          outputIndex: Number.parseInt(out.outpoint.split('.')[1], 10),
           satoshis: out.satoshis,
           outputScript: tx.outputs[Number(outputIndexStr)].lockingScript.toHex(),
           originator: normalizedDomain,

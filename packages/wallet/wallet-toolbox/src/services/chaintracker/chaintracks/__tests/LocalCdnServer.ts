@@ -1,8 +1,8 @@
 import express from 'express'
-import path from 'path'
-import fs from 'fs'
+import path from 'node:path'
+import fs from 'node:fs'
 import cors from 'cors'
-import http from 'http'
+import http from 'node:http'
 
 export class LocalCdnServer {
   app: express.Application

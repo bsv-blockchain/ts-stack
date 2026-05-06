@@ -87,7 +87,7 @@ export default class Capability {
   private bfrc () {
     const stringToHash = [this.title.trim() + this.authors.join(', ').trim() + (this.version?.toString() || '')].join('').trim()
     const bufferHash = new Hash.SHA256().update(new Hash.SHA256().update(stringToHash).digest()).digest()
-    const hash = bufferHash.reverse()
+    const hash = bufferHash.toReversed()
     return Buffer.from(hash).toString('hex').substring(0, 12)
   }
 }

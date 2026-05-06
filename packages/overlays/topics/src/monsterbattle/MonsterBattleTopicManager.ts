@@ -1,5 +1,6 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction, PushDrop, Utils, OP, Script } from '@bsv/sdk'
+import { Transaction, Utils, OP, Script } from '@bsv/sdk'
+
 
 export default class MonsterBattleTopicManager implements TopicManager {
   async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {

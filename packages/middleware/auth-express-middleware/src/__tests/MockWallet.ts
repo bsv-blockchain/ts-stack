@@ -76,7 +76,7 @@ export class MockWallet extends ProtoWallet
     ) {
       this.keyDeriver = new KeyDeriver(rootKeyOrKeyDeriver)
     } else {
-      throw new Error('Invalid key deriver provided')
+      throw new TypeError('Invalid key deriver provided')
     }
   }
 

@@ -225,7 +225,7 @@ export default class WalletClient implements WalletInterface {
     keyID?: KeyIDStringUnder800Bytes
     privileged?: BooleanDefaultFalse
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     forSelf?: BooleanDefaultFalse
   }): Promise<{ publicKey: PubKeyHex }> {
     await this.connectToSubstrate()
@@ -283,7 +283,7 @@ export default class WalletClient implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ ciphertext: Byte[] }> {
     await this.connectToSubstrate()
@@ -298,7 +298,7 @@ export default class WalletClient implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ plaintext: Byte[] }> {
     await this.connectToSubstrate()
@@ -313,7 +313,7 @@ export default class WalletClient implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ hmac: Byte[] }> {
     await this.connectToSubstrate()
@@ -329,7 +329,7 @@ export default class WalletClient implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {
     await this.connectToSubstrate()
@@ -345,7 +345,7 @@ export default class WalletClient implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ signature: Byte[] }> {
     await this.connectToSubstrate()
@@ -362,7 +362,7 @@ export default class WalletClient implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     forSelf?: BooleanDefaultFalse
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {

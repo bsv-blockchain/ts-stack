@@ -162,7 +162,7 @@ export class OverlayGASPStorage implements GASPStorage {
    * Also terminates graphs if the response would be empty.
    */
   private async stripAlreadyKnownInputs (response: GASPNodeResponse | undefined): Promise<GASPNodeResponse | undefined> {
-    if (typeof response === 'undefined') {
+    if (response === undefined) {
       return response
     }
     for (const inputNodeId of Object.keys(response.requestedInputs)) {

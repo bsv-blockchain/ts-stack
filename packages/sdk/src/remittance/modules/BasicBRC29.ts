@@ -1,8 +1,5 @@
-import type {
-  Invoice,
-  RemittanceOptionId,
-  Termination
-} from '../types.js'
+import type { RemittanceOptionId, Termination } from '../types.js'
+
 import type { ModuleContext } from '../types.js'
 import type { RemittanceModule } from '../RemittanceModule.js'
 import type {

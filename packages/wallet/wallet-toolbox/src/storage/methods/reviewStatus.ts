@@ -32,10 +32,10 @@ export async function reviewStatus (
       if (count > 0) {
         r.log += `${count} ${pq.log}\n`
       }
-    } catch (eu: unknown) {
+    } catch (error_: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const e = WalletError.fromUnknown(eu)
-      throw eu
+      const e = WalletError.fromUnknown(error_)
+      throw error_
     }
   }
 

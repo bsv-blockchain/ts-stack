@@ -34,7 +34,7 @@ export class ChaintracksKnexMigrations implements MigrationSource<string> {
 
   async getLatestMigration (): Promise<string> {
     const ms = await this.getMigrations()
-    return ms[ms.length - 1]
+    return ms.at(-1)!
   }
 
   static async latestMigration (): Promise<string> {

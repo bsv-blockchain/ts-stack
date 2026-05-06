@@ -1,6 +1,4 @@
-import { Chain } from '../../../../sdk'
-import { ChaintracksStorageKnex, ChaintracksStorageKnexOptions } from './ChaintracksStorageKnex'
-import knex from 'knex'
+import { ChaintracksStorageKnexOptions } from './ChaintracksStorageKnex'
 
 export interface ChaintracksStorageMemoryOptions extends ChaintracksStorageKnexOptions {
   sqliteClient: 'sqlite3' | 'better-sqlite3' | undefined

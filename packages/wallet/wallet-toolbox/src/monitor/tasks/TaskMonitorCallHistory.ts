@@ -1,4 +1,3 @@
-import { TableMonitorEvent } from '../../storage/index.client'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 

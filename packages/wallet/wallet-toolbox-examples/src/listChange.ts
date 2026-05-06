@@ -1,4 +1,3 @@
-import { Beef } from '@bsv/sdk'
 import { Setup } from '@bsv/wallet-toolbox'
 import { runArgv2Function } from './runArgv2Function'
 
@@ -31,8 +30,10 @@ Change for:
       limit: 1000
     })
 
+    const actionsNewestFirst = [...actions]
+    actionsNewestFirst.reverse()
     for (const stati of [['nosend'], ['completed', 'unproven']])
-      for (const a of actions.reverse()) {
+      for (const a of actionsNewestFirst) {
         if (stati.indexOf(a.status) >= 0) {
           for (const o of a.outputs!) {
             if (o.spendable && o.basket === 'default') {

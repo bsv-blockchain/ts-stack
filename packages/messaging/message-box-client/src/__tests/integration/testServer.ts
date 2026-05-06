@@ -1,7 +1,7 @@
-import { spawn } from 'child_process'
-import { resolve } from 'path'
+import { spawn } from 'node:child_process'
+import { resolve } from 'node:path'
 
-let serverProcess: any | null = null
+let serverProcess: any = null
 
 async function isServerRunning (): Promise<boolean> {
   try {

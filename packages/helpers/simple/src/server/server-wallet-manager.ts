@@ -8,7 +8,7 @@
  * createServerWalletHandler() returns Next.js App Router compatible { GET, POST }.
  */
 
-import { join } from 'path'
+import { join } from 'node:path'
 import { ServerWalletManagerConfig } from '../core/types'
 import { JsonFileStore } from './json-file-store'
 import {
@@ -122,7 +122,7 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
         if (action === 'request') {
           const wallet = await manager.getWallet()
           const satoshisStr = params.get('satoshis')
-          const satoshis = (satoshisStr != null && satoshisStr !== '') ? parseInt(satoshisStr, 10) : (config?.defaultRequestSatoshis ?? 1000)
+          const satoshis = (satoshisStr != null && satoshisStr !== '') ? Number.parseInt(satoshisStr, 10) : (config?.defaultRequestSatoshis ?? 1000)
           const request = wallet.createPaymentRequest({
             satoshis,
             memo: config?.requestMemo ?? 'Server wallet funding'

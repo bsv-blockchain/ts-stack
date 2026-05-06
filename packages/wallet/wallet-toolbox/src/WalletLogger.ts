@@ -1,4 +1,5 @@
-import { Beef, CreateActionArgs, WalletInterface, WalletLoggerInterface, WalletLoggerLog } from '@bsv/sdk'
+import { Beef, CreateActionArgs, WalletLoggerInterface, WalletLoggerLog } from '@bsv/sdk'
+
 import { WalletError } from './sdk/WalletError'
 
 export class WalletLogger implements WalletLoggerInterface {

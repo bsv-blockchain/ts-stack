@@ -1475,7 +1475,7 @@ export class MessageBoxClient {
       Logger.log('[MB CLIENT] Revocation broadcast succeeded. TXID:', result.txid)
 
       if (typeof result.txid !== 'string') {
-        throw new Error('Revoke failed: broadcast did not return a txid')
+        throw new TypeError('Revoke failed: broadcast did not return a txid')
       }
 
       return { txid: result.txid }

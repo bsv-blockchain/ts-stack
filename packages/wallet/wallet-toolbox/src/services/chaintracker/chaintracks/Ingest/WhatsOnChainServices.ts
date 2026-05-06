@@ -155,8 +155,8 @@ export class WhatsOnChainServices {
         return { range: 'latest', sourceUrl, fileName }
       }
       if (bits.length === 3) {
-        const fromHeight = parseInt(bits[0], 10)
-        const toHeight = parseInt(bits[1], 10)
+        const fromHeight = Number.parseInt(bits[0], 10)
+        const toHeight = Number.parseInt(bits[1], 10)
         if (Number.isInteger(fromHeight) && Number.isInteger(toHeight)) {
           return { range: { fromHeight, toHeight }, sourceUrl, fileName }
         }
@@ -191,7 +191,7 @@ export interface WocGetHeadersHeader {
 }
 
 export function wocGetHeadersHeaderToBlockHeader (h: WocGetHeadersHeader): BlockHeader {
-  const bits: number = typeof h.bits === 'string' ? parseInt(h.bits, 16) : h.bits
+  const bits: number = typeof h.bits === 'string' ? Number.parseInt(h.bits, 16) : h.bits
   if (!h.previousblockhash) {
     h.previousblockhash = '0000000000000000000000000000000000000000000000000000000000000000' // genesis
   }

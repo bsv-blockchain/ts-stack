@@ -53,7 +53,7 @@ export default class SatoshisPerKilobyte implements FeeModel {
           i
         )
       } else {
-        throw new Error(
+        throw new TypeError(
           'All inputs must have an unlocking script or an unlocking script template for sat/kb fee computation.'
         )
       }

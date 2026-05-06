@@ -229,7 +229,7 @@ export class RegistryClient {
   async removeDefinition (
     registryRecord: RegistryRecord
   ): Promise<BroadcastResponse | BroadcastFailure> {
-    if (registryRecord.txid === undefined || typeof registryRecord.outputIndex === 'undefined' || registryRecord.lockingScript === undefined) {
+    if (registryRecord.txid === undefined || registryRecord.outputIndex === undefined || registryRecord.lockingScript === undefined) {
       throw new Error('Invalid registry record. Missing txid, outputIndex, or lockingScript.')
     }
 
@@ -321,7 +321,7 @@ export class RegistryClient {
     registryRecord: RegistryRecord,
     updatedData: DefinitionData
   ): Promise<BroadcastResponse | BroadcastFailure> {
-    if (registryRecord.txid === undefined || typeof registryRecord.outputIndex === 'undefined' || registryRecord.lockingScript === undefined) {
+    if (registryRecord.txid === undefined || registryRecord.outputIndex === undefined || registryRecord.lockingScript === undefined) {
       throw new Error('Invalid registry record. Missing txid, outputIndex, or lockingScript.')
     }
 
@@ -660,7 +660,7 @@ export function deserializeWalletProtocol (str: string): WalletProtocol {
 
   // Validate that the protocol string is a string and its length is within the allowed bounds.
   if (typeof protocolString !== 'string') {
-    throw new Error('Invalid protocolID')
+    throw new TypeError('Invalid protocolID')
   }
 
   return [security as SecurityLevel, protocolString]

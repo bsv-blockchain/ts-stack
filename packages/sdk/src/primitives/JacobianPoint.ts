@@ -251,7 +251,7 @@ export default class JacobianPoint extends BasePoint {
     if (this.isInfinity()) {
       return this
     }
-    if (typeof pow === 'undefined') {
+    if (pow === undefined) {
       return this.dbl()
     }
 

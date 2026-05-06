@@ -58,7 +58,7 @@ export class BulkFilesReader {
   }
 
   private getLastFile (): BulkHeaderFileInfo | undefined {
-    return this.files[this.files.length - 1]
+    return this.files.at(-1)
   }
 
   get heightRange (): HeightRange {

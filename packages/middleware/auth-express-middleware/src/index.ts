@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
-import fs from 'fs'
+import fs from 'node:fs'
 import mime from 'mime-types'
 import {
   Utils,
@@ -15,7 +15,7 @@ import {
 
 export interface AuthRequest extends Request {
   auth?: {
-    identityKey: PubKeyHex | 'unknown'
+    identityKey: PubKeyHex
   }
 }
 // Developers may optionally provide a handler for incoming certificates.

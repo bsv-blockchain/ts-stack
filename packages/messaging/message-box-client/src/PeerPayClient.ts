@@ -22,7 +22,7 @@ function toNumberArray (tx: AtomicBEEF): number[] {
 
 function hexToBytes (hex: string): number[] {
   const matches = hex.match(/.{1,2}/g)
-  return matches != null ? matches.map(byte => parseInt(byte, 16)) : []
+  return matches != null ? matches.map(byte => Number.parseInt(byte, 16)) : []
 }
 
 function safeParse<T> (input: any): T | undefined {

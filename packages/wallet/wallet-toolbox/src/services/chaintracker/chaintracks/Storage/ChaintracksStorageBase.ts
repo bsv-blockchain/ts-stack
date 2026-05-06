@@ -17,8 +17,6 @@ import {
 } from '../util/blockHeaderUtilities'
 import { BulkFileDataManager } from '../util/BulkFileDataManager'
 import { BulkFilesReaderStorage } from '../util/BulkFilesReader'
-import { asArray } from '../../../../utility/utilityHelpers.noBuffer'
-import { deserialize } from 'v8'
 
 /**
  * Required interface methods of a Chaintracks Storage Engine implementation.
@@ -284,7 +282,8 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
     const minHeight = !bulkRange.isEmpty ? bulkRange.minHeight : before.bulk.isEmpty ? 0 : before.bulk.maxHeight + 1
     const filteredHeaders = headers.concat(priorLiveHeaders || []).filter(h => h.height >= minHeight)
-    const sortedHeaders = filteredHeaders.sort((a, b) => a.height - b.height)
+    const sortedHeaders = [...filteredHeaders]
+    sortedHeaders.sort((a, b) => a.height - b.height)
     const liveHeaders = sortedHeaders.filter(h => bulkRange.isEmpty || !bulkRange.contains(h.height))
 
     if (liveHeaders.length === sortedHeaders.length) {
@@ -296,13 +295,13 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
     for (const h of sortedHeaders) {
       const dupe = chains.find(c => {
-        const lh = c.headers[c.headers.length - 1]
+        const lh = c.headers.at(-1)!
         return lh.hash === h.hash
       })
       if (dupe != null) continue
       const chainWork = convertBitsToWork(h.bits)
       let chain = chains.find(c => {
-        const lh = c.headers[c.headers.length - 1]
+        const lh = c.headers.at(-1)!
         return lh.height + 1 === h.height && lh.hash === h.previousHash
       })
       if (chain != null) {
@@ -317,7 +316,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
       // if this header doesn't extend an existing chain,
       // it may be a branch from the previous header.
       chain = chains.find(c => {
-        const lh = c.headers[c.headers.length - 2]
+        const lh = c.headers.at(-2)!
         return lh.height + 1 === h.height && lh.hash === h.previousHash
       })
       if (chain != null) {
@@ -325,7 +324,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
         // Create a new chain with this header as the tip.
         const headers = chain.headers.slice(0, -1)
         headers.push(h)
-        const otherHeaderChainWork = convertBitsToWork(chain.headers[chain.headers.length - 1].bits)
+        const otherHeaderChainWork = convertBitsToWork(chain.headers.at(-1)!.bits)
         const newChainWork = addWork(subWork(chain.chainWork, otherHeaderChainWork), chainWork)
         const newChain = {
           headers,

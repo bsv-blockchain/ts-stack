@@ -86,7 +86,7 @@ export default class BTMSTopicManager implements TopicManager {
 
       // Validate params
       if (!Array.isArray(parsedTransaction.outputs)) {
-        throw new Error('Missing parameter: outputs')
+        throw new TypeError('Missing parameter: outputs')
       }
 
       // Build previous UTXOs from BEEF data for coins we're spending

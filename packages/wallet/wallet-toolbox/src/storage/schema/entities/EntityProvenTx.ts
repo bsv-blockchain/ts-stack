@@ -88,7 +88,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
    * @returns desirialized `MerklePath` object, value is cached.
    */
   getMerklePath (): MerklePath {
-    if (this._mp == null) this._mp = MerklePath.fromBinary(this.api.merklePath)
+    this._mp ??= MerklePath.fromBinary(this.api.merklePath)
     return this._mp
   }
 
@@ -326,8 +326,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
         })
 
         return proven
-      } catch (eu: unknown) {
-        const { code, description } = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const { code, description } = WalletError.fromUnknown(error_)
         const { attempts } = req
         req.addHistoryNote({ what: 'getMerklePathProvenError', attempts, code, description }, true)
       }

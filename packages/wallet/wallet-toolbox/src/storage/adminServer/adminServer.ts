@@ -5,7 +5,7 @@ import { Services } from '../../services/Services'
 import { MonitorDaemon } from '../../monitor/MonitorDaemon'
 import { Wallet } from '../../Wallet'
 import { renderAdminPage } from './adminUi'
-import path from 'path'
+import path from 'node:path'
 
 const express = require('express')
 const { createAuthMiddleware } = require('@bsv/auth-express-middleware')
@@ -469,7 +469,7 @@ async function rebroadcastReq (
 
   const services = context.daemon.setup?.services
   if (!(services instanceof Services)) {
-    throw new Error('Manual rebroadcast requires monitor services to be a Services instance.')
+    throw new TypeError('Manual rebroadcast requires monitor services to be a Services instance.')
   }
 
   const rawTxHex = toHex(req.rawTx)!

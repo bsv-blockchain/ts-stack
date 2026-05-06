@@ -65,7 +65,7 @@ export const addOpReturnData = (
 
   // Validate fields parameter
   if (!Array.isArray(fields)) {
-    throw new Error('Invalid fields parameter: must be an array of strings or number arrays')
+    throw new TypeError('Invalid fields parameter: must be an array of strings or number arrays')
   }
 
   if (fields.length === 0) {
@@ -79,7 +79,7 @@ export const addOpReturnData = (
 
     if (!isString) {
       if (!Array.isArray(field)) {
-        throw new Error(
+        throw new TypeError(
           `Invalid field at index ${i}: must be a string or number array, got ${typeof field}`
         )
       }
@@ -89,7 +89,7 @@ export const addOpReturnData = (
       for (let j = 0; j < sampleSize; j++) {
         const idx = Math.floor((j / sampleSize) * field.length)
         if (typeof field[idx] !== 'number') {
-          throw new Error(
+          throw new TypeError(
             `Invalid field at index ${i}: array contains non-number at position ${idx}`
           )
         }

@@ -328,7 +328,7 @@ export default class LocalKVStore {
               }
             }, this.originator)
             if (typeof signableTransaction !== 'object') {
-              throw new Error('Wallet did not return a signable transaction when expected.')
+              throw new TypeError('Wallet did not return a signable transaction when expected.')
             }
             const spends = await this.getSpends(key, outputs, pushdrop, signableTransaction.tx)
             const { txid } = await this.wallet.signAction({

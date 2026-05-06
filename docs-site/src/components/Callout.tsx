@@ -20,7 +20,7 @@ interface Props {
   children: ReactNode
 }
 
-export default function Callout({ kind = 'note', title, children }: Props) {
+export default function Callout({ kind = 'note', title, children }: Readonly<Props>) {
   return (
     <div className={'callout ' + kind}>
       <div className="callout-title">{title ?? LABELS[kind]}</div>

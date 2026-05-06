@@ -244,7 +244,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
    * @param noDupes if true, only newest note with same `what` value is retained.
    */
   addHistoryNote (note: ReqHistoryNote, noDupes?: boolean) {
-    if (this.history.notes == null) this.history.notes = []
+    this.history.notes ??= []
     if (!note.when) note.when = new Date().toISOString()
     if (noDupes) {
       // Remove any existing notes with same 'what' value and either no 'when' or an earlier 'when'

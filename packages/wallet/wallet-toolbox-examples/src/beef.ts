@@ -1,17 +1,6 @@
-import {
-  Beef,
-  InternalizeActionArgs,
-  PrivateKey,
-  PublicKey,
-  SignActionArgs
-} from '@bsv/sdk'
-import {
-  randomBytesBase64,
-  ScriptTemplateBRC29,
-  Services,
-  Setup,
-  SetupWallet
-} from '@bsv/wallet-toolbox'
+import { InternalizeActionArgs } from '@bsv/sdk'
+import { Services, Setup } from '@bsv/wallet-toolbox'
+
 
 /**
  * Example of internalizing a BRC29 wallet payment output into the receiving wallet.

@@ -1,4 +1,4 @@
-import { Server as HttpServer } from 'http'
+import { Server as HttpServer } from 'node:http'
 import { ServerOptions, Server as IoServer, Socket as IoSocket } from 'socket.io'
 import { WalletInterface, Peer, SessionManager } from '@bsv/sdk'
 import { SocketServerTransport } from './SocketServerTransport.js'

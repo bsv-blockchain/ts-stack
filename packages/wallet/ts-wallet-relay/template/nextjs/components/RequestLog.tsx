@@ -7,7 +7,7 @@ interface Props {
   entries: RequestLogEntry[]
 }
 
-export function RequestLog({ entries }: Props) {
+export function RequestLog({ entries }: Readonly<Props>) {
   return (
     <RequestLogBase
       entries={entries}

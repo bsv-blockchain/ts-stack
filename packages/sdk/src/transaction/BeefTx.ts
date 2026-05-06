@@ -105,7 +105,7 @@ export default class BeefTx {
     } else if (tx instanceof Transaction) {
       this._tx = tx
     } else {
-      throw new Error('Invalid transaction data type')
+      throw new TypeError('Invalid transaction data type')
     }
     this.bumpIndex = bumpIndex
     this.updateInputTxids()

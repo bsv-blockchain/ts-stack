@@ -1,39 +1,5 @@
-/**
- * BTMS - Basic Token Management System
- * 
- * Main class for managing BTMS tokens. Provides high-level methods for:
- * - Issuing new tokens
- * - Sending tokens to recipients
- * - Receiving tokens from others
- * - Querying token balances and assets
- * 
- */
+import { WalletClient, Transaction, Beef, Utils, TopicBroadcaster, LookupResolver, LockingScript, CreateActionArgs, CreateActionOutput, ListOutputsResult, ListOutputsArgs, ListActionsResult, TXIDHexString, HexString, PubKeyHex, LabelStringUnder300Bytes, OutputTagStringUnder300Bytes, Random, WalletInterface, CommsLayer, AtomicBEEF } from '@bsv/sdk'
 
-import {
-  WalletClient,
-  Transaction,
-  Beef,
-  Utils,
-  TopicBroadcaster,
-  LookupResolver,
-  LockingScript,
-  CreateActionArgs,
-  CreateActionOutput,
-  ListOutputsResult,
-  ListOutputsArgs,
-  ListActionsResult,
-  TXIDHexString,
-  HexString,
-  PubKeyHex,
-  OutpointString,
-  LabelStringUnder300Bytes,
-  OutputTagStringUnder300Bytes,
-  PositiveIntegerOrZero,
-  Random,
-  WalletInterface,
-  CommsLayer,
-  AtomicBEEF
-} from '@bsv/sdk'
 
 import { BTMSToken } from './BTMSToken.js'
 import { parseCustomInstructions, decodeOutputAmount, decodeInputAmount } from './utils.js'

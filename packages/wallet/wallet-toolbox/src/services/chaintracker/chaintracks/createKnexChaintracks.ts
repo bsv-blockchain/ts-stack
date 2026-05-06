@@ -1,4 +1,5 @@
-import { Knex, knex as makeKnex } from 'knex'
+import { Knex } from 'knex'
+
 import { Chain } from '../../../sdk'
 import { Chaintracks } from './Chaintracks'
 import { ChaintracksFetch } from './util/ChaintracksFetch'

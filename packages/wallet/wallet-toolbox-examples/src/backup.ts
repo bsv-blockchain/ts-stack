@@ -1,4 +1,5 @@
-import { sdk, Setup, SetupEnv, SetupWallet } from '@bsv/wallet-toolbox'
+import { Setup, SetupEnv, SetupWallet } from '@bsv/wallet-toolbox'
+
 import { runArgv2Function } from './runArgv2Function'
 
 /**

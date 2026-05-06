@@ -1,6 +1,7 @@
 import { ProtoMapStorageManager } from './ProtoMapStorageManager.js'
 import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
-import { PushDrop, Utils, WalletProtocol } from '@bsv/sdk'
+import { PushDrop, Utils } from '@bsv/sdk'
+
 import { ProtoMapQuery, ProtoMapRegistration } from './types.js'
 import { Db } from 'mongodb'
 import { deserializeWalletProtocol } from './ProtoMapTopicManager.js'

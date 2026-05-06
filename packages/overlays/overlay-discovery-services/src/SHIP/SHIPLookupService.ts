@@ -1,4 +1,5 @@
-import { LookupService, LookupQuestion, LookupAnswer, LookupFormula, AdmissionMode, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
+import { LookupService, LookupQuestion, LookupFormula, AdmissionMode, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
+
 import { SHIPStorage } from './SHIPStorage.js'
 import { PushDrop, Utils } from '@bsv/sdk'
 import { SHIPQuery } from '../types.js'
@@ -69,13 +70,13 @@ export class SHIPLookupService implements LookupService {
         const { limit, skip, sortOrder } = query
 
         // Validate pagination parameters
-        if (typeof limit !== 'undefined' && (typeof limit !== 'number' || limit < 0)) {
+        if (limit !== undefined && (typeof limit !== 'number' || limit < 0)) {
           throw new Error('query.limit must be a positive number if provided')
         }
-        if (typeof skip !== 'undefined' && (typeof skip !== 'number' || skip < 0)) {
+        if (skip !== undefined && (typeof skip !== 'number' || skip < 0)) {
           throw new Error('query.skip must be a non-negative number if provided')
         }
-        if (typeof sortOrder !== 'undefined' && sortOrder !== 'asc' && sortOrder !== 'desc') {
+        if (sortOrder !== undefined && sortOrder !== 'asc' && sortOrder !== 'desc') {
           throw new Error('query.sortOrder must be "asc" or "desc" if provided')
         }
 
@@ -86,24 +87,24 @@ export class SHIPLookupService implements LookupService {
       const { domain, topics, identityKey, limit, skip, sortOrder } = query
 
       // Validate query parameters
-      if (typeof domain !== 'string' && typeof domain !== 'undefined') {
+      if (typeof domain !== 'string' && domain !== undefined) {
         throw new Error('query.domain must be a string if provided')
       }
-      if (!Array.isArray(topics) && typeof topics !== 'undefined') {
+      if (!Array.isArray(topics) && topics !== undefined) {
         throw new Error('query.topics must be an array of strings if provided')
       }
-      if (typeof identityKey !== 'string' && typeof identityKey !== 'undefined') {
+      if (typeof identityKey !== 'string' && identityKey !== undefined) {
         throw new Error('query.identityKey must be a string if provided')
       }
 
       // Validate pagination parameters
-      if (typeof limit !== 'undefined' && (typeof limit !== 'number' || limit < 0)) {
+      if (limit !== undefined && (typeof limit !== 'number' || limit < 0)) {
         throw new Error('query.limit must be a positive number if provided')
       }
-      if (typeof skip !== 'undefined' && (typeof skip !== 'number' || skip < 0)) {
+      if (skip !== undefined && (typeof skip !== 'number' || skip < 0)) {
         throw new Error('query.skip must be a non-negative number if provided')
       }
-      if (typeof sortOrder !== 'undefined' && sortOrder !== 'asc' && sortOrder !== 'desc') {
+      if (sortOrder !== undefined && sortOrder !== 'asc' && sortOrder !== 'desc') {
         throw new Error('query.sortOrder must be "asc" or "desc" if provided')
       }
 

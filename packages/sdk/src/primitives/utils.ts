@@ -797,7 +797,7 @@ export const minimallyEncode = (buf: number[]): number[] => {
   }
 
   // If the last byte is not 0x00 or 0x80, we are minimally encoded.
-  const last = buf[buf.length - 1]
+  const last = buf.at(-1)
   if ((last & 0x7f) !== 0) {
     return buf
   }
@@ -809,7 +809,7 @@ export const minimallyEncode = (buf: number[]): number[] => {
   }
 
   // If the next byte has it sign bit set, then we are minimaly encoded.
-  if ((buf[buf.length - 2] & 0x80) !== 0) {
+  if ((buf.at(-2) & 0x80) !== 0) {
     return buf
   }
 

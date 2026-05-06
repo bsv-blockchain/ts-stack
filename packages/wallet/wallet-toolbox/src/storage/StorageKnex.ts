@@ -56,7 +56,8 @@ import {
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
-import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
+import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
+
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
@@ -998,7 +999,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           console.error('Migration returned falsy result await this.knex.migrate.down(config)')
           break
         }
-      } catch (eu: unknown) {
+      } catch (error_: unknown) {
         break
       }
     }

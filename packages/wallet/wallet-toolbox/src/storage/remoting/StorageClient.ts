@@ -39,7 +39,6 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
 import { EntityTimeStamp } from '../../sdk/types'
-import { WalletError } from '../../sdk/WalletError'
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { logWalletError } from '../../WalletLogger'
 
@@ -115,9 +114,9 @@ export class StorageClient implements WalletStorageProvider {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         })
-      } catch (eu: unknown) {
-        logWalletError(eu, logger, 'error requesting remote service')
-        throw eu
+      } catch (error_: unknown) {
+        logWalletError(error_, logger, 'error requesting remote service')
+        throw error_
       }
 
       if (!response.ok) {
@@ -138,9 +137,9 @@ export class StorageClient implements WalletStorageProvider {
       }
 
       return json.result
-    } catch (eu: unknown) {
-      logWalletError(eu, logger, 'error setting up request to remote service')
-      throw eu
+    } catch (error_: unknown) {
+      logWalletError(error_, logger, 'error setting up request to remote service')
+      throw error_
     } finally {
       if (logger != null) {
         // Restore original logger in params

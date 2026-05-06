@@ -40,7 +40,7 @@ export class BanService {
    */
   private sanitize (value: unknown): string {
     if (typeof value !== 'string') {
-      throw new Error('Invalid input: expected a string value')
+      throw new TypeError('Invalid input: expected a string value')
     }
     return value
   }

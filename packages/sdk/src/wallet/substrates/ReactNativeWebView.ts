@@ -20,7 +20,7 @@ export default class ReactNativeWebView extends InvokableWalletBase {
   constructor(domain: string = '*') {
     super()
     if (typeof window !== 'object') {
-      throw new Error('The XDM substrate requires a global window object.')
+      throw new TypeError('The XDM substrate requires a global window object.')
     }
     if (!(window as unknown as ReactNativeWindow).hasOwnProperty("ReactNativeWebView")) {
       throw new Error(
@@ -28,7 +28,7 @@ export default class ReactNativeWebView extends InvokableWalletBase {
       )
     }
     if (typeof (window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage !== 'function') {
-      throw new Error(
+      throw new TypeError(
         'The window.ReactNativeWebView property does not seem to support postMessage calls.'
       )
     }

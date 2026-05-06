@@ -1,4 +1,5 @@
-import { Random, Transaction, Script, Utils } from '@bsv/sdk'
+import { Random, Transaction, Script } from '@bsv/sdk'
+
 import { MockChainStorage, MockChainBlockHeaderRow } from './MockChainStorage'
 import { computeMerkleRoot } from './merkleTree'
 import { toBinaryBaseBlockHeader } from '../services/Services'
@@ -25,7 +26,7 @@ export function createCoinbaseTransaction (height: number): Transaction {
       h >>= 8
     }
     // If the high bit is set, add a 0x00 byte to keep it positive
-    if (heightBytes[heightBytes.length - 1] & 0x80) {
+    if (heightBytes.at(-1)! & 0x80) {
       heightBytes.push(0)
     }
   }

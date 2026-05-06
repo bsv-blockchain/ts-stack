@@ -155,7 +155,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     keyID?: KeyIDStringUnder800Bytes
     privileged?: BooleanDefaultFalse
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     forSelf?: BooleanDefaultFalse
   }): Promise<{ publicKey: PubKeyHex }> {
     return await this.api('getPublicKey', args) as { publicKey: PubKeyHex }
@@ -219,7 +219,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ ciphertext: Byte[] }> {
     return await this.api('encrypt', args) as { ciphertext: Byte[] }
@@ -231,7 +231,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ plaintext: Byte[] }> {
     return await this.api('decrypt', args) as { plaintext: Byte[] }
@@ -243,7 +243,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ hmac: Byte[] }> {
     return await this.api('createHmac', args) as { hmac: Byte[] }
@@ -256,7 +256,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {
     return await this.api('verifyHmac', args) as { valid: true }
@@ -269,7 +269,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     privileged?: BooleanDefaultFalse
   }): Promise<{ signature: Byte[] }> {
     return await this.api('createSignature', args) as { signature: Byte[] }
@@ -283,7 +283,7 @@ export default class HTTPWalletJSON implements WalletInterface {
     protocolID: [SecurityLevel, ProtocolString5To400Bytes]
     keyID: KeyIDStringUnder800Bytes
     privilegedReason?: DescriptionString5to50Bytes
-    counterparty?: PubKeyHex | 'self' | 'anyone'
+    counterparty?: PubKeyHex
     forSelf?: BooleanDefaultFalse
     privileged?: BooleanDefaultFalse
   }): Promise<{ valid: true }> {

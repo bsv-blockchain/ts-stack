@@ -2085,7 +2085,7 @@ export default class WalletWireProcessor implements WalletWire {
 
   private decodeCounterparty(
     reader: Utils.Reader
-  ): string | 'self' | 'anyone' | undefined {
+  ): string | undefined {
     const counterpartyFlag = reader.readUInt8()
     if (counterpartyFlag === 11) {
       return 'self'

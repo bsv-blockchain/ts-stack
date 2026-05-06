@@ -72,7 +72,7 @@ export const verify = (
     const verifierRest = reader.read(32)
     const verifierDER = toHex([verifierFirst, ...verifierRest])
     if (typeof recipient !== 'object') {
-      throw new Error(
+      throw new TypeError(
         `This signature can only be verified with knowledge of a specific private key. The associated public key is: ${verifierDER}`
       )
     }

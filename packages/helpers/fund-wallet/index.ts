@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { randomBytes } from 'crypto'
+import { randomBytes } from 'node:crypto'
 import chalk from 'chalk'
-import { createInterface } from 'readline';
+import { createInterface } from 'node:readline';
 import { WalletClient, PrivateKey, PublicKey, P2PKH, KeyDeriver, WalletInterface, InternalizeActionArgs } from '@bsv/sdk'
 import { Wallet, WalletStorageManager, WalletSigner, Services, StorageClient } from '@bsv/wallet-toolbox'
 

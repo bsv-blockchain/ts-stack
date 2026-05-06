@@ -1,4 +1,4 @@
-import { WalletProtocol, WalletCounterparty, ScriptTemplate, WalletInterface, LockingScript, Transaction, UnlockingScript, Script, CreateActionOptions, CreateActionResult, WalletClient } from '@bsv/sdk';
+import { WalletProtocol, WalletCounterparty, ScriptTemplate, WalletInterface, LockingScript, Transaction, UnlockingScript, Script, CreateActionOptions, WalletClient } from '@bsv/sdk';
 
 /**
  * Parameters for deriving a public key from a BRC-100 wallet.
@@ -837,7 +837,7 @@ declare class InputBuilder {
        * @param params - Build parameters (optional)
        * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
        */
-    build(params?: BuildParams): Promise<CreateActionResult | any>;
+    build(params?: BuildParams): Promise<any>;
     /**
        * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
        * Equivalent to calling build({ preview: true }).
@@ -949,7 +949,7 @@ declare class OutputBuilder {
        * @param params - Build parameters (optional)
        * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
        */
-    build(params?: BuildParams): Promise<CreateActionResult | any>;
+    build(params?: BuildParams): Promise<any>;
     /**
        * Preview the transaction without executing it (convenience proxy to TransactionTemplate).
        * Equivalent to calling build({ preview: true }).
@@ -1093,7 +1093,7 @@ declare class TransactionBuilder {
        * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
        * @throws Error if no outputs are configured or if locking script creation fails
        */
-    build(params?: BuildParams): Promise<CreateActionResult | any>;
+    build(params?: BuildParams): Promise<any>;
     /**
        * Preview the transaction without executing it.
        * Equivalent to calling build({ preview: true }).
@@ -1114,7 +1114,7 @@ declare class TransactionBuilder {
        * @throws Error if to is not a string
        * @throws Error if satoshis is not a non-negative number
        */
-    pay(to: string, satoshis: number): Promise<CreateActionResult | any>;
+    pay(to: string, satoshis: number): Promise<any>;
 }
 
 /**

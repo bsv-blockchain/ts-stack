@@ -307,7 +307,7 @@ class CBC {
   }
 
   public static blockBufs2Buf (blockBufs: number[][]): number[] {
-    let last = blockBufs[blockBufs.length - 1]
+    let last = blockBufs.at(-1)
     last = CBC.pkcs7Unpad(last)
     blockBufs[blockBufs.length - 1] = last
 
@@ -437,7 +437,7 @@ class CBC {
   }
 
   public static pkcs7Unpad (paddedbuf: number[]): number[] {
-    const padlength = paddedbuf[paddedbuf.length - 1]
+    const padlength = paddedbuf.at(-1)
     const padbuf = paddedbuf.slice(
       paddedbuf.length - padlength,
       paddedbuf.length

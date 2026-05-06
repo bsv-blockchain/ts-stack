@@ -6,7 +6,7 @@ interface Props {
   height?: number
 }
 
-export default function AsyncApiEmbed({ slug, title, height = 900 }: Props) {
+export default function AsyncApiEmbed({ slug, title, height = 900 }: Readonly<Props>) {
   const labels: Record<string, string> = {
     brc29: 'BRC-29 Peer Payment',
     brc31: 'BRC-31 Auth Handshake',

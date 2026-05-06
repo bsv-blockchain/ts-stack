@@ -198,7 +198,7 @@ export default class Mnemonic {
       if (mnemonic !== '') {
         mnemonic = mnemonic + this.Wordlist.space
       }
-      const wi = parseInt(bin.slice(i * 11, (i + 1) * 11), 2)
+      const wi = Number.parseInt(bin.slice(i * 11, (i + 1) * 11), 2)
       mnemonic = mnemonic + this.Wordlist.value[wi]
     }
 
@@ -240,7 +240,7 @@ export default class Mnemonic {
     const buf: number[] = []
 
     for (let i = 0; i < nonhashBits.length / 8; i++) {
-      buf.push(parseInt(bin.slice(i * 8, (i + 1) * 8), 2))
+      buf.push(Number.parseInt(bin.slice(i * 8, (i + 1) * 8), 2))
     }
     const hash = Hash.sha256(buf.slice(0, nonhashBits.length / 8))
     let expectedHashBits = hash[0].toString(2)
@@ -266,7 +266,7 @@ export default class Mnemonic {
       )
     }
     if (typeof passphrase !== 'string') {
-      throw new Error('passphrase must be a string or undefined')
+      throw new TypeError('passphrase must be a string or undefined')
     }
     mnemonic = mnemonic.normalize('NFKD')
     passphrase = passphrase.normalize('NFKD')

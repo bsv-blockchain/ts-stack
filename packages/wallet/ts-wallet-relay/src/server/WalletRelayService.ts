@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import type { Server } from 'http'
+import type { Server } from 'node:http'
 
 /**
  * Minimal Express-compatible router interface.

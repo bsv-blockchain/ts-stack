@@ -651,7 +651,7 @@ var addOpReturnData = (script, fields) => {
     throw new Error("Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.");
   }
   if (!Array.isArray(fields)) {
-    throw new Error("Invalid fields parameter: must be an array of strings or number arrays");
+    throw new TypeError("Invalid fields parameter: must be an array of strings or number arrays");
   }
   if (fields.length === 0) {
     throw new Error("At least one data field is required for OP_RETURN");
@@ -661,7 +661,7 @@ var addOpReturnData = (script, fields) => {
     const isString = typeof field === "string";
     if (!isString) {
       if (!Array.isArray(field)) {
-        throw new Error(
+        throw new TypeError(
           `Invalid field at index ${i}: must be a string or number array, got ${typeof field}`
         );
       }
@@ -669,7 +669,7 @@ var addOpReturnData = (script, fields) => {
       for (let j = 0; j < sampleSize; j++) {
         const idx = Math.floor(j / sampleSize * field.length);
         if (typeof field[idx] !== "number") {
-          throw new Error(
+          throw new TypeError(
             `Invalid field at index ${i}: array contains non-number at position ${idx}`
           );
         }
@@ -751,7 +751,7 @@ function validateInput(input, functionName) {
   }
   const inputType = typeof input;
   if (Array.isArray(input)) {
-    throw new Error(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`);
+    throw new TypeError(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`);
   }
   if (inputType !== "string" && inputType !== "object") {
     throw new Error(`${functionName}: Input must be a LockingScript, Script, or hex string, got ${inputType}`);
@@ -759,7 +759,7 @@ function validateInput(input, functionName) {
   if (inputType === "object") {
     const scriptObj = input;
     if (typeof scriptObj.toHex !== "function" || typeof scriptObj.toASM !== "function") {
-      throw new Error(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`);
+      throw new TypeError(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`);
     }
   }
   if (inputType === "string") {
@@ -1364,21 +1364,21 @@ var TransactionBuilder = class {
     }
     if (opts.noSendChange !== void 0) {
       if (!Array.isArray(opts.noSendChange)) {
-        throw new Error("noSendChange must be an array");
+        throw new TypeError("noSendChange must be an array");
       }
       for (let i = 0; i < opts.noSendChange.length; i++) {
         if (typeof opts.noSendChange[i] !== "string") {
-          throw new Error(`noSendChange[${i}] must be a string (outpoint format)`);
+          throw new TypeError(`noSendChange[${i}] must be a string (outpoint format)`);
         }
       }
     }
     if (opts.sendWith !== void 0) {
       if (!Array.isArray(opts.sendWith)) {
-        throw new Error("sendWith must be an array");
+        throw new TypeError("sendWith must be an array");
       }
       for (let i = 0; i < opts.sendWith.length; i++) {
         if (typeof opts.sendWith[i] !== "string") {
-          throw new Error(`sendWith[${i}] must be a string (hex txid)`);
+          throw new TypeError(`sendWith[${i}] must be a string (hex txid)`);
         }
       }
     }

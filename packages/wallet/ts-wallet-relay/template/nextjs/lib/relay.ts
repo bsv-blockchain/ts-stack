@@ -11,11 +11,11 @@
  * hot-reloads (module code re-runs; the HTTP server does not).
  */
 
-import type { Server } from 'http'
+import type { Server } from 'node:http'
 import { WalletClient } from '@bsv/sdk'
 import { WalletRelayService } from '@bsv/wallet-relay'
 
-const g = global as typeof globalThis & { __walletRelay?: WalletRelayService }
+const g = globalThis as typeof globalThis & { __walletRelay?: WalletRelayService }
 
 export function initRelay(server: Server): WalletRelayService {
   if (g.__walletRelay) return g.__walletRelay

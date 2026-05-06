@@ -301,7 +301,7 @@ export class GASP implements GASPRemote {
     const [txid, index] = outpoint.split('.')
     const result = {
       txid,
-      outputIndex: parseInt(index, 10)
+      outputIndex: Number.parseInt(index, 10)
     }
     this.debugLog(`Deconstructed 36-byte structure: ${outpoint} into txid: ${txid}, outputIndex: ${result.outputIndex}`)
     return result

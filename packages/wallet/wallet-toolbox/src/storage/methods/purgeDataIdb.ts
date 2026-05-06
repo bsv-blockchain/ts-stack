@@ -1,5 +1,3 @@
-import { Beef } from '@bsv/sdk'
-import { Knex } from 'knex'
 import { StorageIdb } from '../StorageIdb'
 import { PurgeParams, PurgeResults, TrxToken } from '../../sdk/WalletStorage.interfaces'
 

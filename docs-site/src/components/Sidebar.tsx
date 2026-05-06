@@ -6,7 +6,7 @@ interface Props {
   className?: string
 }
 
-export default function Sidebar({ className }: Props) {
+export default function Sidebar({ className }: Readonly<Props>) {
   const { pathname } = useLocation()
 
   return (

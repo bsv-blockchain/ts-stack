@@ -5,8 +5,7 @@ import { BulkIngestorBase } from './BulkIngestorBase'
 import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
 import { HeightRange, HeightRanges } from '../util/HeightRange'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
-import { WalletError, WERR_INVALID_PARAMETER } from '../../../../sdk'
-import { validateBulkFileData } from '../util/blockHeaderUtilities'
+import { WERR_INVALID_PARAMETER } from '../../../../sdk'
 import { selectBulkHeaderFiles } from '../util/BulkFileDataManager'
 
 export interface BulkIngestorCDNOptions extends BulkIngestorBaseOptions {

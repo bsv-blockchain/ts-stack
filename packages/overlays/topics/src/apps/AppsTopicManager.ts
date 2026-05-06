@@ -38,7 +38,7 @@ export default class AppsTopicManager implements TopicManager {
             typeof metadata.publisher !== 'string' ||
             typeof metadata.release_date !== 'string'
           ) {
-            throw new Error('App metadata missing required fields')
+            throw new TypeError('App metadata missing required fields')
           }
 
           const isLinked = await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, metadata.publisher, result.fields)

@@ -90,7 +90,7 @@ export default class RPuzzle implements ScriptTemplate {
   } {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
-        if (typeof privateKey === 'undefined') {
+        if (privateKey === undefined) {
           privateKey = PrivateKey.fromRandom()
         }
         let signatureScope = TransactionSignature.SIGHASH_FORKID
@@ -109,7 +109,7 @@ export default class RPuzzle implements ScriptTemplate {
         const otherInputs = [...tx.inputs]
         const [input] = otherInputs.splice(inputIndex, 1)
         if (typeof input.sourceTransaction !== 'object') {
-          throw new Error(
+          throw new TypeError(
             'The source transaction is needed for transaction signing.'
           )
         }

@@ -22,8 +22,8 @@ export default class ScriptEvaluationError extends Error {
     stackMem: number
     altStackMem: number
   }) {
-    const stackHex = params.stackState.map(s => s != null && typeof s.length !== 'undefined' ? toHex(s) : (s === null || s === undefined ? 'null/undef' : 'INVALID_STACK_ITEM')).join(', ')
-    const altStackHex = params.altStackState.map(s => s != null && typeof s.length !== 'undefined' ? toHex(s) : (s === null || s === undefined ? 'null/undef' : 'INVALID_STACK_ITEM')).join(', ')
+    const stackHex = params.stackState.map(s => s != null && s.length !== undefined ? toHex(s) : (s === null || s === undefined ? 'null/undef' : 'INVALID_STACK_ITEM')).join(', ')
+    const altStackHex = params.altStackState.map(s => s != null && s.length !== undefined ? toHex(s) : (s === null || s === undefined ? 'null/undef' : 'INVALID_STACK_ITEM')).join(', ')
     const pcInfo = `Context: ${params.context}, PC: ${params.programCounter}`
     const stackInfo = `Stack: [${stackHex}] (len: ${params.stackState.length}, mem: ${params.stackMem})`
     const altStackInfo = `AltStack: [${altStackHex}] (len: ${params.altStackState.length}, mem: ${params.altStackMem})`

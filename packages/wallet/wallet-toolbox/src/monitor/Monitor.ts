@@ -26,7 +26,8 @@ import { WERR_BAD_REQUEST, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { WalletError } from '../sdk/WalletError'
 import { BlockHeader, WalletServices } from '../sdk/WalletServices.interfaces'
 import { Services } from '../services/Services'
-import { ChaintracksClientApi, ReorgListener } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
+import { ChaintracksClientApi } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
+
 import { Chaintracks } from '../services/chaintracker/chaintracks/Chaintracks'
 
 export type MonitorStorage = WalletStorageManager
@@ -304,8 +305,8 @@ export class Monitor {
       for (const t of this._tasks) {
         try {
           await t.asyncSetup()
-        } catch (eu: unknown) {
-          const e = WalletError.fromUnknown(eu)
+        } catch (error_: unknown) {
+          const e = WalletError.fromUnknown(error_)
           const details = `monitor task ${t.name} asyncSetup error ${e.code} ${e.description}`
           console.log(details)
           await this.logEvent('error0', details)
@@ -321,8 +322,8 @@ export class Monitor {
       for (const t of this._tasks) {
         try {
           if (t.trigger(now).run) tasksToRun.push(t)
-        } catch (eu: unknown) {
-          const e = WalletError.fromUnknown(eu)
+        } catch (error_: unknown) {
+          const e = WalletError.fromUnknown(error_)
           const details = `monitor task ${t.name} trigger error ${e.code} ${e.description}`
           console.log(details)
           await this.logEvent('error0', details)
@@ -342,8 +343,8 @@ export class Monitor {
               await this.logEvent(ttr.name, log)
             }
           }
-        } catch (eu: unknown) {
-          const e = WalletError.fromUnknown(eu)
+        } catch (error_: unknown) {
+          const e = WalletError.fromUnknown(error_)
           const details = `monitor task ${ttr.name} runTask error ${e.code} ${e.description}\n${e.stack}`
           console.log(details)
           await this.logEvent('error1', details)

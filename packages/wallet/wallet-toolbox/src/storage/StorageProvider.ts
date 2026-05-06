@@ -358,8 +358,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
             await this.mergeReqToBeefToShareExternally(d.req!, r.beef, knownTxids, trx)
           }
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         d.error = `${e.name}: ${e.message}`
       }
     }
@@ -425,8 +425,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           await req1.updateStorageDynamicProperties(this, trx)
         }
         break
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
 
@@ -728,8 +728,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
                 status: 'completed'
               })
               req.addHistoryNote({ what: 'notifyTxOfProof', transactionId: id })
-            } catch (eu: unknown) {
-              const { code, description } = WalletError.fromUnknown(eu)
+            } catch (error_: unknown) {
+              const { code, description } = WalletError.fromUnknown(error_)
               const { provenTxId } = proven
               req.addHistoryNote({ what: 'notifyTxOfProofError', id, provenTxId, code, description })
             }

@@ -124,7 +124,9 @@ export class BulkFileDataManager {
     } else {
       // Bfds win if they have greater CDN coverage
       // Replace all sfs with bfds
-      for (const s of sfs.reverse()) await this.storage.deleteBulkFile(s.fileId!)
+      const reversedFiles = [...sfs]
+      reversedFiles.reverse()
+      for (const s of reversedFiles) await this.storage.deleteBulkFile(s.fileId!)
       for (const bfd of this.bfds) {
         await this.ensureData(bfd)
         bfd.fileId = await this.storage.insertBulkFile(bfdToInfo(bfd, true))
@@ -345,7 +347,7 @@ export class BulkFileDataManager {
     return await this.lock.withReadLock(async () => {
       if (this.bfds.length === 0) return HeightRange.empty
       const first = this.bfds[0]
-      const last = this.bfds[this.bfds.length - 1]
+      const last = this.bfds.at(-1)!
       return new HeightRange(first.firstHeight, last.firstHeight + last.count - 1)
     })
   }
@@ -520,7 +522,7 @@ export class BulkFileDataManager {
   private validateBfdForAdd (bfd: BulkFileData): void {
     if (this.bfds.length === 0 && bfd.firstHeight !== 0) { throw new WERR_INVALID_PARAMETER('firstHeight', '0 for the first file') }
     if (this.bfds.length > 0) {
-      const last = this.bfds[this.bfds.length - 1]
+      const last = this.bfds.at(-1)!
       if (bfd.firstHeight !== last.firstHeight + last.count) { throw new WERR_INVALID_PARAMETER('firstHeight', 'the last file\'s firstHeight + count') }
       if (bfd.prevHash !== last.lastHash || bfd.prevChainWork !== last.lastChainWork) { throw new WERR_INVALID_PARAMETER('prevHash/prevChainWork', 'the last file\'s lastHash/lastChainWork') }
     }
@@ -772,7 +774,8 @@ export class BulkFileDataManager {
     const withData = this.bfds.filter(bfd => (bfd.data != null) && (bfd.fileId || bfd.sourceUrl))
     let countToRelease = withData.length - this.maxRetained
     if (countToRelease <= 0) return
-    const sorted = withData.sort((a, b) => a.mru - b.mru)
+    const sorted = [...withData]
+    sorted.sort((a, b) => a.mru - b.mru)
     while (countToRelease-- > 0 && sorted.length > 0) {
       const oldest = sorted.shift()!
       // Release the least recently used data

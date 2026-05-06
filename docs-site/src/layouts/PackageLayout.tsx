@@ -8,7 +8,7 @@ interface Props {
   children: ReactNode
 }
 
-export default function PackageLayout({ meta, children }: Props) {
+export default function PackageLayout({ meta, children }: Readonly<Props>) {
   const npm = meta?.npm
   const version = meta?.version
   const apiSlug = npm?.replace('@bsv/', '')

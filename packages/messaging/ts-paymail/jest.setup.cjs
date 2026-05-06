@@ -1,2 +1,2 @@
 const fetch = require('cross-fetch');
-global.fetch = fetch;
+globalThis.fetch = fetch;

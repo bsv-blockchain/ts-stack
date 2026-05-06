@@ -1,4 +1,5 @@
-import { PrivateKey, KeyDeriver, PublicKey, KeyDeriverApi } from '@bsv/sdk'
+import { PrivateKey, PublicKey, KeyDeriverApi } from '@bsv/sdk'
+
 import { Wallet } from './Wallet'
 import { Chain } from './sdk/types'
 import { WalletStorageManager } from './storage/WalletStorageManager'

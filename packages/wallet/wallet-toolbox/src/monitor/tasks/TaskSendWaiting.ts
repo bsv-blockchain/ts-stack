@@ -1,4 +1,5 @@
-import { ReviewActionResult, SendWithResult } from '@bsv/sdk'
+import { SendWithResult } from '@bsv/sdk'
+
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { attemptToPostReqsToNetwork } from '../../storage/methods/attemptToPostReqsToNetwork'

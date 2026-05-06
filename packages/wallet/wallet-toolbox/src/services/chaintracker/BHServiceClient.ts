@@ -139,8 +139,8 @@ export class BHServiceClient implements ChaintracksServiceClient {
         const v = await r.json() as T
         if (!v) return undefined
         return v
-      } catch (eu: unknown) {
-        e = eu as Error
+      } catch (error_: unknown) {
+        e = error_ as Error
       }
       if (e && e.name !== 'ECONNRESET') break
     }

@@ -153,7 +153,7 @@ export default class TransactionSignature extends Signature {
       const writer = new Writer()
 
       for (const input of inputs) {
-        if (typeof input.sourceTXID === 'undefined') {
+        if (input.sourceTXID === undefined) {
           if (input.sourceTransaction == null) {
             throw new Error('Missing sourceTransaction for input')
           }
@@ -185,7 +185,7 @@ export default class TransactionSignature extends Signature {
     function getOutputsHash (outputIndex?: number): number[] {
       const writer = new Writer()
 
-      if (typeof outputIndex === 'undefined') {
+      if (outputIndex === undefined) {
         for (const output of params.outputs) {
           const satoshis = output.satoshis ?? 0 // Default to 0 if undefined
           writer.writeUInt64LE(satoshis)
@@ -261,7 +261,7 @@ export default class TransactionSignature extends Signature {
       } else {
         hashOutputs = getOutputsHash(key)
         if (cache != null) {
-          if (cache.hashOutputsSingle == null) cache.hashOutputsSingle = new Map()
+          cache.hashOutputsSingle ??= new Map()
           cache.hashOutputsSingle.set(key, hashOutputs)
         }
       }
@@ -349,7 +349,7 @@ export default class TransactionSignature extends Signature {
       const scope = 1
       return new TransactionSignature(r, s, scope)
     }
-    const scope = buf[buf.length - 1]
+    const scope = buf.at(-1)
     const derbuf = buf.slice(0, buf.length - 1)
     const tempSig = Signature.fromDER(derbuf)
     return new TransactionSignature(tempSig.r, tempSig.s, scope)

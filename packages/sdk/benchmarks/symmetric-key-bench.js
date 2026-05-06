@@ -1,4 +1,4 @@
-import { randomBytes, randomFillSync } from 'crypto'
+import { randomBytes, randomFillSync } from 'node:crypto'
 // Provide browser-like crypto for Random
 globalThis.self = { crypto: { getRandomValues: (arr) => randomFillSync(arr) } }
 import SymmetricKey from '../dist/esm/src/primitives/SymmetricKey.js'

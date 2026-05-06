@@ -8,7 +8,7 @@ interface Props {
   children: ReactNode
 }
 
-export default function MetaLayout({ meta, children }: Props) {
+export default function MetaLayout({ meta, children }: Readonly<Props>) {
   return (
     <div className={styles.root}>
       {children}

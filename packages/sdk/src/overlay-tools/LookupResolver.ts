@@ -119,7 +119,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
 
   constructor (httpClient = defaultFetch, allowHTTP: boolean = false) {
     if (typeof httpClient !== 'function') {
-      throw new Error(
+      throw new TypeError(
         'HTTPSOverlayLookupFacilitator requires a fetch implementation. ' +
         'In environments without fetch, provide a polyfill or custom implementation.'
       )
@@ -375,7 +375,7 @@ export default class LookupResolver {
       try {
         const hosts = await this.hostsInFlight.get(service)
         if (typeof hosts !== 'object') {
-          throw new Error('Hosts is not defined.')
+          throw new TypeError('Hosts is not defined.')
         }
         return hosts.slice()
       } catch {

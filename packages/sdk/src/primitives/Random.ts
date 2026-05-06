@@ -41,7 +41,7 @@ class Rand {
     if (typeof process !== 'undefined' && process.release?.name === 'node') {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const crypto = require('crypto')
+        const crypto = require('node:crypto')
         if (typeof crypto.randomBytes === 'function') {
           this._rand = (n) => {
             return Array.from(crypto.randomBytes(n))

@@ -277,11 +277,11 @@ export default class Point extends BasePoint {
       bytes.length - 1 === 2 * len
     ) {
       if (bytes[0] === 0x06) {
-        if (bytes[bytes.length - 1] % 2 !== 0) {
+        if (bytes.at(-1) % 2 !== 0) {
           throw new Error('Point string value is wrong length')
         }
       } else if (bytes[0] === 0x07) {
-        if (bytes[bytes.length - 1] % 2 !== 1) {
+        if (bytes.at(-1) % 2 !== 1) {
           throw new Error('Point string value is wrong length')
         }
       }
