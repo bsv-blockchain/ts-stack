@@ -33,7 +33,7 @@
  *   - Valid server-token, transfer-token, and payment scripts → admitted (built from hex)
  */
 
-import { LockingScript, Transaction, Script, Utils } from '@bsv/sdk'
+import { LockingScript, Transaction, Utils } from '@bsv/sdk'
 import FractionalizeTopicManager from '../fractionalize/FractionalizeTopicManager.js'
 
 // ---------------------------------------------------------------------------

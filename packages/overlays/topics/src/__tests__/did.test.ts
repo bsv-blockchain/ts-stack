@@ -9,7 +9,7 @@
  * globally before per-output checks.
  */
 
-import { LockingScript, PrivateKey, PublicKey, Script, Signature, Transaction, Utils } from '@bsv/sdk'
+import { LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils } from '@bsv/sdk'
 import DIDTopicManager from '../did/DIDTopicManager.js'
 
 // ---------------------------------------------------------------------------

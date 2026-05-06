@@ -27,7 +27,6 @@ import { MongoClient, Db } from 'mongodb'
 import { LockingScript, PrivateKey, PublicKey, Transaction, Utils, ProtoWallet, WalletProtocol } from '@bsv/sdk'
 import KVStoreTopicManager from '../kvstore/KVStoreTopicManager.js'
 import KVStoreLookupServiceFactory from '../kvstore/KVStoreLookupService.js'
-import { KVStoreStorageManager } from '../kvstore/KVStoreStorageManager.js'
 import { OutputAdmittedByTopic, LookupQuestion } from '@bsv/overlay'
 
 const mongoMemoryServerOptions = { instance: { launchTimeout: 60000 } }
