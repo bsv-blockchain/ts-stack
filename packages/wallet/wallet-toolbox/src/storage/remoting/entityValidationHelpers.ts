@@ -45,6 +45,7 @@ export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?
  * @returns input `entities` array with contained values validated.
  */
 export function validateEntities<T extends EntityTimeStamp>(entities: T[], dateFields?: string[]): T[] {
+  if (!Array.isArray(entities)) return entities
   for (let i = 0; i < entities.length; i++) {
     entities[i] = validateEntity(entities[i], dateFields)
   }
