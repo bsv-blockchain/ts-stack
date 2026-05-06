@@ -38,7 +38,7 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
 import { EntityTimeStamp } from '../../sdk/types'
-import { validateDate, validateEntity, validateEntities } from './entityValidationHelpers'
+import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 
 /**
  * Abstract base class shared by `StorageClient` and `StorageMobile`.
@@ -406,20 +406,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async getSyncChunk (args: RequestSyncChunkArgs): Promise<SyncChunk> {
     const r = await this.rpcCall<SyncChunk>('getSyncChunk', [args])
-    if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
-    if (r.certificates != null) r.certificates = validateEntities(r.certificates)
-    if (r.commissions != null) r.commissions = validateEntities(r.commissions)
-    if (r.outputBaskets != null) r.outputBaskets = validateEntities(r.outputBaskets)
-    if (r.outputTagMaps != null) r.outputTagMaps = validateEntities(r.outputTagMaps)
-    if (r.outputTags != null) r.outputTags = validateEntities(r.outputTags)
-    if (r.outputs != null) r.outputs = validateEntities(r.outputs)
-    if (r.provenTxReqs != null) r.provenTxReqs = validateEntities(r.provenTxReqs)
-    if (r.provenTxs != null) r.provenTxs = validateEntities(r.provenTxs)
-    if (r.transactions != null) r.transactions = validateEntities(r.transactions)
-    if (r.txLabelMaps != null) r.txLabelMaps = validateEntities(r.txLabelMaps)
-    if (r.txLabels != null) r.txLabels = validateEntities(r.txLabels)
-    if (r.user != null) r.user = validateEntity(r.user)
-    return r
+    return validateSyncChunkEntities(r)
   }
 
   /**

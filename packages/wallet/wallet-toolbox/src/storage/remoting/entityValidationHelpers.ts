@@ -1,3 +1,4 @@
+import { SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 
 /**
@@ -48,4 +49,25 @@ export function validateEntities<T extends EntityTimeStamp>(entities: T[], dateF
     entities[i] = validateEntity(entities[i], dateFields)
   }
   return entities
+}
+
+/**
+ * Validate all entity arrays within a `SyncChunk` received from a remote storage call.
+ * Normalises timestamps, nulls, and binary fields in-place.
+ */
+export function validateSyncChunkEntities (r: SyncChunk): SyncChunk {
+  if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
+  if (r.certificates != null) r.certificates = validateEntities(r.certificates)
+  if (r.commissions != null) r.commissions = validateEntities(r.commissions)
+  if (r.outputBaskets != null) r.outputBaskets = validateEntities(r.outputBaskets)
+  if (r.outputTagMaps != null) r.outputTagMaps = validateEntities(r.outputTagMaps)
+  if (r.outputTags != null) r.outputTags = validateEntities(r.outputTags)
+  if (r.outputs != null) r.outputs = validateEntities(r.outputs)
+  if (r.provenTxReqs != null) r.provenTxReqs = validateEntities(r.provenTxReqs)
+  if (r.provenTxs != null) r.provenTxs = validateEntities(r.provenTxs)
+  if (r.transactions != null) r.transactions = validateEntities(r.transactions)
+  if (r.txLabelMaps != null) r.txLabelMaps = validateEntities(r.txLabelMaps)
+  if (r.txLabels != null) r.txLabels = validateEntities(r.txLabels)
+  if (r.user != null) r.user = validateEntity(r.user)
+  return r
 }

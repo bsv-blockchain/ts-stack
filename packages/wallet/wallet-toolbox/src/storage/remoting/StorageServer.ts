@@ -14,7 +14,7 @@ import { StorageProvider } from '../StorageProvider'
 import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 import { SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
-import { validateDate, validateEntity, validateEntities } from './entityValidationHelpers'
+import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
 
@@ -193,19 +193,7 @@ export class StorageServer {
                 await this.validateParam0(params, req)
                 // const args: RequestSyncChunkArgs = params[0]
                 const r: SyncChunk = params[1]
-                if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
-                if (r.certificates != null) r.certificates = validateEntities(r.certificates)
-                if (r.commissions != null) r.commissions = validateEntities(r.commissions)
-                if (r.outputBaskets != null) r.outputBaskets = validateEntities(r.outputBaskets)
-                if (r.outputTagMaps != null) r.outputTagMaps = validateEntities(r.outputTagMaps)
-                if (r.outputTags != null) r.outputTags = validateEntities(r.outputTags)
-                if (r.outputs != null) r.outputs = validateEntities(r.outputs)
-                if (r.provenTxReqs != null) r.provenTxReqs = validateEntities(r.provenTxReqs)
-                if (r.provenTxs != null) r.provenTxs = validateEntities(r.provenTxs)
-                if (r.transactions != null) r.transactions = validateEntities(r.transactions)
-                if (r.txLabelMaps != null) r.txLabelMaps = validateEntities(r.txLabelMaps)
-                if (r.txLabels != null) r.txLabels = validateEntities(r.txLabels)
-                if (r.user != null) r.user = validateEntity(r.user)
+                validateSyncChunkEntities(r)
               }
               break
             default:
