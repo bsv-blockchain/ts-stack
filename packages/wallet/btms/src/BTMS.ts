@@ -1484,14 +1484,14 @@ export class BTMS {
           const outputIndex = Number(outputIndexStr)
           const canonicalAssetId = BTMSToken.computeAssetId(txid, outputIndex)
 
-          let scriptHex: LockingScript | HexString | undefined
+          let scriptHex: HexString | undefined
           if (includeBeef) {
             // When includeBeef is true, lockingScript is not returned - get it from the transaction
             if (!page.BEEF) {
               continue
             }
             const tx = Transaction.fromBEEF(page.BEEF, txid)
-            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript
+            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript.toHex() as HexString
           } else {
             // When includeBeef is false, use the returned lockingScript
             scriptHex = output.lockingScript
