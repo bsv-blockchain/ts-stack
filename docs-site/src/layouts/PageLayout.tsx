@@ -9,7 +9,7 @@ interface Props {
   children: ReactNode
 }
 
-export default function PageLayout({ children }: Props) {
+export default function PageLayout({ children }: Readonly<Props>) {
   const meta = usePageMeta()
   const kind = meta?.kind ?? 'meta'
 

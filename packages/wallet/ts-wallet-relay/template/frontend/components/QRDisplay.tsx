@@ -14,7 +14,7 @@ interface Props {
   onRefresh: () => void
 }
 
-export function QRDisplay({ session, onRefresh }: Props) {
+export function QRDisplay({ session, onRefresh }: Readonly<Props>) {
   const status = session?.status ?? 'pending'
   return (
     <QRDisplayBase

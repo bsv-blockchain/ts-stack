@@ -15,8 +15,6 @@ import { SingleWriterMultiReaderLock } from './util/SingleWriterMultiReaderLock'
 import { ChaintracksFsApi } from './Api/ChaintracksFsApi'
 import { randomBytesBase64, wait } from '../../../utility/utilityHelpers'
 import { WalletError } from '../../../sdk/WalletError'
-import { CWIStyleWalletManager } from '../../../CWIStyleWalletManager'
-
 export class Chaintracks implements ChaintracksManagementApi {
   static createOptions (chain: Chain): ChaintracksOptions {
     return {
@@ -353,8 +351,8 @@ export class Chaintracks implements ChaintracksManagementApi {
             done = true
             break
           }
-        } catch (eu: unknown) {
-          const e = (bulkSyncError = WalletError.fromUnknown(eu))
+        } catch (error_: unknown) {
+          const e = (bulkSyncError = WalletError.fromUnknown(error_))
           this.log(`bulk sync error: ${e.message}`)
           if (!this.available)
           // During initial startup, bulk ingestors must be available.
@@ -614,8 +612,8 @@ export class Chaintracks implements ChaintracksManagementApi {
             }
           }
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         if (!this.available) {
           this.startupError = e
           this.stopMainThread = true

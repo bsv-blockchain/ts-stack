@@ -65,8 +65,8 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
         const v = await r.json() as FetchStatus<T>
         if (v.status === 'success') return v.value
         else e = new Error(JSON.stringify(v))
-      } catch (eu: unknown) {
-        e = eu as Error
+      } catch (error_: unknown) {
+        e = error_ as Error
       }
       if (e && e.name !== 'ECONNRESET') break
     }

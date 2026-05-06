@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws'
-import type { IncomingMessage, Server } from 'http'
+import type { IncomingMessage, Server } from 'node:http'
 import type { WireEnvelope } from '../types.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000

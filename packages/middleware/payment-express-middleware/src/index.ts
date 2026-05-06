@@ -22,7 +22,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): (req
   } = options
 
   if (typeof calculateRequestPrice !== 'function') {
-    throw new Error('The calculateRequestPrice option must be a function.')
+    throw new TypeError('The calculateRequestPrice option must be a function.')
   }
 
   if (wallet === undefined || typeof wallet !== 'object') {

@@ -80,7 +80,7 @@ export default class Transaction {
     if (typeof obj.pathIndex === 'number') {
       const path = BUMPs[obj.pathIndex]
       if (typeof path !== 'object') {
-        throw new Error('Invalid merkle path index found in BEEF!')
+        throw new TypeError('Invalid merkle path index found in BEEF!')
       }
       obj.tx.merklePath = path
     } else {
@@ -90,7 +90,7 @@ export default class Transaction {
         }
         const sourceObj = transactions[input.sourceTXID]
         if (typeof sourceObj !== 'object') {
-          throw new Error(
+          throw new TypeError(
             `Reference to unknown TXID in BEEF: ${input.sourceTXID ?? 'undefined'}`
           )
         }
@@ -365,15 +365,15 @@ export default class Transaction {
    */
   addInput (input: TransactionInput): void {
     if (
-      typeof input.sourceTXID === 'undefined' &&
-      typeof input.sourceTransaction === 'undefined'
+      input.sourceTXID === undefined &&
+      input.sourceTransaction === undefined
     ) {
-      throw new Error(
+      throw new TypeError(
         'A reference to an an input transaction is required. If the input transaction itself cannot be referenced, its TXID must still be provided.'
       )
     }
     // If the input sequence number hasn't been set, the expectation is that it is final.
-    if (typeof input.sequence === 'undefined') {
+    if (input.sequence === undefined) {
       input.sequence = 0xffffffff
     }
     this.invalidateSerializationCaches()
@@ -388,8 +388,8 @@ export default class Transaction {
   addOutput (output: TransactionOutput): void {
     this.cachedHash = undefined
     if (output.change !== true) {
-      if (typeof output.satoshis === 'undefined') {
-        throw new Error(
+      if (output.satoshis === undefined) {
+        throw new TypeError(
           'either satoshis must be defined or change must be set to true'
         )
       }
@@ -408,7 +408,7 @@ export default class Transaction {
    */
   addP2PKHOutput (address: number[] | string, satoshis?: number): void {
     const lockingScript = new P2PKH().lock(address)
-    if (typeof satoshis === 'undefined') {
+    if (satoshis === undefined) {
       return this.addOutput({ lockingScript, change: true })
     }
     this.addOutput({
@@ -463,7 +463,7 @@ export default class Transaction {
     let change = 0
     for (const input of this.inputs) {
       if (typeof input.sourceTransaction !== 'object') {
-        throw new Error(
+        throw new TypeError(
           'Source transactions are required for all inputs during fee computation'
         )
       }
@@ -493,7 +493,7 @@ export default class Transaction {
       distributedChange = this.distributeEqualChange(change, changeOutputs)
     }
     if (distributedChange < change) {
-      const lastOutput = this.outputs[this.outputs.length - 1]
+      const lastOutput = this.outputs.at(-1)
       if (lastOutput.satoshis !== undefined) {
         lastOutput.satoshis += change - distributedChange
       } else {
@@ -552,7 +552,7 @@ export default class Transaction {
     let totalIn = 0
     for (const input of this.inputs) {
       if (typeof input.sourceTransaction !== 'object') {
-        throw new Error(
+        throw new TypeError(
           'Source transactions or sourceSatoshis are required for all inputs to calculate fee'
         )
       }
@@ -572,7 +572,7 @@ export default class Transaction {
   async sign (): Promise<void> {
     this.invalidateSerializationCaches()
     for (const out of this.outputs) {
-      if (typeof out.satoshis === 'undefined') {
+      if (out.satoshis === undefined) {
         if (out.change === true) {
           throw new Error(
             'There are still change outputs with uncomputed amounts. Use the fee() method to compute the change amounts and transaction fees prior to signing.'
@@ -616,7 +616,7 @@ export default class Transaction {
     writer.writeUInt32LE(this.version)
     writer.writeVarIntNum(this.inputs.length)
     for (const i of this.inputs) {
-      if (typeof i.sourceTXID === 'undefined') {
+      if (i.sourceTXID === undefined) {
         if (i.sourceTransaction != null) {
           writer.write(i.sourceTransaction.hash() as number[])
         } else {
@@ -675,12 +675,12 @@ export default class Transaction {
     writer.write([0, 0, 0, 0, 0, 0xef])
     writer.writeVarIntNum(this.inputs.length)
     for (const i of this.inputs) {
-      if (typeof i.sourceTransaction === 'undefined') {
-        throw new Error(
+      if (i.sourceTransaction === undefined) {
+        throw new TypeError(
           'All inputs must have source transactions when serializing to EF format'
         )
       }
-      if (typeof i.sourceTXID === 'undefined') {
+      if (i.sourceTXID === undefined) {
         writer.write(i.sourceTransaction.hash() as number[])
       } else {
         writer.write(toArray(i.sourceTXID, 'hex').reverse() as number[])
@@ -867,7 +867,7 @@ export default class Transaction {
       }
 
       // Verify fee if feeModel is provided
-      if (typeof feeModel !== 'undefined') {
+      if (feeModel !== undefined) {
         if (tx === undefined) {
           throw new Error('Transaction is undefined')
         }
@@ -891,12 +891,12 @@ export default class Transaction {
       for (let i = 0; i < tx.inputs.length; i++) {
         const input = tx.inputs[i]
         if (typeof input.sourceTransaction !== 'object') {
-          throw new Error(
+          throw new TypeError(
             `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
           )
         }
         if (typeof input.unlockingScript !== 'object') {
-          throw new Error(
+          throw new TypeError(
             `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
           )
         }
@@ -910,7 +910,7 @@ export default class Transaction {
         }
 
         const otherInputs = tx.inputs.filter((_, idx) => idx !== i)
-        if (typeof input.sourceTXID === 'undefined') {
+        if (input.sourceTXID === undefined) {
           input.sourceTXID = sourceTxid
         }
 
@@ -939,7 +939,7 @@ export default class Transaction {
       let outputTotal = 0
       for (const out of tx.outputs) {
         if (typeof out.satoshis !== 'number') {
-          throw new Error(
+          throw new TypeError(
             'Every output must have a defined amount during transaction verification.'
           )
         }

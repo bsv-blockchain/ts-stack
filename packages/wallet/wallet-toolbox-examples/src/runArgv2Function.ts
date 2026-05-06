@@ -1,4 +1,4 @@
-import path from 'path'
+import path from 'node:path'
 
 /**
  * Used to run a named function from a command line of the form:

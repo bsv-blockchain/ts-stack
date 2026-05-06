@@ -3,8 +3,8 @@ import { tcp } from '@libp2p/tcp';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
-import { kadDHT } from '@libp2p/kad-dht';
-import { gossipsub, type GossipSub } from '@chainsafe/libp2p-gossipsub';
+import { kadDHT } from '@libp2p/kad-dht';import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+
 import { preSharedKey } from '@libp2p/pnet';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
 import { identify } from '@libp2p/identify';

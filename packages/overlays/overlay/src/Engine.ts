@@ -1030,7 +1030,7 @@ export class Engine {
     context: UTXOHistoryHydrationContext = this.createUTXOHistoryHydrationContext()
   ): Promise<Output | undefined> {
     // If we have an output but no history selector, just return the output.
-    if (typeof historySelector === 'undefined') {
+    if (historySelector === undefined) {
       return output
     }
 

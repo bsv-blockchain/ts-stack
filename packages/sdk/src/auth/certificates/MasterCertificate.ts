@@ -157,7 +157,7 @@ export class MasterCertificate extends Certificate {
     privilegedReason?: string
   ): Promise<Record<CertificateFieldNameUnder50Bytes, string>> {
     if (!Array.isArray(fieldsToReveal)) {
-      throw new Error('fieldsToReveal must be an array of strings')
+      throw new TypeError('fieldsToReveal must be an array of strings')
     }
     const fieldRevelationKeyring = {}
     for (const fieldName of fieldsToReveal) {

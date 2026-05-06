@@ -270,7 +270,7 @@ export function toArray (
       assertValidHex(msg)
       msg = normalizeHex(msg)
       for (let i = 0; i < msg.length; i += 2) {
-        res.push(parseInt(msg[i] + msg[i + 1], 16))
+        res.push(Number.parseInt(msg[i] + msg[i + 1], 16))
       }
     }
   } else {
@@ -1144,7 +1144,7 @@ function abytes (b: Uint8Array | undefined, ...lengths: number[]): void {
   }
 }
 function ahash (h: IHash): void {
-  if (typeof h !== 'function' || typeof h.create !== 'function') { throw new Error('Hash should be wrapped by utils.createHasher') }
+  if (typeof h !== 'function' || typeof h.create !== 'function') { throw new TypeError('Hash should be wrapped by utils.createHasher') }
   anumber(h.outputLen)
   anumber(h.blockLen)
 }
@@ -1717,7 +1717,7 @@ class HMAC<T extends Hash<T>> extends Hash<HMAC<T>> {
     ahash(hash)
     const key = toBytes(_key)
     this.iHash = hash.create() as T
-    if (typeof (this.iHash as any).update !== 'function') { throw new Error('Expected instance of class which extends utils.Hash') }
+    if (typeof (this.iHash as any).update !== 'function') { throw new TypeError('Expected instance of class which extends utils.Hash') }
     this.blockLen = this.iHash.blockLen
     this.outputLen = this.iHash.outputLen
     const blockLen = this.blockLen
@@ -1845,7 +1845,7 @@ export function pbkdf2 (
   // back to the original implementation.
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const nodeCrypto = require('crypto')
+    const nodeCrypto = require('node:crypto')
     if (typeof nodeCrypto.pbkdf2Sync === 'function') {
       const p = Buffer.from(password)
       const s = Buffer.from(salt)

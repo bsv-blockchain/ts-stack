@@ -273,10 +273,10 @@ export class BTMSToken {
 
   private validateAmount(amount: number): void {
     if (!Number.isFinite(amount)) {
-      throw new Error('Amount must be a finite number')
+      throw new TypeError('Amount must be a finite number')
     }
     if (!Number.isInteger(amount)) {
-      throw new Error('Amount must be an integer')
+      throw new TypeError('Amount must be an integer')
     }
     if (amount < MIN_TOKEN_AMOUNT) {
       throw new Error(`Amount must be at least ${MIN_TOKEN_AMOUNT}`)

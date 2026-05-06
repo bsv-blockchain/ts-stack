@@ -112,7 +112,7 @@ export function createTokenMethods (core: WalletCore): {
           if ((output as any).customInstructions != null) {
             try { ci = JSON.parse((output as any).customInstructions as string) } catch {}
           }
-          const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+          const protocolID = ci.protocolID ?? defaultProtocolID
           const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
           const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
@@ -187,7 +187,7 @@ export function createTokenMethods (core: WalletCore): {
         if ((targetOutput as any).customInstructions != null) {
           try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
-        const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+        const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
         const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
@@ -287,7 +287,7 @@ export function createTokenMethods (core: WalletCore): {
         if ((targetOutput as any).customInstructions != null) {
           try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
-        const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+        const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
         const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 
@@ -360,7 +360,7 @@ export function createTokenMethods (core: WalletCore): {
         if ((targetOutput as any).customInstructions != null) {
           try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
-        const protocolID = ci.protocolID != null ? ci.protocolID : defaultProtocolID
+        const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
         const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
 

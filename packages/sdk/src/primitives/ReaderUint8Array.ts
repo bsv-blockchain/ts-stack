@@ -25,7 +25,7 @@ export class ReaderUint8Array {
     } else if (Array.isArray(bin)) {
       this.bin = new Uint8Array(bin)
     } else {
-      throw new Error('ReaderUint8Array constructor: bin must be Uint8Array or number[]')
+      throw new TypeError('ReaderUint8Array constructor: bin must be Uint8Array or number[]')
     }
     this.pos = pos
     this.length = this.bin.length

@@ -78,7 +78,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * after the retention period. If the key is refreshed again
    * within that period, the timer is cleared and re-set.
    */
-  private destroyTimer: any | undefined
+  private destroyTimer: any
 
   /**
    * Number of chunks to split the 32-byte key into.

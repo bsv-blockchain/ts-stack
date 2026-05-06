@@ -182,9 +182,9 @@ export abstract class StorageReaderWriter extends StorageReader {
           isDeleted: false
         })
         break
-      } catch (eu: unknown) {
-        console.log(`findOrInsertUser catch: ${JSON.stringify(eu).slice(0, 512)}`)
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        console.log(`findOrInsertUser catch: ${JSON.stringify(error_).slice(0, 512)}`)
+        if (retry > 0) throw error_
       }
     }
     return { user, isNew }
@@ -209,8 +209,8 @@ export abstract class StorageReaderWriter extends StorageReader {
         isNew = true
         tx = newTx
         break
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
     return { tx, isNew }
@@ -240,8 +240,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           })
         }
         return basket
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
   }
@@ -268,8 +268,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           })
         }
         return txLabel
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
   }
@@ -295,8 +295,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           })
         }
         return txLabelMap
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
   }
@@ -323,8 +323,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           })
         }
         return outputTag
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
   }
@@ -350,8 +350,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           })
         }
         return outputTagMap
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
   }
@@ -381,8 +381,8 @@ export abstract class StorageReaderWriter extends StorageReader {
           return { syncState, isNew: true }
         }
         return { syncState, isNew: false }
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
   }
@@ -401,8 +401,8 @@ export abstract class StorageReaderWriter extends StorageReader {
         isNew = true
         req = newReq
         break
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
     return { req, isNew }
@@ -422,8 +422,8 @@ export abstract class StorageReaderWriter extends StorageReader {
         isNew = true
         proven = newProven
         break
-      } catch (eu: unknown) {
-        if (retry > 0) throw eu
+      } catch (error_: unknown) {
+        if (retry > 0) throw error_
       }
     }
     return { proven, isNew }

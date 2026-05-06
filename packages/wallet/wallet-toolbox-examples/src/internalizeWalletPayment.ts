@@ -1,18 +1,6 @@
-import {
-  Beef,
-  InternalizeActionArgs,
-  PrivateKey,
-  PublicKey,
-  SignActionArgs
-} from '@bsv/sdk'
-import {
-  randomBytesBase64,
-  ScriptTemplateBRC29,
-  sdk,
-  Services,
-  Setup,
-  SetupWallet
-} from '@bsv/wallet-toolbox'
+import { InternalizeActionArgs } from '@bsv/sdk'
+import { sdk, Setup } from '@bsv/wallet-toolbox'
+
 import { outputBRC29 } from './brc29'
 import { runArgv2Function } from './runArgv2Function'
 

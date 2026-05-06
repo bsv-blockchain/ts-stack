@@ -5,7 +5,7 @@ interface Props {
   code: string
 }
 
-export default function Mermaid({ code }: Props) {
+export default function Mermaid({ code }: Readonly<Props>) {
   const ref = useRef<HTMLDivElement>(null)
   const renderId = useId().replaceAll(':', '')
   const [error, setError] = useState<string | null>(null)

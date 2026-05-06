@@ -230,13 +230,18 @@ export default class HD {
         continue
       }
 
-      if (parseInt(c.replace("'", ''), 10).toString() !== c.replace("'", '')) {
+      const childMatch = /^(\d+)('?)$/.exec(c)
+      if (childMatch === null) {
         throw new Error('invalid path')
       }
 
-      const usePrivate = c.length > 1 && c[c.length - 1] === "'"
-      let childIndex =
-        parseInt(usePrivate ? c.slice(0, c.length - 1) : c, 10) & 0x7fffffff
+      const childIndexValue = Number.parseInt(childMatch[1], 10)
+      if (childIndexValue > 0x7fffffff) {
+        throw new Error('invalid path')
+      }
+
+      const usePrivate = childMatch[2] === "'"
+      let childIndex = childIndexValue
 
       if (usePrivate) {
         childIndex += 0x80000000
@@ -256,7 +261,7 @@ export default class HD {
    */
   public deriveChild (i: number): HD {
     if (typeof i !== 'number') {
-      throw new Error('i must be a number')
+      throw new TypeError('i must be a number')
     }
 
     const ibc: number[] = []

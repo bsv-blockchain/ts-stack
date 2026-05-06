@@ -271,11 +271,11 @@ export function validateHeaderFormat (header: BlockHeader): void {
   /**
    * Root object checks
    */
-  if (typeof header === 'undefined') {
-    throw new Error('Missing header.')
+  if (header === undefined) {
+    throw new TypeError('Missing header.')
   }
   if (typeof header !== 'object') {
-    throw new Error('Header must be an object.')
+    throw new TypeError('Header must be an object.')
   }
   if (!Object.keys(header).every(key => ALLOWED_KEYS[key])) {
     throw new Error('Header contains extra properties.')
@@ -285,10 +285,10 @@ export function validateHeaderFormat (header: BlockHeader): void {
    * Version
    */
   if (typeof header.version !== 'number') {
-    throw new Error('Header version must be a number.')
+    throw new TypeError('Header version must be a number.')
   }
   if (!Number.isInteger(header.version)) {
-    throw new Error('Header version must be an integer.')
+    throw new TypeError('Header version must be an integer.')
   }
   if (header.version < 0 || header.version > UINT_MAX) {
     throw new Error(`Header version must be between 0 and ${UINT_MAX}.`)
@@ -298,10 +298,10 @@ export function validateHeaderFormat (header: BlockHeader): void {
    * Height
    */
   if (typeof header.height !== 'number') {
-    throw new Error('Header height must be a number.')
+    throw new TypeError('Header height must be a number.')
   }
   if (!Number.isInteger(header.height)) {
-    throw new Error('Header height must be an integer.')
+    throw new TypeError('Header height must be an integer.')
   }
   if (header.height < 0 || header.height > UINT_MAX / 2) {
     throw new Error(`Header version must be between 0 and ${UINT_MAX / 2}.`)
@@ -325,10 +325,10 @@ export function validateHeaderFormat (header: BlockHeader): void {
    * Time
    */
   if (typeof header.time !== 'number') {
-    throw new Error('Header time must be a number.')
+    throw new TypeError('Header time must be a number.')
   }
   if (!Number.isInteger(header.time)) {
-    throw new Error('Header time must be an integer.')
+    throw new TypeError('Header time must be an integer.')
   }
   if (header.time < 0 || header.time > UINT_MAX) {
     throw new Error(`Header time must be between 0 and ${UINT_MAX}.`)
@@ -338,10 +338,10 @@ export function validateHeaderFormat (header: BlockHeader): void {
    * Bits
    */
   if (typeof header.bits !== 'number') {
-    throw new Error('Header bits must be a number.')
+    throw new TypeError('Header bits must be a number.')
   }
   if (!Number.isInteger(header.bits)) {
-    throw new Error('Header bits must be an integer.')
+    throw new TypeError('Header bits must be an integer.')
   }
   if (header.bits < 0 || header.bits > UINT_MAX) {
     throw new Error(`Header bits must be between 0 and ${UINT_MAX}.`)
@@ -351,10 +351,10 @@ export function validateHeaderFormat (header: BlockHeader): void {
    * Nonce
    */
   if (typeof header.nonce !== 'number') {
-    throw new Error('Header nonce must be a number.')
+    throw new TypeError('Header nonce must be a number.')
   }
   if (!Number.isInteger(header.nonce)) {
-    throw new Error('Header nonce must be an integer.')
+    throw new TypeError('Header nonce must be an integer.')
   }
   if (header.nonce < 0 || header.nonce > UINT_MAX) {
     throw new Error(`Header nonce must be between 0 and ${UINT_MAX}.`)

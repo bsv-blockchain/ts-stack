@@ -10,7 +10,7 @@ interface Props {
   children: ReactNode
 }
 
-export default function GuideLayout({ meta, children }: Props) {
+export default function GuideLayout({ meta, children }: Readonly<Props>) {
   const { pathname } = useLocation()
   const guideSection = NAV.find(s => s.label === 'Guides')
   const guides = guideSection?.items ?? []

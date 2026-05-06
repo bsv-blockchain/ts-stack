@@ -1089,7 +1089,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       keyID?: KeyIDStringUnder800Bytes
       privileged?: BooleanDefaultFalse
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       forSelf?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1258,7 +1258,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1299,7 +1299,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1340,7 +1340,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1382,7 +1382,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1420,7 +1420,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       privileged?: BooleanDefaultFalse
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1469,7 +1469,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       protocolID: [SecurityLevel, ProtocolString5To400Bytes]
       keyID: KeyIDStringUnder800Bytes
       privilegedReason?: DescriptionString5to50Bytes
-      counterparty?: PubKeyHex | 'self' | 'anyone'
+      counterparty?: PubKeyHex
       forSelf?: BooleanDefaultFalse
       privileged?: BooleanDefaultFalse
     },
@@ -1515,7 +1515,7 @@ export default class WalletWireTransceiver implements WalletInterface {
   private encodeKeyRelatedParams(
     protocolID: [SecurityLevel, ProtocolString5To400Bytes],
     keyID: KeyIDStringUnder800Bytes,
-    counterparty?: PubKeyHex | 'self' | 'anyone',
+    counterparty?: PubKeyHex,
     privileged?: boolean,
     privilegedReason?: string
   ): number[] {

@@ -10,8 +10,6 @@ import {
 } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
 import { MockChainStorage } from './MockChainStorage'
 import { WERR_NOT_IMPLEMENTED } from '../sdk/WERR_errors'
-import { asString } from '../utility/utilityHelpers.noBuffer'
-
 export class MockChainTracker implements ChaintracksClientApi {
   constructor (
     public chain: Chain,

@@ -21,10 +21,10 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
         r.count += count
         r.log += `${count} ${pq.log}\n`
       }
-    } catch (eu: unknown) {
+    } catch (error_: unknown) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const e = WalletError.fromUnknown(eu)
-      throw eu
+      const e = WalletError.fromUnknown(error_)
+      throw error_
     }
   }
 
@@ -135,9 +135,9 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
       if (utxo.txid) {
         try {
           await storage.getBeefForTransaction(utxo.txid, options)
-        } catch (eu: unknown) {
-          const e = WalletError.fromUnknown(eu)
-          if (!isMissingLocalBeefError(e, utxo.txid, storage.chain)) throw eu
+        } catch (error_: unknown) {
+          const e = WalletError.fromUnknown(error_)
+          if (!isMissingLocalBeefError(e, utxo.txid, storage.chain)) throw error_
           // UTXO's tx beef not in local storage. Skip it; the tx has spendable outputs so it won't be purged anyway.
         }
       }

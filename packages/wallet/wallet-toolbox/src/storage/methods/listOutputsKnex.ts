@@ -8,8 +8,6 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
-import { WERR_INTERNAL } from '../../sdk'
-
 export async function listOutputs (
   dsk: StorageKnex,
   auth: AuthId,

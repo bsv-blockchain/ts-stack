@@ -8,7 +8,7 @@
  * createCredentialIssuerHandler() returns Next.js App Router compatible { GET, POST }.
  */
 
-import { join } from 'path'
+import { join } from 'node:path'
 import { CredentialIssuerHandlerConfig } from '../core/types'
 import { JsonFileStore } from './json-file-store'
 import { ServerWalletManager } from './server-wallet-manager'

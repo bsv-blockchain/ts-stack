@@ -31,7 +31,7 @@ interface Props {
   installUrl?: string
 }
 
-export function WalletConnectionModal({ onLocalWallet, onMobileQR, installUrl }: Props) {
+export function WalletConnectionModal({ onLocalWallet, onMobileQR, installUrl }: Readonly<Props>) {
   return (
     <WalletConnectionModalBase
       onLocalWallet={onLocalWallet}

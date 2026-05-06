@@ -31,7 +31,7 @@ export class SessionManager {
    */
   addSession (session: PeerSession): void {
     if (typeof session.sessionNonce !== 'string') {
-      throw new Error(
+      throw new TypeError(
         'Invalid session: sessionNonce is required to add a session.'
       )
     }

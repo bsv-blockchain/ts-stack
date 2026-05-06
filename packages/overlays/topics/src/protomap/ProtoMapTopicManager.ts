@@ -15,7 +15,7 @@ export function deserializeWalletProtocol(str: string): WalletProtocol {
   }
 
   if (typeof protocolString !== 'string') {
-    throw new Error('Invalid protocolID')
+    throw new TypeError('Invalid protocolID')
   }
 
   return [security as SecurityLevel, protocolString as ProtocolString5To400Bytes]

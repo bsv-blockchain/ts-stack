@@ -117,7 +117,7 @@ export class AuthFetch {
 
         // Create a new transport for this base url if needed
         let peerToUse: AuthPeer
-        if (typeof this.peers[baseURL] === 'undefined') {
+        if (this.peers[baseURL] === undefined) {
           // Create a peer for the request
           const newTransport = new SimplifiedFetchTransport(baseURL)
           peerToUse = {
@@ -315,7 +315,7 @@ export class AuthFetch {
     const baseURL = parsedUrl.origin
 
     let peerToUse: { peer: Peer; identityKey?: string }
-    if (typeof this.peers[baseURL] !== 'undefined') {
+    if (this.peers[baseURL] !== undefined) {
       peerToUse = { peer: this.peers[baseURL].peer }
     } else {
       const newTransport = new SimplifiedFetchTransport(baseURL)
@@ -525,14 +525,14 @@ export class AuthFetch {
     if (!satoshisRequiredHeader) {
       throw new Error('Missing x-bsv-payment-satoshis-required response header.')
     }
-    const satoshisRequired = parseInt(satoshisRequiredHeader)
+    const satoshisRequired = Number.parseInt(satoshisRequiredHeader)
     if (isNaN(satoshisRequired) || satoshisRequired <= 0) {
       throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
     }
 
     const serverIdentityKey = originalResponse.headers.get('x-bsv-auth-identity-key')
     if (typeof serverIdentityKey !== 'string') {
-      throw new Error('Missing x-bsv-auth-identity-key response header.')
+      throw new TypeError('Missing x-bsv-auth-identity-key response header.')
     }
 
     const derivationPrefix = originalResponse.headers.get('x-bsv-payment-derivation-prefix')
@@ -915,7 +915,7 @@ export class AuthFetch {
 
     // 8. ReadableStream
     if (body instanceof ReadableStream) {
-      throw new Error('ReadableStream cannot be directly converted to number[].')
+      throw new TypeError('ReadableStream cannot be directly converted to number[].')
     }
 
     // 9. Fallback

@@ -285,7 +285,7 @@ export default class Signature {
   ): number[] | string {
     if (recovery < 0 || recovery > 3) throw new Error('Invalid recovery param')
     if (typeof compressed !== 'boolean') {
-      throw new Error('Invalid compressed param')
+      throw new TypeError('Invalid compressed param')
     }
     let compactByte = 27 + recovery
     if (compressed) {

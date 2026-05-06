@@ -4,7 +4,7 @@ interface Props {
   file: string
 }
 
-export default function EditOnGitHub({ file }: Props) {
+export default function EditOnGitHub({ file }: Readonly<Props>) {
   const href = `https://github.com/bsv-blockchain/ts-stack/edit/main/docs/${file}`
   return (
     <div className={styles.root}>

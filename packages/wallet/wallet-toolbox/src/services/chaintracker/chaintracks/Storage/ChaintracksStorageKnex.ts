@@ -92,7 +92,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
           console.error('Migration returned falsy result await this.knex.migrate.down(config)')
           break
         }
-      } catch (eu: unknown) {
+      } catch (error_: unknown) {
         break
       }
     }

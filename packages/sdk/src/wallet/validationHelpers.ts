@@ -439,7 +439,7 @@ export function validateCreateActionOutput (o: CreateActionOutput): ValidCreateA
  * @returns ValidCreateActionOptions with defaults applied
  */
 export function validateCreateActionOptions (options?: CreateActionOptions): ValidCreateActionOptions {
-  const o = options != null ? options : {}
+  const o = options ?? {}
   const vo: ValidCreateActionOptions = {
     signAndProcess: defaultTrue(o.signAndProcess),
     acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast),
@@ -566,7 +566,7 @@ export function validateCreateActionArgs (args: CreateActionArgs, logger?: Walle
  * Convert string outpoints to `{ txid: string, vout: number }`
  */
 export function validateSignActionOptions (options?: SignActionOptions): ValidSignActionOptions {
-  const o = options != null ? options : {}
+  const o = options ?? {}
   const vo: ValidSignActionOptions = {
     acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast),
     returnTXIDOnly: defaultFalse(o.returnTXIDOnly),
@@ -724,7 +724,7 @@ export function validateInternalizeActionArgs (args: InternalizeActionArgs): Val
     tx: args.tx,
     outputs: args.outputs.map(o => validateInternalizeOutput(o)),
     description: validateStringLength(args.description, 'description', 5, 2000),
-    labels: (args.labels != null ? args.labels : []).map(t => validateLabel(t)),
+    labels: (args.labels ?? []).map(t => validateLabel(t)),
     seekPermission: defaultTrue(args.seekPermission)
   }
 
@@ -1126,7 +1126,7 @@ export function validateListOutputsArgs (args: ListOutputsArgs): ValidListOutput
 
   const vargs: ValidListOutputsArgs = {
     basket: validateBasket(args.basket),
-    tags: (args.tags != null ? args.tags : []).map(t => validateTag(t)),
+    tags: (args.tags ?? []).map(t => validateTag(t)),
     tagQueryMode,
     includeLockingScripts: args.include === 'locking scripts',
     includeTransactions: args.include === 'entire transactions',
@@ -1176,7 +1176,7 @@ export function validateListActionsArgs (args: ListActionsArgs): ValidListAction
   else throw new WERR_INVALID_PARAMETER('labelQueryMode', 'undefined, \'any\', or \'all\'')
 
   const vargs: ValidListActionsArgs = {
-    labels: (args.labels != null ? args.labels : []).map(t => validateLabel(t)),
+    labels: (args.labels ?? []).map(t => validateLabel(t)),
     labelQueryMode,
     includeLabels: defaultFalse(args.includeLabels),
     includeInputs: defaultFalse(args.includeInputs),

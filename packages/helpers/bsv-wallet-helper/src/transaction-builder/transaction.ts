@@ -1,19 +1,8 @@
-import {
-  WalletInterface,
-  LockingScript,
-  Transaction,
-  CreateActionOutput,
-  CreateActionInput,
-  CreateActionOptions,
-  CreateActionResult,
-  WalletProtocol,
-  WalletCounterparty,
-  Script,
-  SatoshisPerKilobyte,
-  Beef
-} from '@bsv/sdk'
+import { WalletInterface, LockingScript, Transaction, CreateActionOutput, CreateActionOptions, CreateActionResult, Script, SatoshisPerKilobyte, Beef } from '@bsv/sdk'
+
 import P2PKH from '../script-templates/p2pkh'
-import OrdP2PKH, { Inscription, MAP } from '../script-templates/ordinal'
+import OrdP2PKH from '../script-templates/ordinal'
+
 import OrdLock from '../script-templates/ordlock'
 import { WalletDerivationParams } from '../types/wallet'
 import { getDerivation } from '../utils'
@@ -171,7 +160,7 @@ export class InputBuilder {
      * @param params - Build parameters (optional)
      * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
      */
-  async build (params?: BuildParams): Promise<CreateActionResult | any> {
+  async build (params?: BuildParams): Promise<any> {
     return await this.parent.build(params)
   }
 
@@ -349,7 +338,7 @@ export class OutputBuilder {
      * @param params - Build parameters (optional)
      * @returns Promise resolving to txid and tx from wallet.createAction(), or preview object if params.preview=true
      */
-  async build (params?: BuildParams): Promise<CreateActionResult | any> {
+  async build (params?: BuildParams): Promise<any> {
     return await this.parent.build(params)
   }
 
@@ -457,22 +446,22 @@ export class TransactionBuilder {
 
     if (opts.noSendChange !== undefined) {
       if (!Array.isArray(opts.noSendChange)) {
-        throw new Error('noSendChange must be an array')
+        throw new TypeError('noSendChange must be an array')
       }
       for (let i = 0; i < opts.noSendChange.length; i++) {
         if (typeof opts.noSendChange[i] !== 'string') {
-          throw new Error(`noSendChange[${i}] must be a string (outpoint format)`)
+          throw new TypeError(`noSendChange[${i}] must be a string (outpoint format)`)
         }
       }
     }
 
     if (opts.sendWith !== undefined) {
       if (!Array.isArray(opts.sendWith)) {
-        throw new Error('sendWith must be an array')
+        throw new TypeError('sendWith must be an array')
       }
       for (let i = 0; i < opts.sendWith.length; i++) {
         if (typeof opts.sendWith[i] !== 'string') {
-          throw new Error(`sendWith[${i}] must be a string (hex txid)`)
+          throw new TypeError(`sendWith[${i}] must be a string (hex txid)`)
         }
       }
     }
@@ -838,7 +827,7 @@ export class TransactionBuilder {
      * @returns Promise resolving to txid and tx from wallet.signAction(), or preview object if params.preview=true
      * @throws Error if no outputs are configured or if locking script creation fails
      */
-  async build (params?: BuildParams): Promise<CreateActionResult | any> {
+  async build (params?: BuildParams): Promise<any> {
     // Validate that we have outputs
     if (this.outputs.length === 0) {
       throw new Error('At least one output is required to build a transaction')
@@ -1366,7 +1355,7 @@ export class TransactionBuilder {
      * @throws Error if to is not a string
      * @throws Error if satoshis is not a non-negative number
      */
-  async pay (to: string, satoshis: number): Promise<CreateActionResult | any> {
+  async pay (to: string, satoshis: number): Promise<any> {
     if (typeof to !== 'string') {
       throw new Error('to must be a string')
     }

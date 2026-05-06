@@ -18,13 +18,13 @@
  *   import { initRelay } from './src/lib/relay.js'
  */
 
-import { createServer } from 'http'
-import { parse } from 'url'
+import { createServer } from 'node:http'
+import { parse } from 'node:url'
 import next from 'next'
 import { initRelay } from './lib/relay.js'
 
 const dev  = process.env.NODE_ENV !== 'production'
-const port = parseInt(process.env.PORT ?? '3000', 10)
+const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 
 const app    = next({ dev })
 const handle = app.getRequestHandler()

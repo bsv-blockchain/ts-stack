@@ -8,10 +8,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
-RUN npm install -g tsx@4 typescript@5 --ignore-scripts
-
 # Install dependencies
-RUN npm ci --ignore-scripts
+RUN npm install -g tsx@4.21.0 typescript@5.8.3 --ignore-scripts \
+  && npm ci --ignore-scripts
 
 # Copy source code
 COPY src ./src

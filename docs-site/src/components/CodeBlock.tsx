@@ -8,7 +8,7 @@ interface Props {
   [key: string]: unknown
 }
 
-export default function CodeBlock({ children, ...rest }: Props) {
+export default function CodeBlock({ children, ...rest }: Readonly<Props>) {
   const [copied, setCopied] = useState(false)
 
   const codeEl =

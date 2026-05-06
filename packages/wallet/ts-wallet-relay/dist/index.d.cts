@@ -1,4 +1,4 @@
-import { Server } from 'http';
+import { Server } from 'node:http';
 import { W as WireEnvelope, S as Session, a as SessionStatus, R as RpcRequest, b as RpcResponse, c as WalletLike } from './types-BIOdtOVN.cjs';
 export { P as PROTOCOL_ID, d as PairingParams, e as ParseResult, f as SessionInfo } from './types-BIOdtOVN.cjs';
 import { Request, Response } from 'express';

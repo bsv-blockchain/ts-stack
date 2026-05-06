@@ -37,7 +37,7 @@ function validateInput (input: unknown, functionName: string): void {
 
   // Check for arrays (typeof array is 'object')
   if (Array.isArray(input)) {
-    throw new Error(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`)
+    throw new TypeError(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`)
   }
 
   // Check for valid types
@@ -49,7 +49,7 @@ function validateInput (input: unknown, functionName: string): void {
   if (inputType === 'object') {
     const scriptObj = input as any
     if (typeof scriptObj.toHex !== 'function' || typeof scriptObj.toASM !== 'function') {
-      throw new Error(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`)
+      throw new TypeError(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`)
     }
   }
 

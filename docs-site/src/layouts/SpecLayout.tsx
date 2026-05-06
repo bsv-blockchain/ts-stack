@@ -7,7 +7,7 @@ interface Props {
   children: ReactNode
 }
 
-export default function SpecLayout({ meta, children }: Props) {
+export default function SpecLayout({ meta, children }: Readonly<Props>) {
   return (
     <div>
       {children}

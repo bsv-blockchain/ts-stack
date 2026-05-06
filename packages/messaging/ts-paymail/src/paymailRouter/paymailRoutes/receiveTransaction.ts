@@ -1,5 +1,6 @@
 import Joi from 'joi'
-import { PublicKey, Transaction, Signature, Utils, Hash, BigNumber, BSM } from '@bsv/sdk'
+import { Transaction, Signature, Utils, Hash, BigNumber, BSM } from '@bsv/sdk'
+
 import PaymailRoute, { DomainLogicHandler } from './paymailRoute.js'
 import P2pReceiveTransactionCapability from '../../capability/p2pReceiveTransactionCapability.js'
 import { PaymailBadRequestError } from '../../errors/index.js'

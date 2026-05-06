@@ -19,7 +19,7 @@ export default function ToC() {
       els.map(el => ({
         id: el.id,
         text: el.textContent ?? '',
-        level: parseInt(el.tagName.slice(1)),
+        level: Number.parseInt(el.tagName.slice(1)),
       }))
     )
   }, [])

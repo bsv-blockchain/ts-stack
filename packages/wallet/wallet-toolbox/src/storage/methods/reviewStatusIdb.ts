@@ -1,6 +1,3 @@
-import { Beef } from '@bsv/sdk'
-import { Knex } from 'knex'
-import { TableOutput, TableTransaction } from '../index.client'
 import { sdk } from '../../index.client'
 import { StorageIdb } from '../StorageIdb'
 

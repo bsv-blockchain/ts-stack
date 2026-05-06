@@ -74,8 +74,8 @@ export abstract class Format {
       h += `${al('Inputs', 30)} ${ar('Vin/', 5)} ${'Outputs'}\n`
       h += `${al('Outpoint', 17)} ${ar('Satoshis', 12)} ${ar('Vout', 5)} ${ar('Satoshis', 12)} ${al('Lock Script', 23)}\n`
       return h + log
-    } catch (eu: unknown) {
-      const e = sdk.WalletError.fromUnknown(eu)
+    } catch (error_: unknown) {
+      const e = sdk.WalletError.fromUnknown(error_)
       return `Transaction with txid ${txid} is invalid`
     }
   }
@@ -93,8 +93,8 @@ export abstract class Format {
       const log = Format.toLogStringBeefTxid(beef, tx.txid)
       const h = `transactionId:${tx.transactionId} userId:${tx.userId} ${tx.status} satoshis:${sa(tx.satoshis)}\n`
       return h + log
-    } catch (eu: unknown) {
-      const e = sdk.WalletError.fromUnknown(eu)
+    } catch (error_: unknown) {
+      const e = sdk.WalletError.fromUnknown(error_)
       return `Transaction ${tx.transactionId} with txid ${tx.txid} is invalid`
     }
   }

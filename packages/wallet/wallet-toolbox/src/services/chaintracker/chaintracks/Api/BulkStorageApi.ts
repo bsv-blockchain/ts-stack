@@ -1,6 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Chain } from '../../../../sdk/types'
-import { BlockHeader, LiveBlockHeader } from './BlockHeaderApi'
+import { BlockHeader } from './BlockHeaderApi'
+
 import { HeightRange } from '../util/HeightRange'
 import { ChaintracksStorageApi } from './ChaintracksStorageApi'
 import { ChaintracksFsApi } from './ChaintracksFsApi'

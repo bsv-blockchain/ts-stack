@@ -1,4 +1,5 @@
-import { Subtree, SubtreeNode } from './subtrees.js';
+import { Subtree } from './subtrees.js'
+
 import { Hash, Utils } from '@bsv/sdk';
 
 // Test the Subtree serialization and deserialization

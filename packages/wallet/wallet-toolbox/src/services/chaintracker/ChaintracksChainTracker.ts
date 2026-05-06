@@ -49,8 +49,8 @@ export class ChaintracksChainTracker implements ChainTracker {
         }
 
         break
-      } catch (eu: unknown) {
-        error = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        error = WalletError.fromUnknown(error_)
         if (tryCount > retries) {
           throw error
         }

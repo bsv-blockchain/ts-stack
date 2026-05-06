@@ -146,7 +146,7 @@ export class GlobalKVStore {
       throw new Error('Key must be a non-empty string.')
     }
     if (typeof value !== 'string') {
-      throw new Error('Value must be a string.')
+      throw new TypeError('Value must be a string.')
     }
 
     const controller = await this.getIdentityKey()

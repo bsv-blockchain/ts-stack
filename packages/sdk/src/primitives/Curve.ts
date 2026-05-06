@@ -146,7 +146,7 @@ export default class Curve {
   }
 
   constructor () {
-    if (typeof globalCurve !== 'undefined') {
+    if (globalCurve !== undefined) {
       return globalCurve
     } else {
       /* eslint-disable @typescript-eslint/no-this-alias */

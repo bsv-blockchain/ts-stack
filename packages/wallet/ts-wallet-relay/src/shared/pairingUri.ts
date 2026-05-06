@@ -1,6 +1,7 @@
 import type { PairingParams, ParseResult } from '../types.js'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
-import { bytesToBase64url, base64urlToBytes } from './encoding.js'
+import { base64urlToBytes } from './encoding.js'
+
 
 /** Default accepted URI schemes for parsePairingUri. */
 export const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string> = new Set(['bsv-browser:'])

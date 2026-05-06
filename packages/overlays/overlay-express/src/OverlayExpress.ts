@@ -25,7 +25,7 @@ import { MongoClient, Db } from 'mongodb'
 import makeUserInterface, { type UIConfig } from './makeUserInterface.js'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import chalk from 'chalk'
-import util from 'util'
+import util from 'node:util'
 import { v4 as uuidv4 } from 'uuid'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
 import { BanService } from './BanService.js'
@@ -573,7 +573,7 @@ export default class OverlayExpress {
 
     // Prepare advertiser if not set by the user
     let advertiser: Advertiser | undefined = this.engineConfig.advertiser
-    if (typeof advertiser === 'undefined') {
+    if (advertiser === undefined) {
       try {
         advertiser = new DiscoveryServices.WalletAdvertiser(
           this.network,
@@ -598,7 +598,7 @@ export default class OverlayExpress {
       this.services,
       storage,
       // chainTracker
-      typeof this.engineConfig.chainTracker !== 'undefined'
+      this.engineConfig.chainTracker !== undefined
         ? this.engineConfig.chainTracker
         : this.chainTracker,
       // hostingURL
@@ -644,7 +644,7 @@ export default class OverlayExpress {
       this.serverWallet = wallet
 
       // Auto-set the admin identity key from the server's own key if not configured
-      if (typeof this.adminIdentityKey === 'undefined') {
+      if (this.adminIdentityKey === undefined) {
         this.adminIdentityKey = keyDeriver.identityKey
       }
 
@@ -661,8 +661,8 @@ export default class OverlayExpress {
    * @throws Error if Knex is not configured
    */
   private ensureKnex (): Knex.Knex {
-    if (typeof this.knex === 'undefined') {
-      throw new Error('You must configure your SQL database with the .configureKnex() method first!')
+    if (this.knex === undefined) {
+      throw new TypeError('You must configure your SQL database with the .configureKnex() method first!')
     }
     return this.knex
   }
@@ -672,8 +672,8 @@ export default class OverlayExpress {
    * @throws Error if MongoDB is not configured
    */
   private ensureMongo (): Db {
-    if (typeof this.mongoDb === 'undefined') {
-      throw new Error('You must configure your MongoDB connection with the .configureMongo() method first!')
+    if (this.mongoDb === undefined) {
+      throw new TypeError('You must configure your MongoDB connection with the .configureMongo() method first!')
     }
     return this.mongoDb
   }
@@ -683,8 +683,8 @@ export default class OverlayExpress {
    * @throws Error if the Engine is not configured
    */
   private ensureEngine (): Engine {
-    if (typeof this.engine === 'undefined') {
-      throw new Error('You must configure your Overlay Services engine with the .configureEngine() method first!')
+    if (this.engine === undefined) {
+      throw new TypeError('You must configure your Overlay Services engine with the .configureEngine() method first!')
     }
     return this.engine
   }
@@ -760,8 +760,8 @@ export default class OverlayExpress {
         scope: 'ready',
         critical: true,
         handler: async () => {
-          if (typeof this.engine === 'undefined') {
-            throw new Error('Overlay engine is not configured')
+          if (this.engine === undefined) {
+            throw new TypeError('Overlay engine is not configured')
           }
 
           return {
@@ -778,8 +778,8 @@ export default class OverlayExpress {
         scope: 'ready',
         critical: true,
         handler: async () => {
-          if (typeof this.knex === 'undefined') {
-            throw new Error('Knex is not configured')
+          if (this.knex === undefined) {
+            throw new TypeError('Knex is not configured')
           }
 
           await this.knex.raw('select 1 as ok')
@@ -796,8 +796,8 @@ export default class OverlayExpress {
         scope: 'ready',
         critical: true,
         handler: async () => {
-          if (typeof this.mongoDb === 'undefined') {
-            throw new Error('MongoDB is not configured')
+          if (this.mongoDb === undefined) {
+            throw new TypeError('MongoDB is not configured')
           }
 
           await this.mongoDb.command({ ping: 1 })
@@ -855,7 +855,7 @@ export default class OverlayExpress {
         port: this.port,
         network: this.network,
         startedAt: this.startTime?.toISOString(),
-        uptimeMs: typeof this.startTime === 'undefined' ? 0 : Date.now() - this.startTime.getTime(),
+        uptimeMs: this.startTime === undefined ? 0 : Date.now() - this.startTime.getTime(),
         topicManagerCount: Object.keys(this.managers).length,
         lookupServiceCount: Object.keys(this.services).length
       },
@@ -1105,7 +1105,7 @@ export default class OverlayExpress {
           const topicsHeader = req.headers['x-topics']
           const includesOffChain = req.headers['x-includes-off-chain-values'] === 'true'
           if (typeof topicsHeader !== 'string') {
-            throw new Error('Missing x-topics header')
+            throw new TypeError('Missing x-topics header')
           }
           const topics = JSON.parse(topicsHeader)
           let offChainValues: number[] | undefined
@@ -1410,9 +1410,9 @@ export default class OverlayExpress {
           const collection = db.collection('shipRecords')
 
           const search = typeof req.query.search === 'string' ? req.query.search : undefined
-          const rawPage = parseInt(req.query.page as string, 10)
+          const rawPage = Number.parseInt(req.query.page as string, 10)
           const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
-          const rawLimit = parseInt(req.query.limit as string, 10)
+          const rawLimit = Number.parseInt(req.query.limit as string, 10)
           const limit = Math.min(200, Math.max(1, Number.isNaN(rawLimit) ? 50 : rawLimit))
           const skip = (page - 1) * limit
 
@@ -1456,9 +1456,9 @@ export default class OverlayExpress {
           const collection = db.collection('slapRecords')
 
           const search = typeof req.query.search === 'string' ? req.query.search : undefined
-          const rawPage = parseInt(req.query.page as string, 10)
+          const rawPage = Number.parseInt(req.query.page as string, 10)
           const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
-          const rawLimit = parseInt(req.query.limit as string, 10)
+          const rawLimit = Number.parseInt(req.query.limit as string, 10)
           const limit = Math.min(200, Math.max(1, Number.isNaN(rawLimit) ? 50 : rawLimit))
           const skip = (page - 1) * limit
 
@@ -1555,7 +1555,7 @@ export default class OverlayExpress {
               return res.status(400).json({ status: 'error', message: 'Outpoint format must be "txid.outputIndex"' })
             }
             const txid = value.substring(0, dotIndex)
-            const outputIndex = parseInt(value.substring(dotIndex + 1))
+            const outputIndex = Number.parseInt(value.substring(dotIndex + 1))
             if (isNaN(outputIndex)) {
               return res.status(400).json({ status: 'error', message: 'Invalid outputIndex in outpoint' })
             }

@@ -19,7 +19,7 @@
  * Copy .env.example → .env, add a WALLET_WIF, and run.
  */
 
-import http from 'http'
+import http from 'node:http'
 import express from 'express'
 import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'

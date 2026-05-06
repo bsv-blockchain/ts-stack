@@ -4,8 +4,8 @@ import {
   ChaintracksReadableFileApi,
   ChaintracksWritableFileApi
 } from '../Api/ChaintracksFsApi'
-import { promises as fs } from 'fs'
-import Path from 'path'
+import { promises as fs } from 'node:fs'
+import Path from 'node:path'
 
 export abstract class ChaintracksFsStatics {
   static async delete (path: string): Promise<void> {

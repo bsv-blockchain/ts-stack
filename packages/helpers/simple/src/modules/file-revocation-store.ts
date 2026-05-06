@@ -1,9 +1,9 @@
 import { RevocationRecord, RevocationStore } from '../core/types'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const nodePath = require('path') as typeof import('path')
+const nodePath = require('node:path') as typeof import('node:path')
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const nodeFs = require('fs') as typeof import('fs')
+const nodeFs = require('node:fs') as typeof import('node:fs')
 
 // ============================================================================
 // FileRevocationStore (Node.js server only — not browser-safe)

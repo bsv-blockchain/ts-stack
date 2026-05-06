@@ -1,10 +1,10 @@
-import { createServer } from 'http'
+import { createServer } from 'node:http'
 import { AuthSocketServer } from '../AuthSocketServer'
 import { AuthSocketClient } from '@bsv/authsocket-client'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 
-import * as crypto from 'crypto'
-(global.self as any) = { crypto }
+import * as crypto from 'node:crypto'
+(globalThis.self as any) = { crypto }
 
 const httpServer = createServer()
 const port = 3000

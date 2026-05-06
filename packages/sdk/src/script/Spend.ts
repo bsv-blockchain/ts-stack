@@ -48,8 +48,8 @@ function isMinimallyEncodedHelper (
     return false
   }
   if (buf.length > 0) {
-    if ((buf[buf.length - 1] & 0x7f) === 0) {
-      if (buf.length <= 1 || (buf[buf.length - 2] & 0x80) === 0) {
+    if ((buf.at(-1) & 0x7f) === 0) {
+      if (buf.length <= 1 || (buf.at(-2) & 0x80) === 0) {
         return false
       }
     }
@@ -524,7 +524,7 @@ export default class Spend {
   private parseLaxChecksigSignature (buf: number[]): TransactionSignature {
     if (buf.length === 0) return TransactionSignature.fromChecksigFormat(buf)
 
-    const scope = buf[buf.length - 1]
+    const scope = buf.at(-1)
     const der = buf.slice(0, -1)
     const position = { value: 0 }
     if (der[position.value++] !== 0x30) throw new Error('Signature DER must start with 0x30')
@@ -881,11 +881,11 @@ export default class Spend {
           break
         case OP.OP_ELSE:
           if (this.ifStack.length === 0) this.scriptEvaluationError('OP_ELSE requires a preceeding OP_IF.')
-          if (this.hasExplicitFlags() && this.isAfterGenesis() && this.elseStack[this.elseStack.length - 1]) {
+          if (this.hasExplicitFlags() && this.isAfterGenesis() && this.elseStack.at(-1)) {
             this.scriptEvaluationError('OP_ELSE may only be used once for each OP_IF or OP_NOTIF after Genesis.')
           }
           this.elseStack[this.elseStack.length - 1] = true
-          this.ifStack[this.ifStack.length - 1] = !(this.ifStack[this.ifStack.length - 1])
+          this.ifStack[this.ifStack.length - 1] = !this.ifStack.at(-1)
           break
         case OP.OP_ENDIF:
           if (this.ifStack.length === 0) this.scriptEvaluationError('OP_ENDIF requires a preceeding OP_IF.')
@@ -1400,7 +1400,7 @@ export default class Spend {
           let signbit = 0x00
 
           if (rawnum.length > 0) {
-            signbit = rawnum[rawnum.length - 1] & 0x80 // Store sign bit
+            signbit = rawnum.at(-1) & 0x80 // Store sign bit
             rawnum[rawnum.length - 1] &= 0x7f // Remove sign bit for padding
           }
 

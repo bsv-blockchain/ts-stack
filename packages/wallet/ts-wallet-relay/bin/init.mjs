@@ -16,9 +16,9 @@
  * Existing files are never overwritten — they are skipped with a warning.
  */
 
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const __dirname   = path.dirname(fileURLToPath(import.meta.url))
 const templateDir = path.join(__dirname, '..', 'template')

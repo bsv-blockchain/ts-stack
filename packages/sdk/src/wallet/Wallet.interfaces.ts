@@ -216,11 +216,11 @@ export type SecurityLevel = 0 | 1 | 2
 
 export type WalletProtocol = [SecurityLevel, ProtocolString5To400Bytes]
 
-export type WalletCounterparty = PubKeyHex | 'self' | 'anyone'
+export type WalletCounterparty = PubKeyHex
 
 export type AcquisitionProtocol = 'direct' | 'issuance'
 
-export type KeyringRevealer = PubKeyHex | 'certifier'
+export type KeyringRevealer = PubKeyHex
 
 export type ActionStatus =
   | 'completed'

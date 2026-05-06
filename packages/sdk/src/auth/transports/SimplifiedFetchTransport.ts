@@ -24,7 +24,7 @@ export class SimplifiedFetchTransport implements Transport {
    */
   constructor(baseUrl: string, fetchClient = defaultFetch) {
     if (typeof fetchClient !== 'function') {
-      throw new Error(
+      throw new TypeError(
         'SimplifiedFetchTransport requires a fetch implementation. ' +
         'In environments without fetch, provide a polyfill or custom implementation.'
       )

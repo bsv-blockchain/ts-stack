@@ -216,7 +216,7 @@ var WebSocketRelay = class {
 };
 
 // src/server/QRSessionManager.ts
-var import_crypto = require("crypto");
+var import_node_crypto = require("crypto");
 var PAIRING_TTL_MS = 120 * 1e3;
 var PAIRING_GRACE_MS = 30 * 1e3;
 var PENDING_EXPIRY_MS = PAIRING_TTL_MS + PAIRING_GRACE_MS + 60 * 1e3;
@@ -243,8 +243,8 @@ var QRSessionManager = class {
       err.code = 429;
       throw err;
     }
-    const id = (0, import_crypto.randomBytes)(32).toString("base64url");
-    const desktopToken = (0, import_crypto.randomBytes)(24).toString("base64url");
+    const id = (0, import_node_crypto.randomBytes)(32).toString("base64url");
+    const desktopToken = (0, import_node_crypto.randomBytes)(24).toString("base64url");
     const now = Date.now();
     const session = {
       id,
@@ -302,18 +302,18 @@ var QRSessionManager = class {
 };
 
 // src/server/WalletRequestHandler.ts
-var import_crypto2 = require("crypto");
+var import_node_crypto2 = require("crypto");
 var WalletRequestHandler = class {
   constructor() {
     this.seq = 0;
   }
   /** Create an RPC request with a unique ID and incrementing seq. */
   createRequest(method, params) {
-    return { id: (0, import_crypto2.randomUUID)(), seq: ++this.seq, method, params };
+    return { id: (0, import_node_crypto2.randomUUID)(), seq: ++this.seq, method, params };
   }
   /** Create a protocol-level message (pairing_ack, session_revoke, …). */
   createProtocolMessage(method, params) {
-    return { id: (0, import_crypto2.randomUUID)(), seq: ++this.seq, method, params };
+    return { id: (0, import_node_crypto2.randomUUID)(), seq: ++this.seq, method, params };
   }
   parseMessage(raw) {
     return JSON.parse(raw);

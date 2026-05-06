@@ -1,6 +1,4 @@
 import { Setup } from '@bsv/wallet-toolbox'
-import { runArgv2Function } from './runArgv2Function'
-
 /**
  * Running the `makeEnv` function generates several new private keys
  * and related `.env` file initializers which simplify use of the `Setup`

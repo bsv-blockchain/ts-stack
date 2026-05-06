@@ -238,8 +238,8 @@ export class Services implements WalletServices {
           if (r.error != null) services.addServiceCallError(stc, r.error)
           else services.addServiceCallFailure(stc)
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
       }
       services.next()
@@ -323,8 +323,8 @@ export class Services implements WalletServices {
             if (r.error != null) services.addServiceCallError(stc, r.error)
             else services.addServiceCallFailure(stc)
           }
-        } catch (eu: unknown) {
-          const e = WalletError.fromUnknown(eu)
+        } catch (error_: unknown) {
+          const e = WalletError.fromUnknown(error_)
           services.addServiceCallError(stc, e)
         }
         services.next()
@@ -364,8 +364,8 @@ export class Services implements WalletServices {
           if (r.error != null) services.addServiceCallError(stc, r.error)
           else services.addServiceCallFailure(stc)
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
       }
       services.next()
@@ -521,8 +521,8 @@ export class Services implements WalletServices {
         if ((r.error != null) && (r0.error == null) && (r0.rawTx == null))
         // If we have an error and didn't before...
         { r0.error = r.error }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
       }
       services.next()
@@ -536,9 +536,9 @@ export class Services implements WalletServices {
       try {
         const r: R = await method()
         return r
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
-        if (e.code != 'ECONNRESET') throw eu
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
+        if (e.code != 'ECONNRESET') throw error_
       }
     }
     throw new WERR_INVALID_OPERATION('hashToHeader service unavailable')
@@ -606,8 +606,8 @@ export class Services implements WalletServices {
           // If we have an error and didn't before...
           r0.error = r.error
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
       }
       services.next()
@@ -666,8 +666,8 @@ export class Services implements WalletServices {
         } else {
           services.addServiceCallFailure(stc)
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
       }
       services.next()

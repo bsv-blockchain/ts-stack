@@ -8,7 +8,7 @@ import {
 } from '../primitives/index.js'
 import { WalletProtocol, PubKeyHex } from './Wallet.interfaces.js'
 
-export type Counterparty = PublicKey | PubKeyHex | 'self' | 'anyone'
+export type Counterparty = PublicKey | PubKeyHex
 
 export interface KeyDeriverApi {
   /**

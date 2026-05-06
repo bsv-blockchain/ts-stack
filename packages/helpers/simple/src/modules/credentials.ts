@@ -567,17 +567,17 @@ export function createCredentialMethods (core: WalletCore): {
 
         const certs = result.certificates ?? []
         return certs.map((cert: any) => {
-          const issuerKey = (cert.certifier != null ? cert.certifier : config.certifiers[0]) as string
+          const issuerKey = (cert.certifier ?? config.certifiers[0]) as string
           return toVerifiableCredential(
             {
               type: cert.type,
               serialNumber: cert.serialNumber,
               subject: cert.subject,
               certifier: cert.certifier,
-              revocationOutpoint: cert.revocationOutpoint != null ? cert.revocationOutpoint : '00'.repeat(32) + '.0',
-              fields: cert.fields != null ? cert.fields : {},
-              signature: cert.signature != null ? cert.signature : '',
-              keyringForSubject: cert.keyringForSubject != null ? cert.keyringForSubject : {}
+              revocationOutpoint: cert.revocationOutpoint ?? '00'.repeat(32) + '.0',
+              fields: cert.fields ?? {},
+              signature: cert.signature ?? '',
+              keyringForSubject: cert.keyringForSubject ?? {}
             },
             issuerKey
           )

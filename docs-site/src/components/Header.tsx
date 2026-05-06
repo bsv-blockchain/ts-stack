@@ -14,7 +14,7 @@ interface Props {
   onMenuClick?: () => void
 }
 
-export default function Header({ onMenuClick }: Props) {
+export default function Header({ onMenuClick }: Readonly<Props>) {
   const { pathname } = useLocation()
 
   return (

@@ -394,6 +394,25 @@ describe('HD', () => {
     })
   })
 
+  describe('#derive path validation', () => {
+    it('should derive mixed hardened and non-hardened path segments', () => {
+      const bip32 = HD.fromString(vector1mPrivate)
+      expect(() => bip32.derive("m/0'/0'/2/3/4'/4")).not.toThrow()
+    })
+
+    it('should reject apostrophes that are not trailing hardening markers', () => {
+      const bip32 = HD.fromString(vector1mPrivate)
+      expect(() => bip32.derive("m/1'2")).toThrow('invalid path')
+      expect(() => bip32.derive("m/1''")).toThrow('invalid path')
+    })
+
+    it('should reject child indexes outside the non-hardened range', () => {
+      const bip32 = HD.fromString(vector1mPrivate)
+      expect(() => bip32.derive('m/2147483648')).toThrow('invalid path')
+      expect(() => bip32.derive("m/2147483648'")).toThrow('invalid path')
+    })
+  })
+
   describe('#toString', () => {
     const bip32 = new HD()
     bip32.fromRandom()

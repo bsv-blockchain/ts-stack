@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto'
+import { randomBytes } from 'node:crypto'
 import type { Session, SessionStatus } from '../types.js'
 
 const PAIRING_TTL_MS   = 120 * 1000  // 2 min QR expiry

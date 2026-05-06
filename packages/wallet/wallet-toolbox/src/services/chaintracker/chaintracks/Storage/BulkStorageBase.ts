@@ -5,14 +5,11 @@ import { BulkStorageApi, BulkStorageBaseOptions } from '../Api/BulkStorageApi'
 import { ChaintracksStorageBase } from './ChaintracksStorageBase'
 
 import { HeightRange } from '../util/HeightRange'
-import { BulkFilesReader } from '../util/BulkFilesReader'
 import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
-
-import { addWork, convertBitsToWork, deserializeBlockHeaders, genesisBuffer } from '../util/blockHeaderUtilities'
 import { Chain } from '../../../../sdk/types'
-import { BlockHeader, LiveBlockHeader } from '../Api/BlockHeaderApi'
+import { BlockHeader } from '../Api/BlockHeaderApi'
+
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
-import { Utils } from '@bsv/sdk'
 import { asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
 
 export abstract class BulkStorageBase implements BulkStorageApi {

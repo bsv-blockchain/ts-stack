@@ -106,7 +106,7 @@ class DNSResolver extends AbstractResolver {
 
     return {
       domain: responseDomain,
-      port: parseInt(port)
+      port: Number.parseInt(port)
     }
   }
 

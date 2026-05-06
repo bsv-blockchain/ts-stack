@@ -101,7 +101,7 @@ export class Peer {
       throw e
     })
     this.sessionManager =
-      sessionManager != null ? sessionManager : new SessionManager()
+      sessionManager ?? new SessionManager()
     if (autoPersistLastSession === false) {
       this.autoPersistLastSession = false
     } else {

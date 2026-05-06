@@ -44,7 +44,7 @@ export class CompletedProtoWallet
     ) {
       this.keyDeriver = new CachedKeyDeriver(rootKeyOrKeyDeriver)
     } else {
-      throw new Error('Invalid key deriver provided')
+      throw new TypeError('Invalid key deriver provided')
     }
   }
 

@@ -69,8 +69,8 @@ async function validateReqsAndMergeBeefs (
         vreqs.push(vreq)
         r.details.push(vreq)
       }
-    } catch (eu: unknown) {
-      const { code, message } = sdk.WalletError.fromUnknown(eu)
+    } catch (error_: unknown) {
+      const { code, message } = sdk.WalletError.fromUnknown(error_)
       req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqError', txid: req.txid, code, message })
       req.attempts++
       if (req.attempts > 6 || message.startsWith('The txid parameter must be known to storage')) {

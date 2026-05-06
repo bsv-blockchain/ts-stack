@@ -1,14 +1,5 @@
 // src/script-templates/p2pkh.ts
-import {
-  LockingScript,
-  UnlockingScript,
-  Hash,
-  OP,
-  Utils,
-  TransactionSignature as TransactionSignature2,
-  Signature,
-  PublicKey
-} from "@bsv/sdk";
+import { LockingScript, UnlockingScript, Hash, OP, Utils, TransactionSignature as TransactionSignature2, Signature, PublicKey } from "@bsv/sdk";
 
 // src/utils/createPreimage.ts
 import {
@@ -225,10 +216,7 @@ var P2PKH = class {
 };
 
 // src/script-templates/ordinal.ts
-import {
-  LockingScript as LockingScript2,
-  Utils as Utils2
-} from "@bsv/sdk";
+import { LockingScript as LockingScript2, Utils as Utils2 } from "@bsv/sdk";
 
 // src/utils/constants.ts
 var ORDINAL_MAP_PREFIX = "1PuQa7K62MiKCtssSLKy1kh56WWU7MtUR5";
@@ -339,18 +327,7 @@ var applyInscription = (lockingScript, inscription, metaData, withSeparator = fa
 };
 
 // src/script-templates/ordlock.ts
-import {
-  BigNumber,
-  Hash as Hash2,
-  LockingScript as LockingScript3,
-  OP as OP2,
-  PublicKey as PublicKey2,
-  Script as Script4,
-  Signature as Signature2,
-  TransactionSignature as TransactionSignature3,
-  UnlockingScript as UnlockingScript3,
-  Utils as Utils3
-} from "@bsv/sdk";
+import { BigNumber, Hash as Hash2, LockingScript as LockingScript3, OP as OP2, PublicKey as PublicKey2, Script as Script4, Signature as Signature2, TransactionSignature as TransactionSignature3, UnlockingScript as UnlockingScript3, Utils as Utils3 } from "@bsv/sdk";
 var OLOCK_PREFIX = "2097dfd76851bf465e8f715593b217714858bbe9570ff3bd5e33840a34e20ff0262102ba79df5f8ae7604a9830f03c7933028186aede0675a16f025dc4f8be8eec0382201008ce7480da41702918d1ec8e6849ba32b4d65b1e40dc669c31a1e6306b266c0000";
 var OLOCK_SUFFIX = "615179547a75537a537a537a0079537a75527a527a7575615579008763567901c161517957795779210ac407f0e4bd44bfc207355a778b046225a7068fc59ee7eda43ad905aadbffc800206c266b30e6a1319c66dc401e5bd6b432ba49688eecd118297041da8074ce081059795679615679aa0079610079517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e01007e81517a75615779567956795679567961537956795479577995939521414136d08c5ed2bf3ba048afe6dcaebafeffffffffffffffffffffffffffffff00517951796151795179970079009f63007952799367007968517a75517a75517a7561527a75517a517951795296a0630079527994527a75517a6853798277527982775379012080517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f517f7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e7c7e01205279947f7754537993527993013051797e527e54797e58797e527e53797e52797e57797e0079517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a75517a756100795779ac517a75517a75517a75517a75517a75517a75517a75517a75517a7561517a75517a756169587951797e58797eaa577961007982775179517958947f7551790128947f77517a75517a75618777777777777777777767557951876351795779a9876957795779ac777777777777777767006868";
 var toHex2 = (str) => {
@@ -571,11 +548,7 @@ var OrdLock = class {
 };
 
 // src/transaction-builder/transaction.ts
-import {
-  Transaction as Transaction5,
-  SatoshisPerKilobyte,
-  Beef
-} from "@bsv/sdk";
+import { Transaction as Transaction5, SatoshisPerKilobyte, Beef } from "@bsv/sdk";
 
 // src/utils/mockWallet.ts
 import {
@@ -639,7 +612,7 @@ var addOpReturnData = (script, fields) => {
     throw new Error("Script already contains OP_RETURN. Cannot add multiple OP_RETURN statements to the same script.");
   }
   if (!Array.isArray(fields)) {
-    throw new Error("Invalid fields parameter: must be an array of strings or number arrays");
+    throw new TypeError("Invalid fields parameter: must be an array of strings or number arrays");
   }
   if (fields.length === 0) {
     throw new Error("At least one data field is required for OP_RETURN");
@@ -649,7 +622,7 @@ var addOpReturnData = (script, fields) => {
     const isString = typeof field === "string";
     if (!isString) {
       if (!Array.isArray(field)) {
-        throw new Error(
+        throw new TypeError(
           `Invalid field at index ${i}: must be a string or number array, got ${typeof field}`
         );
       }
@@ -657,7 +630,7 @@ var addOpReturnData = (script, fields) => {
       for (let j = 0; j < sampleSize; j++) {
         const idx = Math.floor(j / sampleSize * field.length);
         if (typeof field[idx] !== "number") {
-          throw new Error(
+          throw new TypeError(
             `Invalid field at index ${i}: array contains non-number at position ${idx}`
           );
         }
@@ -739,7 +712,7 @@ function validateInput(input, functionName) {
   }
   const inputType = typeof input;
   if (Array.isArray(input)) {
-    throw new Error(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`);
+    throw new TypeError(`${functionName}: Input cannot be an array. Expected LockingScript, Script, or hex string`);
   }
   if (inputType !== "string" && inputType !== "object") {
     throw new Error(`${functionName}: Input must be a LockingScript, Script, or hex string, got ${inputType}`);
@@ -747,7 +720,7 @@ function validateInput(input, functionName) {
   if (inputType === "object") {
     const scriptObj = input;
     if (typeof scriptObj.toHex !== "function" || typeof scriptObj.toASM !== "function") {
-      throw new Error(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`);
+      throw new TypeError(`${functionName}: Object must be a LockingScript or Script with toHex() and toASM() methods`);
     }
   }
   if (inputType === "string") {
@@ -1352,21 +1325,21 @@ var TransactionBuilder = class {
     }
     if (opts.noSendChange !== void 0) {
       if (!Array.isArray(opts.noSendChange)) {
-        throw new Error("noSendChange must be an array");
+        throw new TypeError("noSendChange must be an array");
       }
       for (let i = 0; i < opts.noSendChange.length; i++) {
         if (typeof opts.noSendChange[i] !== "string") {
-          throw new Error(`noSendChange[${i}] must be a string (outpoint format)`);
+          throw new TypeError(`noSendChange[${i}] must be a string (outpoint format)`);
         }
       }
     }
     if (opts.sendWith !== void 0) {
       if (!Array.isArray(opts.sendWith)) {
-        throw new Error("sendWith must be an array");
+        throw new TypeError("sendWith must be an array");
       }
       for (let i = 0; i < opts.sendWith.length; i++) {
         if (typeof opts.sendWith[i] !== "string") {
-          throw new Error(`sendWith[${i}] must be a string (hex txid)`);
+          throw new TypeError(`sendWith[${i}] must be a string (hex txid)`);
         }
       }
     }

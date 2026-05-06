@@ -33,7 +33,7 @@ const actions: { method: WalletMethod; label: string; params?: unknown }[] = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function WalletActions({ session, onRequest }: Props) {
+export function WalletActions({ session, onRequest }: Readonly<Props>) {
   const connected = session?.status === 'connected'
 
   return (

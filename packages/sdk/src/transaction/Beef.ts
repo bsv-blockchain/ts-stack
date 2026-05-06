@@ -126,7 +126,7 @@ export class Beef {
     }
 
     // If the transaction is not the last one, clone and modify
-    const beef = (this.txs[this.txs.length - 1] === tx) ? this : this.clone()
+    const beef = (this.txs.at(-1) === tx) ? this : this.clone()
 
     if (beef !== this) {
       const i = this.txs.findIndex((t) => t.txid === txid)

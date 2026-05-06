@@ -1,5 +1,6 @@
 import { LookupFormula } from './LookupFormula.js'
-import { Script, LookupQuestion, LookupAnswer } from '@bsv/sdk'
+import { Script, LookupQuestion } from '@bsv/sdk'
+
 
 /* ---------------------------------------------------------------------------
  *  Modes a Lookup Service may request from the Overlay Services Engine

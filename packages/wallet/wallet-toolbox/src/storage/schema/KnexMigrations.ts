@@ -49,7 +49,7 @@ export class KnexMigrations implements MigrationSource<string> {
 
   async getLatestMigration (): Promise<string> {
     const ms = await this.getMigrations()
-    return ms[ms.length - 1]
+    return ms.at(-1)!
   }
 
   static async latestMigration (): Promise<string> {
@@ -543,8 +543,8 @@ export async function determineDBType (knex: Knex<any, any[]>): Promise<DBType> 
     const dbtype: 'SQLite' | 'MySQL' | 'Unknown' = r[0].database_type
     if (dbtype === 'Unknown') throw new WERR_NOT_IMPLEMENTED('Attempting to create database on unsuported engine.')
     return dbtype
-  } catch (eu: unknown) {
-    const e = WalletError.fromUnknown(eu)
+  } catch (error_: unknown) {
+    const e = WalletError.fromUnknown(error_)
     // Check for SQLite errors from both node-sqlite3 (SQLITE_ERROR) and better-sqlite3 (SqliteError)
     if (e.code === 'SQLITE_ERROR' || e.code === 'SqliteError') return 'SQLite'
     throw new WERR_NOT_IMPLEMENTED('Attempting to create database on unsuported engine.')

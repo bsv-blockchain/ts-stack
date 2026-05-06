@@ -64,8 +64,8 @@ export class MergeEntity<API extends EntityTimeStamp, DE extends EntityBase<API>
           inserts++
         }
         if (eiId > -1) this.updateSyncMap(this.idMap, eiId, eo.id)
-      } catch (eu: unknown) {
-        throw eu
+      } catch (error_: unknown) {
+        throw error_
       }
     }
     return { inserts, updates }

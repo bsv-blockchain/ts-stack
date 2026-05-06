@@ -80,8 +80,8 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         else r.results.push({ txid, status: 'mined', depth: d.confirmations })
       }
       r.status = 'success'
-    } catch (eu: unknown) {
-      const e = WalletError.fromUnknown(eu)
+    } catch (error_: unknown) {
+      const e = WalletError.fromUnknown(error_)
       r.error = e
     }
 
@@ -279,9 +279,9 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
             r.notes!.push(n)
           }
         }
-      } catch (eu: unknown) {
+      } catch (error_: unknown) {
         r.status = 'error'
-        const e = WalletError.fromUnknown(eu)
+        const e = WalletError.fromUnknown(error_)
         r.notes!.push({
           ...nne(),
           what: 'postRawTxCatch',
@@ -406,10 +406,10 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         }
 
         return r
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         if (e.code !== 'ECONNRESET' || retry >= 2) {
-          r.error = new WERR_INTERNAL(`service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(eu))}`)
+          r.error = new WERR_INTERNAL(`service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(error_))}`)
           return r
         }
       }
@@ -467,11 +467,11 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         r.status = 'success'
 
         return r
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         if (e.code !== 'ECONNRESET' || retry >= 2) {
           r.error = new WERR_INTERNAL(
-            `WoC getScriptHashConfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(eu))}`
+            `WoC getScriptHashConfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(error_))}`
           )
           return r
         }
@@ -530,18 +530,17 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         r.status = 'success'
 
         return r
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         if (e.code !== 'ECONNRESET' || retry > 2) {
           r.error = new WERR_INTERNAL(
-            `WoC getScriptHashUnconfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(eu))}`
+            `WoC getScriptHashUnconfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(error_))}`
           )
           return r
         }
       }
     }
 
-    return r
   }
 
   async getScriptHashHistory (hash: string): Promise<GetScriptHashHistoryResult> {
@@ -730,8 +729,8 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
           })
           throw new WERR_INVALID_PARAMETER('blockhash', 'a valid on-chain block hash')
         }
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         r.notes!.push({
           what: 'getMerklePathError',
           name: r.name,

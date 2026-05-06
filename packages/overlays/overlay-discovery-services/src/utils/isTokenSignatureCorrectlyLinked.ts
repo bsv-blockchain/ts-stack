@@ -1,4 +1,5 @@
-import { PublicKey, Signature, ProtoWallet, Utils } from '@bsv/sdk'
+import { PublicKey, ProtoWallet, Utils } from '@bsv/sdk'
+
 
 /**
  * Checks that the BRC-48 locking key and the signature are valid and linked to the claimed identity key.

@@ -181,7 +181,7 @@ export class Historian<T, C = unknown> {
 
     // History is built in reverse chronological order during traversal,
     // so we reverse it to return oldest-first
-    const chronological = history.reverse()
+    const chronological = history.toReversed()
 
     if (this.historyCache != null) {
       const cacheKey = this.historyKey(startTransaction, context)

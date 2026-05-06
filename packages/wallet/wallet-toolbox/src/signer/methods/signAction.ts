@@ -44,9 +44,9 @@ function mergePriorOptions (
   saArgs: SignActionArgs
 ): Validation.ValidSignActionArgs {
   const saOptions = (saArgs.options ||= {})
-  if (saOptions.acceptDelayedBroadcast === undefined) { saOptions.acceptDelayedBroadcast = caVargs.options.acceptDelayedBroadcast }
-  if (saOptions.returnTXIDOnly === undefined) saOptions.returnTXIDOnly = caVargs.options.returnTXIDOnly
-  if (saOptions.noSend === undefined) saOptions.noSend = caVargs.options.noSend
-  if (saOptions.sendWith === undefined) saOptions.sendWith = caVargs.options.sendWith
+  saOptions.acceptDelayedBroadcast ??= caVargs.options.acceptDelayedBroadcast
+  saOptions.returnTXIDOnly ??= caVargs.options.returnTXIDOnly
+  saOptions.noSend ??= caVargs.options.noSend
+  saOptions.sendWith ??= caVargs.options.sendWith
   return Validation.validateSignActionArgs(saArgs)
 }

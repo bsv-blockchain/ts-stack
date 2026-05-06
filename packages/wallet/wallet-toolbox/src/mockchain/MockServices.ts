@@ -1,11 +1,9 @@
 import {
   Beef,
   ChainTracker,
-  MerklePath,
   Random,
   Transaction as BsvTransaction,
-  Utils,
-  WalletLoggerInterface
+  Utils
 } from '@bsv/sdk'
 import { Knex } from 'knex'
 import { Chain } from '../sdk/types'
@@ -32,6 +30,24 @@ import { MockChainStorage } from './MockChainStorage'
 import { MockChainTracker } from './MockChainTracker'
 import { MockMiner } from './MockMiner'
 import { computeMerklePath } from './merkleTree'
+
+const mockFiatRatesByUsd: Record<FiatCurrencyCode, number> = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  JPY: 156.5,
+  CNY: 7.24,
+  INR: 83.42,
+  AUD: 1.51,
+  CAD: 1.37,
+  CHF: 0.9,
+  HKD: 7.81,
+  SGD: 1.35,
+  NZD: 1.64,
+  SEK: 10.52,
+  NOK: 10.74,
+  MXN: 16.68
+}
 
 export interface ReorgResult {
   oldTip: BlockHeader
@@ -189,8 +205,8 @@ export class MockServices implements WalletServices {
           status: 'success',
           txidResults: [{ txid, status: 'success' }]
         })
-      } catch (eu: unknown) {
-        const error = eu instanceof Error ? new WERR_INTERNAL(eu.message) : new WERR_INTERNAL(String(eu))
+      } catch (error_: unknown) {
+        const error = error_ instanceof Error ? new WERR_INTERNAL(error_.message) : new WERR_INTERNAL(String(error_))
         results.push({
           name: 'MockServices',
           status: 'error',
@@ -458,17 +474,17 @@ export class MockServices implements WalletServices {
   }
 
   async getBsvExchangeRate (): Promise<number> {
-    return 50.0
+    return 50
   }
 
   async getFiatExchangeRate (currency: FiatCurrencyCode, base?: FiatCurrencyCode): Promise<number> {
-    if (currency === (base || 'USD')) return 1
-    return 1.0
+    const baseCurrency = base ?? 'USD'
+    return mockFiatRatesByUsd[currency] / mockFiatRatesByUsd[baseCurrency]
   }
 
   async getFiatExchangeRates (targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {
     const rates: Record<string, number> = {}
-    for (const c of targetCurrencies) rates[c] = 1
+    for (const c of targetCurrencies) rates[c] = mockFiatRatesByUsd[c]
     return {
       timestamp: new Date(),
       base: 'USD',

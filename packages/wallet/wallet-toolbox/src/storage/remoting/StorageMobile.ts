@@ -102,8 +102,8 @@ export class StorageClient implements WalletStorageProvider {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         })
-      } catch (eu: unknown) {
-        throw eu
+      } catch (error_: unknown) {
+        throw error_
       }
 
       if (!response.ok) {
@@ -121,8 +121,8 @@ export class StorageClient implements WalletStorageProvider {
       }
 
       return json.result
-    } catch (eu: unknown) {
-      throw eu
+    } catch (error_: unknown) {
+      throw error_
     }
   }
 

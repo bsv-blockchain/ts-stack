@@ -1,20 +1,5 @@
-import {
-  BigNumber,
-  Hash,
-  LockingScript,
-  OP,
-  PublicKey,
-  Script,
-  ScriptTemplate,
-  Signature,
-  Transaction,
-  TransactionSignature,
-  UnlockingScript,
-  Utils,
-  WalletCounterparty,
-  WalletInterface,
-  WalletProtocol
-} from '@bsv/sdk'
+import { BigNumber, Hash, LockingScript, OP, PublicKey, Script, ScriptTemplate, Signature, Transaction, TransactionSignature, UnlockingScript, Utils, WalletInterface, WalletProtocol } from '@bsv/sdk'
+
 import { calculatePreimage } from '../utils/createPreimage'
 import P2PKH from './p2pkh'
 import {

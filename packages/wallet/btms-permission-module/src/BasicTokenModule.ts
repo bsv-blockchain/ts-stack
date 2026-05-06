@@ -748,7 +748,8 @@ export class BasicTokenModule implements PermissionsModule {
 
       const txidBytes = data.slice(outpointStart, outpointStart + 32)
       // Reverse the txid bytes (Bitcoin uses little-endian)
-      const txid = Utils.toHex(txidBytes.reverse())
+      txidBytes.reverse()
+      const txid = Utils.toHex(txidBytes)
       const voutBytes = data.slice(outpointStart + 32, outpointStart + 36)
       const vout = voutBytes[0] | (voutBytes[1] << 8) | (voutBytes[2] << 16) | (voutBytes[3] << 24)
       const outpoint = `${txid}.${vout}`

@@ -8,7 +8,7 @@ type ImgProps = ComponentPropsWithoutRef<'img'>
 type PreProps = ComponentPropsWithoutRef<'pre'>
 type CodeProps = ComponentPropsWithoutRef<'code'>
 
-function Anchor({ href, children, ...rest }: AnchorProps) {
+function Anchor({ href, children, ...rest }: Readonly<AnchorProps>) {
   const isExternal = href?.startsWith('http')
   return (
     <a
@@ -22,15 +22,15 @@ function Anchor({ href, children, ...rest }: AnchorProps) {
   )
 }
 
-function Img({ src, alt, ...rest }: ImgProps) {
+function Img({ src, alt, ...rest }: Readonly<ImgProps>) {
   return <img src={src} alt={alt ?? ''} loading="lazy" {...rest} />
 }
 
-function Pre({ children, ...rest }: PreProps) {
+function Pre({ children, ...rest }: Readonly<PreProps>) {
   return <CodeBlock {...rest}>{children}</CodeBlock>
 }
 
-function InlineCode({ children, ...rest }: CodeProps) {
+function InlineCode({ children, ...rest }: Readonly<CodeProps>) {
   return <code {...rest}>{children}</code>
 }
 

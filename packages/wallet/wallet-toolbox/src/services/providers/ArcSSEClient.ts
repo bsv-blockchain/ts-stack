@@ -39,7 +39,7 @@ export interface ArcSSEClientOptions {
 
 export class ArcSSEClient {
   private _lastEventId: string | undefined
-  private es: any | null = null
+  private es: any = null
   private readonly url: string
   private connected = false
   private connecting = false

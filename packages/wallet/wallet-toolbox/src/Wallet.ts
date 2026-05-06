@@ -489,8 +489,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
           vargs.privileged,
           vargs.privilegedReason
         )
-      } catch (eu: unknown) {
-        const e = WalletError.fromUnknown(eu)
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
         throw new WERR_INVALID_PARAMETER(
           'args',
           `valid encrypted and signed certificate and keyring from revealer. ${e.name}: ${e.message}`
@@ -805,7 +805,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     try {
       Validation.validateOriginator(originator)
 
-      if (args.options == null) args.options = {}
+      args.options ??= {}
       args.options.trustSelf ||= this.trustSelf
       if (this.autoKnownTxids && (args.options.knownTxids == null)) {
         args.options.knownTxids = this.getKnownTxids(args.options.knownTxids)
@@ -835,9 +835,9 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
       this.logResult(r, logger)
       return r
-    } catch (eu: unknown) {
-      this.logWalletError(eu, logger)
-      throw eu
+    } catch (error_: unknown) {
+      this.logWalletError(error_, logger)
+      throw error_
     }
   }
 

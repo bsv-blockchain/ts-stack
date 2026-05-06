@@ -1,17 +1,7 @@
-import {
-  LockingScript,
-  Utils,
-  Script,
-  WalletInterface,
-  ScriptTemplate,
-  Transaction,
-  UnlockingScript,
-  WalletProtocol,
-  WalletCounterparty
-} from '@bsv/sdk'
+import { LockingScript, Utils, Script, WalletInterface, ScriptTemplate, Transaction, UnlockingScript } from '@bsv/sdk'
+
 import P2PKH from './p2pkh'
 import { ORDINAL_MAP_PREFIX } from '../utils/constants'
-import { WalletDerivationParams } from '../types/wallet'
 import {
   OrdinalLockParams,
   OrdinalLockWithPubkeyhash,

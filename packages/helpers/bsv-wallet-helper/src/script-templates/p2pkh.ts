@@ -1,21 +1,6 @@
-import {
-  LockingScript,
-  ScriptTemplate,
-  Transaction,
-  UnlockingScript,
-  Hash,
-  OP,
-  Utils,
-  WalletInterface,
-  Script,
-  TransactionSignature,
-  Signature,
-  PublicKey,
-  WalletProtocol,
-  WalletCounterparty
-} from '@bsv/sdk'
+import { LockingScript, ScriptTemplate, Transaction, UnlockingScript, Hash, OP, Utils, WalletInterface, Script, TransactionSignature, Signature, PublicKey, WalletProtocol } from '@bsv/sdk'
+
 import { calculatePreimage } from '../utils/createPreimage'
-import { WalletDerivationParams } from '../types/wallet'
 import {
   P2PKHLockParams,
   P2PKHLockWithPubkeyhash,
