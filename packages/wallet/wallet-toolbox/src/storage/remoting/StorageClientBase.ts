@@ -38,6 +38,7 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableProvenTxReq } from '../schema/tables/TableProvenTxReq'
 import { EntityTimeStamp } from '../../sdk/types'
+import { validateDate, validateEntity, validateEntities } from './entityValidationHelpers'
 
 /**
  * Abstract base class shared by `StorageClient` and `StorageMobile`.
@@ -231,7 +232,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       storageIdentityKey,
       storageName
     ])
-    r.syncState = this.validateEntity(r.syncState, ['when'])
+    r.syncState = validateEntity(r.syncState, ['when'])
     return r
   }
 
@@ -296,10 +297,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]> {
     const r = await this.rpcCall<TableCertificateX[]>('findCertificatesAuth', [auth, args])
-    this.validateEntities(r)
+    validateEntities(r)
     if (args.includeFields) {
       for (const c of r) {
-        if (c.fields != null) this.validateEntities(c.fields)
+        if (c.fields != null) validateEntities(c.fields)
       }
     }
     return r
@@ -317,7 +318,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async findOutputBasketsAuth (auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]> {
     const r = await this.rpcCall<TableOutputBasket[]>('findOutputBaskets', [auth, args])
-    this.validateEntities(r)
+    validateEntities(r)
     return r
   }
 
@@ -333,7 +334,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async findOutputsAuth (auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]> {
     const r = await this.rpcCall<TableOutput[]>('findOutputsAuth', [auth, args])
-    this.validateEntities(r)
+    validateEntities(r)
     return r
   }
 
@@ -349,7 +350,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
     const r = await this.rpcCall<TableProvenTxReq[]>('findProvenTxReqs', [args])
-    this.validateEntities(r)
+    validateEntities(r)
     return r
   }
 
@@ -405,19 +406,19 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   async getSyncChunk (args: RequestSyncChunkArgs): Promise<SyncChunk> {
     const r = await this.rpcCall<SyncChunk>('getSyncChunk', [args])
-    if (r.certificateFields != null) r.certificateFields = this.validateEntities(r.certificateFields)
-    if (r.certificates != null) r.certificates = this.validateEntities(r.certificates)
-    if (r.commissions != null) r.commissions = this.validateEntities(r.commissions)
-    if (r.outputBaskets != null) r.outputBaskets = this.validateEntities(r.outputBaskets)
-    if (r.outputTagMaps != null) r.outputTagMaps = this.validateEntities(r.outputTagMaps)
-    if (r.outputTags != null) r.outputTags = this.validateEntities(r.outputTags)
-    if (r.outputs != null) r.outputs = this.validateEntities(r.outputs)
-    if (r.provenTxReqs != null) r.provenTxReqs = this.validateEntities(r.provenTxReqs)
-    if (r.provenTxs != null) r.provenTxs = this.validateEntities(r.provenTxs)
-    if (r.transactions != null) r.transactions = this.validateEntities(r.transactions)
-    if (r.txLabelMaps != null) r.txLabelMaps = this.validateEntities(r.txLabelMaps)
-    if (r.txLabels != null) r.txLabels = this.validateEntities(r.txLabels)
-    if (r.user != null) r.user = this.validateEntity(r.user)
+    if (r.certificateFields != null) r.certificateFields = validateEntities(r.certificateFields)
+    if (r.certificates != null) r.certificates = validateEntities(r.certificates)
+    if (r.commissions != null) r.commissions = validateEntities(r.commissions)
+    if (r.outputBaskets != null) r.outputBaskets = validateEntities(r.outputBaskets)
+    if (r.outputTagMaps != null) r.outputTagMaps = validateEntities(r.outputTagMaps)
+    if (r.outputTags != null) r.outputTags = validateEntities(r.outputTags)
+    if (r.outputs != null) r.outputs = validateEntities(r.outputs)
+    if (r.provenTxReqs != null) r.provenTxReqs = validateEntities(r.provenTxReqs)
+    if (r.provenTxs != null) r.provenTxs = validateEntities(r.provenTxs)
+    if (r.transactions != null) r.transactions = validateEntities(r.transactions)
+    if (r.txLabelMaps != null) r.txLabelMaps = validateEntities(r.txLabelMaps)
+    if (r.txLabels != null) r.txLabels = validateEntities(r.txLabels)
+    if (r.user != null) r.user = validateEntity(r.user)
     return r
   }
 
@@ -451,45 +452,25 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     return await this.rpcCall<number>('setActive', [auth, newActiveStorageIdentityKey])
   }
 
-  validateDate (date: Date | string | number): Date {
-    let r: Date
-    if (date instanceof Date) r = date
-    else r = new Date(date)
-    return r
-  }
+  /** @see {@link validateDate} */
+  validateDate (date: Date | string | number): Date { return validateDate(date) }
 
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process all individual records with time stamps retreived from database.
+   * @see {@link validateEntity}
    */
   validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T {
-    entity.created_at = this.validateDate(entity.created_at)
-    entity.updated_at = this.validateDate(entity.updated_at)
-    if (dateFields != null) {
-      for (const df of dateFields) {
-        if (entity[df]) entity[df] = this.validateDate(entity[df])
-      }
-    }
-    for (const key of Object.keys(entity)) {
-      const val = entity[key]
-      if (val === null) {
-        entity[key] = undefined
-      } else if (val instanceof Uint8Array) {
-        entity[key] = Array.from(val)
-      }
-    }
-    return entity
+    return validateEntity(entity, dateFields)
   }
 
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process all arrays of records with time stamps retreived from database.
    * @returns input `entities` array with contained values validated.
+   * @see {@link validateEntities}
    */
   validateEntities<T extends EntityTimeStamp>(entities: T[], dateFields?: string[]): T[] {
-    for (let i = 0; i < entities.length; i++) {
-      entities[i] = this.validateEntity(entities[i], dateFields)
-    }
-    return entities
+    return validateEntities(entities, dateFields)
   }
 }
