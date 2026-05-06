@@ -11,6 +11,7 @@ import { createAuthMiddleware } from '../index'
 // Export a function to start the server programmatically
 export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { ready: Promise<void> } => {
   const app = express()
+  app.disable('x-powered-by')
 
   // Middleware setup
   app.use(bodyParser.json())

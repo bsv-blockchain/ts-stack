@@ -1457,7 +1457,7 @@ export class BTMS {
               continue
             }
             const tx = Transaction.fromBEEF(page.BEEF, txid)
-            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript.toHex() as HexString
+            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript.toHex()
           } else {
             // When includeBeef is false, use the returned lockingScript
             scriptHex = output.lockingScript
