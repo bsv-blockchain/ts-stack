@@ -1,29 +1,15 @@
 # CODEOWNERS — bsv-blockchain/ts-stack
 #
 # Each line: path pattern → GitHub teams or users responsible for review.
-# More specific rules override less specific ones.
+# Later matching rules override earlier ones.
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # ── Default (catch-all) ──────────────────────────────────────────────────────
 *                               @bsv-blockchain/stack-architects
 
-# ── SDK ──────────────────────────────────────────────────────────────────────
-/packages/sdk/                  @bsv-blockchain/sdk-leads
-
-# ── Wallet ───────────────────────────────────────────────────────────────────
-/packages/wallet/               @bsv-blockchain/wallet-leads
-
-# ── Overlay ──────────────────────────────────────────────────────────────────
-/packages/overlays/             @bsv-blockchain/overlay-leads
-
-# ── Messaging ────────────────────────────────────────────────────────────────
-/packages/messaging/            @bsv-blockchain/messaging-leads
-
-# ── Network / Middleware ──────────────────────────────────────────────────────
-/packages/network/              @bsv-blockchain/middleware-leads
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-/packages/helpers/              @bsv-blockchain/stack-architects
+# ── Package Defaults ─────────────────────────────────────────────────────────
+/packages/                      @bsv-blockchain/ent:bsva-technology
+# Add package-specific owners below this default as they are assigned.
 
 # ── Conformance & Specs ──────────────────────────────────────────────────────
 /conformance/                   @bsv-blockchain/stack-architects
