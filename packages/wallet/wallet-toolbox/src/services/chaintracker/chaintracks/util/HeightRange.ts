@@ -80,8 +80,6 @@ export class HeightRange implements HeightRangeApi {
    * @returns
    */
   intersect (range: HeightRange) {
-    // if (this.isEmpty || range.isEmpty) return HeightRange.empty
-    // if (this.maxHeight < range.minHeight || this.minHeight > range.maxHeight) return HeightRange.empty
     const r = new HeightRange(Math.max(this.minHeight, range.minHeight), Math.min(this.maxHeight, range.maxHeight))
     return r
   }

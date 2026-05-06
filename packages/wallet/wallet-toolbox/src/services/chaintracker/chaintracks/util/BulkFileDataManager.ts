@@ -747,7 +747,6 @@ export class BulkFileDataManager {
     if ((bfd.data == null) && (this.fetch != null) && bfd.sourceUrl) {
       // TODO - restore this change
       const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
-      // const url = this.fetch.pathJoin('http://localhost:8842/blockheaders', bfd.fileName)
 
       try {
         bfd.data = await this.fetch.download(url)

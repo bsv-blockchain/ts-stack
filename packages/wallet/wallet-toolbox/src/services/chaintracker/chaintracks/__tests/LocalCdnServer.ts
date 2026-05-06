@@ -62,10 +62,7 @@ export class LocalCdnServer {
     })
 
     this.server.listen(this.port, () => {
-      //      console.log(`Server running at http://localhost:${this.port}`)
-      //      console.log(`Serving files from: ${this.folder}`)
-      //      console.log(`Access files at: http://localhost:${this.port}/blockheaders`)
-      //      console.log(`List files at: http://localhost:${this.port}/files`)
+      // intentionally silent
     })
   }
 

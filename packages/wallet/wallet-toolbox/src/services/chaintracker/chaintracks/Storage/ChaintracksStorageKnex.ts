@@ -368,8 +368,6 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
 
   async findMaxHeaderId (): Promise<number> {
     return ((await this.knex(this.headerTableName).max('headerId as v')).pop()?.v as number) || -1
-    // const [resultrow] = await this.knex(this.headerTableName).max('headerId as maxHeaderId')
-    // return resultrow?.maxHeaderId || 0
   }
 
   override async deleteLiveBlockHeaders (): Promise<void> {

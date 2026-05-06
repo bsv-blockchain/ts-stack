@@ -222,7 +222,6 @@ if (decoded.valid) {
 - **`src/index.ts`** — Public API exports and module factory
 - **`src/BTMS.ts`** — Main class with token operations
 - **`src/BTMSToken.ts`** — Static encoding/decoding utilities
-- **`src/BTMSAdvanced.ts`** — Advanced features (marketplace listings, etc.)
 - **`src/types.ts`** — TypeScript interfaces and type definitions
 - **`src/constants.ts`** — Protocol constants (topic, markers, defaults)
 - **`src/utils.ts`** — Utility functions (custom instruction parsing)

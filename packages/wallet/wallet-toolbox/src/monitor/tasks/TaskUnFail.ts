@@ -53,7 +53,6 @@ export class TaskUnFail extends WalletMonitorTask {
       log += `${reqs.length} reqs with status 'unfail'\n`
       const r = await this.unfail(reqs, 2)
       log += `${r.log}\n`
-      // console.log(log);
       if (reqs.length < limit) break
       offset += limit
     }

@@ -39,9 +39,6 @@
 // Main class
 export { BTMS } from './BTMS.js'
 
-// Advanced extension class
-// export { BTMSAdvanced } from './BTMSAdvanced.js'
-
 // Token encoding/decoding
 export { BTMSToken } from './BTMSToken.js'
 
