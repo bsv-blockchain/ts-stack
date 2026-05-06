@@ -1,6 +1,6 @@
 # ts-stack
 
-BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middleware, helpers, infrastructure components, docs, and cross-language conformance vectors.
+BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middleware, helpers, infra services, docs, and cross-language conformance vectors.
 
 [![Build and Test](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml/badge.svg?label=build%20%2B%20test)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml)
 [![Conformance](https://github.com/bsv-blockchain/ts-stack/actions/workflows/conformance.yml/badge.svg)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/conformance.yml)
@@ -21,9 +21,9 @@ BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middle
 | Helpers | `packages/helpers/` | Application entry points, templates, DID, wallet utilities, amount conversion |
 | Conformance | `conformance/` | Language-neutral JSON vectors and runners for SDK, wallet, overlay, messaging, payments, storage, sync |
 | Docs | `docs/`, `docs-site/` | Source docs and the Vite/React documentation site |
-| Infrastructure | `infrastructure components/` | Deployable servers kept outside the pnpm workspace |
+| Infra | `infra/` | Deployable servers kept outside the pnpm workspace |
 
-Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders usually start with `@bsv/wallet-toolbox`. Service operators usually start with the overlay, messaging, middleware, or infrastructure packages.
+Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders usually start with `@bsv/wallet-toolbox`. Service operators usually start with the overlay, messaging, middleware, or infra packages.
 
 ## Quick Start
 
@@ -126,18 +126,18 @@ pnpm --filter @bsv/sdk run test:coverage
 | [`packages/helpers/amountinator`](packages/helpers/amountinator) | [`@bsv/amountinator`](https://www.npmjs.com/package/@bsv/amountinator) | Satoshi/BSV conversion and formatting |
 | [`packages/helpers/fund-wallet`](packages/helpers/fund-wallet) | [`@bsv/fund-wallet`](https://www.npmjs.com/package/@bsv/fund-wallet) | Testnet/devnet wallet funding helper |
 
-### Infrastructure Components
+### Infra
 
-These deployable projects are not included in `pnpm-workspace.yaml`; they keep their original server layout under `infrastructure components/`.
+These deployable projects are not included in `pnpm-workspace.yaml`; they keep their original server layout under `infra/`.
 
 | Path | Package | Role |
 |---|---|---|
-| [`infrastructure components/message-box-server`](infrastructure%20components/message-box-server) | `@bsv/messagebox-server` private | Message box server |
-| [`infrastructure components/overlay-server`](infrastructure%20components/overlay-server) | `@bsv/overlay-express-examples` private | Overlay server deployment |
-| [`infrastructure components/uhrp-server-basic`](infrastructure%20components/uhrp-server-basic) | [`@bsv/uhrp-lite`](https://www.npmjs.com/package/@bsv/uhrp-lite) | Basic UHRP storage host |
-| [`infrastructure components/uhrp-server-cloud-bucket`](infrastructure%20components/uhrp-server-cloud-bucket) | [`@bsv/uhrp-storage-server`](https://www.npmjs.com/package/@bsv/uhrp-storage-server) | UHRP storage server for cloud bucket deployments |
-| [`infrastructure components/wallet-infra`](infrastructure%20components/wallet-infra) | `@bsv/wallet-infra` private | UTXO management server |
-| [`infrastructure components/wab`](infrastructure%20components/wab) | `@bsv/wab-server` private | Wallet Authentication Backend |
+| [`infra/message-box-server`](infra/message-box-server) | `@bsv/messagebox-server` private | Message box server |
+| [`infra/overlay-server`](infra/overlay-server) | `@bsv/overlay-express-examples` private | Overlay server deployment |
+| [`infra/uhrp-server-basic`](infra/uhrp-server-basic) | [`@bsv/uhrp-lite`](https://www.npmjs.com/package/@bsv/uhrp-lite) | Basic UHRP storage host |
+| [`infra/uhrp-server-cloud-bucket`](infra/uhrp-server-cloud-bucket) | [`@bsv/uhrp-storage-server`](https://www.npmjs.com/package/@bsv/uhrp-storage-server) | UHRP storage server for cloud bucket deployments |
+| [`infra/wallet-infra`](infra/wallet-infra) | `@bsv/wallet-infra` private | UTXO management server |
+| [`infra/wab`](infra/wab) | `@bsv/wab-server` private | Wallet Authentication Backend |
 
 ## Conformance Vectors
 
