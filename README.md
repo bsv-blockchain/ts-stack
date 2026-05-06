@@ -8,7 +8,6 @@ BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middle
 [![Security](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=security_rating)](https://sonarcloud.io/component_measures?metric=security_rating&id=bsv-blockchain_ts-stack)
 [![Reliability](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=reliability_rating)](https://sonarcloud.io/component_measures?metric=reliability_rating&id=bsv-blockchain_ts-stack)
 [![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=bsv-blockchain_ts-stack&metric=sqale_rating)](https://sonarcloud.io/component_measures?metric=sqale_rating&id=bsv-blockchain_ts-stack)
-[![npm version](https://img.shields.io/npm/v/@bsv/sdk?label=%40bsv%2Fsdk&color=brightgreen)](https://www.npmjs.com/package/@bsv/sdk)
 
 ## What Lives Here
 
