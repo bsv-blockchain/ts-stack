@@ -848,4 +848,197 @@ describe('MessageBoxClient', () => {
     )
     expect(result).toEqual({ txid: 'broadcasted-txid' })
   })
+
+  describe('message box quotes', () => {
+    const recipientA = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    const recipientB = '03b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+
+    const makeClient = (): MessageBoxClient => new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://default.box'
+    })
+
+    const makeQuoteResponse = (
+      body: unknown,
+      headers: Record<string, string> = { 'x-bsv-auth-identity-key': 'delivery-agent' }
+    ): Response => new Response(JSON.stringify(body), { status: 200, headers })
+
+    it('gets a single-recipient quote from the override host', async () => {
+      const client = makeClient()
+      const fetchSpy = jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
+        makeQuoteResponse({
+          status: 'success',
+          quote: {
+            recipientFee: 12,
+            deliveryFee: 3
+          }
+        })
+      )
+
+      await expect(client.getMessageBoxQuote({
+        recipient: recipientA,
+        messageBox: 'inbox'
+      }, 'https://quote.box')).resolves.toEqual({
+        recipientFee: 12,
+        deliveryFee: 3,
+        deliveryAgentIdentityKey: 'delivery-agent'
+      })
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `https://quote.box/permissions/quote?recipient=${recipientA}&messageBox=inbox`,
+        { method: 'GET' }
+      )
+    })
+
+    it('throws when a single-recipient quote response has no delivery-agent key', async () => {
+      const client = makeClient()
+      jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
+        makeQuoteResponse({
+          status: 'success',
+          quote: { recipientFee: 0, deliveryFee: 0 }
+        }, {})
+      )
+
+      await expect(client.getMessageBoxQuote({
+        recipient: recipientA,
+        messageBox: 'inbox'
+      }, 'https://quote.box')).rejects.toThrow('Delivery agent did not provide their identity key')
+    })
+
+    it('aggregates a multi-recipient quote payload', async () => {
+      const client = makeClient()
+      jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
+        makeQuoteResponse({
+          quotesByRecipient: [
+            {
+              recipient: recipientA,
+              messageBox: 'inbox',
+              deliveryFee: 2,
+              recipientFee: 0,
+              status: 'always_allow'
+            },
+            {
+              recipient: recipientB,
+              messageBox: 'inbox',
+              deliveryFee: 2,
+              recipientFee: -1,
+              status: 'blocked'
+            }
+          ],
+          blockedRecipients: [recipientB]
+        })
+      )
+
+      await expect(client.getMessageBoxQuote({
+        recipient: [recipientA, recipientB],
+        messageBox: 'inbox'
+      }, 'https://quote.box')).resolves.toEqual({
+        quotesByRecipient: [
+          {
+            recipient: recipientA,
+            messageBox: 'inbox',
+            deliveryFee: 2,
+            recipientFee: 0,
+            status: 'always_allow'
+          },
+          {
+            recipient: recipientB,
+            messageBox: 'inbox',
+            deliveryFee: 2,
+            recipientFee: -1,
+            status: 'blocked'
+          }
+        ],
+        totals: {
+          deliveryFees: 4,
+          recipientFees: 0,
+          totalForPayableRecipients: 4
+        },
+        blockedRecipients: [recipientB],
+        deliveryAgentIdentityKeyByHost: {
+          'https://quote.box': 'delivery-agent'
+        }
+      })
+    })
+
+    it('expands a single quote payload across all recipients in a host group', async () => {
+      const client = makeClient()
+      jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
+        makeQuoteResponse({
+          quote: {
+            deliveryFee: 5,
+            recipientFee: 7
+          }
+        })
+      )
+
+      await expect(client.getMessageBoxQuote({
+        recipient: [recipientA, recipientB],
+        messageBox: 'inbox'
+      }, 'https://quote.box')).resolves.toMatchObject({
+        quotesByRecipient: [
+          {
+            recipient: recipientA,
+            messageBox: 'inbox',
+            deliveryFee: 5,
+            recipientFee: 7,
+            status: 'payment_required'
+          },
+          {
+            recipient: recipientB,
+            messageBox: 'inbox',
+            deliveryFee: 5,
+            recipientFee: 7,
+            status: 'payment_required'
+          }
+        ],
+        totals: {
+          deliveryFees: 10,
+          recipientFees: 14,
+          totalForPayableRecipients: 24
+        }
+      })
+    })
+
+    it('rejects empty multi-recipient quote requests', async () => {
+      const client = makeClient()
+
+      await expect(client.getMessageBoxQuote({
+        recipient: [],
+        messageBox: 'inbox'
+      })).rejects.toThrow('At least one recipient is required.')
+    })
+
+    it('groups multi-recipient quote requests by resolved host', async () => {
+      const client = makeClient()
+      jest.spyOn(client, 'resolveHostForRecipient')
+        .mockResolvedValueOnce('https://one.box')
+        .mockResolvedValueOnce('https://two.box')
+        .mockResolvedValueOnce('https://one.box')
+
+      const groups = await (client as any).groupQuoteRecipientsByHost([
+        recipientA,
+        recipientB,
+        recipientA
+      ])
+
+      expect(Array.from(groups.entries())).toEqual([
+        ['https://one.box', [recipientA, recipientA]],
+        ['https://two.box', [recipientB]]
+      ])
+    })
+
+    it('rejects unexpected quote payload shapes', () => {
+      const client = makeClient()
+      const accumulator = (client as any).createMultiQuoteAccumulator()
+
+      expect(() => (client as any).mergeQuotePayload(
+        { unexpected: true },
+        'https://quote.box',
+        [recipientA],
+        'inbox',
+        accumulator
+      )).toThrow('Unexpected quote response shape from host https://quote.box')
+    })
+  })
 })
