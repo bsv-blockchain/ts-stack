@@ -1,4 +1,4 @@
-import { WalletInterface, LockingScript, Transaction, CreateActionOutput, CreateActionOptions, CreateActionResult, Script, SatoshisPerKilobyte, Beef } from '@bsv/sdk'
+import { WalletInterface, LockingScript, Transaction, CreateActionOutput, CreateActionOptions, SatoshisPerKilobyte, Beef } from '@bsv/sdk'
 
 import P2PKH from '../script-templates/p2pkh'
 import OrdP2PKH from '../script-templates/ordinal'

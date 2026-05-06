@@ -17,7 +17,7 @@
  * P2PKH scripts are silently skipped (not admitted, not an error).
  */
 
-import { LockingScript, Transaction, Script, Utils } from '@bsv/sdk'
+import { LockingScript, Transaction, Utils } from '@bsv/sdk'
 import MonsterBattleTopicManager from '../monsterbattle/MonsterBattleTopicManager.js'
 
 // ---------------------------------------------------------------------------

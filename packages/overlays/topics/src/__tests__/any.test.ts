@@ -8,7 +8,7 @@
 import { jest } from '@jest/globals'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
-import { LockingScript, P2PKH, PrivateKey, Transaction, Utils } from '@bsv/sdk'
+import { P2PKH, PrivateKey, Transaction } from '@bsv/sdk'
 import AnyTopicManager from '../any/AnyTopicManager.js'
 import { AnyLookupService } from '../any/AnyLookupService.js'
 import { AnyStorage } from '../any/AnyStorage.js'

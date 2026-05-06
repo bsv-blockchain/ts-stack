@@ -6,7 +6,6 @@
 import {
   PrivateKey,
   KeyDeriver,
-  WalletInterface,
   WalletClient
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'

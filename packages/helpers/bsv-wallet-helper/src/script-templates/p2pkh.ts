@@ -1,4 +1,4 @@
-import { LockingScript, ScriptTemplate, Transaction, UnlockingScript, Hash, OP, Utils, WalletInterface, Script, TransactionSignature, Signature, PublicKey, WalletProtocol } from '@bsv/sdk'
+import { LockingScript, ScriptTemplate, Transaction, UnlockingScript, Hash, OP, Utils, WalletInterface, TransactionSignature, Signature, PublicKey, WalletProtocol } from '@bsv/sdk'
 
 import { calculatePreimage } from '../utils/createPreimage'
 import {
