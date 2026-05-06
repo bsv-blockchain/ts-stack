@@ -153,7 +153,7 @@ Important entry points:
 | [`conformance/VECTOR-FORMAT.md`](conformance/VECTOR-FORMAT.md) | Vector envelope and field rules |
 | [`docs/conformance`](docs/conformance) | User-facing conformance docs |
 
-CI publishes the `conformance-vectors` artifact from `main` so downstream SDKs can consume the same vector set.
+CI publishes the `conformance-vectors` artifact from `main` so downstream SDKs can consume the same vector set. Language-specific runners live in those downstream repositories; `ts-stack` owns the shared corpus and TypeScript validation.
 
 ## Documentation
 

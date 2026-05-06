@@ -220,7 +220,7 @@ Each SDK implementation provides its own runner that reads from this shared corp
 | Repository        | Runner path                                      | Language   |
 |-------------------|--------------------------------------------------|------------|
 | `ts-stack`        | `conformance/runner/src/runner.js`               | TypeScript |
-| `go-sdk` (planned)| `conformance/runner/runner.go`                   | Go         |
+| `go-stack`        | `conformance/runner/`                            | Go         |
 | `rust-sdk` (planned)| `conformance/runner/src/main.rs`               | Rust       |
 
-All runners MUST implement the same CLI contract (flags and exit codes) defined above. The CI job in each repository pins the conformance corpus via a git submodule or a direct checkout of this repository at a tagged commit.
+All runners MUST implement the same CLI contract (flags and exit codes) defined above. The CI job in each downstream repository pins the conformance corpus via the `conformance-vectors` artifact or a direct checkout of this repository at a tagged commit.

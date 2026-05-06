@@ -89,6 +89,8 @@ For a non-TypeScript SDK or wallet:
 4. Compare your actual output to each vector's `expected` object.
 5. Track unsupported categories explicitly rather than silently ignoring them.
 
+Language-specific runners are owned by their downstream stack repositories. This repo publishes the shared vector corpus and runs the TypeScript validation path.
+
 ## Next Steps
 
 - [Vector Catalog](./vectors.md) — Current vector files and method coverage
