@@ -7,7 +7,7 @@ import {
   WalletActionInput,
   Validation
 } from '@bsv/sdk'
-import { StorageKnex } from '../StorageKnex'
+import type { StorageKnex } from '../StorageKnex'
 import { getLabelToSpecOp, ListActionsSpecOp } from './ListActionsSpecOp'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { isListActionsSpecOp } from '../../sdk/types'

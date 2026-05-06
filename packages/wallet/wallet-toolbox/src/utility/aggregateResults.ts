@@ -1,7 +1,7 @@
 import { Beef, ReviewActionResult, SendWithResult } from '@bsv/sdk'
 import { PostReqsToNetworkResult } from '../storage/methods/attemptToPostReqsToNetwork'
 import { StorageGetBeefOptions, WERR_INTERNAL } from '../sdk'
-import { StorageProvider } from '../index.client'
+import { StorageProvider } from '../storage/StorageProvider'
 
 export const aggregateActionResults = async (
   storage: StorageProvider,

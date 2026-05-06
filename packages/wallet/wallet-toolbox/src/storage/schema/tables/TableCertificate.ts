@@ -1,5 +1,6 @@
 import { Base64String, HexString, OutpointString, PubKeyHex } from '@bsv/sdk'
-import { sdk, TableCertificateField } from '../../../index.client'
+import * as sdk from '../../../sdk'
+import { TableCertificateField } from './TableCertificateField'
 
 export interface TableCertificate extends sdk.EntityTimeStamp {
   created_at: Date

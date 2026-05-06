@@ -17,7 +17,7 @@ import {
   TableTxLabel,
   TableTxLabelMap,
   TableUser
-} from '../index.client'
+} from './tables'
 
 export interface StorageIdbSchema {
   certificates: {

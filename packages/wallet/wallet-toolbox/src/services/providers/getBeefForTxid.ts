@@ -40,11 +40,10 @@ import {
   TableTransaction,
   TableTxLabel,
   TableTxLabelMap,
-  TableUser,
-  Services,
-  StorageAdminStats
-} from '../../index.client'
-import { StorageProvider } from '../../storage/StorageProvider'
+  TableUser
+} from '../../storage/schema/tables'
+import { Services } from '../Services'
+import { StorageProvider, StorageAdminStats } from '../../storage/StorageProvider'
 
 export async function getBeefForTxid (services: Services, txid: string): Promise<Beef> {
   const storage = new ServicesOnlyStorageProvider(services)

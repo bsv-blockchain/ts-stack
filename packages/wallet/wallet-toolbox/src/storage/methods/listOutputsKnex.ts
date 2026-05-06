@@ -1,5 +1,5 @@
 import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
-import { StorageKnex } from '../StorageKnex'
+import type { StorageKnex } from '../StorageKnex'
 import { Knex } from 'knex'
 import { getListOutputsSpecOp } from './ListOutputsSpecOp'
 import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'

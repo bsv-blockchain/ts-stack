@@ -1,5 +1,6 @@
 import { ListCertificatesResult, OriginatorDomainNameStringUnder250Bytes, Validation } from '@bsv/sdk'
-import { StorageProvider, TableCertificate } from '../index.client'
+import { StorageProvider } from '../StorageProvider'
+import { TableCertificate } from '../schema/tables/TableCertificate'
 import { AuthId, FindCertificatesArgs } from '../../sdk/WalletStorage.interfaces'
 import { Paged } from '../../sdk/types'
 

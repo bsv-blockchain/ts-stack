@@ -1,6 +1,6 @@
 import { Beef } from '@bsv/sdk'
 import { Knex } from 'knex'
-import { StorageKnex } from '../StorageKnex'
+import type { StorageKnex } from '../StorageKnex'
 import { PurgeParams, PurgeResults, StorageGetBeefOptions, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WalletError } from '../../sdk/WalletError'
 import { TableTransaction } from '../schema/tables/TableTransaction'
