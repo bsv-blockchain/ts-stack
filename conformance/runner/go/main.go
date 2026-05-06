@@ -52,6 +52,29 @@ const (
 	StatusNotImplemented Status = "not-implemented"
 )
 
+// Repeated failure-message format strings. Extracted to constants to satisfy
+// SonarCloud rule go:S1192 (string literals should not be duplicated).
+const (
+	errDecodeInput         = "decode input: %v"
+	errDecodeMessage       = "decode message: %v"
+	errDecodeMessageHex    = "decode message_hex: %v"
+	errDecodeBeefHex       = "decode beef_hex: %v"
+	errPrivateKeyFromHex   = "PrivateKeyFromHex: %v"
+	errSign                = "Sign: %v"
+	errToDER               = "ToDER: %v"
+	errElectrumDecrypt     = "ElectrumDecrypt: %v"
+	errChunks              = "Chunks: %v"
+	msgNoChunks            = "no chunks"
+	fmtGotWantStr          = "got %s, want %s"
+	fmtRGotWant            = "r: got %s, want %s"
+	fmtSGotWant            = "s: got %s, want %s"
+	fmtBlockHeightGotWant  = "block_height: got %d, want %d"
+	fmtMerkleRootGotWant   = "merkle_root: got %s, want %s"
+	fmtInputsCountGotWant  = "inputs_count: got %d, want %d"
+	fmtOutputsCountGotWant = "outputs_count: got %d, want %d"
+	fmtChunk0OpGotWant     = "chunk_0_op: got %d, want %d"
+)
+
 type Result struct {
 	ID       string
 	Status   Status
@@ -204,7 +227,7 @@ func dispatchSHA256(input, expected map[string]interface{}) (Status, string) {
 
 	data, err := decodeMessage(msg, encoding)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode input: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeInput, err)
 	}
 
 	var result []byte
@@ -217,7 +240,7 @@ func dispatchSHA256(input, expected map[string]interface{}) (Status, string) {
 	want := getString(expected, "hash")
 	got := hex.EncodeToString(result)
 	if got != want {
-		return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+		return StatusFail, fmt.Sprintf(fmtGotWantStr, got, want)
 	}
 	return StatusPass, ""
 }
@@ -229,14 +252,14 @@ func dispatchRIPEMD160(input, expected map[string]interface{}) (Status, string) 
 
 	data, err := decodeMessage(msg, encoding)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode input: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeInput, err)
 	}
 
 	result := primhash.Ripemd160(data)
 	want := getString(expected, "hash")
 	got := hex.EncodeToString(result)
 	if got != want {
-		return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+		return StatusFail, fmt.Sprintf(fmtGotWantStr, got, want)
 	}
 	return StatusPass, ""
 }
@@ -257,7 +280,7 @@ func dispatchHash160(input, expected map[string]interface{}) (Status, string) {
 		encoding := getString(input, "encoding")
 		data, err = decodeMessage(msg, encoding)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("decode input: %v", err)
+			return StatusFail, fmt.Sprintf(errDecodeInput, err)
 		}
 	}
 
@@ -265,7 +288,7 @@ func dispatchHash160(input, expected map[string]interface{}) (Status, string) {
 	want := getString(expected, "hash160")
 	got := hex.EncodeToString(result)
 	if got != want {
-		return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+		return StatusFail, fmt.Sprintf(fmtGotWantStr, got, want)
 	}
 	return StatusPass, ""
 }
@@ -292,7 +315,7 @@ func dispatchHMAC(input, expected map[string]interface{}) (Status, string) {
 
 	msgData, err := decodeMessage(msg, msgEncoding)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode message: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeMessage, err)
 	}
 
 	var result []byte
@@ -308,7 +331,7 @@ func dispatchHMAC(input, expected map[string]interface{}) (Status, string) {
 	want := getString(expected, "hmac")
 	got := hex.EncodeToString(result)
 	if got != want {
-		return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+		return StatusFail, fmt.Sprintf(fmtGotWantStr, got, want)
 	}
 	return StatusPass, ""
 }
@@ -360,7 +383,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 
 		msgBytes, err := hex.DecodeString(msgHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+			return StatusFail, fmt.Sprintf(errDecodeMessageHex, err)
 		}
 		rBytes, err := hex.DecodeString(rHex)
 		if err != nil {
@@ -372,7 +395,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 		}
 		privKey, err := ecprim.PrivateKeyFromHex(privHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+			return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 		}
 		sig := &ecprim.Signature{
 			R: new(big.Int).SetBytes(rBytes),
@@ -393,7 +416,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 	}
 	privKey, err := ecprim.PrivateKeyFromHex(privHex)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+		return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 	}
 
 	// message to sign (use decodeHexPad: BigNumber hex may have odd length)
@@ -403,14 +426,14 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 	}
 	signMsgBytes, err := decodeHexPad(signMsgHex)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeMessageHex, err)
 	}
 
 	// Wrong-pubkey verify (ecdsa-004)
 	if wrongScalar := getString(input, "wrong_pubkey_scalar"); wrongScalar != "" {
 		sig, err := privKey.Sign(signMsgBytes)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("Sign: %v", err)
+			return StatusFail, fmt.Sprintf(errSign, err)
 		}
 		scalarInt, _ := new(big.Int).SetString(wrongScalar, 10)
 		scalarBytes := make([]byte, 32)
@@ -458,7 +481,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 		if getBool(expected, "throws") {
 			return StatusPass, ""
 		}
-		return StatusFail, fmt.Sprintf("Sign: %v", err)
+		return StatusFail, fmt.Sprintf(errSign, err)
 	}
 
 	// Wrong-message verify (ecdsa-003)
@@ -484,7 +507,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 	if wantDERLen, ok := expected["der_length_bytes"]; ok {
 		derBytes, err := sig.ToDER()
 		if err != nil {
-			return StatusFail, fmt.Sprintf("ToDER: %v", err)
+			return StatusFail, fmt.Sprintf(errToDER, err)
 		}
 		wantLen, _ := wantDERLen.(float64)
 		if len(derBytes) != int(wantLen) {
@@ -496,7 +519,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 	if wantHexLen, ok := expected["der_hex_length_chars"]; ok {
 		derBytes, err := sig.ToDER()
 		if err != nil {
-			return StatusFail, fmt.Sprintf("ToDER: %v", err)
+			return StatusFail, fmt.Sprintf(errToDER, err)
 		}
 		gotHexLen := len(hex.EncodeToString(derBytes))
 		wantLen, _ := wantHexLen.(float64)
@@ -510,7 +533,7 @@ func dispatchECDSA(input, expected map[string]interface{}) (Status, string) {
 		if b, _ := wantRT.(bool); b {
 			derBytes, err := sig.ToDER()
 			if err != nil {
-				return StatusFail, fmt.Sprintf("ToDER: %v", err)
+				return StatusFail, fmt.Sprintf(errToDER, err)
 			}
 			sig2, err := ecprim.FromDER(derBytes)
 			if err != nil {
@@ -574,7 +597,7 @@ func dispatchECIES(input, expected map[string]interface{}) (Status, string) {
 		}
 		plain, err := goecies.ElectrumDecrypt(ct, recipPriv, nil)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("ElectrumDecrypt: %v", err)
+			return StatusFail, fmt.Sprintf(errElectrumDecrypt, err)
 		}
 		gotHex := hex.EncodeToString(plain)
 		if gotHex != wantPlainHex {
@@ -628,7 +651,7 @@ func dispatchECIES(input, expected map[string]interface{}) (Status, string) {
 			msgBytes = []byte(msgHex)
 		}
 		if err != nil {
-			return StatusFail, fmt.Sprintf("decode message: %v", err)
+			return StatusFail, fmt.Sprintf(errDecodeMessage, err)
 		}
 
 		// Alice encrypts for Bob (noKey=true): uses alicePriv as fromPrivKey, bobPub as toPublicKey
@@ -654,7 +677,7 @@ func dispatchECIES(input, expected map[string]interface{}) (Status, string) {
 		if wantPlain := getString(expected, "decrypted_message_utf8"); wantPlain != "" {
 			plain, err := goecies.ElectrumDecrypt(ct1, bobPriv, alicePub)
 			if err != nil {
-				return StatusFail, fmt.Sprintf("ElectrumDecrypt: %v", err)
+				return StatusFail, fmt.Sprintf(errElectrumDecrypt, err)
 			}
 			if string(plain) != wantPlain {
 				return StatusFail, fmt.Sprintf("decrypted: got %q, want %q", string(plain), wantPlain)
@@ -671,7 +694,7 @@ func dispatchECIES(input, expected map[string]interface{}) (Status, string) {
 		msgBytes = []byte(msgHex)
 	}
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode message: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeMessage, err)
 	}
 
 	// Encrypt
@@ -713,7 +736,7 @@ func dispatchECIES(input, expected map[string]interface{}) (Status, string) {
 		}
 		plain, err := goecies.ElectrumDecrypt(ct, recipPriv, senderPriv.PubKey())
 		if err != nil {
-			return StatusFail, fmt.Sprintf("ElectrumDecrypt: %v", err)
+			return StatusFail, fmt.Sprintf(errElectrumDecrypt, err)
 		}
 		gotHex := hex.EncodeToString(plain)
 		if gotHex != wantPlainHex {
@@ -751,7 +774,7 @@ func dispatchAES(input, expected map[string]interface{}) (Status, string) {
 		want := getString(expected, "ciphertext")
 		got := hex.EncodeToString(ct)
 		if got != want {
-			return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+			return StatusFail, fmt.Sprintf(fmtGotWantStr, got, want)
 		}
 		return StatusPass, ""
 
@@ -806,7 +829,7 @@ func dispatchKeyDerivation(input, expected map[string]interface{}) (Status, stri
 		if wantRound := getString(expected, "privkey_hex_roundtrip"); wantRound != "" {
 			privKey, err := ecprim.PrivateKeyFromHex(privHex)
 			if err != nil {
-				return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+				return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 			}
 			got := hex.EncodeToString(privKey.Serialize())
 			if got != wantRound {
@@ -818,7 +841,7 @@ func dispatchKeyDerivation(input, expected map[string]interface{}) (Status, stri
 		if wantPrefix := getString(expected, "pubkey_der_prefix"); wantPrefix != "" {
 			privKey, err := ecprim.PrivateKeyFromHex(privHex)
 			if err != nil {
-				return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+				return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 			}
 			der := privKey.PubKey().ToDER()
 			// Length checks
@@ -967,7 +990,7 @@ func dispatchPrivateKey(input, expected map[string]interface{}) (Status, string)
 			if getString(expected, "error") != "" {
 				return StatusPass, ""
 			}
-			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+			return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 		}
 		if wantRound := getString(expected, "privkey_hex_roundtrip"); wantRound != "" {
 			got := hex.EncodeToString(privKey.Serialize())
@@ -999,7 +1022,7 @@ func dispatchPublicKey(input, expected map[string]interface{}) (Status, string) 
 	if privHex := getString(input, "privkey_hex"); privHex != "" {
 		privKey, err := ecprim.PrivateKeyFromHex(privHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+			return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 		}
 		pub := privKey.PubKey()
 		if wantDER := getString(expected, "pubkey_der_hex"); wantDER != "" {
@@ -1070,7 +1093,7 @@ func dispatchMerkleParent(input, expected map[string]interface{}) (Status, strin
 	want := getString(expected, "parent_hex")
 	got := hex.EncodeToString(result)
 	if got != want {
-		return StatusFail, fmt.Sprintf("got %s, want %s", got, want)
+		return StatusFail, fmt.Sprintf(fmtGotWantStr, got, want)
 	}
 	return StatusPass, ""
 }
@@ -1114,7 +1137,7 @@ func dispatchUHRPURL(input, expected map[string]interface{}) (Status, string) {
 			}
 			got := hex.EncodeToString(gotBytes)
 			if got != wantHashHex {
-				return StatusFail, fmt.Sprintf("got %s, want %s", got, wantHashHex)
+				return StatusFail, fmt.Sprintf(fmtGotWantStr, got, wantHashHex)
 			}
 			return StatusPass, ""
 		}
@@ -1146,7 +1169,7 @@ func dispatchPrivKeyWIF(input, expected map[string]interface{}) (Status, string)
 			// Any error satisfies expected error for now
 			return StatusPass, ""
 		}
-		return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+		return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 	}
 
 	if strict && wantErr != "" {
@@ -1198,7 +1221,7 @@ func dispatchSignature(input, expected map[string]interface{}) (Status, string) 
 		}
 		msgBytes, err := hex.DecodeString(msgHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+			return StatusFail, fmt.Sprintf(errDecodeMessageHex, err)
 		}
 
 		// Error cases: invalid recovery param — validate range [0,3]
@@ -1212,21 +1235,21 @@ func dispatchSignature(input, expected map[string]interface{}) (Status, string) 
 
 		privKey, err := ecprim.PrivateKeyFromHex(privHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("PrivateKeyFromHex: %v", err)
+			return StatusFail, fmt.Sprintf(errPrivateKeyFromHex, err)
 		}
 		sig, err := privKey.Sign(msgBytes)
 		if err != nil {
 			if getBool(expected, "throws") {
 				return StatusPass, ""
 			}
-			return StatusFail, fmt.Sprintf("Sign: %v", err)
+			return StatusFail, fmt.Sprintf(errSign, err)
 		}
 
 		// Check DER
 		if wantDER := getString(expected, "der_hex"); wantDER != "" {
 			derBytes, err := sig.ToDER()
 			if err != nil {
-				return StatusFail, fmt.Sprintf("ToDER: %v", err)
+				return StatusFail, fmt.Sprintf(errToDER, err)
 			}
 			gotDER := hex.EncodeToString(derBytes)
 			if gotDER != wantDER {
@@ -1304,13 +1327,13 @@ func dispatchSignature(input, expected map[string]interface{}) (Status, string) 
 		if wantR := getString(expected, "r_hex"); wantR != "" {
 			got := fmt.Sprintf("%064x", sig.R)
 			if got != wantR {
-				return StatusFail, fmt.Sprintf("r: got %s, want %s", got, wantR)
+				return StatusFail, fmt.Sprintf(fmtRGotWant, got, wantR)
 			}
 		}
 		if wantS := getString(expected, "s_hex"); wantS != "" {
 			got := fmt.Sprintf("%064x", sig.S)
 			if got != wantS {
-				return StatusFail, fmt.Sprintf("s: got %s, want %s", got, wantS)
+				return StatusFail, fmt.Sprintf(fmtSGotWant, got, wantS)
 			}
 		}
 		return StatusPass, ""
@@ -1339,13 +1362,13 @@ func dispatchSignature(input, expected map[string]interface{}) (Status, string) 
 		if wantR := getString(expected, "r_hex"); wantR != "" {
 			got := fmt.Sprintf("%064x", sig.R)
 			if got != wantR {
-				return StatusFail, fmt.Sprintf("r: got %s, want %s", got, wantR)
+				return StatusFail, fmt.Sprintf(fmtRGotWant, got, wantR)
 			}
 		}
 		if wantS := getString(expected, "s_hex"); wantS != "" {
 			got := fmt.Sprintf("%064x", sig.S)
 			if got != wantS {
-				return StatusFail, fmt.Sprintf("s: got %s, want %s", got, wantS)
+				return StatusFail, fmt.Sprintf(fmtSGotWant, got, wantS)
 			}
 		}
 		return StatusPass, ""
@@ -1381,13 +1404,13 @@ func dispatchSignature(input, expected map[string]interface{}) (Status, string) 
 		if wantR := getString(expected, "r_hex"); wantR != "" {
 			got := hex.EncodeToString(rBytes)
 			if got != wantR {
-				return StatusFail, fmt.Sprintf("r: got %s, want %s", got, wantR)
+				return StatusFail, fmt.Sprintf(fmtRGotWant, got, wantR)
 			}
 		}
 		if wantS := getString(expected, "s_hex"); wantS != "" {
 			got := hex.EncodeToString(sBytes)
 			if got != wantS {
-				return StatusFail, fmt.Sprintf("s: got %s, want %s", got, wantS)
+				return StatusFail, fmt.Sprintf(fmtSGotWant, got, wantS)
 			}
 		}
 		return StatusPass, ""
@@ -1409,7 +1432,7 @@ func dispatchBSM(input, expected map[string]interface{}) (Status, string) {
 	msgHex := getString(input, "message_hex")
 	msgBytes, err := hex.DecodeString(msgHex)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode message_hex: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeMessageHex, err)
 	}
 
 	// ── magicHash vectors ─────────────────────────────────────────────────────
@@ -1440,11 +1463,11 @@ func dispatchBSM(input, expected map[string]interface{}) (Status, string) {
 		magicHash := bsmMagicHash(msgBytes)
 		sig, err := privKey.Sign(magicHash)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("Sign: %v", err)
+			return StatusFail, fmt.Sprintf(errSign, err)
 		}
 		derBytes, err := sig.ToDER()
 		if err != nil {
-			return StatusFail, fmt.Sprintf("ToDER: %v", err)
+			return StatusFail, fmt.Sprintf(errToDER, err)
 		}
 		got := hex.EncodeToString(derBytes)
 		if got != wantDERHex {
@@ -1642,13 +1665,13 @@ func dispatchMerklePath(input, expected map[string]interface{}) (Status, string)
 			if wantH, ok := expected["block_height"]; ok {
 				wantHInt, _ := wantH.(float64)
 				if height != uint64(wantHInt) {
-					return StatusFail, fmt.Sprintf("block_height: got %d, want %d", height, uint64(wantHInt))
+					return StatusFail, fmt.Sprintf(fmtBlockHeightGotWant, height, uint64(wantHInt))
 				}
 			}
 			if wantRoot := getString(expected, "merkle_root"); wantRoot != "" {
 				// Single-tx block: merkle root = txid (display format)
 				if txidStr != wantRoot {
-					return StatusFail, fmt.Sprintf("merkle_root: got %s, want %s", txidStr, wantRoot)
+					return StatusFail, fmt.Sprintf(fmtMerkleRootGotWant, txidStr, wantRoot)
 				}
 			}
 			return StatusPass, ""
@@ -1667,7 +1690,7 @@ func dispatchMerklePath(input, expected map[string]interface{}) (Status, string)
 			}
 			if wantRoot := getString(expected, "merkle_root"); wantRoot != "" {
 				if root != wantRoot {
-					return StatusFail, fmt.Sprintf("merkle_root: got %s, want %s", root, wantRoot)
+					return StatusFail, fmt.Sprintf(fmtMerkleRootGotWant, root, wantRoot)
 				}
 			}
 			return StatusPass, ""
@@ -1686,7 +1709,7 @@ func dispatchMerklePath(input, expected map[string]interface{}) (Status, string)
 			}
 			if wantRoot := getString(expected, "merkle_root"); wantRoot != "" {
 				if root != wantRoot {
-					return StatusFail, fmt.Sprintf("merkle_root: got %s, want %s", root, wantRoot)
+					return StatusFail, fmt.Sprintf(fmtMerkleRootGotWant, root, wantRoot)
 				}
 			}
 			// extracted_smaller_than_full: proof path (log2 n hashes) < full block (n hashes)
@@ -1728,7 +1751,7 @@ func dispatchMerklePath(input, expected map[string]interface{}) (Status, string)
 	if wantHeight, ok := expected["block_height"]; ok {
 		wantH, _ := wantHeight.(float64)
 		if mp.BlockHeight != uint32(wantH) {
-			return StatusFail, fmt.Sprintf("block_height: got %d, want %d", mp.BlockHeight, uint32(wantH))
+			return StatusFail, fmt.Sprintf(fmtBlockHeightGotWant, mp.BlockHeight, uint32(wantH))
 		}
 	}
 
@@ -1770,7 +1793,7 @@ func dispatchMerklePath(input, expected map[string]interface{}) (Status, string)
 				return StatusFail, fmt.Sprintf("ComputeRootHex: %v", err)
 			}
 			if got != wantRoot {
-				return StatusFail, fmt.Sprintf("merkle_root: got %s, want %s", got, wantRoot)
+				return StatusFail, fmt.Sprintf(fmtMerkleRootGotWant, got, wantRoot)
 			}
 		}
 	}
@@ -1819,7 +1842,7 @@ func dispatchBEEF(input, expected map[string]interface{}) (Status, string) {
 	beefHex := getString(input, "beef_hex")
 	beefBytes, err := hex.DecodeString(beefHex)
 	if err != nil {
-		return StatusFail, fmt.Sprintf("decode beef_hex: %v", err)
+		return StatusFail, fmt.Sprintf(errDecodeBeefHex, err)
 	}
 
 	wantParseSucceeds := getBool(expected, "parse_succeeds")
@@ -1858,13 +1881,13 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 		if wantIC, ok := expected["inputs_count"]; ok {
 			wantI, _ := wantIC.(float64)
 			if len(tx.Inputs) != int(wantI) {
-				return StatusFail, fmt.Sprintf("inputs_count: got %d, want %d", len(tx.Inputs), int(wantI))
+				return StatusFail, fmt.Sprintf(fmtInputsCountGotWant, len(tx.Inputs), int(wantI))
 			}
 		}
 		if wantOC, ok := expected["outputs_count"]; ok {
 			wantO, _ := wantOC.(float64)
 			if len(tx.Outputs) != int(wantO) {
-				return StatusFail, fmt.Sprintf("outputs_count: got %d, want %d", len(tx.Outputs), int(wantO))
+				return StatusFail, fmt.Sprintf(fmtOutputsCountGotWant, len(tx.Outputs), int(wantO))
 			}
 		}
 		if wantLT, ok := expected["locktime"]; ok {
@@ -1901,7 +1924,7 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 		beefHex := getString(input, "beef_hex")
 		beefBytes, err := hex.DecodeString(beefHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("decode beef_hex: %v", err)
+			return StatusFail, fmt.Sprintf(errDecodeBeefHex, err)
 		}
 		_, _, atomicErr := gotx.NewBeefFromAtomicBytes(beefBytes)
 		if getBool(expected, "throws") {
@@ -1978,13 +2001,13 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 		if wantIC, ok := expected["inputs_count"]; ok {
 			wantI, _ := wantIC.(float64)
 			if len(tx.Inputs) != int(wantI) {
-				return StatusFail, fmt.Sprintf("inputs_count: got %d, want %d", len(tx.Inputs), int(wantI))
+				return StatusFail, fmt.Sprintf(fmtInputsCountGotWant, len(tx.Inputs), int(wantI))
 			}
 		}
 		if wantOC, ok := expected["outputs_count"]; ok {
 			wantO, _ := wantOC.(float64)
 			if len(tx.Outputs) != int(wantO) {
-				return StatusFail, fmt.Sprintf("outputs_count: got %d, want %d", len(tx.Outputs), int(wantO))
+				return StatusFail, fmt.Sprintf(fmtOutputsCountGotWant, len(tx.Outputs), int(wantO))
 			}
 		}
 		return StatusPass, ""
@@ -2005,13 +2028,13 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 		if wantIC, ok := expected["inputs_count"]; ok {
 			wantI, _ := wantIC.(float64)
 			if len(tx.Inputs) != int(wantI) {
-				return StatusFail, fmt.Sprintf("inputs_count: got %d, want %d", len(tx.Inputs), int(wantI))
+				return StatusFail, fmt.Sprintf(fmtInputsCountGotWant, len(tx.Inputs), int(wantI))
 			}
 		}
 		if wantOC, ok := expected["outputs_count"]; ok {
 			wantO, _ := wantOC.(float64)
 			if len(tx.Outputs) != int(wantO) {
-				return StatusFail, fmt.Sprintf("outputs_count: got %d, want %d", len(tx.Outputs), int(wantO))
+				return StatusFail, fmt.Sprintf(fmtOutputsCountGotWant, len(tx.Outputs), int(wantO))
 			}
 		}
 		if wantLT, ok := expected["locktime"]; ok {
@@ -2044,13 +2067,13 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 		if wantIC, ok := expected["inputs_count"]; ok {
 			wantI, _ := wantIC.(float64)
 			if len(tx.Inputs) != int(wantI) {
-				return StatusFail, fmt.Sprintf("inputs_count: got %d, want %d", len(tx.Inputs), int(wantI))
+				return StatusFail, fmt.Sprintf(fmtInputsCountGotWant, len(tx.Inputs), int(wantI))
 			}
 		}
 		if wantOC, ok := expected["outputs_count"]; ok {
 			wantO, _ := wantOC.(float64)
 			if len(tx.Outputs) != int(wantO) {
-				return StatusFail, fmt.Sprintf("outputs_count: got %d, want %d", len(tx.Outputs), int(wantO))
+				return StatusFail, fmt.Sprintf(fmtOutputsCountGotWant, len(tx.Outputs), int(wantO))
 			}
 		}
 		return StatusPass, ""
@@ -2060,7 +2083,7 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 	if beefHex := getString(input, "beef_hex"); beefHex != "" {
 		beefBytes, err := hex.DecodeString(beefHex)
 		if err != nil {
-			return StatusFail, fmt.Sprintf("decode beef_hex: %v", err)
+			return StatusFail, fmt.Sprintf(errDecodeBeefHex, err)
 		}
 		beef, err := gotx.NewBeefFromBytes(beefBytes)
 		if err != nil {
@@ -2075,7 +2098,7 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 				return StatusFail, fmt.Sprintf("ComputeRootHex: %v", err)
 			}
 			if got != wantRoot {
-				return StatusFail, fmt.Sprintf("merkle_root: got %s, want %s", got, wantRoot)
+				return StatusFail, fmt.Sprintf(fmtMerkleRootGotWant, got, wantRoot)
 			}
 		}
 		return StatusPass, ""
@@ -2090,7 +2113,7 @@ func dispatchSerialization(input, expected map[string]interface{}) (Status, stri
 		if wantH, ok := expected["block_height"]; ok {
 			wantHeight, _ := wantH.(float64)
 			if mp.BlockHeight != uint32(wantHeight) {
-				return StatusFail, fmt.Sprintf("block_height: got %d, want %d", mp.BlockHeight, uint32(wantHeight))
+				return StatusFail, fmt.Sprintf(fmtBlockHeightGotWant, mp.BlockHeight, uint32(wantHeight))
 			}
 		}
 		if wantCount, ok := expected["path_leaf_count"]; ok {
@@ -2152,15 +2175,15 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 			}
 			chunks, err := s.Chunks()
 			if err != nil {
-				return StatusFail, fmt.Sprintf("Chunks: %v", err)
+				return StatusFail, fmt.Sprintf(errChunks, err)
 			}
 			if len(chunks) == 0 {
-				return StatusFail, "no chunks"
+				return StatusFail, msgNoChunks
 			}
 			if wantOp, ok := expected["chunk_0_op"]; ok {
 				wantOpInt, _ := wantOp.(float64)
 				if int(chunks[0].Op) != int(wantOpInt) {
-					return StatusFail, fmt.Sprintf("chunk_0_op: got %d, want %d", chunks[0].Op, int(wantOpInt))
+					return StatusFail, fmt.Sprintf(fmtChunk0OpGotWant, chunks[0].Op, int(wantOpInt))
 				}
 			}
 			return StatusPass, ""
@@ -2281,7 +2304,7 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 		}
 		chunks, err := s.Chunks()
 		if err != nil {
-			return StatusFail, fmt.Sprintf("Chunks: %v", err)
+			return StatusFail, fmt.Sprintf(errChunks, err)
 		}
 		if wantCount, ok := expected["chunks_count"]; ok {
 			wantC, _ := wantCount.(float64)
@@ -2292,10 +2315,10 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 		if wantOp, ok := expected["chunk_0_op"]; ok {
 			wantOpInt, _ := wantOp.(float64)
 			if len(chunks) == 0 {
-				return StatusFail, "no chunks"
+				return StatusFail, msgNoChunks
 			}
 			if int(chunks[0].Op) != int(wantOpInt) {
-				return StatusFail, fmt.Sprintf("chunk_0_op: got %d, want %d", chunks[0].Op, int(wantOpInt))
+				return StatusFail, fmt.Sprintf(fmtChunk0OpGotWant, chunks[0].Op, int(wantOpInt))
 			}
 		}
 		if wantRT := getString(expected, "hex_roundtrip"); wantRT != "" {
@@ -2335,7 +2358,7 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 				}
 				return StatusPass, ""
 			}
-			return StatusFail, fmt.Sprintf("Chunks: %v", err)
+			return StatusFail, fmt.Sprintf(errChunks, err)
 		}
 		if wantCount, ok := expected["chunks_count"]; ok {
 			wantC, _ := wantCount.(float64)
@@ -2351,7 +2374,7 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 				wantData[i] = byte(int(bF))
 			}
 			if len(chunks) == 0 {
-				return StatusFail, "no chunks"
+				return StatusFail, msgNoChunks
 			}
 			if !bytes.Equal(chunks[0].Data, wantData) {
 				return StatusFail, fmt.Sprintf("chunk_0_data: got %v, want %v", chunks[0].Data, wantData)
@@ -2461,7 +2484,7 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 		}
 		chunks, err := s.Chunks()
 		if err != nil {
-			return StatusFail, fmt.Sprintf("Chunks: %v", err)
+			return StatusFail, fmt.Sprintf(errChunks, err)
 		}
 		if len(chunks) == 0 {
 			return StatusFail, "no chunks after push"
@@ -2469,7 +2492,7 @@ func dispatchEvaluation(input, expected map[string]interface{}) (Status, string)
 		if wantOp, ok := expected["chunk_0_op"]; ok {
 			wantOpInt, _ := wantOp.(float64)
 			if int(chunks[0].Op) != int(wantOpInt) {
-				return StatusFail, fmt.Sprintf("chunk_0_op: got %d, want %d", chunks[0].Op, int(wantOpInt))
+				return StatusFail, fmt.Sprintf(fmtChunk0OpGotWant, chunks[0].Op, int(wantOpInt))
 			}
 		}
 		return StatusPass, ""
