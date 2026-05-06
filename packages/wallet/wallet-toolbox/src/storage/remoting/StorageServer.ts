@@ -14,6 +14,7 @@ import { StorageProvider } from '../StorageProvider'
 import { WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 import { SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
+import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
 
@@ -192,19 +193,7 @@ export class StorageServer {
                 await this.validateParam0(params, req)
                 // const args: RequestSyncChunkArgs = params[0]
                 const r: SyncChunk = params[1]
-                if (r.certificateFields != null) r.certificateFields = this.validateEntities(r.certificateFields)
-                if (r.certificates != null) r.certificates = this.validateEntities(r.certificates)
-                if (r.commissions != null) r.commissions = this.validateEntities(r.commissions)
-                if (r.outputBaskets != null) r.outputBaskets = this.validateEntities(r.outputBaskets)
-                if (r.outputTagMaps != null) r.outputTagMaps = this.validateEntities(r.outputTagMaps)
-                if (r.outputTags != null) r.outputTags = this.validateEntities(r.outputTags)
-                if (r.outputs != null) r.outputs = this.validateEntities(r.outputs)
-                if (r.provenTxReqs != null) r.provenTxReqs = this.validateEntities(r.provenTxReqs)
-                if (r.provenTxs != null) r.provenTxs = this.validateEntities(r.provenTxs)
-                if (r.transactions != null) r.transactions = this.validateEntities(r.transactions)
-                if (r.txLabelMaps != null) r.txLabelMaps = this.validateEntities(r.txLabelMaps)
-                if (r.txLabels != null) r.txLabels = this.validateEntities(r.txLabels)
-                if (r.user != null) r.user = this.validateEntity(r.user)
+                validateSyncChunkEntities(r)
               }
               break
             default:
@@ -301,45 +290,25 @@ export class StorageServer {
     }
   }
 
-  validateDate (date: Date | string | number): Date {
-    let r: Date
-    if (date instanceof Date) r = date
-    else r = new Date(date)
-    return r
-  }
+  /** @see {@link validateDate} */
+  validateDate (date: Date | string | number): Date { return validateDate(date) }
 
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process all individual records with time stamps retreived from database.
+   * @see {@link validateEntity}
    */
   validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T {
-    entity.created_at = this.validateDate(entity.created_at)
-    entity.updated_at = this.validateDate(entity.updated_at)
-    if (dateFields != null) {
-      for (const df of dateFields) {
-        if (entity[df]) entity[df] = this.validateDate(entity[df])
-      }
-    }
-    for (const key of Object.keys(entity)) {
-      const val = entity[key]
-      if (val === null) {
-        entity[key] = undefined
-      } else if (Buffer.isBuffer(val)) {
-        entity[key] = Array.from(val)
-      }
-    }
-    return entity
+    return validateEntity(entity, dateFields)
   }
 
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process all arrays of records with time stamps retreived from database.
    * @returns input `entities` array with contained values validated.
+   * @see {@link validateEntities}
    */
   validateEntities<T extends EntityTimeStamp>(entities: T[], dateFields?: string[]): T[] {
-    for (let i = 0; i < entities.length; i++) {
-      entities[i] = this.validateEntity(entities[i], dateFields)
-    }
-    return entities
+    return validateEntities(entities, dateFields)
   }
 }
