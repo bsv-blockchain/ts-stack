@@ -82,155 +82,100 @@ export class MockServices implements WalletServices {
 
   async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult[]> {
     const results: PostBeefResult[] = []
-
     for (const txid of txids) {
       try {
-        // Find the transaction in the BEEF
-        const beefTx = beef.findTxid(txid)
-        if (beefTx == null) {
-          results.push({
-            name: 'MockServices',
-            status: 'error',
-            error: new WERR_INVALID_PARAMETER('txid', `present in provided BEEF. txid: ${txid}`),
-            txidResults: [{ txid, status: 'error' }]
-          })
-          continue
-        }
-
-        const rawTx = beefTx.rawTx
-        if (rawTx == null) {
-          results.push({
-            name: 'MockServices',
-            status: 'error',
-            error: new WERR_INVALID_PARAMETER('rawTx', `present in BEEF for txid: ${txid}`),
-            txidResults: [{ txid, status: 'error' }]
-          })
-          continue
-        }
-
-        const tx = BsvTransaction.fromBinary(rawTx)
-
-        // Validate inputs
-        const currentHeight = await this.tracker.currentHeight()
-        for (let i = 0; i < tx.inputs.length; i++) {
-          const input = tx.inputs[i]
-          const sourceTxid =
-            input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
-          if (!sourceTxid) {
-            throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${i}`)
-          }
-          const sourceVout = input.sourceOutputIndex
-
-          const utxo = await this.storage.getUtxo(sourceTxid, sourceVout)
-          if (utxo == null) {
-            throw new WERR_INVALID_PARAMETER(
-              'input',
-              `reference a known UTXO. Input ${i}: ${sourceTxid}.${sourceVout} not found`
-            )
-          }
-          if (utxo.spentByTxid) {
-            throw new WERR_INVALID_PARAMETER(
-              'input',
-              `not be already spent. Input ${i}: ${sourceTxid}.${sourceVout} spent by ${utxo.spentByTxid}`
-            )
-          }
-
-          // Coinbase maturity check
-          if (utxo.isCoinbase && utxo.blockHeight !== null) {
-            if (currentHeight - utxo.blockHeight < 100) {
-              throw new WERR_INVALID_PARAMETER(
-                'input',
-                `not spend immature coinbase. Input ${i}: coinbase at height ${utxo.blockHeight}, current height ${currentHeight}, need 100 confirmations`
-              )
-            }
-          }
-
-          // Ensure source transaction is set for script validation
-          if (input.sourceTransaction == null) {
-            const sourceTxRow = await this.storage.getTransaction(sourceTxid)
-            if (sourceTxRow != null) {
-              let sourceRaw: number[]
-              if (sourceTxRow.rawTx instanceof Buffer) {
-                sourceRaw = Array.from(sourceTxRow.rawTx)
-              } else if (Array.isArray(sourceTxRow.rawTx)) {
-                sourceRaw = sourceTxRow.rawTx
-              } else {
-                sourceRaw = Array.from(sourceTxRow.rawTx as Uint8Array)
-              }
-              input.sourceTransaction = BsvTransaction.fromBinary(sourceRaw)
-            }
-          }
-        }
-
-        // Validate scripts using the SDK script interpreter
-        // We set sourceTransaction on each input above, so verify should work.
-        // Also set merklePath on source transactions to satisfy the SDK's proof requirement.
-        for (const input of tx.inputs) {
-          if ((input.sourceTransaction != null) && (input.sourceTransaction.merklePath == null)) {
-            const stxid = input.sourceTransaction.id('hex')
-            const stx = await this.storage.getTransaction(stxid)
-            if ((stx != null) && stx.blockHeight !== null) {
-              const txsInBlock = await this.storage.getTransactionsInBlock(stx.blockHeight)
-              const stxids = txsInBlock.map(t => t.txid)
-              const idx = stxids.indexOf(stxid)
-              if (idx >= 0) {
-                input.sourceTransaction.merklePath = computeMerklePath(stxids, idx, stx.blockHeight)
-              }
-            }
-          }
-        }
-
-        const verified = await tx.verify('scripts only')
-        if (!verified) {
-          throw new WERR_INVALID_PARAMETER('transaction', `pass script validation: ${verified}`)
-        }
-
-        // Store transaction
-        await this.storage.insertTransaction(txid, Array.from(rawTx))
-
-        // Create UTXOs for each output
-        for (let vout = 0; vout < tx.outputs.length; vout++) {
-          const output = tx.outputs[vout]
-          const scriptBinary = output.lockingScript.toBinary()
-          const scriptHash = asString(sha256Hash(Array.from(scriptBinary)))
-          await this.storage.insertUtxo(txid, vout, Array.from(scriptBinary), output.satoshis ?? 0, scriptHash)
-        }
-
-        // Spend inputs
-        for (const input of tx.inputs) {
-          const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
-          await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
-        }
-
-        results.push({
-          name: 'MockServices',
-          status: 'success',
-          txidResults: [{ txid, status: 'success' }]
-        })
+        await this.postOneTx(beef, txid)
+        results.push({ name: 'MockServices', status: 'success', txidResults: [{ txid, status: 'success' }] })
       } catch (error_: unknown) {
         const error = error_ instanceof Error ? new WERR_INTERNAL(error_.message) : new WERR_INTERNAL(String(error_))
-        results.push({
-          name: 'MockServices',
-          status: 'error',
-          error,
-          txidResults: [{ txid, status: 'error' }]
-        })
+        results.push({ name: 'MockServices', status: 'error', error, txidResults: [{ txid, status: 'error' }] })
       }
     }
-
     return results
+  }
+
+  private async postOneTx (beef: Beef, txid: string): Promise<void> {
+    const beefTx = beef.findTxid(txid)
+    if (beefTx == null) throw new WERR_INVALID_PARAMETER('txid', `present in provided BEEF. txid: ${txid}`)
+    const rawTx = beefTx.rawTx
+    if (rawTx == null) throw new WERR_INVALID_PARAMETER('rawTx', `present in BEEF for txid: ${txid}`)
+
+    const tx = BsvTransaction.fromBinary(rawTx)
+    await this.validateTxInputs(tx)
+    await this.populateMerklePaths(tx)
+
+    const verified = await tx.verify('scripts only')
+    if (!verified) throw new WERR_INVALID_PARAMETER('transaction', `pass script validation: ${verified}`)
+
+    await this.storage.insertTransaction(txid, Array.from(rawTx))
+    await this.storeOutputs(tx, txid)
+    await this.spendInputs(tx, txid)
+  }
+
+  private async validateTxInputs (tx: BsvTransaction): Promise<void> {
+    const currentHeight = await this.tracker.currentHeight()
+    for (let i = 0; i < tx.inputs.length; i++) {
+      const input = tx.inputs[i]
+      const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
+      if (!sourceTxid) throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${i}`)
+
+      const utxo = await this.storage.getUtxo(sourceTxid, input.sourceOutputIndex)
+      if (utxo == null) throw new WERR_INVALID_PARAMETER('input', `reference a known UTXO. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} not found`)
+      if (utxo.spentByTxid) throw new WERR_INVALID_PARAMETER('input', `not be already spent. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} spent by ${utxo.spentByTxid}`)
+      if (utxo.isCoinbase && utxo.blockHeight !== null && currentHeight - utxo.blockHeight < 100) {
+        throw new WERR_INVALID_PARAMETER('input', `not spend immature coinbase. Input ${i}: coinbase at height ${utxo.blockHeight}, current height ${currentHeight}, need 100 confirmations`)
+      }
+
+      if (input.sourceTransaction == null) {
+        input.sourceTransaction = await this.loadSourceTransaction(sourceTxid)
+      }
+    }
+  }
+
+  private async loadSourceTransaction (sourceTxid: string): Promise<BsvTransaction | undefined> {
+    const sourceTxRow = await this.storage.getTransaction(sourceTxid)
+    if (sourceTxRow == null) return undefined
+    const raw = sourceTxRow.rawTx instanceof Buffer
+      ? Array.from(sourceTxRow.rawTx)
+      : Array.isArray(sourceTxRow.rawTx) ? sourceTxRow.rawTx : Array.from(sourceTxRow.rawTx as Uint8Array)
+    return BsvTransaction.fromBinary(raw)
+  }
+
+  private async populateMerklePaths (tx: BsvTransaction): Promise<void> {
+    for (const input of tx.inputs) {
+      if ((input.sourceTransaction == null) || (input.sourceTransaction.merklePath != null)) continue
+      const stxid = input.sourceTransaction.id('hex')
+      const stx = await this.storage.getTransaction(stxid)
+      if ((stx == null) || stx.blockHeight === null) continue
+      const txsInBlock = await this.storage.getTransactionsInBlock(stx.blockHeight)
+      const stxids = txsInBlock.map(t => t.txid)
+      const idx = stxids.indexOf(stxid)
+      if (idx >= 0) input.sourceTransaction.merklePath = computeMerklePath(stxids, idx, stx.blockHeight)
+    }
+  }
+
+  private async storeOutputs (tx: BsvTransaction, txid: string): Promise<void> {
+    for (let vout = 0; vout < tx.outputs.length; vout++) {
+      const output = tx.outputs[vout]
+      const scriptBinary = output.lockingScript.toBinary()
+      const scriptHash = asString(sha256Hash(Array.from(scriptBinary)))
+      await this.storage.insertUtxo(txid, vout, Array.from(scriptBinary), output.satoshis ?? 0, scriptHash)
+    }
+  }
+
+  private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
+    for (const input of tx.inputs) {
+      const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
+      await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
+    }
   }
 
   async reorg (startingHeight: number, numBlocks: number, txidMap?: Record<string, number>): Promise<ReorgResult> {
     const oldTip = await this.storage.getChainTip()
     if (oldTip == null) throw new WERR_INTERNAL('Cannot reorg empty chain')
-    if (startingHeight > oldTip.height) {
-      throw new WERR_INVALID_PARAMETER('startingHeight', `<= current tip height ${oldTip.height}`)
-    }
+    if (startingHeight > oldTip.height) throw new WERR_INVALID_PARAMETER('startingHeight', `<= current tip height ${oldTip.height}`)
 
     const deactivatedHeaders: BlockHeader[] = []
-
-    // Collect all deactivated headers
     for (let h = startingHeight; h <= oldTip.height; h++) {
       const header = await this.storage.getBlockHeaderByHeight(h)
       if (header != null) deactivatedHeaders.push(header)
@@ -238,119 +183,78 @@ export class MockServices implements WalletServices {
 
     await this.knex.transaction(async trx => {
       const trxStorage = new MockChainStorage(trx as unknown as Knex)
-
-      // Tear down old blocks
-      for (let h = oldTip.height; h >= startingHeight; h--) {
-        const txsInBlock = await trxStorage.getTransactionsInBlock(h)
-        // Get coinbaseTxid from the raw row (not BlockHeader which lacks it)
-        const headerRow = await trxStorage.knex('mockchain_block_headers').where({ height: h }).first()
-        const coinbaseTxid = headerRow?.coinbaseTxid
-
-        for (const tx of txsInBlock) {
-          if (coinbaseTxid && tx.txid === coinbaseTxid) {
-            // Delete coinbase UTXOs and transaction
-            await trxStorage.deleteUtxosByTxid(tx.txid)
-            await trxStorage.deleteTransaction(tx.txid)
-          } else {
-            // Return non-coinbase tx to mempool
-            await trxStorage.setTransactionBlock(tx.txid, null as any, null as any)
-            await trxStorage.setUtxoBlockHeight(tx.txid, null)
-          }
-        }
-
-        if (headerRow) {
-          await trxStorage.deleteBlockHeader(h)
-        }
-      }
-
-      // Mine numBlocks new blocks
-      for (let i = 0; i < numBlocks; i++) {
-        const newHeight = startingHeight + i
-
-        // Determine which txids go in this block from txidMap
-        const mappedTxids: string[] = []
-        if (txidMap != null) {
-          for (const [tid, offset] of Object.entries(txidMap)) {
-            if (offset === i) mappedTxids.push(tid)
-          }
-        }
-
-        // Get previous hash
-        let prevHash: string
-        if (newHeight === 0) {
-          prevHash = '00'.repeat(32)
-        } else {
-          const prevHeader = await trxStorage.getBlockHeaderByHeight(newHeight - 1)
-          if (prevHeader == null) throw new WERR_INTERNAL(`Missing block header at height ${newHeight - 1}`)
-          prevHash = prevHeader.hash
-        }
-
-        // Create coinbase
-        const { createCoinbaseTransaction } = await import('./MockMiner')
-        const coinbaseTx = createCoinbaseTransaction(newHeight)
-        const coinbaseTxid = coinbaseTx.id('hex')
-        const coinbaseRawTx = Array.from(coinbaseTx.toBinary())
-
-        const allTxids = [coinbaseTxid, ...mappedTxids]
-        const { computeMerkleRoot } = await import('./merkleTree')
-        const merkleRoot = computeMerkleRoot(allTxids)
-
-        const time = Math.floor(Date.now() / 1000)
-        const bits = 0x207fffff
-        const nonceBytes = Random(4)
-        const nonce = ((nonceBytes[0] << 24) | (nonceBytes[1] << 16) | (nonceBytes[2] << 8) | nonceBytes[3]) >>> 0
-
-        const headerObj = { version: 1, previousHash: prevHash, merkleRoot, time, bits, nonce }
-        const headerBinary = toBinaryBaseBlockHeader(headerObj)
-        const hash = asString(doubleSha256BE(headerBinary))
-
-        // Insert coinbase tx
-        await trxStorage.knex('mockchain_transactions').insert({
-          txid: coinbaseTxid,
-          rawTx: Buffer.from(coinbaseRawTx),
-          blockHeight: newHeight,
-          blockIndex: 0
-        })
-
-        // Insert coinbase UTXO
-        const coinbaseOutputScript = [0x51]
-        const coinbaseScriptHash = asString(sha256Hash(coinbaseOutputScript))
-        await trxStorage.knex('mockchain_utxos').insert({
-          txid: coinbaseTxid,
-          vout: 0,
-          lockingScript: Buffer.from(coinbaseOutputScript),
-          satoshis: 5_000_000_000,
-          scriptHash: coinbaseScriptHash,
-          spentByTxid: null,
-          isCoinbase: true,
-          blockHeight: newHeight
-        })
-
-        // Update mapped txs
-        for (let j = 0; j < mappedTxids.length; j++) {
-          await trxStorage.setTransactionBlock(mappedTxids[j], newHeight, j + 1)
-          await trxStorage.setUtxoBlockHeight(mappedTxids[j], newHeight)
-        }
-
-        // Insert block header
-        await trxStorage.knex('mockchain_block_headers').insert({
-          height: newHeight,
-          hash,
-          previousHash: prevHash,
-          merkleRoot,
-          version: 1,
-          time,
-          bits,
-          nonce,
-          coinbaseTxid
-        })
-      }
+      await this.tearDownOldBlocks(trxStorage, oldTip.height, startingHeight)
+      await this.mineReorgBlocks(trxStorage, startingHeight, numBlocks, txidMap)
     })
 
     const newTip = await this.storage.getChainTip()
     if (newTip == null) throw new WERR_INTERNAL('Chain tip missing after reorg')
-
     return { oldTip, newTip, deactivatedHeaders }
+  }
+
+  private async tearDownOldBlocks (trxStorage: MockChainStorage, fromHeight: number, toHeight: number): Promise<void> {
+    for (let h = fromHeight; h >= toHeight; h--) {
+      const txsInBlock = await trxStorage.getTransactionsInBlock(h)
+      const headerRow = await trxStorage.knex('mockchain_block_headers').where({ height: h }).first()
+      const coinbaseTxid = headerRow?.coinbaseTxid
+
+      for (const tx of txsInBlock) {
+        if (coinbaseTxid && tx.txid === coinbaseTxid) {
+          await trxStorage.deleteUtxosByTxid(tx.txid)
+          await trxStorage.deleteTransaction(tx.txid)
+        } else {
+          await trxStorage.setTransactionBlock(tx.txid, null as any, null as any)
+          await trxStorage.setUtxoBlockHeight(tx.txid, null)
+        }
+      }
+      if (headerRow) await trxStorage.deleteBlockHeader(h)
+    }
+  }
+
+  private async mineReorgBlocks (
+    trxStorage: MockChainStorage,
+    startingHeight: number,
+    numBlocks: number,
+    txidMap?: Record<string, number>
+  ): Promise<void> {
+    const { createCoinbaseTransaction } = await import('./MockMiner')
+    const { computeMerkleRoot } = await import('./merkleTree')
+
+    for (let i = 0; i < numBlocks; i++) {
+      const newHeight = startingHeight + i
+      const mappedTxids = txidMap != null ? Object.entries(txidMap).filter(([, o]) => o === i).map(([tid]) => tid) : []
+
+      const prevHash = newHeight === 0
+        ? '00'.repeat(32)
+        : await this.getPrevHashForHeight(trxStorage, newHeight)
+
+      const coinbaseTx = createCoinbaseTransaction(newHeight)
+      const coinbaseTxid = coinbaseTx.id('hex')
+      const coinbaseRawTx = Array.from(coinbaseTx.toBinary())
+      const merkleRoot = computeMerkleRoot([coinbaseTxid, ...mappedTxids])
+
+      const time = Math.floor(Date.now() / 1000)
+      const bits = 0x207fffff
+      const nonceBytes = Random(4)
+      const nonce = ((nonceBytes[0] << 24) | (nonceBytes[1] << 16) | (nonceBytes[2] << 8) | nonceBytes[3]) >>> 0
+      const hash = asString(doubleSha256BE(toBinaryBaseBlockHeader({ version: 1, previousHash: prevHash, merkleRoot, time, bits, nonce })))
+
+      await trxStorage.knex('mockchain_transactions').insert({ txid: coinbaseTxid, rawTx: Buffer.from(coinbaseRawTx), blockHeight: newHeight, blockIndex: 0 })
+      const coinbaseOutputScript = [0x51]
+      await trxStorage.knex('mockchain_utxos').insert({ txid: coinbaseTxid, vout: 0, lockingScript: Buffer.from(coinbaseOutputScript), satoshis: 5_000_000_000, scriptHash: asString(sha256Hash(coinbaseOutputScript)), spentByTxid: null, isCoinbase: true, blockHeight: newHeight })
+
+      for (let j = 0; j < mappedTxids.length; j++) {
+        await trxStorage.setTransactionBlock(mappedTxids[j], newHeight, j + 1)
+        await trxStorage.setUtxoBlockHeight(mappedTxids[j], newHeight)
+      }
+      await trxStorage.knex('mockchain_block_headers').insert({ height: newHeight, hash, previousHash: prevHash, merkleRoot, version: 1, time, bits, nonce, coinbaseTxid })
+    }
+  }
+
+  private async getPrevHashForHeight (trxStorage: MockChainStorage, height: number): Promise<string> {
+    const prevHeader = await trxStorage.getBlockHeaderByHeight(height - 1)
+    if (prevHeader == null) throw new WERR_INTERNAL(`Missing block header at height ${height - 1}`)
+    return prevHeader.hash
   }
 
   async getRawTx (txid: string): Promise<GetRawTxResult> {
