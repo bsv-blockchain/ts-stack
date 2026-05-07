@@ -14,7 +14,7 @@ export interface GraphNode {
   proof?: string
   txMetadata?: string
   outputMetadata?: string
-  inputs?: Record<string, { hash: string }> | undefined
+  inputs?: Record<string, { hash: string }>
   children: GraphNode[]
   parent?: GraphNode
 }
@@ -135,22 +135,20 @@ export class OverlayGASPStorage implements GASPStorage {
     )
     if (admittanceResult.outputsToAdmit.includes(tx.outputIndex)) {
       // The transaction is admissible, no further inputs are needed
-    } else {
+    } else if (this.engine.managers[this.topic] !== undefined && typeof this.engine.managers[this.topic].identifyNeededInputs === 'function') {
       // The transaction is not admissible, get inputs needed for further verification
       // TopicManagers should implement a function to identify which inputs are needed.
-      if (this.engine.managers[this.topic] !== undefined && typeof this.engine.managers[this.topic].identifyNeededInputs === 'function') {
-        try {
-          const neededInputs = await this.engine.managers[this.topic].identifyNeededInputs?.(parsedTx.toBEEF()) ?? []
-          for (const input of neededInputs) {
-            response.requestedInputs[`${input.txid}.${input.outputIndex}`] = {
-              metadata: false
-            }
+      try {
+        const neededInputs = await this.engine.managers[this.topic].identifyNeededInputs?.(parsedTx.toBEEF()) ?? []
+        for (const input of neededInputs) {
+          response.requestedInputs[`${input.txid}.${input.outputIndex}`] = {
+            metadata: false
           }
-          return await this.stripAlreadyKnownInputs(response)
-        } catch (e) {
-          console.error(`An error occurred when identifying needed inputs for transaction: ${parsedTx.id('hex')}.${tx.outputIndex}!`)
-          // Cut off the graph in case of an error here.
         }
+        return await this.stripAlreadyKnownInputs(response)
+      } catch (e) {
+        console.error(`An error occurred when identifying needed inputs for transaction: ${parsedTx.id('hex')}.${tx.outputIndex}!`)
+        // Cut off the graph in case of an error here.
       }
       // By default, if the topic manager isn't able to stipulate needed inputs, only the inputs necessary for SPV are requested.
     }
@@ -217,13 +215,13 @@ export class OverlayGASPStorage implements GASPStorage {
       // Find the parent node based on spentBy
       const parentNode = this.temporaryGraphNodeRefs[spentBy]
 
-      if (parentNode !== undefined) {
+      if (parentNode === undefined) {
+        throw new Error(`Parent node with GraphID ${spentBy} not found`)
+      } else {
         // Set parent-child relationship
         parentNode.children.push(newGraphNode)
         newGraphNode.parent = parentNode
         this.temporaryGraphNodeRefs[`${newGraphNode.txid}.${newGraphNode.outputIndex}`] = newGraphNode
-      } else {
-        throw new Error(`Parent node with GraphID ${spentBy} not found`)
       }
     }
   }
