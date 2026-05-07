@@ -6,7 +6,7 @@ import {
   PrivateKey,
   RequestedCertificateTypeIDAndFieldList,
   Utils,
-  AuthFetch,
+  AuthFetch
 } from '@bsv/sdk'
 import { Server } from 'http'
 import { startServer } from './testExpressServer'
@@ -101,9 +101,9 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          'x-bsv-test': 'this is a test header',
+          'x-bsv-test': 'this is a test header'
         },
-        body: new URLSearchParams({ message: 'hello!', type: 'form-data' }).toString(),
+        body: new URLSearchParams({ message: 'hello!', type: 'form-data' }).toString()
       }
     )
     expect(result.status).toBe(200)
@@ -120,9 +120,9 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
         method: 'POST',
         headers: {
           'content-type': 'text/plain',
-          'x-bsv-test': 'this is a test header',
+          'x-bsv-test': 'this is a test header'
         },
-        body: 'Hello, this is a plain text message!',
+        body: 'Hello, this is a plain text message!'
       }
     )
     expect(result.status).toBe(200)
@@ -139,9 +139,9 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/octet-stream',
-          'x-bsv-test': 'this is a test header',
+          'x-bsv-test': 'this is a test header'
         },
-        body: Utils.toArray('Hello from binary!'),
+        body: Utils.toArray('Hello from binary!')
       }
     )
     expect(result.status).toBe(200)
@@ -182,9 +182,9 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
         method: 'PUT',
         headers: {
           'content-type': 'application/json',
-          'x-bsv-test': 'this is a test header',
+          'x-bsv-test': 'this is a test header'
         },
-        body: JSON.stringify({ key: 'value', action: 'update' }),
+        body: JSON.stringify({ key: 'value', action: 'update' })
       }
     )
     expect(result.status).toBe(200)
@@ -200,7 +200,7 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
       {
         method: 'DELETE',
         headers: {
-          'x-bsv-test': 'this is a test header',
+          'x-bsv-test': 'this is a test header'
         }
       }
     )
@@ -216,7 +216,7 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     const result = await authFetch.fetch('http://localhost:3000/large-upload', {
       method: 'POST',
       headers: {
-        'content-type': 'application/octet-stream',
+        'content-type': 'application/octet-stream'
       },
       body: largeBuffer
     })
@@ -242,14 +242,13 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
     const result = await authFetch.fetch('http://localhost:3000/custom-headers', {
       method: 'GET',
       headers: {
-        'x-bsv-custom-header': 'CustomHeaderValue',
+        'x-bsv-custom-header': 'CustomHeaderValue'
       }
     })
     expect(result.status).toBe(200)
     const textResponse = await result.text()
     expect(textResponse).toBeDefined()
   })
-
 
   // --------------------------------------------------------------------------
   // Edge-Case Tests
@@ -262,7 +261,7 @@ describe('AuthFetch and AuthExpress Integration Tests', () => {
       authFetch.fetch('http://localhost:3000/no-content-type-endpoint', {
         method: 'POST',
         // Intentionally no 'content-type' header
-        body: 'This should fail if your code requires Content-Type for POST.',
+        body: 'This should fail if your code requires Content-Type for POST.'
       })
     ).rejects.toThrow()
   })
