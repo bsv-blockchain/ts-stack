@@ -165,9 +165,7 @@ export class GASP implements GASPRemote {
   remote: GASPRemote
   lastInteraction: number
 
-  /**
-   * @deprecated Retained for backwards compatibility. Use `logLevel` and the new logging methods instead.
-   */
+  /** Retained for backwards compatibility. Use `logLevel` and the new logging methods instead. */
   log: boolean
 
   /**
@@ -275,7 +273,7 @@ export class GASP implements GASPRemote {
   }
 
   private validateTimestamp(timestamp: number): void {
-    if (typeof timestamp !== 'number' || isNaN(timestamp) || timestamp < 0 || !Number.isInteger(timestamp)) {
+    if (typeof timestamp !== 'number' || Number.isNaN(timestamp) || timestamp < 0 || !Number.isInteger(timestamp)) {
       throw new Error('Invalid timestamp format')
     }
   }
