@@ -102,7 +102,7 @@ export class RemittanceAdapter implements SdkCommsLayer {
    * @returns Array of peer messages with stringified bodies
    */
   async listMessages(args: { messageBox: string, host?: string }): Promise<RemittancePeerMessage[]> {
-    const defaultRecipient = await this.messageBox.getIdentityKey() as PubKeyHex
+    const defaultRecipient = await this.messageBox.getIdentityKey()
     const messages = await this.messageBox.listMessages({
       messageBox: args.messageBox,
       host: args.host
@@ -128,7 +128,7 @@ export class RemittanceAdapter implements SdkCommsLayer {
     overrideHost?: string
     onMessage: (msg: RemittancePeerMessage) => void
   }): Promise<void> {
-    const defaultRecipient = await this.messageBox.getIdentityKey() as PubKeyHex
+    const defaultRecipient = await this.messageBox.getIdentityKey()
 
     await this.messageBox.listenForLiveMessages({
       messageBox: args.messageBox,
@@ -146,8 +146,8 @@ export class RemittanceAdapter implements SdkCommsLayer {
   ): RemittancePeerMessage {
     return {
       messageId: msg.messageId,
-      sender: msg.sender as PubKeyHex,
-      recipient: (msg.recipient ?? fallbackRecipient) as PubKeyHex,
+      sender: msg.sender,
+      recipient: msg.recipient ?? fallbackRecipient,
       messageBox: msg.messageBox ?? fallbackMessageBox,
       body: this.toBodyString(msg.body)
     }
@@ -156,9 +156,9 @@ export class RemittanceAdapter implements SdkCommsLayer {
   private toBodyString (body: unknown): string {
     if (typeof body === 'string') return body
     try {
-      return JSON.stringify(body)
+      return JSON.stringify(body) ?? body?.toString() ?? ''
     } catch {
-      return String(body)
+      return body?.toString() ?? ''
     }
   }
 }

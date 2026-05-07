@@ -459,7 +459,7 @@ export class MessageBoxClient {
    * const host = await resolveHostForRecipient('028d...') // → returns either overlay host or this.host
    */
   async resolveHostForRecipient(identityKey: string): Promise<string> {
-    const advertisementTokens = await this.queryAdvertisements(identityKey, undefined)
+    const advertisementTokens = await this.queryAdvertisements(identityKey)
     if (advertisementTokens.length === 0) {
       Logger.warn(`[MB CLIENT] No advertisements for ${identityKey}, using default host ${this.host}`)
       return this.host
@@ -912,12 +912,12 @@ export class MessageBoxClient {
    */
   async disconnectWebSocket(): Promise<void> {
     await this.assertInitialized()
-    if (this.socket != null) {
+    if (this.socket == null) {
+      Logger.log('[MB CLIENT] No active WebSocket connection to close.')
+    } else {
       Logger.log('[MB CLIENT] Closing WebSocket connection...')
       this.socket.disconnect()
       this.socket = undefined
-    } else {
-      Logger.log('[MB CLIENT] No active WebSocket connection to close.')
     }
   }
 
@@ -1217,7 +1217,7 @@ export class MessageBoxClient {
 
       const parsed = await response.json().catch(() => ({} as any))
       if (!response.ok || parsed.status !== 'success') {
-        const msg = !response.ok ? `HTTP ${response.status} - ${response.statusText}` : (parsed.description ?? 'Unknown server error')
+        const msg = response.ok ? (parsed.description ?? 'Unknown server error') : `HTTP ${response.status} - ${response.statusText}`
         throw new Error(msg)
       }
 
@@ -1225,19 +1225,23 @@ export class MessageBoxClient {
       const sent = Array.isArray(parsed.results) ? parsed.results : []
       const failed: Array<{ recipient: string, error: string }> = [] // handled server-side now
 
-      const status: SendListResult['status'] =
-        sent.length === allowedRecipients.length
-          ? 'success'
-          : sent.length > 0
-            ? 'partial'
-            : 'error'
+      let status: SendListResult['status']
+      if (sent.length === allowedRecipients.length) {
+        status = 'success'
+      } else if (sent.length > 0) {
+        status = 'partial'
+      } else {
+        status = 'error'
+      }
 
-      const description =
-        status === 'success'
-          ? `Sent to ${sent.length} recipients.`
-          : status === 'partial'
-            ? `Sent to ${sent.length} recipients; ${allowedRecipients.length - sent.length} failed; ${blocked.length} blocked.`
-            : `Failed to send to ${allowedRecipients.length} allowed recipients. ${blocked.length} blocked.`
+      let description: string
+      if (status === 'success') {
+        description = `Sent to ${sent.length} recipients.`
+      } else if (status === 'partial') {
+        description = `Sent to ${sent.length} recipients; ${allowedRecipients.length - sent.length} failed; ${blocked.length} blocked.`
+      } else {
+        description = `Failed to send to ${allowedRecipients.length} allowed recipients. ${blocked.length} blocked.`
+      }
 
       return { status, description, sent, blocked, failed, totals }
     } catch (err) {
@@ -1527,8 +1531,7 @@ export class MessageBoxClient {
     let hosts: string[] = host != null ? [host] : []
     if (hosts.length === 0) {
       const advertisedHosts = await this.queryAdvertisements(
-        await this.getIdentityKey(),
-        undefined
+        await this.getIdentityKey()
       )
       hosts = Array.from(new Set([this.host, ...advertisedHosts.map(h => h.host)]))
     }
@@ -1556,13 +1559,10 @@ export class MessageBoxClient {
 
     // 3. Split successes / failures
     const messagesByHost: PeerMessage[][] = []
-    const errors: any[] = []
 
     for (const r of settled) {
       if (r.status === 'fulfilled') {
         messagesByHost.push(r.value)
-      } else {
-        errors.push(r.reason)
       }
     }
 
@@ -1616,7 +1616,7 @@ export class MessageBoxClient {
             `[MB CLIENT] Processing recipient payment in message from ${String(p.message.sender)}…`
           )
 
-          const recipientOutputs = (p.paymentData as Payment).outputs.filter(
+          const recipientOutputs = p.paymentData!.outputs.filter(
             output => output.protocol === 'wallet payment'
           )
 
@@ -1626,9 +1626,9 @@ export class MessageBoxClient {
             )
 
             const internalizeResult = await this.walletClient.internalizeAction({
-              tx: (p.paymentData as Payment).tx,
+              tx: p.paymentData!.tx,
               outputs: recipientOutputs,
-              description: (p.paymentData as Payment).description ?? 'MessageBox recipient payment'
+              description: p.paymentData!.description ?? 'MessageBox recipient payment'
             }, this.originator)
 
             if (internalizeResult.accepted) {
@@ -1732,7 +1732,7 @@ export class MessageBoxClient {
    * console.log(messages)
    */
   async listMessagesLite({ messageBox, host }: ListMessagesParams): Promise<PeerMessage[]> {
-    const res = await this.authFetch.fetch(`${host as string}/listMessages`, {
+    const res = await this.authFetch.fetch(`${host!}/listMessages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messageBox })
@@ -1740,18 +1740,11 @@ export class MessageBoxClient {
     const data = await res.json()
     if (data.status === 'error') throw new Error(data.description ?? 'Unknown server error')
     const messages = data.messages as PeerMessage[]
-    const tryParse = (raw: string): any => {
-      try {
-        return JSON.parse(raw)
-      } catch {
-        return raw
-      }
-    }
 
     await this.mapWithConcurrency(messages, 4, async (message) => {
       try {
         const parsedBody: unknown =
-          typeof message.body === 'string' ? tryParse(message.body) : message.body
+          typeof message.body === 'string' ? this.tryParse(message.body) : message.body
         let messageContent: any = parsedBody
         if (
           parsedBody != null &&
@@ -1760,7 +1753,7 @@ export class MessageBoxClient {
         ) {
           const wrappedMessage = (parsedBody as any).message
           messageContent = typeof wrappedMessage === 'string'
-            ? tryParse(wrappedMessage)
+            ? this.tryParse(wrappedMessage)
             : wrappedMessage
         }
         if (
@@ -1778,7 +1771,7 @@ export class MessageBoxClient {
             )
           })
           const decryptedText = Utils.toUTF8(decrypted.plaintext)
-          message.body = tryParse(decryptedText)
+          message.body = this.tryParse(decryptedText)
         } else {
           message.body = messageContent ?? parsedBody
         }
@@ -1968,7 +1961,7 @@ export class MessageBoxClient {
     if (hosts.length === 0) {
       // 1. Determine all hosts (advertised + default)
       const identityKey = await this.getIdentityKey()
-      const advertisedHosts = await this.queryAdvertisements(identityKey, undefined)
+      const advertisedHosts = await this.queryAdvertisements(identityKey)
       hosts = Array.from(new Set([this.host, ...advertisedHosts.map(h => h.host)]))
     }
 
@@ -1984,7 +1977,7 @@ export class MessageBoxClient {
         const data = await res.json()
         if (data.status === 'error') throw new Error(data.description)
         Logger.log(`[MB CLIENT] Acknowledged on ${host}`)
-        return data.status as string
+        return data.status
       } catch (err) {
         Logger.warn(`[MB CLIENT WARN] acknowledgeMessage failed for ${host}:`, err)
         return null
@@ -2009,7 +2002,7 @@ export class MessageBoxClient {
       if (r.status === 'rejected') errs.push(r.reason)
     }
     throw new Error(
-      `Failed to acknowledge messages on all hosts: ${errs.map(e => String(e)).join('; ')}`
+      `Failed to acknowledge messages on all hosts: ${errs.map(String).join('; ')}`
     )
   }
 
