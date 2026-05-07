@@ -386,6 +386,26 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * @param trx
    * @returns
    */
+  private async upsertProvenTxReq (
+    txid: string,
+    newReq: TableProvenTxReq | undefined,
+    trx: TrxToken | undefined
+  ): Promise<TableProvenTxReq | undefined> {
+    const existing = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
+    if (existing == null && newReq == null) return undefined
+    if (existing == null) {
+      await this.insertProvenTxReq(newReq!, trx)
+      return newReq
+    }
+    if (newReq != null) {
+      const req1 = new EntityProvenTxReq(existing)
+      req1.mergeHistory(newReq, undefined, true)
+      req1.mergeNotifyTransactionIds(newReq)
+      await req1.updateStorageDynamicProperties(this, trx)
+    }
+    return existing
+  }
+
   async getProvenOrReq (txid: string, newReq?: TableProvenTxReq, trx?: TrxToken): Promise<StorageProvenOrReq> {
     if ((newReq != null) && txid !== newReq.txid) throw new WERR_INVALID_PARAMETER('newReq', 'same txid')
 
@@ -396,24 +416,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
     for (let retry = 0; ; retry++) {
       try {
-        r.req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
-
-        // Nothing found and nothing to insert — done
-        if ((r.req == null) && (newReq == null)) break
-
-        // Not found — insert the new req
-        if (r.req == null) {
-          await this.insertProvenTxReq(newReq!, trx)
-          break
-        }
-
-        // Found existing — merge history/notify from newReq if provided
-        if (newReq != null) {
-          const req1 = new EntityProvenTxReq(r.req)
-          req1.mergeHistory(newReq, undefined, true)
-          req1.mergeNotifyTransactionIds(newReq)
-          await req1.updateStorageDynamicProperties(this, trx)
-        }
+        r.req = await this.upsertProvenTxReq(txid, newReq, trx)
         break
       } catch (error_: unknown) {
         if (retry > 0) throw error_
@@ -551,6 +554,49 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return beef
   }
 
+  /**
+   * Handles the proven-tx branch of getValidBeefForTxid.
+   *
+   * Returns the beef if the proof was merged and we can stop, or `undefined` to
+   * signal that the caller should fall through to the rawTx path.  May also
+   * populate `r.rawTx` so the rawTx path can proceed without re-fetching.
+   */
+  private async handleProvenTxBranch (
+    txid: string,
+    r: ProvenOrRawTx,
+    beef: Beef,
+    trustSelf: TrustSelf | undefined,
+    requiredLevels: number | undefined,
+    chainTracker: ChainTracker | undefined,
+    skipInvalidProofs: boolean | undefined
+  ): Promise<Beef | undefined> {
+    if (requiredLevels) {
+      // Need more levels — caller should proceed via rawTx path
+      r.rawTx = r.proven!.rawTx
+      return undefined
+    }
+    if (trustSelf === 'known') {
+      beef.mergeTxidOnly(txid)
+      return beef
+    }
+    const mp = new EntityProvenTx(r.proven!).getMerklePath()
+    if (chainTracker != null) {
+      const root = mp.computeRoot()
+      const isValid = await chainTracker.isValidRootForHeight(root, r.proven!.height)
+      if (!isValid) {
+        if (!skipInvalidProofs) throw new WERR_INVALID_MERKLE_ROOT(r.proven!.blockHash, r.proven!.height, root, txid)
+        // Proof is currently invalid — recurse deeper via rawTx path
+        r.rawTx = r.proven!.rawTx
+        r.proven = undefined
+        return undefined
+      }
+    }
+    // Proof is good — merge and return
+    beef.mergeRawTx(r.proven!.rawTx)
+    beef.mergeBump(mp)
+    return beef
+  }
+
   async getValidBeefForTxid (
     txid: string,
     mergeToBeef?: Beef,
@@ -562,38 +608,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     skipInvalidProofs?: boolean
   ): Promise<Beef | undefined> {
     const beef = mergeToBeef ?? new Beef()
-
     const r = await this.getProvenOrRawTx(txid, trx)
 
     // --- proven-tx path ---
     if (r.proven != null) {
-      if (requiredLevels) {
-        // Need more levels — fall through to rawTx path
-        r.rawTx = r.proven.rawTx
-      } else if (trustSelf === 'known') {
-        beef.mergeTxidOnly(txid)
-        return beef
-      } else {
-        const mp = new EntityProvenTx(r.proven).getMerklePath()
-        if (chainTracker != null) {
-          const root = mp.computeRoot()
-          const isValid = await chainTracker.isValidRootForHeight(root, r.proven.height)
-          if (!isValid) {
-            if (!skipInvalidProofs) {
-              throw new WERR_INVALID_MERKLE_ROOT(r.proven.blockHash, r.proven.height, root, txid)
-            }
-            // ignore this currently invalid proof and try to recurse deeper
-            r.rawTx = r.proven.rawTx
-            r.proven = undefined
-          }
-        }
-        if (r.proven != null) {
-          // Proof is still good — merge and return
-          beef.mergeRawTx(r.proven.rawTx)
-          beef.mergeBump(mp)
-          return beef
-        }
-      }
+      const result = await this.handleProvenTxBranch(txid, r, beef, trustSelf, requiredLevels, chainTracker, skipInvalidProofs)
+      if (result != null || r.rawTx == null) return result
     }
 
     // --- rawTx path ---
