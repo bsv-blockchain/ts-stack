@@ -114,8 +114,8 @@ function stripVerifiedPushDropSignature (fields: number[][], lockingPublicKey: a
     let writeOffset = 0
     for (let i = 0; i < protocolFieldCount; i++) {
       const field = fields[i]
-      for (let j = 0; j < field.length; j++) {
-        dataToVerify[writeOffset++] = field[j]
+      for (const byte of field) {
+        dataToVerify[writeOffset++] = byte
       }
     }
 
@@ -543,7 +543,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
 
     // V3 fields: umpVersion, kdfAlgorithm, kdfParams
     if (token.umpVersion === 3 && (token.passwordKdf != null)) {
-      const versionFieldIndex = (token.profilesEncrypted != null) ? 12 : 11
+      const versionFieldIndex = (token.profilesEncrypted == null) ? 11 : 12
 
       fields[versionFieldIndex] = [token.umpVersion] // Single byte
       fields[versionFieldIndex + 1] = Utils.toArray(token.passwordKdf.algorithm, 'utf8')
@@ -607,7 +607,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     try {
       createResult = await wallet.createAction(
         {
-          description: (oldTokenToConsume != null) ? 'Renew UMP token (consume old, create new)' : 'Create new UMP token',
+          description: (oldTokenToConsume == null) ? 'Create new UMP token' : 'Renew UMP token (consume old, create new)',
           inputs,
           outputs,
           inputBEEF: inputToken?.beef,
@@ -641,7 +641,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         throw new Error('No signableTransaction and no final TX found.')
       }
       // Now broadcast to `tm_users` using SHIP
-      const broadcastTx = Transaction.fromAtomicBEEF(createResult.tx!)
+      const broadcastTx = Transaction.fromAtomicBEEF(createResult.tx)
       const result = await this.broadcaster.broadcast(broadcastTx)
       console.log('BROADCAST RESULT', result)
       return `${finalTxid}.0`
@@ -670,7 +670,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
         },
         adminOriginator
       )
-      finalTxid = signResult.txid || ((signResult.tx != null) ? Transaction.fromAtomicBEEF(signResult.tx).id('hex') : '')
+      finalTxid = signResult.txid || ((signResult.tx == null) ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
       if (!finalTxid) {
         throw new Error('Could not finalize transaction for renewed UMP token.')
       }
@@ -686,7 +686,7 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     } else {
       // Fallback for creating a new token (no input spending)
       const signResult = await wallet.signAction({ reference, spends: {} }, adminOriginator)
-      finalTxid = signResult.txid || ((signResult.tx != null) ? Transaction.fromAtomicBEEF(signResult.tx).id('hex') : '')
+      finalTxid = signResult.txid || ((signResult.tx == null) ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
       if (!finalTxid) {
         throw new Error('Failed to finalize new UMP token transaction.')
       }
@@ -742,7 +742,10 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
       const hasV3MetadataWithoutProfiles =
         protocolFields.length >= 14 && protocolFields[11]?.length === 1 && protocolFields[11][0] === 3
 
-      const kdfVersionFieldIndex = hasV3MetadataWithProfiles ? 12 : hasV3MetadataWithoutProfiles ? 11 : -1
+      let kdfVersionFieldIndex: number
+      if (hasV3MetadataWithProfiles) kdfVersionFieldIndex = 12
+      else if (hasV3MetadataWithoutProfiles) kdfVersionFieldIndex = 11
+      else kdfVersionFieldIndex = -1
 
       // Build the UMP token from these fields, preserving outpoint
       const t: UMPToken = {
@@ -1510,9 +1513,9 @@ export class CWIStyleWalletManager implements WalletInterface {
       const rootPrivilegedBytes = rootPrivileged.toArray()
 
       // Apply the profile's pad if applicable
-      const profilePrivilegedBytes = (profilePrivilegedPad != null)
-        ? this.XOR(rootPrivilegedBytes, profilePrivilegedPad)
-        : rootPrivilegedBytes
+      const profilePrivilegedBytes = (profilePrivilegedPad == null)
+        ? rootPrivilegedBytes
+        : this.XOR(rootPrivilegedBytes, profilePrivilegedPad)
 
       return new PrivateKey(profilePrivilegedBytes)
     })
@@ -1780,12 +1783,12 @@ export class CWIStyleWalletManager implements WalletInterface {
         })
       ).ciphertext,
       profilesEncrypted, // Add encrypted profiles
-      ...((kdfMetadata != null)
-        ? {
+      ...(kdfMetadata == null
+        ? {}
+        : {
             umpVersion: 3,
             passwordKdf: kdfMetadata
-          }
-        : {})
+          })
       // currentOutpoint will be set after publishing
     }
 
@@ -2008,9 +2011,9 @@ export class CWIStyleWalletManager implements WalletInterface {
     this.rootPrimaryKey = rootPrimaryKey
 
     // Store ephemeral key if provided, for one-time use by the manager
-    let oneTimePrivilegedKey: PrivateKey | undefined = (ephemeralRootPrivilegedKey != null)
-      ? new PrivateKey(ephemeralRootPrivilegedKey)
-      : undefined
+    let oneTimePrivilegedKey: PrivateKey | undefined = (ephemeralRootPrivilegedKey == null)
+      ? undefined
+      : new PrivateKey(ephemeralRootPrivilegedKey)
 
     // Create the ROOT PrivilegedKeyManager
     this.rootPrivilegedKeyManager = new PrivilegedKeyManager(async (reason: string) => {
