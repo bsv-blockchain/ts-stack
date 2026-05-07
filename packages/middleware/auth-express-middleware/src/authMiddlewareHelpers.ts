@@ -111,15 +111,16 @@ export function writeBodyToWriter (
   const { body, headers } = req
   const debugLog = makeDebugLogger(logger, logLevel)
 
-  // Normalise a header to a single string — Express may return string[] when a
-  // header is repeated.  Take the first value to avoid type-confusion (CodeQL
-  // js/type-confusion-through-parameter-tampering).
-  const getHeader = (name: string): string => {
-    const v = headers[name]
-    if (Array.isArray(v)) return v[0] ?? ''
-    return typeof v === 'string' ? v : ''
+  // Inline-normalised content-type to a single string (Express may return string[]).
+  // Inline narrowing rather than a helper so CodeQL's dataflow analysis can see
+  // the explicit type guard (avoids js/type-confusion-through-parameter-tampering).
+  const rawContentType = headers['content-type']
+  let contentType = ''
+  if (typeof rawContentType === 'string') {
+    contentType = rawContentType
+  } else if (Array.isArray(rawContentType) && typeof rawContentType[0] === 'string') {
+    contentType = rawContentType[0]
   }
-  const contentType = getHeader('content-type')
 
   if (Array.isArray(body) && body.every((item) => typeof item === 'number')) {
     writer.writeVarIntNum(body.length)
@@ -145,7 +146,9 @@ export function writeBodyToWriter (
 
   if (
     contentType === 'application/x-www-form-urlencoded' &&
-    body &&
+    body !== null &&
+    typeof body === 'object' &&
+    !Array.isArray(body) &&
     Object.keys(body).length > 0
   ) {
     const parsedBody = new URLSearchParams(body).toString()
