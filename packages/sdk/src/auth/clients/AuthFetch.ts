@@ -315,9 +315,7 @@ export class AuthFetch {
     const baseURL = parsedUrl.origin
 
     let peerToUse: { peer: Peer; identityKey?: string }
-    if (this.peers[baseURL] !== undefined) {
-      peerToUse = { peer: this.peers[baseURL].peer }
-    } else {
+    if (this.peers[baseURL] === undefined) {
       const newTransport = new SimplifiedFetchTransport(baseURL)
       peerToUse = {
         peer: new Peer(
@@ -329,6 +327,8 @@ export class AuthFetch {
         )
       }
       this.peers[baseURL] = peerToUse
+    } else {
+      peerToUse = { peer: this.peers[baseURL].peer }
     }
 
     // Return a promise that resolves when certificates are received
@@ -451,14 +451,14 @@ export class AuthFetch {
 
     // nHeaders
     writer.writeVarIntNum(includedHeaders.length)
-    for (let i = 0; i < includedHeaders.length; i++) {
+    for (const [headerKey, headerValue] of includedHeaders) {
       // headerKeyLength
-      const headerKeyAsArray = Utils.toArray(includedHeaders[i][0], 'utf8')
+      const headerKeyAsArray = Utils.toArray(headerKey, 'utf8')
       writer.writeVarIntNum(headerKeyAsArray.length)
       // headerKey
       writer.write(headerKeyAsArray)
       // headerValueLength
-      const headerValueAsArray = Utils.toArray(includedHeaders[i][1], 'utf8')
+      const headerValueAsArray = Utils.toArray(headerValue, 'utf8')
       writer.writeVarIntNum(headerValueAsArray.length)
       // headerValue
       writer.write(headerValueAsArray)
@@ -470,7 +470,7 @@ export class AuthFetch {
     if (methodsThatTypicallyHaveBody.includes(method.toUpperCase()) && body === undefined) {
       // Check if content-type is application/json
       const contentTypeHeader = includedHeaders.find(([k]) => k === 'content-type')
-      if (contentTypeHeader && contentTypeHeader[1].includes('application/json')) {
+      if (contentTypeHeader?.[1].includes('application/json') === true) {
         body = '{}'
       } else {
         body = ''
@@ -541,7 +541,15 @@ export class AuthFetch {
     }
 
     let paymentContext = config.paymentContext
-    if (paymentContext != null) {
+    if (paymentContext == null) {
+      paymentContext = await this.createPaymentContext(
+        url,
+        config,
+        satoshisRequired,
+        serverIdentityKey,
+        derivationPrefix
+      )
+    } else {
       const requirementsChanged = !this.isPaymentContextCompatible(
         paymentContext,
         satoshisRequired,
@@ -558,14 +566,6 @@ export class AuthFetch {
           derivationPrefix
         )
       }
-    } else {
-      paymentContext = await this.createPaymentContext(
-        url,
-        config,
-        satoshisRequired,
-        serverIdentityKey,
-        derivationPrefix
-      )
     }
 
     if (paymentContext.attempts >= paymentContext.maxAttempts) {
@@ -573,7 +573,7 @@ export class AuthFetch {
     }
 
     const headersWithPayment: Record<string, string> = {
-      ...(config.headers ?? {})
+      ...config.headers
     }
     headersWithPayment['x-bsv-payment'] = JSON.stringify({
       derivationPrefix: paymentContext.derivationPrefix,
@@ -692,7 +692,7 @@ export class AuthFetch {
     url: string,
     config: SimplifiedFetchRequestOptions
   ): PaymentRetryContext['requestSummary'] {
-    const headers = { ...(config.headers ?? {}) }
+    const headers = { ...config.headers }
     const method = typeof config.method === 'string' ? config.method.toUpperCase() : 'GET'
     const bodySummary = this.describeRequestBodyForLogging(config.body)
 
@@ -727,7 +727,7 @@ export class AuthFetch {
 
     if (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(body)) {
       return {
-        type: body.constructor != null ? body.constructor.name : 'TypedArray',
+        type: body.constructor == null ? 'TypedArray' : body.constructor.name,
         byteLength: body.byteLength
       }
     }
@@ -791,12 +791,10 @@ export class AuthFetch {
       console.error(`${prefix} ${message}`, details)
     } else if (level === 'warn') {
       console.warn(`${prefix} ${message}`, details)
+    } else if (typeof console.info === 'function') {
+      console.info(`${prefix} ${message}`, details)
     } else {
-      if (typeof console.info === 'function') {
-        console.info(`${prefix} ${message}`, details)
-      } else {
-        console.log(`${prefix} ${message}`, details)
-      }
+      console.log(`${prefix} ${message}`, details)
     }
   }
 

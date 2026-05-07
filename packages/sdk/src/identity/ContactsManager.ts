@@ -53,9 +53,9 @@ export class ContactsManager {
       if (cached != null && cached !== '') {
         try {
           const cachedContacts: Contact[] = JSON.parse(cached)
-          return identityKey != null
-            ? cachedContacts.filter(c => c.identityKey === identityKey)
-            : cachedContacts
+          return identityKey == null
+            ? cachedContacts
+            : cachedContacts.filter(c => c.identityKey === identityKey)
         } catch (e) {
           console.warn('Invalid cached contacts JSON; will reload from chain', e)
         }
@@ -116,8 +116,7 @@ export class ContactsManager {
     )
 
     const contacts: Contact[] = []
-    for (let i = 0; i < decryptResults.length; i++) {
-      const result = decryptResults[i]
+    for (const result of decryptResults) {
       if (result.status === 'fulfilled') {
         try {
           const contactData: Contact = JSON.parse(Utils.toUTF8(result.value.plaintext))
@@ -132,9 +131,9 @@ export class ContactsManager {
 
     // Cache the loaded contacts
     this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify(contacts))
-    const filteredContacts = identityKey != null
-      ? contacts.filter(c => c.identityKey === identityKey)
-      : contacts
+    const filteredContacts = identityKey == null
+      ? contacts
+      : contacts.filter(c => c.identityKey === identityKey)
     return filteredContacts
   }
 
@@ -233,7 +232,23 @@ export class ContactsManager {
       'self'
     )
 
-    if (existingOutput != null) {
+    if (existingOutput == null) {
+      // Create new contact output
+      const { tx } = await this.wallet.createAction({
+        description: 'Add Contact',
+        outputs: [{
+          basket: 'contacts',
+          satoshis: 1,
+          lockingScript: lockingScript.toHex(),
+          outputDescription: `Contact: ${contact.name ?? contact.identityKey.slice(0, 10)}`,
+          tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`],
+          customInstructions: JSON.stringify({ keyID })
+        }],
+        options: { acceptDelayedBroadcast: false, randomizeOutputs: false }
+      }, this.originator)
+
+      if (tx == null) throw new Error('Failed to create contact output')
+    } else {
       // Update existing contact by spending its output
       const [txid, outputIndex] = String(existingOutput.outpoint).split('.')
       const prevOutpoint = `${txid}.${outputIndex}` as const
@@ -255,7 +270,7 @@ export class ContactsManager {
           tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`],
           customInstructions: JSON.stringify({ keyID })
         }],
-        options: { acceptDelayedBroadcast: false, randomizeOutputs: false } // TODO: Support custom config as needed.
+        options: { acceptDelayedBroadcast: false, randomizeOutputs: false }
       }, this.originator)
 
       if (signableTransaction == null) throw new Error('Unable to update contact')
@@ -272,22 +287,6 @@ export class ContactsManager {
       }, this.originator)
 
       if (tx == null) throw new Error('Failed to update contact output')
-    } else {
-      // Create new contact output
-      const { tx } = await this.wallet.createAction({
-        description: 'Add Contact',
-        outputs: [{
-          basket: 'contacts',
-          satoshis: 1,
-          lockingScript: lockingScript.toHex(),
-          outputDescription: `Contact: ${contact.name ?? contact.identityKey.slice(0, 10)}`,
-          tags: [`identityKey ${Utils.toHex(hashedIdentityKey)}`],
-          customInstructions: JSON.stringify({ keyID })
-        }],
-        options: { acceptDelayedBroadcast: false, randomizeOutputs: false } // TODO: Support custom config as needed.
-      }, this.originator)
-
-      if (tx == null) throw new Error('Failed to create contact output')
     }
     this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify(contacts))
   }
@@ -361,8 +360,7 @@ export class ContactsManager {
               inputDescription: 'Spend contact output to delete'
             }],
             outputs: [], // No outputs = deletion
-            options: { acceptDelayedBroadcast: false, randomizeOutputs: false } // TODO: Support custom config as needed.
-          }, this.originator)
+            options: { acceptDelayedBroadcast: false, randomizeOutputs: false }           }, this.originator)
 
           if (signableTransaction == null) throw new Error('Unable to delete contact')
 

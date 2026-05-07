@@ -64,9 +64,7 @@ export class RegistryClient {
    * @returns The public identity key as a hex string.
    */
   private async getIdentityKey (): Promise<PubKeyHex> {
-    if (this.cachedIdentityKey === undefined) {
-      this.cachedIdentityKey = (await this.wallet.getPublicKey({ identityKey: true })).publicKey
-    }
+    this.cachedIdentityKey ??= (await this.wallet.getPublicKey({ identityKey: true })).publicKey
     return this.cachedIdentityKey
   }
 
@@ -75,9 +73,7 @@ export class RegistryClient {
    * @returns The network type ('mainnet' or 'testnet').
    */
   private async getNetwork (): Promise<'mainnet' | 'testnet'> {
-    if (this.network === undefined) {
-      this.network = (await this.wallet.getNetwork({})).network
-    }
+    this.network ??= (await this.wallet.getNetwork({})).network
     return this.network
   }
 
@@ -240,14 +236,16 @@ export class RegistryClient {
     }
 
     // Create a descriptive label for the item we're removing
-    const itemIdentifier =
-      registryRecord.definitionType === 'basket'
-        ? registryRecord.basketID
-        : registryRecord.definitionType === 'protocol'
-          ? registryRecord.name
-          : registryRecord.definitionType === 'certificate'
-            ? (registryRecord.name !== undefined ? registryRecord.name : registryRecord.type)
-            : 'unknown'
+    let itemIdentifier: string | undefined
+    if (registryRecord.definitionType === 'basket') {
+      itemIdentifier = registryRecord.basketID
+    } else if (registryRecord.definitionType === 'protocol') {
+      itemIdentifier = registryRecord.name
+    } else if (registryRecord.definitionType === 'certificate') {
+      itemIdentifier = registryRecord.name ?? registryRecord.type
+    } else {
+      itemIdentifier = 'unknown'
+    }
 
     const outpoint = `${registryRecord.txid}.${registryRecord.outputIndex}`
     const { signableTransaction } = await this.wallet.createAction({
@@ -337,14 +335,16 @@ export class RegistryClient {
     }
 
     // Create a descriptive label for the item we're updating
-    const itemIdentifier =
-      registryRecord.definitionType === 'basket'
-        ? registryRecord.basketID
-        : registryRecord.definitionType === 'protocol'
-          ? registryRecord.name
-          : registryRecord.definitionType === 'certificate'
-            ? (registryRecord.name !== undefined ? registryRecord.name : registryRecord.type)
-            : 'unknown'
+    let itemIdentifier: string | undefined
+    if (registryRecord.definitionType === 'basket') {
+      itemIdentifier = registryRecord.basketID
+    } else if (registryRecord.definitionType === 'protocol') {
+      itemIdentifier = registryRecord.name
+    } else if (registryRecord.definitionType === 'certificate') {
+      itemIdentifier = registryRecord.name ?? registryRecord.type
+    } else {
+      itemIdentifier = 'unknown'
+    }
 
     const pushdrop = new PushDrop(this.wallet, this.originator)
 

@@ -14,13 +14,15 @@ export function defaultHttpClient(): HttpClient {
     }
   }
 
-  if (typeof globalThis.window !== 'undefined' && typeof globalThis.window.fetch === 'function') {
+  if (globalThis.window !== undefined && typeof globalThis.window.fetch === 'function') {
     // Browser tab/page context
     return new FetchHttpClient(globalThis.window.fetch.bind(globalThis.window))
   } else if (typeof globalThis.fetch === 'function') {
     // Service workers, Deno, Node 18+ (any environment with global fetch)
     return new FetchHttpClient(globalThis.fetch.bind(globalThis))
-  } else if (typeof require !== 'undefined') {
+  } else if (typeof require === 'undefined') {
+    return noHttpClient
+  } else {
     // Older Node.js — use https module
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -30,7 +32,5 @@ export function defaultHttpClient(): HttpClient {
       // node:https not available in this runtime; fall through to noHttpClient
       return noHttpClient
     }
-  } else {
-    return noHttpClient
   }
 }

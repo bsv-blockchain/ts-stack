@@ -215,13 +215,13 @@ export default class PublicKey extends Point {
     let sharedSecret: Point
     if (typeof retrieveCachedSharedSecret === 'function') {
       const retrieved = retrieveCachedSharedSecret(privateKey, this)
-      if (retrieved !== undefined) {
-        sharedSecret = retrieved
-      } else {
+      if (retrieved === undefined) {
         sharedSecret = this.deriveSharedSecret(privateKey)
         if (typeof cacheSharedSecret === 'function') {
           cacheSharedSecret(privateKey, this, sharedSecret)
         }
+      } else {
+        sharedSecret = retrieved
       }
     } else {
       sharedSecret = this.deriveSharedSecret(privateKey)

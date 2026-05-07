@@ -121,31 +121,31 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.writeUTF8(paramWriter, args.description)
 
     // input BEEF
-    if (args.inputBEEF != null) {
+    if (args.inputBEEF == null) {
+      paramWriter.writeVarIntNum(-1)
+    } else {
       paramWriter.writeVarIntNum(args.inputBEEF.length)
       paramWriter.write(args.inputBEEF)
-    } else {
-      paramWriter.writeVarIntNum(-1)
     }
 
     // Serialize inputs
-    if (args.inputs != null) {
+    if (args.inputs == null) {
+      paramWriter.writeVarIntNum(-1)
+    } else {
       paramWriter.writeVarIntNum(args.inputs.length)
       for (const input of args.inputs) {
         this.serializeCreateActionInput(paramWriter, input)
       }
-    } else {
-      paramWriter.writeVarIntNum(-1)
     }
 
     // Serialize outputs
-    if (args.outputs != null) {
+    if (args.outputs == null) {
+      paramWriter.writeVarIntNum(-1)
+    } else {
       paramWriter.writeVarIntNum(args.outputs.length)
       for (const output of args.outputs) {
         this.serializeCreateActionOutput(paramWriter, output)
       }
-    } else {
-      paramWriter.writeVarIntNum(-1)
     }
 
     // Serialize lockTime, version
@@ -967,27 +967,27 @@ export default class WalletWireTransceiver implements WalletInterface {
 
   /** Writes an array of UTF-8 strings as (VarInt count, ...items). -1 if null. */
   private writeUTF8Array (writer: Utils.Writer, arr: string[] | undefined): void {
-    if (arr != null) {
+    if (arr == null) {
+      writer.writeVarIntNum(-1)
+    } else {
       writer.writeVarIntNum(arr.length)
       for (const item of arr) {
         const bytes = Utils.toArray(item, 'utf8')
         writer.writeVarIntNum(bytes.length)
         writer.write(bytes)
       }
-    } else {
-      writer.writeVarIntNum(-1)
     }
   }
 
   /** Writes an array of hex-encoded txids (each 32 bytes) as (VarInt count, ...items). -1 if null. */
   private writeTxidArray (writer: Utils.Writer, arr: string[] | undefined): void {
-    if (arr != null) {
+    if (arr == null) {
+      writer.writeVarIntNum(-1)
+    } else {
       writer.writeVarIntNum(arr.length)
       for (const txid of arr) {
         writer.write(Utils.toArray(txid, 'hex'))
       }
-    } else {
-      writer.writeVarIntNum(-1)
     }
   }
 
@@ -1081,13 +1081,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.writeTxidArray(writer, options.knownTxids)
     this.writeOptionalBool(writer, options.returnTXIDOnly)
     this.writeOptionalBool(writer, options.noSend)
-    if (options.noSendChange != null) {
+    if (options.noSendChange == null) {
+      writer.writeVarIntNum(-1)
+    } else {
       writer.writeVarIntNum(options.noSendChange.length)
       for (const outpoint of options.noSendChange) {
         writer.write(this.encodeOutpoint(outpoint))
       }
-    } else {
-      writer.writeVarIntNum(-1)
     }
     this.writeTxidArray(writer, options.sendWith)
     this.writeOptionalBool(writer, options.randomizeOutputs)
@@ -1178,9 +1178,9 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(signatureAsArray)
 
       const keyringRevealerAsArray =
-        args.keyringRevealer !== 'certifier'
-          ? Utils.toArray(args.keyringRevealer, 'hex')
-          : [11]
+        args.keyringRevealer === 'certifier'
+          ? [11]
+          : Utils.toArray(args.keyringRevealer, 'hex')
       paramWriter.write(keyringRevealerAsArray)
 
       const keyringKeys = Object.keys(args.keyringForSubject ?? {})

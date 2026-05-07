@@ -218,15 +218,14 @@ export default class Spend {
     this.lockTime = params.lockTime
     this.memoryLimit = params.memoryLimit ?? 32000000
     this.isRelaxedOverride = params.isRelaxed === true
-    this.verifyFlags = params.verifyFlags === undefined
-      ? undefined
-      : new Set(
-        (Array.isArray(params.verifyFlags)
-          ? params.verifyFlags
-          : params.verifyFlags.split(','))
-          .map(flag => flag.trim())
-          .filter(flag => flag.length > 0)
-      )
+    if (params.verifyFlags === undefined) {
+      this.verifyFlags = undefined
+    } else {
+      const flagArr = Array.isArray(params.verifyFlags)
+        ? params.verifyFlags
+        : params.verifyFlags.split(',')
+      this.verifyFlags = new Set(flagArr.map(flag => flag.trim()).filter(flag => flag.length > 0))
+    }
     this.stack = []
     this.altStack = []
     this.ifStack = []
