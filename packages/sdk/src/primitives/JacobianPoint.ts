@@ -2,6 +2,8 @@ import BasePoint from './BasePoint.js'
 import BigNumber from './BigNumber.js'
 import Point from './Point.js'
 
+type JacobianCoord = string | BigNumber | null
+
 /**
  * The `JacobianPoint` class extends the `BasePoint` class for handling Jacobian coordinates on an Elliptic Curve.
  * This class defines the properties and the methods needed to work with points in Jacobian coordinates.
@@ -39,9 +41,9 @@ export default class JacobianPoint extends BasePoint {
    * const pointJ2 = new JacobianPoint('3', '4', '1'); // creates point (3, 4, 1)
    */
   constructor (
-    x: string | BigNumber | null,
-    y: string | BigNumber | null,
-    z: string | BigNumber | null
+    x: JacobianCoord,
+    y: JacobianCoord,
+    z: JacobianCoord
   ) {
     super('jacobian')
     if (x === null && y === null && z === null) {
@@ -157,10 +159,10 @@ export default class JacobianPoint extends BasePoint {
     const h = u1.redSub(u2)
     const r = s1.redSub(s2)
     if (h.cmpn(0) === 0) {
-      if (r.cmpn(0) !== 0) {
-        return new JacobianPoint(null, null, null)
-      } else {
+      if (r.cmpn(0) === 0) {
         return this.dbl()
+      } else {
+        return new JacobianPoint(null, null, null)
       }
     }
 
@@ -215,10 +217,10 @@ export default class JacobianPoint extends BasePoint {
     const h = u1.redSub(u2)
     const r = s1.redSub(s2)
     if (h.cmpn(0) === 0) {
-      if (r.cmpn(0) !== 0) {
-        return new JacobianPoint(null, null, null)
-      } else {
+      if (r.cmpn(0) === 0) {
         return this.dbl()
+      } else {
+        return new JacobianPoint(null, null, null)
       }
     }
 
@@ -414,7 +416,7 @@ export default class JacobianPoint extends BasePoint {
     }
 
     const xc = x.clone()
-    if (this.curve === null || (this.curve.redN == null)) {
+    if (this.curve?.redN == null) {
       throw new Error('Curve or redN is not initialized.')
     }
 

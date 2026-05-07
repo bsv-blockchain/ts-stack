@@ -44,8 +44,8 @@ function truncateToN (
 function bnToBigInt (bn: BigNumber): bigint {
   const bytes = bn.toArray('be')
   let x = 0n
-  for (let i = 0; i < bytes.length; i++) {
-    x = (x << 8n) | BigInt(bytes[i])
+  for (const byte of bytes) {
+    x = (x << 8n) | BigInt(byte)
   }
   return x
 }
@@ -107,12 +107,14 @@ export const sign = (
   const drbg = new DRBG(bkey, nonce)
 
   for (let iter = 0; ; iter++) {
-    let kBN =
-      typeof customK === 'function'
-        ? customK(iter)
-        : BigNumber.isBN(customK)
-          ? customK
-          : new BigNumber(drbg.generate(bytes), 16)
+    let kBN: BigNumber | null
+    if (typeof customK === 'function') {
+      kBN = customK(iter)
+    } else if (BigNumber.isBN(customK)) {
+      kBN = customK
+    } else {
+      kBN = new BigNumber(drbg.generate(bytes), 16)
+    }
 
     if (kBN == null) {
       throw new Error('k is undefined')

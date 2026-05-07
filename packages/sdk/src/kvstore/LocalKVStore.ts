@@ -155,7 +155,7 @@ export default class LocalKVStore {
     if (outputs.length === 0) {
       return r
     }
-    const output = outputs[outputs.length - 1]
+    const output = outputs.at(-1)!
     r.outpoint = output.outpoint
     let field: number[]
     try {
@@ -197,7 +197,7 @@ export default class LocalKVStore {
     const p = this.getProtocol(key)
     const tx = Transaction.fromAtomicBEEF(atomicBEEF)
     const spends: Record<number, SignActionSpend> = {}
-    for (let i = 0; i < outputs.length; i++) {
+    for (const [i] of outputs.entries()) {
       const unlocker = pushdrop.unlock(p.protocolID, p.keyID, 'self')
       const unlockingScript = await unlocker.sign(tx, i)
       spends[i] = {

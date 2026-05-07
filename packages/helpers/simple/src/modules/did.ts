@@ -100,6 +100,317 @@ function parseOpReturnSegments (scriptHex: string): string[] {
 }
 
 // ============================================================================
+// Resolution helper functions (module-private)
+// ============================================================================
+
+const DID_CONTENT_TYPE = 'application/did+ld+json'
+const WOC_API = 'https://api.whatsonchain.com/v1/bsv/main'
+const WOC_RATE_LIMIT_MS = 350
+const WOC_MAX_HOPS = 100
+
+/** Return a DIDResolutionResult for a legacy pubkey-based DID. */
+function resolveLegacyDID (identityKey: string): DIDResolutionResult {
+  const legacyDoc = DID.fromIdentityKey(identityKey) // NOSONAR — legacy DID resolution requires deprecated API
+  return {
+    didDocument: {
+      '@context': DID_CONTEXT,
+      id: legacyDoc.id,
+      controller: legacyDoc.controller,
+      verificationMethod: legacyDoc.verificationMethod.map(vm => ({
+        id: vm.id,
+        type: vm.type,
+        controller: vm.controller,
+        publicKeyJwk: pubKeyToJwk(vm.publicKeyHex)
+      })),
+      authentication: legacyDoc.authentication
+    },
+    didDocumentMetadata: {},
+    didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+  }
+}
+
+/** Try a proxy resolver; return result or null if unavailable / no match. */
+async function tryProxyResolver (didString: string, proxyUrl: string | undefined): Promise<DIDResolutionResult | null> {
+  if (proxyUrl == null || proxyUrl === '') return null
+  try {
+    const response = await fetch(`${proxyUrl}?did=${encodeURIComponent(didString)}`)
+    if (!response.ok) return null
+    const data: any = await response.json()
+    if ((data.didDocument != null) || (data.didDocumentMetadata?.deactivated === true)) {
+      return data as DIDResolutionResult
+    }
+  } catch {
+    // Proxy unavailable — fall through
+  }
+  return null
+}
+
+/** Try the universal resolver directly; return result or null if unavailable. */
+async function tryDirectResolver (didString: string, resolverUrl: string | undefined): Promise<DIDResolutionResult | null> {
+  if (resolverUrl == null || resolverUrl === '') return null
+  try {
+    const response = await fetch(`${resolverUrl}/1.0/identifiers/${didString}`)
+    if (response.ok) {
+      const data: any = await response.json()
+      return {
+        didDocument: data.didDocument ?? data,
+        didDocumentMetadata: data.didDocumentMetadata ?? {},
+        didResolutionMetadata: { contentType: DID_CONTENT_TYPE, ...data.didResolutionMetadata }
+      }
+    }
+    if (response.status === 410) {
+      const data: any = await response.json().catch(() => ({}))
+      return {
+        didDocument: data.didDocument ?? null,
+        didDocumentMetadata: { deactivated: true, ...data.didDocumentMetadata },
+        didResolutionMetadata: { contentType: DID_CONTENT_TYPE, ...data.didResolutionMetadata }
+      }
+    }
+  } catch {
+    // Resolver unavailable — fall through
+  }
+  return null
+}
+
+/** Find the latest chain-state custom-instructions entry for a given DID. */
+function findLatestChainStateForDID (outputs: any[], didString: string): any | null {
+  let latestCI: any = null
+  for (const output of outputs) {
+    if ((output as any).customInstructions == null) continue
+    try {
+      const ci = JSON.parse((output as any).customInstructions)
+      if (ci.did !== didString) continue
+      latestCI = ci
+    } catch {}
+  }
+  return latestCI
+}
+
+/** Find the active chain state and its outpoint for a given DID. */
+function findActiveChainState (outputs: any[], didString: string): { chainCI: any, chainOutpoint: string } | null {
+  for (const output of outputs) {
+    if ((output as any).customInstructions == null) continue
+    try {
+      const ci = JSON.parse((output as any).customInstructions)
+      if (ci.did === didString && ci.status === 'active') {
+        return { chainCI: ci, chainOutpoint: output.outpoint }
+      }
+    } catch {}
+  }
+  return null
+}
+
+/** Build a DIDResolutionResult for a deactivated DID from stored CI. */
+function buildDeactivatedResolutionResult (ci: any, didString: string): DIDResolutionResult {
+  const doc = (ci.subjectKey == null)
+    ? null
+    : DID.buildDocument(ci.issuanceTxid, ci.subjectKey, didString)
+  return {
+    didDocument: doc,
+    didDocumentMetadata: { deactivated: true },
+    didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+  }
+}
+
+/** Build a DIDResolutionResult for an active DID from stored CI. */
+function buildActiveResolutionResult (ci: any, didString: string): DIDResolutionResult {
+  const document = DID.buildDocument(ci.issuanceTxid, ci.subjectKey, didString, ci.services ?? undefined)
+  if (ci.additionalKeys != null) {
+    appendAdditionalKeys(document, ci.additionalKeys as string[], didString)
+  }
+  return {
+    didDocument: document,
+    didDocumentMetadata: {},
+    didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+  }
+}
+
+/** Append additional verification-method keys to a DID document (mutates document). */
+function appendAdditionalKeys (document: DIDDocumentV2, additionalKeys: string[], did: string): void {
+  for (let i = 0; i < additionalKeys.length; i++) {
+    document.verificationMethod.push({
+      id: `${did}#key-${i + 2}`,
+      type: VERIFICATION_KEY_TYPE,
+      controller: did,
+      publicKeyJwk: pubKeyToJwk(additionalKeys[i])
+    })
+  }
+}
+
+/**
+ * Rate-limiter for WoC API calls.
+ * Returns a fetch-like function that throttles to at most one call per WOC_RATE_LIMIT_MS.
+ */
+function makeWocFetcher (): (url: string) => Promise<Response> {
+  let lastCall = 0
+  return async (url: string): Promise<Response> => {
+    const elapsed = Date.now() - lastCall
+    if (lastCall > 0 && elapsed < WOC_RATE_LIMIT_MS) {
+      await new Promise(resolve => setTimeout(resolve, WOC_RATE_LIMIT_MS - elapsed))
+    }
+    lastCall = Date.now()
+    return await fetch(url)
+  }
+}
+
+/** Extract BSVDID OP_RETURN segments from a WoC transaction's vout array. */
+function extractBsvdidSegments (vout: any[]): string[] {
+  for (const out of vout) {
+    const hex = out?.scriptPubKey?.hex as string | undefined
+    if (hex == null || hex === '') continue
+    const s = parseOpReturnSegments(hex)
+    if (s.length >= 3 && s[0] === BSVDID_MARKER) return s
+  }
+  return []
+}
+
+/** Follow the WoC spend index to find the next txid spending output 0. */
+async function fetchNextTxidViaSpend (currentTxid: string, wocFetch: (url: string) => Promise<Response>): Promise<string | null> {
+  try {
+    const resp = await wocFetch(`${WOC_API}/tx/${currentTxid}/out/0/spend`)
+    if (resp.ok && resp.status !== 404) {
+      const data: any = await resp.json()
+      return data?.txid ?? null
+    }
+  } catch { /* fall through */ }
+  return null
+}
+
+/** Follow address history to find the next txid in the chain. */
+async function fetchNextTxidViaHistory (
+  txData: any,
+  visited: Set<string>,
+  wocFetch: (url: string) => Promise<Response>
+): Promise<string | null> {
+  const out0Addr = txData.vout?.[0]?.scriptPubKey?.addresses?.[0]
+  if (out0Addr == null) return null
+  try {
+    const resp = await wocFetch(`${WOC_API}/address/${String(out0Addr)}/history`)
+    if (!resp.ok) return null
+    const history = await resp.json() as Array<{ tx_hash: string, height: number }>
+    const candidates = history
+      .filter(e => !visited.has(e.tx_hash))
+      .sort((a, b) => b.height - a.height)
+    return candidates.length > 0 ? candidates[0].tx_hash : null
+  } catch {
+    return null
+  }
+}
+
+interface WocChainState {
+  lastDocument: DIDDocumentV2 | null
+  lastDocTxid: string | undefined
+  created: string | undefined
+  updated: string | undefined
+  foundIssuance: boolean
+}
+
+/**
+ * Process one hop in the WoC chain-follow loop.
+ * Returns the payload that caused early exit (revocation), or null to continue.
+ */
+function processWocSegments (
+  segments: string[],
+  txData: any,
+  currentTxid: string,
+  state: WocChainState
+): DIDResolutionResult | null {
+  if (segments.length < 3) return null
+  const payload = segments[2]
+  const timestamp = txData.time == null ? undefined : new Date(txData.time * 1000).toISOString()
+
+  if (payload === '3') {
+    return {
+      didDocument: state.lastDocument,
+      didDocumentMetadata: {
+        created: state.created,
+        updated: state.updated,
+        deactivated: true,
+        versionId: currentTxid
+      },
+      didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+    }
+  }
+
+  if (payload === '1') {
+    state.foundIssuance = true
+  } else if (payload !== '2') {
+    // Not '1' (issuance) or '2' (funding) → treat as document JSON
+    try {
+      state.lastDocument = JSON.parse(payload) as DIDDocumentV2
+      state.lastDocTxid = currentTxid
+      state.updated = timestamp
+    } catch { /* Not valid JSON — skip */ }
+  }
+  return null
+}
+
+/** Resolve a DID by following the UTXO chain on WhatsOnChain (extracted logic). */
+async function resolveChainOnWoC (txid: string): Promise<DIDResolutionResult> {
+  const notFound: DIDResolutionResult = {
+    didDocument: null,
+    didDocumentMetadata: {},
+    didResolutionMetadata: { error: 'notFound', message: 'DID not found on chain' }
+  }
+
+  const wocFetch = makeWocFetcher()
+  const visited = new Set<string>()
+  const state: WocChainState = {
+    lastDocument: null,
+    lastDocTxid: undefined,
+    created: undefined,
+    updated: undefined,
+    foundIssuance: false
+  }
+
+  let currentTxid = txid
+
+  for (let hop = 0; hop < WOC_MAX_HOPS; hop++) {
+    if (visited.has(currentTxid)) break
+    visited.add(currentTxid)
+
+    const txResp = await wocFetch(`${WOC_API}/tx/${currentTxid}`)
+    if (!txResp.ok) return notFound
+    const txData: any = await txResp.json()
+
+    state.created ??= txData.time == null ? undefined : new Date(txData.time * 1000).toISOString()
+
+    const segments = extractBsvdidSegments((txData.vout as any[] | null) ?? [])
+    const earlyExit = processWocSegments(segments, txData, currentTxid, state)
+    if (earlyExit != null) return earlyExit
+
+    // Follow the chain to the next spending tx
+    let nextTxid = await fetchNextTxidViaSpend(currentTxid, wocFetch)
+    if (nextTxid == null) {
+      nextTxid = await fetchNextTxidViaHistory(txData, visited, wocFetch)
+    }
+    if (nextTxid == null) break
+    currentTxid = nextTxid
+  }
+
+  if (state.lastDocument != null) {
+    return {
+      didDocument: state.lastDocument,
+      didDocumentMetadata: { created: state.created, updated: state.updated, versionId: state.lastDocTxid },
+      didResolutionMetadata: { contentType: DID_CONTENT_TYPE }
+    }
+  }
+
+  if (state.foundIssuance) {
+    return {
+      didDocument: null,
+      didDocumentMetadata: { created: state.created },
+      didResolutionMetadata: {
+        error: 'notYetAvailable',
+        message: 'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
+      }
+    }
+  }
+
+  return notFound
+}
+
+// ============================================================================
 // DID Utility Class (standalone — no wallet dependency)
 // ============================================================================
 
@@ -464,25 +775,9 @@ function _buildDIDMethods (core: WalletCore): {
     async resolveDID (didString: string): Promise<DIDResolutionResult> {
       const parsed = DID.parse(didString)
 
-      // Legacy pubkey-based DID — return legacy document
+      // Legacy pubkey-based DID — return legacy document immediately
       if (parsed.identifier.length === 66) {
-        const legacyDoc = DID.fromIdentityKey(parsed.identifier) // NOSONAR — legacy DID resolution requires deprecated API
-        return {
-          didDocument: {
-            '@context': DID_CONTEXT,
-            id: legacyDoc.id,
-            controller: legacyDoc.controller,
-            verificationMethod: legacyDoc.verificationMethod.map(vm => ({
-              id: vm.id,
-              type: vm.type,
-              controller: vm.controller,
-              publicKeyJwk: pubKeyToJwk(vm.publicKeyHex)
-            })),
-            authentication: legacyDoc.authentication
-          },
-          didDocumentMetadata: {},
-          didResolutionMetadata: { contentType: 'application/did+ld+json' }
-        }
+        return resolveLegacyDID(parsed.identifier)
       }
 
       // Check local basket first — fastest resolution for our own DIDs
@@ -494,53 +789,12 @@ function _buildDIDMethods (core: WalletCore): {
       }
 
       // Try server-side proxy (bypasses CORS for browser clients)
-      // The proxy handles nChain → WoC fallback internally, so one call is enough.
-      const proxyUrl = core.defaults.didProxyUrl
-      if (proxyUrl != null && proxyUrl !== '') {
-        try {
-          const response = await fetch(`${proxyUrl}?did=${encodeURIComponent(didString)}`)
-          if (response.ok) {
-            const data: any = await response.json()
-            if ((data.didDocument != null) || (data.didDocumentMetadata?.deactivated === true)) {
-              return data as DIDResolutionResult
-            }
-          }
-        } catch {
-          // Proxy unavailable — fall through to direct resolvers
-        }
-      }
+      const proxyResult = await tryProxyResolver(didString, core.defaults.didProxyUrl)
+      if (proxyResult != null) return proxyResult
 
-      // No proxy configured (server-side SDK usage) — try resolvers directly
-      const resolverUrl = core.defaults.didResolverUrl
-      if (resolverUrl != null && resolverUrl !== '') {
-        try {
-          const response = await fetch(`${resolverUrl}/1.0/identifiers/${didString}`)
-          if (response.ok) {
-            const data: any = await response.json()
-            return {
-              didDocument: data.didDocument ?? data,
-              didDocumentMetadata: data.didDocumentMetadata ?? {},
-              didResolutionMetadata: {
-                contentType: 'application/did+ld+json',
-                ...data.didResolutionMetadata
-              }
-            }
-          }
-          if (response.status === 410) {
-            const data: any = await response.json().catch(() => ({}))
-            return {
-              didDocument: data.didDocument ?? null,
-              didDocumentMetadata: { deactivated: true, ...data.didDocumentMetadata },
-              didResolutionMetadata: {
-                contentType: 'application/did+ld+json',
-                ...data.didResolutionMetadata
-              }
-            }
-          }
-        } catch {
-          // Resolver unavailable — fall through to WhatsOnChain
-        }
-      }
+      // Try direct universal resolver (server-side SDK usage)
+      const resolverResult = await tryDirectResolver(didString, core.defaults.didResolverUrl)
+      if (resolverResult != null) return resolverResult
 
       // WhatsOnChain direct fallback (server-side only — CORS-blocked in browsers)
       return await this._resolveViaWhatsOnChain(parsed.identifier)
@@ -561,56 +815,16 @@ function _buildDIDMethods (core: WalletCore): {
       } as any)
 
       const outputs = listResult?.outputs ?? []
-
-      // Find the latest state for this DID (may have multiple outputs: doc, update, deactivate)
-      let latestCI: any = null
-      for (const output of outputs) {
-        if ((output as any).customInstructions == null) continue
-        try {
-          const ci = JSON.parse((output as any).customInstructions)
-          if (ci.did !== didString) continue
-          // Pick the latest by preferring deactivated > active, and later entries
-          latestCI = ci
-        } catch {}
-      }
+      const latestCI = findLatestChainStateForDID(outputs, didString)
 
       if (latestCI == null) return null
 
       if (latestCI.status === 'deactivated') {
-        // Try to reconstruct last known document
-        const doc = (latestCI.subjectKey == null)
-          ? null
-          : DID.buildDocument(latestCI.issuanceTxid, latestCI.subjectKey, didString)
-        return {
-          didDocument: doc,
-          didDocumentMetadata: { deactivated: true },
-          didResolutionMetadata: { contentType: 'application/did+ld+json' }
-        }
+        return buildDeactivatedResolutionResult(latestCI, didString)
       }
 
-      // Build document from stored metadata
-      if ((latestCI.subjectKey != null) && (latestCI.issuanceTxid != null)) {
-        const services = latestCI.services ?? undefined
-        const document = DID.buildDocument(latestCI.issuanceTxid, latestCI.subjectKey, didString, services)
-
-        // If additional keys stored, add them
-        if (latestCI.additionalKeys != null) {
-          for (let i = 0; i < latestCI.additionalKeys.length; i++) {
-            const jwk = pubKeyToJwk(latestCI.additionalKeys[i])
-            document.verificationMethod.push({
-              id: `${didString}#key-${i + 2}`,
-              type: VERIFICATION_KEY_TYPE,
-              controller: didString,
-              publicKeyJwk: jwk
-            })
-          }
-        }
-
-        return {
-          didDocument: document,
-          didDocumentMetadata: {},
-          didResolutionMetadata: { contentType: 'application/did+ld+json' }
-        }
+      if (latestCI.subjectKey != null && latestCI.issuanceTxid != null) {
+        return buildActiveResolutionResult(latestCI, didString)
       }
 
       return null
@@ -621,160 +835,8 @@ function _buildDIDMethods (core: WalletCore): {
      * @internal
      */
     async _resolveViaWhatsOnChain (txid: string): Promise<DIDResolutionResult> {
-      const notFound: DIDResolutionResult = {
-        didDocument: null,
-        didDocumentMetadata: {},
-        didResolutionMetadata: { error: 'notFound', message: 'DID not found on chain' }
-      }
-
       try {
-        let currentTxid = txid
-        let lastDocument: DIDDocumentV2 | null = null
-        let lastDocTxid: string | undefined
-        let created: string | undefined
-        let updated: string | undefined
-        let foundIssuance = false
-        const maxHops = 100 // safety limit
-        const visited = new Set<string>()
-
-        // Rate-limited fetch to avoid WoC 429 errors (browser has strict limits)
-        let lastWocCall = 0
-        const wocFetch = async (url: string): Promise<Response> => {
-          const elapsed = Date.now() - lastWocCall
-          if (lastWocCall > 0 && elapsed < 350) {
-            await new Promise(resolve => setTimeout(resolve, 350 - elapsed))
-          }
-          lastWocCall = Date.now()
-          return await fetch(url)
-        }
-
-        for (let hop = 0; hop < maxHops; hop++) {
-          if (visited.has(currentTxid)) break
-          visited.add(currentTxid)
-          // Fetch the transaction
-          const txResp = await wocFetch(`https://api.whatsonchain.com/v1/bsv/main/tx/${currentTxid}`)
-          if (!txResp.ok) return notFound
-          const txData: any = await txResp.json()
-
-          created ??= (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
-
-          // Parse OP_RETURN outputs to find BSVDID segments
-          let segments: string[] = []
-          for (const vout of (txData.vout as any[] | null) ?? []) {
-            const hex = vout?.scriptPubKey?.hex as string | undefined
-            if (hex == null || hex === '') continue
-            const s = parseOpReturnSegments(hex)
-            if (s.length >= 3 && s[0] === BSVDID_MARKER) {
-              segments = s
-              break
-            }
-          }
-
-          if (segments.length >= 3) {
-            const payload = segments[2]
-
-            // Check transaction type based on payload
-            if (payload === '3') {
-              // Revocation tx
-              return {
-                didDocument: lastDocument,
-                didDocumentMetadata: {
-                  created,
-                  updated,
-                  deactivated: true,
-                  versionId: currentTxid
-                },
-                didResolutionMetadata: { contentType: 'application/did+ld+json' }
-              }
-            }
-
-            if (payload === '2') {
-              // Funding tx — continue following chain
-            } else if (payload === '1') {
-              // Issuance tx — continue following chain
-              foundIssuance = true
-            } else {
-              // Assume it's a document (JSON payload)
-              try {
-                lastDocument = JSON.parse(payload) as DIDDocumentV2
-                lastDocTxid = currentTxid
-                updated = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
-              } catch {
-                // Not valid JSON — skip
-              }
-            }
-          }
-
-          // Check if output 0 is spent → follow the chain
-          let nextTxid: string | null = null
-
-          // Strategy 1: spend endpoint (fast path)
-          try {
-            const spendResp = await wocFetch(
-              `https://api.whatsonchain.com/v1/bsv/main/tx/${currentTxid}/out/0/spend`
-            )
-            if (spendResp.ok && spendResp.status !== 404) {
-              const spendData: any = await spendResp.json()
-              nextTxid = spendData?.txid ?? null
-            }
-          } catch { /* fall through to address history */ }
-
-          // Strategy 2: address history fallback (WoC spend index is unreliable)
-          // The chain key address is random and unique to this DID, so any
-          // other TX at that address is a chain TX — no per-TX verification needed.
-          if (nextTxid == null) {
-            const out0Addr = txData.vout?.[0]?.scriptPubKey?.addresses?.[0]
-            if (out0Addr != null) {
-              try {
-                const histResp = await wocFetch(
-                  `https://api.whatsonchain.com/v1/bsv/main/address/${String(out0Addr)}/history`
-                )
-                if (histResp.ok) {
-                  const history = await histResp.json() as Array<{ tx_hash: string, height: number }>
-                  // Sort descending by height — most recent TX first.
-                  // Pick the latest chain TX to skip intermediate hops
-                  // (the main loop will parse its BSVDID markers).
-                  const candidates = history
-                    .filter(e => !visited.has(e.tx_hash))
-                    .sort((a, b) => b.height - a.height)
-                  if (candidates.length > 0) {
-                    nextTxid = candidates[0].tx_hash
-                  }
-                }
-              } catch { /* address history unavailable */ }
-            }
-          }
-
-          if (nextTxid == null) break
-
-          currentTxid = nextTxid
-        }
-
-        if (lastDocument != null) {
-          return {
-            didDocument: lastDocument,
-            didDocumentMetadata: {
-              created,
-              updated,
-              versionId: lastDocTxid
-            },
-            didResolutionMetadata: { contentType: 'application/did+ld+json' }
-          }
-        }
-
-        // Found issuance TX but document hasn't propagated yet
-        if (foundIssuance) {
-          return {
-            didDocument: null,
-            didDocumentMetadata: { created },
-            didResolutionMetadata: {
-              error: 'notYetAvailable',
-              message: 'DID issuance found on chain but document transaction has not propagated yet. Try again shortly.'
-            }
-          }
-        }
-
-        return notFound
+        return await resolveChainOnWoC(txid)
       } catch (error) {
         return {
           didDocument: null,
@@ -797,32 +859,17 @@ function _buildDIDMethods (core: WalletCore): {
         DID.parse(options.did)
         const basket = core.defaults.didBasket
 
-        // Find current chain state from basket
         const listResult = await client.listOutputs({
           basket,
           include: 'locking scripts',
           includeCustomInstructions: true
         } as any)
 
-        const outputs = listResult?.outputs ?? []
-        let chainCI: any = null
-        let chainOutpoint: string = ''
-
-        for (const output of outputs) {
-          if ((output as any).customInstructions == null) continue
-          try {
-            const ci = JSON.parse((output as any).customInstructions)
-            if (ci.did === options.did && ci.status === 'active') {
-              chainCI = ci
-              chainOutpoint = output.outpoint
-            }
-          } catch {}
-        }
-
-        if (chainCI == null) {
+        const activeState = findActiveChainState(listResult?.outputs ?? [], options.did)
+        if (activeState == null) {
           throw new DIDError(`No active chain state found for ${options.did}`)
         }
-
+        const { chainCI, chainOutpoint } = activeState
         const { identityCode, subjectKey, issuanceTxid, chainKeyHex } = chainCI
         if (chainKeyHex == null || chainKeyHex === '') {
           throw new DIDError('Chain key not found in output metadata — cannot spend chain UTXO')
@@ -831,31 +878,11 @@ function _buildDIDMethods (core: WalletCore): {
         const chainKey = PrivateKey.fromHex(chainKeyHex)
         const chainAddress = chainKey.toPublicKey().toAddress()
 
-        // Build the updated document
-        const document = DID.buildDocument(
-          issuanceTxid,
-          subjectKey,
-          options.did,
-          options.services
-        )
-
-        // If additional verification keys requested, add them
+        const document = DID.buildDocument(issuanceTxid, subjectKey, options.did, options.services)
         if (options.additionalKeys != null) {
-          for (let i = 0; i < options.additionalKeys.length; i++) {
-            const jwk = pubKeyToJwk(options.additionalKeys[i])
-            document.verificationMethod.push({
-              id: `${options.did}#key-${i + 2}`,
-              type: VERIFICATION_KEY_TYPE,
-              controller: options.did,
-              publicKeyJwk: jwk
-            })
-          }
+          appendAdditionalKeys(document, options.additionalKeys, options.did)
         }
 
-        const documentJson = JSON.stringify(document)
-        const opReturnDocument = buildOpReturn(identityCode, documentJson)
-
-        // Spend current chain UTXO → new chain UTXO + updated document
         await spendChainOutput({
           client,
           basket,
@@ -882,19 +909,14 @@ function _buildDIDMethods (core: WalletCore): {
               tags: ['did', 'did-chain']
             },
             {
-              lockingScript: opReturnDocument.toHex(),
+              lockingScript: buildOpReturn(identityCode, JSON.stringify(document)).toHex(),
               satoshis: 0,
               outputDescription: 'DID Document (updated)'
             }
           ]
         })
 
-        return {
-          did: options.did,
-          txid: issuanceTxid,
-          identityCode,
-          document
-        }
+        return { did: options.did, txid: issuanceTxid, identityCode, document }
       } catch (error) {
         if (error instanceof DIDError) throw error
         throw new DIDError(`DID update failed: ${(error as Error).message}`)
@@ -912,42 +934,22 @@ function _buildDIDMethods (core: WalletCore): {
         DID.parse(didString)
         const basket = core.defaults.didBasket
 
-        // Find current chain state
         const listResult = await client.listOutputs({
           basket,
           include: 'locking scripts',
           includeCustomInstructions: true
         } as any)
 
-        const outputs = listResult?.outputs ?? []
-        let chainCI: any = null
-        let chainOutpoint: string = ''
-
-        for (const output of outputs) {
-          if ((output as any).customInstructions == null) continue
-          try {
-            const ci = JSON.parse((output as any).customInstructions)
-            if (ci.did === didString && ci.status === 'active') {
-              chainCI = ci
-              chainOutpoint = output.outpoint
-            }
-          } catch {}
-        }
-
-        if (chainCI == null) {
+        const activeState = findActiveChainState(listResult?.outputs ?? [], didString)
+        if (activeState == null) {
           throw new DIDError(`No active chain state found for ${didString}`)
         }
-
+        const { chainCI, chainOutpoint } = activeState
         const { identityCode, chainKeyHex } = chainCI
         if (chainKeyHex == null || chainKeyHex === '') {
           throw new DIDError('Chain key not found in output metadata — cannot spend chain UTXO')
         }
 
-        const revocationScript = buildOpReturn(identityCode, '3')
-        const trackingScript = buildTrackingScript()
-
-        // Spend chain UTXO → OP_RETURN revocation (out 0, terminates chain) +
-        // P2PKH tracker (out 1, local bookkeeping)
         const result = await spendChainOutput({
           client,
           basket,
@@ -956,12 +958,12 @@ function _buildDIDMethods (core: WalletCore): {
           description: `DID revocation for ${didString}`,
           newOutputs: [
             {
-              lockingScript: revocationScript.toHex(),
+              lockingScript: buildOpReturn(identityCode, '3').toHex(),
               satoshis: 0,
               outputDescription: 'DID revocation marker'
             },
             {
-              lockingScript: trackingScript,
+              lockingScript: buildTrackingScript(),
               satoshis: 1,
               outputDescription: 'DID chain tracker (deactivated)',
               basket,

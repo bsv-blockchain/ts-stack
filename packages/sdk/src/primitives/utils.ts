@@ -6,7 +6,7 @@ export { WriterUint8Array } from './WriterUint8Array.js'
 export { ReaderUint8Array } from './ReaderUint8Array.js'
 
 const BufferCtor =
-  typeof globalThis !== 'undefined' ? (globalThis as any).Buffer : undefined
+  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 const CAN_USE_BUFFER =
   BufferCtor != null && typeof BufferCtor.from === 'function'
 
@@ -117,7 +117,7 @@ export function base64ToArray (msg: string): number[] {
   }
 
   // cleanse string
-  let s = msg.trim().replace(/[\r\n\t\f\v ]+/g, '')
+  let s = msg.trim().replaceAll(/[\r\n\t\f\v ]+/g, '')
   s = s.replaceAll('-', '+').replaceAll('_', '/')
 
   // ensure padding is correct
@@ -264,7 +264,7 @@ export const fromBase58 = (str: string): number[] => {
     throw new Error(`Invalid base58 character “${match.join('')}”`)
   }
   const lz = str.match(/^1+/gmu)
-  const psz: number = (lz !== null) ? lz[0].length : 0
+  const psz: number = lz === null ? 0 : lz[0].length
   const size = ((str.length - psz) * (Math.log(58) / Math.log(256)) + 1) >>> 0
 
   const uint8 = new Uint8Array([
@@ -320,8 +320,8 @@ export const toBase58 = (bin: number[]): string => {
   }
 
   for (const byte of bin) {
-    if (byte !== 0) break
-    else result.push('1'.codePointAt(0) as number)
+    if (byte === 0) result.push('1'.codePointAt(0) as number)
+    else break
   }
 
   result.reverse()
@@ -647,7 +647,7 @@ export class Reader {
     const val = this.bin[this.pos]
     this.pos += 1
     // If the sign bit is set, convert to negative value
-    return (val & 0x80) !== 0 ? val - 0x100 : val
+    return (val & 0x80) === 0 ? val : val - 0x100
   }
 
   public readUInt16BE (): number {
@@ -659,7 +659,7 @@ export class Reader {
   public readInt16BE (): number {
     const val = this.readUInt16BE()
     // If the sign bit is set, convert to negative value
-    return (val & 0x8000) !== 0 ? val - 0x10000 : val
+    return (val & 0x8000) === 0 ? val : val - 0x10000
   }
 
   public readUInt16LE (): number {
@@ -671,7 +671,7 @@ export class Reader {
   public readInt16LE (): number {
     const val = this.readUInt16LE()
     // If the sign bit is set, convert to negative value
-    const x = (val & 0x8000) !== 0 ? val - 0x10000 : val
+    const x = (val & 0x8000) === 0 ? val : val - 0x10000
     return x
   }
 
@@ -688,7 +688,7 @@ export class Reader {
   public readInt32BE (): number {
     const val = this.readUInt32BE()
     // If the sign bit is set, convert to negative value
-    return (val & 0x80000000) !== 0 ? val - 0x100000000 : val
+    return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
   public readUInt32LE (): number {
@@ -705,7 +705,7 @@ export class Reader {
   public readInt32LE (): number {
     const val = this.readUInt32LE()
     // Explicitly check if the sign bit is set and then convert to a negative value
-    return (val & 0x80000000) !== 0 ? val - 0x100000000 : val
+    return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
   public readUInt64BEBn (): BigNumber {
@@ -807,15 +807,15 @@ export const minimallyEncode = (buf: number[]): number[] => {
   for (let i = buf.length - 1; i > 0; i--) {
     // We found a non zero byte, time to encode.
     if (buf[i - 1] !== 0) {
-      if ((buf[i - 1] & 0x80) !== 0) {
+      if ((buf[i - 1] & 0x80) === 0) {
+        // the sign bit is clear, we can use it.
+        buf[i - 1] |= last
+        return buf.slice(0, i)
+      } else {
         // We found a byte with it sign bit set so we need one more
         // byte.
         buf[i] = last
         return buf.slice(0, i + 1)
-      } else {
-        // the sign bit is clear, we can use it.
-        buf[i - 1] |= last
-        return buf.slice(0, i)
       }
     }
   }

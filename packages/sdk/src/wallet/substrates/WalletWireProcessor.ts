@@ -319,26 +319,28 @@ export default class WalletWireProcessor implements WalletWire {
           }
 
           // tx
-          if (createActionResult.tx != null) {
+          if (createActionResult.tx == null) {
+            resultWriter.writeInt8(0)
+          } else {
             resultWriter.writeInt8(1)
             resultWriter.writeVarIntNum(createActionResult.tx.length)
             resultWriter.write(createActionResult.tx)
-          } else {
-            resultWriter.writeInt8(0)
           }
 
           // noSendChange
-          if (createActionResult.noSendChange != null) {
+          if (createActionResult.noSendChange == null) {
+            resultWriter.writeVarIntNum(-1)
+          } else {
             resultWriter.writeVarIntNum(createActionResult.noSendChange.length)
             for (const outpoint of createActionResult.noSendChange) {
               resultWriter.write(this.encodeOutpoint(outpoint))
             }
-          } else {
-            resultWriter.writeVarIntNum(-1)
           }
 
           // sendWithResults
-          if (createActionResult.sendWithResults != null) {
+          if (createActionResult.sendWithResults == null) {
+            resultWriter.writeVarIntNum(-1)
+          } else {
             resultWriter.writeVarIntNum(
               createActionResult.sendWithResults.length
             )
@@ -350,12 +352,12 @@ export default class WalletWireProcessor implements WalletWire {
               else if (result.status === 'failed') statusCode = 3
               resultWriter.writeInt8(statusCode)
             }
-          } else {
-            resultWriter.writeVarIntNum(-1)
           }
 
           // signableTransaction
-          if (createActionResult.signableTransaction != null) {
+          if (createActionResult.signableTransaction == null) {
+            resultWriter.writeInt8(0)
+          } else {
             resultWriter.writeInt8(1)
             resultWriter.writeVarIntNum(
               createActionResult.signableTransaction.tx.length
@@ -367,8 +369,6 @@ export default class WalletWireProcessor implements WalletWire {
             )
             resultWriter.writeVarIntNum(referenceBytes.length)
             resultWriter.write(referenceBytes)
-          } else {
-            resultWriter.writeInt8(0)
           }
 
           // Return success code and result
@@ -474,16 +474,18 @@ export default class WalletWireProcessor implements WalletWire {
           }
 
           // tx
-          if (signActionResult.tx != null) {
+          if (signActionResult.tx == null) {
+            resultWriter.writeInt8(0)
+          } else {
             resultWriter.writeInt8(1)
             resultWriter.writeVarIntNum(signActionResult.tx.length)
             resultWriter.write(signActionResult.tx)
-          } else {
-            resultWriter.writeInt8(0)
           }
 
           // sendWithResults
-          if (signActionResult.sendWithResults != null) {
+          if (signActionResult.sendWithResults == null) {
+            resultWriter.writeVarIntNum(-1)
+          } else {
             resultWriter.writeVarIntNum(
               signActionResult.sendWithResults.length
             )
@@ -495,8 +497,6 @@ export default class WalletWireProcessor implements WalletWire {
               else if (result.status === 'failed') statusCode = 3
               resultWriter.writeInt8(statusCode)
             }
-          } else {
-            resultWriter.writeVarIntNum(-1)
           }
 
           // Return success code and result
@@ -644,15 +644,15 @@ export default class WalletWireProcessor implements WalletWire {
             resultWriter.write(descriptionBytes)
 
             // labels
-            if (action.labels !== undefined) {
+            if (action.labels === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               resultWriter.writeVarIntNum(action.labels.length)
               for (const label of action.labels) {
                 const labelBytes = Utils.toArray(label, 'utf8')
                 resultWriter.writeVarIntNum(labelBytes.length)
                 resultWriter.write(labelBytes)
               }
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
 
             // version
@@ -662,7 +662,9 @@ export default class WalletWireProcessor implements WalletWire {
             resultWriter.writeVarIntNum(action.lockTime)
 
             // inputs
-            if (action.inputs !== undefined) {
+            if (action.inputs === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               resultWriter.writeVarIntNum(action.inputs.length)
               for (const input of action.inputs) {
                 // sourceOutpoint
@@ -672,27 +674,27 @@ export default class WalletWireProcessor implements WalletWire {
                 resultWriter.writeVarIntNum(input.sourceSatoshis)
 
                 // sourceLockingScript
-                if (input.sourceLockingScript !== undefined) {
+                if (input.sourceLockingScript === undefined) {
+                  resultWriter.writeVarIntNum(-1)
+                } else {
                   const sourceLockingScriptBytes = Utils.toArray(
                     input.sourceLockingScript,
                     'hex'
                   )
                   resultWriter.writeVarIntNum(sourceLockingScriptBytes.length)
                   resultWriter.write(sourceLockingScriptBytes)
-                } else {
-                  resultWriter.writeVarIntNum(-1)
                 }
 
                 // unlockingScript
-                if (input.unlockingScript !== undefined) {
+                if (input.unlockingScript === undefined) {
+                  resultWriter.writeVarIntNum(-1)
+                } else {
                   const unlockingScriptBytes = Utils.toArray(
                     input.unlockingScript,
                     'hex'
                   )
                   resultWriter.writeVarIntNum(unlockingScriptBytes.length)
                   resultWriter.write(unlockingScriptBytes)
-                } else {
-                  resultWriter.writeVarIntNum(-1)
                 }
 
                 // inputDescription
@@ -706,12 +708,12 @@ export default class WalletWireProcessor implements WalletWire {
                 // sequenceNumber
                 resultWriter.writeVarIntNum(input.sequenceNumber)
               }
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
 
             // outputs
-            if (action.outputs !== undefined) {
+            if (action.outputs === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               resultWriter.writeVarIntNum(action.outputs.length)
               for (const output of action.outputs) {
                 // outputIndex
@@ -721,15 +723,15 @@ export default class WalletWireProcessor implements WalletWire {
                 resultWriter.writeVarIntNum(output.satoshis)
 
                 // lockingScript
-                if (output.lockingScript !== undefined) {
+                if (output.lockingScript === undefined) {
+                  resultWriter.writeVarIntNum(-1)
+                } else {
                   const lockingScriptBytes = Utils.toArray(
                     output.lockingScript,
                     'hex'
                   )
                   resultWriter.writeVarIntNum(lockingScriptBytes.length)
                   resultWriter.write(lockingScriptBytes)
-                } else {
-                  resultWriter.writeVarIntNum(-1)
                 }
 
                 // spendable
@@ -744,40 +746,38 @@ export default class WalletWireProcessor implements WalletWire {
                 resultWriter.write(outputDescriptionBytes)
 
                 // basket
-                if (output.basket !== undefined) {
+                if (output.basket === undefined) {
+                  resultWriter.writeVarIntNum(-1)
+                } else {
                   const basketBytes = Utils.toArray(output.basket, 'utf8')
                   resultWriter.writeVarIntNum(basketBytes.length)
                   resultWriter.write(basketBytes)
-                } else {
-                  resultWriter.writeVarIntNum(-1)
                 }
 
                 // tags
-                if (output.tags !== undefined) {
+                if (output.tags === undefined) {
+                  resultWriter.writeVarIntNum(-1)
+                } else {
                   resultWriter.writeVarIntNum(output.tags.length)
                   for (const tag of output.tags) {
                     const tagBytes = Utils.toArray(tag, 'utf8')
                     resultWriter.writeVarIntNum(tagBytes.length)
                     resultWriter.write(tagBytes)
                   }
-                } else {
-                  resultWriter.writeVarIntNum(-1)
                 }
 
                 // customInstructions
-                if (output.customInstructions !== undefined) {
+                if (output.customInstructions === undefined) {
+                  resultWriter.writeVarIntNum(-1)
+                } else {
                   const customInstructionsBytes = Utils.toArray(
                     output.customInstructions,
                     'utf8'
                   )
                   resultWriter.writeVarIntNum(customInstructionsBytes.length)
                   resultWriter.write(customInstructionsBytes)
-                } else {
-                  resultWriter.writeVarIntNum(-1)
                 }
               }
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
           }
 
@@ -1000,11 +1000,11 @@ export default class WalletWireProcessor implements WalletWire {
           resultWriter.writeVarIntNum(listOutputsResult.totalOutputs)
 
           // BEEF length and BEEF or -1
-          if (listOutputsResult.BEEF != null) {
+          if (listOutputsResult.BEEF == null) {
+            resultWriter.writeVarIntNum(-1)
+          } else {
             resultWriter.writeVarIntNum(listOutputsResult.BEEF.length)
             resultWriter.write(listOutputsResult.BEEF)
-          } else {
-            resultWriter.writeVarIntNum(-1)
           }
 
           // outputs
@@ -1016,51 +1016,51 @@ export default class WalletWireProcessor implements WalletWire {
             resultWriter.writeVarIntNum(output.satoshis)
 
             // lockingScript
-            if (output.lockingScript !== undefined) {
+            if (output.lockingScript === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               const lockingScriptBytes = Utils.toArray(
                 output.lockingScript,
                 'hex'
               )
               resultWriter.writeVarIntNum(lockingScriptBytes.length)
               resultWriter.write(lockingScriptBytes)
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
 
             // customInstructions
-            if (output.customInstructions !== undefined) {
+            if (output.customInstructions === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               const customInstructionsBytes = Utils.toArray(
                 output.customInstructions,
                 'utf8'
               )
               resultWriter.writeVarIntNum(customInstructionsBytes.length)
               resultWriter.write(customInstructionsBytes)
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
 
             // tags
-            if (output.tags !== undefined) {
+            if (output.tags === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               resultWriter.writeVarIntNum(output.tags.length)
               for (const tag of output.tags) {
                 const tagBytes = Utils.toArray(tag, 'utf8')
                 resultWriter.writeVarIntNum(tagBytes.length)
                 resultWriter.write(tagBytes)
               }
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
 
             // labels
-            if (output.labels !== undefined) {
+            if (output.labels === undefined) {
+              resultWriter.writeVarIntNum(-1)
+            } else {
               resultWriter.writeVarIntNum(output.labels.length)
               for (const label of output.labels) {
                 const labelBytes = Utils.toArray(label, 'utf8')
                 resultWriter.writeVarIntNum(labelBytes.length)
                 resultWriter.write(labelBytes)
               }
-            } else {
-              resultWriter.writeVarIntNum(-1)
             }
           }
 
@@ -1098,7 +1098,25 @@ export default class WalletWireProcessor implements WalletWire {
           const identityKeyFlag = paramsReader.readUInt8()
           args.identityKey = identityKeyFlag === 1
 
-          if (args.identityKey !== true) {
+          if (args.identityKey === true) {
+            // Deserialize privilege parameters
+            const privilegedFlag = paramsReader.readInt8()
+            if (privilegedFlag === -1) {
+              args.privileged = undefined
+            } else {
+              args.privileged = privilegedFlag === 1
+            }
+
+            const privilegedReasonLength = paramsReader.readInt8()
+            if (privilegedReasonLength === -1) {
+              args.privilegedReason = undefined
+            } else {
+              const privilegedReasonBytes = paramsReader.read(
+                privilegedReasonLength
+              )
+              args.privilegedReason = Utils.toUTF8(privilegedReasonBytes)
+            }
+          } else {
             // Deserialize protocolID
             args.protocolID = this.decodeProtocolID(paramsReader)
 
@@ -1117,13 +1135,13 @@ export default class WalletWireProcessor implements WalletWire {
             }
 
             const privilegedReasonLength = paramsReader.readInt8()
-            if (privilegedReasonLength !== -1) {
+            if (privilegedReasonLength === -1) {
+              args.privilegedReason = undefined
+            } else {
               const privilegedReasonBytes = paramsReader.read(
                 privilegedReasonLength
               )
               args.privilegedReason = Utils.toUTF8(privilegedReasonBytes)
-            } else {
-              args.privilegedReason = undefined
             }
 
             // Deserialize forSelf
@@ -1132,24 +1150,6 @@ export default class WalletWireProcessor implements WalletWire {
               args.forSelf = undefined
             } else {
               args.forSelf = forSelfFlag === 1
-            }
-          } else {
-            // Deserialize privilege parameters
-            const privilegedFlag = paramsReader.readInt8()
-            if (privilegedFlag === -1) {
-              args.privileged = undefined
-            } else {
-              args.privileged = privilegedFlag === 1
-            }
-
-            const privilegedReasonLength = paramsReader.readInt8()
-            if (privilegedReasonLength !== -1) {
-              const privilegedReasonBytes = paramsReader.read(
-                privilegedReasonLength
-              )
-              args.privilegedReason = Utils.toUTF8(privilegedReasonBytes)
-            } else {
-              args.privilegedReason = undefined
             }
           }
 

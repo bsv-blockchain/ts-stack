@@ -119,7 +119,7 @@ function generateHOTP (
   const signature = hmac.digest()
 
   // RFC 4226 https://datatracker.ietf.org/doc/html/rfc4226#section-5.4
-  const offset = signature[signature.length - 1] & 0x0f // offset is the last byte in the hmac
+  const offset = (signature.at(-1) ?? 0) & 0x0f // offset is the last byte in the hmac
   const fourBytesRange = signature.slice(offset, offset + 4) // starting from offset, get 4 bytes
   const mask = 0x7fffffff // 32-bit number with a leading 0 followed by 31 ones [0111 (...) 1111]
   const masked = new BigNumber(fourBytesRange).toNumber() & mask

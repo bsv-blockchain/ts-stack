@@ -204,7 +204,7 @@ export default class BeefTx {
     } else {
       // V1
       data = Transaction.fromReader(br)
-      bumpIndex = br.readUInt8() !== 0 ? br.readVarIntNum() : undefined
+      bumpIndex = br.readUInt8() === 0 ? undefined : br.readVarIntNum()
       beefTx = BeefTx.fromTx(data, bumpIndex)
     }
 

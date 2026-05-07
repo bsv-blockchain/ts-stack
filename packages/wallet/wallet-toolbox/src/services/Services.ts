@@ -309,29 +309,38 @@ export class Services implements WalletServices {
 
     logger?.group('services getUtxoStatus')
     for (let retry = 0; retry < 2; retry++) {
-      for (let tries = 0; tries < services.count; tries++) {
-        const stc = services.serviceToCall
-        try {
-          const r = await stc.service(output, outputFormat, outpoint)
-          logger?.log(`${stc.providerName} status ${r.status}`)
-          if (r.status === 'success') {
-            services.addServiceCallSuccess(stc)
-            r0 = r
-            break
-          }
-          if (r.error != null) services.addServiceCallError(stc, r.error)
-          else services.addServiceCallFailure(stc)
-        } catch (error_: unknown) {
-          const e = WalletError.fromUnknown(error_)
-          services.addServiceCallError(stc, e)
-        }
-        services.next()
-      }
+      r0 = await this.tryUtxoStatusProviders(services, output, outputFormat, outpoint, logger) ?? r0
       if (r0.status === 'success') break
       await wait(2000)
     }
     logger?.groupEnd()
     return r0
+  }
+
+  private async tryUtxoStatusProviders (
+    services: ServiceCollection<GetUtxoStatusService>,
+    output: string,
+    outputFormat: GetUtxoStatusOutputFormat | undefined,
+    outpoint: string | undefined,
+    logger?: WalletLoggerInterface
+  ): Promise<GetUtxoStatusResult | undefined> {
+    for (let tries = 0; tries < services.count; tries++) {
+      const stc = services.serviceToCall
+      try {
+        const r = await stc.service(output, outputFormat, outpoint)
+        logger?.log(`${stc.providerName} status ${r.status}`)
+        if (r.status === 'success') {
+          services.addServiceCallSuccess(stc)
+          return r
+        }
+        if (r.error != null) services.addServiceCallError(stc, r.error)
+        else services.addServiceCallFailure(stc)
+      } catch (error_: unknown) {
+        services.addServiceCallError(stc, WalletError.fromUnknown(error_))
+      }
+      services.next()
+    }
+    return undefined
   }
 
   async getScriptHashHistory (
@@ -489,36 +498,43 @@ export class Services implements WalletServices {
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
-        const r = await stc.service(txid, this.chain)
-        if (r.rawTx != null) {
-          const hash = asString(doubleSha256BE(r.rawTx))
-          // Confirm transaction hash matches txid
-          if (hash === asString(txid)) {
-            // If we have a match, call it done.
-            r0.rawTx = r.rawTx
-            r0.name = r.name
-            r0.error = undefined
-            services.addServiceCallSuccess(stc)
-            break
-          }
-          r.error = new WERR_INTERNAL(`computed txid ${hash} doesn't match requested value ${txid}`)
-          r.rawTx = undefined
-        }
-
-        if (r.error != null) services.addServiceCallError(stc, r.error)
-        else if (r.rawTx) services.addServiceCallFailure(stc)
-        else services.addServiceCallSuccess(stc, 'not found')
-
-        if ((r.error != null) && (r0.error == null) && (r0.rawTx == null))
-        // If we have an error and didn't before...
-        { r0.error = r.error }
+        const done = this.applyRawTxResult(r0, txid, await stc.service(txid, this.chain), services, stc)
+        if (done) break
       } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        services.addServiceCallError(stc, e)
+        services.addServiceCallError(stc, WalletError.fromUnknown(error_))
       }
       services.next()
     }
     return r0
+  }
+
+  private applyRawTxResult (
+    r0: GetRawTxResult,
+    txid: string,
+    r: GetRawTxResult,
+    services: ServiceCollection<GetRawTxService>,
+    stc: ServiceToCall<GetRawTxService>
+  ): boolean {
+    if (r.rawTx != null) {
+      const hash = asString(doubleSha256BE(r.rawTx))
+      if (hash === asString(txid)) {
+        r0.rawTx = r.rawTx
+        r0.name = r.name
+        r0.error = undefined
+        services.addServiceCallSuccess(stc)
+        return true
+      }
+      r.error = new WERR_INTERNAL(`computed txid ${hash} doesn't match requested value ${txid}`)
+      r.rawTx = undefined
+    }
+
+    if (r.error != null) services.addServiceCallError(stc, r.error)
+    else if (r.rawTx) services.addServiceCallFailure(stc)
+    else services.addServiceCallSuccess(stc, 'not found')
+
+    // If we have an error and didn't before, capture it.
+    if ((r.error != null) && (r0.error == null) && (r0.rawTx == null)) r0.error = r.error
+    return false
   }
 
   async invokeChaintracksWithRetry<R>(method: () => Promise<R>): Promise<R> {
@@ -614,66 +630,72 @@ export class Services implements WalletServices {
     const stored = this.options.fiatExchangeRates
     const storedRates = stored.rates ?? {}
 
-    const toFetch: FiatCurrencyCode[] = []
-    for (const c of targetCurrencies) {
-      if (c === 'USD') {
-        if (typeof storedRates.USD !== 'number') {
-          storedRates.USD = 1
-        }
-        continue
-      }
-
-      const v = storedRates[c]
-      const ts = stored.rateTimestamps?.[c] ?? stored.timestamp
-      const fresh = typeof v === 'number' && ts instanceof Date && ts > freshnessDate
-      if (!fresh) {
-        toFetch.push(c)
-      }
-    }
+    const toFetch = this.collectStaleCurrencies(targetCurrencies, storedRates, stored, freshnessDate)
 
     if (toFetch.length === 0) {
-      this.options.fiatExchangeRates = {
-        timestamp: stored.timestamp,
-        base: stored.base,
-        rates: storedRates,
-        rateTimestamps: stored.rateTimestamps
-      }
+      this.options.fiatExchangeRates = { timestamp: stored.timestamp, base: stored.base, rates: storedRates, rateTimestamps: stored.rateTimestamps }
       return this.options.fiatExchangeRates
     }
 
-    const services = this.updateFiatExchangeRateServices.clone()
-    let fetched: FiatExchangeRates | undefined
+    const fetched = await this.fetchFiatRates(toFetch)
 
+    if (fetched == null) {
+      if (stored && Object.keys(storedRates).length > 0) return stored
+      throw new WERR_INTERNAL()
+    }
+
+    this.options.fiatExchangeRates = this.mergeFiatRates(stored, storedRates, fetched)
+    return this.options.fiatExchangeRates
+  }
+
+  private collectStaleCurrencies (
+    targetCurrencies: FiatCurrencyCode[],
+    storedRates: Record<string, number>,
+    stored: FiatExchangeRates,
+    freshnessDate: Date
+  ): FiatCurrencyCode[] {
+    const toFetch: FiatCurrencyCode[] = []
+    for (const c of targetCurrencies) {
+      if (c === 'USD') {
+        if (typeof storedRates.USD !== 'number') storedRates.USD = 1
+        continue
+      }
+      const v = storedRates[c]
+      const ts = stored.rateTimestamps?.[c] ?? stored.timestamp
+      const fresh = typeof v === 'number' && ts instanceof Date && ts > freshnessDate
+      if (!fresh) toFetch.push(c)
+    }
+    return toFetch
+  }
+
+  private async fetchFiatRates (toFetch: FiatCurrencyCode[]): Promise<FiatExchangeRates | undefined> {
+    const services = this.updateFiatExchangeRateServices.clone()
     for (let tries = 0; tries < services.count; tries++) {
       const stc = services.serviceToCall
       try {
         const r = await stc.service(toFetch as string[], this.options)
         if (toFetch.every(c => c === 'USD' || typeof r.rates?.[c] === 'number')) {
           services.addServiceCallSuccess(stc)
-          fetched = r
-          break
-        } else {
-          services.addServiceCallFailure(stc)
+          return r
         }
+        services.addServiceCallFailure(stc)
       } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        services.addServiceCallError(stc, e)
+        services.addServiceCallError(stc, WalletError.fromUnknown(error_))
       }
       services.next()
     }
+    return undefined
+  }
 
-    if (fetched == null) {
-      if (stored && Object.keys(storedRates).length > 0) {
-        return stored
-      }
-      throw new WERR_INTERNAL()
-    }
-
+  private mergeFiatRates (
+    stored: FiatExchangeRates,
+    storedRates: Record<string, number>,
+    fetched: FiatExchangeRates
+  ): FiatExchangeRates {
     const nextRates: Record<string, number> = { ...storedRates }
     const nextTimestamps: Record<string, Date> = { ...(stored.rateTimestamps ?? {}) }
 
-    const fetchedCurrencies = fetched.rates != null ? Object.keys(fetched.rates) : []
-    for (const c of fetchedCurrencies) {
+    for (const c of (fetched.rates != null ? Object.keys(fetched.rates) : [])) {
       const v = fetched.rates?.[c]
       if (typeof v === 'number') {
         nextRates[c] = v
@@ -681,21 +703,10 @@ export class Services implements WalletServices {
       }
     }
 
-    const nextTimestamp = new Date(
-      Math.max(
-        stored.timestamp instanceof Date ? stored.timestamp.getTime() : new Date(stored.timestamp).getTime(),
-        fetched.timestamp.getTime()
-      )
-    )
+    const storedMs = stored.timestamp instanceof Date ? stored.timestamp.getTime() : new Date(stored.timestamp).getTime()
+    const nextTimestamp = new Date(Math.max(storedMs, fetched.timestamp.getTime()))
 
-    this.options.fiatExchangeRates = {
-      timestamp: nextTimestamp,
-      base: stored.base,
-      rates: nextRates,
-      rateTimestamps: nextTimestamps
-    }
-
-    return this.options.fiatExchangeRates
+    return { timestamp: nextTimestamp, base: stored.base, rates: nextRates, rateTimestamps: nextTimestamps }
   }
 
   async nLockTimeIsFinal (tx: string | number[] | BsvTransaction | number): Promise<boolean> {

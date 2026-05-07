@@ -520,10 +520,10 @@ export default class Point extends BasePoint {
     } else {
       res = [0x04].concat(x, this.getY().toArray('be', len))
     }
-    if (enc !== 'hex') {
-      return res
-    } else {
+    if (enc === 'hex') {
       return toHex(res)
+    } else {
+      return res
     }
   }
 
@@ -570,19 +570,19 @@ export default class Point extends BasePoint {
       typeof this.precomputed === 'object' && this.precomputed !== null
         ? {
             doubles:
-            this.precomputed.doubles != null
-              ? {
+            this.precomputed.doubles == null
+              ? undefined
+              : {
                   step: this.precomputed.doubles.step,
                   points: this.precomputed.doubles.points.slice(1)
-                }
-              : undefined,
+                },
             naf:
-            this.precomputed.naf != null
-              ? {
+            this.precomputed.naf == null
+              ? undefined
+              : {
                   wnd: this.precomputed.naf.wnd,
                   points: this.precomputed.naf.points.slice(1)
                 }
-              : undefined
           }
         : undefined
     ]
@@ -924,18 +924,18 @@ export default class Point extends BasePoint {
       const pre = this.precomputed
       const negate = (p: Point): Point => p.neg()
       res.precomputed = {
-        naf: pre.naf != null
-          ? {
+        naf: pre.naf == null
+          ? undefined
+          : {
               wnd: pre.naf.wnd,
               points: pre.naf.points.map(negate) as BasePoint[]
-            }
-          : undefined,
-        doubles: pre.doubles != null
-          ? {
+            },
+        doubles: pre.doubles == null
+          ? undefined
+          : {
               step: pre.doubles.step,
               points: pre.doubles.points.map((p) => (p as Point).neg())
-            }
-          : undefined,
+            },
         beta: undefined
       }
     }
@@ -1016,19 +1016,19 @@ export default class Point extends BasePoint {
       beta.precomputed = {
         beta: null,
         naf:
-          pre.naf != null
-            ? {
+          pre.naf == null
+            ? undefined
+            : {
                 wnd: pre.naf.wnd,
                 points: pre.naf.points.map(endoMul)
-              }
-            : undefined,
+              },
         doubles:
-          pre.doubles != null
-            ? {
+          pre.doubles == null
+            ? undefined
+            : {
                 step: pre.doubles.step,
                 points: pre.doubles.points.map(endoMul)
               }
-            : undefined
       }
     }
     return beta
@@ -1184,10 +1184,10 @@ export default class Point extends BasePoint {
 
         if (z.cmpn(0) === 0) { // Check if z is 0
           continue
-        } else if (!z.isNeg()) { // If z is positive
-          p = wnd[j][z.sub(one).div(two).toNumber()]
-        } else { // If z is negative
+        } else if (z.isNeg()) { // If z is negative
           p = wnd[j][z.neg().sub(one).div(two).toNumber()].neg()
+        } else { // If z is positive
+          p = wnd[j][z.sub(one).div(two).toNumber()]
         }
 
         if (p.type === 'affine') {

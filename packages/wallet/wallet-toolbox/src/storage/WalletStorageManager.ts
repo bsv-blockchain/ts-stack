@@ -2,10 +2,12 @@ import {
   AbortActionArgs,
   AbortActionResult,
   Beef,
+  ChainTracker,
   InternalizeActionArgs,
   ListActionsResult,
   ListCertificatesResult,
   ListOutputsResult,
+  MerklePath,
   RelinquishCertificateArgs,
   RelinquishOutputArgs,
   Validation
@@ -137,6 +139,31 @@ export class WalletStorageManager implements sdk.WalletStorage {
    *
    * @returns {TableSettings} from the active storage.
    */
+  private async ensureStoreAvailable (store: ManagedStorage): Promise<void> {
+    if (store.isAvailable && store.settings != null && store.user != null) return
+    store.settings = await store.storage.makeAvailable()
+    const r = await store.storage.findOrInsertUser(this._authId.identityKey)
+    store.user = r.user
+    store.isAvailable = true
+  }
+
+  private selectActiveFromStore (store: ManagedStorage, backups: ManagedStorage[]): void {
+    if (this._active == null) {
+      // _stores[0] becomes the default active store.
+      this._active = store
+      return
+    }
+    const ua = store.user!.activeStorage
+    const si = store.settings!.storageIdentityKey
+    if (ua === si && !this.isActiveEnabled) {
+      // This store's user record selects it as the enabled active storage — swap.
+      backups.push(this._active)
+      this._active = store
+    } else {
+      backups.push(store)
+    }
+  }
+
   async makeAvailable (): Promise<TableSettings> {
     if (this._isAvailable) return this._active!.settings!
 
@@ -146,36 +173,13 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
     if (this._stores.length < 1) { throw new sdk.WERR_INVALID_PARAMETER('active', 'valid. Must add active storage provider to wallet.') }
 
-    // Initial backups. conflictingActives will be removed.
     const backups: ManagedStorage[] = []
-    let i = -1
     for (const store of this._stores) {
-      i++
-      if (!store.isAvailable || (store.settings == null) || (store.user == null)) {
-        // Validate all ManagedStorage properties.
-        store.settings = await store.storage.makeAvailable()
-        const r = await store.storage.findOrInsertUser(this._authId.identityKey)
-        store.user = r.user
-        store.isAvailable = true
-      }
-      if (this._active == null)
-      // _stores[0] becomes the default active store. It may be replaced if it is not the user's "enabled" activeStorage and that store is found among the remainder (backups).
-      { this._active = store } else {
-        const ua = store.user.activeStorage
-        const si = store.settings.storageIdentityKey
-        if (ua === si && !this.isActiveEnabled) {
-          // This store's user record selects it as an enabled active storage...
-          // swap the current not-enabled active for this storeage.
-          backups.push(this._active)
-          this._active = store
-        } else {
-          // This store is a backup: Its user record selects some other storage as active.
-          backups.push(store)
-        }
-      }
+      await this.ensureStoreAvailable(store)
+      this.selectActiveFromStore(store, backups)
     }
 
-    // Review backups, partition out conflicting actives.
+    // Partition backups into proper backups vs conflicting actives.
     const si = this._active!.settings?.storageIdentityKey
     for (const store of backups) {
       if (store.user!.activeStorage !== si) this._conflictingActives.push(store)
@@ -620,6 +624,35 @@ export class WalletStorageManager implements sdk.WalletStorage {
    * @param noUpdate
    * @returns
    */
+  private async evaluateNewMerkleLeaf (
+    ptx: TableProvenTx,
+    mp: MerklePath,
+    leaf: { offset: number },
+    blockHash: string,
+    chaintracker: ChainTracker,
+    r: sdk.ReproveProvenResult,
+    update: Partial<TableProvenTx>
+  ): Promise<void> {
+    if (blockHash === ptx.blockHash) {
+      r.log += `    txid ${ptx.txid} merkle path update still based on deactivated header ${ptx.blockHash}\n`
+      r.unchanged = true
+      return
+    }
+    const merkleRoot = mp.computeRoot(ptx.txid)
+    const isValid = await chaintracker.isValidRootForHeight(merkleRoot, update.height!)
+    const heightChange = ptx.height === update.height ? 'unchanged' : `-> ${update.height}`
+    const logUpdate = `      height ${ptx.height} ${heightChange}\n`
+    r.log += `      blockHash ${ptx.blockHash} -> ${update.blockHash}\n`
+    r.log += `      merkleRoot ${ptx.merkleRoot} -> ${update.merkleRoot}\n`
+    r.log += `      index ${ptx.index} -> ${update.index}\n`
+    if (isValid) {
+      r.updated = { update, logUpdate }
+    } else {
+      r.log += `    txid ${ptx.txid} chaintracker fails to confirm updated merkle path update invalid\n` + logUpdate
+      r.unavailable = true
+    }
+  }
+
   async reproveProven (ptx: TableProvenTx, noUpdate?: boolean): Promise<sdk.ReproveProvenResult> {
     const r: sdk.ReproveProvenResult = { log: '', updated: undefined, unchanged: false, unavailable: false }
     const services = this.getServices()
@@ -638,26 +671,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
           merkleRoot: h.merkleRoot,
           blockHash: h.hash
         }
-        if (update.blockHash === ptx.blockHash) {
-          r.log += `    txid ${ptx.txid} merkle path update still based on deactivated header ${ptx.blockHash}\n`
-          r.unchanged = true
-        } else {
-          // Verify the new proof's validity.
-          const merkleRoot = mp.computeRoot(ptx.txid)
-          const isValid = await chaintracker.isValidRootForHeight(merkleRoot, update.height!)
-          const heightChange = ptx.height === update.height ? 'unchanged' : `-> ${update.height}`
-          const logUpdate = `      height ${ptx.height} ${heightChange}\n`
-          r.log += `      blockHash ${ptx.blockHash} -> ${update.blockHash}\n`
-          r.log += `      merkleRoot ${ptx.merkleRoot} -> ${update.merkleRoot}\n`
-          r.log += `      index ${ptx.index} -> ${update.index}\n`
-          if (isValid) {
-            r.updated = { update, logUpdate }
-          } else {
-            r.log +=
-              `    txid ${ptx.txid} chaintracker fails to confirm updated merkle path update invalid\n` + logUpdate
-            r.unavailable = true
-          }
-        }
+        await this.evaluateNewMerkleLeaf(ptx, mp, leaf, h.hash, chaintracker, r, update)
       } else {
         r.log += `    txid ${ptx.txid} merkle path update doesn't include txid\n`
         r.unavailable = true

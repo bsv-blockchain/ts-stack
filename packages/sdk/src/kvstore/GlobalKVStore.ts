@@ -186,7 +186,30 @@ export class GlobalKVStore {
         const existingEntries = await this.queryOverlay({ key, controller }, { includeToken: true })
         const existingToken = existingEntries.length > 0 ? existingEntries[0].token : undefined
 
-        if (existingToken != null) {
+        if (existingToken == null) {
+          // Create new token
+          const { tx } = await this.wallet.createAction({
+            description: tokenSetDescription,
+            outputs: [{
+              satoshis: tokenAmount ?? this.config.tokenAmount as number,
+              lockingScript: lockingScript.toHex(),
+              outputDescription: 'KVStore token'
+            }],
+            options: {
+              acceptDelayedBroadcast: this.config.acceptDelayedBroadcast,
+              noSend: this.config.overlayBroadcast,
+              randomizeOutputs: false
+            }
+          }, this.config.originator)
+
+          if (tx == null) {
+            throw new Error('Failed to create transaction')
+          }
+
+          const transaction = Transaction.fromAtomicBEEF(tx)
+          await this.submitToOverlay(transaction)
+          return `${transaction.id('hex')}.0`
+        } else {
           // Update existing token
           const inputs: CreateActionInput[] = [{
             outpoint: `${existingToken.txid}.${existingToken.outputIndex}`,
@@ -237,29 +260,6 @@ export class GlobalKVStore {
           }
 
           const transaction = Transaction.fromAtomicBEEF(finalTx)
-          await this.submitToOverlay(transaction)
-          return `${transaction.id('hex')}.0`
-        } else {
-          // Create new token
-          const { tx } = await this.wallet.createAction({
-            description: tokenSetDescription,
-            outputs: [{
-              satoshis: tokenAmount ?? this.config.tokenAmount as number,
-              lockingScript: lockingScript.toHex(),
-              outputDescription: 'KVStore token'
-            }],
-            options: {
-              acceptDelayedBroadcast: this.config.acceptDelayedBroadcast,
-              noSend: this.config.overlayBroadcast,
-              randomizeOutputs: false
-            }
-          }, this.config.originator)
-
-          if (tx == null) {
-            throw new Error('Failed to create transaction')
-          }
-
-          const transaction = Transaction.fromAtomicBEEF(tx)
           await this.submitToOverlay(transaction)
           return `${transaction.id('hex')}.0`
         }

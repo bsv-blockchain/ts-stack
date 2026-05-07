@@ -331,7 +331,7 @@ export default class MerklePath {
     const l = offset << 1
 
     const leaf0 = this.findOrComputeLeaf(h, l)
-    if (leaf0 == null || leaf0.hash == null || leaf0.hash === '') return undefined
+    if (leaf0?.hash == null || leaf0.hash === '') return undefined
 
     const leaf1 = this.findOrComputeLeaf(h, l + 1)
     if (leaf1?.hash == null) {
