@@ -74,7 +74,7 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
     this.done = false
     let lastHeaders: WocGetHeadersHeader[] = []
 
-    for (; !this.done;) {
+    while (!this.done) {
       const headers = await this.woc.getHeaders()
 
       const newHeaders = headers.filter(h => !lastHeaders.some(lh => lh.hash === h.hash))

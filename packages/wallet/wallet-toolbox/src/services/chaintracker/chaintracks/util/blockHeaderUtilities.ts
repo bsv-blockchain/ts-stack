@@ -108,7 +108,7 @@ export function validateBufferOfHeaders (
     const header = buffer.slice(headerStart, headerEnd)
     const h = deserializeBaseBlockHeader(header)
     const hashPrev = asString(header.slice(4, 36).reverse())
-    if (lastHeaderHash !== hashPrev) { throw { message: `header ${i} invalid previousHash ${lastHeaderHash} vs ${hashPrev}` } }
+    if (lastHeaderHash !== hashPrev) { throw new Error(`header ${i} invalid previousHash ${lastHeaderHash} vs ${hashPrev}`) }
     lastHeaderHash = asString(doubleSha256BE(header))
     validateAgainstDirtyHashes(lastHeaderHash)
     if (lastChainWork) {
@@ -125,7 +125,7 @@ export function validateBufferOfHeaders (
  */
 export function validateGenesisHeader (buffer: Uint8Array, chain: Chain): void {
   const header = buffer.slice(0, 80)
-  const h = deserializeBlockHeader(header, 0, 0)
+  const h = deserializeBlockHeader(header, 0)
   const gh = genesisHeader(chain)
   if (
     h.bits !== gh.bits ||
@@ -462,7 +462,7 @@ export function deserializeBaseBlockHeader (buffer: number[] | Uint8Array, offse
   return header
 }
 
-export function deserializeBlockHeader (buffer: number[] | Uint8Array, offset = 0, height: number): BlockHeader {
+export function deserializeBlockHeader (buffer: number[] | Uint8Array, height: number, offset = 0): BlockHeader {
   const base = deserializeBaseBlockHeader(buffer, offset)
   const header: BlockHeader = {
     ...base,

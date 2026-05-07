@@ -104,23 +104,6 @@ export class ChaintracksService {
       })
     }
 
-    const appGetVoid = (path: string, action: (q: any) => Promise<void>, noCache = false) => {
-      app.get(this.options.routingPrefix + path, async (req, res) => {
-        if (noCache) {
-          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-          res.setHeader('Pragma', 'no-cache')
-          res.setHeader('Expires', '0')
-        }
-        try {
-          console.log(`request ${path}`)
-          await action(req.query)
-          res.status(200).json({ status: 'success' })
-        } catch (err) {
-          handleErr(err, res)
-        }
-      })
-    }
-
     const appGet = <T>(path: string, action: (q: any) => Promise<T>, noCache = false) => {
       app.get(this.options.routingPrefix + path, async (req, res) => {
         if (noCache) {

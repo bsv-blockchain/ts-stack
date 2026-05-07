@@ -128,10 +128,10 @@ export class ARC {
    */
   async postRawTx (rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
     let txid = Utils.toHex(doubleSha256BE(Utils.toArray(rawTx, 'hex')))
-    if (txids != null) {
-      txid = txids.slice(-1)[0]
-    } else {
+    if (txids == null) {
       txids = [txid]
+    } else {
+      txid = txids.at(-1)!
     }
 
     const requestOptions: HttpClientRequestOptions = {
@@ -200,14 +200,9 @@ export class ARC {
           ed.status = 'ERR_UNKNOWN'
         }
 
-        let d = response.data
+        const d = response.data
         if (d && typeof d === 'string') {
           n.data = response.data.slice(0, 128)
-          try {
-            d = JSON.parse(d)
-          } catch {
-            // Intentionally left empty
-          }
         } else if (d && typeof d === 'object') {
           ed.more = d
           ed.detail = d.detail
@@ -268,7 +263,6 @@ export class ARC {
 
     // Since postRawTx only returns results for a single txid,
     // replicate the basic results any additional txids.
-    // TODO: Temporary hack...
     for (const txid of txids) {
       if (prtr.txid === txid) continue
       const tr: PostTxResultForTxid = {

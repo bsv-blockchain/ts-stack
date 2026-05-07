@@ -1,6 +1,5 @@
 import { BlockHeader, Chain } from '../../../../sdk'
 import { LiveIngestorBase, LiveIngestorBaseOptions } from './LiveIngestorBase'
-import { EnqueueHandler, ErrorHandler } from './WhatsOnChainServices'
 
 
 export interface LiveIngestorTeranodeP2POptions extends LiveIngestorBaseOptions {
@@ -32,13 +31,6 @@ export class LiveIngestorTeranodeP2P extends LiveIngestorBase {
 
   async startListening (liveHeaders: BlockHeader[]): Promise<void> {
     const errors: Array<{ code: number, message: string, count: number }> = []
-    const enqueue: EnqueueHandler = header => {
-      liveHeaders.push(header)
-    }
-    const error: ErrorHandler = (code, message) => {
-      errors.push({ code, message, count: errors.length })
-      return false
-    }
 
     for (;;) {
       const ok = true // await this.woc.listenForNewBlockHeaders(enqueue, error, this.idleWait)

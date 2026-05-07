@@ -199,7 +199,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
   async findHeaderForHeightOrUndefined (height: number): Promise<LiveBlockHeader | BlockHeader | undefined> {
     await this.makeAvailable()
-    if (isNaN(height) || height < 0 || Math.ceil(height) !== height) { throw new WERR_INVALID_PARAMETER('height', `a non-negative integer (${height}).`) }
+    if (Number.isNaN(height) || height < 0 || Math.ceil(height) !== height) { throw new WERR_INVALID_PARAMETER('height', `a non-negative integer (${height}).`) }
     const liveHeader = await this.findLiveHeaderForHeight(height)
     if (liveHeader !== null) return liveHeader
     const header = await this.findBulkFilesHeaderForHeightOrUndefined(height)
@@ -216,7 +216,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
   async isMerkleRootActive (merkleRoot: string): Promise<boolean> {
     await this.makeAvailable()
     const header = await this.findLiveHeaderForMerkleRoot(merkleRoot)
-    return (header != null) ? header.isActive : false
+    return header?.isActive ?? false
   }
 
   async findCommonAncestor (header1: LiveBlockHeader, header2: LiveBlockHeader): Promise<LiveBlockHeader> {
@@ -255,7 +255,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
       await this.addLiveHeadersToBulk(headers)
 
-      await this.deleteOlderLiveBlockHeaders(headers.slice(-1)[0].height)
+      await this.deleteOlderLiveBlockHeaders(headers.at(-1)!.height)
     } finally {
       this.nowMigratingLiveToBulk = false
     }
@@ -272,7 +272,6 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
     // Get the current extent of validated bulk and live block headers.
     const before = await this.getAvailableHeightRanges()
-    const bulkFiles = this.bulkManager
 
     // Review `headers`, applying the following rules:
     // 1. Height must be outside the current bulk HeightRange.
@@ -280,7 +279,12 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
     // 3. Compute chainWork for each header.
     // 4. Verify chain of header hash and previousHash values. One header at each height. Retain chain with most chainWork.
 
-    const minHeight = !bulkRange.isEmpty ? bulkRange.minHeight : before.bulk.isEmpty ? 0 : before.bulk.maxHeight + 1
+    let minHeight: number
+    if (bulkRange.isEmpty) {
+      minHeight = before.bulk.isEmpty ? 0 : before.bulk.maxHeight + 1
+    } else {
+      minHeight = bulkRange.minHeight
+    }
     const filteredHeaders = headers.concat(priorLiveHeaders || []).filter(h => h.height >= minHeight)
     const sortedHeaders = [...filteredHeaders]
     sortedHeaders.sort((a, b) => a.height - b.height)
@@ -359,7 +363,7 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
 
   private async addLiveHeadersToBulk (liveHeaders: LiveBlockHeader[]) {
     if (liveHeaders.length === 0) return
-    const lastChainWork = liveHeaders.slice(-1)[0].chainWork
+    const lastChainWork = liveHeaders.at(-1)!.chainWork
     const firstHeader = liveHeaders[0]
     const previousWork = subWork(firstHeader.chainWork, convertBitsToWork(liveHeaders[0].bits))
     const incrementalWork = subWork(lastChainWork, previousWork)

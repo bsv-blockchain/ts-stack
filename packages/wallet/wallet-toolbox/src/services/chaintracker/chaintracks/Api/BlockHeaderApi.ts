@@ -47,11 +47,14 @@ export function isLive(header: BlockHeader | LiveBlockHeader): header is LiveBlo
   return (header as LiveBlockHeader).headerId !== undefined
 }
 
+/** Union of all block header variants */
+export type AnyBlockHeader = BaseBlockHeader | BlockHeader | LiveBlockHeader
+
 /**
  * Type guard function.
  * @publicbody
  */
-export function isBaseBlockHeader(header: BaseBlockHeader | BlockHeader | LiveBlockHeader): header is BaseBlockHeader {
+export function isBaseBlockHeader(header: AnyBlockHeader): header is BaseBlockHeader {
   return typeof header.previousHash === 'string'
 }
 
@@ -59,7 +62,7 @@ export function isBaseBlockHeader(header: BaseBlockHeader | BlockHeader | LiveBl
  * Type guard function.
  * @publicbody
  */
-export function isBlockHeader(header: BaseBlockHeader | BlockHeader | LiveBlockHeader): header is LiveBlockHeader {
+export function isBlockHeader(header: AnyBlockHeader): header is LiveBlockHeader {
   return 'height' in header && typeof header.previousHash === 'string'
 }
 
@@ -67,6 +70,6 @@ export function isBlockHeader(header: BaseBlockHeader | BlockHeader | LiveBlockH
  * Type guard function.
  * @publicbody
  */
-export function isLiveBlockHeader(header: BaseBlockHeader | BlockHeader | LiveBlockHeader): header is LiveBlockHeader {
+export function isLiveBlockHeader(header: AnyBlockHeader): header is LiveBlockHeader {
   return 'chainwork' in header && typeof header.previousHash === 'string'
 }

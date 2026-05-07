@@ -65,19 +65,19 @@ export interface BulkHeaderFileInfo {
 }
 
 export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
-  chain?: Chain | undefined
+  chain?: Chain
   count: number
-  data?: Uint8Array<ArrayBufferLike> | undefined
+  data?: Uint8Array<ArrayBufferLike>
   fileHash: string | null
-  fileId?: number | undefined
+  fileId?: number
   fileName: string
   firstHeight: number
   lastChainWork: string
   lastHash: string | null
   prevChainWork: string
   prevHash: string
-  sourceUrl?: string | undefined
-  validated?: boolean | undefined
+  sourceUrl?: string
+  validated?: boolean
 
   constructor (info: BulkHeaderFileInfo) {
     this.chain = info.chain

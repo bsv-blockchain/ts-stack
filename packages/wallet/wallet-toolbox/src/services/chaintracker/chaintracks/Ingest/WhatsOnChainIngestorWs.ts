@@ -70,21 +70,6 @@ export async function WocHeadersBulkListener (
       return
     }
 
-    const typicalrawDataAsOf20250710BufferThatParsesTo = `{
-      "channel": "blockHeaders",
-      "pub": {
-        "data": {
-          "version": 635068416,
-          "previousblockhash": "000000000000000005f5778823b824dedf49a503aac60ae153471a3e737d1b1b",
-          "merkleroot": "617e2ce2c1348ec1b35ac727cad8bdec33b1b4b983bb00ba2583af4fe1e25ef7",
-          "time": 1752133908,
-          "bits": 403904562,
-          "nonce": 1932754962,
-          "hash": "00000000000000000670c88b898aadf911ecf4bc6ba4b71f9b319df47f022b8a",
-          "height": 904889
-        }
-      }
-    }`
     // Earlier data formats...
     // "{\"channel\":\"woc#c91c044b-66f5-4172-b509-82c11a41d7fc\",\"data\":{\"data\":{\"hash\":\"00000000000000000ce16106e2100b893f3da5989ef23cbac52eb568cf803dc1\",\"confirmations\":8,\"size\":3345869,\"height\":779890,\"version\":939515904,\"versionHex\":\"37ffe000\",\"merkleroot\":\"92e3d1d72d432c9216d296839eaa675b6ffb40ccf6e1a02229caf3d769dc0a5f\",\"txcount\":10757,\"time\":1676851109,\"mediantime\":1676849009,\"nonce\":4216995243,\"bits\":\"180e38cb\",\"difficulty\":77310268438.5808,\"chainwork\":\"00000000000000000000000000000000000000000142d5cf97c0ed497eae1066\",\"previousblockhash\":\"0000000000000000053d26b7b35a76bf2b672428bae591bc033ae99f9873697a\",\"nextblockhash\":\"000000000000000000e1a110376966033507953d50ade86eadef7226843f3349\"}}}"
 

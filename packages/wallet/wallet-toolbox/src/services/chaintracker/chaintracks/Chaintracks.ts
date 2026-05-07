@@ -37,14 +37,14 @@ export class Chaintracks implements ChaintracksManagementApi {
   // Collection of all long running "threads": main thread (liveHeaders consumer / monitor) and each live header ingestor.
   private readonly promises: Array<Promise<void>> = []
 
-  private readonly callbacks: { header: Array<HeaderListener | null>, reorg: Array<ReorgListener | null> } = { header: [], reorg: [] }
+  private readonly callbacks: { header: Record<string, HeaderListener | null>, reorg: Record<string, ReorgListener | null> } = { header: {}, reorg: {} }
   private readonly storage: ChaintracksStorageApi
   private readonly bulkIngestors: BulkIngestorApi[]
   private readonly liveIngestors: LiveIngestorApi[]
 
   private readonly baseHeaders: BaseBlockHeader[] = []
   private readonly liveHeaders: BlockHeader[] = []
-  private addLiveRecursionLimit = 11
+  private readonly addLiveRecursionLimit: number = 11
 
   private available = false
   private startupError: WalletError | null = null
@@ -123,8 +123,8 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   async unsubscribe (subscriptionId: string): Promise<boolean> {
     let success = true
-    if (this.callbacks.header[subscriptionId]) delete this.callbacks.header[subscriptionId]
-    else if (this.callbacks.reorg[subscriptionId]) delete this.callbacks.reorg[subscriptionId]
+    if (this.callbacks.header[subscriptionId]) this.callbacks.header[subscriptionId] = null
+    else if (this.callbacks.reorg[subscriptionId]) this.callbacks.reorg[subscriptionId] = null
     else success = false
     return success
   }
@@ -206,7 +206,6 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   async isSynchronized (): Promise<boolean> {
     await this.makeAvailable()
-    // TODO add synchronized flag... false while bulksyncing...
     return true
   }
 
@@ -460,7 +459,7 @@ export class Chaintracks implements ChaintracksManagementApi {
    */
   private async mainThreadShiftLiveHeaders (): Promise<void> {
     this.stopMainThread = false
-    let lastSyncCheck = Date.now()
+    let lastSyncCheck = 0
     let lastBulkSync = Date.now()
     const cdnSyncRepeatMsecs = 24 * 60 * 60 * 1000 // 24 hours
     const syncCheckRepeatMsecs = 30 * 60 * 1000 // 30 minutes
@@ -504,12 +503,12 @@ export class Chaintracks implements ChaintracksManagementApi {
         let liveHeaderDupes = 0
         let needSyncCheck = false
 
-        for (; !needSyncCheck && !this.stopMainThread;) {
+        while (!needSyncCheck && !this.stopMainThread) {
           let header = this.liveHeaders.shift()
           if (header != null) {
             // Process a "live" block header...
             let recursions = this.addLiveRecursionLimit
-            for (; !needSyncCheck && !this.stopMainThread;) {
+            while (!needSyncCheck && !this.stopMainThread) {
               // console.log(`Processing liveHeader: height: ${header.height} hash: ${header.hash} ${new Date().toISOString()}`)
               const ihr = await this.addLiveHeader(header)
               if (this.invalidInsertHeaderResult(ihr)) {
@@ -614,11 +613,11 @@ export class Chaintracks implements ChaintracksManagementApi {
         }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
-        if (!this.available) {
+        if (this.available) {
+          this.log(`Error occurred during chaintracks main thread processing: ${e.stack || e.message}`)
+        } else {
           this.startupError = e
           this.stopMainThread = true
-        } else {
-          this.log(`Error occurred during chaintracks main thread processing: ${e.stack || e.message}`)
         }
       }
     }

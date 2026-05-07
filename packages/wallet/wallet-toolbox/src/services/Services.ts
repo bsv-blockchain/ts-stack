@@ -234,10 +234,9 @@ export class Services implements WalletServices {
           services.addServiceCallSuccess(stc)
           r0 = r
           break
-        } else {
-          if (r.error != null) services.addServiceCallError(stc, r.error)
-          else services.addServiceCallFailure(stc)
         }
+        if (r.error != null) services.addServiceCallError(stc, r.error)
+        else services.addServiceCallFailure(stc)
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
@@ -319,10 +318,9 @@ export class Services implements WalletServices {
             services.addServiceCallSuccess(stc)
             r0 = r
             break
-          } else {
-            if (r.error != null) services.addServiceCallError(stc, r.error)
-            else services.addServiceCallFailure(stc)
           }
+          if (r.error != null) services.addServiceCallError(stc, r.error)
+          else services.addServiceCallFailure(stc)
         } catch (error_: unknown) {
           const e = WalletError.fromUnknown(error_)
           services.addServiceCallError(stc, e)
@@ -360,10 +358,9 @@ export class Services implements WalletServices {
         if (r.status === 'success') {
           r0 = r
           break
-        } else {
-          if (r.error != null) services.addServiceCallError(stc, r.error)
-          else services.addServiceCallFailure(stc)
         }
+        if (r.error != null) services.addServiceCallError(stc, r.error)
+        else services.addServiceCallFailure(stc)
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
         services.addServiceCallError(stc, e)
@@ -404,29 +401,25 @@ export class Services implements WalletServices {
     logger?.group('services postBeef')
     switch (this.postBeefMode) {
       case 'UntilSuccess':
-        {
-          for (const stc of stcs) {
-            const r = await callService(stc, softTimeoutMs)
-            logger?.log(`${stc.providerName} status ${r.status}`)
-            rs.push(r)
-            if (r.status === 'success') break
-            const softTimedOut = r.notes?.some(n => n.what === 'postBeefServiceTimeout') === true
-            if (!softTimedOut && r.txidResults && r.txidResults.every(txr => txr.serviceError)) {
-              // move this service to the end of the list
-              this.postBeefServices.moveServiceToLast(stc)
-            }
+        for (const stc of stcs) {
+          const r = await callService(stc, softTimeoutMs)
+          logger?.log(`${stc.providerName} status ${r.status}`)
+          rs.push(r)
+          if (r.status === 'success') break
+          const softTimedOut = r.notes?.some(n => n.what === 'postBeefServiceTimeout') === true
+          if (!softTimedOut && r.txidResults?.every(txr => txr.serviceError)) {
+            // move this service to the end of the list
+            this.postBeefServices.moveServiceToLast(stc)
           }
         }
         break
       case 'PromiseAll':
-        {
-          rs = await Promise.all(
-            stcs.map(async stc => {
-              const r = await callService(stc)
-              return r
-            })
-          )
-        }
+        rs = await Promise.all(
+          stcs.map(async stc => {
+            const r = await callService(stc)
+            return r
+          })
+        )
         break
     }
     logger?.groupEnd()
@@ -453,12 +446,10 @@ export class Services implements WalletServices {
 
       if (r.status === 'success') {
         services.addServiceCallSuccess(stc)
+      } else if (r.error != null) {
+        services.addServiceCallError(stc, r.error)
       } else {
-        if (r.error != null) {
-          services.addServiceCallError(stc, r.error)
-        } else {
-          services.addServiceCallFailure(stc)
-        }
+        services.addServiceCallFailure(stc)
       }
       return r
     }
@@ -515,8 +506,8 @@ export class Services implements WalletServices {
         }
 
         if (r.error != null) services.addServiceCallError(stc, r.error)
-        else if (!r.rawTx) services.addServiceCallSuccess(stc, 'not found')
-        else services.addServiceCallFailure(stc)
+        else if (r.rawTx) services.addServiceCallFailure(stc)
+        else services.addServiceCallSuccess(stc, 'not found')
 
         if ((r.error != null) && (r0.error == null) && (r0.rawTx == null))
         // If we have an error and didn't before...
@@ -585,8 +576,10 @@ export class Services implements WalletServices {
       try {
         const r = await stc.service(txid, this)
         if (r.notes != null) r0.notes!.push(...r.notes)
-        if (!r0.name) r0.name = r.name
-        if (r.merklePath != null) {
+        r0.name ??= r.name
+        if (r.merklePath == null) {
+          logger?.log(`${stc.providerName} no merklePath`)
+        } else {
           logger?.log(`${stc.providerName} has merklePath`)
           // If we have a proof, call it done.
           r0.merklePath = r.merklePath
@@ -595,8 +588,6 @@ export class Services implements WalletServices {
           r0.error = undefined
           services.addServiceCallSuccess(stc)
           break
-        } else {
-          logger?.log(`${stc.providerName} no merklePath`)
         }
 
         if (r.error != null) services.addServiceCallError(stc, r.error)
@@ -619,7 +610,7 @@ export class Services implements WalletServices {
     targetCurrencies: FiatCurrencyCode[],
     updateMsecs?: number
   ): Promise<FiatExchangeRates> {
-    updateMsecs ||= 1000 * 60 * 60 * 24
+    updateMsecs ??= 1000 * 60 * 60 * 24
     const freshnessDate = new Date(Date.now() - updateMsecs)
 
     const stored = this.options.fiatExchangeRates

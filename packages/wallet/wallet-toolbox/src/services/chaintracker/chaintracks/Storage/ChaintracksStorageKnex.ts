@@ -196,7 +196,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
       )
       if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ data: Buffer | null }>>)[0]
       const r = verifyOneOrNone(rs)
-      if ((r != null) && (r.data != null)) {
+      if (r?.data != null) {
         data = Uint8Array.from(r.data)
       }
     } else {

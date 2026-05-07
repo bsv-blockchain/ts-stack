@@ -239,7 +239,6 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
           continue
         }
         if (response.ok) {
-          const txid = response.data
           r.notes!.push({ ...nn(), what: 'postRawTxSuccess' })
         } else if (response.data === 'unexpected response code 500: Transaction already in the mempool') {
           r.notes!.push({ ...nne(), what: 'postRawTxSuccessAlreadyInMempool' })
@@ -330,7 +329,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_OPERATION(`WoC exchangerate response ${response.statusText}`) }
 
       const wocrate = response.data
-      if (wocrate.currency !== 'USD') wocrate.rate = NaN
+      if (wocrate.currency !== 'USD') wocrate.rate = Number.NaN
 
       const newRate: BsvExchangeRate = {
         timestamp: new Date(),
@@ -401,7 +400,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
           }
           if (outpoint) {
             const { txid, vout } = Validation.parseWalletOutpoint(outpoint)
-            r.isUtxo = r.details.find(d => d.txid === txid && d.index === vout) !== undefined
+            r.isUtxo = r.details.some(d => d.txid === txid && d.index === vout)
           } else r.isUtxo = r.details.length > 0
         }
 
@@ -850,7 +849,7 @@ export interface WocHeader {
 }
 
 export function convertWocToBlockHeaderHex (woc: WocHeader): BlockHeader {
-  const bits: number = typeof woc.bits === 'string' ? parseInt(woc.bits, 16) : woc.bits
+  const bits: number = typeof woc.bits === 'string' ? Number.parseInt(woc.bits, 16) : woc.bits
   if (!woc.previousblockhash) {
     woc.previousblockhash = '0000000000000000000000000000000000000000000000000000000000000000' // genesis
   }

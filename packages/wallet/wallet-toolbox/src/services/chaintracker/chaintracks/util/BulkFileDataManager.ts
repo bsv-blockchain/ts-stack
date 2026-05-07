@@ -161,7 +161,7 @@ export class BulkFileDataManager {
     const toUrl = (file: string) => this.fetch!.pathJoin(cdnUrl, file)
     const url = toUrl(`${this.chain}NetBlockHeaders.json`)
 
-    const availableBulkFiles = (await this.fetch.fetchJson(url)) as BulkHeaderFilesInfo
+    const availableBulkFiles = await this.fetch.fetchJson<BulkHeaderFilesInfo>(url)
     if (!availableBulkFiles) { throw new WERR_INVALID_PARAMETER('cdnUrl', `a valid BulkHeaderFilesInfo JSON resource available from ${url}`) }
 
     const selectedFiles = selectBulkHeaderFiles(
@@ -180,7 +180,7 @@ export class BulkFileDataManager {
     }
 
     const rangeBefore = await this.getHeightRange()
-    const r = await this.merge(selectedFiles)
+    await this.merge(selectedFiles)
     const rangeAfter = await this.getHeightRange()
 
     let log = 'BulkDataFileManager.updateFromUrl\n'
@@ -279,7 +279,7 @@ export class BulkFileDataManager {
     if (newBulkHeaders.length === 0) return
     return await this.lock.withWriteLock(async () => {
       const lbf = this.getLastFileNoLock()
-      const nextHeight = (lbf != null) ? lbf.firstHeight + lbf.count : 0
+      const nextHeight = lbf != null ? lbf.firstHeight + lbf.count : 0
       if (nextHeight > 0 && newBulkHeaders.length > 0 && newBulkHeaders[0].height < nextHeight) {
         // Don't modify the incoming array...
         newBulkHeaders = [...newBulkHeaders]
@@ -296,7 +296,7 @@ export class BulkFileDataManager {
       if (!lbf.lastHash) throw new WERR_INTERNAL(`lastHash is not defined for the last bulk file ${lbf.fileName}`)
 
       const fbh = newBulkHeaders[0]
-      const lbh = newBulkHeaders.slice(-1)[0]
+      const lbh = newBulkHeaders.at(-1)!
       let lastChainWork = lbf.lastChainWork
       if (incrementalChainWork) {
         lastChainWork = addWork(incrementalChainWork, lastChainWork)
@@ -353,7 +353,7 @@ export class BulkFileDataManager {
   }
 
   async getDataFromFile (file: BulkHeaderFileInfo, offset?: number, length?: number): Promise<Uint8Array | undefined> {
-    const bfd = await this.getBfdForHeight(file.firstHeight)
+    const bfd = this.getBfdForHeight(file.firstHeight)
     if ((bfd == null) || bfd.count < file.count) {
       throw new WERR_INVALID_PARAMETER(
         'file',
@@ -395,7 +395,7 @@ export class BulkFileDataManager {
       const offset = (height - file.firstHeight) * 80
       const data = await this.getDataFromFileNoLock(file, offset, 80)
       if (data == null) return undefined
-      const header = deserializeBlockHeader(data, 0, height)
+      const header = deserializeBlockHeader(data, height, 0)
       return header
     })
   }
@@ -473,8 +473,8 @@ export class BulkFileDataManager {
 
       if (!isKnownValidBulkHeaderFile(bfd)) {
         const pbf = bfd.firstHeight > 0 ? this.getBfdForHeight(bfd.firstHeight - 1) : undefined
-        const prevHash = (pbf != null) ? pbf.lastHash! : '00'.repeat(32)
-        const prevChainWork = (pbf != null) ? pbf.lastChainWork : '00'.repeat(32)
+        const prevHash = pbf?.lastHash ?? '00'.repeat(32)
+        const prevChainWork = pbf?.lastChainWork ?? '00'.repeat(32)
 
         const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(
           bfd.data,
@@ -595,24 +595,21 @@ export class BulkFileDataManager {
       if (isBdfIncremental(update)) {
         // 1. Incremental file may only be extended with more incremental headers.
         if (!isBdfIncremental(lbf)) { throw new WERR_INVALID_PARAMETER('file', 'an incremental file to update an existing incremental file') }
+      } else if (isBdfCdn(lbf)) {
+        // 2. The update is a CDN bulk file replacing a partial CDN file.
+        if (update.count <= lbf.count) {
+          throw new WERR_INVALID_PARAMETER(
+            'update.count',
+            `CDN update must have more headers. ${update.count} <= ${lbf.count}`
+          )
+        }
       } else {
-        // The update is a CDN bulk file.
-        if (isBdfCdn(lbf)) {
-          // 2. An updated CDN file replaces a partial CDN file.
-          if (update.count <= lbf.count) {
-            throw new WERR_INVALID_PARAMETER(
-              'update.count',
-              `CDN update must have more headers. ${update.count} <= ${lbf.count}`
-            )
-          }
-        } else {
-          // 3. A new CDN file replaces some or all of current incremental file.
-          // Retain extra incremental headers if any.
-          if (update.count < lbf.count) {
-            // The new CDN partially replaces the last incremental file, prepare to shift work and re-add it.
-            await this.ensureData(lbf)
-            truncate = lbf
-          }
+        // 3. A new CDN file replaces some or all of current incremental file.
+        // Retain extra incremental headers if any.
+        if (update.count < lbf.count) {
+          // The new CDN partially replaces the last incremental file, prepare to shift work and re-add it.
+          await this.ensureData(lbf)
+          truncate = lbf
         }
       }
     } else {
@@ -649,14 +646,14 @@ export class BulkFileDataManager {
     }
 
     const updateInfo = bfdToInfo(update, true)
-    const truncateInfo = (truncate != null) ? bfdToInfo(truncate, true) : undefined
+    const truncateInfo = truncate != null ? bfdToInfo(truncate, true) : undefined
 
     if (this.storage != null) {
       // Keep storage in sync.
       if (update.fileId) {
         await this.storage.updateBulkFile(update.fileId, updateInfo)
       }
-      if ((truncate != null) && (truncateInfo != null)) {
+      if (truncate != null && truncateInfo != null) {
         if (replaced != null) {
           await this.storage.updateBulkFile(truncate.fileId!, truncateInfo)
         } else {
@@ -664,7 +661,7 @@ export class BulkFileDataManager {
           truncate.fileId = await this.storage.insertBulkFile(truncateInfo)
         }
       }
-      if ((drop != null) && drop.fileId) {
+      if (drop?.fileId) {
         await this.storage.deleteBulkFile(drop.fileId)
       }
     }
@@ -745,7 +742,6 @@ export class BulkFileDataManager {
     }
 
     if ((bfd.data == null) && (this.fetch != null) && bfd.sourceUrl) {
-      // TODO - restore this change
       const url = this.fetch.pathJoin(bfd.sourceUrl, bfd.fileName)
 
       try {
