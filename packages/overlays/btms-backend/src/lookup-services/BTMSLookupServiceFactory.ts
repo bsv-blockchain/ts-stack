@@ -16,9 +16,9 @@ class BTMSLookupService implements LookupService {
   private static readonly TOPIC = 'tm_btms'
   private static readonly SERVICE_ID = 'ls_btms'
 
-  constructor(public storageManager: BTMSStorageManager) { }
+  constructor (public storageManager: BTMSStorageManager) { }
 
-  private isLikelySignatureField(field: number[]): boolean {
+  private isLikelySignatureField (field: number[]): boolean {
     if (field.length < 40) {
       return false
     }
@@ -29,7 +29,7 @@ class BTMSLookupService implements LookupService {
     }
     let printable = 0
     for (const code of asText) {
-      const codePoint = code.charCodeAt(0)
+      const codePoint = code.codePointAt(0) ?? 0
       if (
         (codePoint >= 32 && codePoint <= 126) ||
         codePoint === 9 ||
@@ -42,7 +42,7 @@ class BTMSLookupService implements LookupService {
     return printable / Math.max(asText.length, 1) < 0.8
   }
 
-  private decodeAdmittedToken(lockingScript: LockingScript, txid: string, outputIndex: number): {
+  private decodeAdmittedToken (lockingScript: LockingScript, txid: string, outputIndex: number): {
     assetId: string
     amount: number
     metadata?: string
@@ -84,7 +84,7 @@ class BTMSLookupService implements LookupService {
     }
   }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') {
       throw new Error('Invalid payload mode')
     }
@@ -111,7 +111,7 @@ class BTMSLookupService implements LookupService {
     }
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload mode')
     const { topic, txid, outputIndex } = payload
     if (topic !== BTMSLookupService.TOPIC) return
@@ -119,11 +119,11 @@ class BTMSLookupService implements LookupService {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided')
     }
@@ -176,7 +176,7 @@ class BTMSLookupService implements LookupService {
   /**
    * History selector for determining which outputs to include in chain tracking
    */
-  private async historySelector(beef: number[], outputIndex: number, assetId?: string): Promise<boolean> {
+  private async historySelector (beef: number[], outputIndex: number, assetId?: string): Promise<boolean> {
     try {
       const tx = Transaction.fromBEEF(beef)
       const output = tx.outputs[outputIndex]
@@ -198,11 +198,11 @@ class BTMSLookupService implements LookupService {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return docs
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -217,8 +217,9 @@ class BTMSLookupService implements LookupService {
 }
 
 // Factory function
-export default (db: Db): BTMSLookupService => {
+function createBTMSLookupService (db: Db): BTMSLookupService {
   return new BTMSLookupService(new BTMSStorageManager(db))
 }
+export default createBTMSLookupService
 
 export { BTMSLookupService }

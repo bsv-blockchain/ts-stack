@@ -156,9 +156,9 @@ export class RemittanceAdapter implements SdkCommsLayer {
   private toBodyString (body: unknown): string {
     if (typeof body === 'string') return body
     try {
-      return JSON.stringify(body) ?? body?.toString() ?? ''
+      return JSON.stringify(body) ?? ''
     } catch {
-      return body?.toString() ?? ''
+      return ''
     }
   }
 }

@@ -40,7 +40,7 @@ export class IdentityStorageManager {
   }
 
   private normalizeSearchInput(input: string): string {
-    return input.trim().replace(/\s+/g, ' ')
+    return input.trim().replaceAll(/\s+/g, ' ')
   }
 
   private getFuzzyRegex(input: string): RegExp {
@@ -50,7 +50,7 @@ export class IdentityStorageManager {
     }
     const fuzzyPattern = normalizedInput
       .split(' ')
-      .map(token => token.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
+      .map(token => token.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
       .join('.*')
     return new RegExp(fuzzyPattern, 'i')
   }
