@@ -40,12 +40,10 @@ export function createDefaultKnexChaintracksOptions (
   }
   const bulkFileDataManager = new BulkFileDataManager(bfo)
 
-  if (knexConfig == null) {
-    knexConfig = {
-      client: 'better-sqlite3',
-      connection: { filename: ChaintracksFs.pathJoin(rootFolder, `${chain}Net_chaintracks.sqlite`) },
-      useNullAsDefault: true
-    }
+  knexConfig ??= {
+    client: 'better-sqlite3',
+    connection: { filename: ChaintracksFs.pathJoin(rootFolder, `${chain}Net_chaintracks.sqlite`) },
+    useNullAsDefault: true
   }
   const knexInstance = makeKnex(knexConfig)
 

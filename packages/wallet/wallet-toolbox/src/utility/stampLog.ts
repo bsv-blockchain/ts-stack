@@ -6,7 +6,10 @@
  */
 export function stampLog (log: string | undefined | { log?: string }, lineToAdd: string): string | undefined {
   const add = `${new Date().toISOString()} ${lineToAdd}\n`
-  if (typeof log === 'object' && typeof log.log === 'string') return (log.log = log.log + add)
+  if (typeof log === 'object' && typeof log.log === 'string') {
+    log.log = log.log + add
+    return log.log
+  }
   if (typeof log === 'string') return log + add
   return undefined
 }

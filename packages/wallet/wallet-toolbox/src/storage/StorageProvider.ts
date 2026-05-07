@@ -811,7 +811,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     // without offset and length values return what we have (make no changes)
     if (!o.scriptLength || !o.scriptOffset || !o.txid) return
     // if there is an outputScript and its length is the expected length return what we have.
-    if ((o.lockingScript != null) && o.lockingScript.length === o.scriptLength) return
+    if (o.lockingScript?.length === o.scriptLength) return
 
     // outputScript is missing or has incorrect length...
 

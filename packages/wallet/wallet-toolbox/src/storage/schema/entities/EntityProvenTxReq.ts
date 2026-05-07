@@ -227,7 +227,11 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     if (!Number.isInteger(id)) throw new WERR_INVALID_PARAMETER('id', 'integer')
     const s = new Set(this.notify.transactionIds || [])
     s.add(id)
-    this.notify.transactionIds = [...s].sort((a, b) => (a > b ? 1 : a < b ? -1 : 0))
+    this.notify.transactionIds = [...s].sort((a, b) => {
+      if (a > b) return 1
+      if (a < b) return -1
+      return 0
+    })
     this.notified = false
   }
 
@@ -261,7 +265,11 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
       const k = (n: ReqHistoryNote): string => {
         return `${n.when} ${n.what}`
       }
-      this.history.notes.sort((a, b) => (k(a) < k(b) ? -1 : k(a) > k(b) ? 1 : 0))
+      this.history.notes.sort((a, b) => {
+        if (k(a) < k(b)) return -1
+        if (k(a) > k(b)) return 1
+        return 0
+      })
     }
   }
 

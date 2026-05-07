@@ -36,7 +36,7 @@ export async function acquireDirectCertificate (
     })
   }
 
-  const count = await wallet.storage.insertCertificate(newCert)
+  await wallet.storage.insertCertificate(newCert)
 
   const r: AcquireCertificateResult = {
     type: vargs.type,

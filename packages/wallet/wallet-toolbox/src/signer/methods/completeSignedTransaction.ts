@@ -1,4 +1,4 @@
-import { Beef, SignActionResult, SignActionSpend, Spend, Transaction } from '@bsv/sdk'
+import { Beef, SignActionSpend, Spend, Transaction } from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
@@ -31,10 +31,6 @@ export async function completeSignedTransaction (
     }
     input.unlockingScript = asBsvSdkScript(spend.unlockingScript)
     if (spend.sequenceNumber !== undefined) input.sequence = spend.sequenceNumber
-  }
-
-  const results = {
-    sdk: {} as SignActionResult
   }
 
   /// //////////////////

@@ -1,5 +1,11 @@
 import { Utils } from '@bsv/sdk'
 
+/** Byte array, string, or Uint8Array accepted by buffer-coercion helpers */
+export type ByteInput = string | number[] | Uint8Array
+
+/** Encoding identifier for buffer-coercion helpers */
+export type ByteEncoding = 'hex' | 'utf8' | 'base64'
+
 /**
  * Convert a value to an encoded string if currently an encoded string or number[] or Uint8Array.
  * @param val string or number[] or Uint8Array. If string, encoding must be hex. If number[], each value must be 0..255.
@@ -9,9 +15,9 @@ import { Utils } from '@bsv/sdk'
  * @publicbody
  */
 export function asString (
-  val: string | number[] | Uint8Array,
-  enc?: 'hex' | 'utf8' | 'base64',
-  returnEnc?: 'hex' | 'utf8' | 'base64'
+  val: ByteInput,
+  enc?: ByteEncoding,
+  returnEnc?: ByteEncoding
 ): string {
   enc ||= 'hex'
   returnEnc ||= enc
@@ -36,7 +42,7 @@ export function asString (
  * @returns number[] array of byte values representation of val.
  * @publicbody
  */
-export function asArray (val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8' | 'base64'): number[] {
+export function asArray (val: ByteInput, enc?: ByteEncoding): number[] {
   if (Array.isArray(val)) return val
   if (typeof val !== 'string') return Array.from(val)
   enc ||= 'hex'
@@ -51,7 +57,7 @@ export function asArray (val: string | number[] | Uint8Array, enc?: 'hex' | 'utf
  * @returns Uint8Array representation of val.
  * @publicbody
  */
-export function asUint8Array (val: string | number[] | Uint8Array, enc?: 'hex' | 'utf8' | 'base64'): Uint8Array {
+export function asUint8Array (val: ByteInput, enc?: ByteEncoding): Uint8Array {
   if (Array.isArray(val)) return Uint8Array.from(val)
   if (typeof val !== 'string') return val
   enc ||= 'hex'

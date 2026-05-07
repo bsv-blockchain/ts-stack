@@ -295,7 +295,7 @@ export class Monitor {
   async runTask (name: string): Promise<string> {
     let task = this._tasks.find(t => t.name === name)
     let log = ''
-    if (task == null) task = this._otherTasks.find(t => t.name === name)
+    task ??= this._otherTasks.find(t => t.name === name)
     if (task != null) {
       await task.asyncSetup()
       log = await task.runTask()

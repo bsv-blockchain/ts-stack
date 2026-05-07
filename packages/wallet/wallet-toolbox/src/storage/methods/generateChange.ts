@@ -95,8 +95,6 @@ export async function generateChangeSdk (
     const maxChangeOutputs = params.maxChangeOutputs ?? maxChangeOutputsPerTransaction
 
     const randomVals = [...(params.randomVals || [])]
-    const randomValsUsed: number[] = []
-
     const nextRandomVal = (): number => {
       let val = 0
       if (!randomVals || randomVals.length === 0) {
@@ -106,8 +104,6 @@ export async function generateChangeSdk (
         val = randomVals.shift() || 0
         randomVals.push(val)
       }
-      // Capture random sequence used if not supplied
-      randomValsUsed.push(val)
       return val
     }
 
@@ -435,7 +431,8 @@ export function validateGenerateChangeSdkResult (
 
 function logGenerateChangeSdkParams (params: GenerateChangeSdkParams, eu?: unknown) {
   let s = JSON.stringify(params)
-  console.log(`generateChangeSdk params length ${s.length}${eu ? ` error: ${eu}` : ''}`)
+  const euStr = eu != null ? ` error: ${String(eu)}` : ''
+  console.log(`generateChangeSdk params length ${s.length}${euStr}`)
   let i = -1
   const maxlen = 99900
   for (;;) {
@@ -577,17 +574,13 @@ export function generateChangeSdkMakeStorage (availableChange: GenerateChangeSdk
     ...c,
     spendable: true
   }))
-  change.sort((a, b) =>
-    a.satoshis < b.satoshis
-      ? -1
-      : a.satoshis > b.satoshis
-        ? 1
-        : a.outputId < b.outputId
-          ? -1
-          : a.outputId > b.outputId
-            ? 1
-            : 0
-  )
+  change.sort((a, b) => {
+    if (a.satoshis < b.satoshis) return -1
+    if (a.satoshis > b.satoshis) return 1
+    if (a.outputId < b.outputId) return -1
+    if (a.outputId > b.outputId) return 1
+    return 0
+  })
 
   let log = ''
   for (const c of change) log += `change ${c.satoshis} ${c.outputId}\n`

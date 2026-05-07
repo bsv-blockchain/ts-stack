@@ -116,8 +116,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     return (
       this._active !== undefined &&
       this._active.settings!.storageIdentityKey === this._active.user!.activeStorage &&
-      this._conflictingActives !== undefined &&
-      this._conflictingActives.length === 0
+      this._conflictingActives?.length === 0
     )
   }
 
@@ -646,7 +645,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
           // Verify the new proof's validity.
           const merkleRoot = mp.computeRoot(ptx.txid)
           const isValid = await chaintracker.isValidRootForHeight(merkleRoot, update.height!)
-          const logUpdate = `      height ${ptx.height} ${ptx.height === update.height ? 'unchanged' : `-> ${update.height}`}\n`
+          const heightChange = ptx.height === update.height ? 'unchanged' : `-> ${update.height}`
+          const logUpdate = `      height ${ptx.height} ${heightChange}\n`
           r.log += `      blockHash ${ptx.blockHash} -> ${update.blockHash}\n`
           r.log += `      merkleRoot ${ptx.merkleRoot} -> ${update.merkleRoot}\n`
           r.log += `      index ${ptx.index} -> ${update.index}\n`

@@ -149,12 +149,14 @@ export class MockServices implements WalletServices {
           if (input.sourceTransaction == null) {
             const sourceTxRow = await this.storage.getTransaction(sourceTxid)
             if (sourceTxRow != null) {
-              const sourceRaw =
-                sourceTxRow.rawTx instanceof Buffer
-                  ? Array.from(sourceTxRow.rawTx)
-                  : Array.isArray(sourceTxRow.rawTx)
-                    ? (sourceTxRow.rawTx)
-                    : Array.from(sourceTxRow.rawTx as Uint8Array)
+              let sourceRaw: number[]
+              if (sourceTxRow.rawTx instanceof Buffer) {
+                sourceRaw = Array.from(sourceTxRow.rawTx)
+              } else if (Array.isArray(sourceTxRow.rawTx)) {
+                sourceRaw = sourceTxRow.rawTx
+              } else {
+                sourceRaw = Array.from(sourceTxRow.rawTx as Uint8Array)
+              }
               input.sourceTransaction = BsvTransaction.fromBinary(sourceRaw)
             }
           }
@@ -354,12 +356,14 @@ export class MockServices implements WalletServices {
   async getRawTx (txid: string): Promise<GetRawTxResult> {
     const tx = await this.storage.getTransaction(txid)
     if (tx == null) return { txid }
-    const rawTx =
-      tx.rawTx instanceof Buffer
-        ? Array.from(tx.rawTx)
-        : Array.isArray(tx.rawTx)
-          ? (tx.rawTx)
-          : Array.from(tx.rawTx as Uint8Array)
+    let rawTx: number[]
+    if (tx.rawTx instanceof Buffer) {
+      rawTx = Array.from(tx.rawTx)
+    } else if (Array.isArray(tx.rawTx)) {
+      rawTx = tx.rawTx
+    } else {
+      rawTx = Array.from(tx.rawTx as Uint8Array)
+    }
     return { txid, rawTx, name: 'MockServices' }
   }
 
@@ -401,9 +405,9 @@ export class MockServices implements WalletServices {
     // If outpoint is provided, filter to match
     if (outpoint && isUtxo) {
       const [opTxid, opVoutStr] = outpoint.split('.')
-      const opVout = parseInt(opVoutStr, 10)
+      const opVout = Number.parseInt(opVoutStr, 10)
       const match = details.find(d => d.txid === opTxid && d.index === opVout)
-      isUtxo = !(match == null)
+      isUtxo = match != null
     }
 
     return {
@@ -533,12 +537,14 @@ export class MockServices implements WalletServices {
       const txRow = await this.storage.getTransaction(tid)
       if (txRow == null) return
 
-      const rawTx =
-        txRow.rawTx instanceof Buffer
-          ? Array.from(txRow.rawTx)
-          : Array.isArray(txRow.rawTx)
-            ? (txRow.rawTx)
-            : Array.from(txRow.rawTx as Uint8Array)
+      let rawTx: number[]
+      if (txRow.rawTx instanceof Buffer) {
+        rawTx = Array.from(txRow.rawTx)
+      } else if (Array.isArray(txRow.rawTx)) {
+        rawTx = txRow.rawTx
+      } else {
+        rawTx = Array.from(txRow.rawTx as Uint8Array)
+      }
 
       if (txRow.blockHeight !== null) {
         // Mined: add with merkle path

@@ -33,7 +33,7 @@ export function buildSignableTransaction (
   // Commission output
   // Change outputs
   // The Vout values will be randomized if args.options.randomizeOutputs is true. Default is true.
-  const voutToIndex = Array<number>(storageOutputs.length)
+  const voutToIndex = new Array<number>(storageOutputs.length)
   for (let vout = 0; vout < storageOutputs.length; vout++) {
     const i = storageOutputs.findIndex(o => o.vout === vout)
     if (i < 0) throw new WERR_INVALID_PARAMETER('output.vout', `sequential. ${vout} is missing`)
@@ -86,9 +86,11 @@ export function buildSignableTransaction (
         : undefined
     inputs.push({ argsInput, storageInput })
   }
-  inputs.sort((a, b) =>
-    a.storageInput.vin < b.storageInput.vin ? -1 : a.storageInput.vin === b.storageInput.vin ? 0 : 1
-  )
+  inputs.sort((a, b) => {
+    if (a.storageInput.vin < b.storageInput.vin) return -1
+    if (a.storageInput.vin === b.storageInput.vin) return 0
+    return 1
+  })
 
   const pendingStorageInputs: PendingStorageInput[] = []
 

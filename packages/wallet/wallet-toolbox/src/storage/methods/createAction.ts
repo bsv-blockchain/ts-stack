@@ -480,7 +480,7 @@ async function createNewOutputs (
       vout: verifyInteger(o.vout),
       satoshis: Validation.validateSatoshis(o.satoshis, 'o.satoshis'),
       lockingScript: (o.lockingScript == null) ? '' : asString(o.lockingScript),
-      providedBy: verifyTruthy(o.providedBy) as StorageProvidedBy,
+      providedBy: verifyTruthy(o.providedBy),
       purpose: o.purpose || undefined,
       basket: Object.values(txBaskets).find(b => b.basketId === o.basketId)?.name,
       tags,
@@ -745,8 +745,7 @@ async function validateNoSendChange (
       )
       // noSendChange is not marked spendable until sent, may not already be spent, and must have a valid greater than zero satoshis
       if (
-        (output == null) ||
-        output.providedBy !== 'storage' ||
+        output?.providedBy !== 'storage' ||
         output.purpose !== 'change' ||
         !output.spendable ||
         Number.isInteger(output.spentBy) ||
@@ -960,7 +959,7 @@ async function fundNewTransactionSdk (
           // when this output gets spent
           spentBy: undefined,
           spendingDescription: undefined
-        } as TableOutput)
+        })
     ),
     derivationPrefix
   }

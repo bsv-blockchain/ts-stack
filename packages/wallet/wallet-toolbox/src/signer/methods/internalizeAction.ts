@@ -37,7 +37,7 @@ export async function internalizeAction (
 ): Promise<StorageInternalizeActionResult> {
   const vargs = Validation.validateInternalizeActionArgs(args)
 
-  const { ab, tx, txid } = await validateAtomicBeef()
+  const { tx } = await validateAtomicBeef()
   const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
 
   for (const o of vargs.outputs) {

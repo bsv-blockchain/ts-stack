@@ -180,7 +180,7 @@ export function verifyOne<T> (results: T[], errorDescrition?: string): T {
 export async function wait (msecs: number): Promise<void> {
   const MIN_WAIT = 0
   const MAX_WAIT = 2 * 60 * 1000 // maximum allowed wait in ms (2 minutes)
-  if (typeof msecs !== 'number' || !Number.isFinite(msecs) || isNaN(msecs) || msecs < MIN_WAIT || msecs > MAX_WAIT) {
+  if (typeof msecs !== 'number' || !Number.isFinite(msecs) || Number.isNaN(msecs) || msecs < MIN_WAIT || msecs > MAX_WAIT) {
     throw new WERR_INVALID_PARAMETER('msecs', `a number between ${MIN_WAIT} and ${MAX_WAIT} msecs, not ${msecs}.`)
   }
   return await new Promise(resolve => setTimeout(resolve, msecs))

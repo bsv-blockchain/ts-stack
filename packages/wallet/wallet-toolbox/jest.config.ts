@@ -1,7 +1,7 @@
 import type { Config } from 'jest'
 //import { defaults } from 'jest-config'
 
-export default async (): Promise<Config> => {
+const getJestConfig = async (): Promise<Config> => {
   //console.log(defaults)
   return {
     bail: 0,
@@ -24,3 +24,5 @@ export default async (): Promise<Config> => {
     testTimeout: 30000,
   }
 }
+
+export default getJestConfig

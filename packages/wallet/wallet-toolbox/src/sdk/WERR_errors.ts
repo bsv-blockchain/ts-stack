@@ -77,7 +77,7 @@ export class WERR_INVALID_MERKLE_ROOT extends WalletError {
   ) {
     super(
       'WERR_INVALID_MERKLE_ROOT',
-      `Invalid merkleRoot ${merkleRoot} for block ${blockHash} at height ${blockHeight}${txid ? ` for txid ${txid}` : ''}.`
+      `Invalid merkleRoot ${merkleRoot} for block ${blockHash} at height ${blockHeight}${txid != null ? ' for txid ' + txid : ''}.`
     )
   }
 
