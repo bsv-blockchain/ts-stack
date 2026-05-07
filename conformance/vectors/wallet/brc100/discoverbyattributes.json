@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -160,7 +160,9 @@
         "discoverByAttributes",
         "schema",
         "non-empty"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Expects non-empty overlay result; stub LookupResolver returns empty. Pending live overlay integration."
     },
     {
       "id": "wallet.brc100.discoverbyattributes.7",

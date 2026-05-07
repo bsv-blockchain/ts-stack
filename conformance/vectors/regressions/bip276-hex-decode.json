@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "version": "1.0.1",
   "domain": "sdk",
   "category": "script",
   "description": "BIP276 network and version fields are 2-digit hex values (00–FF). The go-sdk pre-fix used a regex pattern '\\d{2}' that only matched decimal digits [0-9], rejecting any BIP276 string whose network or version byte contained a hex letter (A-F). Additionally, parsing used strconv.Atoi() (base-10) instead of ParseInt(base-16), and the network/version struct fields were assigned in reverse order.",
@@ -14,6 +14,7 @@
       "id": "regression.bip276.hex-decode.0001",
       "description": "Decode BIP276 with network=0xFF (255) — must not reject hex letter 'f'",
       "parity_class": "intended",
+      "skip_reason": "Go-SDK-specific regression (go-sdk#286): TS SDK does not expose a DecodeBIP276 function in the same module; this vector exercises Go-only code paths fixed in go-sdk v1.2.19. No TS dispatcher path exists for 'DecodeBIP276' operations.",
       "input": {
         "operation": "DecodeBIP276",
         "bip276_string": "bitcoin-script:ff01737472696e67ad3ca5e1"
@@ -31,6 +32,7 @@
       "id": "regression.bip276.hex-decode.0002",
       "description": "Decode BIP276 with version=0xAA (170) — must parse 'aa' as hex 170 not fail",
       "parity_class": "intended",
+      "skip_reason": "Go-SDK-specific regression (go-sdk#286): TS SDK does not expose a DecodeBIP276 function in the same module; this vector exercises Go-only code paths fixed in go-sdk v1.2.19. No TS dispatcher path exists for 'DecodeBIP276' operations.",
       "input": {
         "operation": "DecodeBIP276",
         "bip276_string": "bitcoin-script:01aa737472696e67b1e2c3d4"
@@ -48,6 +50,7 @@
       "id": "regression.bip276.hex-decode.0003",
       "description": "Encode then decode round-trip for network=0x01, version=0x01 (all decimal digits) must succeed",
       "parity_class": "intended",
+      "skip_reason": "Go-SDK-specific regression (go-sdk#286): TS SDK does not expose EncodeBIP276/DecodeBIP276 functions matching this round-trip contract; these operations map only to Go-SDK code paths. No TS dispatcher path exists.",
       "input": {
         "operation": "EncodeBIP276_then_Decode",
         "prefix": "bitcoin-script",

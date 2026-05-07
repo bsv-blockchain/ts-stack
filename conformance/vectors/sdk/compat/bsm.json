@@ -3,9 +3,9 @@
   "id": "sdk.compat.bsm",
   "name": "Bitcoin Signed Message (BSM) — sign, verify, magicHash",
   "brc": ["BRC-77"],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "reference_impl": "packages/sdk/ts-sdk/src/compat/BSM.ts",
-  "parity_class": "best-effort",
+  "parity_class": "required",
   "vectors": [
     {
       "id": "bsm-magic-001",
