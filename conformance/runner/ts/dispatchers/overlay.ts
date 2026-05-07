@@ -24,13 +24,13 @@
  *      with an explicit skip_reason comment below (no vector files are modified
  *      here; the parity_class change must be done in the vector files if needed).
  *
- * TODO (mismatch flags):
+ * MISMATCH flags:
  *   - submit.8: SDK off-chain-values body layout uses
  *       Writer.writeVarIntNum(beef.length) ++ beef ++ offChainValues
  *     but the vector note says "varint(4) + 4 off-chain bytes + BEEF bytes"
  *     which reverses the order.  Vector expected.body only checks outputsToAdmit
  *     shape so no assertion fails, but the body_hex note disagrees with the SDK.
- *     Flagged as TODO — do NOT silently fix expected values.
+ *     Flagged — do NOT silently fix expected values.
  *
  *   - lookup.3: x-aggregation binary response — the SDK sends X-Aggregation: yes
  *     and parses the binary response, but the vector only checks content_type.
@@ -48,7 +48,7 @@ import { expect } from '@jest/globals'
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 interface VectorInput {
-  method?: HttpMethod | string
+  method?: string
   path?: string
   headers?: Record<string, string>
   body?: unknown
@@ -366,33 +366,14 @@ function dispatchLookup (inp: VectorInput, exp: VectorExpected): void {
     const status = exp.status ?? 200
 
     switch (path) {
-      case '/listTopicManagers': {
-        // Returns Record<string, TopicManagerInfo>
+      case '/listTopicManagers':
+      case '/listLookupServiceProviders': {
+        // Returns Record<string, TopicManagerInfo | LookupServiceInfo>
         expect(status).toBe(200)
         if (exp.body_schema !== undefined) {
           expect(typeof exp.body_schema).toBe('string')
         }
         // example_body (in expected) must be an object whose values are info records
-        const exampleBody = (exp as Record<string, unknown>).example_body as Record<string, unknown> | undefined
-        if (exampleBody !== undefined) {
-          expect(typeof exampleBody).toBe('object')
-          for (const [key, val] of Object.entries(exampleBody)) {
-            expect(typeof key).toBe('string')
-            const info = val as Record<string, unknown>
-            // TopicManagerInfo: name (string), shortDescription (string), optional fields
-            if ('name' in info) expect(typeof info.name).toBe('string')
-            if ('shortDescription' in info) expect(typeof info.shortDescription).toBe('string')
-          }
-        }
-        return
-      }
-
-      case '/listLookupServiceProviders': {
-        // Returns Record<string, LookupServiceInfo>
-        expect(status).toBe(200)
-        if (exp.body_schema !== undefined) {
-          expect(typeof exp.body_schema).toBe('string')
-        }
         const exampleBody = (exp as Record<string, unknown>).example_body as Record<string, unknown> | undefined
         if (exampleBody !== undefined) {
           expect(typeof exampleBody).toBe('object')

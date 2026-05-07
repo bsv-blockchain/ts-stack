@@ -103,8 +103,8 @@ export default class OrdLock implements ScriptTemplate {
     }
 
     const combinedMetadata = {
-      ...(params.metadata ?? {}),
-      ...(params.itemData ?? {})
+      ...params.metadata,
+      ...params.itemData
     }
 
     // Convert the inscription to a hex string

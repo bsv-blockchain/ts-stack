@@ -173,20 +173,16 @@ export class MultiPushDrop implements ScriptTemplate {
 
     // Pick the value on the stack that's right before the locking script.
     // This should be the index of the key to use in the unlock.
-    lockPart.push(createMinimallyEncodedScriptChunk([nPublicKeys]))
-    lockPart.push({ op: OP.OP_PICK })
+    lockPart.push(createMinimallyEncodedScriptChunk([nPublicKeys]), { op: OP.OP_PICK })
 
     // Now we use the index to get the actual key.
     lockPart.push({ op: OP.OP_PICK })
 
     // We pull the signature from the bottom of the stack, no matter the number of keys.
-    lockPart.push({ op: OP.OP_DEPTH })
-    lockPart.push({ op: OP.OP_1SUB })
-    lockPart.push({ op: OP.OP_PICK })
+    lockPart.push({ op: OP.OP_DEPTH }, { op: OP.OP_1SUB }, { op: OP.OP_PICK })
 
     // We swap the signature and public key so they're in the correct order, then CHECKSIGVERIFY
-    lockPart.push({ op: OP.OP_SWAP })
-    lockPart.push({ op: OP.OP_CHECKSIGVERIFY })
+    lockPart.push({ op: OP.OP_SWAP }, { op: OP.OP_CHECKSIGVERIFY })
 
     // Construct PushDrop Part for fields
     const pushDropPart: Array<{ op: number, data?: number[] }> = []
@@ -302,8 +298,7 @@ export class MultiPushDrop implements ScriptTemplate {
 
         // Create Unlocking Script Chunks: <Signature> <Index>
         const unlockingChunks: Array<{ op: number, data?: number[] }> = []
-        unlockingChunks.push({ op: sigForScript.length, data: sigForScript })
-        unlockingChunks.push(createMinimallyEncodedScriptChunk([unlockerIndex]))
+        unlockingChunks.push({ op: sigForScript.length, data: sigForScript }, createMinimallyEncodedScriptChunk([unlockerIndex]))
         return new UnlockingScript(unlockingChunks)
       },
       // Estimate length: Signature (~71-73 bytes) + Index push (1 byte for 0-15, potentially more)

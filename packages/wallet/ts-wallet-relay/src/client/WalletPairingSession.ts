@@ -86,22 +86,22 @@ export class WalletPairingSession {
   private connected = false
   private _lastSeq = 0
   private _resolvedRelay: string | null = null
-  private protocolID: WalletProtocol
+  private readonly protocolID: WalletProtocol
   private mobileIdentityKey: string | null = null
   private requestHandler: RequestHandler | null = null
   private readonly implementedMethods: ReadonlySet<string>
   private readonly autoApproveMethods: ReadonlySet<string>
 
-  private listeners: {
+  private readonly listeners: {
     connected: Array<() => void>
     disconnected: Array<() => void>
     error: Array<(msg: string) => void>
   } = { connected: [], disconnected: [], error: [] }
 
   constructor(
-    private wallet: WalletLike,
-    private params: PairingParams,
-    private options: WalletPairingSessionOptions = {}
+    private readonly wallet: WalletLike,
+    private readonly params: PairingParams,
+    private readonly options: WalletPairingSessionOptions = {}
   ) {
     this.protocolID = JSON.parse(params.protocolID) as WalletProtocol
     this.implementedMethods = options.implementedMethods ?? DEFAULT_IMPLEMENTED_METHODS
@@ -266,7 +266,7 @@ export class WalletPairingSession {
 
         // Inbound RPC request
         if ('method' in msg && msg.id) {
-          await this.handleRpc(msg as RpcRequest)
+          await this.handleRpc(msg)
         }
       } catch {
         // silently drop malformed messages

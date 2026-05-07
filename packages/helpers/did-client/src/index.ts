@@ -21,8 +21,8 @@ import { DIDRecord, DIDQuery } from './types/index.js'
 /* ────────────────────────────────────────────────────────────
  * Constants
  * ────────────────────────────────────────────────────────── */
-const PROTOCOL_ID: WalletProtocol = [2, 'did token'] // TODO: Change to: [1, 'metanet did']
-const DEFAULT_KEY_ID = '1' // TODO: Update to take into account derivation prefix / suffix
+const PROTOCOL_ID: WalletProtocol = [2, 'did token'] // NOTE: Change to: [1, 'metanet did']
+const DEFAULT_KEY_ID = '1' // NOTE: Update to take into account derivation prefix / suffix
 const DEFAULT_OVERLAY_TOPIC = 'tm_did'
 const DEFAULT_LOOKUP_SERVICE = 'ls_did'
 
@@ -267,9 +267,10 @@ export class DIDClient {
    */
   async findDID(
     query: DIDQuery & { limit?: number; skip?: number; sortOrder?: 'asc' | 'desc'; startDate?: string; endDate?: string } = {},
-    opts: { resolver?: LookupResolver; wallet?: WalletInterface; includeBeef?: boolean } = { includeBeef: true }
+    opts: { resolver?: LookupResolver; wallet?: WalletInterface; includeBeef?: boolean } = {}
   ): Promise<Array<DIDRecord & { beef?: number[] }>> {
-    const wallet = opts.wallet ?? this.wallet
+    const { includeBeef = true, ...restOpts } = opts
+    const wallet = restOpts.wallet ?? this.wallet
 
     // 1. Build the lookup query
     const lookupQuery: Record<string, unknown> = {}
@@ -283,13 +284,13 @@ export class DIDClient {
 
     // 2. Resolve via lookup service
     const resolver =
-      opts.resolver ??
+      restOpts.resolver ??
       new LookupResolver({ networkPreset: this.networkPreset ?? (await wallet.getNetwork({})).network })
 
     const answer = await resolver.query({ service: this.overlayService, query: lookupQuery })
 
     // 3. Parse the answer
-    return this.parseLookupAnswer(answer, opts.includeBeef!)
+    return this.parseLookupAnswer(answer, includeBeef)
   }
 
   /* ───────────────────── Helper: parse lookup answer ─────────────────── */
@@ -307,7 +308,7 @@ export class DIDClient {
       if (decoded.fields.length < 1) throw new Error('Invalid DID token: missing serial number')
 
       // Convert serial bytes → Base64 string
-      const serialNumber = Utils.toBase64(decoded.fields[0] as number[])
+      const serialNumber = Utils.toBase64(decoded.fields[0])
 
       return {
         txid: tx.id('hex'),

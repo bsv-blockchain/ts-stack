@@ -224,6 +224,71 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
 // Wallet-integrated DID methods
 // ============================================================================
 
+async function spendChainOutput (params: {
+  client: any
+  basket: string
+  currentOutpoint: string
+  chainKeyHex: string
+  description: string
+  newOutputs: Array<{
+    lockingScript: string
+    satoshis: number
+    outputDescription: string
+    basket?: string
+    customInstructions?: string
+    tags?: string[]
+  }>
+}): Promise<{ txid: string, tx: any }> {
+  const { client, basket, currentOutpoint, chainKeyHex, description, newOutputs } = params
+  const chainKey = PrivateKey.fromHex(chainKeyHex)
+
+  // Get BEEF for the chain UTXO
+  const result = await client.listOutputs({
+    basket,
+    include: 'entire transactions',
+    includeCustomInstructions: true
+  } as any)
+
+  const beef = new Beef()
+  beef.mergeBeef((result).BEEF as number[])
+  const inputBEEF = beef.toBinary()
+
+  // Create action with custom input (chain UTXO to spend)
+  const response = await client.createAction({
+    description,
+    inputBEEF,
+    inputs: [{
+      outpoint: currentOutpoint,
+      unlockingScriptLength: 108, // P2PKH: sig 73 + push 1 + pubkey 33 + push 1
+      inputDescription: 'DID chain UTXO'
+    }],
+    outputs: newOutputs,
+    options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+  } as any)
+
+  if ((response)?.signableTransaction == null) {
+    throw new DIDError('Expected signableTransaction for chain spend')
+  }
+
+  const signable = (response).signableTransaction
+  const txToSign = Transaction.fromBEEF(signable.tx)
+  txToSign.inputs[0].unlockingScriptTemplate = new P2PKH().unlock(chainKey, 'all', false)
+  await txToSign.sign()
+
+  const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
+  if (unlockingScript == null || unlockingScript === '') throw new DIDError('Failed to generate unlocking script')
+
+  const finalResult = await client.signAction({
+    reference: signable.reference,
+    spends: { 0: { unlockingScript } }
+  })
+
+  return {
+    txid: (finalResult).txid ?? '',
+    tx: (finalResult).tx
+  }
+}
+
 export function createDIDMethods (core: WalletCore): ReturnType<typeof _buildDIDMethods> {
   return _buildDIDMethods(core)
 }
@@ -249,75 +314,6 @@ function _buildDIDMethods (core: WalletCore): {
     return new P2PKH().lock(address).toHex()
   }
 
-  /**
-   * Spend a chain UTXO using the signableTransaction flow.
-   * Follows the same pattern as sendToken in tokens.ts.
-   */
-  async function spendChainOutput (params: {
-    client: any
-    basket: string
-    currentOutpoint: string
-    chainKeyHex: string
-    description: string
-    newOutputs: Array<{
-      lockingScript: string
-      satoshis: number
-      outputDescription: string
-      basket?: string
-      customInstructions?: string
-      tags?: string[]
-    }>
-  }): Promise<{ txid: string, tx: any }> {
-    const { client, basket, currentOutpoint, chainKeyHex, description, newOutputs } = params
-    const chainKey = PrivateKey.fromHex(chainKeyHex)
-
-    // Get BEEF for the chain UTXO
-    const result = await client.listOutputs({
-      basket,
-      include: 'entire transactions',
-      includeCustomInstructions: true
-    } as any)
-
-    const beef = new Beef()
-    beef.mergeBeef((result).BEEF as number[])
-    const inputBEEF = beef.toBinary()
-
-    // Create action with custom input (chain UTXO to spend)
-    const response = await client.createAction({
-      description,
-      inputBEEF,
-      inputs: [{
-        outpoint: currentOutpoint,
-        unlockingScriptLength: 108, // P2PKH: sig 73 + push 1 + pubkey 33 + push 1
-        inputDescription: 'DID chain UTXO'
-      }],
-      outputs: newOutputs,
-      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-    } as any)
-
-    if ((response)?.signableTransaction == null) {
-      throw new DIDError('Expected signableTransaction for chain spend')
-    }
-
-    const signable = (response).signableTransaction
-    const txToSign = Transaction.fromBEEF(signable.tx)
-    txToSign.inputs[0].unlockingScriptTemplate = new P2PKH().unlock(chainKey, 'all', false)
-    await txToSign.sign()
-
-    const unlockingScript = txToSign.inputs[0].unlockingScript?.toHex()
-    if (unlockingScript == null || unlockingScript === '') throw new DIDError('Failed to generate unlocking script')
-
-    const finalResult = await client.signAction({
-      reference: signable.reference,
-      spends: { 0: { unlockingScript } }
-    })
-
-    return {
-      txid: (finalResult).txid ?? '',
-      tx: (finalResult).tx
-    }
-  }
-
   return {
     /**
      * Create a spec-compliant did:bsv DID with UTXO chain linking.
@@ -335,7 +331,7 @@ function _buildDIDMethods (core: WalletCore): {
         const client = core.getClient()
         const basket = options?.basket ?? core.defaults.didBasket
         const identityCode = options?.identityCode ?? generateIdentityCode()
-        const protocolID = core.defaults.didProtocolID as [SecurityLevel, string]
+        const protocolID = core.defaults.didProtocolID
 
         // Generate chain key — random PrivateKey for UTXO chain linking
         const chainKey = PrivateKey.fromRandom()
@@ -470,7 +466,7 @@ function _buildDIDMethods (core: WalletCore): {
 
       // Legacy pubkey-based DID — return legacy document
       if (parsed.identifier.length === 66) {
-        const legacyDoc = DID.fromIdentityKey(parsed.identifier)
+        const legacyDoc = DID.fromIdentityKey(parsed.identifier) // NOSONAR — legacy DID resolution requires deprecated API
         return {
           didDocument: {
             '@context': DID_CONTEXT,
@@ -526,7 +522,7 @@ function _buildDIDMethods (core: WalletCore): {
               didDocumentMetadata: data.didDocumentMetadata ?? {},
               didResolutionMetadata: {
                 contentType: 'application/did+ld+json',
-                ...(data.didResolutionMetadata ?? {})
+                ...data.didResolutionMetadata
               }
             }
           }
@@ -537,7 +533,7 @@ function _buildDIDMethods (core: WalletCore): {
               didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata ?? {}) },
               didResolutionMetadata: {
                 contentType: 'application/did+ld+json',
-                ...(data.didResolutionMetadata ?? {})
+                ...data.didResolutionMetadata
               }
             }
           }
@@ -582,9 +578,9 @@ function _buildDIDMethods (core: WalletCore): {
 
       if (latestCI.status === 'deactivated') {
         // Try to reconstruct last known document
-        const doc = (latestCI.subjectKey != null)
-          ? DID.buildDocument(latestCI.issuanceTxid, latestCI.subjectKey, didString)
-          : null
+        const doc = (latestCI.subjectKey == null)
+          ? null
+          : DID.buildDocument(latestCI.issuanceTxid, latestCI.subjectKey, didString)
         return {
           didDocument: doc,
           didDocumentMetadata: { deactivated: true },
@@ -661,7 +657,7 @@ function _buildDIDMethods (core: WalletCore): {
           const txData: any = await txResp.json()
 
           if (created == null) {
-            created = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
+            created = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
           }
 
           // Parse OP_RETURN outputs to find BSVDID segments
@@ -704,7 +700,7 @@ function _buildDIDMethods (core: WalletCore): {
               try {
                 lastDocument = JSON.parse(payload) as DIDDocumentV2
                 lastDocTxid = currentTxid
-                updated = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
+                updated = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
               } catch {
                 // Not valid JSON — skip
               }
@@ -742,7 +738,7 @@ function _buildDIDMethods (core: WalletCore): {
                   // (the main loop will parse its BSVDID markers).
                   const candidates = history
                     .filter(e => !visited.has(e.tx_hash))
-                    .sort((a, b) => (b.height !== 0 ? b.height : 0) - (a.height !== 0 ? a.height : 0))
+                    .sort((a, b) => b.height - a.height)
                   if (candidates.length > 0) {
                     nextTxid = candidates[0].tx_hash
                   }
@@ -1041,7 +1037,7 @@ function _buildDIDMethods (core: WalletCore): {
      * Get this wallet's legacy DID Document (identity-key based).
      */
     getDID (): DIDDocument {
-      return DID.fromIdentityKey(core.getIdentityKey())
+      return DID.fromIdentityKey(core.getIdentityKey()) // NOSONAR — deprecated method intentionally uses deprecated API
     },
 
     /**
@@ -1051,7 +1047,7 @@ function _buildDIDMethods (core: WalletCore): {
     async registerDID (options?: { persist?: boolean }): Promise<DIDDocument> {
       const { Certifier } = await import('./certification')
       const identityKey = core.getIdentityKey()
-      const didDoc = DID.fromIdentityKey(identityKey)
+      const didDoc = DID.fromIdentityKey(identityKey) // NOSONAR — deprecated method intentionally uses deprecated API
 
       if (options?.persist !== false) {
         try {

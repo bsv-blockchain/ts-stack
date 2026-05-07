@@ -158,7 +158,7 @@ async function dispatchArcSubmit (
 
     // Get rawTx from input body (if present)
     const inputBody = input.body as Record<string, unknown> | undefined
-    const rawTx = (inputBody !== undefined ? getString(inputBody, 'rawTx') : '') || 'aabbcc'
+    const rawTx = (inputBody === undefined ? '' : getString(inputBody, 'rawTx')) || 'aabbcc'
 
     const mockFetch = syntheticFetch(expectedStatus, expectedBody)
     const arc = new ARC('https://arc.example.com', {
@@ -248,7 +248,6 @@ async function dispatchArcSubmit (
       const expBody = expectedBody as Record<string, unknown>
       expect(getString(expBody, 'status')).toBe('success')
     }
-    return
   }
 }
 
@@ -258,7 +257,7 @@ async function dispatchArcSubmit (
  * Validate an ARC callback payload body for required fields and format.
  * Returns { valid, reason } where reason is set on failure.
  *
- * TODO: broadcast.merklepath.6 vs broadcast.merklepath.4 discrepancy —
+ * NOTE: broadcast.merklepath.6 vs broadcast.merklepath.4 discrepancy —
  * Both vectors have odd-length merklePath hex strings. Vector 4 (blockHeight=813706)
  * expects 400 (rejection for "odd length"). Vector 6 (blockHeight=0, genesis block)
  * expects 200 (accepted). The vectors conflict: an odd-length hex string cannot be
@@ -308,7 +307,7 @@ function validateArcCallbackPayload (body: Record<string, unknown>): {
   // Exception: blockHeight=0 (genesis) is treated as a special case per vector 6's
   // stated intent ("genesis edge case — must be accepted"), even though the BUMP
   // in that vector is 81 chars (odd-length) and the SDK cannot parse it.
-  // TODO: broadcast.merklepath.6 — vector BUMP (81 chars) conflicts with vector 4's
+  // NOTE: broadcast.merklepath.6 — vector BUMP (81 chars) conflicts with vector 4's
   // odd-length rejection rule. Genesis BUMP should be 82 chars. Flag for correction.
   const isGenesis = blockHeight === 0
   if (!isGenesis && merklePath.length % 2 !== 0) {
@@ -372,8 +371,6 @@ async function dispatchMerklePathValidation (
       const expBody = (expected.body ?? {}) as Record<string, unknown>
       expect(getString(expBody, 'status')).toBe('error')
     }
-
-    return
   }
 }
 
@@ -544,7 +541,6 @@ async function dispatchMerkleService (
         expect(typeof details.aerospike).toBe('string')
       }
     }
-    return
   }
 }
 

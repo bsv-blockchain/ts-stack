@@ -61,7 +61,7 @@ export function toNextHandlers (handler: RouteHandler): { GET?: (req: any) => Pr
   }
 
   return {
-    ...((handler.GET != null) ? { GET: wrapHandler('GET') } : {}),
-    ...((handler.POST != null) ? { POST: wrapHandler('POST') } : {})
+    ...((handler.GET == null) ? {} : { GET: wrapHandler('GET') }),
+    ...((handler.POST == null) ? {} : { POST: wrapHandler('POST') })
   }
 }

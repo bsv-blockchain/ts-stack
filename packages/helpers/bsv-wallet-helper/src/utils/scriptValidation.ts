@@ -1,6 +1,9 @@
 import { LockingScript, Script, Utils } from '@bsv/sdk'
 import { ORDINAL_MAP_PREFIX } from './constants'
 
+/** Accepted input types for script validation functions. */
+type ScriptInput = ScriptInput
+
 /**
  * Script validation templates for common Bitcoin script patterns
  */
@@ -106,9 +109,9 @@ export function isP2PKH (script: LockingScript | Script): boolean
  */
 export function isP2PKH (hex: string): boolean
 
-export function isP2PKH (input: LockingScript | Script | string): boolean
+export function isP2PKH (input: ScriptInput): boolean
 
-export function isP2PKH (input: LockingScript | Script | string): boolean {
+export function isP2PKH (input: ScriptInput): boolean {
   validateInput(input, 'isP2PKH')
 
   try {
@@ -181,9 +184,9 @@ export function isOrdinal (script: LockingScript | Script): boolean
  */
 export function isOrdinal (hex: string): boolean
 
-export function isOrdinal (input: LockingScript | Script | string): boolean
+export function isOrdinal (input: ScriptInput): boolean
 
-export function isOrdinal (input: LockingScript | Script | string): boolean {
+export function isOrdinal (input: ScriptInput): boolean {
   validateInput(input, 'isOrdinal')
 
   try {
@@ -242,9 +245,9 @@ export function hasOrd (script: LockingScript | Script): boolean
  */
 export function hasOrd (hex: string): boolean
 
-export function hasOrd (input: LockingScript | Script | string): boolean
+export function hasOrd (input: ScriptInput): boolean
 
-export function hasOrd (input: LockingScript | Script | string): boolean {
+export function hasOrd (input: ScriptInput): boolean {
   validateInput(input, 'hasOrd')
 
   try {
@@ -291,9 +294,9 @@ export function hasOpReturnData (script: LockingScript | Script): boolean
  */
 export function hasOpReturnData (hex: string): boolean
 
-export function hasOpReturnData (input: LockingScript | Script | string): boolean
+export function hasOpReturnData (input: ScriptInput): boolean
 
-export function hasOpReturnData (input: LockingScript | Script | string): boolean {
+export function hasOpReturnData (input: ScriptInput): boolean {
   validateInput(input, 'hasOpReturnData')
 
   try {
@@ -375,7 +378,7 @@ export function getScriptType (script: LockingScript | Script): ScriptType
  */
 export function getScriptType (hex: string): ScriptType
 
-export function getScriptType (input: LockingScript | Script | string): ScriptType {
+export function getScriptType (input: ScriptInput): ScriptType {
   validateInput(input, 'getScriptType')
 
   try {
@@ -452,7 +455,7 @@ export function extractInscriptionData (script: LockingScript | Script): Inscrip
  */
 export function extractInscriptionData (hex: string): InscriptionData | null
 
-export function extractInscriptionData (input: LockingScript | Script | string): InscriptionData | null {
+export function extractInscriptionData (input: ScriptInput): InscriptionData | null {
   validateInput(input, 'extractInscriptionData')
 
   // Convert to Script object for chunk parsing
@@ -498,7 +501,7 @@ export function extractInscriptionData (input: LockingScript | Script | string):
   if (endifIndex === 9) {
     // Full format with content type (OP_ENDIF at position 9)
     const contentTypeChunk = chunks[6]
-    if (!contentTypeChunk || (contentTypeChunk.data == null) || contentTypeChunk.data.length === 0) {
+    if (contentTypeChunk?.data == null || contentTypeChunk.data.length === 0) {
       throw new Error('extractInscriptionData: Missing content type data at chunk 6')
     }
 
@@ -511,14 +514,14 @@ export function extractInscriptionData (input: LockingScript | Script | string):
 
     // Extract data (chunk 8)
     const dataChunk = chunks[8]
-    if (!dataChunk || (dataChunk.data == null) || dataChunk.data.length === 0) {
+    if (dataChunk?.data == null || dataChunk.data.length === 0) {
       throw new Error('extractInscriptionData: Missing inscription data at chunk 8')
     }
     dataB64 = Buffer.from(dataChunk.data).toString('base64')
   } else if (endifIndex === 7) {
     // Short format without content type (OP_ENDIF at position 7)
     const dataChunk = chunks[6]
-    if (!dataChunk || (dataChunk.data == null) || dataChunk.data.length === 0) {
+    if (dataChunk?.data == null || dataChunk.data.length === 0) {
       throw new Error('extractInscriptionData: Missing inscription data at chunk 6')
     }
     contentType = 'application/octet-stream' // Default when not specified
@@ -574,7 +577,7 @@ export function extractMapMetadata (script: LockingScript | Script): MAP | null
  */
 export function extractMapMetadata (hex: string): MAP | null
 
-export function extractMapMetadata (input: LockingScript | Script | string): MAP | null {
+export function extractMapMetadata (input: ScriptInput): MAP | null {
   validateInput(input, 'extractMapMetadata')
 
   // Must have OP_RETURN data
@@ -593,7 +596,7 @@ export function extractMapMetadata (input: LockingScript | Script | string): MAP
 
   // Next chunk should be MAP prefix
   const prefixChunk = chunks[opReturnIndex + 1]
-  if (!prefixChunk || (prefixChunk.data == null) || prefixChunk.data.length === 0) {
+  if (prefixChunk?.data == null || prefixChunk.data.length === 0) {
     return null
   }
 
@@ -611,7 +614,7 @@ export function extractMapMetadata (input: LockingScript | Script | string): MAP
 
   // Next chunk should be 'SET' command
   const cmdChunk = chunks[opReturnIndex + 2]
-  if (!cmdChunk || (cmdChunk.data == null) || cmdChunk.data.length === 0) {
+  if (cmdChunk?.data == null || cmdChunk.data.length === 0) {
     return null
   }
 
@@ -698,7 +701,7 @@ export function extractOpReturnData (script: LockingScript | Script): string[] |
  */
 export function extractOpReturnData (hex: string): string[] | null
 
-export function extractOpReturnData (input: LockingScript | Script | string): string[] | null {
+export function extractOpReturnData (input: ScriptInput): string[] | null {
   validateInput(input, 'extractOpReturnData')
 
   if (!hasOpReturnData(input)) {

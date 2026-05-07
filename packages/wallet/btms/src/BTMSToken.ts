@@ -45,9 +45,9 @@ import { BTMS_PROTOCOL_ID, ISSUE_MARKER, MIN_TOKEN_AMOUNT, MAX_TOKEN_AMOUNT } fr
  * ```
  */
 export class BTMSToken {
-  private wallet: WalletInterface
-  private protocolID: WalletProtocol
-  private originator?: string
+  private readonly wallet: WalletInterface
+  private readonly protocolID: WalletProtocol
+  private readonly originator?: string
 
   constructor(
     wallet?: WalletInterface,
@@ -138,7 +138,7 @@ export class BTMSToken {
    * @param keyID - Key ID for derivation from customInstructions
    * @returns An unlocker that can sign transactions
    */
-  createUnlocker(counterparty: WalletCounterparty = 'self', keyID: string) {
+  createUnlocker(keyID: string, counterparty: WalletCounterparty = 'self') {
     return new PushDrop(this.wallet, this.originator).unlock(
       this.protocolID,
       keyID,

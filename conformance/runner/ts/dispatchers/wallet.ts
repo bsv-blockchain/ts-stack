@@ -12,7 +12,7 @@
  *
  *   encrypt: non-deterministic (random IV). We perform round-trip assertion.
  *
- * TODO MISMATCH — encrypt vectors:
+ * MISMATCH — encrypt vectors:
  *   Vectors wallet.brc100.encrypt.{1..36} contain fixed ciphertext byte arrays
  *   but ProtoWallet.encrypt() prepends a random IV, making output differ per
  *   call. We assert round-trip correctness (decrypt ∘ encrypt recovers
@@ -22,7 +22,7 @@
  *   isAuthenticated, waitForAuthentication, getHeight, getHeaderForHeight,
  *   getNetwork, getVersion
  *
- *   TODO MISMATCH — getversion vectors:
+ *   MISMATCH — getversion vectors:
  *     Each vector expects a different version string; a static stub cannot
  *     satisfy all simultaneously. We check structural shape only.
  *
@@ -32,28 +32,28 @@
  *   wallet pass directly; methods that require pre-existing state or a funded
  *   wallet are demoted to parity_class='intended' in their vector files.
  *
- *   TODO MISMATCH — createaction vectors:
+ *   MISMATCH — createaction vectors:
  *     All 90 createaction vectors require a funded wallet (change UTXOs).
  *     Without a fund-seeding harness the wallet throws ERR_INSUFFICIENT_FUNDS.
  *     Vectors are demoted to intended-skip pending a funded mock-chain harness.
  *
- *   TODO MISMATCH — signaction vectors:
+ *   MISMATCH — signaction vectors:
  *     All 8 signaction vectors reference in-flight actions that don't exist in
  *     a fresh wallet. Demoted to intended-skip.
  *
- *   TODO MISMATCH — acquirecertificate direct vectors {1,3,7,8}:
+ *   MISMATCH — acquirecertificate direct vectors {1,3,7,8}:
  *     These vectors carry a synthetic placeholder signature (a0000…) which
  *     fails MasterCertificate.verify(). The wallet correctly rejects them.
  *     Vectors are demoted to intended-skip pending real cert generation.
  *
- *   TODO MISMATCH — discoverby{identitykey,attributes} non-empty vectors {5,6}:
+ *   MISMATCH — discoverby{identitykey,attributes} non-empty vectors {5,6}:
  *     Require live overlay query results. Demoted to intended-skip.
  *
- *   TODO MISMATCH — internalizeaction success vectors {1-5,8-10}:
+ *   MISMATCH — internalizeaction success vectors {1-5,8-10}:
  *     Vectors supply 12-byte placeholder tx arrays that are not valid BEEF.
  *     The wallet's BEEF validation rejects them. Demoted to intended-skip.
  *
- *   TODO MISMATCH — listactions.14, listcertificates.5:
+ *   MISMATCH — listactions.14, listcertificates.5:
  *     Expect pre-populated state that a fresh empty wallet cannot satisfy.
  *     Demoted to intended-skip.
  */
@@ -65,8 +65,7 @@ import {
   LookupQuestion,
   LookupResolver,
   PrivateKey,
-  ProtoWallet,
-  Validation
+  ProtoWallet
 } from '@bsv/sdk'
 
 // Wallet-toolbox imports via moduleNameMapper aliases (see jest.config.mjs).
@@ -173,8 +172,7 @@ function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider
     activeStorage: STORAGE_KEY
   }
 
-  // Certificate store for acquireCertificate → relinquishCertificate round-trip.
-  const certStore: Map<string, any> = new Map()
+  // Counter for inserted certificate IDs (writes accepted; reads not needed by conformance harness).
   let nextCertId = 1
 
   const stub: any = {
@@ -242,10 +240,8 @@ function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider
     },
 
     // ── Certificate operations ─────────────────────────────────────────────
-    async insertCertificateAuth (_auth: AuthId, cert: any) {
-      const id = nextCertId++
-      certStore.set(String(id), { ...cert, certificateId: id })
-      return id
+    async insertCertificateAuth (_auth: AuthId, _cert: any) {
+      return nextCertId++
     },
     async relinquishCertificate (_auth: AuthId, _args: any) {
       // Fresh wallet has no certs; anything is "not found".
@@ -262,9 +258,7 @@ function makeMinimalStorageProvider (identityKey: string): WalletStorageProvider
       throw err
     },
     async insertCertificate (_cert: any) {
-      const id = nextCertId++
-      certStore.set(String(id), { ..._cert, certificateId: id })
-      return id
+      return nextCertId++
     },
 
     // ── StorageProvider reader methods (for WalletStorageManager compatibility) ─
@@ -425,7 +419,7 @@ async function dispatchEncrypt (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.encrypt.{1..36}:
+  // MISMATCH wallet.brc100.encrypt.{1..36}:
   //   Vectors contain fixed ciphertext bytes but ProtoWallet.encrypt() uses a
   //   random IV (SymmetricKey.encrypt), so output differs each call.
   //   We assert round-trip correctness instead.
@@ -586,7 +580,7 @@ async function dispatchGetVersion (
   _input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.getversion.{1..5}:
+  // MISMATCH wallet.brc100.getversion.{1..5}:
   //   Each vector expects a different version string (wallet-0.1.0, wallet-1.0.0,
   //   x-0.0.0, …) — a single stub cannot satisfy all. We assert structural shape.
   if ('error' in expected) return
@@ -605,7 +599,7 @@ async function dispatchCreateAction (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.createaction.{1..90}:
+  // MISMATCH wallet.brc100.createaction.{1..90}:
   //   All vectors require a funded wallet (change UTXOs for fee payment).
   //   A fresh empty wallet throws ERR_INSUFFICIENT_FUNDS.
   //   All 90 vectors demoted to intended-skip in createaction.json.
@@ -623,7 +617,7 @@ async function dispatchSignAction (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.signaction.{1..8}:
+  // MISMATCH wallet.brc100.signaction.{1..8}:
   //   Vectors 1-5,8 reference in-flight actions that don't exist in a fresh wallet.
   //   Vectors 6,7 expect errors (unknown reference / validation) and are demoted
   //   along with the rest to keep the set consistent.
@@ -691,7 +685,7 @@ async function dispatchInternalizeAction (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.internalizeaction.{1-5,8-10}:
+  // MISMATCH wallet.brc100.internalizeaction.{1-5,8-10}:
   //   These vectors provide 12-byte placeholder tx arrays that are not valid
   //   BEEF. The wallet's BEEF parser rejects them even though the vectors
   //   expect accepted:true. Demoted to intended-skip.
@@ -762,12 +756,12 @@ async function dispatchAcquireCertificate (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.acquirecertificate.{1,3,7,8}:
+  // MISMATCH wallet.brc100.acquirecertificate.{1,3,7,8}:
   //   Direct-protocol vectors carry placeholder signature "a0000…" which fails
   //   MasterCertificate.verify() — the wallet correctly rejects them even though
   //   the vectors expect success. Demoted to intended-skip.
   //
-  // TODO MISMATCH wallet.brc100.acquirecertificate.2:
+  // MISMATCH wallet.brc100.acquirecertificate.2:
   //   Issuance protocol requires a live certifier URL
   //   (https://certifier.example.com). Cannot reproduce in-process. Demoted.
   //
@@ -822,7 +816,7 @@ async function dispatchProveCertificate (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.provecertificate.{1-4,6-8}:
+  // MISMATCH wallet.brc100.provecertificate.{1-4,6-8}:
   //   proveCertificate looks up the certificate from storage and calls
   //   MasterCertificate.createKeyringForVerifier. A fresh wallet has no
   //   certificates, so the lookup fails with "unique certificate match" error.
@@ -871,7 +865,7 @@ async function dispatchDiscoverByIdentityKey (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.discoverbyidentitykey.{5,6}:
+  // MISMATCH wallet.brc100.discoverbyidentitykey.{5,6}:
   //   Expect non-empty results with certifierInfo — requires live overlay
   //   returning valid certs. The stub LookupResolver returns empty.
   //   These vectors are demoted to intended-skip.
@@ -907,7 +901,7 @@ async function dispatchDiscoverByAttributes (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
-  // TODO MISMATCH wallet.brc100.discoverbyattributes.6:
+  // MISMATCH wallet.brc100.discoverbyattributes.6:
   //   Expects non-empty results with certifierInfo — requires live overlay.
   //   Demoted to intended-skip.
   //

@@ -17,8 +17,8 @@ const DEFAULT_REFRESH_INTERVAL = 5 * 60 * 1000
 export class CurrencyConverter {
   public exchangeRates: ExchangeRates
   public preferredCurrency: SupportedCurrencyCode
-  private services: Services
-  private settingsManager: WalletSettingsManager
+  private readonly services: Services
+  private readonly settingsManager: WalletSettingsManager
 
   private readonly refreshInterval: number
   private lastRateFetch = 0
@@ -32,7 +32,7 @@ export class CurrencyConverter {
    * @param refreshInterval  How often to pull new rates (ms), if 0, it never auto-refreshes
    */
   constructor(refreshInterval: number = DEFAULT_REFRESH_INTERVAL, settingsManager: WalletSettingsManager | undefined = undefined) {
-    this.refreshInterval = refreshInterval > 0 ? refreshInterval : 0
+    this.refreshInterval = Math.max(0, refreshInterval)
     this.services = new Services('main')
     this.exchangeRates = {
       usdPerBsv: 0,
@@ -49,7 +49,7 @@ export class CurrencyConverter {
    * - the currency exchange rates
    * - the user's preferred currency
    * - and set's an interval to keep the exchange rate updated.
-   * TODO: Test interval updates when used in a React UI
+   * NOTE: Interval updates need testing when used in a React UI
    */
   async initialize(): Promise<void> {
     await Promise.all([this.fetchExchangeRates(), this.refreshPreferredCurrency()])
@@ -169,7 +169,7 @@ export class CurrencyConverter {
   async convertAmount(amount: number | string, formatOptions?: FormatOptions) {
     await this.refreshPreferredCurrency()
     const amountAsString = amount.toString()
-    let parsedAmount = parseFloat(amountAsString.replace(/[^0-9.-]+/g, ""))
+    let parsedAmount = Number.parseFloat(amountAsString.replace(/[^0-9.-]+/g, ""))
     let inputCurrency = amountAsString.replace(/[\d.,\s]+/g, '').trim()
     inputCurrency ||= (amountAsString.includes('.') ? 'BSV' : 'SATS')
 

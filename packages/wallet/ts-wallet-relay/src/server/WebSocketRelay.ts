@@ -37,15 +37,15 @@ export type DisconnectHandler = (topic: string, role: Role) => void
  * - role=desktop connections validated via onValidateDesktopToken callback when set
  */
 export class WebSocketRelay {
-  private wss: WebSocketServer
-  private topics = new Map<string, TopicEntry>()
+  private readonly wss: WebSocketServer
+  private readonly topics = new Map<string, TopicEntry>()
   private onMessage: MessageHandler | null = null
   private validateTopic: TopicValidator | null = null
   private validateDesktopToken: TokenValidator | null = null
   private onDisconnectCb: DisconnectHandler | null = null
   private onMobileConnectCb: ConnectHandler | null = null
-  private allowedOrigin: string | null = null
-  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private readonly allowedOrigin: string | null = null
+  private readonly heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(server: Server, options?: { allowedOrigin?: string }) {
     this.allowedOrigin = options?.allowedOrigin ?? null
@@ -180,7 +180,7 @@ export class WebSocketRelay {
 
     ws.on('message', (data) => {
       try {
-        const envelope = JSON.parse(data.toString()) as WireEnvelope
+        const envelope = JSON.parse(String(data)) as WireEnvelope
         if (!envelope.topic || !envelope.ciphertext) return
 
         // Route to the other side

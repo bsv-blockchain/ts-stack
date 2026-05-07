@@ -342,12 +342,10 @@ export function dispatch (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void | Promise<void> {
-  switch (category) {
-    case 'uhrp-http':
-      return dispatchUhrpHttp(input, expected)
-    default:
-      throw new Error(`storage dispatcher: unknown category '${category}'`)
+  if (category === 'uhrp-http') {
+    return dispatchUhrpHttp(input, expected)
   }
+  throw new Error(`storage dispatcher: unknown category '${category}'`)
 }
 
 function dispatchUhrpHttp (
@@ -388,10 +386,7 @@ function dispatchUhrpHttp (
     }
     const hasAuth = lowerHeaders['authorization'] !== undefined
 
-    if (!hasAuth) {
-      // unauthenticated
-      dispatchUploadUnauthenticated(input, expected)
-    } else {
+    if (hasAuth) {
       const body = (input['body'] ?? {}) as Record<string, unknown>
       if (body['fileSize'] === undefined) {
         // missing fileSize
@@ -400,6 +395,9 @@ function dispatchUhrpHttp (
         // happy path
         dispatchUploadRequest(input, expected)
       }
+    } else {
+      // unauthenticated
+      dispatchUploadUnauthenticated(input, expected)
     }
     return
   }
@@ -412,13 +410,12 @@ function dispatchUhrpHttp (
       dispatchFindMissingParam(input, expected)
     } else if (status === 404) {
       dispatchFindNotFound(input, expected)
+    } else if ('body_shape' in expected) {
+      // Vector 4 (happy path with body_shape)
+      dispatchFindRequest(input, expected)
     } else {
-      // Vector 4 (happy path with body_shape) or vector 5 (bare URL)
-      if ('body_shape' in expected) {
-        dispatchFindRequest(input, expected)
-      } else {
-        dispatchFindBareUrl(input, expected)
-      }
+      // Vector 5 (bare URL)
+      dispatchFindBareUrl(input, expected)
     }
     return
   }
@@ -431,10 +428,10 @@ function dispatchUhrpHttp (
     }
     const hasAuth = lowerHeaders['authorization'] !== undefined
 
-    if (!hasAuth) {
-      dispatchListUnauthenticated(input, expected)
-    } else {
+    if (hasAuth) {
       dispatchListRequest(input, expected)
+    } else {
+      dispatchListUnauthenticated(input, expected)
     }
     return
   }

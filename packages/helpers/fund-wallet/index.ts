@@ -151,7 +151,7 @@ if (args.includes('--help') || args.includes('-h')) {
 }
 
 const getArg = (name: string): string | undefined => {
-  const index = args.findIndex(arg => arg === `--${name}`)
+  const index = args.indexOf(`--${name}`)
   if (index !== -1 && index + 1 < args.length) {
     return args[index + 1]
   }
@@ -197,15 +197,18 @@ if (cliNetwork && cliPrivateKey) {
   }
 
   const amount = cliSatoshis ? Number(cliSatoshis) : 0
-  if (cliSatoshis && (isNaN(amount) || amount < 0)) {
+  if (cliSatoshis && (Number.isNaN(amount) || amount < 0)) {
     showHelp(`Invalid satoshis: ${cliSatoshis}. Must be a positive number`)
   }
 
-  fundWallet(network as 'test' | 'main', storageURL, amount, walletPrivateKey)
-    .catch((err) => {
-      console.error('❌', err);
-      process.exit(1);
-    })
+  void (async () => {
+    try {
+      await fundWallet(network as 'test' | 'main', storageURL, amount, walletPrivateKey)
+    } catch (err) {
+      console.error('❌', err)
+      process.exit(1)
+    }
+  })()
 } else if (!hasCliArgs) {
   // Fall back to interactive prompts
   const rl = createInterface({
@@ -215,13 +218,13 @@ if (cliNetwork && cliPrivateKey) {
 
   // Prompt the user for input
   rl.question('Enter network (test or main), default main: ', (network) => {
-    network = network || 'main'
+    network ||= 'main'
     if (network !== 'test' && network !== 'main') {
       console.error('❌ Invalid network: ', network);
       process.exit(1);
     }
     rl.question('Enter Wallet Storage URL you want to store the funds with, default https://store-us-1.bsvb.tech : ', (storageURL) => {
-      storageURL = storageURL || 'https://store-us-1.bsvb.tech'
+      storageURL ||= 'https://store-us-1.bsvb.tech'
       if (!storageURL.startsWith('https://')) {
         console.error('❌ Invalid storage URL: ', storageURL);
         process.exit(1);

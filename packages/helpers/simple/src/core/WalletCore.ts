@@ -166,7 +166,7 @@ export abstract class WalletCore {
             lockingScript: script.toHex(),
             satoshis: 0,
             outputDescription: desc,
-            ...(spec.basket != null ? { basket: spec.basket } : {})
+            ...(spec.basket == null ? {} : { basket: spec.basket })
           })
           outputDetails.push({ index: i, type: 'op_return', satoshis: 0, description: desc })
         } else if ((spec.to != null) && (spec.data != null)) {
@@ -210,7 +210,7 @@ export abstract class WalletCore {
             lockingScript,
             satoshis: sats,
             outputDescription: desc,
-            ...(spec.basket != null ? { basket: spec.basket } : {})
+            ...(spec.basket == null ? {} : { basket: spec.basket })
           })
           outputDetails.push({ index: i, type: 'p2pkh', satoshis: sats, description: desc })
         } else {
@@ -399,7 +399,7 @@ export abstract class WalletCore {
         lockingScript,
         satoshis: request.satoshis,
         outputDescription: `Server wallet funding: ${request.satoshis} sats`,
-        ...(basket != null ? { basket } : {})
+        ...(basket == null ? {} : { basket })
       }]
 
       if (request.memo != null && request.memo !== '') {

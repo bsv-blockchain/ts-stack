@@ -97,7 +97,7 @@ export class DIDResolverService {
   }
 
   async resolve (did: string): Promise<DIDResolutionResult> {
-    const txidMatch = did.match(/^did:bsv:([0-9a-f]{64})$/i)
+    const txidMatch = /^did:bsv:([0-9a-f]{64})$/i.exec(did)
 
     // Try nChain Universal Resolver
     try {
@@ -116,7 +116,7 @@ export class DIDResolverService {
           didDocumentMetadata: data.didDocumentMetadata ?? {},
           didResolutionMetadata: {
             contentType: 'application/did+ld+json',
-            ...(data.didResolutionMetadata ?? {})
+            ...data.didResolutionMetadata
           }
         }
       }
@@ -125,10 +125,10 @@ export class DIDResolverService {
         const data: any = await response.json().catch(() => ({}))
         return {
           didDocument: data.didDocument ?? null,
-          didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata ?? {}) },
+          didDocumentMetadata: { deactivated: true, ...data.didDocumentMetadata },
           didResolutionMetadata: {
             contentType: 'application/did+ld+json',
-            ...(data.didResolutionMetadata ?? {})
+            ...data.didResolutionMetadata
           }
         }
       }
@@ -171,8 +171,8 @@ export class DIDResolverService {
       if (!txResp.ok) return notFound
       const txData: any = await txResp.json()
 
-      if (created == null) {
-        created = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
+      if (txData.time != null) {
+        created ??= new Date(txData.time * 1000).toISOString()
       }
 
       // Parse OP_RETURN outputs
@@ -204,7 +204,7 @@ export class DIDResolverService {
           try {
             lastDocument = JSON.parse(payload)
             lastDocTxid = currentTxid
-            updated = (txData.time != null) ? new Date(txData.time * 1000).toISOString() : undefined
+            updated = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
           } catch {
             // Not valid JSON
           }
@@ -233,7 +233,7 @@ export class DIDResolverService {
               const history = (await histResp.json()) as Array<{ tx_hash: string, height: number }>
               const candidates = history
                 .filter(e => !visited.has(e.tx_hash))
-                .sort((a, b) => (b.height !== 0 ? b.height : 0) - (a.height !== 0 ? a.height : 0))
+                .sort((a, b) => b.height - a.height)
               if (candidates.length > 0) {
                 nextTxid = candidates[0].tx_hash
               }
@@ -287,11 +287,12 @@ export function createDIDResolverHandler (config?: DIDResolverConfig): ReturnTyp
 
       try {
         const result = await resolver.resolve(did)
-        const status = result.didResolutionMetadata.error === 'notFound'
-          ? 404
-          : (result.didResolutionMetadata.error === 'internalError'
-              ? 502
-              : 200)
+        let status = 200
+        if (result.didResolutionMetadata.error === 'notFound') {
+          status = 404
+        } else if (result.didResolutionMetadata.error === 'internalError') {
+          status = 502
+        }
         return jsonResponse(result, status)
       } catch (error) {
         return jsonResponse({

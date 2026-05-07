@@ -141,7 +141,7 @@ export class WalletRelayClient {
       ])
       this._walletProxy = Object.fromEntries(entries) as unknown as Pick<WalletInterface, WalletMethodName>
     }
-    return this._walletProxy!
+    return this._walletProxy as Pick<WalletInterface, WalletMethodName>
   }
 
   /**
@@ -247,9 +247,12 @@ export class WalletRelayClient {
       this._resolveLogEntry(requestId, response)
       return response
     } catch (err) {
-      const relayErr = err instanceof WalletRelayError
-        ? err
-        : new WalletRelayError(err instanceof Error ? err.message : 'Request failed', 'NETWORK_ERROR')
+      let relayErr: WalletRelayError
+      if (err instanceof WalletRelayError) {
+        relayErr = err
+      } else {
+        relayErr = new WalletRelayError(err instanceof Error ? err.message : 'Request failed', 'NETWORK_ERROR')
+      }
       this._resolveLogEntry(requestId, {
         requestId,
         error:     { code: 500, message: relayErr.message },

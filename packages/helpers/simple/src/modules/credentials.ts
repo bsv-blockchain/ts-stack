@@ -39,9 +39,7 @@ export class CredentialSchema {
   constructor (config: CredentialSchemaConfig) {
     this.config = {
       ...config,
-      certificateTypeBase64: config.certificateTypeBase64 != null
-        ? config.certificateTypeBase64
-        : Utils.toBase64(Utils.toArray(config.id, 'utf8'))
+      certificateTypeBase64: config.certificateTypeBase64 ?? Utils.toBase64(Utils.toArray(config.id, 'utf8'))
     }
   }
 
@@ -171,9 +169,7 @@ export class CredentialIssuer {
 
     // Default to MemoryRevocationStore (browser-safe).
     // For Node.js servers, pass a FileRevocationStore via revocation.store.
-    const store: RevocationStore = (config.revocation as any)?.store != null
-      ? (config.revocation as any).store
-      : new MemoryRevocationStore()
+    const store: RevocationStore = (config.revocation as any)?.store ?? new MemoryRevocationStore()
 
     return new CredentialIssuer({
       privateKey,
@@ -239,7 +235,7 @@ export class CredentialIssuer {
       }
 
       revocationOutpoint = `${String(result.txid)}.0`
-      revocationBeef = result.tx != null ? Array.from(result.tx) : []
+      revocationBeef = result.tx == null ? [] : Array.from(result.tx)
     }
 
     // Issue MasterCertificate
@@ -409,9 +405,6 @@ export function toVerifiableCredential (
   const now = new Date().toISOString()
   const credentialType = options?.credentialType ?? 'BSVCertificate'
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { revocationOutpoint: _rev, keyringForSubject: _kr, ...subjectRest } = cert.fields as any
-
   return {
     '@context': [VC_CONTEXT],
     type: ['VerifiableCredential', credentialType],
@@ -421,12 +414,12 @@ export function toVerifiableCredential (
       id: `did:bsv:${cert.subject}`,
       ...cert.fields
     },
-    credentialStatus: cert.revocationOutpoint !== '00'.repeat(32) + '.0'
-      ? {
+    credentialStatus: cert.revocationOutpoint === '00'.repeat(32) + '.0'
+      ? undefined
+      : {
           id: `bsv:${cert.revocationOutpoint}`,
           type: REVOCATION_TYPE
-        }
-      : undefined,
+        },
     proof: {
       type: PROOF_TYPE,
       created: now,

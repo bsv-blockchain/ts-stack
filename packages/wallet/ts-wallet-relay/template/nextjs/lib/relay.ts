@@ -20,7 +20,7 @@ const g = globalThis as typeof globalThis & { __walletRelay?: WalletRelayService
 export function initRelay(server: Server): WalletRelayService {
   if (g.__walletRelay) return g.__walletRelay
 
-  // TODO: Replace with the BSV wallet your backend should use for
+  // NOTE: Replace with the BSV wallet your backend should use for
   //       encrypting/decrypting messages with the mobile device.
   //
   // WalletClient('auto') auto-detects a running MetaNet Client on localhost.
@@ -39,7 +39,7 @@ export function initRelay(server: Server): WalletRelayService {
     relayUrl: process.env['RELAY_URL'] ?? 'ws://localhost:3000',
     origin:   process.env['ORIGIN']    ?? 'http://localhost:3000',
 
-    // TODO (optional): hook into session lifecycle events
+    // NOTE (optional): hook into session lifecycle events
     onSessionConnected:    id => console.log(`[relay] mobile connected    — ${id}`),
     onSessionDisconnected: id => console.log(`[relay] mobile disconnected — ${id}`),
   })

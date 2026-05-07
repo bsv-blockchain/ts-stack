@@ -11,15 +11,14 @@ type RouterLike = {
   get(path: string, handler: (req: Request, res: Response) => void): unknown
   post(path: string, handler: (req: Request, res: Response) => void): unknown
 }
-import type { WalletLike } from '../types.js'
+import { PROTOCOL_ID } from '../types.js'
+import type { WalletLike, WireEnvelope, RpcResponse } from '../types.js'
 import { WebSocketRelay } from './WebSocketRelay.js'
 import { QRSessionManager } from './QRSessionManager.js'
 import { WalletRequestHandler } from './WalletRequestHandler.js'
 import { buildPairingUri } from '../shared/pairingUri.js'
 import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
 import { bytesToBase64url } from '../shared/encoding.js'
-import { PROTOCOL_ID } from '../types.js'
-import type { WireEnvelope, RpcResponse } from '../types.js'
 
 export interface WalletRelayServiceOptions {
   /**
@@ -110,20 +109,20 @@ const MOBILE_AUTH_TIMEOUT_MS = 15_000
  *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  */
 export class WalletRelayService {
-  private sessions: QRSessionManager
-  private relay: WebSocketRelay
-  private handler = new WalletRequestHandler()
-  private pending = new Map<string, PendingRequest>()
-  private mobileAuthTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly sessions: QRSessionManager
+  private readonly relay: WebSocketRelay
+  private readonly handler = new WalletRequestHandler()
+  private readonly pending = new Map<string, PendingRequest>()
+  private readonly mobileAuthTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Resolved options — always defined after construction
-  private wallet: WalletLike
-  private relayUrl: string
-  private origin: string
-  private schema: string
-  private signQrCodes: boolean
+  private readonly wallet: WalletLike
+  private readonly relayUrl: string
+  private readonly origin: string
+  private readonly schema: string
+  private readonly signQrCodes: boolean
 
-  constructor(private opts: WalletRelayServiceOptions) {
+  constructor(private readonly opts: WalletRelayServiceOptions) {
     this.wallet      = opts.wallet
     this.relayUrl    = opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
     this.origin      = opts.origin   ?? process.env['ORIGIN']   ?? 'http://localhost:5173'
@@ -200,7 +199,7 @@ export class WalletRelayService {
         keyID:        session.id,
         counterparty: 'anyone',
       })
-      sig = bytesToBase64url(signature as number[])
+      sig = bytesToBase64url(signature)
     }
 
     const uri = buildPairingUri({
@@ -307,9 +306,12 @@ export class WalletRelayService {
         .then(response => res.json(response))
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : 'Request failed'
-          const status = msg === 'Invalid desktop token' ? 401
-            : msg.startsWith('Session is') ? 400
-            : 504
+          let status = 504
+          if (msg === 'Invalid desktop token') {
+            status = 401
+          } else if (msg.startsWith('Session is')) {
+            status = 400
+          }
           res.status(status).json({ error: msg })
         })
     })

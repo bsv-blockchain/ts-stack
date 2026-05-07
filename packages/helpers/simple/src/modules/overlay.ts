@@ -205,7 +205,7 @@ export function createOverlayMethods (core: WalletCore): {
           lockingScript: lockingScript.toHex(),
           satoshis: 1,
           outputDescription: 'SHIP token',
-          ...(basket != null ? { basket } : {})
+          ...(basket == null ? {} : { basket })
         }],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
@@ -228,7 +228,7 @@ export function createOverlayMethods (core: WalletCore): {
           lockingScript: lockingScript.toHex(),
           satoshis: 1,
           outputDescription: 'SLAP token',
-          ...(basket != null ? { basket } : {})
+          ...(basket == null ? {} : { basket })
         }],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })

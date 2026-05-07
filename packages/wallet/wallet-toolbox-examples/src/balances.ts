@@ -44,7 +44,7 @@ export async function balances(): Promise<void> {
       })
 
       // Sum the "satoshis" held by each output to compute the available balance.
-      balance += change.outputs.reduce((b, o) => (b += o.satoshis), 0)
+      balance += change.outputs.reduce((b, o) => b + o.satoshis, 0)
 
       offset += change.outputs.length
       if (change.outputs.length === 0 || offset >= change.totalOutputs) break

@@ -21,7 +21,7 @@
 
 import { expect } from '@jest/globals'
 import {
-  Hash, MerklePath, PrivateKey,
+  Hash, PrivateKey,
   Beef, Script, UnlockingScript, Transaction,
   TransactionSignature
 } from '@bsv/sdk'
@@ -50,7 +50,7 @@ function hexToBytes (hex: string): number[] {
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
-    out.push(parseInt(hex.slice(i, i + 2), 16))
+    out.push(Number.parseInt(hex.slice(i, i + 2), 16))
   }
   return out
 }
@@ -172,7 +172,6 @@ function dispatchBeefIsValidHydration (
     const beef = Beef.fromBinary(beefBytes)
     const hasTx = beef.txs.length > 0
     expect(hasTx).toBe(getBool(expected, 'txid_non_null'))
-    return
   }
 }
 
@@ -206,10 +205,10 @@ function bip276Decode (encoded: string): { prefix: string, network: number, vers
   if (rest.length < 12) return null // at least 4 hex chars meta + 8 checksum
   const networkHex = rest.slice(0, 2)
   const versionHex = rest.slice(2, 4)
-  const dataHex = rest.slice(4, rest.length - 8)
-  const network = parseInt(networkHex, 16)
-  const version = parseInt(versionHex, 16)
-  if (isNaN(network) || isNaN(version)) return null
+  const dataHex = rest.slice(4, -8)
+  const network = Number.parseInt(networkHex, 16)
+  const version = Number.parseInt(versionHex, 16)
+  if (Number.isNaN(network) || Number.isNaN(version)) return null
   return { prefix, network, version, dataHex }
 }
 
@@ -243,7 +242,6 @@ function dispatchBIP276 (
     expect(decoded.network).toBe(getNumber(expected, 'round_trip_network'))
     expect(decoded.version).toBe(getNumber(expected, 'round_trip_version'))
     expect(decoded.dataHex).toBe(getString(expected, 'round_trip_data_hex'))
-    return
   }
 }
 
@@ -395,7 +393,6 @@ function dispatchScriptWriteBinEmpty (
 
   if (op === 'script_writeBin_toHex') {
     expect(s.toHex()).toBe(getString(expected, 'hex'))
-    return
   }
 }
 
@@ -469,7 +466,6 @@ function dispatchTxSequenceZeroSighash (
     const seqOffset = 4 + 1 + 32 + 4 + 1
     const seqBytes = raw.slice(seqOffset, seqOffset + 4)
     expect(bytesToHex(seqBytes)).toBe(getString(expected, 'serialised_sequence_hex'))
-    return
   }
 }
 

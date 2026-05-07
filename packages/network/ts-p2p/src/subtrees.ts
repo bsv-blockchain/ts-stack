@@ -23,7 +23,7 @@ export interface TxMap {
 
 // Simple TxMap implementation using Map with hex string keys
 export class SimpleTxMap implements TxMap {
-    private map = new Map<string, bigint>();
+    private readonly map = new Map<string, bigint>();
 
     private hashToKey(hash: number[]): string {
         return Utils.toHex(hash);

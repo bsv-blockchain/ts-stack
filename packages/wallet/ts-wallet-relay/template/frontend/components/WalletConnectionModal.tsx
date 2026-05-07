@@ -13,7 +13,7 @@
  *     onMobileQR={() => { ... }}
  *   />
  *
- * TODO: Update installUrl to point to your target wallet's download/install page.
+ * NOTE: Update installUrl to point to your target wallet's download/install page.
  */
 
 import { WalletConnectionModal as WalletConnectionModalBase } from '@bsv/wallet-relay/react'
@@ -26,7 +26,7 @@ interface Props {
   onMobileQR: () => void
   /**
    * URL to send the user to if they want to install a BSV wallet.
-   * TODO: replace with the correct install URL for your target platform.
+   * NOTE: replace with the correct install URL for your target platform.
    */
   installUrl?: string
 }

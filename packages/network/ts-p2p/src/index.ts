@@ -62,8 +62,8 @@ interface TeranodeListenerConfig extends Omit<SubscriberConfig, 'topics'> {
  */
 export class TeranodeListener {
   private node: Libp2p | null = null;
-  private topicCallbacks: TopicCallbacks;
-  private config: TeranodeListenerConfig;
+  private readonly topicCallbacks: TopicCallbacks;
+  private readonly config: TeranodeListenerConfig;
   private reconnectionInterval?: NodeJS.Timeout;
 
   /**
@@ -293,15 +293,15 @@ export class TeranodeListener {
     return setInterval(async () => {
       if (!this.node) return;
 
-      const connectedPeerIds = this.node.getPeers().map(p => p.toString());
+      const connectedPeerIds = new Set(this.node.getPeers().map(p => p.toString()));
       const disconnectedStaticPeers = [];
 
       for (const staticPeer of staticPeers) {
         try {
-          const peerIdMatch = staticPeer.match(/\/p2p\/([^/]+)$/);
+          const peerIdMatch = /\/p2p\/([^/]+)$/.exec(staticPeer);
           if (peerIdMatch) {
             const peerId = peerIdMatch[1];
-            if (!connectedPeerIds.includes(peerId)) {
+            if (!connectedPeerIds.has(peerId)) {
               disconnectedStaticPeers.push(staticPeer);
             }
           }
@@ -449,15 +449,15 @@ async function connectToStaticPeers(node: Libp2p, staticPeers: string[]) {
 
 function startStaticPeerMonitoring(node: Libp2p, staticPeers: string[]): NodeJS.Timeout {
   return setInterval(async () => {
-    const connectedPeerIds = node.getPeers().map(p => p.toString());
+    const connectedPeerIds = new Set(node.getPeers().map(p => p.toString()));
     const disconnectedStaticPeers: string[] = [];
 
     for (const staticPeer of staticPeers) {
       try {
-        const peerIdMatch = staticPeer.match(/\/p2p\/([^/]+)$/);
+        const peerIdMatch = /\/p2p\/([^/]+)$/.exec(staticPeer);
         if (peerIdMatch) {
           const peerId = peerIdMatch[1];
-          if (!connectedPeerIds.includes(peerId)) {
+          if (!connectedPeerIds.has(peerId)) {
             disconnectedStaticPeers.push(staticPeer);
           }
         }

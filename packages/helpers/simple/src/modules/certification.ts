@@ -39,12 +39,12 @@ export class Certifier {
     includeTimestamp?: boolean
   }): Promise<Certifier> {
     let key: PrivateKey
-    if (config?.privateKey != null) {
-      key = new PrivateKey(config.privateKey, 'hex')
-    } else {
+    if (config?.privateKey == null) {
       const bytes = Random(32)
       const hex = Array.from(bytes, (b: number) => b.toString(16).padStart(2, '0')).join('')
       key = new PrivateKey(hex, 'hex')
+    } else {
+      key = new PrivateKey(config.privateKey, 'hex')
     }
 
     return new Certifier({

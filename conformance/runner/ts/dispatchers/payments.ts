@@ -47,7 +47,7 @@ function isTxidHex (s: string): boolean {
 
 /** Returns true if string matches a 13-digit Unix millisecond timestamp. */
 function isUnixMs (s: string): boolean {
-  return /^[0-9]{13}$/.test(s)
+  return /^\d{13}$/.test(s)
 }
 
 // ── BRC-29 Payment Protocol ───────────────────────────────────────────────────
@@ -222,7 +222,6 @@ function dispatchBRC29PaymentProtocol (
         expect(msg).toHaveProperty(field)
       }
     }
-    return
   }
 }
 
@@ -400,7 +399,6 @@ function dispatchBRC121 (
     if (body !== undefined) {
       expect(body).toHaveProperty('error')
     }
-    return
   }
 }
 

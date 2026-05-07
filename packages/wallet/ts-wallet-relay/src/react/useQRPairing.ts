@@ -23,8 +23,8 @@ export function useQRPairing(
   const open = useCallback(() => {
     if (options?.openUrl) {
       options.openUrl(pairingUri)
-    } else if (typeof window !== 'undefined') {
-      window.location.href = pairingUri
+    } else if (typeof globalThis.window !== 'undefined') {
+      globalThis.window.location.href = pairingUri
     }
   }, [pairingUri, options?.openUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 

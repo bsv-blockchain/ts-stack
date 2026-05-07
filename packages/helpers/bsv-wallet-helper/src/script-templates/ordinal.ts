@@ -171,7 +171,11 @@ export const applyInscription = (
   }
 
   // Combine ordinal envelope with P2PKH locking script
-  let inscriptionAsm = `${ordAsm ? `${ordAsm} ${withSeparator ? 'OP_CODESEPARATOR ' : ''}` : ''}${lockingScript.toASM()}`
+  let inscriptionAsmPrefix = ''
+  if (ordAsm) {
+    inscriptionAsmPrefix = ordAsm + ' ' + (withSeparator ? 'OP_CODESEPARATOR ' : '')
+  }
+  let inscriptionAsm = inscriptionAsmPrefix + lockingScript.toASM()
 
   // Validate and append MAP metadata if provided
   if ((metaData != null) && (!metaData.app || !metaData.type)) {
@@ -181,13 +185,12 @@ export const applyInscription = (
   if (metaData?.app && metaData?.type) {
     const mapPrefixHex = toHex(ORDINAL_MAP_PREFIX)
     const mapCmdValue = toHex('SET')
-    inscriptionAsm = `${inscriptionAsm ? `${inscriptionAsm} ` : ''}OP_RETURN ${mapPrefixHex} ${mapCmdValue}`
+    const mapPrefix = (inscriptionAsm ? inscriptionAsm + ' ' : '') + 'OP_RETURN ' + mapPrefixHex + ' ' + mapCmdValue
+    inscriptionAsm = mapPrefix
 
     for (const [key, value] of Object.entries(metaData)) {
       if (key !== 'cmd') {
-        inscriptionAsm = `${inscriptionAsm} ${toHex(key)} ${toHex(
-					value
-				)}`
+        inscriptionAsm = inscriptionAsm + ' ' + toHex(key) + ' ' + toHex(value)
       }
     }
   }

@@ -1,7 +1,7 @@
 import type { Config } from 'jest';
 //import { defaults } from 'jest-config'
 
-export default async (): Promise<Config> => {
+const jestConfig = async (): Promise<Config> => {
   //console.log(defaults)
   return {
     bail: 1,
@@ -23,3 +23,5 @@ export default async (): Promise<Config> => {
     transform: { '^.+\\.ts$': ['ts-jest', { 'rootDir': "." }] },
   }
 }
+
+export default jestConfig

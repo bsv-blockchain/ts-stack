@@ -50,7 +50,14 @@ export function formatAmountWithCurrency(amount: number, currency: string, optio
   const { decimalPlaces, useCommas = true, useUnderscores = false } = options || {}
 
   // Determine the number of decimal places
-  let decimals = decimalPlaces ?? ((amount < 1 && amount !== 0) ? Math.min(Math.max(2, -Math.floor(Math.log10(amount)) + 1), 4) : (['BSV', 'SATS'].includes(currency) ? 8 : 2))
+  let decimals: number
+  if (decimalPlaces !== undefined) {
+    decimals = decimalPlaces
+  } else if (amount < 1 && amount !== 0) {
+    decimals = Math.min(Math.max(2, -Math.floor(Math.log10(amount)) + 1), 4)
+  } else {
+    decimals = ['BSV', 'SATS'].includes(currency) ? 8 : 2
+  }
 
   // Format the amount with determined decimal places
   let fixed = amount.toFixed(decimals)
@@ -89,19 +96,21 @@ export function formatAmountWithCurrency(amount: number, currency: string, optio
     NOK: 'NOK ',
     MXN: 'MX$'
   }
-  formattedAmount =
-    currency === 'SATS' || currency === 'BSV'
-      ? formattedAmount + (currency === 'SATS' ? ' satoshis' : ' BSV')
-      : (symbols[currency] || `${currency} `) + formattedAmount
+  if (currency === 'SATS') {
+    formattedAmount = formattedAmount + ' satoshis'
+  } else if (currency === 'BSV') {
+    formattedAmount = formattedAmount + ' BSV'
+  } else {
+    formattedAmount = (symbols[currency] || (currency + ' ')) + formattedAmount
+  }
 
   // build result with hover text
   const result: { formattedAmount: string; hoverText?: string } = { formattedAmount }
   if (amount < 0.01) {
     result.hoverText = formattedAmount
-    result.formattedAmount =
-      currency === 'BSV'
-        ? `< 0.01 BSV`
-        : `< ${(symbols[currency] || `${currency} `)}0.01`
+    const currencyPrefix = currency === 'BSV' ? '' : (symbols[currency] || (currency + ' '))
+    const smallAmountLabel = currency === 'BSV' ? '< 0.01 BSV' : ('< ' + currencyPrefix + '0.01')
+    result.formattedAmount = smallAmountLabel
   }
 
   return result
