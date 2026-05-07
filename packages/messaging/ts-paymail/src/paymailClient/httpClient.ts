@@ -2,6 +2,9 @@ import { PaymailServerResponseError } from '../errors/index.js'
 import fetch from 'cross-fetch'
 
 type FetchOptions = RequestInit & { timeout?: number }
+type RequestOptions = FetchOptions & { method: 'GET' | 'POST', body?: any }
+
+const defaultRequestOptions: RequestOptions = { method: 'GET' }
 
 export default class HttpClient {
   private readonly defaultTimeout: number
@@ -12,9 +15,7 @@ export default class HttpClient {
 
   async request (
     url: string,
-    options: FetchOptions & { method: 'GET' | 'POST', body?: any } = {
-      method: 'GET'
-    }
+    options: RequestOptions = defaultRequestOptions
   ): Promise<Response> {
     const controller = new AbortController()
     const timeout = options.timeout ?? this.defaultTimeout
@@ -39,8 +40,6 @@ export default class HttpClient {
         throw new PaymailServerResponseError(await response.text())
       }
       return response
-    } catch (error) {
-      throw error
     } finally {
       clearTimeout(timeoutId)
     }

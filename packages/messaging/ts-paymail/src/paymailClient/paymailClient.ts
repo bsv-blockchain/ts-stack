@@ -4,7 +4,7 @@ import HttpClient from './httpClient.js'
 import Capability from '../capability/capability.js'
 import Joi from 'joi'
 import { PaymailServerResponseError } from '../errors/index.js'
-import { PrivateKey, BSM, BigNumber, Hash, Utils, Signature } from '@bsv/sdk'
+import { PrivateKey, BigNumber, Hash, Utils, Signature, ECDSA } from '@bsv/sdk'
 import PublicProfileCapability from '../capability/publicProfileCapability.js'
 import PublicKeyInfrastructureCapability from '../capability/pkiCapability.js'
 import P2pPaymentDestinationCapability from '../capability/p2pPaymentDestinationCapability.js'
@@ -16,6 +16,25 @@ import TransactionNegotiationCapabilities, { TransactionNegotiationBody } from '
 import SimpleP2pOrdinalDestinationsCapability from '../capability/simpleP2pOrdinalDestinationsCapability.js'
 import SimpleP2pOrdinalReceiveCapability from '../capability/simpleP2pOrdinalReceiveCapability.js'
 const { sha256 } = Hash
+
+const BSM_PREFIX = 'Bitcoin Signed Message:\n'
+
+/** Encode a small integer as a Bitcoin varint (up to 252 bytes). */
+function bsmVarInt (n: number): number[] {
+  if (n < 0xfd) return [n]
+  return [0xfd, n & 0xff, (n >> 8) & 0xff]
+}
+
+function bsmMagicHash (msg: number[]): number[] {
+  const prefixBytes = Utils.toArray(BSM_PREFIX, 'utf8')
+  const buf = [
+    ...bsmVarInt(prefixBytes.length),
+    ...prefixBytes,
+    ...bsmVarInt(msg.length),
+    ...msg
+  ]
+  return Hash.hash256(buf)
+}
 
 /**
  * PaymailClient provides functionality to interact with BSV Paymail services.
@@ -43,7 +62,7 @@ export default class PaymailClient {
   constructor (httpClient?: HttpClient, dnsOptions?: DNSResolverOptions, localhostPort?: number) {
     this.httpClient = httpClient || new HttpClient()
     this._domainCapabilityCache = new Map()
-    this._resolver = new DNSResolver(dnsOptions, this.httpClient)
+    this._resolver = new DNSResolver(this.httpClient, dnsOptions)
     this._localHostPort = localhostPort || 3000
   }
 
@@ -293,8 +312,8 @@ export default class PaymailClient {
    */
   public createP2PSignature = (txid: string, privKey: PrivateKey): string => {
     const msg = Utils.toArray(txid, 'utf8')
-    const msgHash = BSM.magicHash(msg)
-    const sig = BSM.sign(msg, privKey, 'raw') as Signature
+    const msgHash = bsmMagicHash(msg)
+    const sig = ECDSA.sign(new BigNumber(msgHash), privKey, true)
     const recovery = sig.CalculateRecoveryFactor(privKey.toPublicKey(), new BigNumber(msgHash))
     return sig.toCompact(recovery, true, 'base64') as string
   }
