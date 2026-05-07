@@ -92,7 +92,10 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
           console.error('Migration returned falsy result await this.knex.migrate.down(config)')
           break
         }
-      } catch (error_: unknown) {
+      } catch (migrationError: unknown) {
+        // migrate.down throws when there are no more migrations to roll back — this is
+        // the expected terminal condition, so we stop iterating rather than propagating.
+        console.debug('migrate.down stopped (no more migrations or error):', migrationError)
         break
       }
     }

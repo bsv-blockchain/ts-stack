@@ -139,8 +139,11 @@ export class PrivilegedKeyManager implements ProtoWallet {
       this.chunkPropNames = []
       this.chunkPadPropNames = []
       this.decoyPropNamesDestroy = []
-    } catch (_) {
-      // Swallow any errors in the destruction process
+    } catch (_intentionallyIgnored) {
+      // Best-effort memory zeroing: if an individual property is already gone or the
+      // fill/delete throws (e.g. frozen object in a test harness), we must still reach
+      // the finally block to clear the destruction timer.  Propagating here would leave
+      // the timer running and risk a second (no-op) destruction attempt.
     } finally {
       if (this.destroyTimer) {
         clearTimeout(this.destroyTimer)
@@ -227,8 +230,11 @@ export class PrivilegedKeyManager implements ProtoWallet {
         chunk.fill(0)
       }
       return rawKey
-    } catch (_) {
-      // If any property is missing or type mismatch, we return null
+    } catch (_intentionallyIgnored) {
+      // Reassembly failed due to a missing property or type mismatch (e.g. the key was
+      // already destroyed or was never stored).  Returning null signals "no key available"
+      // to the caller, which will prompt re-authentication — propagating the raw error
+      // would leak internal obfuscation details and bypass that recovery path.
       return null
     }
   }

@@ -171,9 +171,10 @@ async function pbkdf2NativeOrWasm (
         keyLen * 8
       )
       return Array.from(new Uint8Array(bits))
-    } catch (err) {
-      // console.warn('[pbkdf2] WebCrypto path failed → falling back to JS implementation', err)
-      /* fall through */
+    } catch (webCryptoErr) {
+      // WebCrypto is unavailable or refused the algorithm (e.g. non-secure context, old
+      // Safari).  Fall through to the pure-JS hash-wasm implementation below.
+      console.debug('[pbkdf2] WebCrypto path failed, falling back to JS implementation', webCryptoErr)
     }
   }
 
@@ -2036,7 +2037,10 @@ export class CWIStyleWalletManager implements WalletInterface {
             this.currentUMPToken!.passwordPrimaryPrivileged
           ) as number[]
           return !!decryptedPrivileged // Test passes if decryption works
-        } catch (e) {
+        } catch (_intentionallyIgnored) {
+          // Decryption failure means the password candidate is wrong — this is the
+          // expected rejection path for an incorrect password.  Returning false causes
+          // the password-retriever loop to prompt the user again rather than crashing.
           return false
         }
       })
