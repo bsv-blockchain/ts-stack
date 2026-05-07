@@ -58,8 +58,8 @@ export class AnyLookupService implements LookupService {
 
     const from = startDate ? new Date(startDate) : undefined
     const to = endDate ? new Date(endDate) : undefined
-    if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
+    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
     if (txid) {
       const result = await this.storage.findByTxid(txid)
@@ -88,4 +88,5 @@ export class AnyLookupService implements LookupService {
 }
 
 // Factory
-export default (db: Db): AnyLookupService => new AnyLookupService(new AnyStorage(db))
+function create(db: Db): AnyLookupService { return new AnyLookupService(new AnyStorage(db)) }
+export default create

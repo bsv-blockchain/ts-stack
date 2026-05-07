@@ -20,7 +20,6 @@ export default class TokenDemoTopicManager implements TopicManager {
   async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     console.log({ previousCoins })
     const outputsToAdmit: number[] = []
-    const coinsToRetain: number[] = []
 
     try {
       console.log('TokenDemo topic manager invoked')
@@ -48,7 +47,7 @@ export default class TokenDemoTopicManager implements TopicManager {
           } else {
             internalAssetBalances.set(details.tokenId, { isMint: false, amount: currentAmount + Number(amount) })
           }
-          coinsToRetain.push(index)
+          // coins are never retained in this demo topic
         } catch (err) {
           console.error(`Error processing input ${index}:`, err)
         }

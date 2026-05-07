@@ -94,4 +94,5 @@ class IdentityLookupService implements LookupService {
   }
 }
 
-export default (db: Db): IdentityLookupService => new IdentityLookupService(new IdentityStorageManager(db))
+function create(db: Db): IdentityLookupService { return new IdentityLookupService(new IdentityStorageManager(db)) }
+export default create

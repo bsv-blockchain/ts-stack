@@ -61,8 +61,8 @@ export default class ProtoMapTopicManager implements TopicManager {
           const expected = keyDeriver.derivePublicKey([1, 'protomap'], '1', registryOperator)
           if (expected.toString() !== lockingPublicKey.toString()) throw new Error('ProtoMap token not linked to registry operator!')
 
-          const signature = fields.pop() as number[]
-          const data = fields.reduce((a, e) => [...a, ...e], [])
+          const signature = fields.pop()!
+          const data = fields.flat()
 
           const anyoneWallet = new ProtoWallet('anyone')
           const { valid: hasValidSignature } = await anyoneWallet.verifySignature({

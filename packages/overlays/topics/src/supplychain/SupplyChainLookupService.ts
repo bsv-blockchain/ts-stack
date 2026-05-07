@@ -66,8 +66,8 @@ export class SupplyChainLookupService implements LookupService {
 
     const from = startDate ? new Date(startDate) : undefined
     const to = endDate ? new Date(endDate) : undefined
-    if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
+    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
     if (txid) return this.storage.findByTxid(txid, limit, skip, sortOrder)
     if (chainId) return this.storage.findByChainId(chainId, limit, skip)
@@ -92,4 +92,5 @@ export class SupplyChainLookupService implements LookupService {
   }
 }
 
-export default (db: Db): SupplyChainLookupService => new SupplyChainLookupService(new SupplyChainStorage(db))
+function create(db: Db): SupplyChainLookupService { return new SupplyChainLookupService(new SupplyChainStorage(db)) }
+export default create

@@ -28,7 +28,7 @@ export default class IdentityTopicManager implements TopicManager {
             parsedCert.signature
           )
 
-          const signature = result.fields.pop() as number[]
+          const signature = result.fields.pop()!
           const data: number[] = []
           for (const field of result.fields) {
             data.push(...field)

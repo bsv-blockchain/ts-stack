@@ -53,7 +53,7 @@ export class WalletConfigStorageManager {
   }
 
   private getFuzzyRegex(input: string): RegExp {
-    const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const escapedInput = input.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
     return new RegExp(escapedInput.split('').join('.*'), 'i')
   }
 

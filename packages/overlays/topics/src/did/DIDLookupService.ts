@@ -72,4 +72,5 @@ class DIDLookupService implements LookupService {
   }
 }
 
-export default (db: Db): DIDLookupService => new DIDLookupService(new DIDStorageManager(db))
+function create(db: Db): DIDLookupService { return new DIDLookupService(new DIDStorageManager(db)) }
+export default create

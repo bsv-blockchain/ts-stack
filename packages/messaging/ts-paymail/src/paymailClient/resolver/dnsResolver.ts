@@ -12,7 +12,7 @@ class DNSResolver extends AbstractResolver {
   private readonly httpClient: HttpClient
   private readonly dns: any
 
-  constructor (options: DNSResolverOptions = {}, httpClient: HttpClient) {
+  constructor (httpClient: HttpClient, options: DNSResolverOptions = {}) {
     super()
     const { dns, dohServerBaseUrl = 'https://dns.google.com/resolve' } = options
     this.dohServiceBaseUrl = dohServerBaseUrl

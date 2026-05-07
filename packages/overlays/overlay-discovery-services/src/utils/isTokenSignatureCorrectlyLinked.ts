@@ -12,7 +12,7 @@ export const isTokenSignatureCorrectlyLinked = async (
   fields: number[][]
 ): Promise<boolean> => {
   // The signature is the last field, which needs to be removed for verification
-  const signature = fields.pop()
+  const signature = fields.pop()!
 
   // The protocol is in the first field
   const protocolID: [2, string] = [2, Utils.toUTF8(fields[0]) === 'SHIP' ? 'service host interconnect' : 'service lookup availability']
@@ -21,7 +21,7 @@ export const isTokenSignatureCorrectlyLinked = async (
   const identityKey = Utils.toHex(fields[1])
 
   // First, we ensure that the signature over the data is valid for the claimed identity key.
-  const data = fields.reduce((a, e) => [...a, ...e], [])
+  const data = fields.flat()
   const anyoneWallet = new ProtoWallet('anyone')
   try {
     const { valid } = await anyoneWallet.verifySignature({

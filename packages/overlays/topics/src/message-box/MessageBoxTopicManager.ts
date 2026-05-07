@@ -48,7 +48,7 @@ export default class MessageBoxTopicManager implements TopicManager {
           const result = PushDrop.decode(output.lockingScript)
 
           // Extract signature (last field), and rest are data
-          const signature = result.fields.pop() as number[]
+          const signature = result.fields.pop()!
           const [identityKeyBuf, hostBuf] = result.fields
 
           // Basic admissibility checks before processing
@@ -59,16 +59,15 @@ export default class MessageBoxTopicManager implements TopicManager {
             continue
           }
 
-          let host: string
           try {
-            host = Utils.toUTF8(hostBuf)
+            Utils.toUTF8(hostBuf)
           } catch {
             console.warn(`[ADMISSIBILITY] Output ${i} skipped due to UTF-8 decoding failure`)
             continue
           }
 
           const identityKey = Utils.toHex(identityKeyBuf)
-          const data = result.fields.reduce((a, e) => [...a, ...e], [])
+          const data = result.fields.flat()
 
           const { valid } = await anyoneWallet.verifySignature({
             data,

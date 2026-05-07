@@ -159,4 +159,5 @@ class KVStoreLookupService implements LookupService {
   }
 }
 
-export default (db: Db): KVStoreLookupService => new KVStoreLookupService(new KVStoreStorageManager(db))
+function create(db: Db): KVStoreLookupService { return new KVStoreLookupService(new KVStoreStorageManager(db)) }
+export default create

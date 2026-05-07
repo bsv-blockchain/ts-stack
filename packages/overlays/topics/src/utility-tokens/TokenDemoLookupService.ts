@@ -53,7 +53,7 @@ export class TokenDemoLookupService implements LookupService {
     if (!question) throw new Error('A valid query must be provided!')
     if (question.service !== 'ls_tokendemo') throw new Error('Lookup service not supported!')
 
-    const { tokenId, outpoint, limit = 50, skip = 0, startDate, endDate, sortOrder } = question.query as TokenDemoQuery
+    const { tokenId, outpoint, limit = 50, skip = 0, sortOrder } = question.query as TokenDemoQuery
 
     if (limit < 0) throw new Error('Limit must be a non-negative number')
     if (skip < 0) throw new Error('Skip must be a non-negative number')
@@ -81,4 +81,5 @@ export class TokenDemoLookupService implements LookupService {
   }
 }
 
-export default (db: Db): TokenDemoLookupService => new TokenDemoLookupService(new TokenDemoStorage(db))
+function create(db: Db): TokenDemoLookupService { return new TokenDemoLookupService(new TokenDemoStorage(db)) }
+export default create

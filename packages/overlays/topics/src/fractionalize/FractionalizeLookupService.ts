@@ -50,8 +50,8 @@ export class FractionalizeLookupService implements LookupService {
 
     const from = startDate ? new Date(startDate) : undefined
     const to = endDate ? new Date(endDate) : undefined
-    if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
+    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
     if (txid) {
       const result = await this.storage.findByTxid(txid)
@@ -79,4 +79,5 @@ export class FractionalizeLookupService implements LookupService {
   }
 }
 
-export default (db: Db): FractionalizeLookupService => new FractionalizeLookupService(new FractionalizeStorage(db))
+function create(db: Db): FractionalizeLookupService { return new FractionalizeLookupService(new FractionalizeStorage(db)) }
+export default create

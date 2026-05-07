@@ -73,4 +73,5 @@ class UHRPLookupService implements LookupService {
   }
 }
 
-export default (db: Db) => new UHRPLookupService(db)
+function create(db: Db): UHRPLookupService { return new UHRPLookupService(db) }
+export default create

@@ -10,7 +10,7 @@ import { Transport, AuthMessage } from '@bsv/sdk'
 export class SocketServerTransport implements Transport {
   private onDataCallback?: (message: AuthMessage) => Promise<void>
 
-  constructor(private socket: IoSocket) { }
+  constructor(private readonly socket: IoSocket) { }
 
   async send(message: AuthMessage): Promise<void> {
     // We'll emit with a special low-level event named: 'authMessage'

@@ -38,7 +38,11 @@ export class KnexStorage implements Storage {
     return {
       ...row,
       outputScript: Array.from(row.outputScript),
-      beef: includeBEEF ? (beefOverride ?? (row.beef !== undefined ? Array.from(row.beef) : undefined)) : undefined,
+      beef: (() => {
+        if (!includeBEEF) return undefined
+        if (beefOverride != null) return beefOverride
+        return row.beef != null ? Array.from(row.beef) : undefined
+      })(),
       spent: Boolean(row.spent),
       outputsConsumed: this.parseOutputRelations(row.outputsConsumed),
       consumedBy: this.parseOutputRelations(row.consumedBy)

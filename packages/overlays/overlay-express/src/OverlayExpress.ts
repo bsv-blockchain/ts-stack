@@ -545,14 +545,14 @@ export default class OverlayExpress {
 
     // Construct a default sync configuration, in case the user doesn't want GASP at all:
     let syncConfig: Record<string, string[] | 'SHIP' | false> = {}
-    if (!this.enableGASPSync) {
+    if (this.enableGASPSync) {
+      // If the user provided a syncConfiguration, use that. Otherwise default to an empty object.
+      syncConfig = this.engineConfig.syncConfiguration ?? {}
+    } else {
       // For each manager, disable sync
       for (const managerName of Object.keys(this.managers)) {
         syncConfig[managerName] = false
       }
-    } else {
-      // If the user provided a syncConfiguration, use that. Otherwise default to an empty object.
-      syncConfig = this.engineConfig.syncConfiguration ?? {}
     }
 
     // Build the actual Storage
@@ -598,9 +598,7 @@ export default class OverlayExpress {
       this.services,
       storage,
       // chainTracker
-      this.engineConfig.chainTracker !== undefined
-        ? this.engineConfig.chainTracker
-        : this.chainTracker,
+      this.engineConfig.chainTracker ?? this.chainTracker,
       // hostingURL
       `https://${this.advertisableFQDN}`,
       // shipTrackers
@@ -608,11 +606,10 @@ export default class OverlayExpress {
         ? (this.engineConfig.shipTrackers ?? DEFAULT_TESTNET_SLAP_TRACKERS)
         : this.engineConfig.shipTrackers,
       // slapTrackers
-      Array.isArray(this.engineConfig.slapTrackers)
-        ? this.engineConfig.slapTrackers
-        : this.network === 'test'
-          ? DEFAULT_TESTNET_SLAP_TRACKERS
-          : DEFAULT_SLAP_TRACKERS,
+      (() => {
+        if (Array.isArray(this.engineConfig.slapTrackers)) return this.engineConfig.slapTrackers
+        return this.network === 'test' ? DEFAULT_TESTNET_SLAP_TRACKERS : DEFAULT_SLAP_TRACKERS
+      })(),
       // broadcaster
       broadcaster ?? this.engineConfig.broadcaster,
       // advertiser
@@ -644,9 +641,7 @@ export default class OverlayExpress {
       this.serverWallet = wallet
 
       // Auto-set the admin identity key from the server's own key if not configured
-      if (this.adminIdentityKey === undefined) {
-        this.adminIdentityKey = keyDeriver.identityKey
-      }
+      this.adminIdentityKey ??= keyDeriver.identityKey
 
       this.logger.log(chalk.blue('Server wallet initialized for BSV mutual authentication.'))
     } catch (e) {
@@ -1377,7 +1372,7 @@ export default class OverlayExpress {
             data: {
               nodeName: this.name,
               network: this.network,
-              uptime: this.startTime !== undefined ? Date.now() - this.startTime.getTime() : 0,
+              uptime: this.startTime != null ? Date.now() - this.startTime.getTime() : 0,
               startedAt: this.startTime?.toISOString(),
               shipRecordCount: shipCount,
               slapRecordCount: slapCount,
@@ -1556,7 +1551,7 @@ export default class OverlayExpress {
             }
             const txid = value.substring(0, dotIndex)
             const outputIndex = Number.parseInt(value.substring(dotIndex + 1))
-            if (isNaN(outputIndex)) {
+            if (Number.isNaN(outputIndex)) {
               return res.status(400).json({ status: 'error', message: 'Invalid outputIndex in outpoint' })
             }
 
@@ -1698,7 +1693,7 @@ export default class OverlayExpress {
 
           return res.status(200).json({
             status: 'success',
-            message: `Token ${txid}.${outputIndex} removed.${ban === true ? ' Outpoint banned.' : ''}${shouldBanDomain === true && typeof removedDomain === 'string' ? ` Domain "${removedDomain}" banned.` : ''}`
+            message: `Token ${txid}.${outputIndex} removed.${ban === true ? ' Outpoint banned.' : ''}` + (shouldBanDomain === true && typeof removedDomain === 'string' ? ` Domain "${removedDomain}" banned.` : '')
           })
         } catch (error) {
           return res.status(400).json({
@@ -1768,9 +1763,9 @@ export default class OverlayExpress {
             await service.outputEvicted(req.body.txid, req.body.outputIndex)
           } else {
             const services = Object.values(engine.lookupServices)
-            for (let i = 0; i < services.length; i++) {
+            for (const service of services) {
               try {
-                await services[i].outputEvicted(req.body.txid, req.body.outputIndex)
+                await service.outputEvicted(req.body.txid, req.body.outputIndex)
               } catch {
                 continue
               }

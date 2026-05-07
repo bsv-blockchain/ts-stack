@@ -103,9 +103,7 @@ export class Engine {
         this.syncConfiguration[managerName] = Array.from(combinedSet)
       } else {
         // Set undefined managers to 'SHIP' by default
-        if (this.syncConfiguration[managerName] === undefined) {
-          this.syncConfiguration[managerName] = 'SHIP'
-        }
+        this.syncConfiguration[managerName] ??= 'SHIP'
       }
     }
   }
@@ -398,16 +396,16 @@ export class Engine {
           const previousTXID = tx.inputs[inputIndex].sourceTXID ?? tx.inputs[inputIndex].sourceTransaction?.id('hex')
           if (typeof previousTXID !== 'string') continue
           const previousOutputIndex = tx.inputs[inputIndex].sourceOutputIndex
-          if (!admissibleOutputs.coinsToRetain.includes(inputIndex)) {
+          if (admissibleOutputs.coinsToRetain.includes(inputIndex)) {
+            outputsConsumed.push({
+              txid: previousTXID,
+              outputIndex: previousOutputIndex
+            })
+          } else {
             outputsToMarkStale.push({
               txid: previousTXID,
               previousOutputIndex,
               inputIndex
-            })
-          } else {
-            outputsConsumed.push({
-              txid: previousTXID,
-              outputIndex: previousOutputIndex
             })
           }
         }
@@ -788,11 +786,11 @@ export class Engine {
       if (shipsToCreate.length > 0 || slapsToCreate.length > 0) {
         const advertisementData: AdvertisementData[] = [
           ...shipsToCreate.map(topic => ({
-            protocol: 'SHIP' as 'SHIP',
+            protocol: 'SHIP' as const,
             topicOrServiceName: topic
           })),
           ...slapsToCreate.map(service => ({
-            protocol: 'SLAP' as 'SLAP',
+            protocol: 'SLAP' as const,
             topicOrServiceName: service
           }))
         ]
@@ -858,7 +856,7 @@ export class Engine {
               // Parse out the advertisements using the provided parser
               const tx = Transaction.fromBEEF(output.beef)
               const advertisement = this.advertiser?.parseAdvertisement(tx.outputs[output.outputIndex].lockingScript)
-              if (advertisement !== undefined && advertisement !== null && advertisement.protocol === 'SHIP') {
+              if (advertisement?.protocol === 'SHIP') {
                 endpointSet.add(advertisement.domain)
               }
             } catch (error) {
@@ -961,10 +959,10 @@ export class Engine {
           // For each input, look it up and recurse.
           for (const input of tx.inputs) {
             // We should always have a source transaction
-            if (input.sourceTransaction !== undefined) {
-              searchInput(input.sourceTransaction)
-            } else {
+            if (input.sourceTransaction === undefined) {
               throw new Error('Incomplete SPV data!')
+            } else {
+              searchInput(input.sourceTransaction)
             }
           }
         }
@@ -972,19 +970,7 @@ export class Engine {
 
       searchInput(rootTx)
 
-      if (correctTx !== undefined) {
-        const rawTx = correctTx.toHex()
-        const node: GASPNode = {
-          rawTx,
-          graphID,
-          outputIndex
-        }
-        if (correctTx.merklePath !== undefined) {
-          node.proof = correctTx.merklePath.toHex()
-        }
-
-        return node
-      } else {
+      if (correctTx === undefined) {
         // Recursively try to find a matching output
         let foundNode: GASPNode | undefined
         for (const currentOutput of output.outputsConsumed) {
@@ -999,6 +985,18 @@ export class Engine {
         if (foundNode !== undefined) {
           return foundNode
         }
+      } else {
+        const rawTx = correctTx.toHex()
+        const node: GASPNode = {
+          rawTx,
+          graphID,
+          outputIndex
+        }
+        if (correctTx.merklePath !== undefined) {
+          node.proof = correctTx.merklePath.toHex()
+        }
+
+        return node
       }
       throw new Error('Unable to find output associated with your request!')
     }
@@ -1268,7 +1266,7 @@ export class Engine {
    */
   async getDocumentationForTopicManager(manager: any): Promise<string> {
     const documentation = await this.managers[manager]?.getDocumentation?.()
-    return documentation !== undefined ? documentation : 'No documentation found!'
+    return documentation ?? 'No documentation found!'
   }
 
   /**
@@ -1278,7 +1276,7 @@ export class Engine {
    */
   async getDocumentationForLookupServiceProvider(provider: any): Promise<string> {
     const documentation = await this.lookupServices[provider]?.getDocumentation?.()
-    return documentation !== undefined ? documentation : 'No documentation found!'
+    return documentation ?? 'No documentation found!'
   }
 
   /**
@@ -1313,7 +1311,7 @@ export class Engine {
         /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, // Loopback IPs
         /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/, // 10.x.x.x private IPs
         /^192\.168\.\d{1,3}\.\d{1,3}$/, // 192.168.x.x private IPs
-        /^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$/, // 172.16.x.x to 172.31.x.x private IPs
+        /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/, // 172.16.x.x to 172.31.x.x private IPs
         /^0\.0\.0\.0$/ // Non-routable address
       ]
 

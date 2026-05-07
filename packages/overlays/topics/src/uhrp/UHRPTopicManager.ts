@@ -3,7 +3,7 @@ import { Transaction, PushDrop, Utils } from '@bsv/sdk'
 import { isTokenSignatureCorrectlyLinked } from './isTokenSignatureCorrectlyLinked.js'
 
 export default class UHRPTopicManager implements TopicManager {
-  identifyNeededInputs?: ((beef: number[]) => Promise<Array<{ txid: string; outputIndex: number }>>) | undefined
+  identifyNeededInputs?: (beef: number[]) => Promise<Array<{ txid: string; outputIndex: number }>>
 
   async getDocumentation(): Promise<string> {
     return 'Universal Hash Resolution Protocol: manages UHRP content availability advertisements.'

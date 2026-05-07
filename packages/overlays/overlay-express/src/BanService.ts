@@ -99,7 +99,7 @@ export class BanService {
         $set: {
           type: 'outpoint',
           value,
-          domain: domain !== undefined ? this.sanitize(domain) : undefined,
+          domain: domain != null ? this.sanitize(domain) : undefined,
           reason: reason ?? 'Manually banned',
           bannedAt: new Date(),
           bannedBy

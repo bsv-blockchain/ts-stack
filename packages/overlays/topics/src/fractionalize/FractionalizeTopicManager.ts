@@ -15,8 +15,8 @@ export default class FractionalizeTopicManager implements TopicManager {
 
       for (const [index, output] of parsedTx.outputs.entries()) {
         const chunks = output.lockingScript?.chunks ?? []
-        const isOrdinal = !!chunks.find(chunk => chunk.op === OP.OP_IF)
-        const isMultiSig = !!chunks.find(chunk => chunk.op === OP.OP_CHECKMULTISIG)
+        const isOrdinal = chunks.some(chunk => chunk.op === OP.OP_IF)
+        const isMultiSig = chunks.some(chunk => chunk.op === OP.OP_CHECKMULTISIG)
 
         if (isOrdinal && isMultiSig) {
           const result = checkScriptFormat(output.lockingScript, 'server-token')
@@ -91,11 +91,11 @@ function checkScriptFormat(script: Script, type: 'server-token' | 'transfer-toke
         } catch (error) { throw new Error(`Invalid JSON payload: ${error.message}`) }
         const formatMiddle = new Script(chunks.slice(7, 11)).toHex()
         if (formatMiddle !== TEMPLATES['server-token'].formatMiddle) throw new Error('Malformed formatMiddle')
-        if (!chunks[11].data || chunks[11].data.length !== 20) throw new Error('Invalid hash data length')
+        if (chunks[11].data?.length !== 20) throw new Error('Invalid hash data length')
         const formatEnd = new Script(chunks.slice(12, 20)).toHex()
         if (formatEnd !== TEMPLATES['server-token'].formatEnd) throw new Error('Malformed formatEnd')
         if (chunks[20].op !== 106) throw new Error('No OP_RETURN at the end')
-        if (!chunks[20].data || chunks[20].data.length === 0) throw new Error('Missing OP_RETURN data')
+        if (chunks[20].data?.length === 0 || chunks[20].data == null) throw new Error('Missing OP_RETURN data')
         return { valid: true, message: 'Script is valid' }
       }
       case 'transfer-token': {
@@ -108,11 +108,11 @@ function checkScriptFormat(script: Script, type: 'server-token' | 'transfer-toke
         } catch (error) { throw new Error(`Invalid JSON payload: ${error.message}`) }
         const formatMiddle = new Script(chunks.slice(7, 10)).toHex()
         if (formatMiddle !== TEMPLATES['transfer-token'].formatMiddle) throw new Error('Malformed formatMiddle')
-        if (!chunks[10].data || chunks[10].data.length !== 20) throw new Error('Invalid pubkey hash data length')
+        if (chunks[10].data?.length !== 20) throw new Error('Invalid pubkey hash data length')
         const formatEnd = new Script(chunks.slice(11, 13)).toHex()
         if (formatEnd !== TEMPLATES['transfer-token'].formatEnd) throw new Error('Malformed formatEnd')
         if (chunks[13].op !== 106) throw new Error('No OP_RETURN at the end')
-        if (!chunks[13].data || chunks[13].data.length === 0) throw new Error('Missing OP_RETURN data')
+        if (chunks[13].data?.length === 0 || chunks[13].data == null) throw new Error('Missing OP_RETURN data')
         return { valid: true, message: 'Script is valid' }
       }
       case 'payment': {

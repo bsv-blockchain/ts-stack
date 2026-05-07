@@ -18,6 +18,9 @@ export interface AuthRequest extends Request {
     identityKey: PubKeyHex
   }
 }
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
 // Developers may optionally provide a handler for incoming certificates.
 export interface AuthMiddlewareOptions {
   wallet: WalletInterface
@@ -46,7 +49,7 @@ export interface AuthMiddlewareOptions {
    * - warn: Logs potential issues but not necessarily errors.
    * - error: Logs only critical issues and errors.
    */
-  logLevel?: 'debug' | 'info' | 'warn' | 'error'
+  logLevel?: LogLevel
 }
 
 /**
@@ -54,10 +57,10 @@ export interface AuthMiddlewareOptions {
  * based on the configured log level.
  */
 function isLogLevelEnabled(
-  configuredLevel: 'debug' | 'info' | 'warn' | 'error',
-  messageLevel: 'debug' | 'info' | 'warn' | 'error'
+  configuredLevel: LogLevel,
+  messageLevel: LogLevel
 ): boolean {
-  const levels: Array<'debug' | 'info' | 'warn' | 'error'> = ['debug', 'info', 'warn', 'error']
+  const levels: LogLevel[] = ['debug', 'info', 'warn', 'error']
   const configuredIndex = levels.indexOf(configuredLevel)
   const messageIndex = levels.indexOf(messageLevel)
   return messageIndex >= configuredIndex
@@ -69,7 +72,7 @@ function isLogLevelEnabled(
  */
 function getLogMethod(
   logger: typeof console,
-  level: 'debug' | 'info' | 'warn' | 'error'
+  level: LogLevel
 ): (...args: any[]) => void {
   switch (level) {
     case 'debug':
@@ -94,7 +97,7 @@ class ResponseWriterWrapper {
   private statusCode: number = 200
   private headers: Record<string, string> = {}
   private body: number[] = []
-  private originalRes: Response
+  private readonly originalRes: Response
   private flushed: boolean = false
 
   constructor(res: Response) {
@@ -189,7 +192,7 @@ export class ExpressTransport implements Transport {
 
   private messageCallback?: (message: AuthMessage) => Promise<void>
   private readonly logger: typeof console | undefined
-  private readonly logLevel: 'debug' | 'info' | 'warn' | 'error'
+  private readonly logLevel: LogLevel
 
   /**
    * Constructs a new ExpressTransport instance.
@@ -203,7 +206,7 @@ export class ExpressTransport implements Transport {
   constructor(
     allowUnauthenticated: boolean = false,
     logger?: typeof console,
-    logLevel?: 'debug' | 'info' | 'warn' | 'error'
+    logLevel?: LogLevel
   ) {
     this.allowAuthenticated = allowUnauthenticated
     this.logger = logger
@@ -218,18 +221,18 @@ export class ExpressTransport implements Transport {
    * @param data - Optional additional data to log
    */
   private log(
-    level: 'debug' | 'info' | 'warn' | 'error',
+    level: LogLevel,
     message: string,
     data?: any
   ): void {
     if (typeof this.logger !== 'object') return // Logging disabled
-    if (!isLogLevelEnabled(this.logLevel, level)) return
-
-    const logMethod = getLogMethod(this.logger, level)
-    if (data !== undefined) {
-      logMethod(`[ExpressTransport] [${level.toUpperCase()}] ${message}`, data)
-    } else {
-      logMethod(`[ExpressTransport] [${level.toUpperCase()}] ${message}`)
+    if (isLogLevelEnabled(this.logLevel, level)) {
+      const logMethod = getLogMethod(this.logger, level)
+      if (data !== undefined) {
+        logMethod(`[ExpressTransport] [${level.toUpperCase()}] ${message}`, data)
+      } else {
+        logMethod(`[ExpressTransport] [${level.toUpperCase()}] ${message}`)
+      }
     }
   }
 
@@ -250,41 +253,7 @@ export class ExpressTransport implements Transport {
    */
   async send(message: AuthMessage): Promise<void> {
     this.log('debug', `Attempting to send AuthMessage`, { message })
-    if (message.messageType !== 'general') {
-      const handles = this.openNonGeneralHandles[message.yourNonce!]
-      if (!Array.isArray(handles) || handles.length === 0) {
-        this.log('warn', `No open handles to peer for nonce`, { yourNonce: message.yourNonce })
-        throw new Error('No open handles to this peer!')
-      } else {
-        // Since this is an initial response, we can assume there's only one handle per identity
-        const { res, next } = handles[0]
-        const responseHeaders: Record<string, string> = {}
-        responseHeaders['x-bsv-auth-version'] = message.version
-        responseHeaders['x-bsv-auth-message-type'] = message.messageType
-        responseHeaders['x-bsv-auth-identity-key'] = message.identityKey
-        responseHeaders['x-bsv-auth-nonce'] = message.nonce!
-        responseHeaders['x-bsv-auth-your-nonce'] = message.yourNonce!
-        responseHeaders['x-bsv-auth-signature'] = Utils.toHex(message.signature!)
-
-        if (typeof message.requestedCertificates === 'object') {
-          responseHeaders['x-bsv-auth-requested-certificates'] = JSON.stringify(message.requestedCertificates)
-        }
-        if ((res as any).__set !== undefined) {
-          this.resetRes(res, next)
-        }
-        for (const [k, v] of Object.entries(responseHeaders)) {
-          res.set(k, v)
-        }
-
-        this.log('info', 'Sending non-general AuthMessage response', {
-          status: 200,
-          responseHeaders,
-          messagePayload: message
-        })
-        res.send(message)
-        handles.shift()
-      }
-    } else {
+    if (message.messageType === 'general') {
       // General message
       const reader = new Utils.Reader(message.payload)
       const requestId = Utils.toBase64(reader.read(32))
@@ -345,6 +314,40 @@ export class ExpressTransport implements Transport {
         res.send(Buffer.from(new Uint8Array(responseBody)))
       } else {
         res.end()
+      }
+    } else {
+      const handles = this.openNonGeneralHandles[message.yourNonce!]
+      if (!Array.isArray(handles) || handles.length === 0) {
+        this.log('warn', `No open handles to peer for nonce`, { yourNonce: message.yourNonce })
+        throw new Error('No open handles to this peer!')
+      } else {
+        // Since this is an initial response, we can assume there's only one handle per identity
+        const { res, next } = handles[0]
+        const responseHeaders: Record<string, string> = {}
+        responseHeaders['x-bsv-auth-version'] = message.version
+        responseHeaders['x-bsv-auth-message-type'] = message.messageType
+        responseHeaders['x-bsv-auth-identity-key'] = message.identityKey
+        responseHeaders['x-bsv-auth-nonce'] = message.nonce!
+        responseHeaders['x-bsv-auth-your-nonce'] = message.yourNonce!
+        responseHeaders['x-bsv-auth-signature'] = Utils.toHex(message.signature!)
+
+        if (typeof message.requestedCertificates === 'object') {
+          responseHeaders['x-bsv-auth-requested-certificates'] = JSON.stringify(message.requestedCertificates)
+        }
+        if ((res as any).__set !== undefined) {
+          this.resetRes(res, next)
+        }
+        for (const [k, v] of Object.entries(responseHeaders)) {
+          res.set(k, v)
+        }
+
+        this.log('info', 'Sending non-general AuthMessage response', {
+          status: 200,
+          responseHeaders,
+          messagePayload: message
+        })
+        res.send(message)
+        handles.shift()
       }
     }
   }
@@ -488,9 +491,8 @@ export class ExpressTransport implements Transport {
             })
           })
         }
-      } else {
+      } else if (req.headers['x-bsv-auth-request-id']) {
         // Possibly general message
-        if (req.headers['x-bsv-auth-request-id']) {
           const message = buildAuthMessageFromRequest(req, this.logger, this.logLevel)
           this.log('debug', `Received general message with x-bsv-auth-request-id`, { message })
 
@@ -696,7 +698,6 @@ export class ExpressTransport implements Transport {
             })
           }
         }
-      }
     } catch (error) {
       this.log('error', `Caught error in handleIncomingRequest`, { error })
       next(error)
@@ -720,21 +721,19 @@ export class ExpressTransport implements Transport {
         }
         throw e
       }
-    } else {
-      if (
-        typeof res.__status !== 'function' ||
-        typeof res.__set !== 'function' ||
-        typeof res.__json !== 'function' ||
-        typeof res.__send !== 'function' ||
-        typeof res.__end !== 'function' ||
-        typeof res.__sendFile !== 'function'
-      ) {
-        const e = new Error('Unable to restore response object. Did you tamper with hijacked properties (res.__status, __set, __json, __text, __send, __end, __sendFile) ?')
-        if (typeof next === 'function') {
-          next(e)
-        }
-        throw e
+    } else if (
+      typeof res.__status !== 'function' ||
+      typeof res.__set !== 'function' ||
+      typeof res.__json !== 'function' ||
+      typeof res.__send !== 'function' ||
+      typeof res.__end !== 'function' ||
+      typeof res.__sendFile !== 'function'
+    ) {
+      const e = new Error('Unable to restore response object. Did you tamper with hijacked properties (res.__status, __set, __json, __text, __send, __end, __sendFile) ?')
+      if (typeof next === 'function') {
+        next(e)
       }
+      throw e
     }
   }
 
@@ -757,7 +756,7 @@ export class ExpressTransport implements Transport {
 function buildAuthMessageFromRequest(
   req: Request,
   logger?: typeof console,
-  logLevel?: 'debug' | 'info' | 'warn' | 'error'
+  logLevel?: LogLevel
 ): AuthMessage {
   // Possibly log raw request details at debug level
   if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
@@ -824,12 +823,12 @@ function buildAuthMessageFromRequest(
   includedHeaders.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
 
   writer.writeVarIntNum(includedHeaders.length)
-  for (let i = 0; i < includedHeaders.length; i++) {
-    const headerKeyAsArray = Utils.toArray(includedHeaders[i][0], 'utf8')
+  for (const [headerKey, headerValue] of includedHeaders) {
+    const headerKeyAsArray = Utils.toArray(headerKey, 'utf8')
     writer.writeVarIntNum(headerKeyAsArray.length)
     writer.write(headerKeyAsArray)
 
-    const headerValueAsArray = Utils.toArray(includedHeaders[i][1], 'utf8')
+    const headerValueAsArray = Utils.toArray(headerValue, 'utf8')
     writer.writeVarIntNum(headerValueAsArray.length)
     writer.write(headerValueAsArray)
   }
@@ -838,7 +837,7 @@ function buildAuthMessageFromRequest(
   writeBodyToWriter(req, writer, logger, logLevel)
 
   const authMessage = {
-    messageType: 'general' as 'general',
+    messageType: 'general' as const,
     version: req.headers['x-bsv-auth-version'] as string,
     identityKey: req.headers['x-bsv-auth-identity-key'] as string,
     nonce: req.headers['x-bsv-auth-nonce'] as string,
@@ -866,7 +865,7 @@ function writeBodyToWriter(
   req: Request,
   writer: Utils.Writer,
   logger?: typeof console,
-  logLevel?: 'debug' | 'info' | 'warn' | 'error'
+  logLevel?: LogLevel
 ) {
   const { body, headers } = req
 
@@ -948,7 +947,7 @@ function buildResponsePayload(
   responseBody: number[],
   req: Request,
   logger?: typeof console,
-  logLevel?: 'debug' | 'info' | 'warn' | 'error'
+  logLevel?: LogLevel
 ): number[] {
   if (logger && logLevel && isLogLevelEnabled(logLevel, 'debug')) {
     getLogMethod(logger, 'debug')(`[buildResponsePayload] Building response payload`, {
@@ -978,12 +977,12 @@ function buildResponsePayload(
   includedHeaders.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
 
   writer.writeVarIntNum(includedHeaders.length)
-  for (let i = 0; i < includedHeaders.length; i++) {
-    const headerKeyAsArray = Utils.toArray(includedHeaders[i][0], 'utf8')
+  for (const [headerKey, headerValue] of includedHeaders) {
+    const headerKeyAsArray = Utils.toArray(headerKey, 'utf8')
     writer.writeVarIntNum(headerKeyAsArray.length)
     writer.write(headerKeyAsArray)
 
-    const headerValueAsArray = Utils.toArray(includedHeaders[i][1], 'utf8')
+    const headerValueAsArray = Utils.toArray(headerValue, 'utf8')
     writer.writeVarIntNum(headerValueAsArray.length)
     writer.write(headerValueAsArray)
   }

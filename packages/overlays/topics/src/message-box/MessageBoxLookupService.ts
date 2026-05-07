@@ -106,6 +106,7 @@ class MessageBoxLookupService implements LookupService {
   }
 }
 
-export default (mongoDb: Db): MessageBoxLookupService => {
+function create(mongoDb: Db): MessageBoxLookupService {
   return new MessageBoxLookupService(new MessageBoxStorage(mongoDb))
 }
+export default create

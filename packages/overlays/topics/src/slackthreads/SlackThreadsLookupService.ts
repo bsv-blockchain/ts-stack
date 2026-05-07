@@ -64,8 +64,8 @@ export class SlackThreadLookupService implements LookupService {
 
     const from = startDate ? new Date(startDate) : undefined
     const to = endDate ? new Date(endDate) : undefined
-    if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
+    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
     if (threadHash) return this.storage.findByThreadHash(threadHash, limit, skip, sortOrder)
     if (txid) return this.storage.findByTxid(txid, limit, skip, sortOrder)
@@ -90,4 +90,5 @@ export class SlackThreadLookupService implements LookupService {
   }
 }
 
-export default (db: Db): SlackThreadLookupService => new SlackThreadLookupService(new SlackThreadsStorage(db))
+function create(db: Db): SlackThreadLookupService { return new SlackThreadLookupService(new SlackThreadsStorage(db)) }
+export default create

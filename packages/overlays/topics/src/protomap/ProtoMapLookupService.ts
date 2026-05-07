@@ -80,4 +80,5 @@ class ProtoMapLookupService implements LookupService {
   }
 }
 
-export default (db: Db): ProtoMapLookupService => new ProtoMapLookupService(new ProtoMapStorageManager(db))
+function create(db: Db): ProtoMapLookupService { return new ProtoMapLookupService(new ProtoMapStorageManager(db)) }
+export default create

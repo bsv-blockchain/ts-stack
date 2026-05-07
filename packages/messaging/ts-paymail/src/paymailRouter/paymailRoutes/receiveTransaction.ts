@@ -1,11 +1,27 @@
 import Joi from 'joi'
-import { Transaction, Signature, Utils, Hash, BigNumber, BSM } from '@bsv/sdk'
-
+import { Transaction, Signature, Utils, Hash, BigNumber, ECDSA } from '@bsv/sdk'
 import PaymailRoute, { DomainLogicHandler } from './paymailRoute.js'
 import P2pReceiveTransactionCapability from '../../capability/p2pReceiveTransactionCapability.js'
 import { PaymailBadRequestError } from '../../errors/index.js'
 import PaymailClient from '../../paymailClient/paymailClient.js'
-const { sha256 } = Hash
+const BSM_PREFIX = 'Bitcoin Signed Message:\n'
+
+/** Encode a small integer as a Bitcoin varint (up to 252 bytes). */
+function bsmVarInt (n: number): number[] {
+  if (n < 0xfd) return [n]
+  return [0xfd, n & 0xff, (n >> 8) & 0xff]
+}
+
+function bsmMagicHash (msg: number[]): number[] {
+  const prefixBytes = Utils.toArray(BSM_PREFIX, 'utf8')
+  const buf = [
+    ...bsmVarInt(prefixBytes.length),
+    ...prefixBytes,
+    ...bsmVarInt(msg.length),
+    ...msg
+  ]
+  return Hash.hash256(buf)
+}
 
 interface ReceiveTransactionResponse {
   txid: string
@@ -92,10 +108,10 @@ export default class ReceiveTransactionRoute extends PaymailRoute {
     const msg = Utils.toArray(message, 'utf8')
     const sig = Signature.fromCompact(signature, 'base64')
     const recovery = Utils.toArray(signature, 'base64')[0] - 27 - 4
-    const msgHash = BSM.magicHash(msg)
+    const msgHash = bsmMagicHash(msg)
     const pkRecovered = sig.RecoverPublicKey(recovery, new BigNumber(msgHash))
     if (pkRecovered.toString() !== pubkey) throw new PaymailBadRequestError('PubKey does not match signature')
-    if (!BSM.verify(msg, sig, pkRecovered)) throw new PaymailBadRequestError('Invalid Signature')
+    if (!ECDSA.verify(new BigNumber(msgHash), sig, pkRecovered)) throw new PaymailBadRequestError('Invalid Signature')
   }
 
   protected serializeResponse (domainLogicResponse: ReceiveTransactionResponse): string {

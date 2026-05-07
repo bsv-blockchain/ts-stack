@@ -22,7 +22,7 @@ function toNumberArray (tx: AtomicBEEF): number[] {
 
 function hexToBytes (hex: string): number[] {
   const matches = hex.match(/.{1,2}/g)
-  return matches != null ? matches.map(byte => Number.parseInt(byte, 16)) : []
+  return (matches ?? []).map(byte => Number.parseInt(byte, 16))
 }
 
 function safeParse<T> (input: any): T | undefined {
@@ -125,9 +125,7 @@ export class PeerPayClient extends MessageBoxClient {
   }
 
   private get authFetchInstance (): AuthFetch {
-    if (this._authFetchInstance === null || this._authFetchInstance === undefined) {
-      this._authFetchInstance = new AuthFetch(this.peerPayWalletClient, undefined, undefined, this.originator)
-    }
+    this._authFetchInstance ??= new AuthFetch(this.peerPayWalletClient, undefined, undefined, this.originator)
     return this._authFetchInstance
   }
 
@@ -716,9 +714,9 @@ export class PeerPayClient extends MessageBoxClient {
     for (const msg of messages) {
       const body = safeParse<PaymentRequestMessage>(msg.body)
       if (body != null && isValidPaymentRequestMessage(body)) {
-        parsed.push({ messageId: msg.messageId as string, sender: msg.sender as string, body })
+        parsed.push({ messageId: msg.messageId, sender: msg.sender, body })
       } else {
-        malformedMessageIds.push(msg.messageId as string)
+        malformedMessageIds.push(msg.messageId)
       }
     }
 
@@ -743,7 +741,6 @@ export class PeerPayClient extends MessageBoxClient {
           Logger.warn(`[PP CLIENT] Invalid cancellation proof for requestId=${item.body.requestId}, discarding`)
           malformedMessageIds.push(item.messageId)
         }
-        continue
       }
     }
 
