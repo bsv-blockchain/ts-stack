@@ -133,9 +133,7 @@ export class OverlayGASPStorage implements GASPStorage {
       typeof tx.txMetadata === 'string' ? Utils.toArray(tx.txMetadata) : undefined,
       'historical-tx'
     )
-    if (admittanceResult.outputsToAdmit.includes(tx.outputIndex)) {
-      // The transaction is admissible, no further inputs are needed
-    } else if (this.engine.managers[this.topic] !== undefined && typeof this.engine.managers[this.topic].identifyNeededInputs === 'function') {
+    if (!admittanceResult.outputsToAdmit.includes(tx.outputIndex) && this.engine.managers[this.topic] !== undefined && typeof this.engine.managers[this.topic].identifyNeededInputs === 'function') {
       // The transaction is not admissible, get inputs needed for further verification
       // TopicManagers should implement a function to identify which inputs are needed.
       try {
@@ -217,12 +215,11 @@ export class OverlayGASPStorage implements GASPStorage {
 
       if (parentNode === undefined) {
         throw new Error(`Parent node with GraphID ${spentBy} not found`)
-      } else {
-        // Set parent-child relationship
-        parentNode.children.push(newGraphNode)
-        newGraphNode.parent = parentNode
-        this.temporaryGraphNodeRefs[`${newGraphNode.txid}.${newGraphNode.outputIndex}`] = newGraphNode
       }
+      // Set parent-child relationship
+      parentNode.children.push(newGraphNode)
+      newGraphNode.parent = parentNode
+      this.temporaryGraphNodeRefs[`${newGraphNode.txid}.${newGraphNode.outputIndex}`] = newGraphNode
     }
   }
 

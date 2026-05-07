@@ -39,7 +39,7 @@ export class AppsStorageManager {
   }
 
   async findByNameFuzzy(partialName: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<LookupFormula> {
-    const escaped = partialName.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+    const escaped = partialName.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
     const regex = new RegExp(escaped, 'i')
     return this.findRecordWithQuery({ 'metadata.name': { $regex: regex } }, limit, skip, sortOrder)
   }

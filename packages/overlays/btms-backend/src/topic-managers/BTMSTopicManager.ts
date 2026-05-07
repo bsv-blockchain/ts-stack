@@ -7,7 +7,7 @@ import docs from '../docs/BTMSTopicManagerDocs.js'
  * @public
  */
 export default class BTMSTopicManager implements TopicManager {
-  private isLikelySignatureField(field: number[]): boolean {
+  private isLikelySignatureField (field: number[]): boolean {
     if (field.length < 40) {
       return false
     }
@@ -18,7 +18,7 @@ export default class BTMSTopicManager implements TopicManager {
     }
     let printable = 0
     for (const code of asText) {
-      const codePoint = code.charCodeAt(0)
+      const codePoint = code.codePointAt(0) ?? 0
       if (
         (codePoint >= 32 && codePoint <= 126) ||
         codePoint === 9 ||
@@ -31,7 +31,7 @@ export default class BTMSTopicManager implements TopicManager {
     return printable / Math.max(asText.length, 1) < 0.8
   }
 
-  private decodeToken(lockingScript: LockingScript): { assetIdField: string, amount: number, metadata?: string } | undefined {
+  private decodeToken (lockingScript: LockingScript): { assetIdField: string, amount: number, metadata?: string } | undefined {
     const decoded = PushDrop.decode(lockingScript)
     if (decoded.fields.length < 2 || decoded.fields.length > 4) {
       return undefined
@@ -54,14 +54,14 @@ export default class BTMSTopicManager implements TopicManager {
     return { assetIdField, amount, metadata }
   }
 
-  private canonicalAssetId(assetIdField: string, txid: string, outputIndex: number): string {
+  private canonicalAssetId (assetIdField: string, txid: string, outputIndex: number): string {
     if (assetIdField === 'ISSUE') {
       return `${txid}.${outputIndex}`
     }
     return assetIdField
   }
 
-  private parseTokenAmount(raw: string): number | undefined {
+  private parseTokenAmount (raw: string): number | undefined {
     const amount = Number(raw)
     if (!Number.isInteger(amount) || amount < 1) {
       return undefined
@@ -75,7 +75,7 @@ export default class BTMSTopicManager implements TopicManager {
    * @param previousCoins - The previous coins to consider (indices into the BEEF's input transactions)
    * @returns A promise that resolves with the admittance instructions
    */
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     const coinsToRetain: number[] = []
     const coinsRemoved: number[] = []
@@ -144,13 +144,13 @@ export default class BTMSTopicManager implements TopicManager {
           const metadata = decodedToken.metadata
 
           // Track the amounts for previous UTXOs
-          if (!maxNumberOfEachAsset[assetId]) {
+          if (maxNumberOfEachAsset[assetId]) {
+            maxNumberOfEachAsset[assetId].amount += amount
+          } else {
             maxNumberOfEachAsset[assetId] = {
               amount,
               metadata
             }
-          } else {
-            maxNumberOfEachAsset[assetId].amount += amount
           }
         } catch (e) {
           console.log(`[BTMSTopicManager] Failed to decode previous UTXO ${p.txid}.${p.outputIndex}:`, e)
@@ -263,7 +263,7 @@ export default class BTMSTopicManager implements TopicManager {
   /**
    * Returns the documentation for the tokenization protocol
    */
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return docs
   }
 
@@ -271,7 +271,7 @@ export default class BTMSTopicManager implements TopicManager {
    * Get metadata about the topic manager
    * @returns A promise that resolves to an object containing metadata
    */
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

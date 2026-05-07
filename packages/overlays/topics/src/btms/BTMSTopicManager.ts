@@ -18,7 +18,7 @@ export default class BTMSTopicManager implements TopicManager {
     }
     let printable = 0
     for (const code of asText) {
-      const codePoint = code.codePointAt(0)!
+      const codePoint = code.codePointAt(0) ?? 0
       if (
         (codePoint >= 32 && codePoint <= 126) ||
         codePoint === 9 ||
@@ -144,13 +144,13 @@ export default class BTMSTopicManager implements TopicManager {
           const metadata = decodedToken.metadata
 
           // Track the amounts for previous UTXOs
-          if (!maxNumberOfEachAsset[assetId]) {
+          if (maxNumberOfEachAsset[assetId]) {
+            maxNumberOfEachAsset[assetId].amount += amount
+          } else {
             maxNumberOfEachAsset[assetId] = {
               amount,
               metadata
             }
-          } else {
-            maxNumberOfEachAsset[assetId].amount += amount
           }
         } catch (e) {
           console.log(`[BTMSTopicManager] Failed to decode previous UTXO ${p.txid}.${p.outputIndex}:`, e)

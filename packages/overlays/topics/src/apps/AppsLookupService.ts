@@ -78,4 +78,7 @@ class AppsLookupService implements LookupService {
   }
 }
 
-export default (db: Db): AppsLookupService => new AppsLookupService(new AppsStorageManager(db))
+function createAppsLookupService(db: Db): AppsLookupService {
+  return new AppsLookupService(new AppsStorageManager(db))
+}
+export default createAppsLookupService

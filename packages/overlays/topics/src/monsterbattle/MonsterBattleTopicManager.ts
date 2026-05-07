@@ -102,7 +102,7 @@ function isP2PKH(script: Script): boolean {
   if (chunks.length !== 5) return false
   return chunks[0].op === OP.OP_DUP &&
     chunks[1].op === OP.OP_HASH160 &&
-    chunks[2].data && chunks[2].data.length === 20 &&
+    chunks[2].data?.length === 20 &&
     chunks[3].op === OP.OP_EQUALVERIFY &&
     chunks[4].op === OP.OP_CHECKSIG
 }
