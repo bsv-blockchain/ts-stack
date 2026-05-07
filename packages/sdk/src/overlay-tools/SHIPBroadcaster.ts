@@ -251,91 +251,14 @@ export default class TopicBroadcaster implements Broadcaster {
     }
 
     // Now, perform the checks
+    const allHostsError = this.checkAllHostsRequirement(hostAcknowledgments)
+    if (allHostsError != null) return allHostsError
 
-    // Check requireAcknowledgmentFromAllHostsForTopics
-    let requiredTopicsAllHosts: string[]
-    let requireAllHosts: 'all' | 'any'
+    const anyHostError = this.checkAnyHostRequirement(hostAcknowledgments)
+    if (anyHostError != null) return anyHostError
 
-    if (this.requireAcknowledgmentFromAllHostsForTopics === 'any') {
-      requiredTopicsAllHosts = this.topics
-      requireAllHosts = 'any'
-    } else if (Array.isArray(this.requireAcknowledgmentFromAllHostsForTopics)) {
-      requiredTopicsAllHosts = this.requireAcknowledgmentFromAllHostsForTopics
-      requireAllHosts = 'all'
-    } else {
-      // Default ('all') and unknown values: use all topics with 'all' requirement
-      requiredTopicsAllHosts = this.topics
-      requireAllHosts = 'all'
-    }
-
-    if (requiredTopicsAllHosts.length > 0) {
-      const allHostsAcknowledged = this.checkAcknowledgmentFromAllHosts(
-        hostAcknowledgments,
-        requiredTopicsAllHosts,
-        requireAllHosts
-      )
-      if (!allHostsAcknowledged) {
-        return {
-          status: 'error',
-          code: 'ERR_REQUIRE_ACK_FROM_ALL_HOSTS_FAILED',
-          description: 'Not all hosts acknowledged the required topics.'
-        }
-      }
-    }
-
-    // Check requireAcknowledgmentFromAnyHostForTopics
-    let requiredTopicsAnyHost: string[]
-    let requireAnyHost: 'all' | 'any'
-
-    if (this.requireAcknowledgmentFromAnyHostForTopics === 'all') {
-      requiredTopicsAnyHost = this.topics
-      requireAnyHost = 'all'
-    } else if (this.requireAcknowledgmentFromAnyHostForTopics === 'any') {
-      requiredTopicsAnyHost = this.topics
-      requireAnyHost = 'any'
-    } else if (Array.isArray(this.requireAcknowledgmentFromAnyHostForTopics)) {
-      requiredTopicsAnyHost = this.requireAcknowledgmentFromAnyHostForTopics
-      requireAnyHost = 'all'
-    } else {
-      // No requirement
-      requiredTopicsAnyHost = []
-      requireAnyHost = 'all'
-    }
-
-    if (requiredTopicsAnyHost.length > 0) {
-      const anyHostAcknowledged = this.checkAcknowledgmentFromAnyHost(
-        hostAcknowledgments,
-        requiredTopicsAnyHost,
-        requireAnyHost
-      )
-      if (!anyHostAcknowledged) {
-        return {
-          status: 'error',
-          code: 'ERR_REQUIRE_ACK_FROM_ANY_HOST_FAILED',
-          description: 'No host acknowledged the required topics.'
-        }
-      }
-    }
-
-    // Check requireAcknowledgmentFromSpecificHostsForTopics
-    if (
-      Object.keys(this.requireAcknowledgmentFromSpecificHostsForTopics).length >
-      0
-    ) {
-      const specificHostsAcknowledged =
-        this.checkAcknowledgmentFromSpecificHosts(
-          hostAcknowledgments,
-          this.requireAcknowledgmentFromSpecificHostsForTopics
-        )
-      if (!specificHostsAcknowledged) {
-        return {
-          status: 'error',
-          code: 'ERR_REQUIRE_ACK_FROM_SPECIFIC_HOSTS_FAILED',
-          description:
-            'Specific hosts did not acknowledge the required topics.'
-        }
-      }
-    }
+    const specificHostsError = this.checkSpecificHostsRequirement(hostAcknowledgments)
+    if (specificHostsError != null) return specificHostsError
 
     // If all checks pass, return success
     return {
@@ -345,32 +268,72 @@ export default class TopicBroadcaster implements Broadcaster {
     }
   }
 
+  /** Resolves the (requiredTopics, require) pair for requireAcknowledgmentFromAllHostsForTopics. */
+  private resolveAllHostsRequirement (): { requiredTopics: string[], require: 'all' | 'any' } {
+    const r = this.requireAcknowledgmentFromAllHostsForTopics
+    if (r === 'any') return { requiredTopics: this.topics, require: 'any' }
+    if (Array.isArray(r)) return { requiredTopics: r, require: 'all' }
+    // Default 'all' or unknown: all topics, all requirement
+    return { requiredTopics: this.topics, require: 'all' }
+  }
+
+  private checkAllHostsRequirement (hostAcknowledgments: Record<string, Set<string>>): BroadcastFailure | null {
+    const { requiredTopics, require } = this.resolveAllHostsRequirement()
+    if (requiredTopics.length === 0) return null
+    if (!this.checkAcknowledgmentFromAllHosts(hostAcknowledgments, requiredTopics, require)) {
+      return { status: 'error', code: 'ERR_REQUIRE_ACK_FROM_ALL_HOSTS_FAILED', description: 'Not all hosts acknowledged the required topics.' }
+    }
+    return null
+  }
+
+  /** Resolves the (requiredTopics, require) pair for requireAcknowledgmentFromAnyHostForTopics. */
+  private resolveAnyHostRequirement (): { requiredTopics: string[], require: 'all' | 'any' } {
+    const r = this.requireAcknowledgmentFromAnyHostForTopics
+    if (r === 'all') return { requiredTopics: this.topics, require: 'all' }
+    if (r === 'any') return { requiredTopics: this.topics, require: 'any' }
+    if (Array.isArray(r)) return { requiredTopics: r, require: 'all' }
+    return { requiredTopics: [], require: 'all' }
+  }
+
+  private checkAnyHostRequirement (hostAcknowledgments: Record<string, Set<string>>): BroadcastFailure | null {
+    const { requiredTopics, require } = this.resolveAnyHostRequirement()
+    if (requiredTopics.length === 0) return null
+    if (!this.checkAcknowledgmentFromAnyHost(hostAcknowledgments, requiredTopics, require)) {
+      return { status: 'error', code: 'ERR_REQUIRE_ACK_FROM_ANY_HOST_FAILED', description: 'No host acknowledged the required topics.' }
+    }
+    return null
+  }
+
+  private checkSpecificHostsRequirement (hostAcknowledgments: Record<string, Set<string>>): BroadcastFailure | null {
+    if (Object.keys(this.requireAcknowledgmentFromSpecificHostsForTopics).length === 0) return null
+    if (!this.checkAcknowledgmentFromSpecificHosts(hostAcknowledgments, this.requireAcknowledgmentFromSpecificHostsForTopics)) {
+      return { status: 'error', code: 'ERR_REQUIRE_ACK_FROM_SPECIFIC_HOSTS_FAILED', description: 'Specific hosts did not acknowledge the required topics.' }
+    }
+    return null
+  }
+
+  /**
+   * Returns true if `acknowledgedTopics` satisfies the given requirement against `requiredTopics`.
+   */
+  private topicsMatchRequirement (
+    acknowledgedTopics: Set<string>,
+    requiredTopics: string[],
+    require: 'all' | 'any'
+  ): boolean {
+    if (require === 'all') {
+      return requiredTopics.every(t => acknowledgedTopics.has(t))
+    }
+    return requiredTopics.some(t => acknowledgedTopics.has(t))
+  }
+
   private checkAcknowledgmentFromAllHosts (
     hostAcknowledgments: Record<string, Set<string>>,
     requiredTopics: string[],
     require: 'all' | 'any'
   ): boolean {
-    for (const acknowledgedTopics of Object.values(hostAcknowledgments)) {
-      if (require === 'all') {
-        for (const topic of requiredTopics) {
-          if (!acknowledgedTopics.has(topic)) {
-            return false
-          }
-        }
-      } else if (require === 'any') {
-        let anyAcknowledged = false
-        for (const topic of requiredTopics) {
-          if (acknowledgedTopics.has(topic)) {
-            anyAcknowledged = true
-            break
-          }
-        }
-        if (!anyAcknowledged) {
-          return false
-        }
-      }
-    }
-    return true
+    return Object.values(hostAcknowledgments).every(
+      acknowledged => this.topicsMatchRequirement(acknowledged, requiredTopics, require)
+    )
   }
 
   private checkAcknowledgmentFromAnyHost (
@@ -378,32 +341,9 @@ export default class TopicBroadcaster implements Broadcaster {
     requiredTopics: string[],
     require: 'all' | 'any'
   ): boolean {
-    if (require === 'all') {
-      // All required topics must be acknowledged by at least one host
-      for (const acknowledgedTopics of Object.values(hostAcknowledgments)) {
-        let acknowledgesAllRequiredTopics = true
-        for (const topic of requiredTopics) {
-          if (!acknowledgedTopics.has(topic)) {
-            acknowledgesAllRequiredTopics = false
-            break
-          }
-        }
-        if (acknowledgesAllRequiredTopics) {
-          return true
-        }
-      }
-      return false
-    } else {
-      // At least one required topic must be acknowledged by at least one host
-      for (const acknowledgedTopics of Object.values(hostAcknowledgments)) {
-        for (const topic of requiredTopics) {
-          if (acknowledgedTopics.has(topic)) {
-            return true
-          }
-        }
-      }
-      return false
-    }
+    return Object.values(hostAcknowledgments).some(
+      acknowledged => this.topicsMatchRequirement(acknowledged, requiredTopics, require)
+    )
   }
 
   private checkAcknowledgmentFromSpecificHosts (
@@ -418,10 +358,7 @@ export default class TopicBroadcaster implements Broadcaster {
       }
       let requiredTopics: string[]
       let require: 'all' | 'any'
-      if (
-        requiredTopicsOrAllAny === 'all' ||
-        requiredTopicsOrAllAny === 'any'
-      ) {
+      if (requiredTopicsOrAllAny === 'all' || requiredTopicsOrAllAny === 'any') {
         require = requiredTopicsOrAllAny
         requiredTopics = this.topics
       } else if (Array.isArray(requiredTopicsOrAllAny)) {
@@ -431,23 +368,8 @@ export default class TopicBroadcaster implements Broadcaster {
         // Invalid configuration
         continue
       }
-      if (require === 'all') {
-        for (const topic of requiredTopics) {
-          if (!acknowledgedTopics.has(topic)) {
-            return false
-          }
-        }
-      } else if (require === 'any') {
-        let anyAcknowledged = false
-        for (const topic of requiredTopics) {
-          if (acknowledgedTopics.has(topic)) {
-            anyAcknowledged = true
-            break
-          }
-        }
-        if (!anyAcknowledged) {
-          return false
-        }
+      if (!this.topicsMatchRequirement(acknowledgedTopics, requiredTopics, require)) {
+        return false
       }
     }
     return true
