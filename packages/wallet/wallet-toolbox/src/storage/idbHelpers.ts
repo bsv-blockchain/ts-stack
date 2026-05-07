@@ -32,194 +32,292 @@ export function dateMatches (a: Date | undefined, b: Date | undefined): boolean 
   return a.getTime() === b.getTime()
 }
 
+// ─── Field comparison helpers (CC-free building blocks) ──────────────────────
+
+/** True when the partial field is absent or equals the record value (undefined-guarded). */
+function eq<T> (pv: T | undefined, rv: T): boolean {
+  return pv === undefined || pv === rv
+}
+
+/** True when the partial field is null/undefined or equals the record value (null-guarded). */
+function eqNullable<T> (pv: T | null | undefined, rv: T): boolean {
+  return pv == null || pv === rv
+}
+
+/** True when the partial Date is absent or the timestamps match (delegates to dateMatches). */
+function dateEq (pv: Date | undefined, rv: Date | undefined): boolean {
+  return dateMatches(pv, rv)
+}
+
+/** True when the partial Date is null/undefined or the timestamps match. */
+function dateEqNullable (pv: Date | undefined | null, rv: Date): boolean {
+  return pv == null || pv.getTime() === rv.getTime()
+}
+
 // ─── Per-entity partial matchers ─────────────────────────────────────────────
 
 export function matchesOutputTagMapPartial (r: TableOutputTagMap, partial: Partial<TableOutputTagMap>): boolean {
-  if (partial.outputTagId !== undefined && r.outputTagId !== partial.outputTagId) return false
-  if (partial.outputId !== undefined && r.outputId !== partial.outputId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.isDeleted !== undefined && r.isDeleted !== partial.isDeleted) return false
-  return true
+  return (
+    eq(partial.outputTagId, r.outputTagId) &&
+    eq(partial.outputId, r.outputId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.isDeleted, r.isDeleted)
+  )
 }
 
 export function matchesProvenTxReqPartial (r: TableProvenTxReq, partial: Partial<TableProvenTxReq>): boolean {
-  if (partial.provenTxReqId !== undefined && r.provenTxReqId !== partial.provenTxReqId) return false
-  if (partial.provenTxId !== undefined && r.provenTxId !== partial.provenTxId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.status !== undefined && r.status !== partial.status) return false
-  if (partial.attempts !== undefined && r.attempts !== partial.attempts) return false
-  if (partial.notified !== undefined && r.notified !== partial.notified) return false
-  if (partial.txid !== undefined && r.txid !== partial.txid) return false
-  if (partial.batch !== undefined && r.batch !== partial.batch) return false
-  if (partial.history !== undefined && r.history !== partial.history) return false
-  if (partial.notify !== undefined && r.notify !== partial.notify) return false
-  return true
+  return (
+    eq(partial.provenTxReqId, r.provenTxReqId) &&
+    eq(partial.provenTxId, r.provenTxId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.status, r.status) &&
+    eq(partial.attempts, r.attempts) &&
+    eq(partial.notified, r.notified) &&
+    eq(partial.txid, r.txid) &&
+    eq(partial.batch, r.batch) &&
+    eq(partial.history, r.history) &&
+    eq(partial.notify, r.notify)
+  )
 }
 
 export function matchesProvenTxPartial (r: TableProvenTx, partial: Partial<TableProvenTx>): boolean {
-  if (partial.provenTxId !== undefined && r.provenTxId !== partial.provenTxId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.txid !== undefined && r.txid !== partial.txid) return false
-  if (partial.height !== undefined && r.height !== partial.height) return false
-  if (partial.index !== undefined && r.index !== partial.index) return false
-  if (partial.blockHash !== undefined && r.blockHash !== partial.blockHash) return false
-  if (partial.merkleRoot !== undefined && r.merkleRoot !== partial.merkleRoot) return false
-  return true
+  return (
+    eq(partial.provenTxId, r.provenTxId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.txid, r.txid) &&
+    eq(partial.height, r.height) &&
+    eq(partial.index, r.index) &&
+    eq(partial.blockHash, r.blockHash) &&
+    eq(partial.merkleRoot, r.merkleRoot)
+  )
 }
 
 export function matchesTxLabelMapPartial (r: TableTxLabelMap, partial: Partial<TableTxLabelMap>): boolean {
-  if (partial.txLabelId !== undefined && r.txLabelId !== partial.txLabelId) return false
-  if (partial.transactionId !== undefined && r.transactionId !== partial.transactionId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.isDeleted !== undefined && r.isDeleted !== partial.isDeleted) return false
-  return true
+  return (
+    eq(partial.txLabelId, r.txLabelId) &&
+    eq(partial.transactionId, r.transactionId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.isDeleted, r.isDeleted)
+  )
 }
 
 export function matchesCertificateFieldPartial (r: TableCertificateField, partial: Partial<TableCertificateField>): boolean {
-  if (partial.userId !== undefined && r.userId !== partial.userId) return false
-  if (partial.certificateId !== undefined && r.certificateId !== partial.certificateId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.fieldName !== undefined && r.fieldName !== partial.fieldName) return false
-  if (partial.fieldValue !== undefined && r.fieldValue !== partial.fieldValue) return false
-  if (partial.masterKey !== undefined && r.masterKey !== partial.masterKey) return false
-  return true
+  return (
+    eq(partial.userId, r.userId) &&
+    eq(partial.certificateId, r.certificateId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.fieldName, r.fieldName) &&
+    eq(partial.fieldValue, r.fieldValue) &&
+    eq(partial.masterKey, r.masterKey)
+  )
 }
 
 export function matchesCertificatePartial (r: TableCertificate, partial: Partial<TableCertificate>): boolean {
-  if (partial.userId !== undefined && r.userId !== partial.userId) return false
-  if (partial.certificateId !== undefined && r.certificateId !== partial.certificateId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.type !== undefined && r.type !== partial.type) return false
-  if (partial.serialNumber !== undefined && r.serialNumber !== partial.serialNumber) return false
-  if (partial.certifier !== undefined && r.certifier !== partial.certifier) return false
-  if (partial.subject !== undefined && r.subject !== partial.subject) return false
-  if (partial.verifier !== undefined && r.verifier !== partial.verifier) return false
-  if (partial.revocationOutpoint !== undefined && r.revocationOutpoint !== partial.revocationOutpoint) return false
-  if (partial.signature !== undefined && r.signature !== partial.signature) return false
-  if (partial.isDeleted !== undefined && r.isDeleted !== partial.isDeleted) return false
-  return true
+  return (
+    eq(partial.userId, r.userId) &&
+    eq(partial.certificateId, r.certificateId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.type, r.type) &&
+    eq(partial.serialNumber, r.serialNumber) &&
+    eq(partial.certifier, r.certifier) &&
+    eq(partial.subject, r.subject) &&
+    eq(partial.verifier, r.verifier) &&
+    eq(partial.revocationOutpoint, r.revocationOutpoint) &&
+    eq(partial.signature, r.signature) &&
+    eq(partial.isDeleted, r.isDeleted)
+  )
 }
 
 export function matchesCommissionPartial (r: TableCommission, partial: Partial<TableCommission>): boolean {
-  if (partial.commissionId !== undefined && r.commissionId !== partial.commissionId) return false
-  if (partial.transactionId !== undefined && r.transactionId !== partial.transactionId) return false
-  if (partial.userId !== undefined && r.userId !== partial.userId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.satoshis !== undefined && r.satoshis !== partial.satoshis) return false
-  if (partial.keyOffset !== undefined && r.keyOffset !== partial.keyOffset) return false
-  if (partial.isRedeemed !== undefined && r.isRedeemed !== partial.isRedeemed) return false
-  return true
+  return (
+    eq(partial.commissionId, r.commissionId) &&
+    eq(partial.transactionId, r.transactionId) &&
+    eq(partial.userId, r.userId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.satoshis, r.satoshis) &&
+    eq(partial.keyOffset, r.keyOffset) &&
+    eq(partial.isRedeemed, r.isRedeemed)
+  )
 }
 
 export function matchesMonitorEventPartial (r: TableMonitorEvent, partial: Partial<TableMonitorEvent>): boolean {
-  if (partial.id !== undefined && r.id !== partial.id) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.event !== undefined && r.event !== partial.event) return false
-  if (partial.details !== undefined && r.details !== partial.details) return false
-  return true
+  return (
+    eq(partial.id, r.id) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.event, r.event) &&
+    eq(partial.details, r.details)
+  )
 }
 
 export function matchesOutputBasketPartial (r: TableOutputBasket, partial: Partial<TableOutputBasket>): boolean {
-  if (partial.basketId !== undefined && r.basketId !== partial.basketId) return false
-  if (partial.userId !== undefined && r.userId !== partial.userId) return false
-  if (partial.created_at !== undefined && !dateMatches(partial.created_at, r.created_at)) return false
-  if (partial.updated_at !== undefined && !dateMatches(partial.updated_at, r.updated_at)) return false
-  if (partial.name !== undefined && r.name !== partial.name) return false
-  if (partial.numberOfDesiredUTXOs !== undefined && r.numberOfDesiredUTXOs !== partial.numberOfDesiredUTXOs) return false
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (partial.minimumDesiredUTXOValue !== undefined && (r as any).numberOfDesiredSatoshis !== partial.minimumDesiredUTXOValue) return false
-  if (partial.isDeleted !== undefined && r.isDeleted !== partial.isDeleted) return false
-  return true
+  const minimumOk = partial.minimumDesiredUTXOValue === undefined || (r as any).numberOfDesiredSatoshis === partial.minimumDesiredUTXOValue
+  return (
+    eq(partial.basketId, r.basketId) &&
+    eq(partial.userId, r.userId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eq(partial.name, r.name) &&
+    eq(partial.numberOfDesiredUTXOs, r.numberOfDesiredUTXOs) &&
+    minimumOk &&
+    eq(partial.isDeleted, r.isDeleted)
+  )
 }
 
 export function matchesOutputPartial (r: TableOutput, partial: Partial<TableOutput>): boolean {
-  if (partial.outputId && r.outputId !== partial.outputId) return false
-  if (partial.userId && r.userId !== partial.userId) return false
-  if (partial.transactionId && r.transactionId !== partial.transactionId) return false
-  if (partial.basketId && r.basketId !== partial.basketId) return false
-  if (partial.created_at != null && r.created_at.getTime() !== partial.created_at.getTime()) return false
-  if (partial.updated_at != null && r.updated_at.getTime() !== partial.updated_at.getTime()) return false
-  if (partial.spendable !== undefined && r.spendable !== partial.spendable) return false
-  if (partial.change !== undefined && r.change !== partial.change) return false
-  if (partial.outputDescription && r.outputDescription !== partial.outputDescription) return false
-  if (partial.vout !== undefined && r.vout !== partial.vout) return false
-  if (partial.satoshis !== undefined && r.satoshis !== partial.satoshis) return false
-  if (partial.providedBy && r.providedBy !== partial.providedBy) return false
-  if (partial.purpose && r.purpose !== partial.purpose) return false
-  if (partial.type && r.type !== partial.type) return false
-  if (partial.txid && r.txid !== partial.txid) return false
-  if (partial.senderIdentityKey && r.senderIdentityKey !== partial.senderIdentityKey) return false
-  if (partial.derivationPrefix && r.derivationPrefix !== partial.derivationPrefix) return false
-  if (partial.derivationSuffix && r.derivationSuffix !== partial.derivationSuffix) return false
-  if (partial.customInstructions && r.customInstructions !== partial.customInstructions) return false
-  if (partial.spentBy && r.spentBy !== partial.spentBy) return false
-  if (partial.sequenceNumber !== undefined && r.sequenceNumber !== partial.sequenceNumber) return false
-  if (partial.scriptLength !== undefined && r.scriptLength !== partial.scriptLength) return false
-  if (partial.scriptOffset !== undefined && r.scriptOffset !== partial.scriptOffset) return false
-  return true
+  return (
+    matchesOutputPartialIds(r, partial) &&
+    matchesOutputPartialDates(r, partial) &&
+    matchesOutputPartialScalars(r, partial) &&
+    matchesOutputPartialStrings(r, partial)
+  )
+}
+
+function matchesOutputPartialIds (r: TableOutput, partial: Partial<TableOutput>): boolean {
+  return (
+    eqNullable(partial.outputId, r.outputId) &&
+    eqNullable(partial.userId, r.userId) &&
+    eqNullable(partial.transactionId, r.transactionId) &&
+    eqNullable(partial.basketId, r.basketId)
+  )
+}
+
+function matchesOutputPartialDates (r: TableOutput, partial: Partial<TableOutput>): boolean {
+  return (
+    dateEqNullable(partial.created_at, r.created_at) &&
+    dateEqNullable(partial.updated_at, r.updated_at)
+  )
+}
+
+function matchesOutputPartialScalars (r: TableOutput, partial: Partial<TableOutput>): boolean {
+  return (
+    eq(partial.spendable, r.spendable) &&
+    eq(partial.change, r.change) &&
+    eq(partial.vout, r.vout) &&
+    eq(partial.satoshis, r.satoshis) &&
+    eq(partial.sequenceNumber, r.sequenceNumber) &&
+    eq(partial.scriptLength, r.scriptLength) &&
+    eq(partial.scriptOffset, r.scriptOffset)
+  )
+}
+
+function matchesOutputPartialStrings (r: TableOutput, partial: Partial<TableOutput>): boolean {
+  return (
+    eqNullable(partial.outputDescription, r.outputDescription) &&
+    eqNullable(partial.providedBy, r.providedBy) &&
+    eqNullable(partial.purpose, r.purpose) &&
+    eqNullable(partial.type, r.type) &&
+    eqNullable(partial.txid, r.txid) &&
+    eqNullable(partial.senderIdentityKey, r.senderIdentityKey) &&
+    eqNullable(partial.derivationPrefix, r.derivationPrefix) &&
+    eqNullable(partial.derivationSuffix, r.derivationSuffix) &&
+    eqNullable(partial.customInstructions, r.customInstructions) &&
+    eqNullable(partial.spentBy, r.spentBy)
+  )
 }
 
 export function matchesOutputTagPartial (r: TableOutputTag, partial: Partial<TableOutputTag>): boolean {
-  if (partial.outputTagId && r.outputTagId !== partial.outputTagId) return false
-  if (partial.userId && r.userId !== partial.userId) return false
-  if (partial.created_at != null && r.created_at.getTime() !== partial.created_at.getTime()) return false
-  if (partial.updated_at != null && r.updated_at.getTime() !== partial.updated_at.getTime()) return false
-  if (partial.tag && r.tag !== partial.tag) return false
-  if (partial.isDeleted !== undefined && r.isDeleted !== partial.isDeleted) return false
-  return true
+  return (
+    eqNullable(partial.outputTagId, r.outputTagId) &&
+    eqNullable(partial.userId, r.userId) &&
+    dateEqNullable(partial.created_at, r.created_at) &&
+    dateEqNullable(partial.updated_at, r.updated_at) &&
+    eqNullable(partial.tag, r.tag) &&
+    eq(partial.isDeleted, r.isDeleted)
+  )
 }
 
 export function matchesSyncStatePartial (r: TableSyncState, partial: Partial<TableSyncState>): boolean {
-  if (partial.syncStateId && r.syncStateId !== partial.syncStateId) return false
-  if (partial.userId && r.userId !== partial.userId) return false
-  if (partial.created_at != null && r.created_at.getTime() !== partial.created_at.getTime()) return false
-  if (partial.updated_at != null && r.updated_at.getTime() !== partial.updated_at.getTime()) return false
-  if (partial.storageIdentityKey && r.storageIdentityKey !== partial.storageIdentityKey) return false
-  if (partial.storageName && r.storageName !== partial.storageName) return false
-  if (partial.status && r.status !== partial.status) return false
-  if (partial.init !== undefined && r.init !== partial.init) return false
-  if (partial.refNum !== undefined && r.refNum !== partial.refNum) return false
-  if (partial.when != null && r.when?.getTime() !== partial.when.getTime()) return false
-  if (partial.satoshis !== undefined && r.satoshis !== partial.satoshis) return false
+  return (
+    matchesSyncStatePartialIds(r, partial) &&
+    matchesSyncStatePartialScalars(r, partial) &&
+    matchesSyncStatePartialStrings(r, partial)
+  )
+}
+
+function matchesSyncStatePartialIds (r: TableSyncState, partial: Partial<TableSyncState>): boolean {
+  return (
+    eqNullable(partial.syncStateId, r.syncStateId) &&
+    eqNullable(partial.userId, r.userId) &&
+    dateEqNullable(partial.created_at, r.created_at) &&
+    dateEqNullable(partial.updated_at, r.updated_at)
+  )
+}
+
+function matchesSyncStatePartialScalars (r: TableSyncState, partial: Partial<TableSyncState>): boolean {
+  return (
+    eq(partial.init, r.init) &&
+    eq(partial.refNum, r.refNum) &&
+    eq(partial.satoshis, r.satoshis) &&
+    (partial.when == null || r.when?.getTime() === partial.when.getTime())
+  )
+}
+
+function matchesSyncStatePartialStrings (r: TableSyncState, partial: Partial<TableSyncState>): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (partial.errorLocal && (r as any).errorLocale !== partial.errorLocal) return false
-  if (partial.errorOther && r.errorOther !== partial.errorOther) return false
-  return true
+  const errorLocalOk = partial.errorLocal == null || (r as any).errorLocale === partial.errorLocal
+  return (
+    eqNullable(partial.storageIdentityKey, r.storageIdentityKey) &&
+    eqNullable(partial.storageName, r.storageName) &&
+    eqNullable(partial.status, r.status) &&
+    errorLocalOk &&
+    eqNullable(partial.errorOther, r.errorOther)
+  )
 }
 
 export function matchesTransactionPartial (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
-  if (partial.transactionId && r.transactionId !== partial.transactionId) return false
-  if (partial.userId && r.userId !== partial.userId) return false
-  if (partial.created_at != null && r.created_at.getTime() !== partial.created_at.getTime()) return false
-  if (partial.updated_at != null && r.updated_at.getTime() !== partial.updated_at.getTime()) return false
-  if (partial.provenTxId && r.provenTxId !== partial.provenTxId) return false
-  if (partial.status && r.status !== partial.status) return false
-  if (partial.reference && r.reference !== partial.reference) return false
-  if (partial.isOutgoing !== undefined && r.isOutgoing !== partial.isOutgoing) return false
-  if (partial.satoshis !== undefined && r.satoshis !== partial.satoshis) return false
-  if (partial.description && r.description !== partial.description) return false
-  if (partial.version !== undefined && r.version !== partial.version) return false
-  if (partial.lockTime !== undefined && r.lockTime !== partial.lockTime) return false
-  if (partial.txid && r.txid !== partial.txid) return false
-  return true
+  return (
+    matchesTransactionPartialIds(r, partial) &&
+    matchesTransactionPartialScalars(r, partial) &&
+    matchesTransactionPartialStrings(r, partial)
+  )
+}
+
+function matchesTransactionPartialIds (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
+  return (
+    eqNullable(partial.transactionId, r.transactionId) &&
+    eqNullable(partial.userId, r.userId) &&
+    dateEqNullable(partial.created_at, r.created_at) &&
+    dateEqNullable(partial.updated_at, r.updated_at) &&
+    eqNullable(partial.provenTxId, r.provenTxId)
+  )
+}
+
+function matchesTransactionPartialScalars (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
+  return (
+    eq(partial.isOutgoing, r.isOutgoing) &&
+    eq(partial.satoshis, r.satoshis) &&
+    eq(partial.version, r.version) &&
+    eq(partial.lockTime, r.lockTime)
+  )
+}
+
+function matchesTransactionPartialStrings (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
+  return (
+    eqNullable(partial.status, r.status) &&
+    eqNullable(partial.reference, r.reference) &&
+    eqNullable(partial.description, r.description) &&
+    eqNullable(partial.txid, r.txid)
+  )
 }
 
 export function matchesTxLabelPartial (r: TableTxLabel, partial: Partial<TableTxLabel>): boolean {
-  if (partial.txLabelId && r.txLabelId !== partial.txLabelId) return false
-  if (partial.userId && r.userId !== partial.userId) return false
-  if (partial.created_at != null && r.created_at.getTime() !== partial.created_at.getTime()) return false
-  if (partial.updated_at != null && r.updated_at.getTime() !== partial.updated_at.getTime()) return false
-  if (partial.label && r.label !== partial.label) return false
-  if (partial.isDeleted !== undefined && r.isDeleted !== partial.isDeleted) return false
-  return true
+  return (
+    eqNullable(partial.txLabelId, r.txLabelId) &&
+    eqNullable(partial.userId, r.userId) &&
+    dateEqNullable(partial.created_at, r.created_at) &&
+    dateEqNullable(partial.updated_at, r.updated_at) &&
+    eqNullable(partial.label, r.label) &&
+    eq(partial.isDeleted, r.isDeleted)
+  )
 }
 
 // ─── IDB schema upgrade helpers ──────────────────────────────────────────────
@@ -317,4 +415,26 @@ export function upgradeSyncStates (db: IDBPDatabase<StorageIdbSchema>): void {
   store.createIndex('userId', 'userId')
   store.createIndex('refNum', 'refNum', { unique: true })
   store.createIndex('status', 'status')
+}
+
+// ─── Bulk store initialisation (called by the version-1 upgrade) ─────────────
+
+/** Upgrade handler for every store that existed at schema version 1. */
+export function upgradeAllStoresV1 (db: IDBPDatabase<StorageIdbSchema>): void {
+  const names = db.objectStoreNames
+  if (!names.contains('proven_txs')) upgradeProvenTxs(db)
+  if (!names.contains('proven_tx_reqs')) upgradeProvenTxReqs(db)
+  if (!names.contains('users')) upgradeUsers(db)
+  if (!names.contains('certificates')) upgradeCertificates(db)
+  if (!names.contains('certificate_fields')) upgradeCertificateFields(db)
+  if (!names.contains('output_baskets')) upgradeOutputBaskets(db)
+  if (!names.contains('transactions')) upgradeTransactions(db)
+  if (!names.contains('commissions')) upgradeCommissions(db)
+  if (!names.contains('outputs')) upgradeOutputs(db)
+  if (!names.contains('output_tags')) upgradeOutputTags(db)
+  if (!names.contains('output_tags_map')) upgradeOutputTagsMap(db)
+  if (!names.contains('tx_labels')) upgradeTxLabels(db)
+  if (!names.contains('tx_labels_map')) upgradeTxLabelsMap(db)
+  if (!names.contains('monitor_events')) upgradeMonitorEvents(db)
+  if (!names.contains('sync_states')) upgradeSyncStates(db)
 }

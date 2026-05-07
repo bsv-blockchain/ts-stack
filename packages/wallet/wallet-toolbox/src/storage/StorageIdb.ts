@@ -14,21 +14,7 @@ import {
   matchesTransactionPartial,
   matchesTxLabelMapPartial,
   matchesTxLabelPartial,
-  upgradeCertificateFields,
-  upgradeCertificates,
-  upgradeCommissions,
-  upgradeMonitorEvents,
-  upgradeOutputBaskets,
-  upgradeOutputs,
-  upgradeOutputTags,
-  upgradeOutputTagsMap,
-  upgradeProvenTxReqs,
-  upgradeProvenTxs,
-  upgradeSyncStates,
-  upgradeTransactions,
-  upgradeTxLabels,
-  upgradeTxLabelsMap,
-  upgradeUsers
+  upgradeAllStoresV1
 } from './idbHelpers'
 import { ListActionsResult, ListOutputsResult, Validation } from '@bsv/sdk'
 import {
@@ -174,21 +160,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const maxOutputScript = 1024
     const db = await openDB<StorageIdbSchema>(this.dbName, 1, {
       upgrade (db) {
-        if (!db.objectStoreNames.contains('proven_txs')) upgradeProvenTxs(db)
-        if (!db.objectStoreNames.contains('proven_tx_reqs')) upgradeProvenTxReqs(db)
-        if (!db.objectStoreNames.contains('users')) upgradeUsers(db)
-        if (!db.objectStoreNames.contains('certificates')) upgradeCertificates(db)
-        if (!db.objectStoreNames.contains('certificate_fields')) upgradeCertificateFields(db)
-        if (!db.objectStoreNames.contains('output_baskets')) upgradeOutputBaskets(db)
-        if (!db.objectStoreNames.contains('transactions')) upgradeTransactions(db)
-        if (!db.objectStoreNames.contains('commissions')) upgradeCommissions(db)
-        if (!db.objectStoreNames.contains('outputs')) upgradeOutputs(db)
-        if (!db.objectStoreNames.contains('output_tags')) upgradeOutputTags(db)
-        if (!db.objectStoreNames.contains('output_tags_map')) upgradeOutputTagsMap(db)
-        if (!db.objectStoreNames.contains('tx_labels')) upgradeTxLabels(db)
-        if (!db.objectStoreNames.contains('tx_labels_map')) upgradeTxLabelsMap(db)
-        if (!db.objectStoreNames.contains('monitor_events')) upgradeMonitorEvents(db)
-        if (!db.objectStoreNames.contains('sync_states')) upgradeSyncStates(db)
+        upgradeAllStoresV1(db)
         if (!db.objectStoreNames.contains('settings')) {
           if (!storageName || !storageIdentityKey) {
             throw new WERR_INVALID_OPERATION('migrate must be called before first access')
