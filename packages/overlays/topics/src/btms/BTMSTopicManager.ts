@@ -201,6 +201,8 @@ export default class BTMSTopicManager implements TopicManager {
           }
           outputsToAdmit.push(i)
         } catch (e) {
+          // Output does not conform to BTMS token structure; skip it
+          console.debug(`[BTMSTopicManager] Skipping output ${i}: ${e}`)
           continue
         }
       }
@@ -226,7 +228,8 @@ export default class BTMSTopicManager implements TopicManager {
               }
               const outputAssetId = this.canonicalAssetId(decodedCurrent.assetIdField, txid, i)
               return outputAssetId === assetId
-            } catch {
+            } catch (_e) {
+              // Output script is not a valid BTMS token; exclude from matching
               return false
             }
           })
@@ -234,7 +237,9 @@ export default class BTMSTopicManager implements TopicManager {
           if (assetInOutputs) {
             coinsToRetain.push(p.coinIndex)
           }
-        } catch {
+        } catch (e) {
+          // Previous UTXO cannot be decoded; skip it
+          console.debug(`[BTMSTopicManager] Skipping previous coin ${p.txid}.${p.outputIndex}: ${e}`)
           continue
         }
       }
@@ -246,6 +251,7 @@ export default class BTMSTopicManager implements TopicManager {
         coinsRemoved
       }
     } catch (error) {
+      console.warn(`[BTMSTopicManager] identifyAdmissibleOutputs failed: ${error}`)
       return {
         outputsToAdmit: [],
         coinsToRetain: [],

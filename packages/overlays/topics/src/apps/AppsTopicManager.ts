@@ -46,6 +46,8 @@ export default class AppsTopicManager implements TopicManager {
 
           outputsToAdmit.push(i)
         } catch (error) {
+          // Output does not meet Apps protocol requirements; skip it
+          console.debug(`[AppsTopicManager] Skipping output ${i}: ${error}`)
           continue
         }
       }

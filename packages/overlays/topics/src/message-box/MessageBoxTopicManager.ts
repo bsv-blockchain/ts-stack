@@ -96,6 +96,7 @@ export default class MessageBoxTopicManager implements TopicManager {
         coinsRemoved: previousCoins
       }
     } catch (error) {
+      console.warn(`[MessageBoxTopicManager] identifyAdmissibleOutputs failed: ${error}`)
       return {
         outputsToAdmit: [],
         coinsToRetain: [],

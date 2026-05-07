@@ -76,6 +76,8 @@ export default class ProtoMapTopicManager implements TopicManager {
 
           outputsToAdmit.push(i)
         } catch (error) {
+          // Output does not meet ProtoMap protocol requirements; skip it
+          console.debug(`[ProtoMapTopicManager] Skipping output ${i}: ${error}`)
           continue
         }
       }

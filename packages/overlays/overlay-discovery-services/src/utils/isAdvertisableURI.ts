@@ -26,7 +26,8 @@ export const isAdvertisableURI = (uri: string): boolean => {
       if (parsed.hostname.toLowerCase() === 'localhost') return false
       if (parsed.pathname !== '/') return false
       return true
-    } catch (e) {
+    } catch (_e) {
+      // URL constructor throws on malformed input — URI is not advertisable
       return false
     }
   }
@@ -58,7 +59,8 @@ export const isAdvertisableURI = (uri: string): boolean => {
       if (parsed.protocol !== 'wss:') return false
       if (parsed.hostname.toLowerCase() === 'localhost') return false
       return true
-    } catch (e) {
+    } catch (_e) {
+      // URL constructor throws on malformed input — URI is not advertisable
       return false
     }
   }

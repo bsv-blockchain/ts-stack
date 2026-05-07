@@ -192,7 +192,8 @@ class BTMSLookupService implements LookupService {
       }
 
       return true
-    } catch (error) {
+    } catch (_e) {
+      // Malformed BEEF or script — output is not a valid BTMS token; exclude from history
       return false
     }
   }

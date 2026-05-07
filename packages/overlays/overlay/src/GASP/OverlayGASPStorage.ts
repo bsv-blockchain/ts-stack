@@ -147,7 +147,7 @@ export class OverlayGASPStorage implements GASPStorage {
         }
         return await this.stripAlreadyKnownInputs(response)
       } catch (e) {
-        console.error(`An error occurred when identifying needed inputs for transaction: ${parsedTx.id('hex')}.${tx.outputIndex}!`)
+        console.error(`An error occurred when identifying needed inputs for transaction: ${parsedTx.id('hex')}.${tx.outputIndex}: ${e}`)
         // Cut off the graph in case of an error here.
       }
       // By default, if the topic manager isn't able to stipulate needed inputs, only the inputs necessary for SPV are requested.

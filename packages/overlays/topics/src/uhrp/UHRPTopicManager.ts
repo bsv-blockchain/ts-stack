@@ -45,6 +45,7 @@ export default class UHRPTopicManager implements TopicManager {
 
       return { coinsToRetain: previousCoins, outputsToAdmit: outputs }
     } catch (error) {
+      console.warn(`[UHRPTopicManager] identifyAdmissibleOutputs failed: ${error}`)
       return { coinsToRetain: [], outputsToAdmit: [] }
     }
   }
