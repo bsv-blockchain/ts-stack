@@ -58,7 +58,10 @@ export class WalletError extends Error implements WalletErrorObject {
   static fromUnknown (err: unknown): WalletError {
     if (err instanceof WalletError) return err
     let name = 'WERR_UNKNOWN'
-    let message = typeof err === 'string' ? err : typeof err === 'number' ? err.toString() : ''
+    let message: string
+    if (typeof err === 'string') message = err
+    else if (typeof err === 'number') message = err.toString()
+    else message = ''
     let stack: string | undefined
     const details: Record<string, string> = {}
     if (err !== null && typeof err === 'object') {
@@ -154,7 +157,7 @@ export class WalletError extends Error implements WalletErrorObject {
     const message =
       t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
     const toJson =
-      t === 'object' && error !== null && typeof (error as any).toJson === 'function'
+      t === 'object' && typeof (error as any)?.toJson === 'function'
         ? (error as any).toJson
         : undefined
     if (ctor && ctor.startsWith('WERR_') && toJson !== undefined) {

@@ -188,9 +188,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
     privilegedKeyManager?: PrivilegedKeyManager,
     makeLogger?: MakeWalletLogger
   ) {
-    const args: WalletArgs = !isWalletSigner(argsOrSigner)
-      ? argsOrSigner
-      : {
+    const args: WalletArgs = isWalletSigner(argsOrSigner)
+      ? {
           chain: argsOrSigner.chain,
           keyDeriver: argsOrSigner.keyDeriver,
           storage: argsOrSigner.storage,
@@ -199,6 +198,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
           privilegedKeyManager,
           makeLogger
         }
+      : argsOrSigner
 
     if (args.storage._authId.identityKey != args.keyDeriver.identityKey) {
       throw new WERR_INVALID_PARAMETER(
@@ -237,7 +237,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   async destroy (): Promise<void> {
     await this.storage.destroy()
-    if (this.privilegedKeyManager != null) await this.privilegedKeyManager.destroyKey()
+    if (this.privilegedKeyManager != null) this.privilegedKeyManager.destroyKey()
   }
 
   getClientChangeKeyPair (): KeyPair {
@@ -620,7 +620,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   ): Promise<RelinquishCertificateResult> {
     Validation.validateOriginator(originator)
     this.validateAuthAndArgs(args, Validation.validateRelinquishCertificateArgs)
-    const r = await this.storage.relinquishCertificate(args)
+    await this.storage.relinquishCertificate(args)
     return { relinquished: true }
   }
 
@@ -628,7 +628,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
-    originator = Validation.validateOriginator(originator)
+    Validation.validateOriginator(originator)
     const { auth, vargs } = this.validateAuthAndArgs(args, Validation.validateProveCertificateArgs)
     const r = await proveCertificate(this, auth, vargs)
     return r
@@ -745,14 +745,13 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (this.returnTxidOnly) return beef
     const onlyTxids = beef.txs.filter(btx => btx.isTxidOnly).map(btx => btx.txid)
     for (const txid of onlyTxids) {
-      if ((knownTxids != null) && knownTxids.includes(txid)) continue
-      const btx = beef.findTxid(txid)
+      if (knownTxids?.includes(txid)) continue
       const tx = this.beef.findAtomicTransaction(txid)
       if (tx == null) throw new WERR_INTERNAL(`unable to merge txid ${txid} into beef`)
       beef.mergeTransaction(tx)
     }
     for (const btx of beef.txs) {
-      if ((knownTxids != null) && knownTxids.includes(btx.txid)) continue
+      if (knownTxids?.includes(btx.txid)) continue
       if (btx.isTxidOnly) throw new WERR_INTERNAL(`remaining txidOnly ${btx.txid} is not known`)
     }
     return beef
@@ -882,7 +881,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   ): Promise<AbortActionResult> {
     Validation.validateOriginator(originator)
 
-    const { auth } = this.validateAuthAndArgs(args, Validation.validateAbortActionArgs)
+    this.validateAuthAndArgs(args, Validation.validateAbortActionArgs)
     const r = await this.storage.abortAction(args)
     return r
   }
@@ -892,8 +891,8 @@ export class Wallet implements WalletInterface, ProtoWallet {
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
     Validation.validateOriginator(originator)
-    const { vargs } = this.validateAuthAndArgs(args, Validation.validateRelinquishOutputArgs)
-    const r = await this.storage.relinquishOutput(args)
+    this.validateAuthAndArgs(args, Validation.validateRelinquishOutputArgs)
+    await this.storage.relinquishOutput(args)
     return { relinquished: true }
   }
 
@@ -980,7 +979,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
       description: label
     })
 
-    const iar = await toWallet.internalizeAction({
+    await toWallet.internalizeAction({
       tx: car.tx!,
       outputs: [
         {
@@ -1056,7 +1055,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     optionalArgs?: Partial<ListOutputsArgs>
   ): Promise<ListOutputsResult> {
     const args: ListOutputsArgs = {
-      ...(optionalArgs || {}),
+      ...optionalArgs,
       basket: specOpInvalidChange
     }
     args.tags ||= []
@@ -1162,7 +1161,7 @@ export function throwDummyReviewActions () {
   const b58Beef =
     'gno9MC7VXii1KoCkc2nsVyYJpqzN3dhBzYATETJcys62emMKfpBof4R7GozwYEaSapUtnNvqQ57aaYYjm3U2dv9eUJ1sV46boHkQgppYmAz9YH8FdZduV8aJayPViaKcyPmbDhEw6UW8TM5iFZLXNs7HBnJHUKCeTdNK4FUEL7vAugxAV9WUUZ43BZjJk2SmSeps9TCXjt1Ci9fKWp3d9QSoYvTpxwzyUFHjRKtbUgwq55ZfkBp5bV2Bpz9qSuKywKewW7Hh4S1nCUScwwzpKDozb3zic1V9p2k8rQxoPsRxjUJ8bjhNDdsN8d7KukFuc3n47fXzdWttvnxwsujLJRGnQbgJuknQqx3KLf5kJXHzwjG6TzigZk2t24qeB6d3hbYiaDr2fFkUJBL3tukTHhfNkQYRXuz3kucVDzvejHyqJaF51mXG8BjMN5aQj91ZJXCaPVqkMWCzmvyaqmXMdRiJdSAynhXbQK91xf6RwdNhz1tg5f9B6oJJMhsi9UYSVymmax8VLKD9AKzBCBDcfyD83m3jyS1VgKGZn3SkQmr6bsoWq88L3GsMnnmYUGogvdAYarTqg3pzkjCMxHzmJBMN6ofnUk8c1sRTXQue7BbyUaN5uZu3KW6CmFsEfpuqVvnqFW93TU1jrPP2S8yz8AexAnARPCKE8Yz7RfVaT6RCavwQKL3u5iookwRWEZXW1QWmM37yJWHD87SjVynyg327a1CLwcBxmE2CB48QeNVGyQki4CTQMqw2o8TMhDPJej1g68oniAjBcxBLSCs7KGvK3k7AfrHbCMULX9CTibYhCjdFjbsbBoocqJpxxcvkMo1fEEiAzZuiBVZQDYktDdTVbhKHvYkW25HcYX75NJrpNAhm7AjFeKLzEVxqAQkMfvTufpESNRZF4kQqg2Rg8h2ajcKTd5cpEPwXCrZLHm4EaZEmZVbg3QNfGhn7BJu1bHMtLqPD4y8eJxm2uGrW6saf6qKYmmu64F8A667NbD4yskPRQ1S863VzwGpxxmgLc1Ta3R46jEqsAoRDoZVUaCgBBZG3Yg1CTgi1EVBMXU7qvY4n3h8o2FLCEMWY4KadnV3iD4FbcdCmg4yxBosNAZgbPjhgGjCimjh4YsLd9zymGLmivmz2ZBg5m3xaiXT9NN81X9C1JUujd'
   const beef = Beef.fromBinary(Utils.fromBase58(b58Beef))
-  const btx = beef.txs.slice(-1)[0]
+  const btx = beef.txs.at(-1)!
   const txid = btx.txid
 
   console.log('Throwing dummy WERR_REVIEW_ACTIONS')

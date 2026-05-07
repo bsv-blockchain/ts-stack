@@ -87,7 +87,7 @@ export class WalletLogger implements WalletLoggerInterface {
     let log = ''
     if (this.logs.length > 0) {
       const first = this.logs[0]
-      const last = this.logs.slice(-1)[0]
+      const last = this.logs.at(-1)!
       const msecs = last.when - first.when
       log += `   msecs WalletLogger ${new Date(first.when).toISOString()} logged ${msecs / 1000} seconds\n`
       let prev = first
@@ -95,7 +95,11 @@ export class WalletLogger implements WalletLoggerInterface {
       for (const d of this.logs) {
         let df = (d.when - prev.when).toString()
         df = `${' '.repeat(8 - df.length)}${df}`
-        const what = d.isBegin ? ' begin' : d.isEnd ? ' end' : d.isError ? ' ERROR' : ''
+        let what: string
+        if (d.isBegin) what = ' begin'
+        else if (d.isEnd) what = ' end'
+        else if (d.isError) what = ' ERROR'
+        else what = ''
         if (d.isBegin) begins.push(d)
         let m = d.log
         if (!m && d.isEnd && begins.length > 0) {

@@ -71,9 +71,7 @@ export function WalletErrorFromJson (json: object): WalletError {
       e = new WERR_REVIEW_ACTIONS(obj.reviewActionResults, obj.sendWithResults, obj.txid, obj.tx, obj.noSendChange)
       break
     default:
-      {
-        e = new WalletError(obj.name || 'WERR_UNKNOWN', obj.message || '')
-      }
+      e = new WalletError(obj.name || 'WERR_UNKNOWN', obj.message || '')
       break
   }
   return e

@@ -157,7 +157,6 @@ export class PrivilegedKeyManager implements ProtoWallet {
    */
   private scheduleKeyDestruction (): void {
     if (this.destroyTimer) {
-      // TODO: Consider a constructor flag to avoid clearing timers for higher security
       clearTimeout(this.destroyTimer)
     }
     this.destroyTimer = setTimeout(() => {
@@ -276,7 +275,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
     // If we already have chunk properties, try reassemble
     if (this.chunkPropNames.length > 0 && this.chunkPadPropNames.length > 0) {
       const rawKeyBytes = this.reassembleKeyFromChunks()
-      if ((rawKeyBytes != null) && rawKeyBytes.length === 32) {
+      if (rawKeyBytes?.length === 32) {
         // Convert 32 raw bytes back to a PrivateKey
         // (Leading zeros are preserved, but PrivateKey() will parse it as a big integer.)
         const hexKey = Utils.toHex([...rawKeyBytes]) // 64 hex chars
@@ -299,16 +298,16 @@ export class PrivilegedKeyManager implements ProtoWallet {
     const chunks = this.splitKeyIntoChunks(keyBytes)
 
     // Store new chunk data under random property names
-    for (let i = 0; i < chunks.length; i++) {
+    for (const chunk of chunks) {
       const chunkProp = this.generateRandomPropName()
       const padProp = this.generateRandomPropName()
       this.chunkPropNames.push(chunkProp)
       this.chunkPadPropNames.push(padProp)
 
       // Generate random pad of the same length as the chunk
-      const pad = Uint8Array.from(Random(chunks[i].length))
+      const pad = Uint8Array.from(Random(chunk.length))
       // XOR the chunk to obfuscate
-      const obf = this.xorBytes(chunks[i], pad)
+      const obf = this.xorBytes(chunk, pad)
 
       // Store them in dynamic properties
       ;(this as any)[chunkProp] = obf

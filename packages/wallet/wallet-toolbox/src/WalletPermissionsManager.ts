@@ -58,6 +58,12 @@ function isObject (object: any): boolean {
   return object != null && typeof object === 'object'
 }
 
+/** Line item type for spending authorization requests. */
+export type LineItemType = 'input' | 'output' | 'fee'
+
+/** Security level for DPACP protocol permissions. */
+export type SecurityLevel = 0 | 1 | 2
+
 /**
  * A permissions module handles request/response transformation for a specific P-protocol or P-basket scheme under BRC-98/99.
  * Modules are registered in the config mapped by their scheme ID.
@@ -185,7 +191,7 @@ export interface PermissionRequest {
     // For type='spending': details about the requested spend
     satoshis: number
     lineItems?: Array<{
-      type: 'input' | 'output' | 'fee'
+      type: LineItemType
       description: string
       satoshis: number
     }>
@@ -248,7 +254,7 @@ export interface PermissionToken {
   protocol?: string
 
   /** The security level (0,1,2) for DPACP. */
-  securityLevel?: 0 | 1 | 2
+  securityLevel?: SecurityLevel
 
   /** The counterparty, for DPACP. */
   counterparty?: string
@@ -715,10 +721,10 @@ export class WalletPermissionsManager implements WalletInterface {
    */
   private async decryptListOutputsMetadata (results: ListOutputsResult): Promise<ListOutputsResult> {
     if (results.outputs) {
-      for (let i = 0; i < results.outputs.length; i++) {
-        if (results.outputs[i].customInstructions) {
-          results.outputs[i].customInstructions = await this.maybeDecryptMetadata(
-            results.outputs[i].customInstructions!
+      for (const output of results.outputs) {
+        if (output.customInstructions) {
+          output.customInstructions = await this.maybeDecryptMetadata(
+            output.customInstructions
           )
         }
       }
@@ -731,29 +737,29 @@ export class WalletPermissionsManager implements WalletInterface {
    */
   private async decryptListActionsMetadata (results: ListActionsResult): Promise<ListActionsResult> {
     if (results.actions) {
-      for (let i = 0; i < results.actions.length; i++) {
-        if (results.actions[i].description) {
-          results.actions[i].description = await this.maybeDecryptMetadata(results.actions[i].description)
+      for (const action of results.actions) {
+        if (action.description) {
+          action.description = await this.maybeDecryptMetadata(action.description)
         }
-        if (results.actions[i].inputs != null) {
-          for (let j = 0; j < results.actions[i].inputs!.length; j++) {
-            if (results.actions[i].inputs![j].inputDescription) {
-              results.actions[i].inputs![j].inputDescription = await this.maybeDecryptMetadata(
-                results.actions[i].inputs![j].inputDescription
+        if (action.inputs != null) {
+          for (const input of action.inputs) {
+            if (input.inputDescription) {
+              input.inputDescription = await this.maybeDecryptMetadata(
+                input.inputDescription
               )
             }
           }
         }
-        if (results.actions[i].outputs != null) {
-          for (let j = 0; j < results.actions[i].outputs!.length; j++) {
-            if (results.actions[i].outputs![j].outputDescription) {
-              results.actions[i].outputs![j].outputDescription = await this.maybeDecryptMetadata(
-                results.actions[i].outputs![j].outputDescription
+        if (action.outputs != null) {
+          for (const output of action.outputs) {
+            if (output.outputDescription) {
+              output.outputDescription = await this.maybeDecryptMetadata(
+                output.outputDescription
               )
             }
-            if (results.actions[i].outputs![j].customInstructions) {
-              results.actions[i].outputs![j].customInstructions = await this.maybeDecryptMetadata(
-                results.actions[i].outputs![j].customInstructions!
+            if (output.customInstructions) {
+              output.customInstructions = await this.maybeDecryptMetadata(
+                output.customInstructions
               )
             }
           }
@@ -865,17 +871,17 @@ export class WalletPermissionsManager implements WalletInterface {
     // 3) If `ephemeral !== true`, we create or renew an on-chain token
     if (!params.ephemeral) {
       const request = matching.request as PermissionRequest
-      if (!request.renewal) {
-        // brand-new permission token
-        await this.createPermissionOnChain(
+      if (request.renewal) {
+        // renewal => spend the old token, produce a new one
+        await this.renewPermissionOnChain(
+          request.previousToken!,
           request,
           params.expiry || 0, // default: never expires
           params.amount
         )
       } else {
-        // renewal => spend the old token, produce a new one
-        await this.renewPermissionOnChain(
-          request.previousToken!,
+        // brand-new permission token
+        await this.createPermissionOnChain(
           request,
           params.expiry || 0, // default: never expires
           params.amount
@@ -1001,10 +1007,10 @@ export class WalletPermissionsManager implements WalletInterface {
           counterparty,
           reason: p.description
         }
-        if (token != null) {
-          toRenew.push({ oldToken: token, request, expiry })
-        } else {
+        if (token == null) {
           toCreate.push({ request, expiry })
+        } else {
+          toRenew.push({ oldToken: token, request, expiry })
         }
       }
 
@@ -1058,7 +1064,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * Denies a previously requested grouped permission.
    * @param requestID The ID of the request being denied.
    */
-  public async denyGroupedPermission (requestID: string): Promise<void> {
+  private denyActiveRequest (requestID: string): void {
     const matching = this.activeRequests.get(requestID)
     if (matching == null) {
       throw new Error('Request ID not found.')
@@ -1069,6 +1075,10 @@ export class WalletPermissionsManager implements WalletInterface {
       p.reject(err)
     }
     this.activeRequests.delete(requestID)
+  }
+
+  public async denyGroupedPermission (requestID: string): Promise<void> {
+    this.denyActiveRequest(requestID)
   }
 
   public async dismissGroupedPermission (requestID: string): Promise<void> {
@@ -1145,10 +1155,10 @@ export class WalletPermissionsManager implements WalletInterface {
         counterparty,
         reason: p.description
       }
-      if (token != null) {
-        toRenew.push({ oldToken: token, request, expiry })
-      } else {
+      if (token == null) {
         toCreate.push({ request, expiry })
+      } else {
+        toRenew.push({ oldToken: token, request, expiry })
       }
     }
 
@@ -1165,16 +1175,7 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   public async denyCounterpartyPermission (requestID: string): Promise<void> {
-    const matching = this.activeRequests.get(requestID)
-    if (matching == null) {
-      throw new Error('Request ID not found.')
-    }
-    const err = new Error('The user has denied the request for permission.')
-    ;(err as any).code = 'ERR_PERMISSION_DENIED'
-    for (const p of matching.pending) {
-      p.reject(err)
-    }
-    this.activeRequests.delete(requestID)
+    this.denyActiveRequest(requestID)
   }
 
   /* ---------------------------------------------------------------------
@@ -1270,29 +1271,7 @@ export class WalletPermissionsManager implements WalletInterface {
       /* includeExpired= */ true,
       lookupValues
     )
-    if (token != null) {
-      if (!this.isTokenExpired(token.expiry)) {
-        // valid and unexpired
-        this.cachePermission(cacheKey, token.expiry)
-        return true
-      } else {
-        // has a token but expired => request renewal if allowed
-        if (!seekPermission) {
-          throw new Error('Protocol permission expired and no further user consent allowed (seekPermission=false).')
-        }
-        return await this.requestPermissionFlow({
-          type: 'protocol',
-          originator,
-          privileged,
-          protocolID,
-          counterparty,
-          usageType,
-          reason,
-          renewal: true,
-          previousToken: token
-        })
-      }
-    } else {
+    if (token == null) {
       // No token found => request a new one if allowed
       if (!seekPermission) {
         throw new Error('No protocol permission token found (seekPermission=false).')
@@ -1308,6 +1287,28 @@ export class WalletPermissionsManager implements WalletInterface {
         renewal: false
       })
       return granted
+    } else {
+      if (this.isTokenExpired(token.expiry)) {
+        // has a token but expired => request renewal if allowed
+        if (!seekPermission) {
+          throw new Error('Protocol permission expired and no further user consent allowed (seekPermission=false).')
+        }
+        return await this.requestPermissionFlow({
+          type: 'protocol',
+          originator,
+          privileged,
+          protocolID,
+          counterparty,
+          usageType,
+          reason,
+          renewal: true,
+          previousToken: token
+        })
+      } else {
+        // valid and unexpired
+        this.cachePermission(cacheKey, token.expiry)
+        return true
+      }
     }
   }
 
@@ -1346,25 +1347,7 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const token = await this.findBasketToken(originator, basket, true, lookupValues)
-    if (token != null) {
-      if (!this.isTokenExpired(token.expiry)) {
-        this.cachePermission(cacheKey, token.expiry)
-        return true
-      } else {
-        if (!seekPermission) {
-          throw new Error('Basket permission expired (seekPermission=false).')
-        }
-        return await this.requestPermissionFlow({
-          type: 'basket',
-          originator,
-          basket,
-          usageType,
-          reason,
-          renewal: true,
-          previousToken: token
-        })
-      }
-    } else {
+    if (token == null) {
       // none
       if (!seekPermission) {
         throw new Error('No basket permission found, and no user consent allowed (seekPermission=false).')
@@ -1378,6 +1361,24 @@ export class WalletPermissionsManager implements WalletInterface {
         renewal: false
       })
       return granted
+    } else {
+      if (this.isTokenExpired(token.expiry)) {
+        if (!seekPermission) {
+          throw new Error('Basket permission expired (seekPermission=false).')
+        }
+        return await this.requestPermissionFlow({
+          type: 'basket',
+          originator,
+          basket,
+          usageType,
+          reason,
+          renewal: true,
+          previousToken: token
+        })
+      } else {
+        this.cachePermission(cacheKey, token.expiry)
+        return true
+      }
     }
   }
 
@@ -1435,26 +1436,7 @@ export class WalletPermissionsManager implements WalletInterface {
       /* includeExpired= */ true,
       lookupValues
     )
-    if (token != null) {
-      if (!this.isTokenExpired(token.expiry)) {
-        this.cachePermission(cacheKey, token.expiry)
-        return true
-      } else {
-        if (!seekPermission) {
-          throw new Error('Certificate permission expired (seekPermission=false).')
-        }
-        return await this.requestPermissionFlow({
-          type: 'certificate',
-          originator,
-          privileged,
-          certificate: { verifier, certType, fields },
-          usageType,
-          reason,
-          renewal: true,
-          previousToken: token
-        })
-      }
-    } else {
+    if (token == null) {
       if (!seekPermission) {
         throw new Error('No certificate permission found (seekPermission=false).')
       }
@@ -1468,6 +1450,25 @@ export class WalletPermissionsManager implements WalletInterface {
         renewal: false
       })
       return granted
+    } else {
+      if (this.isTokenExpired(token.expiry)) {
+        if (!seekPermission) {
+          throw new Error('Certificate permission expired (seekPermission=false).')
+        }
+        return await this.requestPermissionFlow({
+          type: 'certificate',
+          originator,
+          privileged,
+          certificate: { verifier, certType, fields },
+          usageType,
+          reason,
+          renewal: true,
+          previousToken: token
+        })
+      } else {
+        this.cachePermission(cacheKey, token.expiry)
+        return true
+      }
     }
   }
 
@@ -1485,7 +1486,7 @@ export class WalletPermissionsManager implements WalletInterface {
     originator: string
     satoshis: number
     lineItems?: Array<{
-      type: 'input' | 'output' | 'fee'
+      type: LineItemType
       description: string
       satoshis: number
     }>
@@ -1603,7 +1604,7 @@ export class WalletPermissionsManager implements WalletInterface {
     counterpartyPermissions: CounterpartyPermissions
   ): boolean {
     const [, name] = protocolID
-    return !(counterpartyPermissions.protocols.find(p => p.protocolName === name) == null)
+    return counterpartyPermissions.protocols.some(p => p.protocolName === name)
   }
 
   private validateCounterpartyPermissions (raw: any): CounterpartyPermissions | null {
@@ -1911,23 +1912,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
     const key = `pact:${originator}:${counterparty}`
     const existing = this.activeRequests.get(key)
-    if (existing != null) {
-      const existingRequest = existing.request as {
-        originator: string
-        counterparty: PubKeyHex
-        permissions: CounterpartyPermissions
-        displayOriginator?: string
-        counterpartyLabel?: string
-      }
-      for (const p of permissionsToRequest.protocols) {
-        if (existingRequest.permissions.protocols.find(x => x.protocolName === p.protocolName) == null) {
-          existingRequest.permissions.protocols.push(p)
-        }
-      }
-      await new Promise<boolean>((resolve, reject) => {
-        existing.pending.push({ resolve, reject })
-      })
-    } else {
+    if (existing == null) {
       const counterpartyPromise = new Promise<boolean>((resolve, reject) => {
         this.activeRequests.set(key, {
           request: {
@@ -1948,6 +1933,22 @@ export class WalletPermissionsManager implements WalletInterface {
       })
 
       await counterpartyPromise
+    } else {
+      const existingRequest = existing.request as {
+        originator: string
+        counterparty: PubKeyHex
+        permissions: CounterpartyPermissions
+        displayOriginator?: string
+        counterpartyLabel?: string
+      }
+      for (const p of permissionsToRequest.protocols) {
+        if (!existingRequest.permissions.protocols.some(x => x.protocolName === p.protocolName)) {
+          existingRequest.permissions.protocols.push(p)
+        }
+      }
+      await new Promise<boolean>((resolve, reject) => {
+        existing.pending.push({ resolve, reject })
+      })
     }
 
     this.markPactEstablished(originator, counterparty)
@@ -2038,24 +2039,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
     const key = `group-peer:${originator}:${privileged}:${counterparty}`
     const existing = this.activeRequests.get(key)
-    if (existing != null) {
-      const existingRequest = existing.request as {
-        originator: string
-        permissions: GroupedPermissions
-        displayOriginator?: string
-      }
-      if (existingRequest.permissions.protocolPermissions == null) {
-        existingRequest.permissions.protocolPermissions = []
-      }
-      for (const p of permissionsToRequest.protocolPermissions || []) {
-        if (existingRequest.permissions.protocolPermissions.find(x => deepEqual(x, p)) == null) {
-          existingRequest.permissions.protocolPermissions.push(p)
-        }
-      }
-      await new Promise<boolean>((resolve, reject) => {
-        existing.pending.push({ resolve, reject })
-      })
-    } else {
+    if (existing == null) {
       const permissions: GroupedPermissions = permissionsToRequest
 
       const groupedPromise = new Promise<boolean>((resolve, reject) => {
@@ -2076,6 +2060,21 @@ export class WalletPermissionsManager implements WalletInterface {
       })
 
       await groupedPromise
+    } else {
+      const existingRequest = existing.request as {
+        originator: string
+        permissions: GroupedPermissions
+        displayOriginator?: string
+      }
+      existingRequest.permissions.protocolPermissions ??= []
+      for (const p of permissionsToRequest.protocolPermissions || []) {
+        if (!existingRequest.permissions.protocolPermissions.some(x => deepEqual(x, p))) {
+          existingRequest.permissions.protocolPermissions.push(p)
+        }
+      }
+      await new Promise<boolean>((resolve, reject) => {
+        existing.pending.push({ resolve, reject })
+      })
     }
 
     const satisfied = await this.checkSpecificPermissionAfterGroupFlow(currentRequest)
@@ -2177,7 +2176,7 @@ export class WalletPermissionsManager implements WalletInterface {
         })
       }
       case 'spending':
-        return !(groupPermissions.spendingAuthorization == null)
+        return groupPermissions.spendingAuthorization != null
       default:
         return false
     }
@@ -2454,6 +2453,19 @@ export class WalletPermissionsManager implements WalletInterface {
     return expiry > 0 && expiry < now
   }
 
+  /** Normalizes a txid string to lowercase. */
+  private normalizeTxid (txid?: string): string {
+    return (txid ?? '').toLowerCase()
+  }
+
+  /** Reverses a 32-byte hex txid (for endian normalization). */
+  private reverseHexTxid (txid: string): string {
+    const hex = this.normalizeTxid(txid)
+    if (!/^[0-9a-f]{64}$/.test(hex)) return hex
+    const bytes = hex.match(/../g)
+    return (bytes != null) ? bytes.reverse().join('') : hex
+  }
+
   /** Looks for a DPACP permission token matching origin/domain, privileged, protocol, cpty. */
   private async findProtocolToken (
     originator: string,
@@ -2491,7 +2503,7 @@ export class WalletPermissionsManager implements WalletInterface {
         const [txid, outputIndexStr] = out.outpoint.split('.')
         const tx = Transaction.fromBEEF(result.BEEF!, txid)
         const dec = PushDrop.decode(tx.outputs[Number(outputIndexStr)].lockingScript)
-        if (!dec || !dec.fields || dec.fields.length < 6) continue
+        if (dec?.fields == null || dec.fields.length < 6) continue
         const domainRaw = dec.fields[0]
         const expiryRaw = dec.fields[1]
         const privRaw = dec.fields[2]
@@ -2584,7 +2596,7 @@ export class WalletPermissionsManager implements WalletInterface {
         const tx = Transaction.fromBEEF(result.BEEF!, txid)
         const vout = Number(outputIndexStr)
         const dec = PushDrop.decode(tx.outputs[vout].lockingScript)
-        if (!dec || !dec.fields || dec.fields.length < 6) continue
+        if (dec?.fields == null || dec.fields.length < 6) continue
 
         const domainRaw = dec.fields[0]
         const expiryRaw = dec.fields[1]
@@ -3105,7 +3117,7 @@ export class WalletPermissionsManager implements WalletInterface {
             satoshis: 1,
             outputDescription: 'Renewed permission token',
             ...(opts?.basket ? { basket: opts.basket } : {}),
-            ...(((opts?.tags) != null) ? { tags: opts.tags } : {})
+            ...((opts?.tags == null) ? {} : { tags: opts.tags })
           }
         ],
         options: {
@@ -3304,9 +3316,7 @@ export class WalletPermissionsManager implements WalletInterface {
     const tags: string[] = [`originator ${r.originator}`]
     switch (r.type) {
       case 'protocol': {
-        tags.push(`privileged ${!!r.privileged}`)
-        tags.push(`protocolName ${r.protocolID![1]}`)
-        tags.push(`protocolSecurityLevel ${r.protocolID![0]}`)
+        tags.push(`privileged ${!!r.privileged}`, `protocolName ${r.protocolID![1]}`, `protocolSecurityLevel ${r.protocolID![0]}`)
         if (r.protocolID![0] === 2) {
           tags.push(`counterparty ${r.counterparty ?? 'self'}`)
         }
@@ -3317,9 +3327,7 @@ export class WalletPermissionsManager implements WalletInterface {
         break
       }
       case 'certificate': {
-        tags.push(`privileged ${!!r.privileged}`)
-        tags.push(`type ${r.certificate!.certType}`)
-        tags.push(`verifier ${r.certificate!.verifier}`)
+        tags.push(`privileged ${!!r.privileged}`, `type ${r.certificate!.certType}`, `verifier ${r.certificate!.verifier}`)
         break
       }
       case 'spending': {
@@ -3376,7 +3384,7 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const originFilter = originator ? this.prepareOriginator(originator) : undefined
-    const originVariants = (originFilter != null) ? originFilter.lookupValues : [undefined]
+    const originVariants = (originFilter == null) ? [undefined] : originFilter.lookupValues
     const seen = new Set<string>()
     const tokens: PermissionToken[] = []
 
@@ -3412,7 +3420,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
         const expiryDec = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
         const privDec = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
-        const secDec = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secRaw)), 10) as 0 | 1 | 2
+        const secDec = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(secRaw)), 10) as SecurityLevel
         const protoDec = Utils.toUTF8(await this.decryptPermissionTokenField(protoRaw))
         const cptyDec = Utils.toUTF8(await this.decryptPermissionTokenField(cptyRaw))
 
@@ -3474,7 +3482,7 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const originFilter = params.originator ? this.prepareOriginator(params.originator) : undefined
-    const originVariants = (originFilter != null) ? originFilter.lookupValues : [undefined]
+    const originVariants = (originFilter == null) ? [undefined] : originFilter.lookupValues
     const seen = new Set<string>()
     const tokens: PermissionToken[] = []
 
@@ -3534,7 +3542,7 @@ export class WalletPermissionsManager implements WalletInterface {
         originator: params.originator,
         basket: params.basket,
         seekPermission: false,
-        usageType: 'insertion' // TODO: Consider a generic case for "has"
+        usageType: 'insertion'
       })
       return true
     } catch {
@@ -3635,7 +3643,7 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     const originFilter = params.originator ? this.prepareOriginator(params.originator) : undefined
-    const originVariants = (originFilter != null) ? originFilter.lookupValues : [undefined]
+    const originVariants = (originFilter == null) ? [undefined] : originFilter.lookupValues
     const seen = new Set<string>()
     const tokens: PermissionToken[] = []
 
@@ -3739,7 +3747,7 @@ export class WalletPermissionsManager implements WalletInterface {
       basket: true,
       certificate: true,
       spending: true,
-      ...(opts || {})
+      ...opts
     }
 
     const [protocolTokens, basketTokens, certificateTokens, spendingTokens] = await Promise.all([
@@ -3805,23 +3813,16 @@ export class WalletPermissionsManager implements WalletInterface {
 
     const tx = Transaction.fromAtomicBEEF(signableTransaction.tx)
 
-    const normalizeTxid = (txid?: string) => (txid ?? '').toLowerCase()
-    const reverseHexTxid = (txid: string) => {
-      const hex = normalizeTxid(txid)
-      if (!/^[0-9a-f]{64}$/.test(hex)) return hex
-      const bytes = hex.match(/../g)
-      return (bytes != null) ? bytes.reverse().join('') : hex
-    }
     const matchesOutpointString = (outpoint: string, token: PermissionToken) => {
       const dot = outpoint.lastIndexOf('.')
       const colon = outpoint.lastIndexOf(':')
-      const sep = dot > colon ? dot : colon
+      const sep = Math.max(dot, colon)
       if (sep === -1) return false
       const txidPart = outpoint.slice(0, sep)
       const indexPart = outpoint.slice(sep + 1)
       const vout = Number(indexPart)
       if (!Number.isFinite(vout)) return false
-      return normalizeTxid(txidPart) === normalizeTxid(token.txid) && vout === token.outputIndex
+      return this.normalizeTxid(txidPart) === this.normalizeTxid(token.txid) && vout === token.outputIndex
     }
 
     const findInputIndexForToken = (token: PermissionToken) => {
@@ -3840,10 +3841,10 @@ export class WalletPermissionsManager implements WalletInterface {
           input?.sourceOutputIndex ?? input?.sourceOutput ?? input?.outputIndex ?? input?.vout ?? input?.prevOutIndex
 
         if (typeof txidCandidate === 'string' && typeof voutCandidate === 'number') {
-          const cand = normalizeTxid(txidCandidate)
-          const target = normalizeTxid(token.txid)
+          const cand = this.normalizeTxid(txidCandidate)
+          const target = this.normalizeTxid(token.txid)
           if (cand === target && voutCandidate === token.outputIndex) return true
-          if (cand === reverseHexTxid(token.txid) && voutCandidate === token.outputIndex) return true
+          if (cand === this.reverseHexTxid(token.txid) && voutCandidate === token.outputIndex) return true
         }
 
         const outpointCandidate: unknown = input?.outpoint ?? input?.sourceOutpoint ?? input?.prevOutpoint
@@ -3916,23 +3917,16 @@ export class WalletPermissionsManager implements WalletInterface {
     )
     const tx = Transaction.fromBEEF(signableTransaction!.tx)
 
-    const normalizeTxid = (txid?: string) => (txid ?? '').toLowerCase()
-    const reverseHexTxid = (txid: string) => {
-      const hex = normalizeTxid(txid)
-      if (!/^[0-9a-f]{64}$/.test(hex)) return hex
-      const bytes = hex.match(/../g)
-      return (bytes != null) ? bytes.reverse().join('') : hex
-    }
     const matchesOutpointString = (outpoint: string) => {
       const dot = outpoint.lastIndexOf('.')
       const colon = outpoint.lastIndexOf(':')
-      const sep = dot > colon ? dot : colon
+      const sep = Math.max(dot, colon)
       if (sep === -1) return false
       const txidPart = outpoint.slice(0, sep)
       const indexPart = outpoint.slice(sep + 1)
       const vout = Number(indexPart)
       if (!Number.isFinite(vout)) return false
-      return normalizeTxid(txidPart) === normalizeTxid(oldToken.txid) && vout === oldToken.outputIndex
+      return this.normalizeTxid(txidPart) === this.normalizeTxid(oldToken.txid) && vout === oldToken.outputIndex
     }
 
     let permInputIndex = tx.inputs.findIndex((input: any) => {
@@ -3950,10 +3944,10 @@ export class WalletPermissionsManager implements WalletInterface {
         input?.sourceOutputIndex ?? input?.sourceOutput ?? input?.outputIndex ?? input?.vout ?? input?.prevOutIndex
 
       if (typeof txidCandidate === 'string' && typeof voutCandidate === 'number') {
-        const cand = normalizeTxid(txidCandidate)
-        const target = normalizeTxid(oldToken.txid)
+        const cand = this.normalizeTxid(txidCandidate)
+        const target = this.normalizeTxid(oldToken.txid)
         if (cand === target && voutCandidate === oldToken.outputIndex) return true
-        if (cand === reverseHexTxid(oldToken.txid) && voutCandidate === oldToken.outputIndex) return true
+        if (cand === this.reverseHexTxid(oldToken.txid) && voutCandidate === oldToken.outputIndex) return true
       }
 
       const outpointCandidate: unknown = input?.outpoint ?? input?.sourceOutpoint ?? input?.prevOutpoint
@@ -4043,7 +4037,7 @@ export class WalletPermissionsManager implements WalletInterface {
      *    This ensures the underlying wallet returns a signableTransaction, letting us parse the transaction
      *    to determine net spending and request authorization if needed.
      */
-    const modifiedOptions = { ...(args.options || {}) }
+    const modifiedOptions = { ...args.options }
     if (modifiedOptions.signAndProcess !== true) {
       modifiedOptions.signAndProcess = false
     } else if (!this.isAdminOriginator(originator!)) {
@@ -4138,7 +4132,7 @@ export class WalletPermissionsManager implements WalletInterface {
 
     let netSpent = 0
     const lineItems: Array<{
-      type: 'input' | 'output' | 'fee'
+      type: LineItemType
       description: string
       satoshis: number
     }> = []
