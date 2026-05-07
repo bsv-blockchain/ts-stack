@@ -32,70 +32,54 @@ export default class Script {
     const tokens = asm.split(' ')
     let i = 0
     while (i < tokens.length) {
-      const token = tokens[i]
-      let opCode
-      let opCodeNum: number = 0
-      if (token.startsWith('OP_') && OP[token] !== undefined) {
-        opCode = token
-        opCodeNum = OP[token]
-      }
-
-      // we start with two special cases, 0 and -1, which are handled specially in
-      // toASM. see _chunkToString.
-      if (token === '0') {
-        opCodeNum = 0
-        chunks.push({
-          op: opCodeNum
-        })
-        i = i + 1
-      } else if (token === '-1') {
-        opCodeNum = OP.OP_1NEGATE
-        chunks.push({
-          op: opCodeNum
-        })
-        i = i + 1
-      } else if (opCode === undefined) {
-        let hex = tokens[i]
-        if (hex.length % 2 !== 0) {
-          hex = '0' + hex
-        }
-        const arr = toArray(hex, 'hex')
-        if (encode(arr, 'hex') !== hex) {
-          throw new Error('invalid hex string in script')
-        }
-        const len = arr.length
-        if (len >= 0 && len < OP.OP_PUSHDATA1) {
-          opCodeNum = len
-        } else if (len < Math.pow(2, 8)) {
-          opCodeNum = OP.OP_PUSHDATA1
-        } else if (len < Math.pow(2, 16)) {
-          opCodeNum = OP.OP_PUSHDATA2
-        } else if (len < Math.pow(2, 32)) {
-          opCodeNum = OP.OP_PUSHDATA4
-        }
-        chunks.push({
-          data: arr,
-          op: opCodeNum
-        })
-        i = i + 1
-      } else if (
-        opCodeNum === OP.OP_PUSHDATA1 ||
-        opCodeNum === OP.OP_PUSHDATA2 ||
-        opCodeNum === OP.OP_PUSHDATA4
-      ) {
-        chunks.push({
-          data: toArray(tokens[i + 2], 'hex'),
-          op: opCodeNum
-        })
-        i = i + 3
-      } else {
-        chunks.push({
-          op: opCodeNum
-        })
-        i = i + 1
-      }
+      const { chunk, advance } = Script.parseASMToken(tokens, i)
+      chunks.push(chunk)
+      i += advance
     }
     return new Script(chunks)
+  }
+
+  private static pushdataOpCodeNum (len: number): number {
+    if (len >= 0 && len < OP.OP_PUSHDATA1) return len
+    if (len < Math.pow(2, 8)) return OP.OP_PUSHDATA1
+    if (len < Math.pow(2, 16)) return OP.OP_PUSHDATA2
+    return OP.OP_PUSHDATA4
+  }
+
+  private static parseASMToken (
+    tokens: string[],
+    i: number
+  ): { chunk: ScriptChunk, advance: number } {
+    const token = tokens[i]
+
+    // Special literal tokens
+    if (token === '0') return { chunk: { op: 0 }, advance: 1 }
+    if (token === '-1') return { chunk: { op: OP.OP_1NEGATE }, advance: 1 }
+
+    const isKnownOp = token.startsWith('OP_') && OP[token] !== undefined
+    const opCodeNum: number = isKnownOp ? OP[token] : 0
+
+    // Inline PUSHDATA opcodes consume the next two tokens (size, hex data)
+    if (
+      opCodeNum === OP.OP_PUSHDATA1 ||
+      opCodeNum === OP.OP_PUSHDATA2 ||
+      opCodeNum === OP.OP_PUSHDATA4
+    ) {
+      return { chunk: { data: toArray(tokens[i + 2], 'hex'), op: opCodeNum }, advance: 3 }
+    }
+
+    // Unknown opcode token — treat as raw hex push data
+    if (!isKnownOp) {
+      let hex = token
+      if (hex.length % 2 !== 0) hex = '0' + hex
+      const arr = toArray(hex, 'hex')
+      if (encode(arr, 'hex') !== hex) {
+        throw new Error('invalid hex string in script')
+      }
+      return { chunk: { data: arr, op: Script.pushdataOpCodeNum(arr.length) }, advance: 1 }
+    }
+
+    return { chunk: { op: opCodeNum }, advance: 1 }
   }
 
   /**
@@ -541,6 +525,40 @@ export default class Script {
     return offset
   }
 
+  /**
+   * Reads pushdata length bytes from `bytes` at `pos` and returns the resulting
+   * `{ len, newPos, hasLength }` for a given opcode. Does not read the actual data.
+   */
+  private static readPushdataLength (
+    op: number,
+    bytes: ArrayLike<number>,
+    pos: number,
+    length: number
+  ): { len: number, newPos: number, hasLength: boolean } {
+    if (op > 0 && op < OP.OP_PUSHDATA1) {
+      return { len: op, newPos: pos, hasLength: true }
+    }
+    if (op === OP.OP_PUSHDATA1) {
+      const hasLength = pos < length
+      const len = hasLength ? bytes[pos++] ?? 0 : 0
+      return { len, newPos: pos, hasLength }
+    }
+    if (op === OP.OP_PUSHDATA2) {
+      const hasLength = pos + 1 < length
+      const len = (bytes[pos] ?? 0) | ((bytes[pos + 1] ?? 0) << 8)
+      return { len, newPos: Math.min(pos + 2, length), hasLength }
+    }
+    // OP_PUSHDATA4
+    const hasLength = pos + 3 < length
+    const len = (
+      (bytes[pos] ?? 0) |
+      ((bytes[pos + 1] ?? 0) << 8) |
+      ((bytes[pos + 2] ?? 0) << 16) |
+      ((bytes[pos + 3] ?? 0) << 24)
+    ) >>> 0
+    return { len, newPos: Math.min(pos + 4, length), hasLength }
+  }
+
   private static parseChunks (bytes: ArrayLike<number>): ScriptChunk[] {
     const chunks: ScriptChunk[] = []
     const length = bytes.length
@@ -551,71 +569,22 @@ export default class Script {
       const op = bytes[pos++] ?? 0
 
       if (op === OP.OP_RETURN && inConditionalBlock === 0) {
-        chunks.push({
-          op,
-          data: Script.copyRange(bytes, pos, length)
-        })
+        chunks.push({ op, data: Script.copyRange(bytes, pos, length) })
         break
       }
 
-      if (
-        op === OP.OP_IF ||
-        op === OP.OP_NOTIF ||
-        op === OP.OP_VERIF ||
-        op === OP.OP_VERNOTIF
-      ) {
+      if (op === OP.OP_IF || op === OP.OP_NOTIF || op === OP.OP_VERIF || op === OP.OP_VERNOTIF) {
         inConditionalBlock++
       } else if (op === OP.OP_ENDIF) {
         inConditionalBlock--
       }
 
-      if (op > 0 && op < OP.OP_PUSHDATA1) {
-        const len = op
+      if (op > 0 && op <= OP.OP_PUSHDATA4) {
+        const { len, newPos, hasLength } = Script.readPushdataLength(op, bytes, pos, length)
+        pos = newPos
         const end = Math.min(pos + len, length)
-        chunks.push({
-          data: Script.copyRange(bytes, pos, end),
-          op,
-          invalidLength: end - pos !== len
-        })
-        pos = end
-      } else if (op === OP.OP_PUSHDATA1) {
-        const hasLength = pos < length
-        const len = hasLength ? bytes[pos++] ?? 0 : 0
-        const end = Math.min(pos + len, length)
-        chunks.push({
-          data: Script.copyRange(bytes, pos, end),
-          op,
-          invalidLength: !hasLength || end - pos !== len
-        })
-        pos = end
-      } else if (op === OP.OP_PUSHDATA2) {
-        const hasLength = pos + 1 < length
-        const b0 = bytes[pos] ?? 0
-        const b1 = bytes[pos + 1] ?? 0
-        const len = b0 | (b1 << 8)
-        pos = Math.min(pos + 2, length)
-        const end = Math.min(pos + len, length)
-        chunks.push({
-          data: Script.copyRange(bytes, pos, end),
-          op,
-          invalidLength: !hasLength || end - pos !== len
-        })
-        pos = end
-      } else if (op === OP.OP_PUSHDATA4) {
-        const hasLength = pos + 3 < length
-        const len =
-          ((bytes[pos] ?? 0) |
-            ((bytes[pos + 1] ?? 0) << 8) |
-            ((bytes[pos + 2] ?? 0) << 16) |
-            ((bytes[pos + 3] ?? 0) << 24)) >>>
-          0
-        pos = Math.min(pos + 4, length)
-        const end = Math.min(pos + len, length)
-        chunks.push({
-          data: Script.copyRange(bytes, pos, end),
-          op,
-          invalidLength: !hasLength || end - pos !== len
-        })
+        const invalidLength = !hasLength || end - pos !== len
+        chunks.push({ data: Script.copyRange(bytes, pos, end), op, invalidLength })
         pos = end
       } else {
         chunks.push({ op })
@@ -633,35 +602,18 @@ export default class Script {
     while (pos < length) {
       const start = pos
       const op = bytes[pos++] ?? 0
-      let dataStart = pos
-      let dataLength = 0
 
-      if (op > 0 && op < OP.OP_PUSHDATA1) {
-        dataLength = op
-      } else if (op === OP.OP_PUSHDATA1) {
-        if (pos < length) dataLength = bytes[pos++] ?? 0
-        dataStart = pos
-      } else if (op === OP.OP_PUSHDATA2) {
-        if (pos + 1 < length) dataLength = (bytes[pos] ?? 0) | ((bytes[pos + 1] ?? 0) << 8)
-        pos = Math.min(pos + 2, length)
-        dataStart = pos
-      } else if (op === OP.OP_PUSHDATA4) {
-        if (pos + 3 < length) {
-          dataLength =
-            ((bytes[pos] ?? 0) |
-              ((bytes[pos + 1] ?? 0) << 8) |
-              ((bytes[pos + 2] ?? 0) << 16) |
-              ((bytes[pos + 3] ?? 0) << 24)) >>> 0
+      if (op > 0 && op <= OP.OP_PUSHDATA4) {
+        const { len, newPos } = Script.readPushdataLength(op, bytes, pos, length)
+        pos = newPos
+        const end = Math.min(pos + len, length)
+        if (op !== opcode) {
+          for (let i = start; i < end; i++) out.push(bytes[i] ?? 0)
         }
-        pos = Math.min(pos + 4, length)
-        dataStart = pos
+        pos = end
+      } else {
+        if (op !== opcode) out.push(op)
       }
-
-      const end = Math.min(dataStart + dataLength, length)
-      if (op !== opcode) {
-        for (let i = start; i < end; i++) out.push(bytes[i] ?? 0)
-      }
-      pos = end
     }
 
     return out

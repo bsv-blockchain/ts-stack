@@ -6,7 +6,6 @@ import {
   SecurityLevels,
   Base64String,
   BasketStringUnder300Bytes,
-  BEEF,
   BooleanDefaultFalse,
   BooleanDefaultTrue,
   Byte,
@@ -54,17 +53,28 @@ import * as Utils from '../../primitives/utils.js'
 import calls, { CallType } from './WalletWireCalls.js'
 import { WalletError } from '../WalletError.js'
 
+const ACTION_STATUS_MAP: Record<number, ActionStatus> = {
+  1: 'completed',
+  2: 'unprocessed',
+  3: 'sending',
+  4: 'unproven',
+  5: 'unsigned',
+  6: 'nosend',
+  7: 'nonfinal',
+  8: 'failed'
+}
+
 /**
  * A way to make remote calls to a wallet over a wallet wire.
  */
 export default class WalletWireTransceiver implements WalletInterface {
   wire: WalletWire
 
-  constructor(wire: WalletWire) {
+  constructor (wire: WalletWire) {
     this.wire = wire
   }
 
-  private async transmit(
+  private async transmit (
     call: CallType,
     originator: OriginatorDomainNameStringUnder250Bytes = '',
     params: number[] = []
@@ -101,16 +111,14 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async createAction(
+  async createAction (
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
     const paramWriter = new Utils.Writer()
 
     // Serialize description
-    const descriptionBytes = Utils.toArray(args.description, 'utf8')
-    paramWriter.writeVarIntNum(descriptionBytes.length)
-    paramWriter.write(descriptionBytes)
+    this.writeUTF8(paramWriter, args.description)
 
     // input BEEF
     if (args.inputBEEF != null) {
@@ -124,36 +132,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     if (args.inputs != null) {
       paramWriter.writeVarIntNum(args.inputs.length)
       for (const input of args.inputs) {
-        // outpoint
-        paramWriter.write(this.encodeOutpoint(input.outpoint))
-
-        // unlockingScript / unlockingScriptLength
-        if (input.unlockingScript != null && input.unlockingScript !== '') {
-          const unlockingScriptBytes = Utils.toArray(
-            input.unlockingScript,
-            'hex'
-          )
-          paramWriter.writeVarIntNum(unlockingScriptBytes.length)
-          paramWriter.write(unlockingScriptBytes)
-        } else {
-          paramWriter.writeVarIntNum(-1)
-          paramWriter.writeVarIntNum(input.unlockingScriptLength ?? 0)
-        }
-
-        // inputDescription
-        const inputDescriptionBytes = Utils.toArray(
-          input.inputDescription,
-          'utf8'
-        )
-        paramWriter.writeVarIntNum(inputDescriptionBytes.length)
-        paramWriter.write(inputDescriptionBytes)
-
-        // sequenceNumber
-        if (typeof input.sequenceNumber === 'number') {
-          paramWriter.writeVarIntNum(input.sequenceNumber)
-        } else {
-          paramWriter.writeVarIntNum(-1)
-        }
+        this.serializeCreateActionInput(paramWriter, input)
       }
     } else {
       paramWriter.writeVarIntNum(-1)
@@ -163,244 +142,60 @@ export default class WalletWireTransceiver implements WalletInterface {
     if (args.outputs != null) {
       paramWriter.writeVarIntNum(args.outputs.length)
       for (const output of args.outputs) {
-        // lockingScript
-        const lockingScriptBytes = Utils.toArray(output.lockingScript, 'hex')
-        paramWriter.writeVarIntNum(lockingScriptBytes.length)
-        paramWriter.write(lockingScriptBytes)
-
-        // satoshis
-        paramWriter.writeVarIntNum(output.satoshis)
-
-        // outputDescription
-        const outputDescriptionBytes = Utils.toArray(
-          output.outputDescription,
-          'utf8'
-        )
-        paramWriter.writeVarIntNum(outputDescriptionBytes.length)
-        paramWriter.write(outputDescriptionBytes)
-
-        // basket
-        if (output.basket != null && output.basket !== '') {
-          const basketBytes = Utils.toArray(output.basket, 'utf8')
-          paramWriter.writeVarIntNum(basketBytes.length)
-          paramWriter.write(basketBytes)
-        } else {
-          paramWriter.writeVarIntNum(-1)
-        }
-
-        // customInstructions
-        if (output.customInstructions != null && output.customInstructions !== '') {
-          const customInstructionsBytes = Utils.toArray(
-            output.customInstructions,
-            'utf8'
-          )
-          paramWriter.writeVarIntNum(customInstructionsBytes.length)
-          paramWriter.write(customInstructionsBytes)
-        } else {
-          paramWriter.writeVarIntNum(-1)
-        }
-
-        // tags
-        if (output.tags != null) {
-          paramWriter.writeVarIntNum(output.tags.length)
-          for (const tag of output.tags) {
-            const tagBytes = Utils.toArray(tag, 'utf8')
-            paramWriter.writeVarIntNum(tagBytes.length)
-            paramWriter.write(tagBytes)
-          }
-        } else {
-          paramWriter.writeVarIntNum(-1)
-        }
+        this.serializeCreateActionOutput(paramWriter, output)
       }
     } else {
       paramWriter.writeVarIntNum(-1)
     }
 
-    // Serialize lockTime
-    if (typeof args.lockTime === 'number') {
-      paramWriter.writeVarIntNum(args.lockTime)
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
-
-    // Serialize version
-    if (typeof args.version === 'number') {
-      paramWriter.writeVarIntNum(args.version)
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
+    // Serialize lockTime, version
+    this.writeOptionalVarInt(paramWriter, args.lockTime)
+    this.writeOptionalVarInt(paramWriter, args.version)
 
     // Serialize labels
-    if (args.labels != null) {
-      paramWriter.writeVarIntNum(args.labels.length)
-      for (const label of args.labels) {
-        const labelBytes = Utils.toArray(label, 'utf8')
-        paramWriter.writeVarIntNum(labelBytes.length)
-        paramWriter.write(labelBytes)
-      }
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
+    this.writeUTF8Array(paramWriter, args.labels)
 
     // Serialize options
-    if (args.options != null) {
-      paramWriter.writeInt8(1) // options present
-
-      // signAndProcess
-      if (typeof args.options.signAndProcess === 'boolean') {
-        paramWriter.writeInt8(args.options.signAndProcess ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // acceptDelayedBroadcast
-      if (typeof args.options.acceptDelayedBroadcast === 'boolean') {
-        paramWriter.writeInt8(args.options.acceptDelayedBroadcast ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // trustSelf
-      if (args.options.trustSelf === 'known') {
-        paramWriter.writeInt8(1)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // knownTxids
-      if (args.options.knownTxids != null) {
-        paramWriter.writeVarIntNum(args.options.knownTxids.length)
-        for (const txid of args.options.knownTxids) {
-          const txidBytes = Utils.toArray(txid, 'hex')
-          paramWriter.write(txidBytes)
-        }
-      } else {
-        paramWriter.writeVarIntNum(-1)
-      }
-
-      // returnTXIDOnly
-      if (typeof args.options.returnTXIDOnly === 'boolean') {
-        paramWriter.writeInt8(args.options.returnTXIDOnly ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // noSend
-      if (typeof args.options.noSend === 'boolean') {
-        paramWriter.writeInt8(args.options.noSend ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // noSendChange
-      if (args.options.noSendChange != null) {
-        paramWriter.writeVarIntNum(args.options.noSendChange.length)
-        for (const outpoint of args.options.noSendChange) {
-          paramWriter.write(this.encodeOutpoint(outpoint))
-        }
-      } else {
-        paramWriter.writeVarIntNum(-1)
-      }
-
-      // sendWith
-      if (args.options.sendWith != null) {
-        paramWriter.writeVarIntNum(args.options.sendWith.length)
-        for (const txid of args.options.sendWith) {
-          const txidBytes = Utils.toArray(txid, 'hex')
-          paramWriter.write(txidBytes)
-        }
-      } else {
-        paramWriter.writeVarIntNum(-1)
-      }
-
-      // randomizeOutputs
-      if (typeof args.options.randomizeOutputs === 'boolean') {
-        paramWriter.writeInt8(args.options.randomizeOutputs ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-    } else {
-      paramWriter.writeInt8(0) // options not present
-    }
+    this.serializeCreateActionOptions(paramWriter, args.options)
 
     // Transmit and parse response
-    const result = await this.transmit(
-      'createAction',
-      originator,
-      paramWriter.toArray()
-    )
+    const result = await this.transmit('createAction', originator, paramWriter.toArray())
+    return this.parseCreateActionResult(result)
+  }
+
+  private parseCreateActionResult (result: number[]): CreateActionResult {
     const resultReader = new Utils.Reader(result)
+    const response: CreateActionResult = {}
 
-    const response: {
-      txid?: TXIDHexString
-      tx?: BEEF
-      noSendChange?: OutpointString[]
-      sendWithResults?: Array<{
-        txid: TXIDHexString
-        status: SendWithResultStatus
-      }>
-      signableTransaction?: {
-        tx: BEEF
-        reference: Base64String
-      }
-    } = {}
-
-    // Parse txid
-    const txidFlag = resultReader.readInt8()
-    if (txidFlag === 1) {
-      const txidBytes = resultReader.read(32)
-      response.txid = Utils.toHex(txidBytes)
+    if (resultReader.readInt8() === 1) {
+      response.txid = Utils.toHex(resultReader.read(32))
     }
 
-    // Parse tx
-    const txFlag = resultReader.readInt8()
-    if (txFlag === 1) {
-      const txLength = resultReader.readVarIntNum()
-      response.tx = resultReader.read(txLength)
+    if (resultReader.readInt8() === 1) {
+      response.tx = resultReader.read(resultReader.readVarIntNum())
     }
 
-    // Parse noSendChange
     const noSendChangeLength = resultReader.readVarIntNum()
     if (noSendChangeLength >= 0) {
       response.noSendChange = []
       for (let i = 0; i < noSendChangeLength; i++) {
-        const outpoint = this.readOutpoint(resultReader)
-        response.noSendChange.push(outpoint)
+        response.noSendChange.push(this.readOutpoint(resultReader))
       }
     }
 
-    // Parse sendWithResults
-    const sendWithResultsLength = resultReader.readVarIntNum()
-    if (sendWithResultsLength >= 0) {
-      response.sendWithResults = []
-      for (let i = 0; i < sendWithResultsLength; i++) {
-        const txidBytes = resultReader.read(32)
-        const txid = Utils.toHex(txidBytes)
-        const statusCode = resultReader.readInt8()
-        let status: SendWithResultStatus = 'unproven'
-        if (statusCode === 2) status = 'sending'
-        else if (statusCode === 3) status = 'failed'
-        response.sendWithResults.push({ txid, status })
-      }
-    }
+    const sendWithResults = this.readSendWithResults(resultReader)
+    if (sendWithResults != null) response.sendWithResults = sendWithResults
 
-    // Parse signableTransaction
-    const signableTransactionFlag = resultReader.readInt8()
-    if (signableTransactionFlag === 1) {
-      const txLength = resultReader.readVarIntNum()
-      const tx = resultReader.read(txLength)
-      const referenceLength = resultReader.readVarIntNum()
-      const referenceBytes = resultReader.read(referenceLength)
-      response.signableTransaction = {
-        tx,
-        reference: Utils.toBase64(referenceBytes)
-      }
+    if (resultReader.readInt8() === 1) {
+      const tx = resultReader.read(resultReader.readVarIntNum())
+      const referenceBytes = resultReader.read(resultReader.readVarIntNum())
+      response.signableTransaction = { tx, reference: Utils.toBase64(referenceBytes) }
     }
 
     return response
   }
 
-  async signAction(
+  async signAction (
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
@@ -412,16 +207,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     for (const index of spendIndexes) {
       paramWriter.writeVarIntNum(Number(index))
       const spend = args.spends[Number(index)]
-      // unlockingScript
       const unlockingScriptBytes = Utils.toArray(spend.unlockingScript, 'hex')
       paramWriter.writeVarIntNum(unlockingScriptBytes.length)
       paramWriter.write(unlockingScriptBytes)
-      // sequenceNumber
-      if (typeof spend.sequenceNumber === 'number') {
-        paramWriter.writeVarIntNum(spend.sequenceNumber)
-      } else {
-        paramWriter.writeVarIntNum(-1)
-      }
+      this.writeOptionalVarInt(paramWriter, spend.sequenceNumber)
     }
 
     // Serialize reference
@@ -430,95 +219,26 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.write(referenceBytes)
 
     // Serialize options
-    if (args.options != null) {
-      paramWriter.writeInt8(1) // options present
-
-      // acceptDelayedBroadcast
-      if (typeof args.options.acceptDelayedBroadcast === 'boolean') {
-        paramWriter.writeInt8(args.options.acceptDelayedBroadcast ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // returnTXIDOnly
-      if (typeof args.options.returnTXIDOnly === 'boolean') {
-        paramWriter.writeInt8(args.options.returnTXIDOnly ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // noSend
-      if (typeof args.options.noSend === 'boolean') {
-        paramWriter.writeInt8(args.options.noSend ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
-
-      // sendWith
-      if (args.options.sendWith != null) {
-        paramWriter.writeVarIntNum(args.options.sendWith.length)
-        for (const txid of args.options.sendWith) {
-          const txidBytes = Utils.toArray(txid, 'hex')
-          paramWriter.write(txidBytes)
-        }
-      } else {
-        paramWriter.writeVarIntNum(-1)
-      }
-    } else {
-      paramWriter.writeInt8(0) // options not present
-    }
+    this.serializeSignActionOptions(paramWriter, args.options)
 
     // Transmit and parse response
-    const result = await this.transmit(
-      'signAction',
-      originator,
-      paramWriter.toArray()
-    )
+    const result = await this.transmit('signAction', originator, paramWriter.toArray())
     const resultReader = new Utils.Reader(result)
 
-    const response: {
-      txid?: TXIDHexString
-      tx?: BEEF
-      noSendChange?: OutpointString[]
-      sendWithResults?: Array<{
-        txid: TXIDHexString
-        status: SendWithResultStatus
-      }>
-    } = {}
-
-    // Parse txid
-    const txidFlag = resultReader.readInt8()
-    if (txidFlag === 1) {
-      const txidBytes = resultReader.read(32)
-      response.txid = Utils.toHex(txidBytes)
+    const response: SignActionResult = {}
+    if (resultReader.readInt8() === 1) {
+      response.txid = Utils.toHex(resultReader.read(32))
     }
-
-    // Parse tx
-    const txFlag = resultReader.readInt8()
-    if (txFlag === 1) {
-      const txLength = resultReader.readVarIntNum()
-      response.tx = resultReader.read(txLength)
+    if (resultReader.readInt8() === 1) {
+      response.tx = resultReader.read(resultReader.readVarIntNum())
     }
-
-    // Parse sendWithResults
-    const sendWithResultsLength = resultReader.readVarIntNum()
-    if (sendWithResultsLength >= 0) {
-      response.sendWithResults = []
-      for (let i = 0; i < sendWithResultsLength; i++) {
-        const txidBytes = resultReader.read(32)
-        const txid = Utils.toHex(txidBytes)
-        const statusCode = resultReader.readInt8()
-        let status: SendWithResultStatus = 'unproven'
-        if (statusCode === 2) status = 'sending'
-        else if (statusCode === 3) status = 'failed'
-        response.sendWithResults.push({ txid, status })
-      }
-    }
+    const sendWithResults = this.readSendWithResults(resultReader)
+    if (sendWithResults != null) response.sendWithResults = sendWithResults
 
     return response
   }
 
-  async abortAction(
+  async abortAction (
     args: { reference: Base64String },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ aborted: true }> {
@@ -530,294 +250,144 @@ export default class WalletWireTransceiver implements WalletInterface {
     return { aborted: true }
   }
 
-  async listActions(
+  async listActions (
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
     const paramWriter = new Utils.Writer()
 
-    // Serialize labels
+    // Serialize labels (always-present array, no -1 sentinel)
     paramWriter.writeVarIntNum(args.labels.length)
     for (const label of args.labels) {
-      const labelBytes = Utils.toArray(label, 'utf8')
-      paramWriter.writeVarIntNum(labelBytes.length)
-      paramWriter.write(labelBytes)
+      this.writeUTF8(paramWriter, label)
     }
 
     // Serialize labelQueryMode
-    if (args.labelQueryMode === 'any') {
-      paramWriter.writeInt8(1)
-    } else if (args.labelQueryMode === 'all') {
-      paramWriter.writeInt8(2)
-    } else {
-      paramWriter.writeInt8(-1)
-    }
+    if (args.labelQueryMode === 'any') paramWriter.writeInt8(1)
+    else if (args.labelQueryMode === 'all') paramWriter.writeInt8(2)
+    else paramWriter.writeInt8(-1)
 
     // Serialize include options
-    const includeOptions = [
+    for (const option of [
       args.includeLabels,
       args.includeInputs,
       args.includeInputSourceLockingScripts,
       args.includeInputUnlockingScripts,
       args.includeOutputs,
       args.includeOutputLockingScripts
-    ]
-    for (const option of includeOptions) {
-      if (typeof option === 'boolean') {
-        paramWriter.writeInt8(option ? 1 : 0)
-      } else {
-        paramWriter.writeInt8(-1)
-      }
+    ]) {
+      this.writeOptionalBool(paramWriter, option)
     }
 
-    // Serialize limit and offset
-    if (typeof args.limit === 'number') {
-      paramWriter.writeVarIntNum(args.limit)
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
-    if (typeof args.offset === 'number') {
-      paramWriter.writeVarIntNum(args.offset)
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
+    this.writeOptionalVarInt(paramWriter, args.limit)
+    this.writeOptionalVarInt(paramWriter, args.offset)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
 
-    // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
-
-    // Transmit and parse response
-    const result = await this.transmit(
-      'listActions',
-      originator,
-      paramWriter.toArray()
-    )
+    const result = await this.transmit('listActions', originator, paramWriter.toArray())
     const resultReader = new Utils.Reader(result)
-
     const totalActions = resultReader.readVarIntNum()
-    const actions: Array<{
-      txid: TXIDHexString
-      satoshis: SatoshiValue
-      status: ActionStatus
-      isOutgoing: boolean
-      description: DescriptionString5to50Bytes
-      labels?: LabelStringUnder300Bytes[]
-      version: PositiveIntegerOrZero
-      lockTime: PositiveIntegerOrZero
-      inputs?: Array<{
-        sourceOutpoint: OutpointString
-        sourceSatoshis: SatoshiValue
-        sourceLockingScript?: HexString
-        unlockingScript?: HexString
-        inputDescription: DescriptionString5to50Bytes
-        sequenceNumber: PositiveIntegerOrZero
-      }>
-      outputs?: Array<{
-        outputIndex: PositiveIntegerOrZero
-        satoshis: SatoshiValue
-        lockingScript?: HexString
-        spendable: boolean
-        outputDescription: DescriptionString5to50Bytes
-        basket: BasketStringUnder300Bytes
-        tags: OutputTagStringUnder300Bytes[]
-        customInstructions?: string
-      }>
-    }> = []
-
+    const actions: ListActionsResult['actions'] = []
     for (let i = 0; i < totalActions; i++) {
-      // Parse action fields
-      const txidBytes = resultReader.read(32)
-      const txid = Utils.toHex(txidBytes)
-
-      const satoshis = resultReader.readVarIntNum()
-
-      const statusCode = resultReader.readInt8()
-      let status: ActionStatus
-      switch (statusCode) {
-        case 1:
-          status = 'completed'
-          break
-        case 2:
-          status = 'unprocessed'
-          break
-        case 3:
-          status = 'sending'
-          break
-        case 4:
-          status = 'unproven'
-          break
-        case 5:
-          status = 'unsigned'
-          break
-        case 6:
-          status = 'nosend'
-          break
-        case 7:
-          status = 'nonfinal'
-          break
-        case 8:
-          status = 'failed'
-          break
-        default:
-          throw new Error(`Unknown status code: ${statusCode}`)
-      }
-
-      const isOutgoing = resultReader.readInt8() === 1
-
-      const descriptionLength = resultReader.readVarIntNum()
-      const descriptionBytes = resultReader.read(descriptionLength)
-      const description = Utils.toUTF8(descriptionBytes)
-
-      const action: any = {
-        txid,
-        satoshis,
-        status,
-        isOutgoing,
-        description,
-        version: 0,
-        lockTime: 0
-      }
-
-      // Parse labels
-      const labelsLength = resultReader.readVarIntNum()
-      if (labelsLength >= 0) {
-        action.labels = []
-        for (let j = 0; j < labelsLength; j++) {
-          const labelLength = resultReader.readVarIntNum()
-          const labelBytes = resultReader.read(labelLength)
-          action.labels.push(Utils.toUTF8(labelBytes))
-        }
-      }
-
-      // Parse version and lockTime
-      action.version = resultReader.readVarIntNum()
-      action.lockTime = resultReader.readVarIntNum()
-
-      // Parse inputs
-      const inputsLength = resultReader.readVarIntNum()
-      if (inputsLength >= 0) {
-        action.inputs = []
-        for (let k = 0; k < inputsLength; k++) {
-          const sourceOutpoint = this.readOutpoint(resultReader)
-          const sourceSatoshis = resultReader.readVarIntNum()
-
-          // sourceLockingScript
-          const sourceLockingScriptLength = resultReader.readVarIntNum()
-          let sourceLockingScript: string | undefined
-          if (sourceLockingScriptLength >= 0) {
-            const sourceLockingScriptBytes = resultReader.read(
-              sourceLockingScriptLength
-            )
-            sourceLockingScript = Utils.toHex(sourceLockingScriptBytes)
-          }
-
-          // unlockingScript
-          const unlockingScriptLength = resultReader.readVarIntNum()
-          let unlockingScript: string | undefined
-          if (unlockingScriptLength >= 0) {
-            const unlockingScriptBytes = resultReader.read(
-              unlockingScriptLength
-            )
-            unlockingScript = Utils.toHex(unlockingScriptBytes)
-          }
-
-          // inputDescription
-          const inputDescriptionLength = resultReader.readVarIntNum()
-          const inputDescriptionBytes = resultReader.read(
-            inputDescriptionLength
-          )
-          const inputDescription = Utils.toUTF8(inputDescriptionBytes)
-
-          // sequenceNumber
-          const sequenceNumber = resultReader.readVarIntNum()
-
-          action.inputs.push({
-            sourceOutpoint,
-            sourceSatoshis,
-            sourceLockingScript,
-            unlockingScript,
-            inputDescription,
-            sequenceNumber
-          })
-        }
-      }
-
-      // Parse outputs
-      const outputsLength = resultReader.readVarIntNum()
-      if (outputsLength >= 0) {
-        action.outputs = []
-        for (let l = 0; l < outputsLength; l++) {
-          const outputIndex = resultReader.readVarIntNum()
-          const satoshis = resultReader.readVarIntNum()
-
-          // lockingScript
-          const lockingScriptLength = resultReader.readVarIntNum()
-          let lockingScript: string | undefined
-          if (lockingScriptLength >= 0) {
-            const lockingScriptBytes = resultReader.read(lockingScriptLength)
-            lockingScript = Utils.toHex(lockingScriptBytes)
-          }
-
-          const spendable = resultReader.readInt8() === 1
-
-          // outputDescription
-          const outputDescriptionLength = resultReader.readVarIntNum()
-          const outputDescriptionBytes = resultReader.read(
-            outputDescriptionLength
-          )
-          const outputDescription = Utils.toUTF8(outputDescriptionBytes)
-
-          // basket
-          const basketLength = resultReader.readVarIntNum()
-          let basket: string | undefined
-          if (basketLength >= 0) {
-            const basketBytes = resultReader.read(basketLength)
-            basket = Utils.toUTF8(basketBytes)
-          }
-
-          // tags
-          const tagsLength = resultReader.readVarIntNum()
-          const tags: string[] = []
-          if (tagsLength >= 0) {
-            for (let m = 0; m < tagsLength; m++) {
-              const tagLength = resultReader.readVarIntNum()
-              const tagBytes = resultReader.read(tagLength)
-              tags.push(Utils.toUTF8(tagBytes))
-            }
-          }
-
-          // customInstructions
-          const customInstructionsLength = resultReader.readVarIntNum()
-          let customInstructions: string | undefined
-          if (customInstructionsLength >= 0) {
-            const customInstructionsBytes = resultReader.read(
-              customInstructionsLength
-            )
-            customInstructions = Utils.toUTF8(customInstructionsBytes)
-          }
-
-          action.outputs.push({
-            outputIndex,
-            satoshis,
-            lockingScript,
-            spendable,
-            outputDescription,
-            basket,
-            tags,
-            customInstructions
-          })
-        }
-      }
-
-      actions.push(action)
+      actions.push(this.parseAction(resultReader))
     }
-
-    return {
-      totalActions,
-      actions
-    }
+    return { totalActions, actions }
   }
 
-  async internalizeAction(
+  private parseActionStatus (code: number): ActionStatus {
+    const status = ACTION_STATUS_MAP[code]
+    if (status == null) throw new Error(`Unknown status code: ${code}`)
+    return status
+  }
+
+  private parseAction (reader: Utils.Reader): ListActionsResult['actions'][number] {
+    const txid = Utils.toHex(reader.read(32))
+    const satoshis = reader.readVarIntNum()
+    const status = this.parseActionStatus(reader.readInt8())
+    const isOutgoing = reader.readInt8() === 1
+    const description = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+
+    const action: any = { txid, satoshis, status, isOutgoing, description, version: 0, lockTime: 0 }
+
+    const labelsLen = reader.readVarIntNum()
+    if (labelsLen >= 0) {
+      action.labels = []
+      for (let j = 0; j < labelsLen; j++) {
+        action.labels.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+      }
+    }
+
+    action.version = reader.readVarIntNum()
+    action.lockTime = reader.readVarIntNum()
+
+    const inputsLen = reader.readVarIntNum()
+    if (inputsLen >= 0) {
+      action.inputs = []
+      for (let k = 0; k < inputsLen; k++) {
+        action.inputs.push(this.parseActionInput(reader))
+      }
+    }
+
+    const outputsLen = reader.readVarIntNum()
+    if (outputsLen >= 0) {
+      action.outputs = []
+      for (let l = 0; l < outputsLen; l++) {
+        action.outputs.push(this.parseActionOutput(reader))
+      }
+    }
+
+    return action
+  }
+
+  private parseActionInput (reader: Utils.Reader): {
+    sourceOutpoint: OutpointString
+    sourceSatoshis: SatoshiValue
+    sourceLockingScript?: HexString
+    unlockingScript?: HexString
+    inputDescription: DescriptionString5to50Bytes
+    sequenceNumber: PositiveIntegerOrZero
+  } {
+    const sourceOutpoint = this.readOutpoint(reader)
+    const sourceSatoshis = reader.readVarIntNum()
+    const srcLockLen = reader.readVarIntNum()
+    const sourceLockingScript = srcLockLen >= 0 ? Utils.toHex(reader.read(srcLockLen)) : undefined
+    const unlockLen = reader.readVarIntNum()
+    const unlockingScript = unlockLen >= 0 ? Utils.toHex(reader.read(unlockLen)) : undefined
+    const inputDescription = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+    const sequenceNumber = reader.readVarIntNum()
+    return { sourceOutpoint, sourceSatoshis, sourceLockingScript, unlockingScript, inputDescription, sequenceNumber }
+  }
+
+  private parseActionOutput (reader: Utils.Reader): {
+    outputIndex: PositiveIntegerOrZero
+    satoshis: SatoshiValue
+    lockingScript?: HexString
+    spendable: boolean
+    outputDescription: DescriptionString5to50Bytes
+    basket: BasketStringUnder300Bytes
+    tags: OutputTagStringUnder300Bytes[]
+    customInstructions?: string
+  } {
+    const outputIndex = reader.readVarIntNum()
+    const satoshis = reader.readVarIntNum()
+    const lockLen = reader.readVarIntNum()
+    const lockingScript = lockLen >= 0 ? Utils.toHex(reader.read(lockLen)) : undefined
+    const spendable = reader.readInt8() === 1
+    const outputDescription = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+    const basketLen = reader.readVarIntNum()
+    const basket = basketLen >= 0 ? Utils.toUTF8(reader.read(basketLen)) : undefined
+    const tagsLen = reader.readVarIntNum()
+    const tags: string[] = []
+    if (tagsLen >= 0) {
+      for (let m = 0; m < tagsLen; m++) {
+        tags.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+      }
+    }
+    const custLen = reader.readVarIntNum()
+    const customInstructions = custLen >= 0 ? Utils.toUTF8(reader.read(custLen)) : undefined
+    return { outputIndex, satoshis, lockingScript, spendable, outputDescription, basket: basket as BasketStringUnder300Bytes, tags, customInstructions }
+  }
+
+  async internalizeAction (
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ accepted: true }> {
@@ -826,216 +396,121 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.write(args.tx)
     paramWriter.writeVarIntNum(args.outputs.length)
     for (const out of args.outputs) {
-      paramWriter.writeVarIntNum(out.outputIndex)
-      if (out.protocol === 'wallet payment') {
-        if (out.paymentRemittance == null) {
-          throw new Error('Payment remittance is required for wallet payment')
-        }
-        paramWriter.writeUInt8(1)
-        paramWriter.write(
-          Utils.toArray(out.paymentRemittance.senderIdentityKey, 'hex')
-        )
-        const derivationPrefixAsArray = Utils.toArray(
-          out.paymentRemittance.derivationPrefix,
-          'base64'
-        )
-        paramWriter.writeVarIntNum(derivationPrefixAsArray.length)
-        paramWriter.write(derivationPrefixAsArray)
-        const derivationSuffixAsArray = Utils.toArray(
-          out.paymentRemittance.derivationSuffix,
-          'base64'
-        )
-        paramWriter.writeVarIntNum(derivationSuffixAsArray.length)
-        paramWriter.write(derivationSuffixAsArray)
-      } else {
-        paramWriter.writeUInt8(2)
-        const basketAsArray = Utils.toArray(
-          out.insertionRemittance?.basket,
-          'utf8'
-        )
-        paramWriter.writeVarIntNum(basketAsArray.length)
-        paramWriter.write(basketAsArray)
-        if (typeof out.insertionRemittance?.customInstructions === 'string' && out.insertionRemittance.customInstructions !== '') {
-          const customInstructionsAsArray = Utils.toArray(
-            out.insertionRemittance.customInstructions,
-            'utf8'
-          )
-          paramWriter.writeVarIntNum(customInstructionsAsArray.length)
-          paramWriter.write(customInstructionsAsArray)
-        } else {
-          paramWriter.writeVarIntNum(-1)
-        }
-        if (typeof out.insertionRemittance?.tags === 'object') {
-          paramWriter.writeVarIntNum(out.insertionRemittance.tags.length)
-          for (const tag of out.insertionRemittance.tags) {
-            const tagAsArray = Utils.toArray(tag, 'utf8')
-            paramWriter.writeVarIntNum(tagAsArray.length)
-            paramWriter.write(tagAsArray)
-          }
-        } else {
-          paramWriter.writeVarIntNum(0)
-        }
-      }
+      this.serializeInternalizeOutput(paramWriter, out)
     }
-    if (typeof args.labels === 'object') {
-      paramWriter.writeVarIntNum(args.labels.length)
-      for (const l of args.labels) {
-        const labelAsArray = Utils.toArray(l, 'utf8')
-        paramWriter.writeVarIntNum(labelAsArray.length)
-        paramWriter.write(labelAsArray)
-      }
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
+    this.writeUTF8Array(paramWriter, typeof args.labels === 'object' ? args.labels : undefined)
     const descriptionAsArray = Utils.toArray(args.description)
     paramWriter.writeVarIntNum(descriptionAsArray.length)
     paramWriter.write(descriptionAsArray)
-
-    // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
-
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     await this.transmit('internalizeAction', originator, paramWriter.toArray())
     return { accepted: true }
   }
 
-  async listOutputs(
+  private serializeInternalizeOutput (
+    writer: Utils.Writer,
+    out: InternalizeActionArgs['outputs'][number]
+  ): void {
+    writer.writeVarIntNum(out.outputIndex)
+    if (out.protocol === 'wallet payment') {
+      if (out.paymentRemittance == null) {
+        throw new Error('Payment remittance is required for wallet payment')
+      }
+      writer.writeUInt8(1)
+      writer.write(Utils.toArray(out.paymentRemittance.senderIdentityKey, 'hex'))
+      const prefix = Utils.toArray(out.paymentRemittance.derivationPrefix, 'base64')
+      writer.writeVarIntNum(prefix.length)
+      writer.write(prefix)
+      const suffix = Utils.toArray(out.paymentRemittance.derivationSuffix, 'base64')
+      writer.writeVarIntNum(suffix.length)
+      writer.write(suffix)
+    } else {
+      writer.writeUInt8(2)
+      const basket = Utils.toArray(out.insertionRemittance?.basket, 'utf8')
+      writer.writeVarIntNum(basket.length)
+      writer.write(basket)
+      this.writeOptionalUTF8(writer, out.insertionRemittance?.customInstructions)
+      const tags = out.insertionRemittance?.tags
+      if (typeof tags === 'object') {
+        writer.writeVarIntNum(tags.length)
+        for (const tag of tags) {
+          const t = Utils.toArray(tag, 'utf8')
+          writer.writeVarIntNum(t.length)
+          writer.write(t)
+        }
+      } else {
+        writer.writeVarIntNum(0)
+      }
+    }
+  }
+
+  async listOutputs (
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
     const paramWriter = new Utils.Writer()
-    const basketAsArray = Utils.toArray(args.basket, 'utf8')
-    paramWriter.writeVarIntNum(basketAsArray.length)
-    paramWriter.write(basketAsArray)
+    this.writeUTF8(paramWriter, args.basket)
     if (typeof args.tags === 'object') {
       paramWriter.writeVarIntNum(args.tags.length)
       for (const tag of args.tags) {
-        const tagAsArray = Utils.toArray(tag, 'utf8')
-        paramWriter.writeVarIntNum(tagAsArray.length)
-        paramWriter.write(tagAsArray)
+        this.writeUTF8(paramWriter, tag)
       }
     } else {
       paramWriter.writeVarIntNum(0)
     }
-    if (args.tagQueryMode === 'all') {
-      paramWriter.writeInt8(1)
-    } else if (args.tagQueryMode === 'any') {
-      paramWriter.writeInt8(2)
-    } else {
-      paramWriter.writeInt8(-1)
-    }
-    if (args.include === 'locking scripts') {
-      paramWriter.writeInt8(1)
-    } else if (args.include === 'entire transactions') {
-      paramWriter.writeInt8(2)
-    } else {
-      paramWriter.writeInt8(-1)
-    }
-    if (typeof args.includeCustomInstructions === 'boolean') {
-      paramWriter.writeInt8(args.includeCustomInstructions ? 1 : 0)
-    } else {
-      paramWriter.writeInt8(-1)
-    }
-    if (typeof args.includeTags === 'boolean') {
-      paramWriter.writeInt8(args.includeTags ? 1 : 0)
-    } else {
-      paramWriter.writeInt8(-1)
-    }
-    if (typeof args.includeLabels === 'boolean') {
-      paramWriter.writeInt8(args.includeLabels ? 1 : 0)
-    } else {
-      paramWriter.writeInt8(-1)
-    }
-    if (typeof args.limit === 'number') {
-      paramWriter.writeVarIntNum(args.limit)
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
-    if (typeof args.offset === 'number') {
-      paramWriter.writeVarIntNum(args.offset)
-    } else {
-      paramWriter.writeVarIntNum(-1)
-    }
+    if (args.tagQueryMode === 'all') paramWriter.writeInt8(1)
+    else if (args.tagQueryMode === 'any') paramWriter.writeInt8(2)
+    else paramWriter.writeInt8(-1)
+    if (args.include === 'locking scripts') paramWriter.writeInt8(1)
+    else if (args.include === 'entire transactions') paramWriter.writeInt8(2)
+    else paramWriter.writeInt8(-1)
+    this.writeOptionalBool(paramWriter, args.includeCustomInstructions)
+    this.writeOptionalBool(paramWriter, args.includeTags)
+    this.writeOptionalBool(paramWriter, args.includeLabels)
+    this.writeOptionalVarInt(paramWriter, args.limit)
+    this.writeOptionalVarInt(paramWriter, args.offset)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
 
-    // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
-
-    const result = await this.transmit(
-      'listOutputs',
-      originator,
-      paramWriter.toArray()
-    )
+    const result = await this.transmit('listOutputs', originator, paramWriter.toArray())
     const resultReader = new Utils.Reader(result)
     const totalOutputs = resultReader.readVarIntNum()
     const beefLength = resultReader.readVarIntNum()
-    let BEEF
-    if (beefLength >= 0) {
-      BEEF = resultReader.read(beefLength)
-    }
-    const outputs: Array<{
-      outpoint: OutpointString
-      satoshis: SatoshiValue
-      lockingScript?: HexString
-      tx?: BEEF
-      spendable: true
-      customInstructions?: string
-      tags?: OutputTagStringUnder300Bytes[]
-      labels?: LabelStringUnder300Bytes[]
-    }> = []
+    const BEEF = beefLength >= 0 ? resultReader.read(beefLength) : undefined
+    const outputs: ListOutputsResult['outputs'] = []
     for (let i = 0; i < totalOutputs; i++) {
-      const outpoint = this.readOutpoint(resultReader)
-      const satoshis = resultReader.readVarIntNum()
-      const output: {
-        outpoint: OutpointString
-        satoshis: SatoshiValue
-        lockingScript?: HexString
-        tx?: BEEF
-        spendable: true
-        customInstructions?: string
-        tags?: OutputTagStringUnder300Bytes[]
-        labels?: LabelStringUnder300Bytes[]
-      } = {
-        spendable: true,
-        outpoint,
-        satoshis
-      }
-      const scriptLength = resultReader.readVarIntNum()
-      if (scriptLength >= 0) {
-        output.lockingScript = Utils.toHex(resultReader.read(scriptLength))
-      }
-      const customInstructionsLength = resultReader.readVarIntNum()
-      if (customInstructionsLength >= 0) {
-        output.customInstructions = Utils.toUTF8(
-          resultReader.read(customInstructionsLength)
-        )
-      }
-      const tagsLength = resultReader.readVarIntNum()
-      if (tagsLength !== -1) {
-        const tags: OutputTagStringUnder300Bytes[] = []
-        for (let i = 0; i < tagsLength; i++) {
-          const tagLength = resultReader.readVarIntNum()
-          tags.push(Utils.toUTF8(resultReader.read(tagLength)))
-        }
-        output.tags = tags
-      }
-      const labelsLength = resultReader.readVarIntNum()
-      if (labelsLength !== -1) {
-        const labels: LabelStringUnder300Bytes[] = []
-        for (let i = 0; i < labelsLength; i++) {
-          const labelLength = resultReader.readVarIntNum()
-          labels.push(Utils.toUTF8(resultReader.read(labelLength)))
-        }
-        output.labels = labels
-      }
-      outputs.push(output)
+      outputs.push(this.parseListOutputEntry(resultReader))
     }
-    return {
-      totalOutputs,
-      BEEF,
-      outputs
-    }
+    return { totalOutputs, BEEF, outputs }
   }
 
-  async relinquishOutput(
+  private parseListOutputEntry (reader: Utils.Reader): ListOutputsResult['outputs'][number] {
+    const outpoint = this.readOutpoint(reader)
+    const satoshis = reader.readVarIntNum()
+    const output: ListOutputsResult['outputs'][number] = { spendable: true, outpoint, satoshis }
+    const scriptLen = reader.readVarIntNum()
+    if (scriptLen >= 0) output.lockingScript = Utils.toHex(reader.read(scriptLen))
+    const custLen = reader.readVarIntNum()
+    if (custLen >= 0) output.customInstructions = Utils.toUTF8(reader.read(custLen))
+    const tagsLen = reader.readVarIntNum()
+    if (tagsLen !== -1) {
+      const tags: OutputTagStringUnder300Bytes[] = []
+      for (let i = 0; i < tagsLen; i++) {
+        tags.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+      }
+      output.tags = tags
+    }
+    const labelsLen = reader.readVarIntNum()
+    if (labelsLen !== -1) {
+      const labels: LabelStringUnder300Bytes[] = []
+      for (let i = 0; i < labelsLen; i++) {
+        labels.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+      }
+      output.labels = labels
+    }
+    return output
+  }
+
+  async relinquishOutput (
     args: { basket: BasketStringUnder300Bytes, output: OutpointString },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ relinquished: true }> {
@@ -1048,7 +523,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return { relinquished: true }
   }
 
-  private encodeOutpoint(outpoint: OutpointString): number[] {
+  private encodeOutpoint (outpoint: OutpointString): number[] {
     const writer = new Utils.Writer()
     const [txid, index] = outpoint.split('.')
     writer.write(Utils.toArray(txid, 'hex'))
@@ -1056,13 +531,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     return writer.toArray()
   }
 
-  private readOutpoint(reader: Utils.Reader): OutpointString {
+  private readOutpoint (reader: Utils.Reader): OutpointString {
     const txid = Utils.toHex(reader.read(32))
     const index = reader.readVarIntNum()
     return `${txid}.${index}`
   }
 
-  async getPublicKey(
+  async getPublicKey (
     args: {
       seekPermission?: BooleanDefaultTrue
       identityKey?: true
@@ -1101,7 +576,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
 
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
 
     const result = await this.transmit(
       'getPublicKey',
@@ -1113,7 +588,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async revealCounterpartyKeyLinkage(
+  async revealCounterpartyKeyLinkage (
     args: {
       counterparty: PubKeyHex
       verifier: PubKeyHex
@@ -1122,13 +597,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{
-    prover: PubKeyHex
-    verifier: PubKeyHex
-    counterparty: PubKeyHex
-    revelationTime: ISOTimestampString
-    encryptedLinkage: Byte[]
-    encryptedLinkageProof: number[]
-  }> {
+      prover: PubKeyHex
+      verifier: PubKeyHex
+      counterparty: PubKeyHex
+      revelationTime: ISOTimestampString
+      encryptedLinkage: Byte[]
+      encryptedLinkageProof: number[]
+    }> {
     const paramWriter = new Utils.Writer()
     paramWriter.write(
       this.encodePrivilegedParams(args.privileged, args.privilegedReason)
@@ -1164,7 +639,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async revealSpecificKeyLinkage(
+  async revealSpecificKeyLinkage (
     args: {
       counterparty: PubKeyHex
       verifier: PubKeyHex
@@ -1175,15 +650,15 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{
-    prover: PubKeyHex
-    verifier: PubKeyHex
-    counterparty: PubKeyHex
-    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
-    keyID: KeyIDStringUnder800Bytes
-    encryptedLinkage: Byte[]
-    encryptedLinkageProof: Byte[]
-    proofType: Byte
-  }> {
+      prover: PubKeyHex
+      verifier: PubKeyHex
+      counterparty: PubKeyHex
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      encryptedLinkage: Byte[]
+      encryptedLinkageProof: Byte[]
+      proofType: Byte
+    }> {
     const paramWriter = new Utils.Writer()
     paramWriter.write(
       this.encodeKeyRelatedParams(
@@ -1228,7 +703,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async encrypt(
+  async encrypt (
     args: {
       seekPermission?: BooleanDefaultTrue
       plaintext: Byte[]
@@ -1253,7 +728,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.plaintext.length)
     paramWriter.write(args.plaintext)
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     return {
       ciphertext: await this.transmit(
         'encrypt',
@@ -1263,7 +738,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async decrypt(
+  async decrypt (
     args: {
       seekPermission?: BooleanDefaultTrue
       ciphertext: Byte[]
@@ -1288,7 +763,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.ciphertext.length)
     paramWriter.write(args.ciphertext)
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     return {
       plaintext: await this.transmit(
         'decrypt',
@@ -1298,7 +773,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async createHmac(
+  async createHmac (
     args: {
       seekPermission?: BooleanDefaultTrue
       data: Byte[]
@@ -1323,7 +798,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.data.length)
     paramWriter.write(args.data)
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     return {
       hmac: await this.transmit(
         'createHmac',
@@ -1333,7 +808,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async verifyHmac(
+  async verifyHmac (
     args: {
       seekPermission?: BooleanDefaultTrue
       data: Byte[]
@@ -1360,12 +835,12 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.data.length)
     paramWriter.write(args.data)
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     await this.transmit('verifyHmac', originator, paramWriter.toArray())
     return { valid: true }
   }
 
-  async createSignature(
+  async createSignature (
     args: {
       seekPermission?: BooleanDefaultTrue
       data?: Byte[]
@@ -1398,7 +873,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(args.hashToDirectlySign)
     }
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     return {
       signature: await this.transmit(
         'createSignature',
@@ -1408,7 +883,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async verifySignature(
+  async verifySignature (
     args: {
       seekPermission?: BooleanDefaultTrue
       data?: Byte[]
@@ -1449,20 +924,197 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(args.hashToDirectlyVerify ?? [])
     }
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     await this.transmit('verifySignature', originator, paramWriter.toArray())
     return { valid: true }
   }
 
-  private writeSeekPermission (paramWriter: Utils.Writer, seekPermission?: boolean): void {
-    if (typeof seekPermission === 'boolean') {
-      paramWriter.writeInt8(seekPermission ? 1 : 0)
+  /** Writes an optional boolean as Int8: 1/0 if present, -1 if absent. */
+  private writeOptionalBool (writer: Utils.Writer, val: boolean | undefined): void {
+    if (typeof val === 'boolean') {
+      writer.writeInt8(val ? 1 : 0)
     } else {
-      paramWriter.writeInt8(-1)
+      writer.writeInt8(-1)
     }
   }
 
-  private encodeKeyRelatedParams(
+  /** Writes an optional number as VarInt: the value if present, -1 if absent. */
+  private writeOptionalVarInt (writer: Utils.Writer, val: number | undefined): void {
+    if (typeof val === 'number') {
+      writer.writeVarIntNum(val)
+    } else {
+      writer.writeVarIntNum(-1)
+    }
+  }
+
+  /** Writes a UTF-8 string as (VarInt length, bytes). */
+  private writeUTF8 (writer: Utils.Writer, val: string | undefined): void {
+    const bytes = Utils.toArray(val ?? '', 'utf8')
+    writer.writeVarIntNum(bytes.length)
+    writer.write(bytes)
+  }
+
+  /** Writes an optional UTF-8 string: (VarInt length, bytes) if non-empty, -1 if absent/empty. */
+  private writeOptionalUTF8 (writer: Utils.Writer, val: string | undefined): void {
+    if (val != null && val !== '') {
+      const bytes = Utils.toArray(val, 'utf8')
+      writer.writeVarIntNum(bytes.length)
+      writer.write(bytes)
+    } else {
+      writer.writeVarIntNum(-1)
+    }
+  }
+
+  /** Writes an array of UTF-8 strings as (VarInt count, ...items). -1 if null. */
+  private writeUTF8Array (writer: Utils.Writer, arr: string[] | undefined): void {
+    if (arr != null) {
+      writer.writeVarIntNum(arr.length)
+      for (const item of arr) {
+        const bytes = Utils.toArray(item, 'utf8')
+        writer.writeVarIntNum(bytes.length)
+        writer.write(bytes)
+      }
+    } else {
+      writer.writeVarIntNum(-1)
+    }
+  }
+
+  /** Writes an array of hex-encoded txids (each 32 bytes) as (VarInt count, ...items). -1 if null. */
+  private writeTxidArray (writer: Utils.Writer, arr: string[] | undefined): void {
+    if (arr != null) {
+      writer.writeVarIntNum(arr.length)
+      for (const txid of arr) {
+        writer.write(Utils.toArray(txid, 'hex'))
+      }
+    } else {
+      writer.writeVarIntNum(-1)
+    }
+  }
+
+  /** Reads a list of SendWithResults entries from a binary reader. */
+  private readSendWithResults (
+    reader: Utils.Reader
+  ): Array<{ txid: TXIDHexString, status: SendWithResultStatus }> | undefined {
+    const len = reader.readVarIntNum()
+    if (len < 0) return undefined
+    const results: Array<{ txid: TXIDHexString, status: SendWithResultStatus }> = []
+    for (let i = 0; i < len; i++) {
+      const txid = Utils.toHex(reader.read(32))
+      const code = reader.readInt8()
+      const status: SendWithResultStatus = code === 2 ? 'sending' : code === 3 ? 'failed' : 'unproven'
+      results.push({ txid, status })
+    }
+    return results
+  }
+
+  /** Serializes a single createAction input to the writer. */
+  private serializeCreateActionInput (
+    writer: Utils.Writer,
+    input: {
+      outpoint: OutpointString
+      unlockingScript?: string
+      unlockingScriptLength?: number
+      inputDescription: string
+      sequenceNumber?: number
+    }
+  ): void {
+    writer.write(this.encodeOutpoint(input.outpoint))
+
+    if (input.unlockingScript != null && input.unlockingScript !== '') {
+      const bytes = Utils.toArray(input.unlockingScript, 'hex')
+      writer.writeVarIntNum(bytes.length)
+      writer.write(bytes)
+    } else {
+      writer.writeVarIntNum(-1)
+      writer.writeVarIntNum(input.unlockingScriptLength ?? 0)
+    }
+
+    this.writeUTF8(writer, input.inputDescription)
+    this.writeOptionalVarInt(writer, input.sequenceNumber)
+  }
+
+  /** Serializes a single createAction output to the writer. */
+  private serializeCreateActionOutput (
+    writer: Utils.Writer,
+    output: {
+      lockingScript: string
+      satoshis: number
+      outputDescription: string
+      basket?: string
+      customInstructions?: string
+      tags?: string[]
+    }
+  ): void {
+    const lockingBytes = Utils.toArray(output.lockingScript, 'hex')
+    writer.writeVarIntNum(lockingBytes.length)
+    writer.write(lockingBytes)
+    writer.writeVarIntNum(output.satoshis)
+    this.writeUTF8(writer, output.outputDescription)
+    this.writeOptionalUTF8(writer, output.basket)
+    this.writeOptionalUTF8(writer, output.customInstructions)
+    this.writeUTF8Array(writer, output.tags)
+  }
+
+  /** Serializes createAction options to the writer (Int8 presence byte + fields). */
+  private serializeCreateActionOptions (
+    writer: Utils.Writer,
+    options: {
+      signAndProcess?: boolean
+      acceptDelayedBroadcast?: boolean
+      trustSelf?: string
+      knownTxids?: string[]
+      returnTXIDOnly?: boolean
+      noSend?: boolean
+      noSendChange?: OutpointString[]
+      sendWith?: string[]
+      randomizeOutputs?: boolean
+    } | undefined
+  ): void {
+    if (options == null) {
+      writer.writeInt8(0)
+      return
+    }
+    writer.writeInt8(1)
+    this.writeOptionalBool(writer, options.signAndProcess)
+    this.writeOptionalBool(writer, options.acceptDelayedBroadcast)
+    writer.writeInt8(options.trustSelf === 'known' ? 1 : -1)
+    this.writeTxidArray(writer, options.knownTxids)
+    this.writeOptionalBool(writer, options.returnTXIDOnly)
+    this.writeOptionalBool(writer, options.noSend)
+    if (options.noSendChange != null) {
+      writer.writeVarIntNum(options.noSendChange.length)
+      for (const outpoint of options.noSendChange) {
+        writer.write(this.encodeOutpoint(outpoint))
+      }
+    } else {
+      writer.writeVarIntNum(-1)
+    }
+    this.writeTxidArray(writer, options.sendWith)
+    this.writeOptionalBool(writer, options.randomizeOutputs)
+  }
+
+  /** Serializes signAction options to the writer (Int8 presence byte + fields). */
+  private serializeSignActionOptions (
+    writer: Utils.Writer,
+    options: {
+      acceptDelayedBroadcast?: boolean
+      returnTXIDOnly?: boolean
+      noSend?: boolean
+      sendWith?: string[]
+    } | undefined
+  ): void {
+    if (options == null) {
+      writer.writeInt8(0)
+      return
+    }
+    writer.writeInt8(1)
+    this.writeOptionalBool(writer, options.acceptDelayedBroadcast)
+    this.writeOptionalBool(writer, options.returnTXIDOnly)
+    this.writeOptionalBool(writer, options.noSend)
+    this.writeTxidArray(writer, options.sendWith)
+  }
+
+  private encodeKeyRelatedParams (
     protocolID: [SecurityLevel, ProtocolString5To400Bytes],
     keyID: KeyIDStringUnder800Bytes,
     counterparty?: PubKeyHex,
@@ -1492,7 +1144,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return paramWriter.toArray()
   }
 
-  async acquireCertificate(
+  async acquireCertificate (
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
@@ -1562,7 +1214,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  private encodePrivilegedParams(
+  private encodePrivilegedParams (
     privileged?: boolean,
     privilegedReason?: string
   ): number[] {
@@ -1582,7 +1234,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return paramWriter.toArray()
   }
 
-  async listCertificates(
+  async listCertificates (
     args: {
       certifiers: PubKeyHex[]
       types: Base64String[]
@@ -1623,7 +1275,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     )
     const resultReader = new Utils.Reader(result)
     const totalCertificates = resultReader.readVarIntNum()
-    const certificates: Array<CertificateResult> = []
+    const certificates: CertificateResult[] = []
     for (let i = 0; i < totalCertificates; i++) {
       const certificateLength = resultReader.readVarIntNum()
       const certificateBin = resultReader.read(certificateLength)
@@ -1641,7 +1293,7 @@ export default class WalletWireTransceiver implements WalletInterface {
         }
       }
       const verifierLength = resultReader.readVarIntNum()
-      let verifier: string | undefined = undefined
+      let verifier: string | undefined
       if (verifierLength > 0) {
         verifier = Utils.toUTF8(resultReader.read(verifierLength))
       }
@@ -1649,7 +1301,7 @@ export default class WalletWireTransceiver implements WalletInterface {
         ...cert,
         signature: cert.signature as string,
         keyring: keyringForVerifier,
-        verifier,
+        verifier
       })
     }
     return {
@@ -1658,7 +1310,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async proveCertificate(
+  async proveCertificate (
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
@@ -1722,7 +1374,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async relinquishCertificate(
+  async relinquishCertificate (
     args: {
       type: Base64String
       serialNumber: Base64String
@@ -1745,7 +1397,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return { relinquished: true }
   }
 
-  private parseDiscoveryResult(result: number[]): {
+  private parseDiscoveryResult (result: number[]): {
     totalCertificates: number
     certificates: Array<{
       type: Base64String
@@ -1762,8 +1414,8 @@ export default class WalletWireTransceiver implements WalletInterface {
         trust: PositiveIntegerMax10
       }
       publiclyRevealedKeyring: Record<
-        CertificateFieldNameUnder50Bytes,
-        Base64String
+      CertificateFieldNameUnder50Bytes,
+      Base64String
       >
       decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }>
@@ -1785,8 +1437,8 @@ export default class WalletWireTransceiver implements WalletInterface {
         trust: PositiveIntegerMax10
       }
       publiclyRevealedKeyring: Record<
-        CertificateFieldNameUnder50Bytes,
-        Base64String
+      CertificateFieldNameUnder50Bytes,
+      Base64String
       >
       decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }> = []
@@ -1833,7 +1485,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async discoverByIdentityKey(
+  async discoverByIdentityKey (
     args: {
       seekPermission?: BooleanDefaultTrue
       identityKey: PubKeyHex
@@ -1855,7 +1507,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     const result = await this.transmit(
       'discoverByIdentityKey',
       originator,
@@ -1864,7 +1516,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return this.parseDiscoveryResult(result)
   }
 
-  async discoverByAttributes(
+  async discoverByAttributes (
     args: {
       seekPermission?: BooleanDefaultTrue
       attributes: Record<CertificateFieldNameUnder50Bytes, string>
@@ -1895,7 +1547,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     // Serialize seekPermission
-    this.writeSeekPermission(paramWriter, args.seekPermission)
+    this.writeOptionalBool(paramWriter, args.seekPermission)
     const result = await this.transmit(
       'discoverByAttributes',
       originator,
@@ -1904,7 +1556,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return this.parseDiscoveryResult(result)
   }
 
-  async isAuthenticated(
+  async isAuthenticated (
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ authenticated: true }> {
@@ -1913,7 +1565,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return { authenticated: result[0] === 1 }
   }
 
-  async waitForAuthentication(
+  async waitForAuthentication (
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ authenticated: true }> {
@@ -1921,7 +1573,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     return { authenticated: true }
   }
 
-  async getHeight(
+  async getHeight (
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ height: PositiveInteger }> {
@@ -1932,7 +1584,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async getHeaderForHeight(
+  async getHeaderForHeight (
     args: { height: PositiveInteger },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ header: HexString }> {
@@ -1948,7 +1600,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async getNetwork(
+  async getNetwork (
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ network: 'mainnet' | 'testnet' }> {
@@ -1958,7 +1610,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  async getVersion(
+  async getVersion (
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ version: VersionString7To30Bytes }> {
