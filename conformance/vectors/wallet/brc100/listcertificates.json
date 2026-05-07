@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -141,7 +141,9 @@
         "listCertificates",
         "schema",
         "non-empty"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Expects 1 pre-stored certificate; fresh empty wallet returns 0."
     },
     {
       "id": "wallet.brc100.listcertificates.6",

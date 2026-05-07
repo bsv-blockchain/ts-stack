@@ -3,9 +3,9 @@
   "id": "storage.uhrp-http",
   "name": "UHRP HTTP Storage API",
   "brc": ["BRC-26"],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "reference_impl": "uhrp-services",
-  "parity_class": "best-effort",
+  "parity_class": "required",
   "vectors": [
     {
       "id": "storage.uhrp-http.1",
@@ -238,8 +238,8 @@
         "_schema_check": true,
         "_note": "UHRP URL encodes SHA-256 hash using Base58Check with prefix ce00. May be bare or prefixed with 'uhrp://'",
         "examples": [
-          "uhrp://XUFAKrwTX11FMaKYAtWM1k2WB9a7F7Gi1cR9CX2fpKrYmXEJLqrj",
-          "XUFAKrwTX11FMaKYAtWM1k2WB9a7F7Gi1cR9CX2fpKrYmXEJLqrj"
+          "uhrp://XUUd4J26mdRjnb7iYUdYWN3XR59w8zBWaGVdWnPU8MWvECe3tqCq",
+          "XUTEaLuvEhPySbAMiJxYEhBBGb258URNoqgnaf3Ym4b2wg683ZKp"
         ]
       },
       "expected": {

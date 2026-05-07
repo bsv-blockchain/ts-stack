@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -50,7 +50,9 @@
         "internalizeAction",
         "payment",
         "happy-path"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.2",
@@ -95,7 +97,9 @@
         "brc-100",
         "internalizeAction",
         "basket-insertion"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.3",
@@ -149,7 +153,9 @@
         "brc-100",
         "internalizeAction",
         "multi-output"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.4",
@@ -195,7 +201,9 @@
         "brc-100",
         "internalizeAction",
         "labels"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.5",
@@ -238,7 +246,9 @@
         "brc-100",
         "internalizeAction",
         "no-permission"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.6",
@@ -359,7 +369,9 @@
         "brc-100",
         "internalizeAction",
         "schema"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.9",
@@ -399,7 +411,9 @@
         "brc-100",
         "internalizeAction",
         "minimal"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     },
     {
       "id": "wallet.brc100.internalizeaction.10",
@@ -442,7 +456,9 @@
         "brc-100",
         "internalizeAction",
         "originator"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "12-byte placeholder tx arrays are not valid BEEF; wallet BEEF parser rejects them. Pending real BEEF fixture generation."
     }
   ]
 }

@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -29,7 +29,9 @@
         "brc-100",
         "signAction",
         "happy-path"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.2",
@@ -55,7 +57,9 @@
         "brc-100",
         "signAction",
         "multi-input"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.3",
@@ -81,7 +85,9 @@
         "brc-100",
         "signAction",
         "noSend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.4",
@@ -106,7 +112,9 @@
         "brc-100",
         "signAction",
         "txid-only"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.5",
@@ -140,7 +148,9 @@
         "brc-100",
         "signAction",
         "sendWith"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.6",
@@ -163,7 +173,9 @@
         "brc-100",
         "signAction",
         "error"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.7",
@@ -182,7 +194,9 @@
         "signAction",
         "error",
         "validation"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     },
     {
       "id": "wallet.brc100.signaction.8",
@@ -409,7 +423,9 @@
         "brc-100",
         "signAction",
         "immediate-broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "References in-flight actions that do not exist in a fresh wallet. Demoted pending stateful test harness."
     }
   ]
 }

@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -24,7 +24,9 @@
         "brc-100",
         "abortAction",
         "happy-path"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires in-flight action in wallet state. Fresh wallet has no pending actions."
     },
     {
       "id": "wallet.brc100.abortaction.2",
@@ -40,7 +42,9 @@
       "tags": [
         "brc-100",
         "abortAction"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires in-flight action in wallet state. Fresh wallet has no pending actions."
     },
     {
       "id": "wallet.brc100.abortaction.3",
@@ -58,7 +62,9 @@
         "brc-100",
         "abortAction",
         "originator"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires in-flight action in wallet state. Fresh wallet has no pending actions."
     },
     {
       "id": "wallet.brc100.abortaction.4",
@@ -95,7 +101,9 @@
         "brc-100",
         "abortAction",
         "error"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires in-flight action in wallet state. Fresh wallet has no pending actions."
     },
     {
       "id": "wallet.brc100.abortaction.6",
@@ -131,7 +139,9 @@
         "brc-100",
         "abortAction",
         "schema"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires in-flight action in wallet state. Fresh wallet has no pending actions."
     },
     {
       "id": "wallet.brc100.abortaction.8",
@@ -147,7 +157,9 @@
       "tags": [
         "brc-100",
         "abortAction"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires in-flight action in wallet state. Fresh wallet has no pending actions."
     }
   ]
 }

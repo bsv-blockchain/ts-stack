@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -25,7 +25,9 @@
         "brc-100",
         "relinquishOutput",
         "happy-path"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires pre-existing output in wallet storage. Fresh wallet has no outputs."
     },
     {
       "id": "wallet.brc100.relinquishoutput.2",
@@ -42,7 +44,9 @@
       "tags": [
         "brc-100",
         "relinquishOutput"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires pre-existing output in wallet storage. Fresh wallet has no outputs."
     },
     {
       "id": "wallet.brc100.relinquishoutput.3",
@@ -61,7 +65,9 @@
         "brc-100",
         "relinquishOutput",
         "originator"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires pre-existing output in wallet storage. Fresh wallet has no outputs."
     },
     {
       "id": "wallet.brc100.relinquishoutput.4",
@@ -118,7 +124,9 @@
         "brc-100",
         "relinquishOutput",
         "schema"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires pre-existing output in wallet storage. Fresh wallet has no outputs."
     },
     {
       "id": "wallet.brc100.relinquishoutput.7",
@@ -135,7 +143,9 @@
       "tags": [
         "brc-100",
         "relinquishOutput"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires pre-existing output in wallet storage. Fresh wallet has no outputs."
     },
     {
       "id": "wallet.brc100.relinquishoutput.8",
@@ -152,7 +162,9 @@
       "tags": [
         "brc-100",
         "relinquishOutput"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires pre-existing output in wallet storage. Fresh wallet has no outputs."
     }
   ]
 }

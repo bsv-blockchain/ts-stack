@@ -5,7 +5,7 @@
   "brc": [
     "BRC-100"
   ],
-  "version": "2.0.0",
+  "version": "2.0.1",
   "reference_impl": "@bsv/sdk@2.0.14 + wallet-toolbox",
   "parity_class": "required",
   "vectors": [
@@ -43,7 +43,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.2",
@@ -89,7 +91,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.3",
@@ -142,7 +146,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.4",
@@ -204,7 +210,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.5",
@@ -241,7 +249,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.6",
@@ -284,7 +294,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.7",
@@ -339,7 +351,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.8",
@@ -402,7 +416,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.9",
@@ -436,7 +452,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.10",
@@ -481,7 +499,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.11",
@@ -537,7 +557,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.12",
@@ -597,7 +619,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.13",
@@ -633,7 +657,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.14",
@@ -679,7 +705,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.15",
@@ -732,7 +760,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.16",
@@ -794,7 +824,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.17",
@@ -831,7 +863,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.18",
@@ -874,7 +908,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.19",
@@ -929,7 +965,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.20",
@@ -992,7 +1030,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.21",
@@ -1026,7 +1066,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.22",
@@ -1071,7 +1113,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.23",
@@ -1127,7 +1171,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.24",
@@ -1187,7 +1233,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.25",
@@ -1223,7 +1271,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.26",
@@ -1269,7 +1319,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.27",
@@ -1322,7 +1374,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.28",
@@ -1384,7 +1438,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.29",
@@ -1421,7 +1477,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.30",
@@ -1464,7 +1522,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.31",
@@ -1500,7 +1560,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.32",
@@ -1546,7 +1608,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.33",
@@ -1599,7 +1663,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.34",
@@ -1661,7 +1727,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.35",
@@ -1698,7 +1766,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.36",
@@ -1741,7 +1811,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.37",
@@ -1796,7 +1868,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.38",
@@ -1859,7 +1933,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.39",
@@ -1893,7 +1969,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.40",
@@ -1938,7 +2016,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.41",
@@ -1994,7 +2074,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.42",
@@ -2054,7 +2136,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.43",
@@ -2090,7 +2174,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.44",
@@ -2136,7 +2222,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.45",
@@ -2189,7 +2277,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.46",
@@ -2251,7 +2341,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.47",
@@ -2288,7 +2380,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.48",
@@ -2331,7 +2425,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.49",
@@ -2386,7 +2482,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.50",
@@ -2449,7 +2547,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.51",
@@ -2483,7 +2583,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.52",
@@ -2528,7 +2630,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.53",
@@ -2584,7 +2688,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.54",
@@ -2644,7 +2750,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.55",
@@ -2680,7 +2788,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.56",
@@ -2726,7 +2836,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.57",
@@ -2779,7 +2891,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.58",
@@ -2841,7 +2955,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.59",
@@ -2878,7 +2994,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.60",
@@ -2921,7 +3039,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.61",
@@ -2957,7 +3077,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.62",
@@ -3003,7 +3125,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.63",
@@ -3056,7 +3180,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.64",
@@ -3118,7 +3244,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.65",
@@ -3155,7 +3283,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.66",
@@ -3198,7 +3328,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.67",
@@ -3253,7 +3385,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.68",
@@ -3316,7 +3450,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.69",
@@ -3350,7 +3486,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.70",
@@ -3395,7 +3533,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.71",
@@ -3451,7 +3591,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.72",
@@ -3511,7 +3653,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.73",
@@ -3547,7 +3691,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.74",
@@ -3593,7 +3739,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.75",
@@ -3646,7 +3794,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.76",
@@ -3708,7 +3858,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.77",
@@ -3745,7 +3897,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.78",
@@ -3788,7 +3942,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.79",
@@ -3843,7 +3999,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.80",
@@ -3906,7 +4064,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.81",
@@ -3940,7 +4100,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.82",
@@ -3985,7 +4147,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.83",
@@ -4041,7 +4205,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.84",
@@ -4101,7 +4267,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.85",
@@ -4137,7 +4305,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.86",
@@ -4183,7 +4353,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.87",
@@ -4236,7 +4408,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.88",
@@ -4298,7 +4472,9 @@
         "brc-100",
         "createAction",
         "nosend"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.89",
@@ -4335,7 +4511,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     },
     {
       "id": "wallet.brc100.createaction.90",
@@ -4378,7 +4556,9 @@
         "brc-100",
         "createAction",
         "broadcast"
-      ]
+      ],
+      "parity_class": "intended",
+      "skip_reason": "Requires funded wallet (change UTXOs); fresh in-memory wallet throws ERR_INSUFFICIENT_FUNDS. Pending funded mock-chain harness."
     }
   ]
 }

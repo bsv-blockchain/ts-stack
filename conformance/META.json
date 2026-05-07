@@ -1,11 +1,31 @@
 {
   "version": "1.0.0",
   "description": "BSV cross-language conformance vector corpus",
-  "domains": ["sdk", "wallet", "overlay", "messaging", "broadcast", "auth", "payments", "storage", "sync"],
+  "domains": [
+    "sdk",
+    "wallet",
+    "overlay",
+    "messaging",
+    "broadcast",
+    "auth",
+    "payments",
+    "storage",
+    "sync"
+  ],
   "brc_coverage": {
-    "BRC-42": ["sdk.keys.key-derivation", "sdk.keys.privatekey", "sdk.keys.publickey", "sdk.crypto.signature"],
-    "BRC-74": ["sdk.transactions.merklepath", "broadcast.merklepath"],
-    "BRC-77": ["sdk.compat.bsm"],
+    "BRC-42": [
+      "sdk.keys.key-derivation",
+      "sdk.keys.privatekey",
+      "sdk.keys.publickey",
+      "sdk.crypto.signature"
+    ],
+    "BRC-74": [
+      "sdk.transactions.merklepath",
+      "broadcast.merklepath"
+    ],
+    "BRC-77": [
+      "sdk.compat.bsm"
+    ],
     "BRC-31": [
       "messaging.brc31.authrite-signature",
       "auth.brc31-handshake",
@@ -46,20 +66,40 @@
       "wallet.brc100.getversion",
       "wallet.storage.adapterconformance"
     ],
-    "BRC-121": ["payments.brc121"],
-    "BRC-26": ["storage.uhrp-http"],
-    "BRC-62": ["overlay.submit"],
-    "BRC-22": ["overlay.lookup", "overlay.topicmanagement"],
-    "BRC-20": ["broadcast.arcsubmit", "broadcast.merklepath"],
-    "BRC-21": ["sync.gasprotocol"],
-    "BRC-14": ["sdk.scripts.evaluation"],
-    "merkle-service": ["broadcast.merkle-service"],
-    "message-box": ["messaging.messagebox-http"]
+    "BRC-121": [
+      "payments.brc121"
+    ],
+    "BRC-26": [
+      "storage.uhrp-http"
+    ],
+    "BRC-62": [
+      "overlay.submit"
+    ],
+    "BRC-22": [
+      "overlay.lookup",
+      "overlay.topicmanagement"
+    ],
+    "BRC-20": [
+      "broadcast.arcsubmit",
+      "broadcast.merklepath"
+    ],
+    "BRC-21": [
+      "sync.gasprotocol"
+    ],
+    "BRC-14": [
+      "sdk.scripts.evaluation"
+    ],
+    "merkle-service": [
+      "broadcast.merkle-service"
+    ],
+    "message-box": [
+      "messaging.messagebox-http"
+    ]
   },
   "stats": {
     "total_files": 71,
     "total_vectors": 6601,
-    "last_updated": "2026-05-04"
+    "last_updated": "2026-05-07"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

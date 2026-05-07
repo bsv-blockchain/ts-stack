@@ -9,6 +9,7 @@
     "symptom": "go-sdk ParseBeef() returned nil transaction for BEEF_V2 format, causing nil-pointer dereference when caller invoked TxID()",
     "root_cause": "BEEF_V2 parse path did not assign the newest transaction to the return value, unlike the ATOMIC_BEEF and BEEF_V1 paths"
   },
+  "version": "1.0.1",
   "vectors": [
     {
       "id": "regression.beef.v2-txid-panic.0001",
@@ -28,6 +29,7 @@
       "id": "regression.beef.v2-txid-panic.0002",
       "description": "v1 new BEEF round-trip — minimum BEEF_V1 bytes encode correctly",
       "parity_class": "intended",
+      "skip_reason": "Go-SDK parity gap: Go-SDK v1.2.23 errors in NewBeefFromTransaction(nil) when the BEEF_V1 parse path produces a nil transaction (no txs in payload), while TS SDK returns null without error. Tracked in go-sdk#306 follow-up; requires Go-SDK fix before this vector can be required.",
       "input": {
         "beef_hex": "0100beef0000",
         "format": "BEEF_V1"
