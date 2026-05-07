@@ -19,15 +19,15 @@ export default class ReactNativeWebView extends InvokableWalletBase {
 
   constructor(domain: string = '*') {
     super()
-    if (typeof window !== 'object') {
+    if (typeof globalThis.window !== 'object') {
       throw new TypeError('The XDM substrate requires a global window object.')
     }
-    if (!(window as unknown as ReactNativeWindow).hasOwnProperty("ReactNativeWebView")) {
+    if (!(globalThis.window as unknown as ReactNativeWindow).hasOwnProperty("ReactNativeWebView")) {
       throw new Error(
         'The window object does not have a ReactNativeWebView property.'
       )
     }
-    if (typeof (window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage !== 'function') {
+    if (typeof (globalThis.window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage !== 'function') {
       throw new TypeError(
         'The window.ReactNativeWebView property does not seem to support postMessage calls.'
       )
@@ -47,8 +47,8 @@ export default class ReactNativeWebView extends InvokableWalletBase {
         ) {
           return
         }
-        if (typeof window.removeEventListener === 'function') {
-          window.removeEventListener('message', listener)
+        if (typeof globalThis.window.removeEventListener === 'function') {
+          globalThis.window.removeEventListener('message', listener)
         }
         if (data.status === 'error') {
           const err = new WalletError(data.description, data.code)
@@ -57,8 +57,8 @@ export default class ReactNativeWebView extends InvokableWalletBase {
           resolve(data.result)
         }
       }
-      window.addEventListener('message', listener)
-      ;(window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage(
+      globalThis.window.addEventListener('message', listener)
+      ;(globalThis.window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage(
         JSON.stringify({
           type: 'CWI',
           isInvocation: true,

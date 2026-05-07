@@ -2,6 +2,8 @@ import { Point, PrivateKey, PublicKey, SymmetricKey } from '../primitives/index.
 import { Counterparty, KeyDeriver, KeyDeriverApi } from './KeyDeriver.js'
 import { WalletProtocol } from './Wallet.interfaces.js'
 
+type CachedKeyValue = PublicKey | PrivateKey | SymmetricKey | Point | number[]
+
 /**
  * A cached version of KeyDeriver that caches the results of key derivation methods.
  * This is useful for optimizing performance when the same keys are derived multiple times.
@@ -9,7 +11,7 @@ import { WalletProtocol } from './Wallet.interfaces.js'
  */
 export default class CachedKeyDeriver implements KeyDeriverApi {
   private readonly keyDeriver: KeyDeriver
-  private readonly cache: Map<string, PublicKey | PrivateKey | SymmetricKey | Point | number[]>
+  private readonly cache: Map<string, CachedKeyValue>
   private readonly maxCacheSize: number
 
   /**
@@ -47,9 +49,9 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       }
     )
     this.identityKey = this.rootKey.toPublicKey().toString()
-    this.cache = new Map<string, PublicKey | PrivateKey | SymmetricKey | Point | number[]>()
+    this.cache = new Map<string, CachedKeyValue>()
     const maxCacheSize = options?.maxCacheSize
-    this.maxCacheSize = (maxCacheSize != null && !isNaN(maxCacheSize) && maxCacheSize > 0) ? maxCacheSize : 1000
+    this.maxCacheSize = (maxCacheSize != null && !Number.isNaN(maxCacheSize) && maxCacheSize > 0) ? maxCacheSize : 1000
   }
 
   /**
@@ -252,7 +254,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     } else if (typeof arg === 'object' && arg !== null) {
       return JSON.stringify(arg)
     } else {
-      return String(arg)
+      return String(arg as string | number | boolean)
     }
   }
 
@@ -261,7 +263,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {string} cacheKey - The key of the cached item.
    * @returns {any} - The cached value.
    */
-  private cacheGet (cacheKey: string): PublicKey | PrivateKey | SymmetricKey | Point | number[] | undefined {
+  private cacheGet (cacheKey: string): CachedKeyValue | undefined {
     const value = this.cache.get(cacheKey)
     // Update the entry to reflect recent use
     this.cache.delete(cacheKey)
@@ -276,7 +278,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
    * @param {string} cacheKey - The key of the item to cache.
    * @param {any} value - The value to cache.
    */
-  private cacheSet (cacheKey: string, value: PublicKey | PrivateKey | SymmetricKey | Point | number[]): void {
+  private cacheSet (cacheKey: string, value: CachedKeyValue): void {
     if (this.cache.size >= this.maxCacheSize) {
       // Evict the least recently used item (first item in Map)
       const firstKey = this.cache.keys().next().value

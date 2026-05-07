@@ -25,8 +25,8 @@ export interface KVContext { key: string, protocolID: WalletProtocol }
 export const kvStoreInterpreter: InterpreterFunction<string, KVContext> = async (transaction: Transaction, outputIndex: number, ctx?: KVContext): Promise<string | undefined> => {
   try {
     const output = transaction.outputs[outputIndex]
-    if (output == null || output.lockingScript == null) return undefined
-    if (ctx == null || ctx.key == null) return undefined
+    if (output?.lockingScript == null) return undefined
+    if (ctx?.key == null) return undefined
 
     // Decode the KVStore token
     const decoded = PushDrop.decode(output.lockingScript)

@@ -50,6 +50,9 @@ export interface AdmittanceInstructions {
  */
 export type STEAK = Record<string, AdmittanceInstructions>
 
+/** Specifies which topics must be acknowledged: all, any, or a specific list. */
+export type TopicAcknowledgmentRequirement = 'all' | 'any' | string[]
+
 /** Configuration options for the SHIP broadcaster. */
 export interface SHIPBroadcasterConfig {
   /**
@@ -64,11 +67,11 @@ export interface SHIPBroadcasterConfig {
   /** The resolver used to locate suitable hosts with SHIP */
   resolver?: LookupResolver
   /** Determines which topics (all, any, or a specific list) must be present within all STEAKs received from every host for the broadcast to be considered a success. By default, all hosts must acknowledge all topics. */
-  requireAcknowledgmentFromAllHostsForTopics?: 'all' | 'any' | string[]
+  requireAcknowledgmentFromAllHostsForTopics?: TopicAcknowledgmentRequirement
   /** Determines which topics (all, any, or a specific list) must be present within STEAK received from at least one host for the broadcast to be considered a success. */
-  requireAcknowledgmentFromAnyHostForTopics?: 'all' | 'any' | string[]
+  requireAcknowledgmentFromAnyHostForTopics?: TopicAcknowledgmentRequirement
   /** Determines a mapping whose keys are specific hosts and whose values are the topics (all, any, or a specific list) that must be present within the STEAK received by the given hosts, in order for the broadcast to be considered a success. */
-  requireAcknowledgmentFromSpecificHostsForTopics?: Record<string, 'all' | 'any' | string[]>
+  requireAcknowledgmentFromSpecificHostsForTopics?: Record<string, TopicAcknowledgmentRequirement>
 }
 
 /** Facilitates transaction broadcasts that return STEAK. */
@@ -128,9 +131,9 @@ export default class TopicBroadcaster implements Broadcaster {
   private readonly topics: string[]
   private readonly facilitator: OverlayBroadcastFacilitator
   private readonly resolver: LookupResolver
-  private readonly requireAcknowledgmentFromAllHostsForTopics: | 'all' | 'any' | string[]
-  private readonly requireAcknowledgmentFromAnyHostForTopics: | 'all' | 'any' | string[]
-  private readonly requireAcknowledgmentFromSpecificHostsForTopics: Record<string, 'all' | 'any' | string[]>
+  private readonly requireAcknowledgmentFromAllHostsForTopics: TopicAcknowledgmentRequirement
+  private readonly requireAcknowledgmentFromAnyHostForTopics: TopicAcknowledgmentRequirement
+  private readonly requireAcknowledgmentFromSpecificHostsForTopics: Record<string, TopicAcknowledgmentRequirement>
   private readonly networkPreset: 'mainnet' | 'testnet' | 'local'
 
   // Cache for findInterestedHosts to avoid repeated SHIP tracker lookups
@@ -233,7 +236,7 @@ export default class TopicBroadcaster implements Broadcaster {
       for (const [topic, instructions] of Object.entries(steak)) {
         const outputsToAdmit = instructions.outputsToAdmit
         const coinsToRetain = instructions.coinsToRetain
-        const coinsRemoved = instructions.coinsRemoved as number[]
+        const coinsRemoved = instructions.coinsRemoved
 
         if (
           outputsToAdmit?.length > 0 ||
@@ -253,17 +256,14 @@ export default class TopicBroadcaster implements Broadcaster {
     let requiredTopicsAllHosts: string[]
     let requireAllHosts: 'all' | 'any'
 
-    if (this.requireAcknowledgmentFromAllHostsForTopics === 'all') {
-      requiredTopicsAllHosts = this.topics
-      requireAllHosts = 'all'
-    } else if (this.requireAcknowledgmentFromAllHostsForTopics === 'any') {
+    if (this.requireAcknowledgmentFromAllHostsForTopics === 'any') {
       requiredTopicsAllHosts = this.topics
       requireAllHosts = 'any'
     } else if (Array.isArray(this.requireAcknowledgmentFromAllHostsForTopics)) {
       requiredTopicsAllHosts = this.requireAcknowledgmentFromAllHostsForTopics
       requireAllHosts = 'all'
     } else {
-      // Default to 'all' and 'all'
+      // Default ('all') and unknown values: use all topics with 'all' requirement
       requiredTopicsAllHosts = this.topics
       requireAllHosts = 'all'
     }
@@ -462,8 +462,8 @@ export default class TopicBroadcaster implements Broadcaster {
     // Handle the local network preset
     if (this.networkPreset === 'local') {
       const resultSet = new Set<string>()
-      for (let i = 0; i < this.topics.length; i++) {
-        resultSet.add(this.topics[i])
+      for (const topic of this.topics) {
+        resultSet.add(topic)
       }
       return { 'http://localhost:8080': resultSet }
     }
@@ -519,9 +519,7 @@ export default class TopicBroadcaster implements Broadcaster {
         ) {
           continue
         }
-        if (results[parsed.domain] === undefined) {
-          results[parsed.domain] = new Set()
-        }
+        results[parsed.domain] ??= new Set()
         results[parsed.domain].add(parsed.topicOrService)
       } catch (e) {
         continue

@@ -139,7 +139,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       )
     }
 
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : undefined
+    const controller = typeof AbortController === 'undefined' ? undefined : new AbortController()
     const timer = setTimeout(() => {
       try { controller?.abort() } catch { /* noop */ }
     }, timeout)
@@ -190,7 +190,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       }
     } catch (e) {
       // Normalize timeouts to a consistent error message
-      if ((e as any)?.name === 'AbortError') throw new Error('Request timed out')
+      if ((e as { name?: string })?.name === 'AbortError') throw new Error('Request timed out')
       throw e
     } finally {
       clearTimeout(timer)

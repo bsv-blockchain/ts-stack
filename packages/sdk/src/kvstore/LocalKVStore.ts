@@ -155,7 +155,7 @@ export default class LocalKVStore {
     if (outputs.length === 0) {
       return r
     }
-    const output = outputs.slice(-1)[0]
+    const output = outputs[outputs.length - 1]
     r.outpoint = output.outpoint
     let field: number[]
     try {
@@ -169,23 +169,23 @@ export default class LocalKVStore {
     } catch (error) {
       throw new Error(`Invalid value found. You need to call set to collapse the corrupted state (or relinquish the corrupted ${outputs[0].outpoint} output from the ${this.context} basket) before you can get this value again. Original error: ${error instanceof Error ? error.message : String(error)}`)
     }
-    if (!this.encrypt) {
-      r.value = Utils.toUTF8(field)
-    } else {
+    if (this.encrypt) {
       const { plaintext } = await this.wallet.decrypt({
         ...this.getProtocol(key),
         ciphertext: field
       }, this.originator)
       r.value = Utils.toUTF8(plaintext)
+    } else {
+      r.value = Utils.toUTF8(field)
     }
     return r
   }
 
   private getInputs (outputs: WalletOutput[]): CreateActionInput[] {
     const inputs: CreateActionInput[] = []
-    for (let i = 0; i < outputs.length; i++) {
+    for (const output of outputs) {
       inputs.push({
-        outpoint: outputs[i].outpoint,
+        outpoint: output.outpoint,
         unlockingScriptLength: 74,
         inputDescription: 'Previous key-value token'
       })
