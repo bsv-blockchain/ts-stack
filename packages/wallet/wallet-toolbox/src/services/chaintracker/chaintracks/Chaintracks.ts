@@ -316,71 +316,32 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   private async syncBulkStorageNoLock (presentHeight: number, initialRanges: HeightRanges): Promise<void> {
     let newLiveHeaders: BlockHeader[] = []
-
     let before = initialRanges
     let after = before
     let added = HeightRange.empty
     const maxSyncRounds = Math.max(1, this.bulkIngestors.length * 2)
 
-    let done = false
-    for (let round = 1; !done && round <= maxSyncRounds; round++) {
-      let bulkSyncError: WalletError | undefined
-      let roundMadeProgress = false
-      let roundHadSuccess = false
-      for (const bulk of this.bulkIngestors) {
-        try {
-          const beforeBulkMax = before.bulk.maxHeight
-          const beforeLiveRange = HeightRange.from(newLiveHeaders)
-          const r = await bulk.synchronize(presentHeight, before, newLiveHeaders)
-          roundHadSuccess = true
+    for (let round = 1; round <= maxSyncRounds; round++) {
+      const result = await this.runBulkSyncRound(before, presentHeight, newLiveHeaders)
+      after = result.after
+      newLiveHeaders = result.newLiveHeaders
+      added = after.bulk.above(before.bulk)
+      before = after
 
-          newLiveHeaders = r.liveHeaders
-          after = await this.storage.getAvailableHeightRanges()
-          added = after.bulk.above(before.bulk)
-          const afterLiveRange = HeightRange.from(newLiveHeaders)
-          if (after.bulk.maxHeight > beforeBulkMax || afterLiveRange.maxHeight > beforeLiveRange.maxHeight) {
-            roundMadeProgress = true
-          }
-          before = after
-          this.log(
-            `Bulk Ingestor: ${added.length} added with ${newLiveHeaders.length} live headers from ${bulk.constructor.name}`
-          )
-
-          if (r.done) {
-            done = true
-            break
-          }
-        } catch (error_: unknown) {
-          const e = (bulkSyncError = WalletError.fromUnknown(error_))
-          this.log(`bulk sync error: ${e.message}`)
-          if (!this.available)
-          // During initial startup, bulk ingestors must be available.
-          { break }
-        }
-      }
-      if (!this.available && (bulkSyncError != null) && !roundHadSuccess) {
-        this.startupError = bulkSyncError
-        break
-      }
-      if (done) break
-      if (!roundMadeProgress) {
-        this.log(
-          `Bulk sync stalled after round ${round}. Deferring further bulk sync attempts to continue live header processing.`
-        )
+      if (this.startupError != null) break
+      if (result.done) break
+      if (!result.madeProgress) {
+        this.log(`Bulk sync stalled after round ${round}. Deferring further bulk sync attempts to continue live header processing.`)
         break
       }
       if (round === maxSyncRounds) {
-        this.log(
-          `Bulk sync paused after ${maxSyncRounds} rounds to avoid runaway retries. Will retry in a later sync cycle.`
-        )
+        this.log(`Bulk sync paused after ${maxSyncRounds} rounds to avoid runaway retries. Will retry in a later sync cycle.`)
       }
     }
 
     if (this.startupError == null) {
       this.liveHeaders.unshift(...newLiveHeaders)
-
       added = after.bulk.above(initialRanges.bulk)
-
       this.log(`syncBulkStorage done
   Before sync: bulk ${initialRanges.bulk}, live ${initialRanges.live}
    After sync: bulk ${after.bulk}, live ${after.live}
@@ -388,6 +349,44 @@ export class Chaintracks implements ChaintracksManagementApi {
   ${this.liveHeaders.length} headers forwarded to live header storage
 `)
     }
+  }
+
+  private async runBulkSyncRound (
+    before: HeightRanges,
+    presentHeight: number,
+    newLiveHeaders: BlockHeader[]
+  ): Promise<{ after: HeightRanges, newLiveHeaders: BlockHeader[], done: boolean, madeProgress: boolean }> {
+    let after = before
+    let bulkSyncError: WalletError | undefined
+    let madeProgress = false
+    let hadSuccess = false
+    let done = false
+
+    for (const bulk of this.bulkIngestors) {
+      try {
+        const beforeBulkMax = before.bulk.maxHeight
+        const beforeLiveRange = HeightRange.from(newLiveHeaders)
+        const r = await bulk.synchronize(presentHeight, before, newLiveHeaders)
+        hadSuccess = true
+
+        newLiveHeaders = r.liveHeaders
+        after = await this.storage.getAvailableHeightRanges()
+        const added = after.bulk.above(before.bulk)
+        const afterLiveRange = HeightRange.from(newLiveHeaders)
+        if (after.bulk.maxHeight > beforeBulkMax || afterLiveRange.maxHeight > beforeLiveRange.maxHeight) madeProgress = true
+        before = after
+        this.log(`Bulk Ingestor: ${added.length} added with ${newLiveHeaders.length} live headers from ${bulk.constructor.name}`)
+        if (r.done) { done = true; break }
+      } catch (error_: unknown) {
+        const e = (bulkSyncError = WalletError.fromUnknown(error_))
+        this.log(`bulk sync error: ${e.message}`)
+        // During initial startup, bulk ingestors must be available.
+        if (!this.available) break
+      }
+    }
+
+    if (!this.available && (bulkSyncError != null) && !hadSuccess) this.startupError = bulkSyncError
+    return { after, newLiveHeaders, done, madeProgress }
   }
 
   private async getMissingBlockHeader (hash: string): Promise<BlockHeader | undefined> {
@@ -413,36 +412,33 @@ export class Chaintracks implements ChaintracksManagementApi {
     if (this.invalidInsertHeaderResult(ihr)) return ihr
 
     if (this.subscriberCallbacksEnabled && ihr.added && ihr.isActiveTip) {
-      // If a new active chaintip has been added, notify subscribed event listeners...
-      for (const id in this.callbacks.header) {
-        const addListener = this.callbacks.header[id]
-        if (addListener != null) {
-          try {
-            addListener(header)
-          } catch {
-            /* ignore all errors thrown */
-          }
-        }
-      }
-
+      this.notifyHeaderListeners(header)
       if (ihr.reorgDepth > 0 && (ihr.priorTip != null)) {
-        // If the new header was also a reorg, notify subscribed event listeners...
-        for (const id in this.callbacks.reorg) {
-          const reorgListener = this.callbacks.reorg[id]
-          if (reorgListener != null) {
-            try {
-              const priorTip: BlockHeader = { ...ihr.priorTip }
-              const deactivated: BlockHeader[] = ihr.deactivatedHeaders.map(lbh => ({ ...lbh }))
-              reorgListener(ihr.reorgDepth, priorTip, header, deactivated)
-            } catch {
-              /* ignore all errors thrown */
-            }
-          }
-        }
+        this.notifyReorgListeners(ihr, header)
       }
     }
 
     return ihr
+  }
+
+  private notifyHeaderListeners (header: BlockHeader): void {
+    for (const id in this.callbacks.header) {
+      const listener = this.callbacks.header[id]
+      if (listener != null) {
+        try { listener(header) } catch { /* ignore all errors thrown */ }
+      }
+    }
+  }
+
+  private notifyReorgListeners (ihr: InsertHeaderResult, header: BlockHeader): void {
+    const priorTip: BlockHeader = { ...ihr.priorTip! }
+    const deactivated: BlockHeader[] = ihr.deactivatedHeaders.map(lbh => ({ ...lbh }))
+    for (const id in this.callbacks.reorg) {
+      const listener = this.callbacks.reorg[id]
+      if (listener != null) {
+        try { listener(ihr.reorgDepth, priorTip, header, deactivated) } catch { /* ignore all errors thrown */ }
+      }
+    }
   }
 
   /**
@@ -466,151 +462,10 @@ export class Chaintracks implements ChaintracksManagementApi {
 
     while (!this.stopMainThread) {
       try {
-        // Review the need for bulk sync...
         const now = Date.now()
         lastSyncCheck = now
-
-        const presentHeight = await this.getPresentHeight()
-        const before = await this.storage.getAvailableHeightRanges()
-
-        // Skip bulk sync if within less than half the recursion limit of present height
-        let skipBulkSync =
-          !before.live.isEmpty && before.live.maxHeight >= presentHeight - this.addLiveRecursionLimit / 2
-
-        if (skipBulkSync && now - lastBulkSync > cdnSyncRepeatMsecs) {
-          // If we haven't re-synced in a long time, do it just to check for a CDN update.
-          skipBulkSync = false
-        }
-
-        this.log(`Chaintracks Update Services: Bulk Header Sync Review
-  presentHeight=${presentHeight}   addLiveRecursionLimit=${this.addLiveRecursionLimit}
-  Before synchronize: bulk ${before.bulk}, live ${before.live}
-  ${skipBulkSync ? 'Skipping' : 'Starting'} syncBulkStorage.
-`)
-
-        if (!skipBulkSync) {
-          // Bring bulk storage up-to-date and (re-)initialize liveHeaders
-          lastBulkSync = now
-          if (this.available)
-          // Once available, initial write lock is released, take a new one to update bulk storage.
-          { await this.syncBulkStorage(presentHeight, before) } else
-          // While still not available, the makeAvailable write lock is held.
-          { await this.syncBulkStorageNoLock(presentHeight, before) }
-          if (this.startupError != null) throw this.startupError
-        }
-
-        let count = 0
-        let liveHeaderDupes = 0
-        let needSyncCheck = false
-
-        while (!needSyncCheck && !this.stopMainThread) {
-          let header = this.liveHeaders.shift()
-          if (header != null) {
-            // Process a "live" block header...
-            let recursions = this.addLiveRecursionLimit
-            while (!needSyncCheck && !this.stopMainThread) {
-              // console.log(`Processing liveHeader: height: ${header.height} hash: ${header.hash} ${new Date().toISOString()}`)
-              const ihr = await this.addLiveHeader(header)
-              if (this.invalidInsertHeaderResult(ihr)) {
-                this.log(`Ignoring liveHeader ${header.height} ${header.hash} due to invalid insert result.`)
-                needSyncCheck = true
-              } else if (ihr.noPrev) {
-                // Previous header is unknown, request it by hash from the network and try adding it first...
-                if (recursions-- <= 0) {
-                  // Ignore this header...
-                  this.log(
-                    `Ignoring liveHeader ${header.height} ${header.hash} addLiveRecursionLimit=${this.addLiveRecursionLimit} exceeded.`
-                  )
-                  needSyncCheck = true
-                } else {
-                  const hash = header.previousHash
-                  const prevHeader = await this.getMissingBlockHeader(hash)
-                  if (prevHeader == null) {
-                    this.log(
-                      `Ignoring liveHeader ${header.height} ${header.hash} failed to find previous header by hash ${asString(hash)}`
-                    )
-                    needSyncCheck = true
-                  } else {
-                    // Switch to trying to add prevHeader, unshifting current header to try it again after prevHeader exists.
-                    this.liveHeaders.unshift(header)
-                    header = prevHeader
-                  }
-                }
-              } else {
-                if (this.subscriberCallbacksEnabled) {
-                  this.log(
-                    `addLiveHeader ${header.height}${ihr.added ? ' added' : ''}${ihr.dupe ? ' dupe' : ''}${ihr.isActiveTip ? ' isActiveTip' : ''}${ihr.reorgDepth ? ' reorg depth ' + ihr.reorgDepth : ''}${ihr.noPrev ? ' noPrev' : ''}${ihr.noActiveAncestor || ihr.noTip || ihr.badPrev ? ' error' : ''}`
-                  )
-                }
-                if (ihr.dupe) {
-                  liveHeaderDupes++
-                }
-                // Header wasn't invalid and previous header is known. If it was successfully added, count it as a win.
-                if (ihr.added) {
-                  count++
-                }
-                break
-              }
-            }
-          } else {
-            // There are no liveHeaders currently to process, check the out-of-band baseHeaders channel (`addHeader` method called by a client).
-            const bheader = this.baseHeaders.shift()
-            if (bheader != null) {
-              const prev = await this.storage.findLiveHeaderForBlockHash(bheader.previousHash)
-              if (prev == null) {
-                // Ignoring attempt to add a baseHeader with unknown previous hash, no attempt made to find previous header(s).
-                this.log(`Ignoring header with unknown previousHash ${bheader.previousHash} in live storage.`)
-                // Does not trigger a re-sync.
-              } else {
-                const header: BlockHeader = {
-                  ...bheader,
-                  height: prev.height + 1,
-                  hash: blockHash(bheader)
-                }
-                const ihr = await this.addLiveHeader(header)
-                if (this.invalidInsertHeaderResult(ihr)) {
-                  this.log(`Ignoring invalid baseHeader ${header.height} ${header.hash}.`)
-                } else {
-                  if (this.subscriberCallbacksEnabled) {
-                    this.log(
-                      `addBaseHeader ${header.height}${ihr.added ? ' added' : ''}${ihr.dupe ? ' dupe' : ''}${ihr.isActiveTip ? ' isActiveTip' : ''}${ihr.reorgDepth ? ' reorg depth ' + ihr.reorgDepth : ''}${ihr.noPrev ? ' noPrev' : ''}${ihr.noActiveAncestor || ihr.noTip || ihr.badPrev ? ' error' : ''}`
-                    )
-                  }
-                  // baseHeader was successfully added.
-                  if (ihr.added) {
-                    count++
-                  }
-                }
-              }
-            } else {
-              // There are no liveHeaders and no baseHeaders to add,
-              if (count > 0) {
-                if (liveHeaderDupes > 0) {
-                  this.log(`${liveHeaderDupes} duplicate headers ignored.`)
-                  liveHeaderDupes = 0
-                }
-                const updated = await this.storage.getAvailableHeightRanges()
-                this.log(`After adding ${count} live headers
-   After live: bulk ${updated.bulk}, live ${updated.live}
-`)
-                count = 0
-              }
-              if (!this.subscriberCallbacksEnabled) {
-                const live = await this.storage.findLiveHeightRange()
-                if (!live.isEmpty) {
-                  this.subscriberCallbacksEnabled = true
-                  this.log(`listening at height of ${live.maxHeight}`)
-                }
-              }
-              if (!this.available) {
-                this.available = true
-              }
-              needSyncCheck = Date.now() - lastSyncCheck > syncCheckRepeatMsecs
-              // If we aren't going to review sync, wait before checking input queues again
-              if (!needSyncCheck) await wait(1000)
-            }
-          }
-        }
+        lastBulkSync = await this.runBulkSyncIfNeeded(now, lastBulkSync, cdnSyncRepeatMsecs)
+        await this.processLiveHeaderQueue(lastSyncCheck, syncCheckRepeatMsecs)
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
         if (this.available) {
@@ -620,6 +475,130 @@ export class Chaintracks implements ChaintracksManagementApi {
           this.stopMainThread = true
         }
       }
+    }
+  }
+
+  /** Returns (potentially updated) lastBulkSync timestamp. */
+  private async runBulkSyncIfNeeded (now: number, lastBulkSync: number, cdnSyncRepeatMsecs: number): Promise<number> {
+    const presentHeight = await this.getPresentHeight()
+    const before = await this.storage.getAvailableHeightRanges()
+
+    let skipBulkSync = !before.live.isEmpty && before.live.maxHeight >= presentHeight - this.addLiveRecursionLimit / 2
+    // If we haven't re-synced in a long time, do it just to check for a CDN update.
+    if (skipBulkSync && now - lastBulkSync > cdnSyncRepeatMsecs) skipBulkSync = false
+
+    this.log(`Chaintracks Update Services: Bulk Header Sync Review
+  presentHeight=${presentHeight}   addLiveRecursionLimit=${this.addLiveRecursionLimit}
+  Before synchronize: bulk ${before.bulk}, live ${before.live}
+  ${skipBulkSync ? 'Skipping' : 'Starting'} syncBulkStorage.
+`)
+
+    if (!skipBulkSync) {
+      // Once available, the initial write lock is released; take a new one to update bulk storage.
+      // While not yet available, the makeAvailable write lock is still held.
+      if (this.available) await this.syncBulkStorage(presentHeight, before)
+      else await this.syncBulkStorageNoLock(presentHeight, before)
+      if (this.startupError != null) throw this.startupError
+      return now
+    }
+    return lastBulkSync
+  }
+
+  private async processLiveHeaderQueue (lastSyncCheck: number, syncCheckRepeatMsecs: number): Promise<void> {
+    let count = 0
+    let liveHeaderDupes = 0
+    let needSyncCheck = false
+
+    while (!needSyncCheck && !this.stopMainThread) {
+      const liveHeader = this.liveHeaders.shift()
+      if (liveHeader != null) {
+        const result = await this.processOneLiveHeader(liveHeader)
+        if (result.needSyncCheck) { needSyncCheck = true; continue }
+        if (result.dupe) liveHeaderDupes++
+        if (result.added) count++
+      } else {
+        const bheader = this.baseHeaders.shift()
+        if (bheader != null) {
+          const added = await this.processOneBaseHeader(bheader)
+          if (added) count++
+        } else {
+          // No live or base headers queued — idle path.
+          if (count > 0) {
+            if (liveHeaderDupes > 0) { this.log(`${liveHeaderDupes} duplicate headers ignored.`); liveHeaderDupes = 0 }
+            const updated = await this.storage.getAvailableHeightRanges()
+            this.log(`After adding ${count} live headers\n   After live: bulk ${updated.bulk}, live ${updated.live}\n`)
+            count = 0
+          }
+          await this.checkAndEnableSubscribers()
+          if (!this.available) this.available = true
+          needSyncCheck = Date.now() - lastSyncCheck > syncCheckRepeatMsecs
+          if (!needSyncCheck) await wait(1000)
+        }
+      }
+    }
+  }
+
+  private formatIhrLog (prefix: string, header: BlockHeader, ihr: InsertHeaderResult): string {
+    return `${prefix} ${header.height}${ihr.added ? ' added' : ''}${ihr.dupe ? ' dupe' : ''}${ihr.isActiveTip ? ' isActiveTip' : ''}${ihr.reorgDepth ? ' reorg depth ' + ihr.reorgDepth : ''}${ihr.noPrev ? ' noPrev' : ''}${ihr.noActiveAncestor || ihr.noTip || ihr.badPrev ? ' error' : ''}`
+  }
+
+  private async processOneLiveHeader (
+    startHeader: BlockHeader
+  ): Promise<{ needSyncCheck: boolean, dupe: boolean, added: boolean }> {
+    let header = startHeader
+    let recursions = this.addLiveRecursionLimit
+
+    while (!this.stopMainThread) {
+      const ihr = await this.addLiveHeader(header)
+      if (this.invalidInsertHeaderResult(ihr)) {
+        this.log(`Ignoring liveHeader ${header.height} ${header.hash} due to invalid insert result.`)
+        return { needSyncCheck: true, dupe: false, added: false }
+      }
+      if (ihr.noPrev) {
+        // Previous header is unknown; request it by hash from the network and try adding it first.
+        if (recursions-- <= 0) {
+          this.log(`Ignoring liveHeader ${header.height} ${header.hash} addLiveRecursionLimit=${this.addLiveRecursionLimit} exceeded.`)
+          return { needSyncCheck: true, dupe: false, added: false }
+        }
+        const prevHeader = await this.getMissingBlockHeader(header.previousHash)
+        if (prevHeader == null) {
+          this.log(`Ignoring liveHeader ${header.height} ${header.hash} failed to find previous header by hash ${asString(header.previousHash)}`)
+          return { needSyncCheck: true, dupe: false, added: false }
+        }
+        // Retry adding prevHeader first; then re-queue current header.
+        this.liveHeaders.unshift(header)
+        header = prevHeader
+      } else {
+        if (this.subscriberCallbacksEnabled) this.log(this.formatIhrLog('addLiveHeader', header, ihr))
+        return { needSyncCheck: false, dupe: ihr.dupe, added: ihr.added }
+      }
+    }
+    return { needSyncCheck: false, dupe: false, added: false }
+  }
+
+  private async processOneBaseHeader (bheader: BaseBlockHeader): Promise<boolean> {
+    const prev = await this.storage.findLiveHeaderForBlockHash(bheader.previousHash)
+    if (prev == null) {
+      // Unknown previous hash — ignore without triggering a re-sync.
+      this.log(`Ignoring header with unknown previousHash ${bheader.previousHash} in live storage.`)
+      return false
+    }
+    const header: BlockHeader = { ...bheader, height: prev.height + 1, hash: blockHash(bheader) }
+    const ihr = await this.addLiveHeader(header)
+    if (this.invalidInsertHeaderResult(ihr)) {
+      this.log(`Ignoring invalid baseHeader ${header.height} ${header.hash}.`)
+      return false
+    }
+    if (this.subscriberCallbacksEnabled) this.log(this.formatIhrLog('addBaseHeader', header, ihr))
+    return ihr.added
+  }
+
+  private async checkAndEnableSubscribers (): Promise<void> {
+    if (this.subscriberCallbacksEnabled) return
+    const live = await this.storage.findLiveHeightRange()
+    if (!live.isEmpty) {
+      this.subscriberCallbacksEnabled = true
+      this.log(`listening at height of ${live.maxHeight}`)
     }
   }
 }
