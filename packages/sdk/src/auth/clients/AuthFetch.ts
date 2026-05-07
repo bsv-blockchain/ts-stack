@@ -299,7 +299,7 @@ export class AuthFetch {
     // Check if server requires payment to access the requested route
     if (response.status === 402) {
       // Create and attach a payment, then retry
-      return await this.handlePaymentAndRetry(url, response, config)
+      return await this.handlePaymentAndRetry(url, config, response)
     }
 
     return response
@@ -513,8 +513,8 @@ export class AuthFetch {
    */
   private async handlePaymentAndRetry(
     url: string,
-    originalResponse: Response,
-    config: SimplifiedFetchRequestOptions = {}
+    config: SimplifiedFetchRequestOptions = {},
+    originalResponse: Response
   ): Promise<Response | null> {
     const paymentVersion = originalResponse.headers.get('x-bsv-payment-version')
     if (!paymentVersion || paymentVersion !== PAYMENT_VERSION) {
@@ -618,7 +618,7 @@ export class AuthFetch {
 
       const delayMs = this.getPaymentRetryDelay(paymentContext.attempts)
       await this.wait(delayMs)
-      return this.handlePaymentAndRetry(url, originalResponse, nextConfig)
+      return this.handlePaymentAndRetry(url, nextConfig, originalResponse)
     }
   }
 

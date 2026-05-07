@@ -214,13 +214,13 @@ abstract class BaseHash {
 }
 
 function isSurrogatePair (msg: string, i: number): boolean {
-  if (((msg.codePointAt(i) ?? 0) & 0xfc00) !== 0xd800) {
+  if ((msg.charCodeAt(i) & 0xfc00) !== 0xd800) {
     return false
   }
   if (i < 0 || i + 1 >= msg.length) {
     return false
   }
-  return ((msg.codePointAt(i + 1) ?? 0) & 0xfc00) === 0xdc00
+  return (msg.charCodeAt(i + 1) & 0xfc00) === 0xdc00
 }
 
 /**
@@ -236,7 +236,7 @@ function isSurrogatePair (msg: string, i: number): boolean {
  * https://github.com/google/closure-library/blob/master/LICENSE
  */
 function appendUtf8CodeUnit (msg: string, i: number, out: number[]): number {
-  let c = msg.codePointAt(i) ?? 0
+  let c = msg.charCodeAt(i)
   if (c < 128) {
     out.push(c)
     return i
@@ -246,7 +246,7 @@ function appendUtf8CodeUnit (msg: string, i: number, out: number[]): number {
     return i
   }
   if (isSurrogatePair(msg, i)) {
-    c = 0x10000 + ((c & 0x03ff) << 10) + ((msg.codePointAt(i + 1) ?? 0) & 0x03ff)
+    c = 0x10000 + ((c & 0x03ff) << 10) + (msg.charCodeAt(i + 1) & 0x03ff)
     out.push(
       (c >> 18) | 240,
       ((c >> 12) & 63) | 128,
@@ -1253,7 +1253,8 @@ const U32_MASK64 = BigInt(2 ** 32 - 1)
 const _32n = BigInt(32)
 function fromBig (n: bigint, le = false): { h: number, l: number } {
   if (le) return { h: Number(n & U32_MASK64), l: Number((n >> _32n) & U32_MASK64) }
-  return { h: Math.trunc(Number((n >> _32n) & U32_MASK64)), l: Math.trunc(Number(n & U32_MASK64)) }
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  return { h: Number((n >> _32n) & U32_MASK64) | 0, l: Number(n & U32_MASK64) | 0 }
 }
 function split (lst: bigint[], le = false): Uint32Array[] {
   const len = lst.length
@@ -1274,16 +1275,20 @@ const rotrBH = (h: number, l: number, s: number): number => (h << (64 - s)) | (l
 const rotrBL = (h: number, l: number, s: number): number => (h >>> (s - 32)) | (l << (64 - s))
 function add (Ah: number, Al: number, Bh: number, Bl: number): { h: number, l: number } {
   const l = (Al >>> 0) + (Bl >>> 0)
-  return { h: Math.trunc(Ah + Bh + Math.trunc(l / 2 ** 32)), l: Math.trunc(l) }
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  return { h: (Ah + Bh + ((l / 2 ** 32) | 0)) | 0, l: l | 0 }
 }
 const add3L = (Al: number, Bl: number, Cl: number): number => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0)
-const add3H = (low: number, Ah: number, Bh: number, Ch: number): number => Math.trunc(Ah + Bh + Ch + Math.trunc(low / 2 ** 32))
+// eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+const add3H = (low: number, Ah: number, Bh: number, Ch: number): number => (Ah + Bh + Ch + ((low / 2 ** 32) | 0)) | 0
 const add4L = (Al: number, Bl: number, Cl: number, Dl: number): number => (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0)
-const add4H = (low: number, Ah: number, Bh: number, Ch: number, Dh: number): number => Math.trunc(Ah + Bh + Ch + Dh + Math.trunc(low / 2 ** 32))
+// eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+const add4H = (low: number, Ah: number, Bh: number, Ch: number, Dh: number): number => (Ah + Bh + Ch + Dh + ((low / 2 ** 32) | 0)) | 0
 const add5L = (Al: number, Bl: number, Cl: number, Dl: number, El: number): number =>
   (Al >>> 0) + (Bl >>> 0) + (Cl >>> 0) + (Dl >>> 0) + (El >>> 0)
+// eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
 const add5H = (low: number, Ah: number, Bh: number, Ch: number, Dh: number, Eh: number): number =>
-  Math.trunc(Ah + Bh + Ch + Dh + Eh + Math.trunc(low / 2 ** 32))
+  (Ah + Bh + Ch + Dh + Eh + ((low / 2 ** 32) | 0)) | 0
 
 // _md helpers
 abstract class HashMD<T extends HashMD<T>> extends Hash<T> {
@@ -1419,14 +1424,22 @@ const K256 = Uint32Array.from([
 const SHA256_W = new Uint32Array(64)
 
 class FastSHA256 extends HashMD<FastSHA256> {
-  protected A = Math.trunc(SHA256_IV[0])
-  protected B = Math.trunc(SHA256_IV[1])
-  protected C = Math.trunc(SHA256_IV[2])
-  protected D = Math.trunc(SHA256_IV[3])
-  protected E = Math.trunc(SHA256_IV[4])
-  protected F = Math.trunc(SHA256_IV[5])
-  protected G = Math.trunc(SHA256_IV[6])
-  protected H = Math.trunc(SHA256_IV[7])
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected A = SHA256_IV[0] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected B = SHA256_IV[1] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected C = SHA256_IV[2] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected D = SHA256_IV[3] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected E = SHA256_IV[4] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected F = SHA256_IV[5] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected G = SHA256_IV[6] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected H = SHA256_IV[7] | 0
   constructor (outputLen = 32) {
     super(64, outputLen, 8, false)
   }
@@ -1446,14 +1459,22 @@ class FastSHA256 extends HashMD<FastSHA256> {
     G: number,
     H: number
   ): void {
-    this.A = Math.trunc(A)
-    this.B = Math.trunc(B)
-    this.C = Math.trunc(C)
-    this.D = Math.trunc(D)
-    this.E = Math.trunc(E)
-    this.F = Math.trunc(F)
-    this.G = Math.trunc(G)
-    this.H = Math.trunc(H)
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.A = A | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.B = B | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.C = C | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.D = D | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.E = E | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.F = F | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.G = G | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.H = H | 0
   }
 
   protected process (view: DataView, offset: number): void {
@@ -1597,22 +1618,38 @@ const SHA512_W_H = new Uint32Array(80)
 const SHA512_W_L = new Uint32Array(80)
 
 class FastSHA512 extends HashMD<FastSHA512> {
-  protected Ah = Math.trunc(SHA512_IV[0])
-  protected Al = Math.trunc(SHA512_IV[1])
-  protected Bh = Math.trunc(SHA512_IV[2])
-  protected Bl = Math.trunc(SHA512_IV[3])
-  protected Ch = Math.trunc(SHA512_IV[4])
-  protected Cl = Math.trunc(SHA512_IV[5])
-  protected Dh = Math.trunc(SHA512_IV[6])
-  protected Dl = Math.trunc(SHA512_IV[7])
-  protected Eh = Math.trunc(SHA512_IV[8])
-  protected El = Math.trunc(SHA512_IV[9])
-  protected Fh = Math.trunc(SHA512_IV[10])
-  protected Fl = Math.trunc(SHA512_IV[11])
-  protected Gh = Math.trunc(SHA512_IV[12])
-  protected Gl = Math.trunc(SHA512_IV[13])
-  protected Hh = Math.trunc(SHA512_IV[14])
-  protected Hl = Math.trunc(SHA512_IV[15])
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Ah = SHA512_IV[0] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Al = SHA512_IV[1] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Bh = SHA512_IV[2] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Bl = SHA512_IV[3] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Ch = SHA512_IV[4] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Cl = SHA512_IV[5] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Dh = SHA512_IV[6] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Dl = SHA512_IV[7] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Eh = SHA512_IV[8] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected El = SHA512_IV[9] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Fh = SHA512_IV[10] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Fl = SHA512_IV[11] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Gh = SHA512_IV[12] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Gl = SHA512_IV[13] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Hh = SHA512_IV[14] | 0
+  // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+  protected Hl = SHA512_IV[15] | 0
   constructor (outputLen = 64) {
     super(128, outputLen, 16, false)
   }
@@ -1640,22 +1677,38 @@ class FastSHA512 extends HashMD<FastSHA512> {
     Hh: number,
     Hl: number
   ): void {
-    this.Ah = Math.trunc(Ah)
-    this.Al = Math.trunc(Al)
-    this.Bh = Math.trunc(Bh)
-    this.Bl = Math.trunc(Bl)
-    this.Ch = Math.trunc(Ch)
-    this.Cl = Math.trunc(Cl)
-    this.Dh = Math.trunc(Dh)
-    this.Dl = Math.trunc(Dl)
-    this.Eh = Math.trunc(Eh)
-    this.El = Math.trunc(El)
-    this.Fh = Math.trunc(Fh)
-    this.Fl = Math.trunc(Fl)
-    this.Gh = Math.trunc(Gh)
-    this.Gl = Math.trunc(Gl)
-    this.Hh = Math.trunc(Hh)
-    this.Hl = Math.trunc(Hl)
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Ah = Ah | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Al = Al | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Bh = Bh | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Bl = Bl | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Ch = Ch | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Cl = Cl | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Dh = Dh | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Dl = Dl | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Eh = Eh | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.El = El | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Fh = Fh | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Fl = Fl | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Gh = Gh | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Gl = Gl | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Hh = Hh | 0
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+    this.Hl = Hl | 0
   }
 
   protected process (view: DataView, offset: number): void {
@@ -1664,18 +1717,24 @@ class FastSHA512 extends HashMD<FastSHA512> {
       SHA512_W_L[i] = view.getUint32(offset + 4)
     }
     for (let i = 16; i < 80; i++) {
-      const W15h = Math.trunc(SHA512_W_H[i - 15])
-      const W15l = Math.trunc(SHA512_W_L[i - 15])
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      const W15h = SHA512_W_H[i - 15] | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      const W15l = SHA512_W_L[i - 15] | 0
       const s0h = rotrSH(W15h, W15l, 1) ^ rotrSH(W15h, W15l, 8) ^ shrSH(W15h, W15l, 7)
       const s0l = rotrSL(W15h, W15l, 1) ^ rotrSL(W15h, W15l, 8) ^ shrSL(W15h, W15l, 7)
-      const W2h = Math.trunc(SHA512_W_H[i - 2])
-      const W2l = Math.trunc(SHA512_W_L[i - 2])
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      const W2h = SHA512_W_H[i - 2] | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      const W2l = SHA512_W_L[i - 2] | 0
       const s1h = rotrSH(W2h, W2l, 19) ^ rotrBH(W2h, W2l, 61) ^ shrSH(W2h, W2l, 6)
       const s1l = rotrSL(W2h, W2l, 19) ^ rotrBL(W2h, W2l, 61) ^ shrSL(W2h, W2l, 6)
       const SUMl = add4L(s0l, s1l, SHA512_W_L[i - 7], SHA512_W_L[i - 16])
       const SUMh = add4H(SUMl, s0h, s1h, SHA512_W_H[i - 7], SHA512_W_H[i - 16])
-      SHA512_W_H[i] = Math.trunc(SUMh)
-      SHA512_W_L[i] = Math.trunc(SUMl)
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      SHA512_W_H[i] = SUMh | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      SHA512_W_L[i] = SUMl | 0
     }
     let { Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl } = this
     for (let i = 0; i < 80; i++) {
@@ -1685,27 +1744,42 @@ class FastSHA512 extends HashMD<FastSHA512> {
       const CHIl = (El & Fl) ^ (~El & Gl)
       const T1ll = add5L(Hl, sigma1l, CHIl, SHA512_Kl[i], SHA512_W_L[i])
       const T1h = add5H(T1ll, Hh, sigma1h, CHIh, SHA512_Kh[i], SHA512_W_H[i])
-      const T1l = Math.trunc(T1ll)
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      const T1l = T1ll | 0
       const sigma0h = rotrSH(Ah, Al, 28) ^ rotrBH(Ah, Al, 34) ^ rotrBH(Ah, Al, 39)
       const sigma0l = rotrSL(Ah, Al, 28) ^ rotrBL(Ah, Al, 34) ^ rotrBL(Ah, Al, 39)
       const MAJh = (Ah & Bh) ^ (Ah & Ch) ^ (Bh & Ch)
       const MAJl = (Al & Bl) ^ (Al & Cl) ^ (Bl & Cl)
-      Hh = Math.trunc(Gh)
-      Hl = Math.trunc(Gl)
-      Gh = Math.trunc(Fh)
-      Gl = Math.trunc(Fl)
-      Fh = Math.trunc(Eh)
-      Fl = Math.trunc(El)
-      ;({ h: Eh, l: El } = add(Math.trunc(Dh), Math.trunc(Dl), Math.trunc(T1h), T1l))
-      Dh = Math.trunc(Ch)
-      Dl = Math.trunc(Cl)
-      Ch = Math.trunc(Bh)
-      Cl = Math.trunc(Bl)
-      Bh = Math.trunc(Ah)
-      Bl = Math.trunc(Al)
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Hh = Gh | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Hl = Gl | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Gh = Fh | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Gl = Fl | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Fh = Eh | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Fl = El | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      ;({ h: Eh, l: El } = add(Dh | 0, Dl | 0, T1h | 0, T1l | 0))
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Dh = Ch | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Dl = Cl | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Ch = Bh | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Cl = Bl | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Bh = Ah | 0
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Bl = Al | 0
       const T2l = add3L(sigma0l, MAJl, T1l)
       Ah = add3H(T2l, sigma0h, MAJh, T1h)
-      Al = Math.trunc(T2l)
+      // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); not truncation. Required for SHA arithmetic.
+      Al = T2l | 0
     }
     ;({ h: Ah, l: Al } = add(Ah, Al, this.Ah, this.Al))
     ;({ h: Bh, l: Bl } = add(Bh, Bl, this.Bh, this.Bl))
