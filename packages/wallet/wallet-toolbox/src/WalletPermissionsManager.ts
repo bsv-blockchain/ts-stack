@@ -832,8 +832,9 @@ export class WalletPermissionsManager implements WalletInterface {
       if (typeof cb === 'function') {
         try {
           await cb(param)
-        } catch (e) {
-          // Intentionally swallow errors from user-provided callbacks
+        } catch (_callbackError) {
+          // Intentionally swallow errors from user-provided callbacks to prevent
+          // a misbehaving callback from disrupting the event dispatch loop.
         }
       }
     }
@@ -1692,7 +1693,9 @@ export class WalletPermissionsManager implements WalletInterface {
           })
           return { groupPermissions, counterpartyPermissions: counterpartyPermissionsDeclared }
         }
-      } catch (e) {}
+      } catch (_manifestFetchError) {
+        // Manifest fetch or parse failed — fall through to return null/null defaults below
+      }
 
       const result = { groupPermissions: null, counterpartyPermissions: null }
       this.manifestCache.set(originator, { ...result, fetchedAt: Date.now() })
@@ -2379,7 +2382,8 @@ export class WalletPermissionsManager implements WalletInterface {
         this.adminOriginator
       )
       return plaintext
-    } catch (e) {
+    } catch (_decryptionError) {
+      // Decryption failed (e.g. wrong key, unencrypted legacy value) — return the raw bytes unchanged
       return ciphertext
     }
   }
@@ -2420,7 +2424,8 @@ export class WalletPermissionsManager implements WalletInterface {
         this.adminOriginator
       )
       return Utils.toUTF8(plaintext)
-    } catch (e) {
+    } catch (_decryptionError) {
+      // Decryption failed (e.g. wrong key, unencrypted legacy value) — return original string unchanged
       return ciphertext
     }
   }

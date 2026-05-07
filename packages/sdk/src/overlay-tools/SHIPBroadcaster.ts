@@ -443,7 +443,8 @@ export default class TopicBroadcaster implements Broadcaster {
         }
         results[parsed.domain] ??= new Set()
         results[parsed.domain].add(parsed.topicOrService)
-      } catch (e) {
+      } catch (_notShipOutput) {
+        // Output could not be decoded as an overlay admin token — not a SHIP advertisement; skip
         continue
       }
     }

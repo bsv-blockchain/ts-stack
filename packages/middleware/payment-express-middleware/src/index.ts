@@ -88,7 +88,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): (req
           description: 'The X-BSV-Payment-Derivation-Prefix header is not valid.',
         })
       }
-    } catch (err) {
+    } catch (_malformedPaymentJson) {
       return res.status(400).json({
         status: 'error',
         code: 'ERR_MALFORMED_PAYMENT',

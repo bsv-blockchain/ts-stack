@@ -244,7 +244,7 @@ export default class BigNumber {
           }
           this.initArray(bytes, 'le'); this._sign = sign; this.normSign(); return
         } else {
-          try { tempMagnitude = BigInt('0x' + numStr) } catch (e) { throw new Error('Invalid character in ' + numStr) }
+          try { tempMagnitude = BigInt('0x' + numStr) } catch (_bigIntParseError) { throw new Error('Invalid character in ' + numStr) }
         }
         this._initializeState(tempMagnitude, sign); this.normSign()
       } else {

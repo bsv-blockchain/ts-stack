@@ -69,7 +69,8 @@ export class IdentityClient {
         certificate.signature
       )
       await masterCert.verify()
-    } catch (error) {
+    } catch (_certVerificationError) {
+      // Low-level cert error details are suppressed — surface a user-facing message only
       throw new Error('Public reveal failed: Certificate verification failed!')
     }
 
