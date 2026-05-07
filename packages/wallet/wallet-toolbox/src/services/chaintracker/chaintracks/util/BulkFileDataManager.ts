@@ -201,8 +201,7 @@ export class BulkFileDataManager {
       if ((hbf != null) && file.fileId) hbf.fileId = file.fileId // Always update fileId if provided
       const lbf = this.getLastBfd()
       if (
-        (hbf != null) &&
-        hbf.fileHash === file.fileHash &&
+        hbf?.fileHash === file.fileHash &&
         hbf.count === file.count &&
         hbf.lastHash === file.lastHash &&
         hbf.lastChainWork === file.lastChainWork
@@ -576,10 +575,9 @@ export class BulkFileDataManager {
    */
   private async update (update: BulkFileData, hbf: BulkFileData, r: BulkFileDataManagerMergeResult): Promise<void> {
     if (
-      !hbf ||
-      hbf.firstHeight !== update.firstHeight ||
-      hbf.prevChainWork !== update.prevChainWork ||
-      hbf.prevHash !== update.prevHash
+      hbf?.firstHeight !== update.firstHeight ||
+      hbf?.prevChainWork !== update.prevChainWork ||
+      hbf?.prevHash !== update.prevHash
     ) { throw new WERR_INVALID_PARAMETER('file', 'an existing file by height, prevChainWork and prevHash') }
     if (isBdfCdn(update) === isBdfCdn(hbf) && update.count <= hbf.count) { throw new WERR_INVALID_PARAMETER('file.count', `greater than the current count ${hbf.count}`) }
 
@@ -603,14 +601,11 @@ export class BulkFileDataManager {
             `CDN update must have more headers. ${update.count} <= ${lbf.count}`
           )
         }
-      } else {
+      } else if (update.count < lbf.count) {
         // 3. A new CDN file replaces some or all of current incremental file.
-        // Retain extra incremental headers if any.
-        if (update.count < lbf.count) {
-          // The new CDN partially replaces the last incremental file, prepare to shift work and re-add it.
-          await this.ensureData(lbf)
-          truncate = lbf
-        }
+        // Retain extra incremental headers if any (the new CDN partially replaces the last incremental file).
+        await this.ensureData(lbf)
+        truncate = lbf
       }
     } else {
       // If the update is NOT for the last file, then it MUST be for the second to last file which MUST be a CDN file:

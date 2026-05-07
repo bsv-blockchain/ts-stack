@@ -15,7 +15,7 @@ export function convertProofToMerklePath (txid: string, proof: TscMerkleProofApi
     txid?: boolean
     duplicate?: boolean
   }
-  const path: Leaf[][] = Array(treeHeight)
+  const path: Leaf[][] = new Array(treeHeight)
     .fill(0)
     .map(() => [])
   let index = proof.index

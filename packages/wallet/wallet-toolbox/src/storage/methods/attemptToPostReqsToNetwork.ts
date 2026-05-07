@@ -299,7 +299,8 @@ async function confirmDoubleSpend (
 
   for (let retry = 0; retry < 3; retry++) {
     const gsr = await services.getStatusForTxids([req.txid])
-    note[`getStatus${retry}`] = `${gsr.status}${(gsr.error != null) ? `${gsr.error.code}` : ''},${gsr.results[0]?.status}`
+    const errCode = gsr.error != null ? gsr.error.code : ''
+    note[`getStatus${retry}`] = `${gsr.status}${errCode},${gsr.results[0]?.status}`
     if (gsr.status !== 'success' || gsr.results[0].status === 'unknown') {
       await wait(1000)
     } else {

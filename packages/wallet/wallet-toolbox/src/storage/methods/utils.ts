@@ -6,7 +6,10 @@ import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
  */
 export function varUintSize (val: number): 1 | 3 | 5 | 9 {
   if (val < 0) throw new WERR_INVALID_PARAMETER('varUint', 'non-negative')
-  return val <= 0xfc ? 1 : val <= 0xffff ? 3 : val <= 0xffffffff ? 5 : 9
+  if (val <= 0xfc) return 1
+  if (val <= 0xffff) return 3
+  if (val <= 0xffffffff) return 5
+  return 9
 }
 
 /**

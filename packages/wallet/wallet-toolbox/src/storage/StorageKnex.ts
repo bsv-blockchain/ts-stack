@@ -621,7 +621,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const q = this.setupQuery('outputs', args)
     if ((args.txStatus != null) && args.txStatus.length > 0) {
       q.whereRaw(
-        `(select status from transactions where transactions.transactionId = outputs.transactionId) in (${args.txStatus.map(s => `'${s}'`).join(',')})`
+        `(select status from transactions where transactions.transactionId = outputs.transactionId) in (${args.txStatus.map(s => "'" + s + "'").join(',')})`
       )
     }
     if (args.noScript && !count) {

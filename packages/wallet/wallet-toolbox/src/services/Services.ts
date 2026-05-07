@@ -557,9 +557,7 @@ export class Services implements WalletServices {
       return header
     }
     let header = await this.invokeChaintracksWithRetry(method)
-    if (header == null) {
-      header = await this.whatsonchain.getBlockHeaderByHash(hash)
-    }
+    header ??= await this.whatsonchain.getBlockHeaderByHash(hash)
     if (header == null) throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${hash}' on mined chain ${this.chain}`)
     return header
   }
@@ -674,7 +672,7 @@ export class Services implements WalletServices {
     const nextRates: Record<string, number> = { ...storedRates }
     const nextTimestamps: Record<string, Date> = { ...(stored.rateTimestamps ?? {}) }
 
-    const fetchedCurrencies = Object.keys(fetched.rates ?? {})
+    const fetchedCurrencies = fetched.rates != null ? Object.keys(fetched.rates) : []
     for (const c of fetchedCurrencies) {
       const v = fetched.rates?.[c]
       if (typeof v === 'number') {

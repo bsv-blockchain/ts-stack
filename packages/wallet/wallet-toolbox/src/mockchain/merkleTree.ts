@@ -72,7 +72,7 @@ export function computeMerklePath (txids: string[], targetIndex: number, blockHe
     n = Math.ceil(n / 2)
   }
 
-  const path: Leaf[][] = Array(treeHeight)
+  const path: Leaf[][] = new Array(treeHeight)
     .fill(0)
     .map(() => [])
 
@@ -106,13 +106,12 @@ export function computeMerklePath (txids: string[], targetIndex: number, blockHe
           path[0].push(siblingLeaf)
         }
       }
+    } else if (siblingIndex >= levelTxids.length) {
+      // Higher levels: duplicate sibling when odd
+      path[level].push({ offset: siblingIndex, duplicate: true })
     } else {
       // Higher levels: we only need the sibling hash
-      if (siblingIndex >= levelTxids.length) {
-        path[level].push({ offset: siblingIndex, duplicate: true })
-      } else {
-        path[level].push({ offset: siblingIndex, hash: levelTxids[siblingIndex] })
-      }
+      path[level].push({ offset: siblingIndex, hash: levelTxids[siblingIndex] })
     }
 
     // Compute next level hashes

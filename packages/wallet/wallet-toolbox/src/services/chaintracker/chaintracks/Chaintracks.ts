@@ -286,7 +286,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     let h = await this.findChainTipHeader()
     while (h.height > 0) {
       const hp = await this.findHeaderForHeight(h.height - 1)
-      if ((hp == null) || hp.hash !== h.previousHash) throw new Error(`validation fails at height ${h.height}`)
+      if (hp?.hash !== h.previousHash) throw new Error(`validation fails at height ${h.height}`)
       h = hp
       if (10000 * Math.floor(h.height / 10000) === h.height) this.log(`height ${h.height}`)
     }

@@ -41,7 +41,7 @@ function handleGenericPostError (
     r.data += `,${response.statusText}`
   }
   if (typeof response.status === 'string') {
-    n.status = (response.status as string).slice(0, 128)
+    n.status = response.status.slice(0, 128)
     r.data += `,${response.status}`
   }
   if (typeof response.status === 'number') {

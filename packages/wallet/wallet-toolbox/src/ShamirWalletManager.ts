@@ -346,7 +346,7 @@ export class ShamirWalletManager {
       throw new Error('Invalid share format')
     }
     const threshold = Number.parseInt(parts[2], 10)
-    if (isNaN(threshold) || threshold < 2) {
+    if (Number.isNaN(threshold) || threshold < 2) {
       throw new Error('Invalid threshold in share')
     }
     return threshold
@@ -452,7 +452,7 @@ export class ShamirWalletManager {
     }
 
     const threshold = Number.parseInt(parts[2], 10)
-    if (isNaN(threshold) || threshold < 2) {
+    if (Number.isNaN(threshold) || threshold < 2) {
       throw new Error('Invalid share: threshold must be at least 2')
     }
   }

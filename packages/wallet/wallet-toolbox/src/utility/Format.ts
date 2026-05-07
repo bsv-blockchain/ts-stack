@@ -59,7 +59,8 @@ export abstract class Format {
           const input = tx.inputs[i]
           const satoshis = input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis || 0
           totalIn += satoshis
-          ilog = `${al(`${am(input.sourceTXID || '', 12)}.${input.sourceOutputIndex}`, 17)} ${ar(sa(satoshis), 12)}`
+          const inputRef = am(input.sourceTXID || '', 12) + '.' + String(input.sourceOutputIndex)
+          ilog = `${al(inputRef, 17)} ${ar(sa(satoshis), 12)}`
         }
         if (i < tx.outputs.length) {
           const output = tx.outputs[i]
