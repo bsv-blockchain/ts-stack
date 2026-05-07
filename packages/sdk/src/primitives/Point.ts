@@ -163,20 +163,17 @@ export const scalarMultiplyWNAF = (
 ): JacobianPointBI => {
   const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`
   let tbl = WNAF_TABLE_CACHE.get(key)
-  let P: JacobianPointBI
   if (tbl === undefined) {
     // Convert affine to Jacobian and pre-compute odd multiples
     const tblSize = 1 << (window - 1) // e.g. w=5 → 16 entries
     tbl = new Array(tblSize)
-    P = { X: P0.x, Y: P0.y, Z: BI_ONE }
+    const P: JacobianPointBI = { X: P0.x, Y: P0.y, Z: BI_ONE }
     tbl[0] = P
     const twoP = jpDouble(P)
     for (let i = 1; i < tblSize; i++) {
       tbl[i] = jpAdd(tbl[i - 1], twoP)
     }
     WNAF_TABLE_CACHE.set(key, tbl)
-  } else {
-    P = tbl[0]
   }
 
   // Build wNAF representation of k
@@ -827,8 +824,8 @@ export default class Point extends BasePoint {
     let R1: JacobianPointBI = { X: Px, Y: Py, Z: 1n }
 
     const bits = kBig.toString(2)
-    for (let i = 0; i < bits.length; i++) {
-      const bit = bits[i] === '1' ? 1n : 0n
+    for (const bitChar of bits) {
+      const bit = bitChar === '1' ? 1n : 0n
       ctSwap(bit, R0, R1)
       R1 = jpAdd(R0, R1)
       R0 = jpDouble(R0)
@@ -1142,8 +1139,8 @@ export default class Point extends BasePoint {
       naf[a] = new Array(max)
       naf[b] = new Array(max)
       for (let j = 0; j < max; j++) {
-        const ja = jsf[0][j] | 0
-        const jb = jsf[1][j] | 0
+        const ja = Math.trunc(jsf[0][j])
+        const jb = Math.trunc(jsf[1][j])
 
         naf[a][j] = index[(ja + 1) * 3 + (jb + 1)]
         naf[b][j] = 0

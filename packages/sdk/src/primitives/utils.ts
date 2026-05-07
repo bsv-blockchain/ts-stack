@@ -1,11 +1,9 @@
 import BigNumber from './BigNumber.js'
 import { hash256 } from './Hash.js'
 import { assertValidHex } from './hex.js'
-import { WriterUint8Array } from './WriterUint8Array.js'
-import { ReaderUint8Array } from './ReaderUint8Array.js'
 
-export { WriterUint8Array }
-export { ReaderUint8Array }
+export { WriterUint8Array } from './WriterUint8Array.js'
+export { ReaderUint8Array } from './ReaderUint8Array.js'
 
 const BufferCtor =
   typeof globalThis !== 'undefined' ? (globalThis as any).Buffer : undefined
@@ -75,7 +73,7 @@ export const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
   if (msg === undefined) return []
 
   if (typeof msg !== 'string') {
-    return Array.from(msg, (item: any) => item | 0)
+    return Array.from(msg, (item: any) => Math.trunc(item))
   }
 
   switch (enc) {
@@ -106,8 +104,8 @@ const hexToArray = (msg: string): number[] => {
   const out = new Array(normalized.length / 2)
   let o = 0
   for (let i = 0; i < normalized.length; i += 2) {
-    const hi = HEX_CHAR_TO_VALUE[normalized.charCodeAt(i)]
-    const lo = HEX_CHAR_TO_VALUE[normalized.charCodeAt(i + 1)]
+    const hi = HEX_CHAR_TO_VALUE[normalized.codePointAt(i) as number]
+    const lo = HEX_CHAR_TO_VALUE[normalized.codePointAt(i + 1) as number]
     out[o++] = (hi << 4) | lo
   }
   return out
@@ -120,7 +118,7 @@ export function base64ToArray (msg: string): number[] {
 
   // cleanse string
   let s = msg.trim().replace(/[\r\n\t\f\v ]+/g, '')
-  s = s.replace(/-/g, '+').replace(/_/g, '/')
+  s = s.replaceAll('-', '+').replaceAll('_', '/')
 
   // ensure padding is correct
   const padIndex = s.indexOf('=')
@@ -140,7 +138,7 @@ export function base64ToArray (msg: string): number[] {
   let bitCount = 0
 
   for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i)
+    const c = s.codePointAt(i) as number
     // using ascii map values rather than indexOf
     let v = -1
     if (c >= 65 && c <= 90) {
@@ -301,9 +299,9 @@ export const fromBase58 = (str: string): number[] => {
  * @returns The base58 string representation
  */
 export const toBase58 = (bin: number[]): string => {
-  const base58Map = Array(256).fill(-1)
+  const base58Map = new Array(256).fill(-1)
   for (let i = 0; i < base58chars.length; ++i) {
-    base58Map[base58chars.charCodeAt(i)] = i
+    base58Map[base58chars.codePointAt(i) as number] = i
   }
 
   const result: number[] = []
@@ -312,23 +310,23 @@ export const toBase58 = (bin: number[]): string => {
     let carry = byte
     for (let j = 0; j < result.length; ++j) {
       const x = (base58Map[result[j]] << 8) + carry
-      result[j] = base58chars.charCodeAt(x % 58)
-      carry = (x / 58) | 0
+      result[j] = base58chars.codePointAt(x % 58) as number
+      carry = Math.trunc(x / 58)
     }
     while (carry !== 0) {
-      result.push(base58chars.charCodeAt(carry % 58))
-      carry = (carry / 58) | 0
+      result.push(base58chars.codePointAt(carry % 58) as number)
+      carry = Math.trunc(carry / 58)
     }
   }
 
   for (const byte of bin) {
     if (byte !== 0) break
-    else result.push('1'.charCodeAt(0))
+    else result.push('1'.codePointAt(0) as number)
   }
 
   result.reverse()
 
-  return String.fromCharCode(...result)
+  return String.fromCodePoint(...result)
 }
 
 /**
@@ -378,7 +376,7 @@ export class Writer {
   private length: number
 
   constructor (bufs?: WriterChunk[]) {
-    this.bufs = bufs !== undefined ? bufs : []
+    this.bufs = bufs ?? []
     this.length = 0
     for (const b of this.bufs) this.length += b.length
   }
@@ -403,13 +401,13 @@ export class Writer {
     let offset = 0
     for (const buf of this.bufs) {
       if (buf instanceof Uint8Array) {
-        for (let i = 0; i < buf.length; i++) {
-          ret[offset++] = buf[i]
+        for (const byte of buf) {
+          ret[offset++] = byte
         }
       } else {
         const arr = buf as number[]
-        for (let i = 0; i < arr.length; i++) {
-          ret[offset++] = arr[i]
+        for (const item of arr) {
+          ret[offset++] = item
         }
       }
     }
@@ -442,10 +440,7 @@ export class Writer {
   }
 
   writeInt8 (n: number): this {
-    const buf = new Array(1)
-    buf[0] = n & 0xff
-    this.write(buf)
-    return this
+    return this.writeUInt8(n)
   }
 
   writeUInt16BE (n: number): this {

@@ -131,9 +131,10 @@ export default class Curve {
   static cachedProperty (obj, name: string, computer): void {
     const key = '_' + name
     obj.prototype[name] = function cachedProperty () {
-      const r =
-        this[key] !== undefined ? this[key] : (this[key] = computer.call(this))
-      return r
+      if (this[key] === undefined) {
+        this[key] = computer.call(this)
+      }
+      return this[key]
     }
   }
 
@@ -146,11 +147,11 @@ export default class Curve {
   }
 
   constructor () {
-    if (globalCurve !== undefined) {
-      return globalCurve
-    } else {
-      /* eslint-disable @typescript-eslint/no-this-alias */
+    if (globalCurve === undefined) {
+      /* eslint-disable-next-line @typescript-eslint/no-this-alias */
       globalCurve = this
+    } else {
+      return globalCurve
     }
 
     const precomputed = {
@@ -1015,9 +1016,7 @@ export default class Curve {
     let beta: BigNumber
     let lambda: BigNumber
 
-    if (conf.beta !== undefined) {
-      beta = new BigNumber(conf.beta, 16).toRed(this.red)
-    } else {
+    if (conf.beta === undefined) {
       const betas = this._getEndoRoots(this.p)
       if (betas === null) {
         throw new Error('Failed to get endomorphism roots for beta.')
@@ -1025,11 +1024,11 @@ export default class Curve {
       // Choose the smallest beta
       beta = betas[0].cmp(betas[1]) < 0 ? betas[0] : betas[1]
       beta = beta.toRed(this.red)
+    } else {
+      beta = new BigNumber(conf.beta, 16).toRed(this.red)
     }
 
-    if (conf.lambda !== undefined) {
-      lambda = new BigNumber(conf.lambda, 16)
-    } else {
+    if (conf.lambda === undefined) {
       // Choose the lambda that matches selected beta
       const lambdas = this._getEndoRoots(this.n)
       if (lambdas === null) {
@@ -1064,6 +1063,8 @@ export default class Curve {
           'Lambda selection does not match computed beta.'
         )
       }
+    } else {
+      lambda = new BigNumber(conf.lambda, 16)
     }
 
     // Get basis vectors, used for balanced length-two representation

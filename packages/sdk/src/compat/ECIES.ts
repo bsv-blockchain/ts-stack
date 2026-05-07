@@ -9,7 +9,7 @@ import { toArray, toHex, encode } from '../primitives/utils.js'
 function AES (key): void {
   if (this._tables[0][0][0] === 0) this._precompute()
 
-  let tmp, encKey, decKey
+  let tmp
   const sbox = this._tables[0][4]
   const decTable = this._tables[1]
   const keyLen = key.length
@@ -19,7 +19,9 @@ function AES (key): void {
     throw new Error('invalid aes key size')
   }
 
-  this._key = [(encKey = key.slice(0)), (decKey = [])]
+  const encKey = key.slice(0)
+  const decKey = []
+  this._key = [encKey, decKey]
 
   // schedule encryption keys
   let i: number
@@ -46,7 +48,7 @@ function AES (key): void {
 
   // schedule decryption keys
   for (let j = 0; i > 0; j++, i--) {
-    tmp = encKey[(j & 3) !== 0 ? i : i - 4]
+    tmp = encKey[(j & 3) === 0 ? i - 4 : i]
     if (i <= 4 || j < 4) {
       decKey[j] = tmp
     } else {
@@ -127,10 +129,11 @@ AES.prototype = {
 
     // Compute double and third tables
     for (i = 0; i < 256; i++) {
-      th[(d[i] = (i << 1) ^ ((i >> 7) * 283)) ^ i] = i
+      d[i] = (i << 1) ^ ((i >> 7) * 283)
+      th[d[i] ^ i] = i
     }
 
-    for (x = xInv = 0; sbox[x] === 0; x ^= (x2 !== 0 ? x2 : 1), xInv = th[xInv] !== 0 ? th[xInv] : 1) {
+    for (x = xInv = 0; sbox[x] === 0; x ^= (x2 === 0 ? 1 : x2), xInv = th[xInv] === 0 ? 1 : th[xInv]) {
       // Compute sbox
       s = xInv ^ (xInv << 1) ^ (xInv << 2) ^ (xInv << 3) ^ (xInv << 4)
       s = (s >> 8) ^ (s & 255) ^ 99
@@ -138,7 +141,9 @@ AES.prototype = {
       sboxInv[s] = x
 
       // Compute MixColumns
-      x8 = d[(x4 = d[(x2 = d[x])])]
+      x2 = d[x]
+      x4 = d[x2]
+      x8 = d[x4]
       tDec = (x8 * 0x1010101) ^ (x4 * 0x10001) ^ (x2 * 0x101) ^ (x * 0x1010100)
       tEnc = (d[s] * 0x101) ^ (s * 0x1010100)
 
@@ -319,7 +324,7 @@ class CBC {
   public static encrypt (
     messageBuf: number[],
     ivBuf: number[],
-    blockCipher: any /* TODO: type */,
+    blockCipher: any,
     cipherKeyBuf: number[]
   ): number[] {
     const blockSize = ivBuf.length * 8
@@ -337,7 +342,7 @@ class CBC {
   public static decrypt (
     encBuf: number[],
     ivBuf: number[],
-    blockCipher: any /* TODO: type */,
+    blockCipher: any,
     cipherKeyBuf: number[]
   ): number[] {
     const bytesize = ivBuf.length
@@ -358,7 +363,7 @@ class CBC {
   public static encryptBlock (
     blockBuf: number[],
     ivBuf: number[],
-    blockCipher: any /* TODO: type */,
+    blockCipher: any,
     cipherKeyBuf: number[]
   ): number[] {
     const xorbuf = CBC.xorBufs(blockBuf, ivBuf)
@@ -369,7 +374,7 @@ class CBC {
   public static decryptBlock (
     encBuf: number[],
     ivBuf: number[],
-    blockCipher: any /* TODO: type */,
+    blockCipher: any,
     cipherKeyBuf: number[]
   ): number[] {
     const xorbuf = blockCipher.decrypt(encBuf, cipherKeyBuf)
@@ -380,13 +385,12 @@ class CBC {
   public static encryptBlocks (
     blockBufs: number[][],
     ivBuf: number[],
-    blockCipher: any /* TODO: type */,
+    blockCipher: any,
     cipherKeyBuf: number[]
   ): number[][] {
     const encBufs: number[][] = []
 
-    for (let i = 0; i < blockBufs.length; i++) {
-      const blockBuf = blockBufs[i]
+    for (const blockBuf of blockBufs) {
       const encBuf = CBC.encryptBlock(
         blockBuf,
         ivBuf,
@@ -405,13 +409,12 @@ class CBC {
   public static decryptBlocks (
     encBufs: number[][],
     ivBuf: number[],
-    blockCipher: any /* TODO: type */,
+    blockCipher: any,
     cipherKeyBuf: number[]
   ): number[][] {
     const blockBufs: number[][] = []
 
-    for (let i = 0; i < encBufs.length; i++) {
-      const encBuf = encBufs[i]
+    for (const encBuf of encBufs) {
       const blockBuf = CBC.decryptBlock(
         encBuf,
         ivBuf,
@@ -548,9 +551,7 @@ export default class ECIES {
     noKey = false
   ): number[] {
     let Rbuf: string | number[] | null = null
-    if (fromPrivateKey == null) {
-      fromPrivateKey = PrivateKey.fromRandom()
-    }
+    fromPrivateKey ??= PrivateKey.fromRandom()
     if (!noKey) {
       Rbuf = fromPrivateKey.toPublicKey().encode(true)
     }
@@ -603,14 +604,12 @@ export default class ECIES {
       }
     }
 
-    if (Rbuf !== null) {
-      if (fromPublicKey == null) {
-        fromPublicKey = PublicKey.fromString(toHex(Rbuf))
-      }
-    } else {
+    if (Rbuf === null) {
       if (fromPublicKey == null) {
         throw new Error('Sender public key is required')
       }
+    } else {
+      fromPublicKey ??= PublicKey.fromString(toHex(Rbuf))
     }
 
     const { iv, kE, kM } = ECIES.ivkEkM(toPrivateKey, fromPublicKey)
@@ -644,12 +643,8 @@ export default class ECIES {
     fromPrivateKey?: PrivateKey,
     ivBuf?: number[]
   ): number[] {
-    if (fromPrivateKey == null) {
-      fromPrivateKey = PrivateKey.fromRandom()
-    }
-    if (ivBuf == null) {
-      ivBuf = Random(16)
-    }
+    fromPrivateKey ??= PrivateKey.fromRandom()
+    ivBuf ??= Random(16)
     const r = fromPrivateKey
     const RPublicKey = fromPrivateKey.toPublicKey()
     const RBuf = RPublicKey.encode(true) as number[]
@@ -689,8 +684,8 @@ export default class ECIES {
     const kEkM = Hash.sha512(Sbuf)
     const kE = kEkM.slice(0, 32)
     const kM = kEkM.slice(32, 64)
-    const c = encBuf.slice(33, encBuf.length - 32)
-    const d = encBuf.slice(encBuf.length - 32, encBuf.length)
+    const c = encBuf.slice(33, -32)
+    const d = encBuf.slice(-32)
     const d2 = Hash.sha256hmac(kM, c)
     if (toHex(d) !== toHex(d2)) {
       throw new Error('Invalid checksum')

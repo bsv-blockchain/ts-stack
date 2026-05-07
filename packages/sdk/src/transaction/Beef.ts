@@ -4,9 +4,8 @@ import ChainTracker from './ChainTracker.js'
 import BeefTx from './BeefTx.js'
 import { Reader, Writer, toHex, toArray, verifyNotNull, ReaderUint8Array, WriterUint8Array, toUint8Array } from '../primitives/utils.js'
 import { hash256 } from '../primitives/Hash.js'
-import { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT } from './BeefConstants.js'
-
-export { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT }
+import { BEEF_V1, BEEF_V2, ATOMIC_BEEF } from './BeefConstants.js'
+export { BEEF_V1, BEEF_V2, ATOMIC_BEEF, TX_DATA_FORMAT } from './BeefConstants.js'
 
 /*
  * BEEF standard: BRC-62: Background Evaluation Extended Format (BEEF) Transactions
@@ -89,7 +88,9 @@ export class Beef {
 
   private ensureSerializableState (): void {
     for (const tx of this.txs) {
-      void tx.txid
+      // Access txid to ensure it is computed before serialization
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      tx.txid
     }
   }
 

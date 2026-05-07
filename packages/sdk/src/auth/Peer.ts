@@ -18,7 +18,7 @@ import { OriginatorDomainNameStringUnder250Bytes, WalletInterface } from '../wal
 
 const AUTH_VERSION = '0.1'
 const BufferCtor =
-  typeof globalThis !== 'undefined' ? (globalThis as any).Buffer : undefined
+  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
 /**
  * Represents a peer capable of performing mutual authentication.
@@ -249,12 +249,12 @@ export class Peer {
     }
 
     // If that session doesn't exist or isn't authenticated, initiate handshake
-    if ((peerSession == null) || !peerSession.isAuthenticated) {
+    if (peerSession?.isAuthenticated !== true) {
       // This will create a brand-new session
       const sessionNonce = await this.initiateHandshake(identityKey)
       // Now retrieve it by the sessionNonce
       peerSession = this.sessionManager.getSession(sessionNonce)
-      if ((peerSession == null) || !peerSession.isAuthenticated) {
+      if (peerSession?.isAuthenticated !== true) {
         throw new Error('Unable to establish mutual authentication with peer!')
       }
     }
@@ -423,9 +423,7 @@ export class Peer {
       if (peerIdentityKey != null) {
         const existingDetails = (error as any).details
         if (existingDetails != null && typeof existingDetails === 'object') {
-          if (existingDetails.peerIdentityKey == null) {
-            existingDetails.peerIdentityKey = peerIdentityKey
-          }
+          existingDetails.peerIdentityKey ??= peerIdentityKey
         } else {
           (error as any).details = { peerIdentityKey }
         }
@@ -548,9 +546,7 @@ export class Peer {
       signature
     }
 
-    if (this.lastInteractedWithPeer === undefined) {
-      this.lastInteractedWithPeer = message.identityKey
-    }
+    this.lastInteractedWithPeer ??= message.identityKey
 
     await this.transport.send(initialResponseMessage)
   }

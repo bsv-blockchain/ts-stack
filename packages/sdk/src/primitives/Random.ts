@@ -31,7 +31,6 @@ class Rand {
     // Try globalThis.crypto (works in Node.js 18+, modern browsers, and Deno)
     if (typeof globalThis !== 'undefined' && typeof (globalThis as any).crypto?.getRandomValues === 'function') {
       this._rand = (n) => {
-        /* eslint-disable-next-line */
         return this.getRandomValues(globalThis as any, n)
       }
       return
@@ -54,19 +53,17 @@ class Rand {
     }
 
     // Try self.crypto (Web Workers and Service Workers)
-    if (typeof self !== 'undefined' && typeof self.crypto?.getRandomValues === 'function') {
+    if (typeof globalThis.self !== 'undefined' && typeof globalThis.self.crypto?.getRandomValues === 'function') {
       this._rand = (n) => {
-        /* eslint-disable-next-line */
-        return this.getRandomValues(self as any, n)
+        return this.getRandomValues(globalThis.self, n)
       }
       return
     }
 
     // Try window.crypto (browsers)
-    if (typeof window !== 'undefined' && typeof (window as any).crypto?.getRandomValues === 'function') {
+    if (typeof globalThis.window !== 'undefined' && typeof (globalThis.window as any).crypto?.getRandomValues === 'function') {
       this._rand = (n) => {
-        /* eslint-disable-next-line */
-        return this.getRandomValues(window as any, n)
+        return this.getRandomValues(globalThis.window, n)
       }
       return
     }
@@ -93,9 +90,9 @@ let ayn: Rand | null = null
  * import Random from '@bsv/sdk/primitives/Random'
  * const bytes = Random(32) // Produces 32 random bytes
  */
-export default (len: number): number[] => {
-  if (ayn == null) {
-    ayn = new Rand()
-  }
+const Random = (len: number): number[] => {
+  ayn ??= new Rand()
   return ayn.generate(len)
 }
+
+export default Random
