@@ -4,9 +4,11 @@ import { MonsterBattleRecord, UTXOReference } from './types.js'
 export class MonsterBattleStorage {
   private readonly records: Collection<MonsterBattleRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<MonsterBattleRecord>('monsterBattleRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

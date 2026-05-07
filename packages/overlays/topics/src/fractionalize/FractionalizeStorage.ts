@@ -4,9 +4,11 @@ import { FractionalizeRecord, UTXOReference } from './types.js'
 export class FractionalizeStorage {
   private readonly records: Collection<FractionalizeRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<FractionalizeRecord>('fractionalizeRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

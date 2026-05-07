@@ -4,14 +4,18 @@ import { TokenDemoRecord, TokenDemoDetails, UTXOReference } from './types.js'
 export class TokenDemoStorage {
   private readonly records: Collection<TokenDemoRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<TokenDemoRecord>('TokenDemoRecords')
-    this.createIndices()
+    this.ready = this.createIndices()
   }
 
   private async createIndices(): Promise<void> {
-    await this.records.createIndex({ txid: 1, outputIndex: 1 }, { name: 'OutpointIndex' })
-    await this.records.createIndex({ tokenId: 'hashed' }, { name: 'TokenIdTextIndex' })
+    await Promise.all([
+      this.records.createIndex({ txid: 1, outputIndex: 1 }, { name: 'OutpointIndex' }),
+      this.records.createIndex({ tokenId: 'hashed' }, { name: 'TokenIdTextIndex' })
+    ])
   }
 
   async storeRecord(txid: string, outputIndex: number, details: TokenDemoDetails): Promise<void> {

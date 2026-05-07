@@ -5,14 +5,20 @@ import { AppCatalogRecord, PublishedAppMetadata } from './types.js'
 export class AppsStorageManager {
   private readonly records: Collection<AppCatalogRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<AppCatalogRecord>('appsCatalogRecords')
-    this.records.createIndex({
+    this.ready = this.createIndices()
+  }
+
+  private async createIndices(): Promise<void> {
+    await this.records.createIndex({
       'metadata.name': 'text',
       'metadata.description': 'text',
       'metadata.tags': 'text',
       'metadata.domain': 'text'
-    }).catch(console.error)
+    })
   }
 
   async storeRecord(txid: string, outputIndex: number, metadata: PublishedAppMetadata): Promise<void> {

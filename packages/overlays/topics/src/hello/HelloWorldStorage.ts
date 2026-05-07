@@ -4,9 +4,11 @@ import { HelloWorldRecord, UTXOReference } from './types.js'
 export class HelloWorldStorage {
   private readonly records: Collection<HelloWorldRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<HelloWorldRecord>('helloWorldRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

@@ -4,9 +4,11 @@ import { SlackThreadRecord, UTXOReference } from './types.js'
 export class SlackThreadsStorage {
   private readonly records: Collection<SlackThreadRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<SlackThreadRecord>('slackThreadRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

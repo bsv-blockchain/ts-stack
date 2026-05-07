@@ -4,9 +4,11 @@ import { DesktopIntegrityRecord, UTXOReference } from './types.js'
 export class DesktopIntegrityStorage {
   private readonly records: Collection<DesktopIntegrityRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<DesktopIntegrityRecord>('desktopIntegrityRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

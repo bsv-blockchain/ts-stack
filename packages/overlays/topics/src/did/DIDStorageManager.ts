@@ -5,10 +5,15 @@ import { LookupFormula } from '@bsv/overlay'
 
 export class DIDStorageManager {
   private readonly records: Collection<DIDRecord>
+  readonly ready: Promise<void>
 
   constructor(private readonly db: Db) {
     this.records = db.collection<DIDRecord>('didRecords')
-    this.records.createIndex({ searchableAttributes: 'text' }).catch((e) => console.error(e))
+    this.ready = this.createIndices()
+  }
+
+  private async createIndices(): Promise<void> {
+    await this.records.createIndex({ searchableAttributes: 'text' })
   }
 
   async storeRecord(txid: string, outputIndex: number, serialNumber: Base64String): Promise<void> {

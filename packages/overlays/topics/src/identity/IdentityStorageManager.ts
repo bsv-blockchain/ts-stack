@@ -8,18 +8,25 @@ interface Query {
 
 export class IdentityStorageManager {
   private readonly records: Collection<IdentityRecord>
+  readonly ready: Promise<void>
 
   constructor(private readonly db: Db) {
     this.records = db.collection<IdentityRecord>('identityRecords')
-    this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.serialNumber': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.subject': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.certifier': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.subject': 1, 'certificate.certifier': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.subject': 1, 'certificate.type': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.fields.userName': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ 'certificate.fields.userName': 1, 'certificate.certifier': 1 }).catch((e) => console.error(e))
-    this.records.createIndex({ searchableAttributes: 'text' }).catch((e) => console.error(e))
+    this.ready = this.createIndices()
+  }
+
+  private async createIndices(): Promise<void> {
+    await Promise.all([
+      this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
+      this.records.createIndex({ 'certificate.serialNumber': 1 }),
+      this.records.createIndex({ 'certificate.subject': 1 }),
+      this.records.createIndex({ 'certificate.certifier': 1 }),
+      this.records.createIndex({ 'certificate.subject': 1, 'certificate.certifier': 1 }),
+      this.records.createIndex({ 'certificate.subject': 1, 'certificate.type': 1 }),
+      this.records.createIndex({ 'certificate.fields.userName': 1 }),
+      this.records.createIndex({ 'certificate.fields.userName': 1, 'certificate.certifier': 1 }),
+      this.records.createIndex({ searchableAttributes: 'text' })
+    ])
   }
 
   async storeRecord(txid: string, outputIndex: number, certificate: Certificate): Promise<void> {

@@ -4,9 +4,11 @@ import { SupplyChainRecord, UTXOReference } from './types.js'
 export class SupplyChainStorage {
   private readonly records: Collection<SupplyChainRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<SupplyChainRecord>('supplyChainRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

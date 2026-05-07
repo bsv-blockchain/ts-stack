@@ -4,14 +4,21 @@ import { PubKeyHex, WalletProtocol } from '@bsv/sdk'
 
 export class KVStoreStorageManager {
   private readonly records: Collection<KVStoreRecord>
+  readonly ready: Promise<void>
 
   constructor(private readonly db: Db) {
     this.records = db.collection<KVStoreRecord>('kvstoreRecords')
-    this.records.createIndex({ key: 1 }).catch(console.error)
-    this.records.createIndex({ protocolID: 1 }).catch(console.error)
-    this.records.createIndex({ controller: 1 }).catch(console.error)
-    this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }).catch(console.error)
-    this.records.createIndex({ tags: 1 }).catch(console.error)
+    this.ready = this.createIndices()
+  }
+
+  private async createIndices(): Promise<void> {
+    await Promise.all([
+      this.records.createIndex({ key: 1 }),
+      this.records.createIndex({ protocolID: 1 }),
+      this.records.createIndex({ controller: 1 }),
+      this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
+      this.records.createIndex({ tags: 1 })
+    ])
   }
 
   async storeRecord(

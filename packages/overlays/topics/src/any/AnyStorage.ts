@@ -5,9 +5,11 @@ import { AnyRecord, UTXOReference } from './types.js'
 export class AnyStorage {
   private readonly records: Collection<AnyRecord>
 
+  readonly ready: Promise<void>
+
   constructor(private readonly db: Db) {
     this.records = db.collection<AnyRecord>('anyRecords')
-    this.createSearchableIndex()
+    this.ready = this.createSearchableIndex()
   }
 
   private async createSearchableIndex(): Promise<void> {

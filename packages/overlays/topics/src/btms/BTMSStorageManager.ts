@@ -7,27 +7,22 @@ import { PubKeyHex } from '@bsv/sdk'
  */
 export class BTMSStorageManager {
   private readonly records: Collection<BTMSRecord>
+  readonly ready: Promise<void>
 
   /**
    * @param db A connected MongoDB database handle.
    */
   constructor (private readonly db: Db) {
     this.records = db.collection<BTMSRecord>('btmsRecords')
+    this.ready = this.createIndices()
+  }
 
-    // Create index on assetId for efficient lookups
-    this.records
-      .createIndex({ assetId: 1 })
-      .catch(console.error)
-
-    // Create index on ownerKey for efficient lookups
-    this.records
-      .createIndex({ ownerKey: 1 })
-      .catch(console.error)
-
-    // Create compound index for txid and outputIndex (unique identifier)
-    this.records
-      .createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
-      .catch(console.error)
+  private async createIndices (): Promise<void> {
+    await Promise.all([
+      this.records.createIndex({ assetId: 1 }),
+      this.records.createIndex({ ownerKey: 1 }),
+      this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
+    ])
   }
 
   /**
