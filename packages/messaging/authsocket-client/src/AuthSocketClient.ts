@@ -10,8 +10,6 @@ class AuthSocketClientImpl {
   public connected = false
   public id: string = ''
   public serverIdentityKey: string | undefined
-  /** Resolves once the underlying Peer transport listener is registered. */
-  public readonly ready: Promise<void>
   private readonly eventCallbacks = new Map<string, Array<(data: any) => void>>()
 
   /**
@@ -25,7 +23,6 @@ class AuthSocketClientImpl {
     private readonly ioSocket: IoClientSocket,
     private readonly peer: Peer
   ) {
-    this.ready = peer.ready
     // Listen for 'connect' and 'disconnect' from underlying Socket.IO
     this.ioSocket.on('connect', () => {
       this.connected = true

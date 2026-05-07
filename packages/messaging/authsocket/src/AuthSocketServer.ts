@@ -100,14 +100,13 @@ export class AuthSocketServer {
   private async handleNewConnection(socket: IoSocket) {
     const transport = new SocketServerTransport(socket)
 
-    // Create a new Peer for this client and wait for the transport listener.
+    // Create a new Peer for this client
     const peer = new Peer(
       this.options.wallet,
       transport,
       this.options.requestedCertificates,
       this.options.sessionManager
     )
-    await peer.ready
 
     const authSocket = new AuthSocket(socket, peer, (sockId, identityKey) => {
       // Callback: once the AuthSocket learns identityKey from a 'general' message, store it
