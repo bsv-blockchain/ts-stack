@@ -304,7 +304,9 @@ export class BulkFilesReaderFs extends BulkFilesReader {
 
     try {
       json = asString(await fs.readFile(jsonPath), 'utf8')
-    } catch (uerr: unknown) {
+    } catch (_fileNotFound: unknown) {
+      // File does not exist yet.  When failToEmptyRange is false we treat a missing
+      // JSON index as an empty range and create it; otherwise we surface a clear error.
       if (!failToEmptyRange) { throw new WERR_INVALID_PARAMETER(`${rootFolder}/${jsonFilename}`, 'a valid, existing JSON file.') }
       json = await this.writeEmptyJsonFile(fs, rootFolder, jsonFilename)
     }

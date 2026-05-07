@@ -246,7 +246,7 @@ async function validateCommitNewTxToStorageArgs (
   let tx: BsvTransaction
   try {
     tx = BsvTransaction.fromBinary(params.rawTx)
-  } catch (e: unknown) {
+  } catch (_parseError: unknown) {
     throw new WERR_INVALID_OPERATION('Parsing serialized transaction failed.')
   }
   if (params.txid !== tx.id('hex')) { throw new WERR_INVALID_OPERATION('Hash of serialized transaction doesn\'t match expected txid') }

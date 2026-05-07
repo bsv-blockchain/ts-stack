@@ -746,7 +746,9 @@ export class BulkFileDataManager {
 
       try {
         bfd.data = await this.fetch.download(url)
-      } catch (err) {
+      } catch (firstAttemptErr) {
+        // First download attempt failed (e.g. transient network error); retry once.
+        console.debug(`BulkFileDataManager: first download attempt failed for ${url}, retrying`, firstAttemptErr)
         bfd.data = await this.fetch.download(url)
       }
       if (!bfd.data) throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
