@@ -52,10 +52,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/bsv-blockchain/ts-p2p.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/network/ts-p2p"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-p2p#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p#readme",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/ts-p2p/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   }
 }

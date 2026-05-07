@@ -6,7 +6,8 @@
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/simple.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/simple"
   },
   "exports": {
     ".": {
@@ -69,5 +70,9 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple#readme"
 }

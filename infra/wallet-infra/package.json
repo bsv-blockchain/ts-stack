@@ -8,7 +8,8 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bitcoin-sv/wallet-infra.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "infra/wallet-infra"
   },
   "keywords": [
     "BSV",
@@ -17,6 +18,10 @@
     "Wallet",
     "Infrastructure"
   ],
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/wallet-infra#readme",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
   "files": [

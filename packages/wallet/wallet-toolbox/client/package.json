@@ -6,7 +6,8 @@
   "types": "./out/src/index.client.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/wallet-toolbox.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/wallet-toolbox/client"
   },
   "author": "Tone Engel",
   "license": "SEE LICENSE IN license.md",
@@ -16,9 +17,9 @@
     "BRC100"
   ],
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/wallet-toolbox/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/wallet-toolbox#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client#readme",
   "dependencies": {
     "@bsv/sdk": "^2.0.14",
     "hash-wasm": "^4.12.0",

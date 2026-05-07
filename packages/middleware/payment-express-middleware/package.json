@@ -8,7 +8,8 @@
   "types": "dist/types/mod.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/payment-express-middleware.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/middleware/payment-express-middleware"
   },
   "files": [
     "dist",
@@ -61,5 +62,9 @@
   "dependencies": {
     "@bsv/sdk": "^2.0.14",
     "express": "^5.1.0"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware#readme"
 }

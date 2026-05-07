@@ -6,11 +6,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/message-box-client.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/messaging/message-box-client"
   },
-  "homepage": "https://github.com/bsv-blockchain/message-box-client#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client#readme",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/message-box-client/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
   "description": "A client for P2P messaging and payments",
   "type": "module",

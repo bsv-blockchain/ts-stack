@@ -4,7 +4,8 @@
   "description": "BSV Blockchain mutual-authentication express middleware",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/auth-express-middleware.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/middleware/auth-express-middleware"
   },
   "type": "module",
   "main": "dist/cjs/mod.js",
@@ -40,9 +41,9 @@
     "doc": "ts2md --inputFilename=mod.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1"
   },
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/auth-express-middleware/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/auth-express-middleware#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware#readme",
   "keywords": [
     "BSV",
     "Blockchain",

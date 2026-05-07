@@ -37,7 +37,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/overlay-discovery-services.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/overlays/overlay-discovery-services"
   },
   "keywords": [
     "BSV",
@@ -49,9 +50,9 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/overlay-discovery-services/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/overlay-discovery-services#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services#readme",
   "devDependencies": {
     "@jest/globals": "^30.3.0",
     "@types/jest": "^30.0.0",

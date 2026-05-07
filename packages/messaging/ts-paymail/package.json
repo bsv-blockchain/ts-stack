@@ -86,12 +86,13 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/ts-paymail/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-paymail#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/ts-paymail.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/messaging/ts-paymail"
   },
   "keywords": [
     "BSV",

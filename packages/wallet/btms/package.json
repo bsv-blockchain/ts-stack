@@ -38,7 +38,8 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bsv-blockchain/btms"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/btms"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -50,5 +51,9 @@
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.0.14"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms#readme"
 }

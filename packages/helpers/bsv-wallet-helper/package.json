@@ -17,7 +17,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/bsv-blockchain/bsv-wallet-helper.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/bsv-wallet-helper"
   },
   "scripts": {
     "test": "jest --runInBand",
@@ -51,5 +52,9 @@
     "ignore": [
       "dist"
     ]
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper#readme"
 }

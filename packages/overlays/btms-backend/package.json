@@ -50,5 +50,14 @@
     "@bsv/overlay": "^2.0.2",
     "@bsv/sdk": "^2.0.14",
     "mongodb": "^7.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/overlays/btms-backend"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/btms-backend#readme"
 }

@@ -6,7 +6,8 @@
   "types": "./out/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/wallet-toolbox-examples.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/wallet-toolbox-examples"
   },
   "author": "Tone Engel",
   "license": "SEE LICENSE IN license.md",
@@ -26,9 +27,9 @@
     "doc": "ts2md"
   },
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/wallet-toolbox/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/wallet-toolbox#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples#readme",
   "devDependencies": {
     "@types/diff": "^6.0.0",
     "@types/fs-extra": "^11.0.4",

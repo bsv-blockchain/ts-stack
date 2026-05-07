@@ -35,7 +35,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/ts-templates.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/ts-templates"
   },
   "keywords": [
     "BSV",
@@ -48,9 +49,9 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/ts-templates/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-templates#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates#readme",
   "devDependencies": {
     "@bsv/wallet-toolbox": "^2.1.24",
     "@types/jest": "^30.0.0",

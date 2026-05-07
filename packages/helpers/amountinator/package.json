@@ -19,12 +19,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/amountinator.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/amountinator"
   },
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/amountinator/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/amountinator#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator#readme",
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",

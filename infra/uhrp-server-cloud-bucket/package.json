@@ -7,7 +7,15 @@
     "out/src",
     "src"
   ],
-  "repository": "https://github.com/bitcoin-sv/uhrp-storage-server",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "infra/uhrp-server-cloud-bucket"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket#readme",
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {

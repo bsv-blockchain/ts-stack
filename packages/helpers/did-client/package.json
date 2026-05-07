@@ -52,5 +52,14 @@
   "dependencies": {
     "@bsv/sdk": "^2.0.14",
     "@bsv/wallet-toolbox-client": "^2.1.18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/did-client"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did-client#readme"
 }

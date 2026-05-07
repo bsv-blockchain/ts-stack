@@ -34,5 +34,14 @@
   },
   "license": "Open BSV",
   "author": "BSV Blockchain Association",
-  "private": false
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/overlays/topics"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics#readme"
 }

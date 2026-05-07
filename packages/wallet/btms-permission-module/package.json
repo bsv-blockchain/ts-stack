@@ -34,5 +34,14 @@
     "@bsv/wallet-toolbox-client": "^2.1.18",
     "@types/node": "^25.6.0",
     "typescript": "^5.2.2"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/btms-permission-module"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms-permission-module#readme"
 }

@@ -13,7 +13,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/wallet-toolbox.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/wallet-toolbox"
   },
   "author": "Tone Engel",
   "license": "SEE LICENSE IN license.md",
@@ -35,9 +36,9 @@
     "sync-versions": "node syncVersions.js"
   },
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/wallet-toolbox/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/wallet-toolbox#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox#readme",
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.0.5",
     "@bsv/payment-express-middleware": "^2.0.2",

@@ -36,7 +36,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bsv-blockchain/authsocket-client.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/messaging/authsocket-client"
   },
   "keywords": [
     "BSV",
@@ -48,9 +49,9 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/authsocket-client/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/authsocket-client#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client#readme",
   "dependencies": {
     "@bsv/sdk": "^2.0.14",
     "socket.io-client": "^4.8.1"

@@ -3,13 +3,14 @@
   "private": true,
   "version": "2.1.6",
   "description": "Run the overlay infrastructure for distributed applications.",
-  "homepage": "https://github.com/bsv-blockchain/overlay-express-examples#readme",
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server#readme",
   "bugs": {
-    "url": "https://github.com/bsv-blockchain/overlay-express-examples/issues"
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://sirdeggen@github.com/bsv-blockchain/overlay-express-examples.git"
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "infra/overlay-server"
   },
   "license": "Open BSV",
   "author": "BSV Association",
