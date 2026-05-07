@@ -219,11 +219,11 @@ export default class TransactionSignature extends Signature {
     let hashOutputs = new Array(32).fill(0)
 
     if ((params.scope & TransactionSignature.SIGHASH_ANYONECANPAY) === 0) {
-      if (cache?.hashPrevouts != null) {
-        hashPrevouts = cache.hashPrevouts
-      } else {
+      if (cache?.hashPrevouts == null) {
         hashPrevouts = getPrevoutHash()
         if (cache != null) cache.hashPrevouts = hashPrevouts
+      } else {
+        hashPrevouts = cache.hashPrevouts
       }
     }
 
@@ -232,11 +232,11 @@ export default class TransactionSignature extends Signature {
       (params.scope & 31) !== TransactionSignature.SIGHASH_SINGLE &&
       (params.scope & 31) !== TransactionSignature.SIGHASH_NONE
     ) {
-      if (cache?.hashSequence != null) {
-        hashSequence = cache.hashSequence
-      } else {
+      if (cache?.hashSequence == null) {
         hashSequence = getSequenceHash()
         if (cache != null) cache.hashSequence = hashSequence
+      } else {
+        hashSequence = cache.hashSequence
       }
     }
 
@@ -244,11 +244,11 @@ export default class TransactionSignature extends Signature {
       (params.scope & 31) !== TransactionSignature.SIGHASH_SINGLE &&
       (params.scope & 31) !== TransactionSignature.SIGHASH_NONE
     ) {
-      if (cache?.hashOutputsAll != null) {
-        hashOutputs = cache.hashOutputsAll
-      } else {
+      if (cache?.hashOutputsAll == null) {
         hashOutputs = getOutputsHash()
         if (cache != null) cache.hashOutputsAll = hashOutputs
+      } else {
+        hashOutputs = cache.hashOutputsAll
       }
     } else if (
       (params.scope & 31) === TransactionSignature.SIGHASH_SINGLE &&
@@ -256,14 +256,14 @@ export default class TransactionSignature extends Signature {
     ) {
       const key = params.inputIndex
       const cachedSingle = cache?.hashOutputsSingle?.get(key)
-      if (cachedSingle != null) {
-        hashOutputs = cachedSingle
-      } else {
+      if (cachedSingle == null) {
         hashOutputs = getOutputsHash(key)
         if (cache != null) {
           cache.hashOutputsSingle ??= new Map()
           cache.hashOutputsSingle.set(key, hashOutputs)
         }
+      } else {
+        hashOutputs = cachedSingle
       }
     }
 

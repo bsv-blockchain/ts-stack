@@ -1040,7 +1040,7 @@ export default class Curve {
       }
 
       const gMulX = this.g.mul(lambdas[0])?.x
-      const gXRedMulBeta = (this.g.x != null) ? this.g.x.redMul(beta) : undefined
+      const gXRedMulBeta = (this.g.x == null) ? undefined : this.g.x.redMul(beta)
 
       if ((gMulX != null) && (gXRedMulBeta != null) && gMulX.cmp(gXRedMulBeta) === 0) {
         lambda = lambdas[0]
@@ -1052,7 +1052,7 @@ export default class Curve {
         }
 
         const gMulX = this.g.mul(lambda)?.x
-        const gXRedMulBeta = (this.g.x != null) ? this.g.x.redMul(beta) : undefined
+        const gXRedMulBeta = (this.g.x == null) ? undefined : this.g.x.redMul(beta)
 
         if ((gMulX == null) || (gXRedMulBeta == null)) {
           throw new Error('Lambda computation failed: g.mul(lambda).x or g.x.redMul(beta) is undefined.')

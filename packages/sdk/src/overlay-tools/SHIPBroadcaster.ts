@@ -50,8 +50,11 @@ export interface AdmittanceInstructions {
  */
 export type STEAK = Record<string, AdmittanceInstructions>
 
+/** The require mode for topic acknowledgment: all topics must be present, or any one suffices. */
+export type RequireMode = 'all' | 'any'
+
 /** Specifies which topics must be acknowledged: all, any, or a specific list. */
-export type TopicAcknowledgmentRequirement = 'all' | 'any' | string[]
+export type TopicAcknowledgmentRequirement = RequireMode | string[]
 
 /** Configuration options for the SHIP broadcaster. */
 export interface SHIPBroadcasterConfig {
@@ -269,7 +272,7 @@ export default class TopicBroadcaster implements Broadcaster {
   }
 
   /** Resolves the (requiredTopics, require) pair for requireAcknowledgmentFromAllHostsForTopics. */
-  private resolveAllHostsRequirement (): { requiredTopics: string[], require: 'all' | 'any' } {
+  private resolveAllHostsRequirement (): { requiredTopics: string[], require: RequireMode } {
     const r = this.requireAcknowledgmentFromAllHostsForTopics
     if (r === 'any') return { requiredTopics: this.topics, require: 'any' }
     if (Array.isArray(r)) return { requiredTopics: r, require: 'all' }
@@ -287,7 +290,7 @@ export default class TopicBroadcaster implements Broadcaster {
   }
 
   /** Resolves the (requiredTopics, require) pair for requireAcknowledgmentFromAnyHostForTopics. */
-  private resolveAnyHostRequirement (): { requiredTopics: string[], require: 'all' | 'any' } {
+  private resolveAnyHostRequirement (): { requiredTopics: string[], require: RequireMode } {
     const r = this.requireAcknowledgmentFromAnyHostForTopics
     if (r === 'all') return { requiredTopics: this.topics, require: 'all' }
     if (r === 'any') return { requiredTopics: this.topics, require: 'any' }
@@ -318,7 +321,7 @@ export default class TopicBroadcaster implements Broadcaster {
   private topicsMatchRequirement (
     acknowledgedTopics: Set<string>,
     requiredTopics: string[],
-    require: 'all' | 'any'
+    require: RequireMode
   ): boolean {
     if (require === 'all') {
       return requiredTopics.every(t => acknowledgedTopics.has(t))
@@ -329,7 +332,7 @@ export default class TopicBroadcaster implements Broadcaster {
   private checkAcknowledgmentFromAllHosts (
     hostAcknowledgments: Record<string, Set<string>>,
     requiredTopics: string[],
-    require: 'all' | 'any'
+    require: RequireMode
   ): boolean {
     return Object.values(hostAcknowledgments).every(
       acknowledged => this.topicsMatchRequirement(acknowledged, requiredTopics, require)
@@ -339,7 +342,7 @@ export default class TopicBroadcaster implements Broadcaster {
   private checkAcknowledgmentFromAnyHost (
     hostAcknowledgments: Record<string, Set<string>>,
     requiredTopics: string[],
-    require: 'all' | 'any'
+    require: RequireMode
   ): boolean {
     return Object.values(hostAcknowledgments).some(
       acknowledged => this.topicsMatchRequirement(acknowledged, requiredTopics, require)
@@ -357,7 +360,7 @@ export default class TopicBroadcaster implements Broadcaster {
         return false
       }
       let requiredTopics: string[]
-      let require: 'all' | 'any'
+      let require: RequireMode
       if (requiredTopicsOrAllAny === 'all' || requiredTopicsOrAllAny === 'any') {
         require = requiredTopicsOrAllAny
         requiredTopics = this.topics

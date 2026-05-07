@@ -90,9 +90,7 @@ export default class RPuzzle implements ScriptTemplate {
   } {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
-        if (privateKey === undefined) {
-          privateKey = PrivateKey.fromRandom()
-        }
+        privateKey ??= PrivateKey.fromRandom()
         let signatureScope = TransactionSignature.SIGHASH_FORKID
         if (signOutputs === 'all') {
           signatureScope |= TransactionSignature.SIGHASH_ALL
