@@ -2,7 +2,7 @@ import { LockingScript, Script, Utils } from '@bsv/sdk'
 import { ORDINAL_MAP_PREFIX } from './constants'
 
 /** Accepted input types for script validation functions. */
-type ScriptInput = ScriptInput
+type ScriptInput = LockingScript | Script | string
 
 /**
  * Script validation templates for common Bitcoin script patterns
