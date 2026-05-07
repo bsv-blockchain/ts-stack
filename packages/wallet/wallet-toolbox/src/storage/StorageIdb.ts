@@ -74,6 +74,40 @@ import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 export interface StorageIdbOptions extends StorageProviderOptions {}
 
 /**
+ * Shared cursor-scan loop used by all `filterXxx` methods of StorageIdb.
+ *
+ * Walks `cursor` forward, applying `since`, a caller-supplied `matches`
+ * predicate, paging (offset / limit), and an async `accept` callback for
+ * records that pass all filters.  Returns the number of accepted records.
+ *
+ * Implemented as a module-level helper (not a class method) so that
+ * profiling/instrumentation that wraps class-prototype methods cannot
+ * intercept or mutate its `matches` / `accept` callbacks.
+ */
+async function scanCursor<T extends { updated_at: Date }> (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  cursor: any,
+  since: Date | undefined,
+  offset: number,
+  limit: number | undefined,
+  matches: (r: T) => boolean | Promise<boolean>,
+  accept: (r: T) => void
+): Promise<number> {
+  let skipped = 0
+  let count = 0
+  for (; cursor != null; cursor = await cursor.continue()) {
+    const r: T = cursor.value
+    if (since != null && since > r.updated_at) continue
+    if (!await matches(r)) continue
+    if (skipped < offset) { skipped++; continue }
+    accept(r)
+    count++
+    if (limit && count >= limit) break
+  }
+  return count
+}
+
+/**
  * This class implements the `StorageProvider` interface using IndexedDB,
  * via the promises wrapper package `idb`.
  */
@@ -139,36 +173,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       this.whenLastAccess = new Date()
       return trx
     }
-  }
-
-  /**
-   * Shared cursor-scan loop used by all `filterXxx` methods.
-   *
-   * Walks `cursor` forward, applying `since`, a caller-supplied `matches`
-   * predicate, paging (offset / limit), and an async `accept` callback for
-   * records that pass all filters.  Returns the number of accepted records.
-   */
-  private async scanCursor<T extends { updated_at: Date }> (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    cursor: any,
-    since: Date | undefined,
-    offset: number,
-    limit: number | undefined,
-    matches: (r: T) => boolean | Promise<boolean>,
-    accept: (r: T) => void
-  ): Promise<number> {
-    let skipped = 0
-    let count = 0
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: T = cursor.value
-      if (since != null && since > r.updated_at) continue
-      if (!await matches(r)) continue
-      if (skipped < offset) { skipped++; continue }
-      accept(r)
-      count++
-      if (limit && count >= limit) break
-    }
-    return count
   }
 
   /**
@@ -483,7 +487,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableOutputTagMap>(
+    await scanCursor<TableOutputTagMap>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -544,7 +548,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('proven_tx_reqs')
     const cursor = await this.openProvenTxReqsCursor(store, args.partial, direction)
-    await this.scanCursor<TableProvenTxReq>(
+    await scanCursor<TableProvenTxReq>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -593,7 +597,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor(null, direction)
     }
-    await this.scanCursor<TableProvenTx>(
+    await scanCursor<TableProvenTx>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -636,7 +640,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableTxLabelMap>(
+    await scanCursor<TableTxLabelMap>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -1133,7 +1137,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableCertificateField>(
+    await scanCursor<TableCertificateField>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesCertificateFieldPartial(r, args.partial),
       filtered
@@ -1174,7 +1178,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const dbTrx = this.toDbTrx(['certificates'], 'readonly', args.trx)
     const store = dbTrx.objectStore('certificates')
     const cursor = await this.openCertificatesCursor(store, args.partial)
-    await this.scanCursor<TableCertificateX>(
+    await scanCursor<TableCertificateX>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -1224,7 +1228,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableCommission>(
+    await scanCursor<TableCommission>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesCommissionPartial(r, args.partial),
       filtered
@@ -1245,7 +1249,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const dbTrx = this.toDbTrx(['monitor_events'], 'readonly', args.trx)
     const store = dbTrx.objectStore('monitor_events')
     const cursor = args.partial?.id ? await store.openCursor(args.partial.id) : await store.openCursor()
-    await this.scanCursor<TableMonitorEvent>(
+    await scanCursor<TableMonitorEvent>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesMonitorEventPartial(r, args.partial),
       filtered
@@ -1276,7 +1280,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableOutputBasket>(
+    await scanCursor<TableOutputBasket>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesOutputBasketPartial(r, args.partial),
       filtered
@@ -1337,7 +1341,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('outputs')
     const cursor = await this.openOutputsCursor(store, args.partial, direction)
-    await this.scanCursor<TableOutput>(
+    await scanCursor<TableOutput>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -1420,7 +1424,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableOutputTag>(
+    await scanCursor<TableOutputTag>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesOutputTagPartial(r, args.partial),
       filtered
@@ -1458,7 +1462,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableSyncState>(
+    await scanCursor<TableSyncState>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesSyncStatePartial(r, args.partial),
       filtered
@@ -1515,7 +1519,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('transactions')
     const cursor = await this.openTransactionsCursor(store, args.partial, direction)
-    await this.scanCursor<TableTransaction>(
+    await scanCursor<TableTransaction>(
       cursor,
       args.since,
       args.paged?.offset || 0,
@@ -1594,7 +1598,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    await this.scanCursor<TableTxLabel>(
+    await scanCursor<TableTxLabel>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
       r => matchesTxLabelPartial(r, args.partial),
       filtered
@@ -1623,7 +1627,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async filterUsers (args: FindUsersArgs, filtered: (v: TableUser) => void): Promise<void> {
     const dbTrx = this.toDbTrx(['users'], 'readonly', args.trx)
     const cursor = await dbTrx.objectStore('users').openCursor()
-    await this.scanCursor<TableUser>(
+    await scanCursor<TableUser>(
       cursor,
       args.since,
       args.paged?.offset || 0,
