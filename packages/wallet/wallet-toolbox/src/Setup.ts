@@ -367,7 +367,7 @@ DEV_KEYS = '{
     const wo = await Setup.createWallet(args)
     const activeStorage = await Setup.createStorageKnex(args)
     await wo.storage.addWalletStorageProvider(activeStorage)
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey)
+    const { user } = await activeStorage.findOrInsertUser(wo.identityKey)
     const userId = user.userId
     const r: SetupWalletKnex = {
       ...wo,

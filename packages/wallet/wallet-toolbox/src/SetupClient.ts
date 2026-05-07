@@ -264,7 +264,7 @@ export abstract class SetupClient {
     const wo = await SetupClient.createWallet(args)
     const activeStorage = await SetupClient.createStorageIdb(args)
     await wo.storage.addWalletStorageProvider(activeStorage)
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey)
+    const { user } = await activeStorage.findOrInsertUser(wo.identityKey)
     const userId = user.userId
     const r: SetupWalletIdb = {
       ...wo,
