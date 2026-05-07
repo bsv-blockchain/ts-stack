@@ -2,7 +2,7 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 export class TaskSyncWhenIdle extends WalletMonitorTask {
-  static taskName = 'SyncWhenIdle'
+  static readonly taskName = 'SyncWhenIdle'
 
   constructor (
     monitor: Monitor,
@@ -12,15 +12,10 @@ export class TaskSyncWhenIdle extends WalletMonitorTask {
   }
 
   trigger (nowMsecsSinceEpoch: number): { run: boolean } {
-    const s = this.storage
-
-    const run = false
-
-    return { run }
+    return { run: false }
   }
 
   async runTask (): Promise<string> {
-    // TODO...
     return ''
   }
 }

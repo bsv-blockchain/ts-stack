@@ -83,7 +83,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   isAvailable (): boolean {
     // We'll just say "yes" if we have settings
-    return !(this.settings == null)
+    return this.settings != null
   }
 
   /**
@@ -103,9 +103,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns remote storage `TableSettings`
    */
   async makeAvailable (): Promise<TableSettings> {
-    if (this.settings == null) {
-      this.settings = await this.rpcCall<TableSettings>('makeAvailable', [])
-    }
+    this.settings ??= await this.rpcCall<TableSettings>('makeAvailable', [])
     return this.settings
   }
 

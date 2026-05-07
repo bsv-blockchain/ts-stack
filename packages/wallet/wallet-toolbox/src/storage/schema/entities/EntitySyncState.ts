@@ -264,7 +264,9 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     return false
   }
 
-  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {}
+  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+    // SyncState records are never created during a merge; they are managed separately
+  }
 
   override async mergeExisting (
     storage: EntityStorage,

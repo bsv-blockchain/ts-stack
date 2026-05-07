@@ -227,7 +227,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       .map(([userId]) => userId)
 
     const users = await Promise.all(sortedUserIds.map(async userId => await this.findUserById(userId, trx)))
-    return users.filter((user): user is TableUser => !(user == null))
+    return users.filter((user): user is TableUser => user != null)
   }
 
   override isStorageProvider (): boolean {
@@ -577,28 +577,27 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (r.proven != null) {
       if (requiredLevels) {
         r.rawTx = r.proven.rawTx
+      } else if (trustSelf === 'known') {
+        beef.mergeTxidOnly(txid)
       } else {
-        if (trustSelf === 'known') beef.mergeTxidOnly(txid)
-        else {
-          const mp = new EntityProvenTx(r.proven).getMerklePath()
-          if (chainTracker != null) {
-            const root = mp.computeRoot()
-            const isValid = await chainTracker.isValidRootForHeight(root, r.proven.height)
-            if (!isValid) {
-              if (!skipInvalidProofs) {
-                throw new WERR_INVALID_MERKLE_ROOT(r.proven.blockHash, r.proven.height, root, txid)
-              }
-              // ignore this currently invalid proof and try to recurse deeper
-              r.rawTx = r.proven.rawTx
-              r.proven = undefined
+        const mp = new EntityProvenTx(r.proven).getMerklePath()
+        if (chainTracker != null) {
+          const root = mp.computeRoot()
+          const isValid = await chainTracker.isValidRootForHeight(root, r.proven.height)
+          if (!isValid) {
+            if (!skipInvalidProofs) {
+              throw new WERR_INVALID_MERKLE_ROOT(r.proven.blockHash, r.proven.height, root, txid)
             }
+            // ignore this currently invalid proof and try to recurse deeper
+            r.rawTx = r.proven.rawTx
+            r.proven = undefined
           }
-          if (r.proven != null) {
-            // If we still like this proof, merge it and return
-            beef.mergeRawTx(r.proven.rawTx)
-            beef.mergeBump(mp)
-            return beef
-          }
+        }
+        if (r.proven != null) {
+          // If we still like this proof, merge it and return
+          beef.mergeRawTx(r.proven.rawTx)
+          beef.mergeBump(mp)
+          return beef
         }
       }
     }
@@ -769,7 +768,6 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       const services = this.getServices()
       for (let i = outputs.length - 1; i >= 0; i--) {
         const o = outputs[i]
-        const oid = verifyId(o.outputId)
         if (o.spendable) {
           let ok = false
           if ((o.lockingScript != null) && o.lockingScript.length > 0) {

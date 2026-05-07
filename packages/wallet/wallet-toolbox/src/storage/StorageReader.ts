@@ -45,12 +45,13 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   }
 
   isAvailable (): boolean {
-    return !(this._settings == null)
+    return this._settings != null
   }
 
   async makeAvailable (): Promise<TableSettings> {
     if (this._settings != null) return this._settings
-    return (this._settings = await this.readSettings())
+    this._settings = await this.readSettings()
+    return this._settings
   }
 
   getSettings (): TableSettings {

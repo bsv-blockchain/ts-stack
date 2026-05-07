@@ -3,6 +3,6 @@ import { PurgeParams, PurgeResults, TrxToken } from '../../sdk/WalletStorage.int
 
 export async function purgeDataIdb (storage: StorageIdb, params: PurgeParams, trx?: TrxToken): Promise<PurgeResults> {
   const r: PurgeResults = { count: 0, log: '' }
-  // TODO: implement purgeDataIdb
+  // Stub: purgeDataIdb not yet implemented
   return r
 }

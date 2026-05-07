@@ -26,7 +26,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * createAction fails to verify a generated beef against the chaintracker.
  */
 export class TaskReorg extends WalletMonitorTask {
-  static taskName = 'Reorg'
+  static readonly taskName = 'Reorg'
 
   process: DeactivedHeader[] = []
 

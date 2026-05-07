@@ -104,7 +104,7 @@ export class EntityOutputTag extends EntityBase<TableOutputTag> {
   ): Promise<{ found: boolean, eo: EntityOutputTag, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findOutputTags({ partial: { tag: ei.tag, userId }, trx }))
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityOutputTag(ef || { ...ei }),
       eiId: verifyId(ei.outputTagId)
     }

@@ -220,7 +220,7 @@ export class KnexMigrations implements MigrationSource<string> {
           chain: chain as Chain,
           knex
         })
-        const settings = await storage.makeAvailable()
+        await storage.makeAvailable()
         await knex.raw('update proven_tx_reqs set history = \'{}\'')
       },
       async down (knex) {

@@ -62,10 +62,10 @@ export async function listOutputs (
 
   let tagIds: number[] = []
   const specOpTags: string[] = []
-  if ((specOp != null) && specOp.tagsParamsCount) {
+  if (specOp?.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
   }
-  if ((specOp != null) && (specOp.tagsToIntercept != null)) {
+  if (specOp?.tagsToIntercept != null) {
     // Pull out tags used by current specOp
     const ts = tags
     tags = []
@@ -81,7 +81,7 @@ export async function listOutputs (
     }
   }
 
-  if ((specOp != null) && (specOp.resultFromTags != null)) {
+  if (specOp?.resultFromTags != null) {
     const r = await specOp.resultFromTags(dsk, auth, vargs, specOpTags)
     return r
   }
@@ -123,7 +123,7 @@ export async function listOutputs (
   if (vargs.includeLockingScripts || specOp?.includeOutputScripts) { columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset'] }
 
   const noTags = tagIds.length === 0
-  const includeSpent = (specOp != null) && specOp.includeSpent ? specOp.includeSpent : false
+  const includeSpent = specOp?.includeSpent ?? false
 
   const txStatusAllowed = ['completed', 'unproven', 'nosend', 'sending']
   const outputColumns = columns.map(c => `o.${c} as ${c}`)
@@ -187,7 +187,6 @@ export async function listOutputs (
       r.totalOutputs = Number(rsum ? rsum.totalSatoshis || 0 : 0)
       return r
     } else {
-      columns = ['outputId', 'basketId', 'spendable', 'satoshis']
       const q = makeWithTagsQuery()
       q.sum('o.satoshis as totalSatoshis')
       const rsum = await q.first()
@@ -199,15 +198,15 @@ export async function listOutputs (
   const { q, qcount } = noTags ? makeWithoutTagsQueries() : makeWithTagsQueries()
 
   // Sort order when limit and offset are possible must be ascending for determinism.
-  if ((specOp == null) || !specOp.ignoreLimit) q.limit(limit).offset(offset)
+  if (!specOp?.ignoreLimit) q.limit(limit).offset(offset)
 
   q.orderBy('o.outputId', orderBy)
 
   let outputs: TableOutput[] = await q
 
   if (specOp != null) {
-    if (specOp.filterOutputs != null) outputs = await specOp.filterOutputs(dsk, auth, vargs, specOpTags, outputs)
-    if (specOp.resultFromOutputs != null) {
+    if (specOp?.filterOutputs != null) outputs = await specOp.filterOutputs(dsk, auth, vargs, specOpTags, outputs)
+    if (specOp?.resultFromOutputs != null) {
       const r = await specOp.resultFromOutputs(dsk, auth, vargs, specOpTags, outputs)
       return r
     }

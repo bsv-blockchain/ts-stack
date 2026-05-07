@@ -224,28 +224,22 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
 
     // Properties that are never updated
     if (
-      eo.transactionId !== ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) ||
-      eo.reference !== ei.reference
-    ) { return false }
+      eo.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
+      eo.reference === ei.reference &&
+      eo.version === ei.version &&
+      eo.lockTime === ei.lockTime &&
+      eo.isOutgoing === ei.isOutgoing &&
+      eo.status === ei.status &&
+      eo.satoshis === ei.satoshis &&
+      eo.txid === ei.txid &&
+      eo.description === ei.description &&
+      optionalArraysEqual(eo.rawTx, ei.rawTx) &&
+      optionalArraysEqual(eo.inputBEEF, ei.inputBEEF) &&
+      (eo.provenTxId == null) === (ei.provenTxId == null) &&
+      !(ei.provenTxId && eo.provenTxId !== ((syncMap != null) ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
+    ) { return true }
 
-    if (
-      eo.version !== ei.version ||
-      eo.lockTime !== ei.lockTime ||
-      eo.isOutgoing !== ei.isOutgoing ||
-      eo.status !== ei.status ||
-      eo.satoshis !== ei.satoshis ||
-      eo.txid !== ei.txid ||
-      eo.description !== ei.description ||
-      !optionalArraysEqual(eo.rawTx, ei.rawTx) ||
-      !optionalArraysEqual(eo.inputBEEF, ei.inputBEEF)
-    ) { return false }
-
-    if (
-      (eo.provenTxId == null) !== (ei.provenTxId == null) ||
-      (ei.provenTxId && eo.provenTxId !== ((syncMap != null) ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
-    ) { return false }
-
-    return true
+    return false
   }
 
   static async mergeFind (
@@ -271,7 +265,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
       ef = verifyOneOrNone(await storage.findTransactions({ partial: { reference: ei.reference, userId }, trx }))
     }
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityTransaction(ef || { ...ei }),
       eiId: verifyId(ei.transactionId)
     }

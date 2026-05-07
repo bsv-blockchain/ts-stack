@@ -172,34 +172,25 @@ export class StorageServer {
               return res.json({ jsonrpc: '2.0', result: undefined, id })
             }
             case 'getSettings':
-              {
-                /** */
-              }
+              /** */
               break
             case 'findOrInsertUser':
-              {
-                if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated user.') }
-              }
+              if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated user.') }
               break
             case 'adminStats':
-              {
-                // TODO: add check for admin user
-                if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.') }
-                if ((this.adminIdentityKeys == null) || !this.adminIdentityKeys.includes(req.auth.identityKey)) { throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.') }
-              }
+              // Add check for admin user
+              if (params[0] !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('function may only access authenticated admin user.') }
+              if (!this.adminIdentityKeys?.includes(req.auth.identityKey)) { throw new WERR_UNAUTHORIZED('function may only be accessed by admin user.') }
               break
-            case 'processSyncChunk':
-              {
-                await this.validateParam0(params, req)
-                // const args: RequestSyncChunkArgs = params[0]
-                const r: SyncChunk = params[1]
-                validateSyncChunkEntities(r)
-              }
+            case 'processSyncChunk': {
+              await this.validateParam0(params, req)
+              // const args: RequestSyncChunkArgs = params[0]
+              const r: SyncChunk = params[1]
+              validateSyncChunkEntities(r)
               break
+            }
             default:
-              {
-                await this.validateParam0(params, req)
-              }
+              await this.validateParam0(params, req)
               break
           }
 
@@ -269,7 +260,7 @@ export class StorageServer {
     }
     if (params[0].identityKey && params[0].identityKey !== req.auth.identityKey) { throw new WERR_UNAUTHORIZED('identityKey does not match authentiation') }
     // console.log('looking up user with identityKey:', req.auth.identityKey)
-    const { user, isNew } = await this.storage.findOrInsertUser(req.auth.identityKey)
+    const { user } = await this.storage.findOrInsertUser(req.auth.identityKey)
     params[0].reqAuthUserId = user.userId
     if (params[0].identityKey) params[0].userId = user.userId
   }

@@ -30,7 +30,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 export interface TaskPurgeParams extends PurgeParams {}
 
 export class TaskPurge extends WalletMonitorTask {
-  static taskName = 'Purge'
+  static readonly taskName = 'Purge'
 
   /**
    * Set to true to trigger running this task

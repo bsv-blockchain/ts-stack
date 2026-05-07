@@ -125,7 +125,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       )
       if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ rawTx: Buffer | null }>>)[0]
       const r = verifyOneOrNone(rs)
-      if ((r != null) && (r.rawTx != null)) {
+      if (r?.rawTx != null) {
         rawTx = Array.from(r.rawTx)
       } else {
         let rs: Array<{ rawTx: Buffer | null }> = await this.toDb(trx).raw(
@@ -133,7 +133,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         )
         if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ rawTx: Buffer | null }>>)[0]
         const r = verifyOneOrNone(rs)
-        if ((r != null) && (r.rawTx != null)) {
+        if (r?.rawTx != null) {
           rawTx = Array.from(r.rawTx)
         }
       }
@@ -281,7 +281,6 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const e = await this.validateEntityForInsert(certificate, trx, undefined, ['isDeleted'])
     if (e.certificateId === 0) delete e.certificateId
 
-    const logger = e.logger
     if (e.logger) delete e.logger
 
     const fields = e.fields
@@ -352,7 +351,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async insertOutputTagMap (tagMap: TableOutputTagMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(tagMap, trx, undefined, ['isDeleted'])
-    const [id] = await this.toDb(trx)<TableOutputTagMap>('output_tags_map').insert(e)
+    await this.toDb(trx)<TableOutputTagMap>('output_tags_map').insert(e)
   }
 
   override async insertTxLabel (label: TableTxLabel, trx?: TrxToken): Promise<number> {
@@ -365,7 +364,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
-    const [id] = await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
+    await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
   }
 
   override async insertMonitorEvent (event: TableMonitorEvent, trx?: TrxToken): Promise<number> {
@@ -488,11 +487,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (Array.isArray(id)) {
       r = await this.toDb(trx)<TableTransaction>('transactions')
         .whereIn('transactionId', id)
-        .update(await this.validatePartialForUpdate(update))
+        .update(this.validatePartialForUpdate(update))
     } else if (Number.isInteger(id)) {
       r = await this.toDb(trx)<TableTransaction>('transactions')
         .where({ transactionId: id })
-        .update(await this.validatePartialForUpdate(update))
+        .update(this.validatePartialForUpdate(update))
     } else {
       throw new WERR_INVALID_PARAMETER('id', 'transactionId or array of transactionId')
     }
@@ -1052,9 +1051,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * @param trx
    */
   async verifyReadyForDatabaseAccess (trx?: TrxToken): Promise<DBType> {
-    if (this._settings == null) {
-      this._settings = await this.readSettings()
-    }
+    this._settings ??= await this.readSettings()
 
     // Always run the PRAGMA for SQLite to ensure foreign key constraints are enabled.
     // This is necessary because PRAGMA foreign_keys is a per-connection setting,
@@ -1322,21 +1319,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
       }
 
-      if (output == null) {
-        output = await baseQuery()
-          .where('o.satoshis', '>=', targetSatoshis)
-          .orderBy('o.satoshis', 'asc')
-          .orderBy('o.outputId', 'asc')
-          .first()
-      }
+      output ??= await baseQuery()
+        .where('o.satoshis', '>=', targetSatoshis)
+        .orderBy('o.satoshis', 'asc')
+        .orderBy('o.outputId', 'asc')
+        .first()
 
-      if (output == null) {
-        output = await baseQuery()
-          .where('o.satoshis', '<', targetSatoshis)
-          .orderBy('o.satoshis', 'desc')
-          .orderBy('o.outputId', 'desc')
-          .first()
-      }
+      output ??= await baseQuery()
+        .where('o.satoshis', '<', targetSatoshis)
+        .orderBy('o.satoshis', 'desc')
+        .orderBy('o.outputId', 'desc')
+        .first()
 
       if (output == null) return undefined
 

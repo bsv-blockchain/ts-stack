@@ -11,7 +11,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  */
 
 export class TaskFailAbandoned extends WalletMonitorTask {
-  static taskName = 'FailAbandoned'
+  static readonly taskName = 'FailAbandoned'
 
   constructor (
     monitor: Monitor,

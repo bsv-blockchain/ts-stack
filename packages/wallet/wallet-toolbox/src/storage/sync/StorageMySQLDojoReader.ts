@@ -291,7 +291,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
         spendable: !!d.spendable,
         change: d.providedBy !== 'you' && d.purpose === 'change',
         outputDescription: (d.description || '').trim(),
-        vout: verifyInteger(typeof d.vout !== 'number' ? 9999 : d.vout),
+        vout: verifyInteger(typeof d.vout === 'number' ? d.vout : 9999),
         satoshis: verifyInteger(d.amount),
         providedBy: verifyTruthy(d.providedBy || 'you')
           .trim()

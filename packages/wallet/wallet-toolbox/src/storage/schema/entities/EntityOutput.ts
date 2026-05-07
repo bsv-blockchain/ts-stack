@@ -250,30 +250,28 @@ export class EntityOutput extends EntityBase<TableOutput> {
   }
 
   override equals (ei: TableOutput, syncMap?: SyncMap | undefined): boolean {
-    if (
-      this.transactionId !== ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) ||
-      this.basketId !== ((syncMap != null) && ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : ei.basketId) ||
-      this.spentBy !== ((syncMap != null) && ei.spentBy ? syncMap.transaction.idMap[ei.spentBy] : ei.spentBy) ||
-      this.vout !== ei.vout ||
-      this.satoshis !== ei.satoshis ||
-      this.spendable !== ei.spendable ||
-      this.change !== ei.change ||
-      this.txid !== ei.txid ||
-      this.type !== ei.type ||
-      this.providedBy !== ei.providedBy ||
-      this.purpose !== ei.purpose ||
-      this.outputDescription !== ei.outputDescription ||
-      this.spendingDescription !== ei.spendingDescription ||
-      this.derivationPrefix !== ei.derivationPrefix ||
-      this.derivationSuffix !== ei.derivationSuffix ||
-      this.senderIdentityKey !== ei.senderIdentityKey ||
-      this.customInstructions !== ei.customInstructions ||
-      !optionalArraysEqual(this.lockingScript, ei.lockingScript) ||
-      this.scriptLength !== ei.scriptLength ||
-      this.scriptOffset !== ei.scriptOffset
-    ) { return false }
-
-    return true
+    return (
+      this.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) &&
+      this.basketId === ((syncMap != null) && ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : ei.basketId) &&
+      this.spentBy === ((syncMap != null) && ei.spentBy ? syncMap.transaction.idMap[ei.spentBy] : ei.spentBy) &&
+      this.vout === ei.vout &&
+      this.satoshis === ei.satoshis &&
+      this.spendable === ei.spendable &&
+      this.change === ei.change &&
+      this.txid === ei.txid &&
+      this.type === ei.type &&
+      this.providedBy === ei.providedBy &&
+      this.purpose === ei.purpose &&
+      this.outputDescription === ei.outputDescription &&
+      this.spendingDescription === ei.spendingDescription &&
+      this.derivationPrefix === ei.derivationPrefix &&
+      this.derivationSuffix === ei.derivationSuffix &&
+      this.senderIdentityKey === ei.senderIdentityKey &&
+      this.customInstructions === ei.customInstructions &&
+      optionalArraysEqual(this.lockingScript, ei.lockingScript) &&
+      this.scriptLength === ei.scriptLength &&
+      this.scriptOffset === ei.scriptOffset
+    )
   }
 
   static async mergeFind (
@@ -284,7 +282,6 @@ export class EntityOutput extends EntityBase<TableOutput> {
     trx?: TrxToken
   ): Promise<{ found: boolean, eo: EntityOutput, eiId: number }> {
     const transactionId = syncMap.transaction.idMap[ei.transactionId]
-    const basketId = ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : null
     const ef = verifyOneOrNone(
       await storage.findOutputs({
         partial: { userId, transactionId, vout: ei.vout },
@@ -292,7 +289,7 @@ export class EntityOutput extends EntityBase<TableOutput> {
       })
     )
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityOutput(ef || { ...ei }),
       eiId: verifyId(ei.outputId)
     }

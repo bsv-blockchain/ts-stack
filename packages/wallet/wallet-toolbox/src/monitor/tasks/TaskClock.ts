@@ -2,7 +2,7 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 export class TaskClock extends WalletMonitorTask {
-  static taskName = 'Clock'
+  static readonly taskName = 'Clock'
   nextMinute: number
 
   constructor (
@@ -14,10 +14,7 @@ export class TaskClock extends WalletMonitorTask {
   }
 
   trigger (nowMsecsSinceEpoch: number): { run: boolean } {
-    const s = this.storage
-
     const run = Date.now() > this.nextMinute
-
     return { run }
   }
 

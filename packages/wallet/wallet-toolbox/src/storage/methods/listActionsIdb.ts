@@ -20,7 +20,6 @@ export async function listActionsIdb (
   auth: AuthId,
   vargs: Validation.ValidListActionsArgs
 ): Promise<ListActionsResult> {
-  const limit = vargs.limit
   const offset = vargs.offset
 
   const r: ListActionsResult = {
@@ -35,8 +34,8 @@ export async function listActionsIdb (
     remainingLabels: ordinaryLabelsPreSpecOp
   } = parseBrc114ActionTimeLabels(vargs.labels)
 
-  const createdAtFrom = actionTimeFrom !== undefined ? new Date(actionTimeFrom) : undefined
-  const createdAtTo = actionTimeTo !== undefined ? new Date(actionTimeTo) : undefined
+  const createdAtFrom = actionTimeFrom === undefined ? undefined : new Date(actionTimeFrom)
+  const createdAtTo = actionTimeTo === undefined ? undefined : new Date(actionTimeTo)
 
   let specOp: ListActionsSpecOp | undefined
   let specOpLabels: string[] = []
@@ -82,11 +81,9 @@ export async function listActionsIdb (
   // any and only non-existing labels, impossible to satisfy.
   { return r }
 
-  const stati: TransactionStatus[] = ((specOp?.setStatusFilter) != null)
-    ? specOp.setStatusFilter()
-    : ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
-
-  const noLabels = labelIds.length === 0
+  const stati: TransactionStatus[] = (specOp?.setStatusFilter == null)
+    ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
+    : specOp.setStatusFilter()
 
   const txs = await storage.findTransactions(
     {
@@ -134,7 +131,7 @@ export async function listActionsIdb (
         if (vargs.includeLabels) {
           action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
           if (timeFilterRequested) {
-            const ts = tx.created_at ? new Date(tx.created_at as any).getTime() : NaN
+            const ts = tx.created_at ? new Date(tx.created_at as any).getTime() : Number.NaN
             if (!Number.isNaN(ts)) {
               const timeLabel = makeBrc114ActionTimeLabel(ts)
               if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)

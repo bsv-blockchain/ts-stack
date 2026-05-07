@@ -114,15 +114,13 @@ export class EntityCommission extends EntityBase<TableCommission> {
   }
 
   override equals (ei: TableCommission, syncMap?: SyncMap | undefined): boolean {
-    if (
-      this.isRedeemed !== ei.isRedeemed ||
-      this.transactionId !== ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) ||
-      this.keyOffset !== ei.keyOffset ||
-      !arraysEqual(this.lockingScript, ei.lockingScript) ||
-      this.satoshis !== ei.satoshis
-    ) { return false }
-
-    return true
+    return (
+      this.isRedeemed === ei.isRedeemed &&
+      this.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) &&
+      this.keyOffset === ei.keyOffset &&
+      arraysEqual(this.lockingScript, ei.lockingScript) &&
+      this.satoshis === ei.satoshis
+    )
   }
 
   static async mergeFind (
@@ -135,7 +133,7 @@ export class EntityCommission extends EntityBase<TableCommission> {
     const transactionId = syncMap.transaction.idMap[ei.transactionId]
     const ef = verifyOneOrNone(await storage.findCommissions({ partial: { transactionId, userId }, trx }))
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityCommission(ef || { ...ei }),
       eiId: verifyId(ei.commissionId)
     }

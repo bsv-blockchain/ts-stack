@@ -170,25 +170,21 @@ class InternalizeActionContext {
       const txo = this.tx.outputs[o.outputIndex]
       switch (o.protocol) {
         case 'basket insertion':
-          {
-            if ((o.insertionRemittance == null) || (o.paymentRemittance != null)) { throw new WERR_INVALID_PARAMETER('basket insertion', 'valid insertionRemittance and no paymentRemittance') }
-            this.basketInsertions.push({
-              ...o.insertionRemittance,
-              txo,
-              vout: o.outputIndex
-            })
-          }
+          if ((o.insertionRemittance == null) || (o.paymentRemittance != null)) { throw new WERR_INVALID_PARAMETER('basket insertion', 'valid insertionRemittance and no paymentRemittance') }
+          this.basketInsertions.push({
+            ...o.insertionRemittance,
+            txo,
+            vout: o.outputIndex
+          })
           break
         case 'wallet payment':
-          {
-            if (o.insertionRemittance || (o.paymentRemittance == null)) { throw new WERR_INVALID_PARAMETER('wallet payment', 'valid paymentRemittance and no insertionRemittance') }
-            this.walletPayments.push({
-              ...o.paymentRemittance,
-              txo,
-              vout: o.outputIndex,
-              ignore: false
-            })
-          }
+          if (o.insertionRemittance || (o.paymentRemittance == null)) { throw new WERR_INVALID_PARAMETER('wallet payment', 'valid paymentRemittance and no insertionRemittance') }
+          this.walletPayments.push({
+            ...o.paymentRemittance,
+            txo,
+            vout: o.outputIndex,
+            ignore: false
+          })
           break
         default:
           throw new WERR_INTERNAL(`unexpected protocol ${o.protocol}`)
@@ -207,13 +203,13 @@ class InternalizeActionContext {
         partial: { userId: this.userId, txid: this.txid }
       })
     )
-    if ((this.etx != null) && !(this.etx.status == 'completed' || this.etx.status === 'unproven' || this.etx.status === 'nosend')) {
+    if ((this.etx != null) && this.etx.status !== 'completed' && this.etx.status !== 'unproven' && this.etx.status !== 'nosend') {
       throw new WERR_INVALID_PARAMETER(
         'tx',
         `target transaction of internalizeAction has invalid status ${this.etx.status}.`
       )
     }
-    this.isMerge = !(this.etx == null)
+    this.isMerge = this.etx != null
 
     if (this.isMerge) {
       this.eos = await this.storage.findOutputs({

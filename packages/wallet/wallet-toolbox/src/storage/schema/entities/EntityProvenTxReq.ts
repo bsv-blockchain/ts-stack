@@ -94,7 +94,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
       // Cleanup null values and duplicates.
       const transactionIds: number[] = []
       for (const id of this.notify.transactionIds) {
-        if (Number.isInteger(id) && !transactionIds.some(txid => txid === id)) transactionIds.push(id)
+        if (Number.isInteger(id) && !transactionIds.includes(id)) transactionIds.push(id)
       }
       this.notify.transactionIds = transactionIds
     }
@@ -192,36 +192,30 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     }
     const n = this.prettyNote(note)
     try {
-      switch (note.what) {
-        case 'status':
-          {
-            const status = note.status_now as ProvenTxReqStatus
-            switch (status) {
-              case 'completed':
-                c.setToCompleted = true
-                break
-              case 'unmined':
-                c.setToUnmined = true
-                break
-              case 'callback':
-                c.setToCallback = true
-                break
-              case 'doubleSpend':
-                c.setToDoubleSpend = true
-                break
-              case 'sending':
-                c.setToSending = true
-                break
-              case 'unconfirmed':
-                c.setToUnconfirmed = true
-                break
-              default:
-                break
-            }
-          }
-          break
-        default:
-          break
+      if (note.what === 'status') {
+        const status = note.status_now as ProvenTxReqStatus
+        switch (status) {
+          case 'completed':
+            c.setToCompleted = true
+            break
+          case 'unmined':
+            c.setToUnmined = true
+            break
+          case 'callback':
+            c.setToCallback = true
+            break
+          case 'doubleSpend':
+            c.setToDoubleSpend = true
+            break
+          case 'sending':
+            c.setToSending = true
+            break
+          case 'unconfirmed':
+            c.setToUnconfirmed = true
+            break
+          default:
+            break
+        }
       }
     } catch {
       /** */
@@ -519,16 +513,16 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
         // || eo.created_at !== minDate(ei.created_at, eo.created_at)
         // || eo.updated_at !== maxDate(ei.updated_at, eo.updated_at)
       ) { return false }
-    } else {
-      if (
-        eo.attempts != ei.attempts ||
-        eo.history != ei.history ||
-        eo.notify != ei.notify ||
-        eo.provenTxReqId !== ei.provenTxReqId ||
-        eo.provenTxId !== ei.provenTxId
-        // || eo.created_at !== ei.created_at
-        // || eo.updated_at !== ei.updated_at
-      ) { return false }
+    } else if (
+      eo.attempts != ei.attempts ||
+      eo.history != ei.history ||
+      eo.notify != ei.notify ||
+      eo.provenTxReqId !== ei.provenTxReqId ||
+      eo.provenTxId !== ei.provenTxId
+      // || eo.created_at !== ei.created_at
+      // || eo.updated_at !== ei.updated_at
+    ) {
+      return false
     }
     return true
   }
@@ -542,7 +536,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
   ): Promise<{ found: boolean, eo: EntityProvenTxReq, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findProvenTxReqs({ partial: { txid: ei.txid }, trx }))
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityProvenTxReq(ef || { ...ei }),
       eiId: verifyId(ei.provenTxReqId)
     }
@@ -585,7 +579,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
   }
 
   static isTerminalStatus (status: ProvenTxReqStatus): boolean {
-    return ProvenTxReqTerminalStatus.some(s => s === status)
+    return ProvenTxReqTerminalStatus.includes(status)
   }
 
   override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {

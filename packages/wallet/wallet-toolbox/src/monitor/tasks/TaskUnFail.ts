@@ -15,7 +15,7 @@ import { EntityProvenTxReq } from '../../storage/schema/entities'
  * If it fails (to find a merklePath), returns the req status to 'invalid'.
  */
 export class TaskUnFail extends WalletMonitorTask {
-  static taskName = 'UnFail'
+  static readonly taskName = 'UnFail'
 
   /**
    * Set to true to trigger running this task
@@ -94,7 +94,6 @@ export class TaskUnFail extends WalletMonitorTask {
   async unfailReq (req: EntityProvenTxReq, indent: number): Promise<string> {
     let log = ''
 
-    const storage = this.storage
     const services = this.monitor.services
 
     const txIds = req.notify.transactionIds || []
@@ -116,14 +115,14 @@ export class TaskUnFail extends WalletMonitorTask {
           const is = await sp.findOutputs({
             partial: { userId: tx.userId, txid: bi.sourceTXID!, vout: bi.sourceOutputIndex }
           })
-          if (is.length !== 1) {
-            log += ' '.repeat(indent + 2) + `input ${vin} not matched to user's outputs\n`
-          } else {
+          if (is.length === 1) {
             const oi = is[0]
             log +=
               ' '.repeat(indent + 2) +
               `input ${vin} matched to output ${oi.outputId} updated spentBy ${tx.transactionId}\n`
             await sp.updateOutput(oi.outputId, { spendable: false, spentBy: tx.transactionId })
+          } else {
+            log += ' '.repeat(indent + 2) + `input ${vin} not matched to user's outputs\n`
           }
         }
         const outputs = await sp.findOutputs({ partial: { userId: tx.userId, transactionId: tx.transactionId } })
@@ -133,11 +132,11 @@ export class TaskUnFail extends WalletMonitorTask {
             log += ' '.repeat(indent + 2) + `output ${o.outputId} does not have a valid locking script\n`
           } else {
             const isUtxo = await services.isUtxo(o)
-            if (isUtxo !== o.spendable) {
+            if (isUtxo === o.spendable) {
+              log += ' '.repeat(indent + 2) + `output ${o.outputId} unchanged\n`
+            } else {
               log += ' '.repeat(indent + 2) + `output ${o.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
               await sp.updateOutput(o.outputId, { spendable: isUtxo })
-            } else {
-              log += ' '.repeat(indent + 2) + `output ${o.outputId} unchanged\n`
             }
           }
         }

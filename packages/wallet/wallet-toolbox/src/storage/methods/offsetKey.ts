@@ -15,7 +15,7 @@ export function keyOffsetToHashedSecret (
     keyOffset = offset.toWif()
   }
 
-  const sharedSecret = pub.mul(offset).encode(true, undefined) as number[]
+  const sharedSecret = pub.mul(offset).encode(true) as number[]
   const hashedSecret = sha256Hash(sharedSecret)
 
   return { hashedSecret: new BigNumber(hashedSecret), keyOffset }
@@ -74,15 +74,12 @@ export function createStorageServiceChargeScript (pubKeyHex: PubKeyHex): {
 export function redeemServiceCharges (privateKeyWif: string, charges: TableCommission[]): Array<{}> {
   const priv = PrivateKey.fromWif(privateKeyWif)
   const pub = priv.toPublicKey()
-  const p2pkh = new P2PKH()
-
   const inputs: CreateActionInput[] = []
 
   for (const c of charges) {
     const { hashedSecret } = keyOffsetToHashedSecret(pub, c.keyOffset)
-    const bn = priv.add(hashedSecret).mod(new Curve().n)
-    const offsetPrivKey = new PrivateKey(bn)
-    // const unlock = p2pkh.unlock(offsetPrivKey, signOutputs, anyoneCanPay)
+    priv.add(hashedSecret).mod(new Curve().n)
+    // const unlock = new P2PKH().unlock(new PrivateKey(bn), signOutputs, anyoneCanPay)
   }
 
   return []

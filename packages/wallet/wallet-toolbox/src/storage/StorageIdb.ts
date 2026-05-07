@@ -279,7 +279,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 
         if (!db.objectStoreNames.contains('monitor_events')) {
           // monitor_events object store
-          const monitorEventsStore = db.createObjectStore('monitor_events', {
+          db.createObjectStore('monitor_events', {
             keyPath: 'id',
             autoIncrement: true
           })
@@ -391,7 +391,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           output = o.output
         } else if (scores.length > 0) {
           // stage 3 satisfied (minimally under-funded)
-          output = scores.slice(-1)[0].output
+          output = scores.at(-1)!.output
         } else {
           // no available funding outputs
           output = undefined
@@ -461,7 +461,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       else rawTx = r.rawTx
     }
     if ((rawTx != null) && sliceRequested) {
-      rawTx = rawTx.slice(offset, offset! + length!)
+      rawTx = rawTx.slice(offset, (offset as number) + (length as number))
     }
     return rawTx
   }
@@ -595,9 +595,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if ((args.tagIds != null) && !args.tagIds.includes(r.outputTagId)) continue
@@ -674,9 +677,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -744,9 +750,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -806,9 +815,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1113,7 +1125,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
           ...u
         }
         const uid = await store.put!(v)
-        if (uid !== i) throw new WERR_INTERNAL(`updated id ${uid} does not match original ${id}`)
+        if (uid !== i) throw new WERR_INTERNAL(`updated id ${String(uid)} does not match original ${String(id)}`)
         updated++
       }
     } finally {
@@ -1322,9 +1334,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1388,9 +1403,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if ((args.certifiers != null) && !args.certifiers.includes(r.certifier)) continue
@@ -1462,9 +1480,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1516,9 +1537,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1574,9 +1598,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1677,9 +1704,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1756,10 +1786,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       isQueryModeAll
     )
     for (const o of results) {
-      if (!args.noScript) {
-        await this.validateOutputScript(o, args.trx)
-      } else {
+      if (args.noScript) {
         o.lockingScript = undefined
+      } else {
+        await this.validateOutputScript(o, args.trx)
       }
     }
     return results
@@ -1791,9 +1821,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1853,9 +1886,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -1947,9 +1983,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if ((args.from != null) && r.created_at.getTime() < args.from.getTime()) continue
@@ -2012,11 +2051,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       isQueryModeAll
     )
     for (const t of results) {
-      if (!args.noRawTx) {
-        await this.validateRawTransaction(t, args.trx)
-      } else {
+      if (args.noRawTx) {
         t.rawTx = undefined
         t.inputBEEF = undefined
+      } else {
+        await this.validateRawTransaction(t, args.trx)
       }
     }
     return results
@@ -2048,9 +2087,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -2088,9 +2130,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     let cursor = await dbTrx.objectStore('users').openCursor()
     let firstTime = true
     while (cursor != null) {
-      if (!firstTime) cursor = await cursor.continue()
-      if (cursor == null) break
-      firstTime = false
+      if (firstTime) {
+        firstTime = false
+      } else {
+        cursor = await cursor.continue()
+        if (cursor == null) break
+      }
       const r = cursor.value
       if ((args.since != null) && args.since > r.updated_at) continue
       if (args.partial) {
@@ -2290,10 +2335,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   async verifyReadyForDatabaseAccess (trx?: TrxToken): Promise<DBType> {
-    if (this._settings == null) {
-      this._settings = await this.readSettings()
-    }
-
+    this._settings ??= await this.readSettings()
     return this._settings.dbtype
   }
 

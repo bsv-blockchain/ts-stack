@@ -250,7 +250,7 @@ async function validateCommitNewTxToStorageArgs (
     throw new WERR_INVALID_OPERATION('Parsing serialized transaction failed.')
   }
   if (params.txid !== tx.id('hex')) { throw new WERR_INVALID_OPERATION('Hash of serialized transaction doesn\'t match expected txid') }
-  const services = await storage.getServices()
+  const services = storage.getServices()
   if (!(await services.nLockTimeIsFinal(tx))) {
     throw new WERR_INVALID_OPERATION(`This transaction is not final.
          Ensure that the transaction meets the rules for being a finalized
@@ -265,7 +265,7 @@ async function validateCommitNewTxToStorageArgs (
   if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
   if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
   const beef = Beef.fromBinary(asArray(transaction.inputBEEF))
-  // TODO: Could check beef validates transaction inputs...
+  // Could check beef validates transaction inputs...
   // Transaction must have unsigned or unprocessed status
   if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed') { throw new WERR_INVALID_OPERATION(`invalid transaction status ${transaction.status}`) }
   const transactionId = verifyId(transaction.transactionId)
@@ -362,7 +362,7 @@ async function validateCommitNewTxToStorageArgs (
       scriptLength: offset.length,
       scriptOffset: offset.offset
     }
-    if (offset.length > (await storage.getSettings()).maxOutputScript)
+    if (offset.length > storage.getSettings().maxOutputScript)
     // Remove long lockingScript data from outputs table, will be read from rawTx in proven_tx or proven_tx_reqs tables.
     { update.lockingScript = undefined }
     vargs.outputUpdates.push({ id: o.outputId, update })
