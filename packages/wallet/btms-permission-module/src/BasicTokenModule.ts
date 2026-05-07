@@ -1,4 +1,4 @@
-import { CreateActionArgs, CreateActionResult, CreateSignatureArgs, Hash, ListActionsArgs, LockingScript, PushDrop, Transaction, Utils } from '@bsv/sdk'
+import { CreateActionArgs, CreateActionInput, CreateActionOutput, CreateActionResult, CreateSignatureArgs, Hash, ListActionsArgs, LockingScript, PushDrop, Transaction, Utils } from '@bsv/sdk'
 import { PermissionsModule } from '@bsv/wallet-toolbox-client'
 import { BTMS, ISSUE_MARKER } from '@bsv/btms'
 import { AuthorizedTransaction, TokenSpendInfo, P_BASKET_PREFIX, BTMS_FIELD, ParsedTokenInfo } from './types'
@@ -451,37 +451,41 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     for (const input of args.inputs) {
-      if (!input?.outpoint || typeof input.outpoint !== 'string') continue
-      const [txid, voutStr] = input.outpoint.split('.')
-      const outputIndex = Number(voutStr)
-      if (!txid || !Number.isFinite(outputIndex) || outputIndex < 0) continue
-
-      try {
-        const tx = Transaction.fromBEEF(args.inputBEEF as number[], txid)
-        const scriptHex = tx.outputs?.[outputIndex]?.lockingScript?.toHex?.()
-        if (!scriptHex) continue
-
-        const parsed = this.parseTokenLockingScript(scriptHex)
-        if (!parsed || parsed.assetId === ISSUE_MARKER) continue
-
-        if (!assetId) {
-          assetId = parsed.assetId
-        } else if (parsed.assetId !== assetId) {
-          assetIdMismatch = true
-          continue
-        }
-
-        beefInputAmount += parsed.amount
-        if (parsed.metadata?.name && typeof parsed.metadata.name === 'string') tokenName = parsed.metadata.name
-        if (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string') iconURL = parsed.metadata.iconURL
-      } catch {
-        // Ignore malformed input BEEF
+      const parsed = this.resolveTokenForInput(input, args.inputBEEF as number[])
+      if (!parsed) continue
+      if (!assetId) {
+        assetId = parsed.assetId
+      } else if (parsed.assetId !== assetId) {
+        assetIdMismatch = true
+        continue
       }
+      beefInputAmount += parsed.amount;
+      ({ tokenName, iconURL } = this.applyMetadata(parsed, tokenName, iconURL))
     }
 
-    const totalInputAmount = beefInputAmount
     const inputAmountSource: TokenSpendInfo['inputAmountSource'] = beefInputAmount > 0 ? 'beef' : 'none'
-    return { assetId, tokenName, iconURL, totalInputAmount, inputAmountSource, assetIdMismatch }
+    return { assetId, tokenName, iconURL, totalInputAmount: beefInputAmount, inputAmountSource, assetIdMismatch }
+  }
+
+  /**
+   * Resolves a BTMS token from a single input via BEEF lookup.
+   * Returns null if the input is invalid, malformed, or an issuance marker.
+   */
+  private resolveTokenForInput(input: CreateActionInput, inputBEEF: number[]): ParsedTokenInfo | null {
+    if (!input?.outpoint || typeof input.outpoint !== 'string') return null
+    const [txid, voutStr] = input.outpoint.split('.')
+    const outputIndex = Number(voutStr)
+    if (!txid || !Number.isFinite(outputIndex) || outputIndex < 0) return null
+    try {
+      const tx = Transaction.fromBEEF(inputBEEF, txid)
+      const scriptHex = tx.outputs?.[outputIndex]?.lockingScript?.toHex?.()
+      if (!scriptHex) return null
+      const parsed = this.parseTokenLockingScript(scriptHex)
+      if (!parsed || parsed.assetId === ISSUE_MARKER) return null
+      return parsed
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -509,23 +513,16 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     for (const output of args.outputs) {
-      if (!output?.lockingScript || typeof output.lockingScript !== 'string') continue
-
-      const parsed = this.parseTokenLockingScript(output.lockingScript)
-      if (!parsed || parsed.assetId === ISSUE_MARKER) continue
-
+      const parsed = this.resolveTokenForOutput(output)
+      if (!parsed) continue
       if (!assetId) {
         assetId = parsed.assetId
       } else if (parsed.assetId !== assetId) {
         assetIdMismatch = true
         continue
       }
-
-      hasTokenOutputs = true
-      if (parsed.metadata?.name && typeof parsed.metadata.name === 'string') tokenName = parsed.metadata.name
-      if (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string') iconURL = parsed.metadata.iconURL
-
-      // Basket presence indicates change (returning to self)
+      hasTokenOutputs = true;
+      ({ tokenName, iconURL } = this.applyMetadata(parsed, tokenName, iconURL))
       if (output.basket && typeof output.basket === 'string' && output.basket.startsWith(P_BASKET_PREFIX)) {
         outputChangeAmount += parsed.amount
       } else {
@@ -534,6 +531,35 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     return { assetId, tokenName, iconURL, outputSendAmount, outputChangeAmount, hasTokenOutputs, assetIdMismatch }
+  }
+
+  /**
+   * Resolves a BTMS token from a single output locking script.
+   * Returns null if the output is invalid or an issuance marker.
+   */
+  private resolveTokenForOutput(output: CreateActionOutput): ParsedTokenInfo | null {
+    if (!output?.lockingScript || typeof output.lockingScript !== 'string') return null
+    const parsed = this.parseTokenLockingScript(output.lockingScript)
+    if (!parsed || parsed.assetId === ISSUE_MARKER) return null
+    return parsed
+  }
+
+  /**
+   * Returns updated tokenName and iconURL from parsed metadata, keeping existing values if metadata is absent.
+   */
+  private applyMetadata(
+    parsed: ParsedTokenInfo,
+    tokenName: string,
+    iconURL: string | undefined
+  ): { tokenName: string; iconURL: string | undefined } {
+    return {
+      tokenName: (parsed.metadata?.name && typeof parsed.metadata.name === 'string')
+        ? parsed.metadata.name
+        : tokenName,
+      iconURL: (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string')
+        ? parsed.metadata.iconURL
+        : iconURL
+    }
   }
 
   /**
