@@ -114,13 +114,13 @@ function validateWalletDerivationParams(params, paramName = "parameters") {
     throw new Error(`Invalid ${paramName}: protocolID must be an array of [number, string]`);
   }
   if (typeof params.protocolID[0] !== "number" || typeof params.protocolID[1] !== "string") {
-    throw new Error(`Invalid ${paramName}: protocolID must be [number, string]`);
+    throw new TypeError(`Invalid ${paramName}: protocolID must be [number, string]`);
   }
   if (params.keyID === void 0 || params.keyID === null) {
     throw new Error(`Invalid ${paramName}: keyID is required`);
   }
   if (typeof params.keyID !== "string") {
-    throw new Error(`Invalid ${paramName}: keyID must be a string`);
+    throw new TypeError(`Invalid ${paramName}: keyID must be a string`);
   }
   if (params.counterparty !== void 0 && typeof params.counterparty !== "string") {
     throw new Error(`Invalid ${paramName}: counterparty must be a string (or omit for default "self")`);
@@ -165,7 +165,7 @@ var P2PKH = class {
     } else {
       throw new Error("One of pubkeyhash, publicKey, or walletParams is required");
     }
-    if (!data || data.length !== 20) {
+    if (data?.length !== 20) {
       throw new Error("Failed to generate valid public key hash (must be 20 bytes)");
     }
     return new import_sdk2.LockingScript([
@@ -210,7 +210,7 @@ var P2PKH = class {
       throw new Error("protocolID must be an array of [number, string]");
     }
     if (typeof keyID !== "string") {
-      throw new Error("keyID must be a string");
+      throw new TypeError("keyID must be a string");
     }
     if (counterparty !== void 0 && typeof counterparty !== "string") {
       throw new Error('counterparty must be a string (or omit for default "self")');
@@ -219,7 +219,7 @@ var P2PKH = class {
       throw new Error('signOutputs must be "all", "none", or "single"');
     }
     if (typeof anyoneCanPay !== "boolean") {
-      throw new Error("anyoneCanPay must be a boolean");
+      throw new TypeError("anyoneCanPay must be a boolean");
     }
     const wallet = this.wallet;
     return {
@@ -349,19 +349,22 @@ var applyInscription = (lockingScript, inscription, metaData, withSeparator = fa
     }
     ordAsm = `OP_0 OP_IF ${ordHex} OP_1 ${fileMediaType} OP_0 ${fileHex} OP_ENDIF`;
   }
-  let inscriptionAsm = `${ordAsm ? `${ordAsm} ${withSeparator ? "OP_CODESEPARATOR " : ""}` : ""}${lockingScript.toASM()}`;
+  let inscriptionAsmPrefix = "";
+  if (ordAsm) {
+    inscriptionAsmPrefix = ordAsm + " " + (withSeparator ? "OP_CODESEPARATOR " : "");
+  }
+  let inscriptionAsm = inscriptionAsmPrefix + lockingScript.toASM();
   if (metaData != null && (!metaData.app || !metaData.type)) {
     throw new Error("MAP.app and MAP.type are required fields");
   }
   if (metaData?.app && metaData?.type) {
     const mapPrefixHex = toHex(ORDINAL_MAP_PREFIX);
     const mapCmdValue = toHex("SET");
-    inscriptionAsm = `${inscriptionAsm ? `${inscriptionAsm} ` : ""}OP_RETURN ${mapPrefixHex} ${mapCmdValue}`;
+    const mapPrefix = (inscriptionAsm ? inscriptionAsm + " " : "") + "OP_RETURN " + mapPrefixHex + " " + mapCmdValue;
+    inscriptionAsm = mapPrefix;
     for (const [key, value] of Object.entries(metaData)) {
       if (key !== "cmd") {
-        inscriptionAsm = `${inscriptionAsm} ${toHex(key)} ${toHex(
-          value
-        )}`;
+        inscriptionAsm = inscriptionAsm + " " + toHex(key) + " " + toHex(value);
       }
     }
   }
@@ -432,8 +435,8 @@ var OrdLock = class {
       id: params.assetId
     };
     const combinedMetadata = {
-      ...params.metadata ?? {},
-      ...params.itemData ?? {}
+      ...params.metadata,
+      ...params.itemData
     };
     const inscriptionJsonHex = toHex2(JSON.stringify(inscription));
     const prefixAsm = import_sdk4.Script.fromHex(OLOCK_PREFIX).toASM();
@@ -795,7 +798,7 @@ function isP2PKH(input) {
       return false;
     }
     return true;
-  } catch (error) {
+  } catch (_invalidScript) {
     return false;
   }
 }
@@ -809,7 +812,7 @@ function isOrdinal(input) {
     const p2pkhPattern = /76a914[0-9a-fA-F]{40}88ac/;
     const hasP2PKH = p2pkhPattern.test(hex);
     return hasP2PKH;
-  } catch (error) {
+  } catch (_invalidScript) {
     return false;
   }
 }
@@ -819,7 +822,7 @@ function hasOrd(input) {
     const hex = typeof input === "string" ? input : scriptToHex(input);
     const { start } = SCRIPT_TEMPLATES.ordinalEnvelope;
     return hex.includes(start);
-  } catch (error) {
+  } catch (_invalidScript) {
     return false;
   }
 }
@@ -833,7 +836,7 @@ function hasOpReturnData(input) {
         if (asm.includes("OP_RETURN")) {
           return true;
         }
-      } catch {
+      } catch (_invalidHex) {
       }
       if (input.startsWith("6a")) {
         return true;
@@ -850,7 +853,7 @@ function hasOpReturnData(input) {
     } else {
       return input.toASM().includes("OP_RETURN");
     }
-  } catch (error) {
+  } catch (_invalidScript) {
     return false;
   }
 }
@@ -870,7 +873,7 @@ function getScriptType(input) {
       }
     }
     return "Custom";
-  } catch (error) {
+  } catch (_invalidScript) {
     return "Custom";
   }
 }
@@ -889,7 +892,7 @@ function extractInscriptionData(input) {
   let dataB64;
   if (endifIndex === 9) {
     const contentTypeChunk = chunks[6];
-    if (!contentTypeChunk || contentTypeChunk.data == null || contentTypeChunk.data.length === 0) {
+    if (contentTypeChunk?.data == null || contentTypeChunk.data.length === 0) {
       throw new Error("extractInscriptionData: Missing content type data at chunk 6");
     }
     try {
@@ -899,13 +902,13 @@ function extractInscriptionData(input) {
       throw new Error(`extractInscriptionData: Invalid UTF-8 in content type: ${message}`);
     }
     const dataChunk = chunks[8];
-    if (!dataChunk || dataChunk.data == null || dataChunk.data.length === 0) {
+    if (dataChunk?.data == null || dataChunk.data.length === 0) {
       throw new Error("extractInscriptionData: Missing inscription data at chunk 8");
     }
     dataB64 = Buffer.from(dataChunk.data).toString("base64");
   } else if (endifIndex === 7) {
     const dataChunk = chunks[6];
-    if (!dataChunk || dataChunk.data == null || dataChunk.data.length === 0) {
+    if (dataChunk?.data == null || dataChunk.data.length === 0) {
       throw new Error("extractInscriptionData: Missing inscription data at chunk 6");
     }
     contentType = "application/octet-stream";
@@ -930,7 +933,7 @@ function extractMapMetadata(input) {
     return null;
   }
   const prefixChunk = chunks[opReturnIndex + 1];
-  if (!prefixChunk || prefixChunk.data == null || prefixChunk.data.length === 0) {
+  if (prefixChunk?.data == null || prefixChunk.data.length === 0) {
     return null;
   }
   let prefix;
@@ -944,7 +947,7 @@ function extractMapMetadata(input) {
     return null;
   }
   const cmdChunk = chunks[opReturnIndex + 2];
-  if (!cmdChunk || cmdChunk.data == null || cmdChunk.data.length === 0) {
+  if (cmdChunk?.data == null || cmdChunk.data.length === 0) {
     return null;
   }
   let cmd;
@@ -1023,7 +1026,7 @@ var InputBuilder = class {
      */
   inputDescription(desc) {
     if (typeof desc !== "string") {
-      throw new Error("Input description must be a string");
+      throw new TypeError("Input description must be a string");
     }
     this.inputConfig.description = desc;
     return this;
@@ -1258,7 +1261,7 @@ var OutputBuilder = class {
      */
   outputDescription(desc) {
     if (typeof desc !== "string") {
-      throw new Error("Output description must be a string");
+      throw new TypeError("Output description must be a string");
     }
     this.outputConfig.description = desc;
     return this;
@@ -1316,7 +1319,7 @@ var TransactionBuilder = class {
      */
   transactionDescription(desc) {
     if (typeof desc !== "string") {
-      throw new Error("Description must be a string");
+      throw new TypeError("Description must be a string");
     }
     this._transactionDescription = desc;
     return this;
@@ -1354,11 +1357,11 @@ var TransactionBuilder = class {
     }
     if (opts.knownTxids !== void 0) {
       if (!Array.isArray(opts.knownTxids)) {
-        throw new Error("knownTxids must be an array");
+        throw new TypeError("knownTxids must be an array");
       }
       for (let i = 0; i < opts.knownTxids.length; i++) {
         if (typeof opts.knownTxids[i] !== "string") {
-          throw new Error(`knownTxids[${i}] must be a string (hex txid)`);
+          throw new TypeError(`knownTxids[${i}] must be a string (hex txid)`);
         }
       }
     }
@@ -1404,7 +1407,7 @@ var TransactionBuilder = class {
       throw new Error("sourceTransaction is required and must be a Transaction object");
     }
     if (typeof params.sourceTransaction.id !== "function") {
-      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+      throw new TypeError("sourceTransaction must be a valid Transaction object with an id() method");
     }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
@@ -1438,7 +1441,7 @@ var TransactionBuilder = class {
       throw new Error("sourceTransaction is required and must be a Transaction object");
     }
     if (typeof params.sourceTransaction.id !== "function") {
-      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+      throw new TypeError("sourceTransaction must be a valid Transaction object with an id() method");
     }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
@@ -1483,7 +1486,7 @@ var TransactionBuilder = class {
       throw new Error("sourceTransaction is required and must be a Transaction object");
     }
     if (typeof params.sourceTransaction.id !== "function") {
-      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+      throw new TypeError("sourceTransaction must be a valid Transaction object with an id() method");
     }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
@@ -1522,13 +1525,13 @@ var TransactionBuilder = class {
       throw new Error("unlockingScriptTemplate is required for custom input");
     }
     if (typeof params.unlockingScriptTemplate.estimateLength !== "function") {
-      throw new Error("unlockingScriptTemplate must have an estimateLength() method");
+      throw new TypeError("unlockingScriptTemplate must have an estimateLength() method");
     }
     if (!params.sourceTransaction || typeof params.sourceTransaction !== "object") {
       throw new Error("sourceTransaction is required and must be a Transaction object");
     }
     if (typeof params.sourceTransaction.id !== "function") {
-      throw new Error("sourceTransaction must be a valid Transaction object with an id() method");
+      throw new TypeError("sourceTransaction must be a valid Transaction object with an id() method");
     }
     if (typeof params.sourceOutputIndex !== "number" || params.sourceOutputIndex < 0) {
       throw new Error("sourceOutputIndex must be a non-negative number");
@@ -1556,7 +1559,7 @@ var TransactionBuilder = class {
      */
   addP2PKHOutput(params) {
     if (typeof params.satoshis !== "number" || params.satoshis < 0) {
-      throw new Error("satoshis must be a non-negative number");
+      throw new TypeError("satoshis must be a non-negative number");
     }
     if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
@@ -1586,7 +1589,7 @@ var TransactionBuilder = class {
      */
   addOrdLockOutput(params) {
     if (typeof params.satoshis !== "number" || params.satoshis < 0) {
-      throw new Error("satoshis must be a non-negative number");
+      throw new TypeError("satoshis must be a non-negative number");
     }
     if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
@@ -1633,7 +1636,7 @@ var TransactionBuilder = class {
      */
   addOrdinalP2PKHOutput(params) {
     if (typeof params.satoshis !== "number" || params.satoshis < 0) {
-      throw new Error("satoshis must be a non-negative number");
+      throw new TypeError("satoshis must be a non-negative number");
     }
     if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
@@ -1671,7 +1674,7 @@ var TransactionBuilder = class {
       throw new Error("lockingScript must be a LockingScript instance");
     }
     if (typeof params.satoshis !== "number" || params.satoshis < 0) {
-      throw new Error("satoshis must be a non-negative number");
+      throw new TypeError("satoshis must be a non-negative number");
     }
     if (params.description !== void 0 && typeof params.description !== "string") {
       throw new Error("description must be a string");
@@ -1708,8 +1711,7 @@ var TransactionBuilder = class {
     const unlockingScriptTemplates = [];
     const actionInputsConfig = [];
     const preimageInputs = [];
-    for (let i = 0; i < this.inputs.length; i++) {
-      const config = this.inputs[i];
+    for (const config of this.inputs) {
       let unlockingScriptTemplate;
       switch (config.type) {
         case "p2pkh":
@@ -1794,12 +1796,10 @@ var TransactionBuilder = class {
           }
           if (isDerivationParams(addressOrParams)) {
             lockingScript = await p2pkh.lock({ walletParams: addressOrParams });
+          } else if (isHexPublicKey(addressOrParams)) {
+            lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
           } else {
-            if (isHexPublicKey(addressOrParams)) {
-              lockingScript = await p2pkh.lock({ publicKey: addressOrParams });
-            } else {
-              lockingScript = await p2pkh.lock({ address: addressOrParams });
-            }
+            lockingScript = await p2pkh.lock({ address: addressOrParams });
           }
           break;
         }
@@ -1826,20 +1826,18 @@ var TransactionBuilder = class {
               inscription: config.inscription,
               metadata: config.metadata
             });
+          } else if (isHexPublicKey(addressOrParams)) {
+            lockingScript = await ordinal.lock({
+              publicKey: addressOrParams,
+              inscription: config.inscription,
+              metadata: config.metadata
+            });
           } else {
-            if (isHexPublicKey(addressOrParams)) {
-              lockingScript = await ordinal.lock({
-                publicKey: addressOrParams,
-                inscription: config.inscription,
-                metadata: config.metadata
-              });
-            } else {
-              lockingScript = await ordinal.lock({
-                address: addressOrParams,
-                inscription: config.inscription,
-                metadata: config.metadata
-              });
-            }
+            lockingScript = await ordinal.lock({
+              address: addressOrParams,
+              inscription: config.inscription,
+              metadata: config.metadata
+            });
           }
           break;
         }
@@ -1965,7 +1963,7 @@ var TransactionBuilder = class {
         const template = unlockingScriptTemplates[i];
         const fn = template?.estimateLength;
         if (typeof fn !== "function") {
-          throw new Error("unlockingScriptTemplate must have an estimateLength() method");
+          throw new TypeError("unlockingScriptTemplate must have an estimateLength() method");
         }
         const argc = fn.length;
         let length;
@@ -2083,10 +2081,10 @@ var TransactionBuilder = class {
      */
   async pay(to, satoshis) {
     if (typeof to !== "string") {
-      throw new Error("to must be a string");
+      throw new TypeError("to must be a string");
     }
     if (typeof satoshis !== "number" || satoshis < 0) {
-      throw new Error("satoshis must be a non-negative number");
+      throw new TypeError("satoshis must be a non-negative number");
     }
     if (isHexPublicKey(to)) {
       this.addP2PKHOutput({ publicKey: to, satoshis });

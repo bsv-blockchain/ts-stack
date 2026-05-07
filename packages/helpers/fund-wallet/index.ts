@@ -203,14 +203,11 @@ if (cliNetwork && cliPrivateKey) {
     showHelp(`Invalid satoshis: ${cliSatoshis}. Must be a positive number`)
   }
 
-  void (async () => {
-    try {
-      await fundWallet(network as 'test' | 'main', storageURL, amount, walletPrivateKey)
-    } catch (err) {
+  fundWallet(network as 'test' | 'main', storageURL, amount, walletPrivateKey)
+    .catch((err) => {
       console.error('❌', err)
       process.exit(1)
-    }
-  })()
+    })
 } else if (!hasCliArgs) {
   // Fall back to interactive prompts
   const rl = createInterface({

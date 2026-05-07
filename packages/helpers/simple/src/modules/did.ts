@@ -530,7 +530,7 @@ function _buildDIDMethods (core: WalletCore): {
             const data: any = await response.json().catch(() => ({}))
             return {
               didDocument: data.didDocument ?? null,
-              didDocumentMetadata: { deactivated: true, ...(data.didDocumentMetadata ?? {}) },
+              didDocumentMetadata: { deactivated: true, ...data.didDocumentMetadata },
               didResolutionMetadata: {
                 contentType: 'application/did+ld+json',
                 ...data.didResolutionMetadata
@@ -656,9 +656,7 @@ function _buildDIDMethods (core: WalletCore): {
           if (!txResp.ok) return notFound
           const txData: any = await txResp.json()
 
-          if (created == null) {
-            created = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
-          }
+          created ??= (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
 
           // Parse OP_RETURN outputs to find BSVDID segments
           let segments: string[] = []

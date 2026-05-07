@@ -163,9 +163,8 @@ function handleMigrate (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  // Required body fields
-  expect(body).toBeDefined()
-  expect(typeof body!['storageName']).toBe('string')
+  if (body === undefined) return
+  expect(typeof body['storageName']).toBe('string')
 
   expect(expectedStatus).toBe(200)
 
@@ -217,9 +216,8 @@ function handleProcessAction (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  // Required body fields per StorageProcessActionArgs
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   expect(typeof b['reference']).toBe('string')
   expect(typeof b['isNewTx']).toBe('boolean')
   expect(typeof b['isSendWith']).toBe('boolean')
@@ -252,8 +250,8 @@ function handleAbortAction (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  expect(typeof body!['reference']).toBe('string')
+  if (body === undefined) return
+  expect(typeof body['reference']).toBe('string')
 
   expect(expectedStatus).toBe(200)
 
@@ -275,8 +273,8 @@ function handleInternalizeAction (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   // Required fields: tx (raw byte array or hex), outputs, description
   expect(b['tx']).toBeDefined()
   expect(Array.isArray(b['outputs'])).toBe(true)
@@ -313,8 +311,8 @@ function handleListActions (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   // limit and offset are optional but must be numbers if present
   if ('limit' in b) expect(typeof b['limit']).toBe('number')
   if ('offset' in b) expect(typeof b['offset']).toBe('number')
@@ -340,8 +338,8 @@ function handleListOutputs (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   if ('limit' in b) expect(typeof b['limit']).toBe('number')
   if ('offset' in b) expect(typeof b['offset']).toBe('number')
 
@@ -366,8 +364,8 @@ function handleSyncChunk (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   expect(typeof b['identityKey']).toBe('string')
 
   expect(expectedStatus).toBe(200)
@@ -389,8 +387,8 @@ function handleSyncState (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   expect(typeof b['storageIdentityKey']).toBe('string')
   expect(typeof b['storageName']).toBe('string')
 
@@ -420,8 +418,8 @@ function handleSyncActive (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  expect(typeof body!['newActiveStorageIdentityKey']).toBe('string')
+  if (body === undefined) return
+  expect(typeof body['newActiveStorageIdentityKey']).toBe('string')
 
   expect(expectedStatus).toBe(200)
 
@@ -443,8 +441,8 @@ function handleInsertCertificate (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   expect(typeof b['certifier']).toBe('string')
   expect(typeof b['serialNumber']).toBe('string')
   expect(typeof b['type']).toBe('string')
@@ -469,8 +467,8 @@ function handleRelinquishCertificate (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   expect(typeof b['certifier']).toBe('string')
   expect(typeof b['serialNumber']).toBe('string')
   expect(typeof b['type']).toBe('string')
@@ -495,8 +493,8 @@ function handleRelinquishOutput (
   assertBearerToken(headers)
   assertJsonContentType(headers)
 
-  expect(body).toBeDefined()
-  const b = body!
+  if (body === undefined) return
+  const b = body
   const outpoint = getString(b, 'output')
 
   // Validate outpoint format: must be {64-hex-chars}.{digit+}

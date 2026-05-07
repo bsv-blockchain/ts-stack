@@ -1,7 +1,7 @@
 import type { Config } from 'jest';
 //import { defaults } from 'jest-config'
 
-const jestConfig = async (): Promise<Config> => {
+async function jestConfig(): Promise<Config> {
   //console.log(defaults)
   return {
     bail: 1,

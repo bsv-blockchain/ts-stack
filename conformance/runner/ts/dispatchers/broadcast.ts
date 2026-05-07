@@ -453,14 +453,14 @@ async function dispatchMerkleService (
       const validTxids = input.valid_txids as unknown[]
       if (Array.isArray(validTxids)) {
         for (const txid of validTxids) {
-          expect(re.test(String(txid))).toBe(true)
+          expect(re.test(`${txid}`)).toBe(true)
         }
       }
 
       const invalidTxids = input.invalid_txids as unknown[]
       if (Array.isArray(invalidTxids)) {
         for (const txid of invalidTxids) {
-          expect(re.test(String(txid))).toBe(false)
+          expect(re.test(`${txid}`)).toBe(false)
         }
       }
     }

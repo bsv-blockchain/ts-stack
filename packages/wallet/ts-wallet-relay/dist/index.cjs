@@ -168,7 +168,7 @@ var WebSocketRelay = class {
     });
     ws.on("message", (data) => {
       try {
-        const envelope = JSON.parse(data.toString());
+        const envelope = JSON.parse(`${data}`);
         if (!envelope.topic || !envelope.ciphertext) return;
         const other = role === "mobile" ? entry.desktop : entry.mobile;
         if (other?.readyState === import_ws.WebSocket.OPEN) {
@@ -270,7 +270,7 @@ var QRSessionManager = class {
   /** Mark that a mobile WS has opened for this session, starting the grace window. */
   setPairingStarted(id) {
     const session = this.sessions.get(id);
-    if (session && session.status === "pending") session.pairingStartedAt = Date.now();
+    if (session?.status === "pending") session.pairingStartedAt = Date.now();
   }
   setStatus(id, status) {
     const session = this.sessions.get(id);
@@ -325,6 +325,9 @@ var WalletRequestHandler = class {
     return { id, seq, error: { code, message } };
   }
 };
+
+// src/types.ts
+var PROTOCOL_ID = [0, "mobile wallet session"];
 
 // src/shared/pairingUri.ts
 var import_sdk2 = require("@bsv/sdk");
@@ -437,9 +440,6 @@ async function decryptEnvelope(wallet, params, ciphertextB64) {
   return new TextDecoder().decode(new Uint8Array(plaintext));
 }
 
-// src/types.ts
-var PROTOCOL_ID = [0, "mobile wallet session"];
-
 // src/server/WalletRelayService.ts
 var REQUEST_TIMEOUT_MS = 3e4;
 var MOBILE_AUTH_TIMEOUT_MS = 15e3;
@@ -534,7 +534,7 @@ var WalletRelayService = class {
    */
   async sendRequest(sessionId, method, params, desktopToken) {
     const session = this.sessions.getSession(sessionId);
-    if (!session || session.status !== "connected" || !session.mobileIdentityKey) {
+    if (session?.status !== "connected" || !session.mobileIdentityKey) {
       const status = session?.status ?? "not found";
       throw new Error(`Session is ${status}`);
     }
@@ -604,7 +604,12 @@ var WalletRelayService = class {
       const token = req.headers["x-desktop-token"];
       void this.sendRequest(req.params["id"], method, params, token).then((response) => res.json(response)).catch((err) => {
         const msg = err instanceof Error ? err.message : "Request failed";
-        const status = msg === "Invalid desktop token" ? 401 : msg.startsWith("Session is") ? 400 : 504;
+        let status = 504;
+        if (msg === "Invalid desktop token") {
+          status = 401;
+        } else if (msg.startsWith("Session is")) {
+          status = 400;
+        }
         res.status(status).json({ error: msg });
       });
     });

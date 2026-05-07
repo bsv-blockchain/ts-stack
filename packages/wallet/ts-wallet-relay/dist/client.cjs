@@ -500,7 +500,12 @@ var WalletRelayClient = class {
       this._resolveLogEntry(requestId, response);
       return response;
     } catch (err) {
-      const relayErr = err instanceof WalletRelayError ? err : new WalletRelayError(err instanceof Error ? err.message : "Request failed", "NETWORK_ERROR");
+      let relayErr;
+      if (err instanceof WalletRelayError) {
+        relayErr = err;
+      } else {
+        relayErr = new WalletRelayError(err instanceof Error ? err.message : "Request failed", "NETWORK_ERROR");
+      }
       this._resolveLogEntry(requestId, {
         requestId,
         error: { code: 500, message: relayErr.message },

@@ -227,7 +227,7 @@ export class WalletRelayService {
    */
   async sendRequest(sessionId: string, method: string, params: unknown, desktopToken?: string): Promise<RpcResponse> {
     const session = this.sessions.getSession(sessionId)
-    if (!session || session.status !== 'connected' || !session.mobileIdentityKey) {
+    if (session?.status !== 'connected' || !session.mobileIdentityKey) {
       const status = session?.status ?? 'not found'
       throw new Error(`Session is ${status}`)
     }

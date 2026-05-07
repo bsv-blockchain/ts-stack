@@ -188,8 +188,8 @@ export function createTokenMethods (core: WalletCore): {
           try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
-        const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
-        const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
+        const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
+        const counterparty = ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -288,8 +288,8 @@ export function createTokenMethods (core: WalletCore): {
           try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
-        const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
-        const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
+        const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
+        const counterparty = ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
@@ -361,8 +361,8 @@ export function createTokenMethods (core: WalletCore): {
           try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
-        const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
-        const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
+        const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
+        const counterparty = ci.counterparty == null ? defaultCounterparty : (ci.counterparty as string)
 
         const beef = new Beef()
         beef.mergeBeef((result as any).BEEF as number[])
