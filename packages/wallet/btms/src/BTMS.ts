@@ -1,8 +1,17 @@
 import { WalletClient, Transaction, Beef, Utils, TopicBroadcaster, LookupResolver, LockingScript, CreateActionArgs, CreateActionOutput, ListOutputsResult, ListOutputsArgs, ListActionsResult, TXIDHexString, HexString, PubKeyHex, LabelStringUnder300Bytes, OutputTagStringUnder300Bytes, Random, WalletInterface, CommsLayer, AtomicBEEF } from '@bsv/sdk'
 
-
 import { BTMSToken } from './BTMSToken.js'
-import { parseCustomInstructions, decodeOutputAmount, decodeInputAmount } from './utils.js'
+import { parseCustomInstructions } from './utils.js'
+import {
+  accumulateOutputIntoBalances,
+  parseIncomingMessage,
+  buildTransactionsResult,
+  tokenMatchesAsset,
+  validateOutputForBadness,
+  verifyProvenTokenAssetId,
+  type AssetAccumulator,
+  type BadOutput
+} from './BTMSHelpers.js'
 import type {
   BTMSConfig,
   BTMSAsset,
@@ -24,8 +33,7 @@ import type {
   ChangeContext,
   ChangeOutput,
   BurnResult,
-  BTMSTransaction,
-  GetTransactionsResult,
+  GetTransactionsResult
 } from './types.js'
 import {
   BTMS_TOPIC,
@@ -293,15 +301,7 @@ export class BTMS {
 
       // Get metadata from first selected UTXO (must be consistent)
       const metadata = selected[0].token.metadata
-
-      // Ensure metadata is consistent across all selected UTXOs
-      const metadataJson = JSON.stringify(metadata ?? null)
-      for (const utxo of selected) {
-        const utxoMetadataJson = JSON.stringify(utxo.token.metadata ?? null)
-        if (utxoMetadataJson !== metadataJson) {
-          throw new Error('Metadata mismatch across selected tokens')
-        }
-      }
+      this.assertConsistentMetadata(selected, metadata)
 
       // Build outputs
       const outputs: CreateActionOutput[] = []
@@ -347,46 +347,13 @@ export class BTMS {
       // Change outputs (if needed)
       const changeAmount = totalInput - amount
       if (changeAmount > 0) {
-        // Compute change outputs using the specified strategy
-        const changeContext: ChangeContext = {
-          changeAmount,
-          paymentAmount: amount,
-          totalInput,
-          assetId
-        }
-        const changeOutputs = BTMS.computeChangeOutputs(changeContext, options.changeStrategy)
-
-        // Create each change output
-        for (const changeOutput of changeOutputs) {
-          const changeDerivationSuffix = Utils.toBase64(Random(32))
-          const changeKeyID = `${transferDerivationPrefix} ${changeDerivationSuffix}`
-
-          const changeScript = await this.tokenTemplate.createTransfer(
-            assetId,
-            changeOutput.amount,
-            changeKeyID,
-            'self',
-            metadata
-          )
-
-          outputs.push({
-            satoshis: DEFAULT_TOKEN_SATOSHIS,
-            lockingScript: changeScript.toHex(),
-            customInstructions: JSON.stringify({
-              derivationPrefix: transferDerivationPrefix,
-              derivationSuffix: changeDerivationSuffix
-            }),
-            basket: BTMS_BASKET,
-            outputDescription: `Change: ${changeOutput.amount} tokens`,
-            tags: [
-              'btms_type_change',
-              'btms_direction_incoming',
-              timestampTag,
-              monthTag,
-              `btms_assetid_${assetId}`
-            ]
-          })
-        }
+        const changeOutputItems = await this.buildChangeOutputs(
+          { changeAmount, paymentAmount: amount, totalInput, assetId },
+          options.changeStrategy,
+          transferDerivationPrefix,
+          metadata
+        )
+        for (const item of changeOutputItems) outputs.push(item)
       }
 
       // Build inputs
@@ -542,52 +509,17 @@ export class BTMS {
       const changeAmount = totalInput - amountToBurn
       const monthLabel = this.getMonthLabel()
       const timestampLabel = this.getTimestampLabel()
-      const monthTag = this.getMonthTag()
-      const timestampTag = this.getTimestampTag()
       const counterparty = await this.getIdentityKey()
 
       if (changeAmount > 0) {
-        // Partial burn - return change to self using the specified strategy
         const changeDerivationPrefix = Utils.toBase64(Random(32))
-
-        const changeContext: ChangeContext = {
-          changeAmount,
-          paymentAmount: amountToBurn,
-          totalInput,
-          assetId
-        }
-        const changeOutputs = BTMS.computeChangeOutputs(changeContext, options.changeStrategy)
-
-        for (const changeOutput of changeOutputs) {
-          const changeDerivationSuffix = Utils.toBase64(Random(32))
-          const changeKeyID = `${changeDerivationPrefix} ${changeDerivationSuffix}`
-
-          const changeScript = await this.tokenTemplate.createTransfer(
-            assetId,
-            changeOutput.amount,
-            changeKeyID,
-            'self',
-            metadata
-          )
-
-          outputs.push({
-            satoshis: DEFAULT_TOKEN_SATOSHIS,
-            lockingScript: changeScript.toHex(),
-            customInstructions: JSON.stringify({
-              derivationPrefix: changeDerivationPrefix,
-              derivationSuffix: changeDerivationSuffix
-            }),
-            basket: BTMS_BASKET,
-            outputDescription: `Change after burning: ${changeOutput.amount} tokens`,
-            tags: [
-              'btms_type_change',
-              'btms_direction_incoming',
-              timestampTag,
-              monthTag,
-              `btms_assetid_${assetId}`
-            ]
-          })
-        }
+        const changeOutputItems = await this.buildChangeOutputs(
+          { changeAmount, paymentAmount: amountToBurn, totalInput, assetId },
+          options.changeStrategy,
+          changeDerivationPrefix,
+          metadata
+        )
+        for (const item of changeOutputItems) outputs.push(item)
       }
 
       // Build inputs - note: inputDescription should reflect what's happening to the tokens
@@ -635,49 +567,17 @@ export class BTMS {
       }
 
       const spends = await this.buildSpendsForInputs(selected, signableTransaction.tx)
+      const txid = await this.signAndBroadcastBurn(
+        signableTransaction.reference,
+        spends,
+        changeAmount
+      )
 
-      try {
-        const { txid } = await this.signAndBroadcast(signableTransaction.reference, spends)
-
-        return {
-          success: true,
-          txid,
-          assetId,
-          amountBurned: amountToBurn
-        }
-      } catch (broadcastError: any) {
-        // When burning all tokens (no outputs), overlay won't admit/retain anything
-        // This is expected behavior and should be treated as success
-        const errorMsg = broadcastError?.message || ''
-        const isBurnAll = changeAmount === 0 // No change outputs means burning everything
-        const isOverlayRejection = errorMsg.includes('No host acknowledged') ||
-          errorMsg.includes('not in admitted outputs')
-
-        if (isBurnAll && isOverlayRejection) {
-          // Sign the transaction to get the txid even though broadcast failed
-          const signResult = await this.wallet.signAction({
-            reference: signableTransaction.reference,
-            spends
-          })
-
-          if (!signResult.tx) {
-            throw new Error('Failed to sign transaction')
-          }
-
-          const txData = Array.isArray(signResult.tx) ? signResult.tx : Utils.toArray(signResult.tx)
-          const finalTx = Transaction.fromAtomicBEEF(txData)
-          const txid = finalTx.id('hex')
-
-          return {
-            success: true,
-            txid,
-            assetId,
-            amountBurned: amountToBurn
-          }
-        }
-
-        // For other broadcast errors, throw them
-        throw broadcastError
+      return {
+        success: true,
+        txid,
+        assetId,
+        amountBurned: amountToBurn
       }
     } catch (error) {
       return {
@@ -1139,117 +1039,71 @@ export class BTMS {
    */
   async listAssets(): Promise<BTMSAsset[]> {
     const assetIds = new Set<string>()
+    // Discover assets using a single basket query; compute balances in one pass.
+    const assetBalances = new Map<string, AssetAccumulator>()
 
-    // Discover assets efficiently using single basket query with tag filtering
-    // This is much faster than scanning thousands of transactions
-    // We also calculate balances and extract metadata in one pass to avoid redundant queries
-    const assetBalances = new Map<string, { balance: number; metadata?: BTMSAssetMetadata }>()
+    await this.collectOwnedTokensIntoBalances(assetIds, assetBalances)
+    const allIncoming = await this.collectIncomingMessages(assetIds)
+    return this.buildAssetList(assetIds, assetBalances, allIncoming)
+  }
 
+  /** Scan basket outputs and populate `assetIds` + `assetBalances`. */
+  private async collectOwnedTokensIntoBalances (
+    assetIds: Set<string>,
+    assetBalances: Map<string, AssetAccumulator>
+  ): Promise<void> {
     try {
-      // Query all owned BTMS tokens (issue, change, received) from single basket.
       const pages = await this.listOutputsPaged({
         basket: BTMS_BASKET,
         tags: ['btms_type_issue', 'btms_type_change', 'btms_type_receive'],
         tagQueryMode: 'any',
         include: 'locking scripts'
       })
-
-      // Decode each output to discover unique assets AND calculate balances in one pass
       for (const page of pages) {
         for (const output of page.outputs) {
-          if (!output.spendable) continue
-          if (output.satoshis !== DEFAULT_TOKEN_SATOSHIS) continue
-
-          const decoded = BTMSToken.decode(output.lockingScript || '')
-          if (!decoded.valid) continue
-
-          // For transfer outputs, use the assetId from the token
-          // For issuance outputs, compute from outpoint
-          let assetId: string
-          if (decoded.assetId === ISSUE_MARKER) {
-            const [txid, outputIndexStr] = output.outpoint.split('.')
-            assetId = BTMSToken.computeAssetId(txid, Number(outputIndexStr))
-          } else {
-            assetId = decoded.assetId
-          }
-
-          if (BTMSToken.isValidAssetId(assetId)) {
-            assetIds.add(assetId)
-
-            // Accumulate balance for this asset
-            const current = assetBalances.get(assetId) || { balance: 0 }
-            current.balance += decoded.amount
-
-            // Store metadata from first output (if not already stored)
-            if (!current.metadata && decoded.metadata) {
-              try {
-                current.metadata = typeof decoded.metadata === 'string'
-                  ? JSON.parse(decoded.metadata)
-                  : decoded.metadata
-              } catch {
-                // Invalid metadata, skip
-              }
-            }
-
-            assetBalances.set(assetId, current)
-          }
+          accumulateOutputIntoBalances(output, assetBalances)
         }
       }
+      for (const assetId of assetBalances.keys()) assetIds.add(assetId)
     } catch (error) {
       console.warn(`[BTMS] listAssets failed to read wallet outputs: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
 
-    // Get all incoming payments once (used for both discovery and per-asset checks)
+  /** Fetch pending incoming messages and add their asset IDs to `assetIds`. */
+  private async collectIncomingMessages (assetIds: Set<string>): Promise<IncomingToken[]> {
     const allIncoming: IncomingToken[] = []
-    if (this.comms) {
-      try {
-        const messages = await this.comms.listMessages({
-          messageBox: BTMS_MESSAGE_BOX
-        })
-        for (const msg of messages) {
-          try {
-            const payment = JSON.parse(msg.body) as IncomingToken
-            payment.messageId = msg.messageId
-            payment.sender = msg.sender
-            allIncoming.push(payment)
-            // Also add to discovered assets
-            if (BTMSToken.isValidAssetId(payment.assetId)) {
-              assetIds.add(payment.assetId)
-            }
-          } catch {
-            // Skip invalid messages
-          }
-        }
-      } catch {
-        // Ignore comms errors
-        console.warn('[BTMS] listAssets failed to read incoming comms messages')
+    if (!this.comms) return allIncoming
+    try {
+      const messages = await this.comms.listMessages({ messageBox: BTMS_MESSAGE_BOX })
+      for (const msg of messages) {
+        const payment = parseIncomingMessage(msg)
+        if (!payment) continue
+        allIncoming.push(payment)
+        if (BTMSToken.isValidAssetId(payment.assetId)) assetIds.add(payment.assetId)
       }
+    } catch {
+      console.warn('[BTMS] listAssets failed to read incoming comms messages')
     }
+    return allIncoming
+  }
 
-    // Build asset list with balances (already calculated from initial query)
+  /** Build the final `BTMSAsset[]` from accumulated data. */
+  private buildAssetList (
+    assetIds: Set<string>,
+    assetBalances: Map<string, AssetAccumulator>,
+    allIncoming: IncomingToken[]
+  ): BTMSAsset[] {
     const assets: BTMSAsset[] = []
-
     for (const assetId of assetIds) {
       const assetData = assetBalances.get(assetId)
-      const balance = assetData?.balance || 0
+      const balance = assetData?.balance ?? 0
       const metadata = assetData?.metadata
-
-      // Check for pending incoming (filter from already-fetched list)
-      const incomingForAsset = allIncoming.filter(p => p.assetId === assetId)
-      const hasPendingIncoming = incomingForAsset.length > 0
-
-      // Only include assets with balance or pending incoming
+      const hasPendingIncoming = allIncoming.some(p => p.assetId === assetId)
       if (balance > 0 || hasPendingIncoming) {
-        assets.push({
-          assetId,
-          name: metadata?.name,
-          balance,
-          metadata,
-          hasPendingIncoming
-        })
+        assets.push({ assetId, name: metadata?.name, balance, metadata, hasPendingIncoming })
       }
     }
-
     return assets
   }
 
@@ -1266,11 +1120,8 @@ export class BTMS {
     limit = 50,
     offset = 0
   ): Promise<GetTransactionsResult> {
-    // Query wallet actions filtered by assetId label, including outputs and inputs to get token amounts
     const result: ListActionsResult = await this.wallet.listActions({
-      labels: [
-        `${BTMS_LABEL_PREFIX}assetId ${assetId}`
-      ],
+      labels: [`${BTMS_LABEL_PREFIX}assetId ${assetId}`],
       labelQueryMode: 'all',
       includeLabels: true,
       includeOutputs: true,
@@ -1280,134 +1131,7 @@ export class BTMS {
       limit,
       offset
     })
-
-    const transactions: BTMSTransaction[] = []
-
-    for (const action of result.actions) {
-      // Parse labels to determine transaction type and direction
-      const labels = action.labels || []
-      const labelPayloads = labels.map(label =>
-        label.startsWith(BTMS_LABEL_PREFIX)
-          ? label.slice(BTMS_LABEL_PREFIX.length)
-          : label
-      )
-      let type: 'issue' | 'send' | 'receive' | 'burn' = 'send'
-      let counterparty: PubKeyHex | undefined
-
-      // Extract type from labels
-      if (labelPayloads.some(l => l.includes('type issue'))) {
-        type = 'issue'
-      } else if (labelPayloads.some(l => l.includes('type receive'))) {
-        type = 'receive'
-      } else if (labelPayloads.some(l => l.includes('type burn'))) {
-        type = 'burn'
-      }
-
-      const direction: 'incoming' | 'outgoing' = (type === 'send' || type === 'burn') ? 'outgoing' : 'incoming'
-
-      // Extract counterparty from labels
-      const counterpartyLabel = labelPayloads.find(l => l.startsWith('counterparty '))
-      if (counterpartyLabel) {
-        counterparty = counterpartyLabel.replace('counterparty ', '')
-      }
-
-      const timestampLabel = labelPayloads.find(l => l.startsWith('timestamp '))
-      const timestamp = timestampLabel
-        ? Number(timestampLabel.replace('timestamp ', ''))
-        : undefined
-
-      // Extract amount from actual token outputs
-      let amount = 0
-
-      if (type === 'issue' && action.outputs) {
-        for (const output of action.outputs) {
-          if (!output.tags?.includes('btms_type_issue')) continue
-          const outputAmount = decodeOutputAmount(output, action.txid, assetId)
-          if (outputAmount !== null) amount += outputAmount
-        }
-      } else if (type === 'receive' && action.outputs) {
-        for (const output of action.outputs) {
-          if (!output.tags?.includes('btms_type_receive')) continue
-          const outputAmount = decodeOutputAmount(output, action.txid, assetId)
-          if (outputAmount !== null) amount += outputAmount
-        }
-      } else if (type === 'send') {
-        const sendOutputs = action.outputs?.filter(output => output.tags?.includes('btms_type_send')) ?? []
-        let decodedSendOutputs = 0
-
-        // Count all btms_type_send outputs (these are sent to counterparty, no basket)
-        // btms_type_change outputs are change and have basket, so they're not included here
-        for (const output of sendOutputs) {
-          const outputAmount = decodeOutputAmount(output, action.txid, assetId)
-          if (outputAmount !== null) {
-            amount += outputAmount
-            decodedSendOutputs += 1
-          }
-        }
-
-        // Fallback to input minus change if send amounts couldn't be decoded.
-        if (decodedSendOutputs === 0) {
-          let inputAmount = 0
-          if (action.inputs) {
-            for (const input of action.inputs) {
-              const inputAmountValue = decodeInputAmount(input, assetId)
-              if (inputAmountValue !== null) inputAmount += inputAmountValue
-            }
-          }
-
-          let changeAmount = 0
-          if (action.outputs) {
-            for (const output of action.outputs) {
-              if (!output.tags?.includes('btms_type_change')) continue
-              const outputAmount = decodeOutputAmount(output, action.txid, assetId)
-              if (outputAmount !== null) changeAmount += outputAmount
-            }
-          }
-          amount = inputAmount - changeAmount
-        }
-      } else if (type === 'burn') {
-        let inputAmount = 0
-        if (action.inputs) {
-          for (const input of action.inputs) {
-            const inputAmountValue = decodeInputAmount(input, assetId)
-            if (inputAmountValue !== null) inputAmount += inputAmountValue
-          }
-        }
-
-        let changeAmount = 0
-        if (action.outputs) {
-          for (const output of action.outputs) {
-            if (!output.tags?.includes('btms_type_change')) continue
-            const outputAmount = decodeOutputAmount(output, action.txid, assetId)
-            if (outputAmount !== null) changeAmount += outputAmount
-          }
-        }
-
-        amount = inputAmount - changeAmount
-      }
-
-      // Make outgoing amounts negative for display
-      if (direction === 'outgoing') {
-        amount = -amount
-      }
-
-      transactions.push({
-        txid: action.txid,
-        type,
-        direction,
-        amount,
-        assetId,
-        counterparty,
-        description: action.description,
-        status: action.status === 'completed' ? 'completed' : 'pending',
-        timestamp: Number.isFinite(timestamp) ? timestamp : undefined
-      })
-    }
-
-    return {
-      transactions,
-      total: result.totalActions || transactions.length
-    }
+    return buildTransactionsResult(result, assetId)
   }
 
   /**
@@ -1434,74 +1158,58 @@ export class BTMS {
     const mergedBeef = includeBeef ? new Beef() : undefined
 
     for (const page of pages) {
-      if (includeBeef && page.BEEF) {
-        mergedBeef?.mergeBeef(page.BEEF)
-      }
-
+      if (includeBeef && page.BEEF) mergedBeef?.mergeBeef(page.BEEF)
       for (const output of page.outputs) {
-        try {
-          if (!output.spendable) continue
-          if (output.satoshis !== DEFAULT_TOKEN_SATOSHIS) continue
-
-          const [txid, outputIndexStr] = output.outpoint.split('.')
-          const outputIndex = Number(outputIndexStr)
-          const canonicalAssetId = BTMSToken.computeAssetId(txid, outputIndex)
-
-          let scriptHex: HexString | undefined
-          if (includeBeef) {
-            // When includeBeef is true, lockingScript is not returned - get it from the transaction
-            if (!page.BEEF) {
-              continue
-            }
-            const tx = Transaction.fromBEEF(page.BEEF, txid)
-            scriptHex = tx.outputs[Number(outputIndexStr)].lockingScript.toHex()
-          } else {
-            // When includeBeef is false, use the returned lockingScript
-            scriptHex = output.lockingScript
-          }
-
-          if (!scriptHex) {
-            continue
-          }
-
-          const decoded = BTMSToken.decode(scriptHex)
-          if (!decoded.valid) continue
-
-          // For issuance outputs, bind them to their canonical txid.vout asset.
-          // For transfer outputs, require direct asset ID match.
-          if (decoded.assetId === ISSUE_MARKER) {
-            if (canonicalAssetId !== assetId) continue
-          } else if (decoded.assetId !== assetId) {
-            continue
-          }
-
-          tokens.push({
-            outpoint: output.outpoint,
-            txid: txid,
-            outputIndex,
-            satoshis: output.satoshis,
-            lockingScript: scriptHex,
-            customInstructions: output.customInstructions,
-            token: decoded,
-            spendable: true,
-            // Per-output BEEF comes from page BEEF
-            beef: includeBeef && page.BEEF ? page.BEEF : undefined
-          })
-        } catch {
-          // Skip corrupted token data
-          continue
-        }
+        const token = this.tryDecodeSpendableOutput(output, page.BEEF, assetId, includeBeef)
+        if (token) tokens.push(token)
       }
     }
 
     return { tokens, beef: mergedBeef }
   }
 
+  /** Attempt to decode one basket output into a `BTMSTokenOutput` for the given asset. */
+  private tryDecodeSpendableOutput (
+    output: { outpoint: string; spendable?: boolean; satoshis?: number; lockingScript?: string; customInstructions?: string },
+    pageBEEF: number[] | Uint8Array | undefined,
+    assetId: string,
+    includeBeef: boolean
+  ): BTMSTokenOutput | null {
+    try {
+      if (!output.spendable) return null
+      if (output.satoshis !== DEFAULT_TOKEN_SATOSHIS) return null
+
+      const [txid, outputIndexStr] = output.outpoint.split('.')
+      const outputIndex = Number(outputIndexStr)
+
+      const scriptHex: HexString | undefined = this.resolveScriptHex(output, pageBEEF, includeBeef)
+      if (!scriptHex) return null
+
+      const decoded = BTMSToken.decode(scriptHex)
+      if (!decoded.valid) return null
+      if (!tokenMatchesAsset(decoded, output.outpoint, assetId)) return null
+
+      return {
+        outpoint: output.outpoint,
+        txid,
+        outputIndex,
+        satoshis: output.satoshis,
+        lockingScript: scriptHex,
+        customInstructions: output.customInstructions,
+        token: decoded,
+        spendable: true,
+        beef: includeBeef && pageBEEF ? pageBEEF : undefined
+      }
+    } catch {
+      return null
+    }
+  }
+
   /**
    * Find outputs in the BTMS basket that cannot be decoded as valid tokens.
    * Useful for cleaning up corrupted or non-overlay outputs.
    */
-  async findBadOutputs(): Promise<Array<{ outpoint: string; reason: string }>> {
+  async findBadOutputs(): Promise<BadOutput[]> {
     const pages = await this.listOutputsPaged({
       basket: BTMS_BASKET,
       tags: ['btms_type_issue', 'btms_type_change', 'btms_type_receive'],
@@ -1509,37 +1217,13 @@ export class BTMS {
       include: 'locking scripts'
     })
 
-    const badOutputs: Array<{ outpoint: string; reason: string }> = []
-
+    const badOutputs: BadOutput[] = []
     for (const page of pages) {
       for (const output of page.outputs) {
-        if (!output.spendable) continue
-
-        if (output.satoshis !== DEFAULT_TOKEN_SATOSHIS) {
-          badOutputs.push({ outpoint: output.outpoint, reason: 'Unexpected satoshi value' })
-          continue
-        }
-
-        if (!output.lockingScript) {
-          badOutputs.push({ outpoint: output.outpoint, reason: 'Missing locking script' })
-          continue
-        }
-
-        try {
-          const decoded = BTMSToken.decode(output.lockingScript)
-          if (!decoded.valid) {
-            badOutputs.push({ outpoint: output.outpoint, reason: decoded.error || 'Invalid token encoding' })
-            continue
-          }
-        } catch (error) {
-          badOutputs.push({
-            outpoint: output.outpoint,
-            reason: error instanceof Error ? error.message : 'Failed to decode token'
-          })
-        }
+        const bad = validateOutputForBadness(output)
+        if (bad) badOutputs.push(bad)
       }
     }
-
     return badOutputs
   }
 
@@ -1721,56 +1405,7 @@ export class BTMS {
           throw new Error(`Duplicate token outpoint in proof: ${outpoint}`)
         }
         seenOutpoints.add(outpoint)
-
-        // Decode the token to get the amount
-        const decoded = BTMSToken.decode(provenToken.output.lockingScript)
-        if (!decoded.valid) {
-          throw new Error('Invalid token in proof')
-        }
-
-        // Verify the token belongs to the claimed asset
-        const tokenAssetId = decoded.assetId === ISSUE_MARKER
-          ? BTMSToken.computeAssetId(provenToken.output.txid, provenToken.output.outputIndex)
-          : decoded.assetId
-
-        if (tokenAssetId !== proof.assetId) {
-          throw new Error('Token asset ID does not match proof asset ID')
-        }
-
-        // Verify the linkage prover matches the proof prover
-        if (provenToken.linkage.prover !== proof.prover) {
-          throw new Error('Token linkage prover does not match proof prover')
-        }
-
-        // Verify the token exists on the overlay first
-        const lookupResult = await this.lookupTokenOnOverlay(
-          provenToken.output.txid,
-          provenToken.output.outputIndex
-        )
-        if (!lookupResult.found) {
-          throw new Error('Token not found on overlay')
-        }
-
-        // Decrypt the linkage to verify the prover owns the key
-        // The verifier decrypts using their key and the prover as counterparty
-        const { plaintext: linkage } = await this.wallet.decrypt({
-          ciphertext: provenToken.linkage.encryptedLinkage,
-          protocolID: [
-            2,
-            `specific linkage revelation ${BTMS_PROTOCOL_ID[0]} ${BTMS_PROTOCOL_ID[1]}`
-          ],
-          keyID: provenToken.keyID,
-          counterparty: proof.prover
-        })
-
-        // The linkage should be a valid HMAC - if decryption succeeded,
-        // it proves the prover has the corresponding private key
-        if (!linkage || linkage.length === 0) {
-          throw new Error('Invalid key linkage for token')
-        }
-
-        // Add to proven amount
-        amountProven += decoded.amount
+        amountProven += await this.verifySingleProvenToken(provenToken, proof.assetId, proof.prover)
       }
 
       // Verify the total amount matches
@@ -2030,6 +1665,118 @@ export class BTMS {
     return BTMSToken.decode(lockingScript)
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers extracted to reduce cognitive complexity
+  // ---------------------------------------------------------------------------
+
+  /** Assert that all selected UTXOs carry the same metadata. */
+  private assertConsistentMetadata (
+    selected: Array<{ token: { metadata?: unknown } }>,
+    metadata: unknown
+  ): void {
+    const metadataJson = JSON.stringify(metadata ?? null)
+    for (const utxo of selected) {
+      if (JSON.stringify(utxo.token.metadata ?? null) !== metadataJson) {
+        throw new Error('Metadata mismatch across selected tokens')
+      }
+    }
+  }
+
+  /** Build change `CreateActionOutput` entries for a send or burn. */
+  private async buildChangeOutputs (
+    context: ChangeContext,
+    changeStrategy: ChangeStrategyOptions | undefined,
+    derivationPrefix: string,
+    metadata: string | undefined
+  ): Promise<CreateActionOutput[]> {
+    const changeOutputItems = BTMS.computeChangeOutputs(context, changeStrategy)
+    const timestampTag = this.getTimestampTag()
+    const monthTag = this.getMonthTag()
+    const result: CreateActionOutput[] = []
+    for (const changeOutput of changeOutputItems) {
+      const changeDerivationSuffix = Utils.toBase64(Random(32))
+      const changeKeyID = `${derivationPrefix} ${changeDerivationSuffix}`
+      const changeScript = await this.tokenTemplate.createTransfer(
+        context.assetId,
+        changeOutput.amount,
+        changeKeyID,
+        'self',
+        metadata
+      )
+      result.push({
+        satoshis: DEFAULT_TOKEN_SATOSHIS,
+        lockingScript: changeScript.toHex(),
+        customInstructions: JSON.stringify({ derivationPrefix, derivationSuffix: changeDerivationSuffix }),
+        basket: BTMS_BASKET,
+        outputDescription: `Change: ${changeOutput.amount} tokens`,
+        tags: [
+          'btms_type_change',
+          'btms_direction_incoming',
+          timestampTag,
+          monthTag,
+          `btms_assetid_${context.assetId}`
+        ]
+      })
+    }
+    return result
+  }
+
+  /**
+   * Sign and broadcast a burn transaction.
+   * When burning all tokens (no change outputs), overlay rejection is treated as success.
+   */
+  private async signAndBroadcastBurn (
+    reference: string,
+    spends: Record<number, { unlockingScript: string }>,
+    changeAmount: number
+  ): Promise<TXIDHexString> {
+    try {
+      const { txid } = await this.signAndBroadcast(reference, spends)
+      return txid
+    } catch (broadcastError: any) {
+      const errorMsg: string = broadcastError?.message ?? ''
+      const isBurnAll = changeAmount === 0
+      const isOverlayRejection = errorMsg.includes('No host acknowledged') ||
+        errorMsg.includes('not in admitted outputs')
+      if (!isBurnAll || !isOverlayRejection) throw broadcastError
+
+      // Sign-only path for burn-all (overlay won't admit with no outputs)
+      const signResult = await this.wallet.signAction({ reference, spends })
+      if (!signResult.tx) throw new Error('Failed to sign transaction')
+      const txData = Array.isArray(signResult.tx) ? signResult.tx : Utils.toArray(signResult.tx)
+      return Transaction.fromAtomicBEEF(txData).id('hex')
+    }
+  }
+
+  /** Verify a single proven token and return its amount contribution. */
+  private async verifySingleProvenToken (
+    provenToken: ProvenToken,
+    expectedAssetId: string,
+    prover: PubKeyHex
+  ): Promise<number> {
+    const decoded = BTMSToken.decode(provenToken.output.lockingScript)
+    if (!decoded.valid) throw new Error('Invalid token in proof')
+
+    verifyProvenTokenAssetId(decoded, provenToken.output.txid, provenToken.output.outputIndex, expectedAssetId)
+
+    if (provenToken.linkage.prover !== prover) {
+      throw new Error('Token linkage prover does not match proof prover')
+    }
+
+    const lookupResult = await this.lookupTokenOnOverlay(provenToken.output.txid, provenToken.output.outputIndex)
+    if (!lookupResult.found) throw new Error('Token not found on overlay')
+
+    const { plaintext: linkage } = await this.wallet.decrypt({
+      ciphertext: provenToken.linkage.encryptedLinkage,
+      protocolID: [2, `specific linkage revelation ${BTMS_PROTOCOL_ID[0]} ${BTMS_PROTOCOL_ID[1]}`],
+      keyID: provenToken.keyID,
+      counterparty: prover
+    })
+
+    if (!linkage || linkage.length === 0) throw new Error('Invalid key linkage for token')
+    return decoded.amount
+  }
+
   /**
    * Select and verify UTXOs on the overlay.
    * 
@@ -2086,28 +1833,8 @@ export class BTMS {
 
         const rebroadcastResults: VerificationResult[] = await Promise.all(
           invalidWithBeef.map(async (utxo): Promise<VerificationResult> => {
-            if (!utxo.beef) {
-              return { utxo, found: false, beef: undefined }
-            }
-
-            try {
-              const tx = Transaction.fromAtomicBEEF(Transaction.fromBEEF(utxo.beef, utxo.txid).toAtomicBEEF())
-              const broadcaster = new TopicBroadcaster([BTMS_TOPIC], {
-                networkPreset: this.networkPreset
-              })
-              const response = await broadcaster.broadcast(tx)
-              if (response.status === 'success') {
-                return {
-                  utxo,
-                  found: true,
-                  beef: Beef.fromBinary(utxo.beef)
-                }
-              }
-            } catch {
-              // Fall through to mark as not found
-            }
-
-            return { utxo, found: false, beef: undefined }
+            const result = await this.tryRebroadcastUtxo(utxo)
+            return { utxo, ...result }
           })
         )
 
@@ -2139,6 +1866,38 @@ export class BTMS {
 
     // Token supply exhausted
     return { selected: [], totalInput: 0, inputBeef }
+  }
+
+  /** Resolve the locking-script hex for one page output (handles BEEF and plain-script modes). */
+  private resolveScriptHex (
+    output: { outpoint: string; lockingScript?: string },
+    pageBEEF: number[] | Uint8Array | undefined,
+    includeBeef: boolean
+  ): string | undefined {
+    if (!includeBeef) return output.lockingScript
+    if (!pageBEEF) return undefined
+    const [txid, outputIndexStr] = output.outpoint.split('.')
+    const tx = Transaction.fromBEEF(pageBEEF, txid)
+    return tx.outputs[Number(outputIndexStr)].lockingScript.toHex()
+  }
+
+  /** Attempt to re-broadcast a UTXO and return whether it was admitted by the overlay. */
+  private async tryRebroadcastUtxo (
+    utxo: { beef?: number[] | Uint8Array; txid: string }
+  ): Promise<{ found: boolean; beef?: Beef }> {
+    if (!utxo.beef) return { found: false }
+    try {
+      const beefArr = Array.isArray(utxo.beef) ? utxo.beef : Utils.toArray(utxo.beef)
+      const tx = Transaction.fromAtomicBEEF(Transaction.fromBEEF(beefArr, utxo.txid).toAtomicBEEF())
+      const broadcaster = new TopicBroadcaster([BTMS_TOPIC], { networkPreset: this.networkPreset })
+      const response = await broadcaster.broadcast(tx)
+      if (response.status === 'success') {
+        return { found: true, beef: Beef.fromBinary(beefArr) }
+      }
+    } catch {
+      // fall through
+    }
+    return { found: false }
   }
 
   // ---------------------------------------------------------------------------

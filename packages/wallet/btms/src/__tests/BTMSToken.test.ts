@@ -1,12 +1,12 @@
 /**
  * BTMSToken Tests
- * 
+ *
  * Tests for the BTMSToken class which handles encoding and decoding
  * of BTMS PushDrop tokens according to the BTMSTopicManager protocol.
  */
 
 import { BTMSToken } from '../BTMSToken.js'
-import { LockingScript, Utils } from '@bsv/sdk'
+import { LockingScript } from '@bsv/sdk'
 
 describe('BTMSToken', () => {
   describe('decode', () => {
