@@ -50,7 +50,7 @@ export class IdentityStorageManager {
     }
     const fuzzyPattern = normalizedInput
       .split(' ')
-      .map(token => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .map(token => token.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`))
       .join('.*')
     return new RegExp(fuzzyPattern, 'i')
   }

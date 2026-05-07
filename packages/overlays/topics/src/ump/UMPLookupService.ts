@@ -100,4 +100,5 @@ class UMPLookupService implements LookupService {
   }
 }
 
-export default (db: Db) => new UMPLookupService(db)
+function create(db: Db): UMPLookupService { return new UMPLookupService(db) }
+export default create

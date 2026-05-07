@@ -29,7 +29,7 @@ export class HelloWorldLookupService implements LookupService {
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     try {
       if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
-      const { topic, lockingScript, txid, outputIndex } = payload
+      const { lockingScript, txid, outputIndex } = payload
       if (payload.topic !== 'tm_helloworld') return
 
       const result = PushDrop.decode(lockingScript)
@@ -66,8 +66,8 @@ export class HelloWorldLookupService implements LookupService {
 
     const from = startDate ? new Date(startDate) : undefined
     const to = endDate ? new Date(endDate) : undefined
-    if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
+    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
     if (message) return this.storage.findByMessage(message, limit, skip, sortOrder)
     return this.storage.findAll(limit, skip, from, to, sortOrder)
@@ -91,4 +91,5 @@ export class HelloWorldLookupService implements LookupService {
   }
 }
 
-export default (db: Db): HelloWorldLookupService => new HelloWorldLookupService(new HelloWorldStorage(db))
+function create(db: Db): HelloWorldLookupService { return new HelloWorldLookupService(new HelloWorldStorage(db)) }
+export default create

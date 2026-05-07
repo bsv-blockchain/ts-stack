@@ -26,7 +26,7 @@ export class DIDStorageManager {
   async findByOutpoint(outpoint: string): Promise<LookupFormula> {
     const [txid, outputIndexStr] = outpoint.split('.')
     const outputIndex = Number.parseInt(outputIndexStr, 10)
-    if (!txid || isNaN(outputIndex)) {
+    if (!txid || Number.isNaN(outputIndex)) {
       throw new Error('Invalid outpoint format. Expected "txid.outputIndex"')
     }
     return await this.findRecordWithQuery({ txid, outputIndex })

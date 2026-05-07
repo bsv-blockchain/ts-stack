@@ -74,4 +74,5 @@ class CertMapLookupService implements LookupService {
   }
 }
 
-export default (db: Db): CertMapLookupService => new CertMapLookupService(new CertMapStorageManager(db))
+function create(db: Db): CertMapLookupService { return new CertMapLookupService(new CertMapStorageManager(db)) }
+export default create

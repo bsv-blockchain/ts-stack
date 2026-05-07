@@ -33,9 +33,9 @@ export default class KVStoreTopicManager implements TopicManager {
         }
 
         const anyoneWallet = new ProtoWallet('anyone')
-        const signature = result.fields.pop() as number[]
+        const signature = result.fields.pop()!
         const { valid } = await anyoneWallet.verifySignature({
-          data: result.fields.reduce((a, e) => [...a, ...e], []),
+          data: result.fields.flat(),
           signature,
           counterparty: Utils.toHex(result.fields[kvProtocol.controller]),
           protocolID: JSON.parse(Utils.toUTF8(result.fields[kvProtocol.protocolID])),

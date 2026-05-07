@@ -29,7 +29,7 @@ class BTMSLookupService implements LookupService {
     }
     let printable = 0
     for (const code of asText) {
-      const codePoint = code.charCodeAt(0)
+      const codePoint = code.codePointAt(0)!
       if (
         (codePoint >= 32 && codePoint <= 126) ||
         codePoint === 9 ||
@@ -216,8 +216,9 @@ class BTMSLookupService implements LookupService {
 }
 
 // Factory function
-export default (db: Db): BTMSLookupService => {
+function create(db: Db): BTMSLookupService {
   return new BTMSLookupService(new BTMSStorageManager(db))
 }
+export default create
 
 export { BTMSLookupService }

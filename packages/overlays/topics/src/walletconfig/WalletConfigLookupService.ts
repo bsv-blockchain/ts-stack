@@ -76,4 +76,5 @@ class WalletConfigLookupService implements LookupService {
   }
 }
 
-export default (db: Db): WalletConfigLookupService => new WalletConfigLookupService(new WalletConfigStorageManager(db))
+function create(db: Db): WalletConfigLookupService { return new WalletConfigLookupService(new WalletConfigStorageManager(db)) }
+export default create

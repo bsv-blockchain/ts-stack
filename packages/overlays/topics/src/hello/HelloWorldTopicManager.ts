@@ -18,14 +18,14 @@ export default class HelloWorldTopicManager implements TopicManager {
           const result = PushDrop.decode(output.lockingScript)
           const signature = result.fields.pop()
 
-          if (!result.fields || result.fields.length !== 1) continue
+          if (result.fields?.length !== 1) continue
 
           const message = Utils.toUTF8(result.fields[0])
           if (message.length < 2) continue
           if (!result.lockingPublicKey || !signature) continue
 
-          const data = result.fields.reduce((a, e) => [...a, ...e], [])
-          const hasValidSignature = await result.lockingPublicKey.verify(data, Signature.fromDER(signature))
+          const data = result.fields.flat()
+          const hasValidSignature = result.lockingPublicKey.verify(data, Signature.fromDER(signature))
           if (!hasValidSignature) throw new Error('Invalid signature!')
           outputsToAdmit.push(index)
         } catch (err) {

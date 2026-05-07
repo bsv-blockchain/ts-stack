@@ -40,8 +40,8 @@ export default class WalletConfigTopicManager implements TopicManager {
           const expected = keyDeriver.derivePublicKey([1, 'wallet config option'], '1', registryOperator)
           if (expected.toString() !== lockingPublicKey.toString()) throw new Error('WalletConfig token not linked to registry operator!')
 
-          const signature = fields.slice(-1)[0] as number[]
-          const data = fields.slice(0, -1).reduce((a, e) => [...a, ...e], [])
+          const signature = fields.at(-1)!
+          const data = fields.slice(0, -1).flat()
           const anyoneWallet = new ProtoWallet('anyone')
           const { valid: hasValidSignature } = await anyoneWallet.verifySignature({
             data,

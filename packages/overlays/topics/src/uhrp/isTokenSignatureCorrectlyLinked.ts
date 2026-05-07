@@ -4,10 +4,10 @@ export const isTokenSignatureCorrectlyLinked = async (
   lockingPublicKey: PublicKey,
   fields: number[][]
 ): Promise<boolean> => {
-  const signature = fields.pop() as number[]
+  const signature = fields.pop()!
   const protocolID: [2, string] = [2, 'uhrp advertisement']
   const identityKey = Utils.toHex(fields[0])
-  const data = fields.reduce((a, e) => [...a, ...e], [])
+  const data = fields.flat()
   const anyoneWallet = new ProtoWallet('anyone')
   try {
     const { valid } = await anyoneWallet.verifySignature({

@@ -59,8 +59,8 @@ export class MonsterBattleLookupService implements LookupService {
 
     const from = startDate ? new Date(startDate) : undefined
     const to = endDate ? new Date(endDate) : undefined
-    if (from && isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
+    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
     if (txid) return this.storage.findByTxid(txid, limit, skip, sortOrder)
     return this.storage.findAll(limit, skip, from, to, sortOrder)
@@ -84,4 +84,5 @@ export class MonsterBattleLookupService implements LookupService {
   }
 }
 
-export default (db: Db): MonsterBattleLookupService => new MonsterBattleLookupService(new MonsterBattleStorage(db))
+function create(db: Db): MonsterBattleLookupService { return new MonsterBattleLookupService(new MonsterBattleStorage(db)) }
+export default create

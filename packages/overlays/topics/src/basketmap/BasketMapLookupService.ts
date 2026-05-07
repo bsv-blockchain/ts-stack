@@ -74,4 +74,5 @@ class BasketMapLookupService implements LookupService {
   }
 }
 
-export default (db: Db): BasketMapLookupService => new BasketMapLookupService(new BasketMapStorageManager(db))
+function create(db: Db): BasketMapLookupService { return new BasketMapLookupService(new BasketMapStorageManager(db)) }
+export default create

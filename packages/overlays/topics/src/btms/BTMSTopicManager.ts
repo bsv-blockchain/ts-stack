@@ -18,7 +18,7 @@ export default class BTMSTopicManager implements TopicManager {
     }
     let printable = 0
     for (const code of asText) {
-      const codePoint = code.charCodeAt(0)
+      const codePoint = code.codePointAt(0)!
       if (
         (codePoint >= 32 && codePoint <= 126) ||
         codePoint === 9 ||

@@ -5,9 +5,9 @@ export const isTokenSignatureCorrectlyLinked = async (
   publisher: PubKeyHex,
   fields: number[][]
 ): Promise<boolean> => {
-  const signature = fields.pop() as number[]
+  const signature = fields.pop()!
   const protocolID: WalletProtocol = [1, 'metanet apps']
-  const data = fields.reduce((a, e) => [...a, ...e], [])
+  const data = fields.flat()
   const anyoneWallet = new ProtoWallet('anyone')
   try {
     const { valid } = await anyoneWallet.verifySignature({
