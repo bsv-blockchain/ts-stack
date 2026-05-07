@@ -126,6 +126,38 @@ export interface PostBeefResultForTxidApi {
  * @param isDelayed
  * @param r Optional. Ignores txids and allows ProvenTxReqs and merged beef to be passed in.
  */
+function classifyReqDetails (
+  details: GetReqsAndBeefDetail[],
+  swr: SendWithResult[],
+  readyToSendReqs: EntityProvenTxReq[]
+): void {
+  for (const getReq of details) {
+    let status: SendWithResultStatus = 'failed'
+    if (getReq.status === 'alreadySent') {
+      status = 'unproven'
+    } else if (getReq.status === 'readyToSend') {
+      status = 'sending'
+      readyToSendReqs.push(new EntityProvenTxReq(getReq.req))
+    }
+    swr.push({ txid: getReq.txid, status })
+  }
+}
+
+async function verifyMergedBeef (
+  storage: StorageProvider,
+  r: GetReqsAndBeefResult,
+  readyToSendReqs: EntityProvenTxReq[],
+  logger?: WalletLoggerInterface
+): Promise<void> {
+  if (readyToSendReqs.length === 0) return
+  const beefIsValid = await r.beef.verify(await storage.getServices().getChainTracker())
+  if (!beefIsValid) {
+    logger?.error(`VERIFY FALSE BEEF: ${r.beef.toLogString()}`)
+    throw new WERR_INTERNAL('merged Beef failed validation.')
+  }
+  logger?.log('beef is valid')
+}
+
 export async function shareReqsWithWorld (
   storage: StorageProvider,
   userId: number,
@@ -139,43 +171,19 @@ export async function shareReqsWithWorld (
 
   if ((r == null) && txids.length < 1) return { swr, ndr }
 
-  // Collect what we know about these sendWith transaction txids from storage.
   r ||= await storage.getReqsAndBeefToShareWithWorld(txids, [])
 
   const readyToSendReqs: EntityProvenTxReq[] = []
-  for (const getReq of r.details) {
-    let status: SendWithResultStatus = 'failed'
-    if (getReq.status === 'alreadySent') status = 'unproven'
-    else if (getReq.status === 'readyToSend') {
-      status = 'sending'
-      readyToSendReqs.push(new EntityProvenTxReq(getReq.req))
-    }
-    swr.push({
-      txid: getReq.txid,
-      status
-    })
-  }
+  classifyReqDetails(r.details, swr, readyToSendReqs)
 
-  // Filter original txids down to reqIds that are available and need sending
   const readyToSendReqIds = readyToSendReqs.map(r => r.id)
   const transactionIds = readyToSendReqs.map(r => r.notify.transactionIds || []).flat()
 
-  // If there are reqs to send, verify that we have a valid aggregate beef for them.
   // If isDelayed, this (or a different beef) will have to be rebuilt at the time of sending.
-  if (readyToSendReqs.length > 0) {
-    const beefIsValid = await r.beef.verify(await storage.getServices().getChainTracker())
-    if (!beefIsValid) {
-      logger?.error(`VERIFY FALSE BEEF: ${r.beef.toLogString()}`)
-      throw new WERR_INTERNAL('merged Beef failed validation.')
-    }
-    logger?.log('beef is valid')
-  }
+  await verifyMergedBeef(storage, r, readyToSendReqs, logger)
 
-  // Set req batch property for the reqs being sent
-  // If delayed, also bump status to 'unsent' and we're done here
   const batch = txids.length > 1 ? randomBytesBase64(16) : undefined
   if (isDelayed) {
-    // Just bump the req status to 'unsent' to enable background sending...
     if (readyToSendReqIds.length > 0) {
       await storage.transaction(async trx => {
         await storage.updateProvenTxReq(readyToSendReqIds, { status: 'unsent', batch }, trx)
@@ -185,21 +193,14 @@ export async function shareReqsWithWorld (
     return { swr, ndr }
   }
 
-  if (readyToSendReqIds.length < 1) {
-    return { swr, ndr }
-  }
+  if (readyToSendReqIds.length < 1) return { swr, ndr }
 
   if (batch) {
-    // Keep batch values in sync...
     for (const req of readyToSendReqs) req.batch = batch
     await storage.updateProvenTxReq(readyToSendReqIds, { batch })
   }
 
-  //
-  // Handle the NON-DELAYED-SEND-NOW case
-  //
   const prtn = await storage.attemptToPostReqsToNetwork(readyToSendReqs, undefined, logger)
-
   const { swr: swrRes, rar } = await aggregateActionResults(storage, swr, prtn)
   return { swr: swrRes, ndr: rar }
 }
@@ -207,6 +208,52 @@ export async function shareReqsWithWorld (
 interface ReqTxStatus {
   req: ProvenTxReqStatus
   tx: TransactionStatus
+}
+
+function determineReqTxStatus (
+  params: Pick<StorageProcessActionArgs, 'isNoSend' | 'isSendWith' | 'isDelayed'>
+): { status: ReqTxStatus, postStatus: ReqTxStatus | undefined } {
+  if (params.isNoSend && !params.isSendWith) return { status: { req: 'nosend', tx: 'nosend' }, postStatus: undefined }
+  if (!params.isNoSend && params.isDelayed) return { status: { req: 'unsent', tx: 'unprocessed' }, postStatus: undefined }
+  if (!params.isNoSend && !params.isDelayed) {
+    return {
+      status: { req: 'unprocessed', tx: 'unprocessed' },
+      postStatus: { req: 'unmined', tx: 'unproven' }
+    }
+  }
+  throw new WERR_INTERNAL('logic error')
+}
+
+function buildOutputUpdates (
+  storage: StorageProvider,
+  tx: BsvTransaction,
+  vargs: ValidCommitNewTxToStorageArgs
+): void {
+  for (const o of vargs.outputOutputs) {
+    const vout = verifyInteger(o.vout)
+    const offset = vargs.txScriptOffsets.outputs[vout]
+    const rawTxScript = asString(vargs.rawTx.slice(offset.offset, offset.offset + offset.length))
+    if ((o.lockingScript != null) && rawTxScript !== asString(o.lockingScript)) {
+      throw new WERR_INVALID_OPERATION(
+        `rawTx output locking script for vout ${vout} not equal to expected output script.`
+      )
+    }
+    if (tx.outputs[vout].lockingScript.toHex() !== rawTxScript) {
+      throw new WERR_INVALID_OPERATION(
+        `parsed transaction output locking script for vout ${vout} not equal to expected output script.`
+      )
+    }
+    const update: Partial<TableOutput> = {
+      txid: vargs.txid,
+      spendable: true, // spendability is gated by transaction status. Remains true until the output is spent.
+      scriptLength: offset.length,
+      scriptOffset: offset.offset
+    }
+    if (offset.length > storage.getSettings().maxOutputScript)
+    // Remove long lockingScript data from outputs table, will be read from rawTx in proven_tx or proven_tx_reqs tables.
+    { update.lockingScript = undefined }
+    vargs.outputUpdates.push({ id: o.outputId, update })
+  }
 }
 
 interface ValidCommitNewTxToStorageArgs {
@@ -301,14 +348,7 @@ async function validateCommitNewTxToStorageArgs (
   // isNoSend                  noSend      noSend
   // !isNoSend && isDelayed    unsent      unprocessed
   // !isNoSend && !isDelayed   unprocessed unprocessed          sending/unmined     sending/unproven      This is the only case that sends immediately.
-  let postStatus: ReqTxStatus | undefined
-  let status: ReqTxStatus
-  if (params.isNoSend && !params.isSendWith) status = { req: 'nosend', tx: 'nosend' }
-  else if (!params.isNoSend && params.isDelayed) status = { req: 'unsent', tx: 'unprocessed' }
-  else if (!params.isNoSend && !params.isDelayed) {
-    status = { req: 'unprocessed', tx: 'unprocessed' }
-    postStatus = { req: 'unmined', tx: 'unproven' }
-  } else throw new WERR_INTERNAL('logic error')
+  const { status, postStatus } = determineReqTxStatus(params)
 
   req.status = status.req
   const vargs: ValidCommitNewTxToStorageArgs = {
@@ -342,31 +382,7 @@ async function validateCommitNewTxToStorageArgs (
   // update outputs with txid, script offsets and lengths, drop long output scripts from outputs table
   // outputs spendable will be updated for change to true and all others to !!o.tracked when tx has been broadcast
   // MAX_OUTPUTSCRIPT_LENGTH is limit for scripts left in outputs table
-  for (const o of vargs.outputOutputs) {
-    const vout = verifyInteger(o.vout)
-    const offset = vargs.txScriptOffsets.outputs[vout]
-    const rawTxScript = asString(vargs.rawTx.slice(offset.offset, offset.offset + offset.length))
-    if ((o.lockingScript != null) && rawTxScript !== asString(o.lockingScript)) {
-      throw new WERR_INVALID_OPERATION(
-        `rawTx output locking script for vout ${vout} not equal to expected output script.`
-      )
-    }
-    if (tx.outputs[vout].lockingScript.toHex() !== rawTxScript) {
-      throw new WERR_INVALID_OPERATION(
-        `parsed transaction output locking script for vout ${vout} not equal to expected output script.`
-      )
-    }
-    const update: Partial<TableOutput> = {
-      txid: vargs.txid,
-      spendable: true, // spendability is gated by transaction status. Remains true until the output is spent.
-      scriptLength: offset.length,
-      scriptOffset: offset.offset
-    }
-    if (offset.length > storage.getSettings().maxOutputScript)
-    // Remove long lockingScript data from outputs table, will be read from rawTx in proven_tx or proven_tx_reqs tables.
-    { update.lockingScript = undefined }
-    vargs.outputUpdates.push({ id: o.outputId, update })
-  }
+  buildOutputUpdates(storage, tx, vargs)
 
   return vargs
 }

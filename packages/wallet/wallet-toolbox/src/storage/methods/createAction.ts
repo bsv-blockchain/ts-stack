@@ -220,6 +220,87 @@ function makeDefaultOutput (userId: number, transactionId: number, satoshis: num
   return output
 }
 
+/** Check known outputs for double-spend, mark them spent, return competing txid if found. */
+async function markKnownInputsSpent (
+  storage: StorageProvider,
+  knownInputRows: Array<{ i: XValidCreateActionInput, o: TableOutput }>,
+  transactionId: number
+): Promise<string | undefined> {
+  let doubleSpendTxid: string | undefined
+  await storage.transaction(async trx => {
+    const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
+    const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
+    for (const ni of knownInputRows) {
+      const { i, o } = ni
+      const o2 = knownOutputsById[verifyId(o.outputId)]
+      if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
+      if (o2.spentBy !== undefined) {
+        const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
+        if (spendingTx?.txid) { doubleSpendTxid = spendingTx.txid; return }
+      }
+      if (!o2.spendable) {
+        throw new WERR_INVALID_PARAMETER(
+          `inputs[${i.vin}]`,
+          `spendable output. output ${o.txid}:${o.vout} appears to have been spent (spendable=${o2.spendable}).`
+        )
+      }
+      await storage.updateOutput(verifyId(o.outputId), { spendable: false, spentBy: transactionId, spendingDescription: i.inputDescription }, trx)
+      o.spendable = false
+      o.spentBy = transactionId
+      o.spendingDescription = i.inputDescription
+    }
+  })
+  return doubleSpendTxid
+}
+
+/** Build an SDK input record for a new-input row that has a backing output. */
+async function buildSdkInputFromOutput (
+  storage: StorageProvider,
+  vargs: Validation.ValidCreateActionArgs,
+  vin: number,
+  i: XValidCreateActionInput | undefined,
+  o: TableOutput,
+  unlockLen: number | undefined
+): Promise<StorageCreateTransactionSdkInput> {
+  if ((i == null) && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
+  const sourceTransaction = vargs.includeAllSourceTransactions && vargs.isSignAction
+    ? await storage.getRawTxOfKnownValidTransaction(o.txid)
+    : undefined
+  return {
+    vin,
+    sourceTxid: o.txid!,
+    sourceVout: o.vout,
+    sourceSatoshis: o.satoshis,
+    sourceLockingScript: asString(o.lockingScript!),
+    sourceTransaction,
+    unlockingScriptLength: unlockLen || i!.unlockingScriptLength,
+    providedBy: (i != null) && o.providedBy === 'storage' ? 'you-and-storage' : o.providedBy,
+    type: o.type,
+    spendingDescription: o.spendingDescription || undefined,
+    derivationPrefix: o.derivationPrefix || undefined,
+    derivationSuffix: o.derivationSuffix || undefined,
+    senderIdentityKey: o.senderIdentityKey || undefined
+  }
+}
+
+/** Build an SDK input record for a user-specified input with no corresponding stored output. */
+function buildSdkInputFromXInput (vin: number, i: XValidCreateActionInput): StorageCreateTransactionSdkInput {
+  return {
+    vin,
+    sourceTxid: i.outpoint.txid,
+    sourceVout: i.outpoint.vout,
+    sourceSatoshis: i.satoshis,
+    sourceLockingScript: i.lockingScript.toHex(),
+    unlockingScriptLength: i.unlockingScriptLength,
+    providedBy: 'you',
+    type: 'custom',
+    spendingDescription: undefined,
+    derivationPrefix: undefined,
+    derivationSuffix: undefined,
+    senderIdentityKey: undefined
+  }
+}
+
 async function createNewInputs (
   storage: StorageProvider,
   userId: number,
@@ -229,122 +310,96 @@ async function createNewInputs (
 ): Promise<StorageCreateTransactionSdkInput[]> {
   const r: StorageCreateTransactionSdkInput[] = []
 
-  const newInputs: Array<{
-    i?: XValidCreateActionInput
-    o?: TableOutput
-    unlockLen?: number
-  }> = []
-  for (const i of ctx.xinputs) {
-    const o = i.output
-    newInputs.push({ i, o })
-  }
+  const newInputs: Array<{ i?: XValidCreateActionInput; o?: TableOutput; unlockLen?: number }> = []
+  for (const i of ctx.xinputs) newInputs.push({ i, o: i.output })
 
   const knownInputRows = newInputs.filter(
     (ni): ni is { i: XValidCreateActionInput, o: TableOutput } => ni.i != null && ni.o != null
   )
   if (knownInputRows.length > 0) {
-    let doubleSpendTxid: string | undefined
-    await storage.transaction(async trx => {
-      const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
-      const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
-
-      for (const ni of knownInputRows) {
-        const { i, o } = ni
-        const o2 = knownOutputsById[verifyId(o.outputId)]
-        if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
-
-        if (o2.spentBy !== undefined) {
-          const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
-          if (spendingTx?.txid) {
-            doubleSpendTxid = spendingTx.txid
-            return
-          }
-        }
-        if (!o2.spendable) {
-          throw new WERR_INVALID_PARAMETER(
-            `inputs[${i.vin}]`,
-            `spendable output. output ${o.txid}:${o.vout} appears to have been spent (spendable=${o2.spendable}).`
-          )
-        }
-
-        await storage.updateOutput(
-          verifyId(o.outputId),
-          {
-            spendable: false,
-            spentBy: ctx.transactionId,
-            spendingDescription: i.inputDescription
-          },
-          trx
-        )
-
-        o.spendable = false
-        o.spentBy = ctx.transactionId
-        o.spendingDescription = i.inputDescription
-      }
-    })
-
+    const doubleSpendTxid = await markKnownInputsSpent(storage, knownInputRows, ctx.transactionId)
     if (doubleSpendTxid) {
       const beef = await storage.getBeefForTransaction(doubleSpendTxid, {})
-      const rar: ReviewActionResult = {
-        txid: '',
-        status: 'doubleSpend',
-        competingTxs: [doubleSpendTxid],
-        competingBeef: beef.toBinary()
-      }
-      throw new WERR_REVIEW_ACTIONS([rar], [])
+      throw new WERR_REVIEW_ACTIONS([{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toBinary() }], [])
     }
   }
 
-  for (const o of allocatedChange) {
-    newInputs.push({ o, unlockLen: 107 })
-  }
+  for (const o of allocatedChange) newInputs.push({ o, unlockLen: 107 })
 
   let vin = -1
   for (const { i, o, unlockLen } of newInputs) {
     vin++
     if (o != null) {
-      if ((i == null) && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
-      const sourceTransaction =
-        vargs.includeAllSourceTransactions && vargs.isSignAction
-          ? await storage.getRawTxOfKnownValidTransaction(o.txid)
-          : undefined
-      const ri: StorageCreateTransactionSdkInput = {
-        vin,
-        sourceTxid: o.txid!,
-        sourceVout: o.vout,
-        sourceSatoshis: o.satoshis,
-        sourceLockingScript: asString(o.lockingScript!),
-        sourceTransaction,
-        unlockingScriptLength: unlockLen || i!.unlockingScriptLength,
-        providedBy: (i != null) && o.providedBy === 'storage' ? 'you-and-storage' : (o.providedBy ),
-        type: o.type,
-        spendingDescription: o.spendingDescription || undefined,
-        derivationPrefix: o.derivationPrefix || undefined,
-        derivationSuffix: o.derivationSuffix || undefined,
-        senderIdentityKey: o.senderIdentityKey || undefined
-      }
-      r.push(ri)
+      r.push(await buildSdkInputFromOutput(storage, vargs, vin, i, o, unlockLen))
     } else {
       if (i == null) throw new WERR_INTERNAL(`vin ${vin} without output or xinput`)
-      // user specified input with no corresponding output being spent.
-      const ri: StorageCreateTransactionSdkInput = {
-        vin,
-        sourceTxid: i.outpoint.txid,
-        sourceVout: i.outpoint.vout,
-        sourceSatoshis: i.satoshis,
-        sourceLockingScript: i.lockingScript.toHex(),
-        unlockingScriptLength: i.unlockingScriptLength,
-        providedBy: 'you',
-        type: 'custom',
-        spendingDescription: undefined,
-        derivationPrefix: undefined,
-        derivationSuffix: undefined,
-        senderIdentityKey: undefined
-      }
-      r.push(ri)
+      r.push(buildSdkInputFromXInput(vin, i))
     }
   }
   return r
+}
+
+/** Randomly reassign vout values across newOutputs using either the provided randomVals or crypto-random bytes. */
+function randomizeOutputVouts (
+  newOutputs: Array<{ o: TableOutput; tags: string[] }>,
+  randomVals?: number[]
+): void {
+  const vals = [...(randomVals || [])]
+  const nextRandom = (): number => {
+    if (vals.length > 0) {
+      const v = vals.shift()!
+      vals.push(v)
+      return v
+    }
+    const bytes = Random(4)
+    return (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
+  }
+  const newVouts = Array.from({ length: newOutputs.length }, (_, i) => i)
+  for (let cur = newVouts.length; cur > 0; cur--) {
+    const rnd = Math.floor(nextRandom() * cur)
+    ;[newVouts[cur - 1], newVouts[rnd]] = [newVouts[rnd], newVouts[cur - 1]]
+  }
+  let vout = -1
+  for (const no of newOutputs) {
+    vout++
+    if (no.o.vout !== vout) throw new WERR_INTERNAL(`new output ${vout} has out of order vout ${no.o.vout}`)
+    no.o.vout = newVouts[vout]
+  }
+}
+
+/** Insert the output and attach its tags; return the SDK output descriptor. */
+async function persistNewOutput (
+  storage: StorageProvider,
+  o: TableOutput,
+  tags: string[],
+  txTags: Record<string, TableOutputTag>,
+  txBaskets: Record<string, TableOutputBasket>
+): Promise<{ changeVout: number | undefined; ro: StorageCreateTransactionSdkOutput }> {
+  o.outputId = await storage.insertOutput(o)
+  const changeVout = (o.change && o.purpose === 'change' && o.providedBy === 'storage') ? o.vout : undefined
+  for (const tagName of new Set(tags)) {
+    const tag = txTags[tagName]
+    await storage.insertOutputTagMap({
+      outputId: verifyId(o.outputId),
+      outputTagId: verifyId(tag.outputTagId),
+      created_at: new Date(),
+      updated_at: new Date(),
+      isDeleted: false
+    })
+  }
+  const ro: StorageCreateTransactionSdkOutput = {
+    vout: verifyInteger(o.vout),
+    satoshis: Validation.validateSatoshis(o.satoshis, 'o.satoshis'),
+    lockingScript: (o.lockingScript == null) ? '' : asString(o.lockingScript),
+    providedBy: verifyTruthy(o.providedBy),
+    purpose: o.purpose || undefined,
+    basket: Object.values(txBaskets).find(b => b.basketId === o.basketId)?.name,
+    tags,
+    outputDescription: o.outputDescription,
+    derivationSuffix: o.derivationSuffix,
+    customInstructions: o.customInstructions
+  }
+  return { changeVout, ro }
 }
 
 async function createNewOutputs (
@@ -357,14 +412,10 @@ async function createNewOutputs (
     outputs: StorageCreateTransactionSdkOutput[]
     changeVouts: number[]
   }> {
-  const outputs: StorageCreateTransactionSdkOutput[] = []
-
-  // Lookup output baskets
   const txBaskets: Record<string, TableOutputBasket> = {}
   const basketNames = [...new Set(ctx.xoutputs.map(x => x.basket).filter((v): v is string => !!v))]
   Object.assign(txBaskets, await storage.findOrInsertOutputBasketsBulk(userId, basketNames))
 
-  // Lookup output tags
   const txTags: Record<string, TableOutputTag> = {}
   const tagNames = [...new Set(ctx.xoutputs.flatMap(x => x.tags))]
   Object.assign(txTags, await storage.findOrInsertOutputTagsBulk(userId, tagNames))
@@ -375,39 +426,23 @@ async function createNewOutputs (
     const lockingScript = asArray(xo.lockingScript)
     if (xo.purpose === 'service-charge') {
       const now = new Date()
-      await storage.insertCommission({
-        userId,
-        transactionId: ctx.transactionId,
-        lockingScript,
-        satoshis: xo.satoshis,
-        isRedeemed: false,
-        keyOffset: verifyTruthy(xo.keyOffset),
-        created_at: now,
-        updated_at: now,
-        commissionId: 0
-      })
-
+      await storage.insertCommission({ userId, transactionId: ctx.transactionId, lockingScript, satoshis: xo.satoshis, isRedeemed: false, keyOffset: verifyTruthy(xo.keyOffset), created_at: now, updated_at: now, commissionId: 0 })
       const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
       o.lockingScript = lockingScript
       o.providedBy = 'storage'
       o.purpose = 'storage-commission'
       o.type = 'custom'
       o.spendable = false
-
       newOutputs.push({ o, tags: [] })
     } else {
-      // The user wants tracking if they put their output in a basket
-      const basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
-
       const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
       o.lockingScript = lockingScript
-      o.basketId = basketId
+      o.basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
       o.customInstructions = xo.customInstructions
       o.outputDescription = xo.outputDescription
       o.providedBy = xo.providedBy
       o.purpose = xo.purpose || ''
       o.type = 'custom'
-
       newOutputs.push({ o, tags: xo.tags })
     }
   }
@@ -417,77 +452,13 @@ async function createNewOutputs (
     newOutputs.push({ o, tags: [] })
   }
 
-  if (vargs.options.randomizeOutputs) {
-    const randomVals: number[] = []
+  if (vargs.options.randomizeOutputs) randomizeOutputVouts(newOutputs, vargs.randomVals)
 
-    const nextRandomVal = (): number => {
-      let val = 0
-      if (!randomVals || randomVals.length === 0) {
-        const bytes = Random(4)
-        val = (((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0) / 0x100000000
-      } else {
-        val = randomVals.shift() || 0
-        randomVals.push(val)
-      }
-      return val
-    }
-
-    /** In-place array shuffle */
-    const shuffleArray = <T>(array: T[]): T[] => {
-      let currentIndex = array.length
-      let temporaryValue: T
-      let randomIndex: number
-      while (currentIndex !== 0) {
-        randomIndex = Math.floor(nextRandomVal() * currentIndex)
-        currentIndex -= 1
-        temporaryValue = array[currentIndex]
-        array[currentIndex] = array[randomIndex]
-        array[randomIndex] = temporaryValue
-      }
-      return array
-    }
-
-    let vout = -1
-    const newVouts = new Array<number>(newOutputs.length)
-    for (let i = 0; i < newVouts.length; i++) newVouts[i] = i
-    shuffleArray(newVouts)
-    for (const no of newOutputs) {
-      vout++
-      if (no.o.vout !== vout) throw new WERR_INTERNAL(`new output ${vout} has out of order vout ${no.o.vout}`)
-      no.o.vout = newVouts[vout]
-    }
-  }
-
+  const outputs: StorageCreateTransactionSdkOutput[] = []
   const changeVouts: number[] = []
   for (const { o, tags } of newOutputs) {
-    o.outputId = await storage.insertOutput(o)
-
-    if (o.change && o.purpose === 'change' && o.providedBy === 'storage') changeVouts.push(o.vout)
-
-    // Add tags to the output
-    for (const tagName of new Set(tags)) {
-      const tag = txTags[tagName]
-      await storage.insertOutputTagMap({
-        outputId: verifyId(o.outputId),
-        outputTagId: verifyId(tag.outputTagId),
-        created_at: new Date(),
-        updated_at: new Date(),
-        isDeleted: false
-      })
-    }
-
-    const ro: StorageCreateTransactionSdkOutput = {
-      vout: verifyInteger(o.vout),
-      satoshis: Validation.validateSatoshis(o.satoshis, 'o.satoshis'),
-      lockingScript: (o.lockingScript == null) ? '' : asString(o.lockingScript),
-      providedBy: verifyTruthy(o.providedBy),
-      purpose: o.purpose || undefined,
-      basket: Object.values(txBaskets).find(b => b.basketId === o.basketId)?.name,
-      tags,
-      outputDescription: o.outputDescription,
-      derivationSuffix: o.derivationSuffix,
-      customInstructions: o.customInstructions
-    }
+    const { changeVout, ro } = await persistNewOutput(storage, o, tags, txTags, txBaskets)
+    if (changeVout !== undefined) changeVouts.push(changeVout)
     outputs.push(ro)
   }
 
@@ -640,88 +611,93 @@ async function validateRequiredInputs (
   const inputTxids: Record<string, boolean> = {}
   for (const input of xinputs) inputTxids[input.outpoint.txid] = true
 
-  // Check beef from user that either there are no txidOnly entries,
-  // or that we can trust storage data and it does indeed vouch
-  // for any txidOnly entries
-  for (const btx of beef.txs) {
-    if (btx.isTxidOnly) {
-      if (!trustSelf)
-        {throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain complete proof data for ${btx.txid}`)}
-      if (!inputTxids[btx.txid]) {
-        // inputTxids are checked next
-        const isKnown = await storage.verifyKnownValidTransaction(btx.txid)
-        if (!isKnown)
-          {throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain complete proof data for unknown ${btx.txid}`)}
-      }
-    }
-  }
-
-  // Make sure that there's an entry for all inputs txid values:
-  for (const txid of Object.keys(inputTxids)) {
-    let btx = beef.findTxid(txid)
-    if ((btx == null) && trustSelf) {
-      if (await storage.verifyKnownValidTransaction(txid)) btx = beef.mergeTxidOnly(txid)
-    }
-    if (btx == null) {
-      throw new WERR_INVALID_PARAMETER(
-        'inputBEEF',
-        `valid and contain proof data for possibly known ${txid}, beef ${beef.toLogString()}`
-      )
-    }
-  }
+  await validateBeefTxidOnlyEntries(beef, inputTxids, trustSelf, storage)
+  await ensureBeefContainsAllInputTxids(beef, inputTxids, trustSelf, storage)
 
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
     console.log(`verifyInputBeef failed, inputBEEF failed to verify.\n${beef.toLogString()}\n`)
-    // console.log(`verifyInputBeef failed, inputBEEF failed to verify.\n${stampLogFormat(vargs.log)}\n${beef.toLogString()}\n`)
     throw new WERR_INVALID_PARAMETER('inputBEEF', 'valid Beef when factoring options.trustSelf')
   }
 
-  // beef may now be trusted and has a BeefTx for every input txid.
-
   const storageBeef = beef.clone()
-
-  const preloadedOutputsByOutpoint = await storage.findOutputsByOutpoints(
-    userId,
-    xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout }))
-  )
+  const preloadedOutputsByOutpoint = await storage.findOutputsByOutpoints(userId, xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout })))
 
   for (const input of xinputs) {
-    const { txid, vout } = input.outpoint
-    let output: TableOutput | undefined = preloadedOutputsByOutpoint[`${txid}.${vout}`]
-    output ??= verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
-    if (output != null) {
-      if (output.change) {
-        throw new WERR_INVALID_PARAMETER(
-          `inputs[${input.vin}]`,
-          'an unmanaged input. Change outputs are managed by your wallet.'
-        )
-      }
-      input.output = output
-      if (!Array.isArray(output.lockingScript) || !Number.isInteger(output.satoshis))
-        {throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'output with valid lockingScript and satoshis')}
-      if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend)
-        {throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'spendable output unless noSend is true')}
-      // input is spending an existing user output which has an lockingScript
-      input.satoshis = Validation.validateSatoshis(output.satoshis, 'output.satoshis')
-      input.lockingScript = Script.fromBinary(asArray(output.lockingScript))
-    } else {
-      let btx = beef.findTxid(txid)!
-      if (btx.isTxidOnly) {
-        const { rawTx, proven } = await storage.getProvenOrRawTx(txid)
-        // stampLog(vargs, `... storage verifyInputBeef getProvenOrRawTx ${txid} ${proven ? 'proven' : rawTx ? 'rawTx' : 'unknown'}`)
-        if (rawTx == null) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for ${txid}`)
-        btx = beef.mergeRawTx(asArray(rawTx))
-        if (proven != null) beef.mergeBump(new EntityProvenTx(proven).getMerklePath())
-      }
-      // btx is valid has parsed transaction data.
-      if (vout >= btx.tx!.outputs.length) throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'valid outpoint')
-      const so = btx.tx!.outputs[vout]
-      input.satoshis = Validation.validateSatoshis(so.satoshis, 'so.satoshis')
-      input.lockingScript = so.lockingScript
-    }
+    await resolveInputScript(storage, userId, vargs, input, beef, preloadedOutputsByOutpoint)
   }
 
   return { beef, storageBeef, xinputs }
+}
+
+/** Check all txidOnly entries in beef: require either trustSelf vouch or throw. */
+async function validateBeefTxidOnlyEntries (
+  beef: Beef,
+  inputTxids: Record<string, boolean>,
+  trustSelf: boolean,
+  storage: StorageProvider
+): Promise<void> {
+  for (const btx of beef.txs) {
+    if (!btx.isTxidOnly) continue
+    if (!trustSelf) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain complete proof data for ${btx.txid}`)
+    if (!inputTxids[btx.txid]) {
+      const isKnown = await storage.verifyKnownValidTransaction(btx.txid)
+      if (!isKnown) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain complete proof data for unknown ${btx.txid}`)
+    }
+  }
+}
+
+/** Ensure beef has an entry (or txidOnly) for every input txid. */
+async function ensureBeefContainsAllInputTxids (
+  beef: Beef,
+  inputTxids: Record<string, boolean>,
+  trustSelf: boolean,
+  storage: StorageProvider
+): Promise<void> {
+  for (const txid of Object.keys(inputTxids)) {
+    let btx = beef.findTxid(txid)
+    if (btx == null && trustSelf) {
+      if (await storage.verifyKnownValidTransaction(txid)) btx = beef.mergeTxidOnly(txid)
+    }
+    if (btx == null) {
+      throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for possibly known ${txid}, beef ${beef.toLogString()}`)
+    }
+  }
+}
+
+/** Resolve satoshis and lockingScript for one xinput from either storage or the beef. */
+async function resolveInputScript (
+  storage: StorageProvider,
+  userId: number,
+  vargs: Validation.ValidCreateActionArgs,
+  input: XValidCreateActionInput,
+  beef: Beef,
+  preloadedOutputsByOutpoint: Record<string, TableOutput>
+): Promise<void> {
+  const { txid, vout } = input.outpoint
+  let output: TableOutput | undefined = preloadedOutputsByOutpoint[`${txid}.${vout}`]
+  output ??= verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
+  if (output != null) {
+    if (output.change) throw new WERR_INVALID_PARAMETER(`inputs[${input.vin}]`, 'an unmanaged input. Change outputs are managed by your wallet.')
+    input.output = output
+    if (!Array.isArray(output.lockingScript) || !Number.isInteger(output.satoshis))
+      throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'output with valid lockingScript and satoshis')
+    if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend)
+      throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'spendable output unless noSend is true')
+    input.satoshis = Validation.validateSatoshis(output.satoshis, 'output.satoshis')
+    input.lockingScript = Script.fromBinary(asArray(output.lockingScript))
+  } else {
+    let btx = beef.findTxid(txid)!
+    if (btx.isTxidOnly) {
+      const { rawTx, proven } = await storage.getProvenOrRawTx(txid)
+      if (rawTx == null) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain proof data for ${txid}`)
+      btx = beef.mergeRawTx(asArray(rawTx))
+      if (proven != null) beef.mergeBump(new EntityProvenTx(proven).getMerklePath())
+    }
+    if (vout >= btx.tx!.outputs.length) throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'valid outpoint')
+    const so = btx.tx!.outputs[vout]
+    input.satoshis = Validation.validateSatoshis(so.satoshis, 'so.satoshis')
+    input.lockingScript = so.lockingScript
+  }
 }
 
 async function validateNoSendChange (

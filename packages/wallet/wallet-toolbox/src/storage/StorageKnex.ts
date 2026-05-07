@@ -109,6 +109,23 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return `substr(${source}, ${fromOffset}, ${forLength})`
   }
 
+  private normaliseKnexRawResult (rs: unknown): Array<{ rawTx: Buffer | null }> {
+    if (this.dbtype === 'MySQL') return (rs as Array<Array<{ rawTx: Buffer | null }>>)[0]
+    return rs as Array<{ rawTx: Buffer | null }>
+  }
+
+  private async getRawTxSlice (txid: string, offset: number, length: number, trx?: TrxToken): Promise<number[] | undefined> {
+    const sub = this.dbTypeSubstring('rawTx', offset + 1, length)
+    let rs = await this.toDb(trx).raw(`select ${sub} as rawTx from proven_txs where txid = '${txid}'`)
+    const proven = verifyOneOrNone(this.normaliseKnexRawResult(rs))
+    if (proven?.rawTx != null) return Array.from(proven.rawTx)
+    rs = await this.toDb(trx).raw(
+      `select ${sub} as rawTx from proven_tx_reqs where txid = '${txid}' and status in ('unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail')`
+    )
+    const req = verifyOneOrNone(this.normaliseKnexRawResult(rs))
+    return req?.rawTx != null ? Array.from(req.rawTx) : undefined
+  }
+
   override async getRawTxOfKnownValidTransaction (
     txid?: string,
     offset?: number,
@@ -117,32 +134,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   ): Promise<number[] | undefined> {
     if (!txid) return undefined
     if (!this.isAvailable()) await this.makeAvailable()
-
-    let rawTx: number[] | undefined
     if (Number.isInteger(offset) && Number.isInteger(length)) {
-      let rs: Array<{ rawTx: Buffer | null }> = await this.toDb(trx).raw(
-        `select ${this.dbTypeSubstring('rawTx', offset! + 1, length)} as rawTx from proven_txs where txid = '${txid}'`
-      )
-      if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ rawTx: Buffer | null }>>)[0]
-      const r = verifyOneOrNone(rs)
-      if (r?.rawTx != null) {
-        rawTx = Array.from(r.rawTx)
-      } else {
-        let rs: Array<{ rawTx: Buffer | null }> = await this.toDb(trx).raw(
-          `select ${this.dbTypeSubstring('rawTx', offset! + 1, length)} as rawTx from proven_tx_reqs where txid = '${txid}' and status in ('unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail')`
-        )
-        if (this.dbtype === 'MySQL') rs = (rs as unknown as Array<Array<{ rawTx: Buffer | null }>>)[0]
-        const r = verifyOneOrNone(rs)
-        if (r?.rawTx != null) {
-          rawTx = Array.from(r.rawTx)
-        }
-      }
-    } else {
-      const r = await this.getProvenOrRawTx(txid, trx)
-      if (r.proven != null) rawTx = r.proven.rawTx
-      else rawTx = r.rawTx
+      return this.getRawTxSlice(txid, offset!, length!, trx)
     }
-    return rawTx
+    const r = await this.getProvenOrRawTx(txid, trx)
+    return r.proven != null ? r.proven.rawTx : r.rawTx
   }
 
   getProvenTxsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
@@ -1069,6 +1065,37 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this._settings.dbtype
   }
 
+  /** Convert every number-array value to a Buffer and every undefined to null on an arbitrary object. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private serialiseForKnex (v: any): void {
+    for (const key of Object.keys(v)) {
+      const val = v[key]
+      if (Array.isArray(val) && (val.length === 0 || typeof val[0] === 'number')) {
+        v[key] = Buffer.from(val)
+      } else if (val === undefined) {
+        v[key] = null
+      }
+    }
+  }
+
+  /** Apply optional date-field coercion list in-place. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private coerceDateFields (v: any, dateFields?: string[]): void {
+    if (dateFields == null) return
+    for (const df of dateFields) {
+      if (v[df]) v[df] = this.validateOptionalEntityDate(v[df])
+    }
+  }
+
+  /** Apply optional boolean-field coercion list in-place. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private coerceBooleanFields (v: any, booleanFields?: string[]): void {
+    if (booleanFields == null) return
+    for (const df of booleanFields) {
+      if (v[df] !== undefined) v[df] = v[df] ? 1 : 0
+    }
+  }
+
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process the update template for entities being updated.
@@ -1079,30 +1106,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     booleanFields?: string[]
   ): Partial<T> {
     if (!this.dbtype) throw new WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v: any = update
     if (v.created_at) v.created_at = this.validateEntityDate(v.created_at)
     if (v.updated_at) v.updated_at = this.validateEntityDate(v.updated_at)
     if (!v.created_at) delete v.created_at
     if (!v.updated_at) v.updated_at = this.validateEntityDate(new Date())
-
-    if (dateFields != null) {
-      for (const df of dateFields) {
-        if (v[df]) v[df] = this.validateOptionalEntityDate(v[df])
-      }
-    }
-    if (booleanFields != null) {
-      for (const df of booleanFields) {
-        if (update[df] !== undefined) update[df] = update[df] ? 1 : 0
-      }
-    }
-    for (const key of Object.keys(v)) {
-      const val = v[key]
-      if (Array.isArray(val) && (val.length === 0 || typeof val[0] === 'number')) {
-        v[key] = Buffer.from(val)
-      } else if (val === undefined) {
-        v[key] = null
-      }
-    }
+    this.coerceDateFields(v, dateFields)
+    this.coerceBooleanFields(update, booleanFields)
+    this.serialiseForKnex(v)
     this.isDirty = true
     return v
   }
@@ -1116,31 +1128,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     trx?: TrxToken,
     dateFields?: string[],
     booleanFields?: string[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     await this.verifyReadyForDatabaseAccess(trx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v: any = { ...entity }
     v.created_at = this.validateOptionalEntityDate(v.created_at, true)!
     v.updated_at = this.validateOptionalEntityDate(v.updated_at, true)!
     if (!v.created_at) delete v.created_at
     if (!v.updated_at) delete v.updated_at
-    if (dateFields != null) {
-      for (const df of dateFields) {
-        if (v[df]) v[df] = this.validateOptionalEntityDate(v[df])
-      }
-    }
-    if (booleanFields != null) {
-      for (const df of booleanFields) {
-        if (entity[df] !== undefined) entity[df] = entity[df] ? 1 : 0
-      }
-    }
-    for (const key of Object.keys(v)) {
-      const val = v[key]
-      if (Array.isArray(val) && (val.length === 0 || typeof val[0] === 'number')) {
-        v[key] = Buffer.from(val)
-      } else if (val === undefined) {
-        v[key] = null
-      }
-    }
+    this.coerceDateFields(v, dateFields)
+    this.coerceBooleanFields(entity, booleanFields)
+    this.serialiseForKnex(v)
     this.isDirty = true
     return v
   }
@@ -1357,6 +1356,21 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r
   }
 
+  /** Convert null→undefined and Buffer→number[] on a retrieved entity in-place. */
+  private deserialiseFromKnex<T>(entity: T): void {
+    for (const key of Object.keys(entity as object)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const val = (entity as any)[key]
+      if (val === null) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(entity as any)[key] = undefined
+      } else if (Buffer.isBuffer(val)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(entity as any)[key] = Array.from(val)
+      }
+    }
+  }
+
   /**
    * Helper to force uniform behavior across database engines.
    * Use to process all individual records with time stamps retreived from database.
@@ -1366,22 +1380,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     entity.updated_at = this.validateDate(entity.updated_at)
     if (dateFields != null) {
       for (const df of dateFields) {
-        if (entity[df]) entity[df] = this.validateDate(entity[df])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((entity as any)[df]) (entity as any)[df] = this.validateDate((entity as any)[df])
       }
     }
     if (booleanFields != null) {
       for (const df of booleanFields) {
-        if (entity[df] !== undefined) entity[df] = !!entity[df]
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((entity as any)[df] !== undefined) (entity as any)[df] = !!(entity as any)[df]
       }
     }
-    for (const key of Object.keys(entity)) {
-      const val = entity[key]
-      if (val === null) {
-        entity[key] = undefined
-      } else if (Buffer.isBuffer(val)) {
-        entity[key] = Array.from(val)
-      }
-    }
+    this.deserialiseFromKnex(entity)
     return entity
   }
 

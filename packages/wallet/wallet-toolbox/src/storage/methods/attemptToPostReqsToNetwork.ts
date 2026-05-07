@@ -106,6 +106,28 @@ async function transferNotesToReqHistories (
   }
 }
 
+function tallyTxidResults (
+  ar: AggregatePostBeefTxResult,
+  pbrs: sdk.PostBeefResult[]
+): void {
+  for (const pbr of pbrs) {
+    const tr = pbr.txidResults.find(tr => tr.txid === ar.txid)
+    if (tr == null) continue
+    ar.txidResults.push(tr)
+    if (tr.status === 'success') {
+      ar.successCount++
+    } else if (tr.doubleSpend) {
+      ar.doubleSpendCount++
+      if (tr.competingTxs != null) ar.competingTxs = [...tr.competingTxs]
+    } else if (tr.serviceError) {
+      ar.serviceErrorCount++
+    } else {
+      ar.statusErrorCount++
+    }
+  }
+  if (ar.competingTxs.length > 1) ar.competingTxs = [...new Set(ar.competingTxs)]
+}
+
 /**
  * For each txid, decide on the aggregate success or failure of attempting to broadcast it to the bitcoin processing network.
  *
@@ -142,21 +164,7 @@ function aggregatePostBeefResultsByTxid (
       competingTxs: []
     }
     r[txid] = ar
-    for (const pbr of pbrs) {
-      const tr = pbr.txidResults.find(tr => tr.txid === txid)
-      if (tr != null) {
-        ar.txidResults.push(tr)
-        if (tr.status === 'success') ar.successCount++
-        else if (tr.doubleSpend) {
-          ar.doubleSpendCount++
-          if (tr.competingTxs != null) {
-            ar.competingTxs = [...tr.competingTxs]
-          }
-        } else if (tr.serviceError) ar.serviceErrorCount++
-        else ar.statusErrorCount++
-      }
-      if (ar.competingTxs.length > 1) ar.competingTxs = [...new Set(ar.competingTxs)] // Remove duplicates
-    }
+    tallyTxidResults(ar, pbrs)
 
     if (ar.successCount > 0 && ar.doubleSpendCount === 0) ar.status = 'success'
     else if (ar.doubleSpendCount > 0) ar.status = 'doubleSpend'
@@ -274,6 +282,38 @@ async function updateReqsFromAggregateResults (
   logger?.group('update storage from aggregate results')
 }
 
+async function gatherCompetingTxids (
+  ar: AggregatePostBeefTxResult,
+  beef: Beef,
+  services: sdk.WalletServices,
+  note: ReqHistoryNote,
+  logger?: WalletLoggerInterface
+): Promise<void> {
+  const req = ar.vreq.req
+  const tx = Transaction.fromBinary(req.rawTx)
+  const competingTxids = new Set(ar.competingTxs)
+  for (const input of tx.inputs) {
+    const sourceTx = beef.findTxid(input.sourceTXID!)?.tx
+    if (sourceTx == null) {
+      let s = note.missingSourceTx || ''
+      s += input.sourceTXID! + ' '
+      note.missingSourceTx = s
+      continue
+    }
+    const lockingScript = sourceTx.outputs[input.sourceOutputIndex].lockingScript.toHex()
+    const hash = services.hashOutputScript(lockingScript)
+    const shhrs = await services.getScriptHashHistory(hash, undefined, logger)
+    if (shhrs.status === 'success') {
+      for (const h of shhrs.history) {
+        // Neither the source of the input nor the current transaction are competition.
+        if (h.txid !== input.sourceTXID && h.txid !== ar.txid) competingTxids.add(h.txid)
+      }
+    }
+  }
+  ar.competingTxs = [...competingTxids].slice(-24) // keep at most 24, if they were sorted by time, keep newest
+  note.competingTxs = ar.competingTxs.join(',')
+}
+
 /**
  * Requires ar.status === 'doubleSpend'
  *
@@ -315,28 +355,7 @@ async function confirmDoubleSpend (
     note.newStatus = ar.status
   } else {
     // Confirmed double spend, get txids of possible competing transactions.
-    const tx = Transaction.fromBinary(req.rawTx)
-    const competingTxids = new Set(ar.competingTxs)
-    for (const input of tx.inputs) {
-      const sourceTx = beef.findTxid(input.sourceTXID!)?.tx
-      if (sourceTx == null) {
-        let s = note.missingSourceTx || ''
-        s += input.sourceTXID! + ' '
-        note.missingSourceTx = s
-      } else {
-        const lockingScript = sourceTx.outputs[input.sourceOutputIndex].lockingScript.toHex()
-        const hash = services.hashOutputScript(lockingScript)
-        const shhrs = await services.getScriptHashHistory(hash, undefined, logger)
-        if (shhrs.status === 'success') {
-          for (const h of shhrs.history) {
-            // Neither the source of the input nor the current transaction are competition.
-            if (h.txid !== input.sourceTXID && h.txid !== ar.txid) competingTxids.add(h.txid)
-          }
-        }
-      }
-    }
-    ar.competingTxs = [...competingTxids].slice(-24) // keep at most 24, if they were sorted by time, keep newest
-    note.competingTxs = ar.competingTxs.join(',')
+    await gatherCompetingTxids(ar, beef, services, note, logger)
   }
   req.addHistoryNote(note)
 }

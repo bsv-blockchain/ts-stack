@@ -8,15 +8,88 @@ import {
   Validation
 } from '@bsv/sdk'
 import type { StorageKnex } from '../StorageKnex'
-import { getLabelToSpecOp, ListActionsSpecOp } from './ListActionsSpecOp'
+import { partitionActionLabels } from './ListActionsSpecOp'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
-import { isListActionsSpecOp } from '../../sdk/types'
 import { TableTxLabel } from '../schema/tables/TableTxLabel'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
+
+
+async function enrichActionLabels (
+  storage: StorageKnex,
+  tx: Partial<TableTransaction>,
+  action: WalletAction,
+  timeFilterRequested: boolean
+): Promise<void> {
+  action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
+  if (timeFilterRequested) {
+    const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : Number.NaN
+    if (!Number.isNaN(ts)) {
+      const timeLabel = makeBrc114ActionTimeLabel(ts)
+      if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
+    }
+  }
+}
+
+async function enrichActionOutputs (
+  storage: StorageKnex,
+  tx: Partial<TableTransaction>,
+  action: WalletAction,
+  includeOutputLockingScripts: boolean
+): Promise<void> {
+  const outputs: TableOutputX[] = await storage.findOutputs({
+    partial: { transactionId: tx.transactionId },
+    noScript: !includeOutputLockingScripts
+  })
+  action.outputs = []
+  for (const o of outputs) {
+    await storage.extendOutput(o, true, true)
+    const wo: WalletActionOutput = {
+      satoshis: o.satoshis || 0,
+      spendable: !!o.spendable,
+      tags: o.tags?.map(t => t.tag) || [],
+      outputIndex: Number(o.vout),
+      outputDescription: o.outputDescription || '',
+      basket: o.basket?.name || ''
+    }
+    if (includeOutputLockingScripts) wo.lockingScript = asString(o.lockingScript || [])
+    action.outputs.push(wo)
+  }
+}
+
+async function enrichActionInputs (
+  storage: StorageKnex,
+  tx: Partial<TableTransaction>,
+  action: WalletAction,
+  includeSourceLockingScripts: boolean,
+  includeUnlockingScripts: boolean
+): Promise<void> {
+  const inputs: TableOutputX[] = await storage.findOutputs({
+    partial: { spentBy: tx.transactionId },
+    noScript: !includeSourceLockingScripts
+  })
+  action.inputs = []
+  if (inputs.length === 0) return
+  const rawTx = await storage.getRawTxOfKnownValidTransaction(tx.txid)
+  let bsvTx: BsvTransaction | undefined
+  if (rawTx != null) bsvTx = BsvTransaction.fromBinary(rawTx)
+  for (const o of inputs) {
+    await storage.extendOutput(o, true, true)
+    const input = bsvTx?.inputs.find(v => v.sourceTXID === o.txid && v.sourceOutputIndex === o.vout)
+    const wo: WalletActionInput = {
+      sourceOutpoint: `${o.txid}.${o.vout}`,
+      sourceSatoshis: o.satoshis || 0,
+      inputDescription: o.outputDescription || '',
+      sequenceNumber: input?.sequence || 0
+    }
+    action.inputs.push(wo)
+    if (includeSourceLockingScripts) wo.sourceLockingScript = asString(o.lockingScript || [])
+    if (includeUnlockingScripts) wo.unlockingScript = input?.unlockingScript?.toHex()
+  }
+}
 
 export async function listActions (
   storage: StorageKnex,
@@ -43,31 +116,7 @@ export async function listActions (
   const createdAtFrom = actionTimeFrom === undefined ? undefined : new Date(actionTimeFrom)
   const createdAtTo = actionTimeTo === undefined ? undefined : new Date(actionTimeTo)
 
-  let specOp: ListActionsSpecOp | undefined
-  let specOpLabels: string[] = []
-  let labels: string[] = []
-  for (const label of ordinaryLabelsPreSpecOp) {
-    if (isListActionsSpecOp(label)) {
-      specOp = getLabelToSpecOp()[label]
-    } else {
-      labels.push(label)
-    }
-  }
-  if (specOp?.labelsToIntercept !== undefined) {
-    const intercept = specOp.labelsToIntercept
-    const labels2 = labels
-    labels = []
-    if (intercept.length === 0) {
-      specOpLabels = labels2
-    }
-    for (const label of labels2) {
-      if (intercept.includes(label)) {
-        specOpLabels.push(label)
-      } else {
-        labels.push(label)
-      }
-    }
-  }
+  const { specOp, specOpLabels, labels } = partitionActionLabels(ordinaryLabelsPreSpecOp)
 
   let labelIds: number[] = []
   if (labels.length > 0) {
@@ -79,8 +128,8 @@ export async function listActions (
       .whereNotNull('txLabelId')
       .whereIn('label', labels)
       .select('txLabelId')
-    const r = await q
-    labelIds = r.map(r => r.txLabelId)
+    const rows = await q
+    labelIds = rows.map(r => r.txLabelId)
   }
 
   const isQueryModeAll = vargs.labelQueryMode === 'all'
@@ -120,11 +169,11 @@ export async function listActions (
 
   const makeWithLabelsQueries = () => {
     const cteq = k.raw(`
-            SELECT ${columns.map(c => 't.' + c).join(',')}, 
-                    (SELECT COUNT(*) 
-                    FROM tx_labels_map AS m 
-                    WHERE m.transactionId = t.transactionId 
-                    AND m.txLabelId IN (${labelIds.join(',')}) 
+            SELECT ${columns.map(c => 't.' + c).join(',')},
+                    (SELECT COUNT(*)
+                    FROM tx_labels_map AS m
+                    WHERE m.transactionId = t.transactionId
+                    AND m.txLabelId IN (${labelIds.join(',')})
                     ) AS lc
             FROM transactions AS t
             WHERE t.userId = ${auth.userId}
@@ -167,7 +216,7 @@ export async function listActions (
   }
 
   for (const tx of txs) {
-    const wtx: WalletAction = {
+    r.actions.push({
       txid: tx.txid || '',
       satoshis: tx.satoshis || 0,
       status: tx.status! as ActionStatus,
@@ -175,76 +224,18 @@ export async function listActions (
       description: tx.description || '',
       version: tx.version || 0,
       lockTime: tx.lockTime || 0
-    }
-    r.actions.push(wtx)
+    })
   }
 
   if (vargs.includeLabels || vargs.includeInputs || vargs.includeOutputs) {
     await Promise.all(
       txs.map(async (tx, i) => {
         const action = r.actions[i]
-        if (vargs.includeLabels) {
-          action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
-          if (timeFilterRequested) {
-            const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : Number.NaN
-            if (!Number.isNaN(ts)) {
-              const timeLabel = makeBrc114ActionTimeLabel(ts)
-              if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
-            }
-          }
-        }
-        if (vargs.includeOutputs) {
-          const outputs: TableOutputX[] = await storage.findOutputs({
-            partial: { transactionId: tx.transactionId },
-            noScript: !vargs.includeOutputLockingScripts
-          })
-          action.outputs = []
-          for (const o of outputs) {
-            await storage.extendOutput(o, true, true)
-            const wo: WalletActionOutput = {
-              satoshis: o.satoshis || 0,
-              spendable: !!o.spendable,
-              tags: o.tags?.map(t => t.tag) || [],
-              outputIndex: Number(o.vout),
-              outputDescription: o.outputDescription || '',
-              basket: o.basket?.name || ''
-            }
-            if (vargs.includeOutputLockingScripts) wo.lockingScript = asString(o.lockingScript || [])
-            action.outputs.push(wo)
-          }
-        }
+        if (vargs.includeLabels) await enrichActionLabels(storage, tx, action, timeFilterRequested)
+        if (vargs.includeOutputs) await enrichActionOutputs(storage, tx, action, !!vargs.includeOutputLockingScripts)
         if (vargs.includeInputs) {
-          const inputs: TableOutputX[] = await storage.findOutputs({
-            partial: { spentBy: tx.transactionId },
-            noScript: !vargs.includeInputSourceLockingScripts
-          })
-          action.inputs = []
-          if (inputs.length > 0) {
-            const rawTx = await storage.getRawTxOfKnownValidTransaction(tx.txid)
-            let bsvTx: BsvTransaction | undefined
-            if (rawTx != null) {
-              bsvTx = BsvTransaction.fromBinary(rawTx)
-            }
-            for (const o of inputs) {
-              await storage.extendOutput(o, true, true)
-              const input = bsvTx?.inputs.find(v => v.sourceTXID === o.txid && v.sourceOutputIndex === o.vout)
-              const wo: WalletActionInput = {
-                sourceOutpoint: `${o.txid}.${o.vout}`,
-                sourceSatoshis: o.satoshis || 0,
-                inputDescription: o.outputDescription || '',
-                sequenceNumber: input?.sequence || 0
-              }
-              action.inputs.push(wo)
-              if (vargs.includeInputSourceLockingScripts) {
-                wo.sourceLockingScript = asString(o.lockingScript || [])
-              }
-              if (vargs.includeInputUnlockingScripts) {
-                wo.unlockingScript = input?.unlockingScript?.toHex()
-              }
-            }
-          }
+          await enrichActionInputs(storage, tx, action, !!vargs.includeInputSourceLockingScripts, !!vargs.includeInputUnlockingScripts)
         }
-        // }
       })
     )
   }

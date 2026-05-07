@@ -142,6 +142,36 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   /**
+   * Shared cursor-scan loop used by all `filterXxx` methods.
+   *
+   * Walks `cursor` forward, applying `since`, a caller-supplied `matches`
+   * predicate, paging (offset / limit), and an async `accept` callback for
+   * records that pass all filters.  Returns the number of accepted records.
+   */
+  private async scanCursor<T extends { updated_at: Date }> (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    cursor: any,
+    since: Date | undefined,
+    offset: number,
+    limit: number | undefined,
+    matches: (r: T) => boolean | Promise<boolean>,
+    accept: (r: T) => void
+  ): Promise<number> {
+    let skipped = 0
+    let count = 0
+    for (; cursor != null; cursor = await cursor.continue()) {
+      const r: T = cursor.value
+      if (since != null && since > r.updated_at) continue
+      if (!await matches(r)) continue
+      if (skipped < offset) { skipped++; continue }
+      accept(r)
+      count++
+      if (limit && count >= limit) break
+    }
+    return count
+  }
+
+  /**
    * Called by `makeAvailable` to return storage `TableSettings`.
    * Since this is the first async method that must be called by all clients,
    * it is where async initialization occurs.
@@ -442,9 +472,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     userId?: number
   ): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['output_tags_map', 'output_tags'], 'readonly', args.trx)
     const store = dbTrx.objectStore('output_tags_map')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -456,20 +483,22 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableOutputTagMap = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (args.tagIds != null && !args.tagIds.includes(r.outputTagId)) continue
-      if (!matchesOutputTagMapPartial(r, args.partial)) continue
-      if (userId !== undefined) {
-        const tagsForUser = await this.countOutputTags({ partial: { userId, outputTagId: r.outputTagId }, trx: dbTrx })
-        if (tagsForUser === 0) continue
-      }
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableOutputTagMap>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      async r => {
+        if (args.tagIds != null && !args.tagIds.includes(r.outputTagId)) return false
+        if (!matchesOutputTagMapPartial(r, args.partial)) return false
+        if (userId !== undefined) {
+          const tagsForUser = await this.countOutputTags({ partial: { userId, outputTagId: r.outputTagId }, trx: dbTrx })
+          if (tagsForUser === 0) return false
+        }
+        return true
+      },
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -479,6 +508,23 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       results.push(this.validateEntity(r))
     })
     return results
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async openProvenTxReqsCursor (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    partial: Partial<any>,
+    direction: IDBCursorDirection
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
+    if (partial?.provenTxReqId) return store.openCursor(partial.provenTxReqId, direction)
+    if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
+    if (partial?.txid !== undefined) return store.index('txid').openCursor(partial.txid, direction)
+    if (partial?.status !== undefined) return store.index('status').openCursor(partial.status, direction)
+    if (partial?.batch !== undefined) return store.index('batch').openCursor(partial.batch, direction)
+    return store.openCursor(null, direction)
   }
 
   async filterProvenTxReqs (
@@ -494,42 +540,27 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         'undefined. ProvenTxReqs may not be found by inputBEEF value.'
       )
     }
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['proven_tx_reqs', 'transactions'], 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('proven_tx_reqs')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    if (args.partial?.provenTxReqId) {
-      cursor = await store.openCursor(args.partial.provenTxReqId, direction)
-    } else if (args.partial?.provenTxId !== undefined) {
-      cursor = await store.index('provenTxId').openCursor(args.partial.provenTxId, direction)
-    } else if (args.partial?.txid !== undefined) {
-      cursor = await store.index('txid').openCursor(args.partial.txid, direction)
-    } else if (args.partial?.status !== undefined) {
-      cursor = await store.index('status').openCursor(args.partial.status, direction)
-    } else if (args.partial?.batch !== undefined) {
-      cursor = await store.index('batch').openCursor(args.partial.batch, direction)
-    } else {
-      cursor = await store.openCursor(null, direction)
-    }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableProvenTxReq = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesProvenTxReqPartial(r, args.partial)) continue
-      if (args.status != null && args.status.length > 0 && !args.status.includes(r.status)) continue
-      if (args.txids != null && args.txids.length > 0 && !args.txids.includes(r.txid)) continue
-      if (userId !== undefined) {
-        const txsForUser = await this.countTransactions({ partial: { userId, txid: r.txid }, trx: dbTrx })
-        if (txsForUser === 0) continue
-      }
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    const cursor = await this.openProvenTxReqsCursor(store, args.partial, direction)
+    await this.scanCursor<TableProvenTxReq>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      async r => {
+        if (!matchesProvenTxReqPartial(r, args.partial)) return false
+        if (args.status != null && args.status.length > 0 && !args.status.includes(r.status)) return false
+        if (args.txids != null && args.txids.length > 0 && !args.txids.includes(r.txid)) return false
+        if (userId !== undefined) {
+          const txsForUser = await this.countTransactions({ partial: { userId, txid: r.txid }, trx: dbTrx })
+          if (txsForUser === 0) return false
+        }
+        return true
+      },
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -550,9 +581,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         'undefined. ProvenTxs may not be found by merklePath value.'
       )
     }
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['proven_txs', 'transactions'], 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('proven_txs')
@@ -565,19 +593,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor(null, direction)
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableProvenTx = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesProvenTxPartial(r, args.partial)) continue
-      if (userId !== undefined) {
-        const txCount = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: dbTrx })
-        if (txCount === 0) continue
-      }
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableProvenTx>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      async r => {
+        if (!matchesProvenTxPartial(r, args.partial)) return false
+        if (userId !== undefined) {
+          const txCount = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: dbTrx })
+          if (txCount === 0) return false
+        }
+        return true
+      },
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -595,9 +625,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     userId?: number
   ): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['tx_labels_map', 'tx_labels'], 'readonly', args.trx)
     const store = dbTrx.objectStore('tx_labels_map')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -609,19 +636,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableTxLabelMap = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesTxLabelMapPartial(r, args.partial)) continue
-      if (userId !== undefined) {
-        const labelCount = await this.countTxLabels({ partial: { userId, txLabelId: r.txLabelId }, trx: dbTrx })
-        if (labelCount === 0) continue
-      }
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableTxLabelMap>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      async r => {
+        if (!matchesTxLabelMapPartial(r, args.partial)) return false
+        if (userId !== undefined) {
+          const labelCount = await this.countTxLabels({ partial: { userId, txLabelId: r.txLabelId }, trx: dbTrx })
+          if (labelCount === 0) return false
+        }
+        return true
+      },
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1093,9 +1122,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     filtered: (v: TableCertificateField) => void
   ): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['certificate_fields'], 'readonly', args.trx)
     const store = dbTrx.objectStore('certificate_fields')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1107,15 +1133,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableCertificateField = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesCertificateFieldPartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableCertificateField>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesCertificateFieldPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1127,39 +1149,43 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async openCertificatesCursor (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    partial: Partial<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
+    if (partial?.certificateId) return store.openCursor(partial.certificateId)
+    if (partial?.userId !== undefined) {
+      if (partial?.type && partial?.certifier && partial?.serialNumber) {
+        return store
+          .index('userId_type_certifier_serialNumber')
+          .openCursor([partial.userId, partial.type, partial.certifier, partial.serialNumber])
+      }
+      return store.index('userId').openCursor(partial.userId)
+    }
+    return store.openCursor()
+  }
+
   async filterCertificates (args: FindCertificatesArgs, filtered: (v: TableCertificateX) => void): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['certificates'], 'readonly', args.trx)
     const store = dbTrx.objectStore('certificates')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    if (args.partial?.certificateId) {
-      cursor = await store.openCursor(args.partial.certificateId)
-    } else if (args.partial?.userId !== undefined) {
-      if (args.partial?.type && args.partial?.certifier && args.partial?.serialNumber) {
-        cursor = await store
-          .index('userId_type_certifier_serialNumber')
-          .openCursor([args.partial.userId, args.partial.type, args.partial.certifier, args.partial.serialNumber])
-      } else {
-        cursor = await store.index('userId').openCursor(args.partial.userId)
-      }
-    } else {
-      cursor = await store.openCursor()
-    }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableCertificateX = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (args.certifiers != null && !args.certifiers.includes(r.certifier)) continue
-      if (args.types != null && !args.types.includes(r.type)) continue
-      if (!matchesCertificatePartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    const cursor = await this.openCertificatesCursor(store, args.partial)
+    await this.scanCursor<TableCertificateX>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      r => {
+        if (args.certifiers != null && !args.certifiers.includes(r.certifier)) return false
+        if (args.types != null && !args.types.includes(r.type)) return false
+        return matchesCertificatePartial(r, args.partial)
+      },
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1185,9 +1211,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         'undefined. Commissions may not be found by lockingScript value.'
       )
     }
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['commissions'], 'readonly', args.trx)
     const store = dbTrx.objectStore('commissions')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1201,15 +1224,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableCommission = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesCommissionPartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableCommission>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesCommissionPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1223,23 +1242,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 
   async filterMonitorEvents (args: FindMonitorEventsArgs, filtered: (v: TableMonitorEvent) => void): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['monitor_events'], 'readonly', args.trx)
     const store = dbTrx.objectStore('monitor_events')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    cursor = args.partial?.id ? await store.openCursor(args.partial.id) : await store.openCursor()
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableMonitorEvent = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesMonitorEventPartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    const cursor = args.partial?.id ? await store.openCursor(args.partial.id) : await store.openCursor()
+    await this.scanCursor<TableMonitorEvent>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesMonitorEventPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1253,33 +1263,24 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 
   async filterOutputBaskets (args: FindOutputBasketsArgs, filtered: (v: TableOutputBasket) => void): Promise<void> {
     this.assertNoUndefinedInPartial(args.partial)
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['output_baskets'], 'readonly', args.trx)
     const store = dbTrx.objectStore('output_baskets')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cursor: any
     if (args.partial?.basketId) {
       cursor = await store.openCursor(args.partial.basketId)
+    } else if (args.partial?.userId !== undefined && args.partial?.name !== undefined) {
+      cursor = await store.index('name_userId').openCursor([args.partial.name, args.partial.userId])
     } else if (args.partial?.userId !== undefined) {
-      if (args.partial?.name !== undefined) {
-        cursor = await store.index('name_userId').openCursor([args.partial.name, args.partial.userId])
-      } else {
-        cursor = await store.index('userId').openCursor(args.partial.userId)
-      }
+      cursor = await store.index('userId').openCursor(args.partial.userId)
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableOutputBasket = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesOutputBasketPartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableOutputBasket>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesOutputBasketPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1289,6 +1290,31 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       result.push(this.validateEntity(r))
     })
     return result
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async openOutputsCursor (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    partial: Partial<any>,
+    direction: IDBCursorDirection
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
+    if (partial?.outputId) return store.openCursor(partial.outputId, direction)
+    if (partial?.userId !== undefined) {
+      if (partial?.transactionId && partial?.vout !== undefined) {
+        return store.index('transactionId_vout_userId').openCursor(
+          [partial.transactionId, partial.vout, partial.userId],
+          direction
+        )
+      }
+      return store.index('userId').openCursor(partial.userId, direction)
+    }
+    if (partial?.transactionId !== undefined) return store.index('transactionId').openCursor(partial.transactionId, direction)
+    if (partial?.basketId !== undefined) return store.index('basketId').openCursor(partial.basketId, direction)
+    if (partial?.spentBy !== undefined) return store.index('spentBy').openCursor(partial.spentBy, direction)
+    return store.openCursor(null, direction)
   }
 
   async filterOutputs (
@@ -1304,56 +1330,37 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         'undefined. Outputs may not be found by lockingScript value.'
       )
     }
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const stores = ['outputs']
     if (tagIds != null && tagIds.length > 0) stores.push('output_tags_map')
     if (args.txStatus != null) stores.push('transactions')
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('outputs')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    if (args.partial?.outputId) {
-      cursor = await store.openCursor(args.partial.outputId, direction)
-    } else if (args.partial?.userId !== undefined) {
-      if (args.partial?.transactionId && args.partial?.vout !== undefined) {
-        cursor = await store
-          .index('transactionId_vout_userId')
-          .openCursor([args.partial.transactionId, args.partial.vout, args.partial.userId], direction)
-      } else {
-        cursor = await store.index('userId').openCursor(args.partial.userId, direction)
+    const cursor = await this.openOutputsCursor(store, args.partial, direction)
+    await this.scanCursor<TableOutput>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      async r => {
+        if (!matchesOutputPartial(r, args.partial)) return false
+        if (args.txStatus !== undefined) {
+          const txCount = await this.countTransactions({
+            partial: { transactionId: r.transactionId },
+            status: args.txStatus,
+            trx: dbTrx
+          })
+          if (txCount === 0) return false
+        }
+        if (tagIds != null && tagIds.length > 0 && !await this.outputMatchesTags(r.outputId, tagIds, isQueryModeAll, dbTrx)) return false
+        return true
+      },
+      r => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (args.noScript === true) (r as any).script = undefined
+        filtered(r)
       }
-    } else if (args.partial?.transactionId !== undefined) {
-      cursor = await store.index('transactionId').openCursor(args.partial.transactionId, direction)
-    } else if (args.partial?.basketId !== undefined) {
-      cursor = await store.index('basketId').openCursor(args.partial.basketId, direction)
-    } else if (args.partial?.spentBy !== undefined) {
-      cursor = await store.index('spentBy').openCursor(args.partial.spentBy, direction)
-    } else {
-      cursor = await store.openCursor(null, direction)
-    }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableOutput = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesOutputPartial(r, args.partial)) continue
-      if (args.txStatus !== undefined) {
-        const txCount = await this.countTransactions({
-          partial: { transactionId: r.transactionId },
-          status: args.txStatus,
-          trx: dbTrx
-        })
-        if (txCount === 0) continue
-      }
-      if (tagIds != null && tagIds.length > 0 && !await this.outputMatchesTags(r.outputId, tagIds, isQueryModeAll, dbTrx)) continue
-      if (skipped < offset) { skipped++; continue }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (args.noScript === true) (r as any).script = undefined
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1400,33 +1407,24 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   async filterOutputTags (args: FindOutputTagsArgs, filtered: (v: TableOutputTag) => void): Promise<void> {
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['output_tags'], 'readonly', args.trx)
     const store = dbTrx.objectStore('output_tags')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cursor: any
     if (args.partial?.outputTagId) {
       cursor = await store.openCursor(args.partial.outputTagId)
+    } else if (args.partial?.userId !== undefined && args.partial?.tag !== undefined) {
+      cursor = await store.index('tag_userId').openCursor([args.partial.tag, args.partial.userId])
     } else if (args.partial?.userId !== undefined) {
-      if (args.partial?.tag !== undefined) {
-        cursor = await store.index('tag_userId').openCursor([args.partial.tag, args.partial.userId])
-      } else {
-        cursor = await store.index('userId').openCursor(args.partial.userId)
-      }
+      cursor = await store.index('userId').openCursor(args.partial.userId)
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableOutputTag = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesOutputTagPartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableOutputTag>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesOutputTagPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1445,9 +1443,6 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         'undefined. SyncStates may not be found by syncMap value.'
       )
     }
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['sync_states'], 'readonly', args.trx)
     const store = dbTrx.objectStore('sync_states')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1463,15 +1458,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableSyncState = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesSyncStatePartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableSyncState>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesSyncStatePartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1481,6 +1472,28 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       result.push(this.validateEntity(r))
     })
     return result
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async openTransactionsCursor (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    partial: Partial<any>,
+    direction: IDBCursorDirection
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
+    if (partial?.transactionId) return store.openCursor(partial.transactionId, direction)
+    if (partial?.userId !== undefined) {
+      if (partial?.status !== undefined) {
+        return store.index('status_userId').openCursor([partial.status, partial.userId], direction)
+      }
+      return store.index('userId').openCursor(partial.userId, direction)
+    }
+    if (partial?.status !== undefined) return store.index('status').openCursor(partial.status, direction)
+    if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
+    if (partial?.reference !== undefined) return store.index('reference').openCursor(partial.reference, direction)
+    return store.openCursor(null, direction)
   }
 
   async filterTransactions (
@@ -1496,46 +1509,27 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         'undefined. Transactions may not be found by inputBEEF value.'
       )
     }
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const stores = ['transactions']
     if (labelIds != null && labelIds.length > 0) stores.push('tx_labels_map')
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('transactions')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    if (args.partial?.transactionId) {
-      cursor = await store.openCursor(args.partial.transactionId, direction)
-    } else if (args.partial?.userId !== undefined) {
-      if (args.partial?.status !== undefined) {
-        cursor = await store.index('status_userId').openCursor([args.partial.status, args.partial.userId], direction)
-      } else {
-        cursor = await store.index('userId').openCursor(args.partial.userId, direction)
-      }
-    } else if (args.partial?.status !== undefined) {
-      cursor = await store.index('status').openCursor(args.partial.status, direction)
-    } else if (args.partial?.provenTxId !== undefined) {
-      cursor = await store.index('provenTxId').openCursor(args.partial.provenTxId, direction)
-    } else if (args.partial?.reference !== undefined) {
-      cursor = await store.index('reference').openCursor(args.partial.reference, direction)
-    } else {
-      cursor = await store.openCursor(null, direction)
-    }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableTransaction = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (args.from != null && r.created_at.getTime() < args.from.getTime()) continue
-      if (args.to != null && r.created_at.getTime() >= args.to.getTime()) continue
-      if (args.status != null && !args.status.includes(r.status)) continue
-      if (!matchesTransactionPartial(r, args.partial)) continue
-      if (labelIds != null && labelIds.length > 0 && !await this.transactionMatchesLabels(r.transactionId, labelIds, isQueryModeAll, dbTrx)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    const cursor = await this.openTransactionsCursor(store, args.partial, direction)
+    await this.scanCursor<TableTransaction>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      async r => {
+        if (args.from != null && r.created_at.getTime() < args.from.getTime()) return false
+        if (args.to != null && r.created_at.getTime() >= args.to.getTime()) return false
+        if (args.status != null && !args.status.includes(r.status)) return false
+        if (!matchesTransactionPartial(r, args.partial)) return false
+        if (labelIds != null && labelIds.length > 0 && !await this.transactionMatchesLabels(r.transactionId, labelIds, isQueryModeAll, dbTrx)) return false
+        return true
+      },
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1587,33 +1581,24 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   async filterTxLabels (args: FindTxLabelsArgs, filtered: (v: TableTxLabel) => void): Promise<void> {
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['tx_labels'], 'readonly', args.trx)
     const store = dbTrx.objectStore('tx_labels')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cursor: any
     if (args.partial?.txLabelId) {
       cursor = await store.openCursor(args.partial.txLabelId)
+    } else if (args.partial?.userId !== undefined && args.partial?.label !== undefined) {
+      cursor = await store.index('label_userId').openCursor([args.partial.label, args.partial.userId])
     } else if (args.partial?.userId !== undefined) {
-      if (args.partial?.label !== undefined) {
-        cursor = await store.index('label_userId').openCursor([args.partial.label, args.partial.userId])
-      } else {
-        cursor = await store.index('userId').openCursor(args.partial.userId)
-      }
+      cursor = await store.index('userId').openCursor(args.partial.userId)
     } else {
       cursor = await store.openCursor()
     }
-    for (; cursor != null; cursor = await cursor.continue()) {
-      const r: TableTxLabel = cursor.value
-      if (args.since != null && args.since > r.updated_at) continue
-      if (!matchesTxLabelPartial(r, args.partial)) continue
-      if (skipped < offset) { skipped++; continue }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    await this.scanCursor<TableTxLabel>(
+      cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
+      r => matchesTxLabelPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
@@ -1625,37 +1610,27 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
+  private matchesUserPartial (r: TableUser, partial: FindUsersArgs['partial']): boolean {
+    if (!partial) return true
+    if (partial.userId && r.userId !== partial.userId) return false
+    if ((partial.created_at != null) && r.created_at.getTime() !== partial.created_at.getTime()) return false
+    if ((partial.updated_at != null) && r.updated_at.getTime() !== partial.updated_at.getTime()) return false
+    if (partial.identityKey && r.identityKey !== partial.identityKey) return false
+    if (partial.activeStorage && r.activeStorage !== partial.activeStorage) return false
+    return true
+  }
+
   async filterUsers (args: FindUsersArgs, filtered: (v: TableUser) => void): Promise<void> {
-    const offset = args.paged?.offset || 0
-    let skipped = 0
-    let count = 0
     const dbTrx = this.toDbTrx(['users'], 'readonly', args.trx)
-    let cursor = await dbTrx.objectStore('users').openCursor()
-    let firstTime = true
-    while (cursor != null) {
-      if (firstTime) {
-        firstTime = false
-      } else {
-        cursor = await cursor.continue()
-        if (cursor == null) break
-      }
-      const r = cursor.value
-      if ((args.since != null) && args.since > r.updated_at) continue
-      if (args.partial) {
-        if (args.partial.userId && r.userId !== args.partial.userId) continue
-        if ((args.partial.created_at != null) && r.created_at.getTime() !== args.partial.created_at.getTime()) continue
-        if ((args.partial.updated_at != null) && r.updated_at.getTime() !== args.partial.updated_at.getTime()) continue
-        if (args.partial.identityKey && r.identityKey !== args.partial.identityKey) continue
-        if (args.partial.activeStorage && r.activeStorage !== args.partial.activeStorage) continue
-      }
-      if (skipped < offset) {
-        skipped++
-        continue
-      }
-      filtered(r)
-      count++
-      if (args.paged?.limit && count >= args.paged.limit) break
-    }
+    const cursor = await dbTrx.objectStore('users').openCursor()
+    await this.scanCursor<TableUser>(
+      cursor,
+      args.since,
+      args.paged?.offset || 0,
+      args.paged?.limit,
+      r => this.matchesUserPartial(r, args.partial),
+      filtered
+    )
     if (args.trx == null) await dbTrx.done
   }
 
