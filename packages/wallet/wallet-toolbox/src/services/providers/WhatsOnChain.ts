@@ -1,7 +1,7 @@
-import { Beef, HexString, Utils, WhatsOnChainConfig, Validation } from '@bsv/sdk'
+import { Beef, HexString, Utils, WhatsOnChainConfig } from '@bsv/sdk'
 import { convertProofToMerklePath } from '../../utility/tscProofToMerklePath'
 import SdkWhatsOnChain from './SdkWhatsOnChain'
-import { Chain, ReqHistoryNote } from '../../sdk/types'
+import { Chain } from '../../sdk/types'
 import {
   BlockHeader,
   BsvExchangeRate,
@@ -15,11 +15,21 @@ import {
   PostTxResultForTxid,
   WalletServices
 } from '../../sdk/WalletServices.interfaces'
-import { WERR_BAD_REQUEST, WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { WalletError } from '../../sdk/WalletError'
 import { doubleSha256BE, wait } from '../../utility/utilityHelpers'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 import { Services, validateScriptHash } from '../Services'
+import {
+  classifyMerklePathResponse,
+  handlePostRawTxErrorResponse,
+  handleScriptHashHistoryCatch,
+  handleScriptHashHistoryResponse,
+  handleUtxoConnReset,
+  makeMerklePathNote,
+  populateUtxoDetails,
+  ScriptHashHistoryResponse
+} from './whatsOnChainHelpers'
 
 export class WhatsOnChainNoServices extends SdkWhatsOnChain {
   constructor (chain: Chain = 'main', config: WhatsOnChainConfig = {}) {
@@ -243,40 +253,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
         } else if (response.data === 'unexpected response code 500: Transaction already in the mempool') {
           r.notes!.push({ ...nne(), what: 'postRawTxSuccessAlreadyInMempool' })
         } else {
-          r.status = 'error'
-          if (response.data === 'unexpected response code 500: 258: txn-mempool-conflict') {
-            r.doubleSpend = true // this is a possible double spend attempt
-            r.competingTxs = undefined // not provided with any data for this.
-            r.notes!.push({ ...nne(), what: 'postRawTxErrorMempoolConflict' })
-          } else if (response.data === 'unexpected response code 500: Missing inputs') {
-            r.doubleSpend = true // this is a possible double spend attempt
-            r.competingTxs = undefined // not provided with any data for this.
-            r.notes!.push({ ...nne(), what: 'postRawTxErrorMissingInputs' })
-          } else {
-            const n: ReqHistoryNote = {
-              ...nne(),
-              what: 'postRawTxError'
-            }
-            if (typeof response.data === 'string') {
-              n.data = response.data.slice(0, 128)
-              r.data = response.data
-            } else {
-              r.data = ''
-            }
-            if (typeof response.statusText === 'string') {
-              n.statusText = response.statusText.slice(0, 128)
-              r.data += `,${response.statusText}`
-            }
-            if (typeof response.status === 'string') {
-              n.status = (response.status as string).slice(0, 128)
-              r.data += `,${response.status}`
-            }
-            if (typeof response.status === 'number') {
-              n.status = response.status
-              r.data += `,${response.status}`
-            }
-            r.notes!.push(n)
-          }
+          handlePostRawTxErrorResponse(r, nne, response)
         }
       } catch (error_: unknown) {
         r.status = 'error'
@@ -354,63 +331,42 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
       details: []
     }
 
+    const scriptHash = validateScriptHash(output, outputFormat)
+    const url = `${this.URL}/script/${scriptHash}/unspent/all`
+    const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
+
     for (let retry = 0; retry <= 2; retry++) {
-      const url: string = ''
-
       try {
-        const scriptHash = validateScriptHash(output, outputFormat)
+        const response = await this.httpClient.request<WhatsOnChainUtxoStatus>(url, requestOptions)
 
-        const requestOptions = {
-          method: 'GET',
-          headers: this.getHttpHeaders()
-        }
-
-        const response = await this.httpClient.request<WhatsOnChainUtxoStatus>(
-          `${this.URL}/script/${scriptHash}/unspent/all`,
-          requestOptions
-        )
         if (response.statusText === 'Too Many Requests' && retry < 2) {
           await wait(2000)
           continue
         }
 
         // response.statusText is often, but not always 'OK' on success...
-        if (!response.data || !response.ok || response.status !== 200) { throw new WERR_INVALID_OPERATION(`WoC getUtxoStatus response ${response.statusText}`) }
+        if (!response.data || !response.ok || response.status !== 200) {
+          throw new WERR_INVALID_OPERATION(`WoC getUtxoStatus response ${response.statusText}`)
+        }
 
         const data = response.data
-
         if (data.script !== scriptHash || !Array.isArray(data.result)) {
           throw new WERR_INTERNAL('data. is not an array')
         }
 
+        r.status = 'success'
+        r.error = undefined
+
         if (data.result.length === 0) {
-          r.status = 'success'
-          r.error = undefined
           r.isUtxo = false
         } else {
-          r.status = 'success'
-          r.error = undefined
-          for (const s of data.result) {
-            r.details.push({
-              txid: s.tx_hash,
-              satoshis: s.value,
-              height: s.height,
-              index: s.tx_pos
-            })
-          }
-          if (outpoint) {
-            const { txid, vout } = Validation.parseWalletOutpoint(outpoint)
-            r.isUtxo = r.details.some(d => d.txid === txid && d.index === vout)
-          } else r.isUtxo = r.details.length > 0
+          populateUtxoDetails(r, data.result, outpoint)
         }
 
         return r
       } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        if (e.code !== 'ECONNRESET' || retry >= 2) {
-          r.error = new WERR_INTERNAL(`service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(error_))}`)
-          return r
-        }
+        const shouldRetry = handleUtxoConnReset(r, error_, url, retry, 2)
+        if (!shouldRetry) return r
       }
     }
 
@@ -429,51 +385,23 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     hash = Utils.toHex(Utils.toArray(hash, 'hex').reverse())
 
     const url = `${this.URL}/script/${hash}/confirmed/history`
+    const methodName = 'getScriptHashConfirmedHistory'
 
     for (let retry = 0; retry <= 2; retry++) {
       try {
-        const requestOptions = {
-          method: 'GET',
-          headers: this.getHttpHeaders()
-        }
-
+        const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
         const response = await this.httpClient.request<WhatsOnChainScriptHashHistoryData>(url, requestOptions)
-        if (response.statusText === 'Too Many Requests' && retry < 2) {
-          await wait(2000)
-          continue
-        }
 
-        if (!response.ok && response.status === 404) {
-          // There is no history for this script hash...
-          r.status = 'success'
-          return r
-        }
+        const action = handleScriptHashHistoryResponse(r, response as ScriptHashHistoryResponse, methodName, retry)
+        if (action === 'continue') { await wait(2000); continue }
+        if (action === 'return') return r
 
-        // response.statusText is often, but not always 'OK' on success...
-        if (!response.data || !response.ok || response.status !== 200) {
-          r.error = new WERR_BAD_REQUEST(
-            `WoC getScriptHashConfirmedHistory response ${response.ok} ${response.status} ${response.statusText}`
-          )
-          return r
-        }
-
-        if (response.data.error) {
-          r.error = new WERR_BAD_REQUEST(`WoC getScriptHashConfirmedHistory error ${response.data.error}`)
-          return r
-        }
-
-        r.history = response.data.result.map(d => ({ txid: d.tx_hash, height: d.height }))
+        r.history = response.data!.result.map(d => ({ txid: d.tx_hash, height: d.height }))
         r.status = 'success'
-
         return r
       } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        if (e.code !== 'ECONNRESET' || retry >= 2) {
-          r.error = new WERR_INTERNAL(
-            `WoC getScriptHashConfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(error_))}`
-          )
-          return r
-        }
+        const shouldRetry = handleScriptHashHistoryCatch(r, error_, url, methodName, retry, 2)
+        if (!shouldRetry) return r
       }
     }
 
@@ -492,54 +420,26 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     hash = Utils.toHex(Utils.toArray(hash, 'hex').reverse())
 
     const url = `${this.URL}/script/${hash}/unconfirmed/history`
+    const methodName = 'getScriptHashUnconfirmedHistory'
 
     for (let retry = 0; ; retry++) {
       try {
-        const requestOptions = {
-          method: 'GET',
-          headers: this.getHttpHeaders()
-        }
-
+        const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
         const response = await this.httpClient.request<WhatsOnChainScriptHashHistoryData>(url, requestOptions)
-        if (response.statusText === 'Too Many Requests' && retry < 2) {
-          await wait(2000)
-          continue
-        }
 
-        if (!response.ok && response.status === 404) {
-          // There is no history for this script hash...
-          r.status = 'success'
-          return r
-        }
+        const action = handleScriptHashHistoryResponse(r, response as ScriptHashHistoryResponse, methodName, retry)
+        if (action === 'continue') { await wait(2000); continue }
+        if (action === 'return') return r
 
-        // response.statusText is often, but not always 'OK' on success...
-        if (!response.data || !response.ok || response.status !== 200) {
-          r.error = new WERR_BAD_REQUEST(
-            `WoC getScriptHashUnconfirmedHistory response ${response.ok} ${response.status} ${response.statusText}`
-          )
-          return r
-        }
-
-        if (response.data.error) {
-          r.error = new WERR_BAD_REQUEST(`WoC getScriptHashUnconfirmedHistory error ${response.data.error}`)
-          return r
-        }
-
-        r.history = response.data.result.map(d => ({ txid: d.tx_hash, height: d.height }))
+        r.history = response.data!.result.map(d => ({ txid: d.tx_hash, height: d.height }))
         r.status = 'success'
-
         return r
       } catch (error_: unknown) {
-        const e = WalletError.fromUnknown(error_)
-        if (e.code !== 'ECONNRESET' || retry > 2) {
-          r.error = new WERR_INTERNAL(
-            `WoC getScriptHashUnconfirmedHistory service failure: ${url}, error: ${JSON.stringify(WalletError.fromUnknown(error_))}`
-          )
-          return r
-        }
+        // Note: original used retry > 2 (not >= 2) for the unconfirmed variant
+        const shouldRetry = handleScriptHashHistoryCatch(r, error_, url, methodName, retry, 3)
+        if (!shouldRetry) return r
       }
     }
-
   }
 
   async getScriptHashHistory (hash: string): Promise<GetScriptHashHistoryResult> {
@@ -642,105 +542,58 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
    */
   async getMerklePath (txid: string, services: WalletServices): Promise<GetMerklePathResult> {
     const r: GetMerklePathResult = { name: 'WoCTsc', notes: [] }
+    const name = r.name!
 
-    const headers = this.getHttpHeaders()
-    const requestOptions = {
-      method: 'GET',
-      headers
-    }
+    const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
+    const url = `${this.URL}/tx/${txid}/proof/tsc`
 
     for (let retry = 0; retry < 2; retry++) {
       try {
-        const response = await this.httpClient.request<WhatsOnChainTscProof | WhatsOnChainTscProof[]>(
-          `${this.URL}/tx/${txid}/proof/tsc`,
-          requestOptions
-        )
-        if (response.statusText === 'Too Many Requests' && retry < 2) {
-          r.notes!.push({
-            what: 'getMerklePathRetry',
-            name: r.name,
-            status: response.status,
-            statusText: response.statusText
-          })
+        const response = await this.httpClient.request<WhatsOnChainTscProof | WhatsOnChainTscProof[]>(url, requestOptions)
+
+        const classification = classifyMerklePathResponse(response.status, response.statusText, retry)
+
+        if (classification === 'retry') {
+          r.notes!.push(makeMerklePathNote('getMerklePathRetry', name, { status: response.status, statusText: response.statusText }))
           await wait(2000)
           continue
         }
-
-        if (response.status === 404 && response.statusText === 'Not Found') {
-          r.notes!.push({
-            what: 'getMerklePathNotFound',
-            name: r.name,
-            status: response.status,
-            statusText: response.statusText
-          })
+        if (classification === 'notFound') {
+          r.notes!.push(makeMerklePathNote('getMerklePathNotFound', name, { status: response.status, statusText: response.statusText }))
           return r
         }
-
         // response.statusText is often, but not always 'OK' on success...
         if (!response.ok || response.status !== 200) {
-          r.notes!.push({
-            what: 'getMerklePathBadStatus',
-            name: r.name,
-            status: response.status,
-            statusText: response.statusText
-          })
+          r.notes!.push(makeMerklePathNote('getMerklePathBadStatus', name, { status: response.status, statusText: response.statusText }))
           throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`)
         }
-
         if (!response.data) {
           // Unmined, proof not yet available.
-          r.notes!.push({
-            what: 'getMerklePathNoData',
-            name: r.name,
-            status: response.status,
-            statusText: response.statusText
-          })
+          r.notes!.push(makeMerklePathNote('getMerklePathNoData', name, { status: response.status, statusText: response.statusText }))
           return r
         }
 
         if (!Array.isArray(response.data)) response.data = [response.data]
-
         if (response.data.length != 1) return r
 
         const p = response.data[0]
         const header = await services.hashToHeader(p.target)
         if (header) {
-          const proof = {
-            index: p.index,
-            nodes: p.nodes,
-            height: header.height
-          }
-          r.merklePath = convertProofToMerklePath(txid, proof)
+          r.merklePath = convertProofToMerklePath(txid, { index: p.index, nodes: p.nodes, height: header.height })
           r.header = header
-          r.notes!.push({
-            what: 'getMerklePathSuccess',
-            name: r.name,
-            status: response.status,
-            statusText: response.statusText
-          })
+          r.notes!.push(makeMerklePathNote('getMerklePathSuccess', name, { status: response.status, statusText: response.statusText }))
         } else {
-          r.notes!.push({
-            what: 'getMerklePathNoHeader',
-            target: p.target,
-            name: r.name,
-            status: response.status,
-            statusText: response.statusText
-          })
+          r.notes!.push(makeMerklePathNote('getMerklePathNoHeader', name, { target: p.target, status: response.status, statusText: response.statusText }))
           throw new WERR_INVALID_PARAMETER('blockhash', 'a valid on-chain block hash')
         }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
-        r.notes!.push({
-          what: 'getMerklePathError',
-          name: r.name,
-          code: e.code,
-          description: e.description
-        })
+        r.notes!.push(makeMerklePathNote('getMerklePathError', name, { code: e.code, description: e.description }))
         r.error = e
       }
       return r
     }
-    r.notes!.push({ what: 'getMerklePathInternal', name: r.name })
+    r.notes!.push(makeMerklePathNote('getMerklePathInternal', name))
     throw new WERR_INTERNAL()
   }
 }
