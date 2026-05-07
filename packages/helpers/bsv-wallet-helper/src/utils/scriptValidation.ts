@@ -142,7 +142,8 @@ export function isP2PKH (input: ScriptInput): boolean {
     }
 
     return true
-  } catch (error) {
+  } catch (_invalidScript) {
+    // Malformed or unrecognised script bytes — treat as non-P2PKH rather than throwing.
     return false
   }
 }
@@ -203,7 +204,8 @@ export function isOrdinal (input: ScriptInput): boolean {
     const hasP2PKH = p2pkhPattern.test(hex)
 
     return hasP2PKH
-  } catch (error) {
+  } catch (_invalidScript) {
+    // Malformed or unrecognised script bytes — treat as non-ordinal rather than throwing.
     return false
   }
 }
@@ -257,7 +259,8 @@ export function hasOrd (input: ScriptInput): boolean {
     // Check if the hex contains the ordinal envelope start pattern
     // OP_0 OP_IF 'ord' = 0063036f7264
     return hex.includes(start)
-  } catch (error) {
+  } catch (_invalidScript) {
+    // Malformed or unrecognised script bytes — treat as no-ord rather than throwing.
     return false
   }
 }
@@ -311,8 +314,8 @@ export function hasOpReturnData (input: ScriptInput): boolean {
         if (asm.includes('OP_RETURN')) {
           return true
         }
-      } catch {
-        // Parsing failed, continue to manual check
+      } catch (_invalidHex) {
+        // Parsing failed — fall through to heuristic opcode scan below.
       }
 
       // Manual check: look for '6a' opcode in the hex string
@@ -336,7 +339,8 @@ export function hasOpReturnData (input: ScriptInput): boolean {
       // For Script objects, use ASM which clearly identifies OP_RETURN as an opcode
       return input.toASM().includes('OP_RETURN')
     }
-  } catch (error) {
+  } catch (_invalidScript) {
+    // Malformed or unrecognised script bytes — treat as no-OP_RETURN rather than throwing.
     return false
   }
 }
@@ -409,7 +413,8 @@ export function getScriptType (input: ScriptInput): ScriptType {
 
     // 4. Everything else is custom
     return 'Custom'
-  } catch (error) {
+  } catch (_invalidScript) {
+    // Malformed or unrecognised script bytes — fall back to 'Custom' rather than throwing.
     return 'Custom'
   }
 }
