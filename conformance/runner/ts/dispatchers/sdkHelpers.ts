@@ -192,18 +192,22 @@ export function merklePathCoinbase (
   if (getString(expected, 'merkle_root') !== '') expect(mp.computeRoot(txidStr)).toBe(getString(expected, 'merkle_root'))
 }
 
-export function merklePathFromBump (
+function assertMerklePathStructure (
   mp: MerklePath,
-  input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   if ('block_height' in expected) expect(mp.blockHeight).toBe(expected['block_height'])
   if ('path_levels' in expected) expect(mp.path.length).toBe(expected['path_levels'])
   if ('path_level0_length' in expected) expect(mp.path[0].length).toBe(expected['path_level0_length'])
-
   const wantHex = getString(expected, 'toHex') || getString(expected, 'serialized_bump_hex')
   if (wantHex !== '') expect(mp.toHex()).toBe(wantHex)
+}
 
+function assertTxidMerkleRoots (
+  mp: MerklePath,
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
   const txid = getString(input, 'txid')
   if (txid !== '') {
     const wantRoot = getString(expected, 'merkle_root')
@@ -219,16 +223,32 @@ export function merklePathFromBump (
     }
   }
 
+  assertSparseTxidRoots(mp, input, expected)
+}
+
+function assertSparseTxidRoots (
+  mp: MerklePath,
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const wantRoot = getString(expected, 'merkle_root')
+  if (wantRoot === '') return
   for (const key of ['txid_tx2', 'txid_tx5', 'txid_tx8']) {
     const txidVal = getString(input, key)
     if (txidVal !== '') {
-      const wantRoot = getString(expected, 'merkle_root')
-      if (wantRoot !== '') {
-        expect(mp.computeRoot(txidVal)).toBe(wantRoot)
-        break
-      }
+      expect(mp.computeRoot(txidVal)).toBe(wantRoot)
+      break
     }
   }
+}
+
+export function merklePathFromBump (
+  mp: MerklePath,
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  assertMerklePathStructure(mp, expected)
+  assertTxidMerkleRoots(mp, input, expected)
 }
 
 // ── Serialization sub-handlers ────────────────────────────────────────────────
@@ -693,39 +713,68 @@ export function dispatchNodeSighashFixture (
   expect(bytesToHex(original)).toBe(getString(expected, 'original_hash'))
 }
 
+function parseTransactionOrReturnInvalid (
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): Transaction | null {
+  try {
+    const tx = Transaction.fromHex(getString(input, 'tx_hex'))
+    expect(bytesToHex(tx.toBinary())).toBe(getString(input, 'tx_hex'))
+    return tx
+  } catch (e) {
+    if (getBool(expected, 'valid')) throw e
+    return null
+  }
+}
+
+function countRejectedSpends (
+  tx: Transaction,
+  prevouts: Array<Record<string, unknown>>,
+  flagStrings: string[],
+  expectValid: boolean
+): number {
+  let rejectedSpendCases = 0
+  for (const flags of flagStrings) {
+    for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
+      rejectedSpendCases += countOneSpend(tx, prevouts, flags, inputIndex, expectValid)
+    }
+  }
+  return rejectedSpendCases
+}
+
+function countOneSpend (
+  tx: Transaction,
+  prevouts: Array<Record<string, unknown>>,
+  flags: string,
+  inputIndex: number,
+  expectValid: boolean
+): number {
+  try {
+    const valid = validateNodeTransactionSpend(tx, prevouts, flags, inputIndex)
+    if (expectValid) expect(valid).toBe(true)
+    return valid ? 0 : 1
+  } catch (e) {
+    if (expectValid) throw e
+    return 1
+  }
+}
+
 export function dispatchNodeTransactionFixture (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
-  let tx: Transaction
-  try {
-    tx = Transaction.fromHex(getString(input, 'tx_hex'))
-    expect(bytesToHex(tx.toBinary())).toBe(getString(input, 'tx_hex'))
-  } catch (e) {
-    if (getBool(expected, 'valid')) throw e
-    return
-  }
+  const tx = parseTransactionOrReturnInvalid(input, expected)
+  if (tx === null) return
 
   const prevouts = Array.isArray(input.prevouts)
     ? input.prevouts as Array<Record<string, unknown>>
     : []
   const flagStrings = getStringArray(input, 'flag_strings')
-  let rejectedSpendCases = 0
+  const expectValid = getBool(expected, 'valid')
 
-  for (const flags of flagStrings) {
-    for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
-      try {
-        const valid = validateNodeTransactionSpend(tx, prevouts, flags, inputIndex)
-        if (!valid) rejectedSpendCases++
-        if (getBool(expected, 'valid')) expect(valid).toBe(true)
-      } catch (e) {
-        if (getBool(expected, 'valid')) throw e
-        rejectedSpendCases++
-      }
-    }
-  }
+  const rejectedSpendCases = countRejectedSpends(tx, prevouts, flagStrings, expectValid)
 
-  if (!getBool(expected, 'valid')) {
+  if (!expectValid) {
     expect(rejectedSpendCases).toBeGreaterThan(0)
   }
 }
