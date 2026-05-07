@@ -421,9 +421,7 @@ export class GlobalKVStore {
    * @private
    */
   private async getIdentityKey (): Promise<PubKeyHex> {
-    if (this.cachedIdentityKey == null) {
-      this.cachedIdentityKey = (await this.wallet.getPublicKey({ identityKey: true }, this.config.originator)).publicKey
-    }
+    this.cachedIdentityKey ??= (await this.wallet.getPublicKey({ identityKey: true }, this.config.originator)).publicKey
     return this.cachedIdentityKey
   }
 
@@ -467,7 +465,7 @@ export class GlobalKVStore {
         const signature = decoded.fields.pop() as number[]
         try {
           await anyoneWallet.verifySignature({
-            data: decoded.fields.reduce((a, e) => [...a, ...e], []),
+            data: decoded.fields.flat(),
             signature,
             counterparty: Utils.toHex(decoded.fields[kvProtocol.controller]),
             protocolID: JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.protocolID])),

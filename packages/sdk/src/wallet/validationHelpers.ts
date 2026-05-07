@@ -274,7 +274,7 @@ export function validateBase64String (s: string, name: string, min?: number, max
 
   let paddingCount = 0
   for (let i = 0; i < s.length; i++) {
-    const char = s.charCodeAt(i)
+    const char = s.codePointAt(i) ?? 0
     if (char >= 65 && char <= 90) continue // A-Z
     if (char >= 97 && char <= 122) continue // a-z
     if (char >= 48 && char <= 57) continue // 0-9
@@ -392,7 +392,7 @@ export interface ValidCreateActionInput {
 export function validateCreateActionInput (i: CreateActionInput): ValidCreateActionInput {
   if (i.unlockingScript === undefined && i.unlockingScriptLength === undefined) { throw new WERR_INVALID_PARAMETER('unlockingScript, unlockingScriptLength', 'at least one valid value.') }
   const unlockingScript = validateOptionalHexString(i.unlockingScript, 'unlockingScript')
-  const unlockingScriptLength = i.unlockingScriptLength ?? (unlockingScript != null ? unlockingScript.length / 2 : 0)
+  const unlockingScriptLength = i.unlockingScriptLength ?? (unlockingScript == null ? 0 : unlockingScript.length / 2)
   if (unlockingScript && unlockingScriptLength !== unlockingScript.length / 2) { throw new WERR_INVALID_PARAMETER('unlockingScriptLength', 'length unlockingScript if both valid.') }
   const vi: ValidCreateActionInput = {
     outpoint: parseWalletOutpoint(i.outpoint),
@@ -657,7 +657,7 @@ export function validateBasketInsertion (args?: BasketInsertion): ValidBasketIns
   if (args === undefined) return undefined
   const v: ValidBasketInsertion = {
     basket: validateBasket(args.basket),
-    customInstructions: validateOptionalStringLength(args.customInstructions, 'customInstructions', 0, 1000), // TODO: real max??
+    customInstructions: validateOptionalStringLength(args.customInstructions, 'customInstructions', 0, 1000),
     tags: defaultEmpty(args.tags).map(t => validateTag(t))
   }
   return v
@@ -1134,7 +1134,7 @@ export function validateListOutputsArgs (args: ListOutputsArgs): ValidListOutput
     includeTags: defaultFalse(args.includeTags),
     includeLabels: defaultFalse(args.includeLabels),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
-    offset: validateInteger(args.offset, 'offset', 0, undefined, undefined),
+    offset: validateInteger(args.offset, 'offset', 0),
     seekPermission: defaultTrue(args.seekPermission),
     knownTxids: []
   }

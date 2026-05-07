@@ -45,7 +45,8 @@ import {
   TXIDHexString,
   VersionString7To30Bytes,
   WalletInterface,
-  ActionStatus
+  ActionStatus,
+  SendWithResultStatus
 } from '../Wallet.interfaces.js'
 import WalletWire from './WalletWire.js'
 import Certificate from '../../auth/certificates/Certificate.js'
@@ -336,7 +337,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       noSendChange?: OutpointString[]
       sendWithResults?: Array<{
         txid: TXIDHexString
-        status: 'unproven' | 'sending' | 'failed'
+        status: SendWithResultStatus
       }>
       signableTransaction?: {
         tx: BEEF
@@ -376,9 +377,8 @@ export default class WalletWireTransceiver implements WalletInterface {
         const txidBytes = resultReader.read(32)
         const txid = Utils.toHex(txidBytes)
         const statusCode = resultReader.readInt8()
-        let status: 'unproven' | 'sending' | 'failed' = 'unproven'
-        if (statusCode === 1) status = 'unproven'
-        else if (statusCode === 2) status = 'sending'
+        let status: SendWithResultStatus = 'unproven'
+        if (statusCode === 2) status = 'sending'
         else if (statusCode === 3) status = 'failed'
         response.sendWithResults.push({ txid, status })
       }
@@ -482,7 +482,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       noSendChange?: OutpointString[]
       sendWithResults?: Array<{
         txid: TXIDHexString
-        status: 'unproven' | 'sending' | 'failed'
+        status: SendWithResultStatus
       }>
     } = {}
 
@@ -508,9 +508,8 @@ export default class WalletWireTransceiver implements WalletInterface {
         const txidBytes = resultReader.read(32)
         const txid = Utils.toHex(txidBytes)
         const statusCode = resultReader.readInt8()
-        let status: 'unproven' | 'sending' | 'failed' = 'unproven'
-        if (statusCode === 1) status = 'unproven'
-        else if (statusCode === 2) status = 'sending'
+        let status: SendWithResultStatus = 'unproven'
+        if (statusCode === 2) status = 'sending'
         else if (statusCode === 3) status = 'failed'
         response.sendWithResults.push({ txid, status })
       }
@@ -584,13 +583,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
 
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
 
     // Transmit and parse response
     const result = await this.transmit(
@@ -899,13 +892,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.write(descriptionAsArray)
 
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
 
     await this.transmit('internalizeAction', originator, paramWriter.toArray())
     return { accepted: true }
@@ -970,13 +957,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
 
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
 
     const result = await this.transmit(
       'listOutputs',
@@ -1096,11 +1077,17 @@ export default class WalletWireTransceiver implements WalletInterface {
   ): Promise<{ publicKey: PubKeyHex }> {
     const paramWriter = new Utils.Writer()
     paramWriter.writeUInt8(args.identityKey ? 1 : 0)
-    if (!args.identityKey) {
+    if (args.identityKey) {
+      paramWriter.write(
+        this.encodePrivilegedParams(args.privileged, args.privilegedReason)
+      )
+    } else {
+      args.protocolID ??= [SecurityLevels.Silent, 'default']
+      args.keyID ??= ''
       paramWriter.write(
         this.encodeKeyRelatedParams(
-          args.protocolID ??= [SecurityLevels.Silent, 'default'],
-          args.keyID ??= '',
+          args.protocolID,
+          args.keyID,
           args.counterparty,
           args.privileged,
           args.privilegedReason
@@ -1111,20 +1098,10 @@ export default class WalletWireTransceiver implements WalletInterface {
       } else {
         paramWriter.writeInt8(-1)
       }
-    } else {
-      paramWriter.write(
-        this.encodePrivilegedParams(args.privileged, args.privilegedReason)
-      )
     }
 
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
 
     const result = await this.transmit(
       'getPublicKey',
@@ -1276,13 +1253,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.plaintext.length)
     paramWriter.write(args.plaintext)
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     return {
       ciphertext: await this.transmit(
         'encrypt',
@@ -1317,13 +1288,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.ciphertext.length)
     paramWriter.write(args.ciphertext)
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     return {
       plaintext: await this.transmit(
         'decrypt',
@@ -1358,13 +1323,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.data.length)
     paramWriter.write(args.data)
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     return {
       hmac: await this.transmit(
         'createHmac',
@@ -1401,13 +1360,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.data.length)
     paramWriter.write(args.data)
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     await this.transmit('verifyHmac', originator, paramWriter.toArray())
     return { valid: true }
   }
@@ -1440,17 +1393,12 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(args.data.length)
       paramWriter.write(args.data)
     } else {
+      args.hashToDirectlySign ??= []
       paramWriter.writeUInt8(2)
-      paramWriter.write(args.hashToDirectlySign ??= [])
+      paramWriter.write(args.hashToDirectlySign)
     }
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     return {
       signature: await this.transmit(
         'createSignature',
@@ -1501,15 +1449,17 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(args.hashToDirectlyVerify ?? [])
     }
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     await this.transmit('verifySignature', originator, paramWriter.toArray())
     return { valid: true }
+  }
+
+  private writeSeekPermission (paramWriter: Utils.Writer, seekPermission?: boolean): void {
+    if (typeof seekPermission === 'boolean') {
+      paramWriter.writeInt8(seekPermission ? 1 : 0)
+    } else {
+      paramWriter.writeInt8(-1)
+    }
   }
 
   private encodeKeyRelatedParams(
@@ -1583,12 +1533,12 @@ export default class WalletWireTransceiver implements WalletInterface {
 
       const keyringKeys = Object.keys(args.keyringForSubject ?? {})
       paramWriter.writeVarIntNum(keyringKeys.length)
-      for (let i = 0; i < keyringKeys.length; i++) {
-        const keyringKeysAsArray = Utils.toArray(keyringKeys[i], 'utf8')
+      for (const key of keyringKeys) {
+        const keyringKeysAsArray = Utils.toArray(key, 'utf8')
         paramWriter.writeVarIntNum(keyringKeysAsArray.length)
         paramWriter.write(keyringKeysAsArray)
         const keyringForSubjectAsArray = Utils.toArray(
-          args.keyringForSubject?.[keyringKeys[i]],
+          args.keyringForSubject?.[key],
           'base64'
         )
         paramWriter.writeVarIntNum(keyringForSubjectAsArray.length)
@@ -1645,13 +1595,13 @@ export default class WalletWireTransceiver implements WalletInterface {
   ): Promise<ListCertificatesResult> {
     const paramWriter = new Utils.Writer()
     paramWriter.writeVarIntNum(args.certifiers.length)
-    for (let i = 0; i < args.certifiers.length; i++) {
-      paramWriter.write(Utils.toArray(args.certifiers[i], 'hex'))
+    for (const certifier of args.certifiers) {
+      paramWriter.write(Utils.toArray(certifier, 'hex'))
     }
 
     paramWriter.writeVarIntNum(args.types.length)
-    for (let i = 0; i < args.types.length; i++) {
-      paramWriter.write(Utils.toArray(args.types[i], 'base64'))
+    for (const type of args.types) {
+      paramWriter.write(Utils.toArray(type, 'base64'))
     }
     if (typeof args.limit === 'number') {
       paramWriter.writeVarIntNum(args.limit)
@@ -1905,13 +1855,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     const result = await this.transmit(
       'discoverByIdentityKey',
       originator,
@@ -1932,12 +1876,12 @@ export default class WalletWireTransceiver implements WalletInterface {
     const paramWriter = new Utils.Writer()
     const attributeKeys = Object.keys(args.attributes)
     paramWriter.writeVarIntNum(attributeKeys.length)
-    for (let i = 0; i < attributeKeys.length; i++) {
-      paramWriter.writeVarIntNum(attributeKeys[i].length)
-      paramWriter.write(Utils.toArray(attributeKeys[i], 'utf8'))
-      paramWriter.writeVarIntNum(args.attributes[attributeKeys[i]].length)
+    for (const attrKey of attributeKeys) {
+      paramWriter.writeVarIntNum(attrKey.length)
+      paramWriter.write(Utils.toArray(attrKey, 'utf8'))
+      paramWriter.writeVarIntNum(args.attributes[attrKey].length)
       paramWriter.write(
-        Utils.toArray(args.attributes[attributeKeys[i]], 'utf8')
+        Utils.toArray(args.attributes[attrKey], 'utf8')
       )
     }
     if (typeof args.limit === 'number') {
@@ -1951,13 +1895,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     // Serialize seekPermission
-    paramWriter.writeInt8(
-      typeof args.seekPermission === 'boolean'
-        ? args.seekPermission
-          ? 1
-          : 0
-        : -1
-    )
+    this.writeSeekPermission(paramWriter, args.seekPermission)
     const result = await this.transmit(
       'discoverByAttributes',
       originator,

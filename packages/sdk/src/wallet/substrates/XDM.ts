@@ -12,10 +12,10 @@ export default class XDMSubstrate extends InvokableWalletBase {
 
   constructor(domain: string = '*') {
     super()
-    if (typeof window !== 'object') {
+    if (typeof globalThis.window !== 'object') {
       throw new TypeError('The XDM substrate requires a global window object.')
     }
-    if (typeof window.postMessage !== 'function') {
+    if (typeof globalThis.window.postMessage !== 'function') {
       throw new TypeError(
         'The window object does not seem to support postMessage calls.'
       )

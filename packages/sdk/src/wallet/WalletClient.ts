@@ -131,7 +131,7 @@ export default class WalletClient implements WalletInterface {
     const fastResults = await Promise.allSettled(fastAttempts)
     const fastSuccessful = fastResults
       .filter((r): r is PromiseFulfilledResult<{ success: boolean, sub?: WalletInterface }> => r.status === 'fulfilled' && r.value.success && r.value.sub !== undefined)
-      .map(r => r.value.sub as WalletInterface)
+      .map(r => r.value.sub)
 
     if (fastSuccessful.length > 0) {
       this.substrate = fastSuccessful[0]
