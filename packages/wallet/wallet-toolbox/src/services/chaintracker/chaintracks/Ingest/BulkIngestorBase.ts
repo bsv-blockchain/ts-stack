@@ -39,7 +39,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
     this.log = log
   }
 
-  async shutdown (): Promise<void> {}
+  async shutdown (): Promise<void> { /* intentional no-op: subclasses override when needed */ }
 
   storageOrUndefined (): ChaintracksStorageApi | undefined {
     return this.storageEngine

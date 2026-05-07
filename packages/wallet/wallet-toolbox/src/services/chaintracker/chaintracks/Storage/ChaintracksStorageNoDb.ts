@@ -19,7 +19,7 @@ interface ChaintracksNoDbData {
 export interface ChaintracksStorageNoDbOptions extends ChaintracksStorageBaseOptions {}
 
 export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
-  static mainData: ChaintracksNoDbData = {
+  static readonly mainData: ChaintracksNoDbData = {
     chain: 'main',
     liveHeaders: new Map<number, LiveBlockHeader>(),
     maxHeaderId: 0,
@@ -27,7 +27,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     hashToHeaderId: new Map<string, number>()
   }
 
-  static testData: ChaintracksNoDbData = {
+  static readonly testData: ChaintracksNoDbData = {
     chain: 'test',
     liveHeaders: new Map<number, LiveBlockHeader>(),
     maxHeaderId: 0,
@@ -39,7 +39,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     super(options)
   }
 
-  override async destroy (): Promise<void> {}
+  override async destroy (): Promise<void> { /* intentional no-op: in-memory storage has no cleanup */ }
 
   async getData (): Promise<ChaintracksNoDbData> {
     switch (this.chain) {
@@ -91,7 +91,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     // Update tipHeaderId if necessary
     if (data.liveHeaders.size > 0) {
       const tip = Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
-      data.tipHeaderId = (tip != null) ? tip.headerId : 0
+      data.tipHeaderId = tip?.headerId ?? 0
     } else {
       data.tipHeaderId = 0
     }

@@ -77,8 +77,8 @@ export class Bitails {
     const r = await this.postRaws(raws, txids)
 
     r.notes!.unshift(note)
-    if (r.status !== 'success') r.notes!.push({ ...nne(), what: 'postBeefError' })
-    else r.notes!.push({ ...nn(), what: 'postBeefSuccess' })
+    if (r.status === 'success') r.notes!.push({ ...nn(), what: 'postBeefSuccess' })
+    else r.notes!.push({ ...nne(), what: 'postBeefError' })
 
     return r
   }
@@ -159,7 +159,7 @@ export class Bitails {
             // btrs has correct number of results and each one has expected txid.
             // focus on results for requested txids
             for (const rt of r.txidResults) {
-              const btr = btrs.find(btr => btr.txid! === rt.txid)!
+              const btr = btrs.find(btr => btr.txid === rt.txid)!
               const txid = rt.txid
               if (btr.error != null) {
                 // code: -25, message: 'missing-inputs'
@@ -225,9 +225,7 @@ export class Bitails {
         r.notes!.push({ ...nn(), what: 'getMerklePathNotFound' })
       } else if (!response.ok || response.status !== 200 || response.statusText !== 'OK') {
         r.notes!.push({ ...nne(), what: 'getMerklePathBadStatus' })
-      } else if (!response.data) {
-        r.notes!.push({ ...nne(), what: 'getMerklePathNoData' })
-      } else {
+      } else if (response.data) {
         const p = response.data
         const header = await services.hashToHeader(p.target)
         if (header) {
@@ -238,6 +236,8 @@ export class Bitails {
         } else {
           r.notes!.push({ ...nne(), what: 'getMerklePathNoHeader', target: p.target })
         }
+      } else {
+        r.notes!.push({ ...nne(), what: 'getMerklePathNoData' })
       }
     } catch (error_: unknown) {
       const e = WalletError.fromUnknown(error_)

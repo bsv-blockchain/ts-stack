@@ -58,7 +58,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     await super.migrateLatest()
   }
 
-  override async destroy (): Promise<void> {}
+  override async destroy (): Promise<void> { /* intentional no-op: IDB cleanup handled by openDB */ }
 
   override async deleteLiveBlockHeaders (): Promise<void> {
     await this.makeAvailable()
@@ -178,10 +178,10 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const heightIndex = store.index('height')
 
     const minCursor = await heightIndex.openCursor(null, 'next')
-    const minValue = (minCursor != null) ? minCursor.value.height : null
+    const minValue = minCursor?.value.height ?? null
 
     const maxCursor = await heightIndex.openCursor(null, 'prev')
-    const maxValue = (maxCursor != null) ? maxCursor.value.height : null
+    const maxValue = maxCursor?.value.height ?? null
 
     const range = minValue === null || maxValue === null ? HeightRange.empty : new HeightRange(minValue, maxValue)
 
@@ -195,7 +195,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const store = trx.objectStore('live_headers')
 
     const maxCursor = await store.openKeyCursor(null, 'prev')
-    const maxValue: number = (maxCursor != null) ? Number(maxCursor.key) : 0
+    const maxValue: number = maxCursor != null ? Number(maxCursor.key) : 0
     await trx.done
     return maxValue
   }
@@ -212,7 +212,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
 
     while ((cursor != null) && count > 0) {
       const header = this.repairStoredLiveHeader(cursor.value)
-      if ((header != null) && header.isActive) {
+      if (header?.isActive) {
         count--
         headers.push(header)
       }
@@ -524,7 +524,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
         }
 
         if (!db.objectStoreNames.contains('bulk_headers')) {
-          const bulkHeadersStore = db.createObjectStore('bulk_headers', {
+          db.createObjectStore('bulk_headers', {
             keyPath: 'fileId',
             autoIncrement: true
           })

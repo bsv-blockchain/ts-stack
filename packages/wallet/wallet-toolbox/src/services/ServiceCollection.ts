@@ -23,7 +23,7 @@ export class ServiceCollection<T> {
     this.since = new Date()
   }
 
-  add (s: { name: string, service: T }): ServiceCollection<T> {
+  add (s: { name: string, service: T }): this {
     this.services.push(s)
     return this
   }
@@ -173,7 +173,7 @@ export class ServiceCollection<T> {
           msecs: c.msecs,
           success: c.success,
           result: c.result,
-          error: (c.error != null) ? { message: c.error.message, code: c.error.code } : undefined
+          error: (c.error == null) ? undefined : { message: c.error.message, code: c.error.code }
         })),
         totalCounts: {
           success: h.totalCounts.success,
@@ -184,8 +184,7 @@ export class ServiceCollection<T> {
         },
         resetCounts: []
       }
-      for (let i = 0; i < h.resetCounts.length; i++) {
-        const r = h.resetCounts[i]
+      for (const r of h.resetCounts) {
         c.resetCounts.push({
           success: r.success,
           failure: r.failure,

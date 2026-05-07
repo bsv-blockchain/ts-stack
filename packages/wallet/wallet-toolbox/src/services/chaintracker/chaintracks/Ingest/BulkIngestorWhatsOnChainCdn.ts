@@ -96,7 +96,7 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
         for (let height = range.range.minHeight; height <= range.range.maxHeight; height++) {
           if (fetchRange.contains(height)) {
             range.data ??= await this.fetch.download(this.fetch.pathJoin(range.sourceUrl, range.fileName))
-            const h = deserializeBlockHeader(range.data, (height - range.range.minHeight) * 80, height)
+            const h = deserializeBlockHeader(range.data, height, (height - range.range.minHeight) * 80)
             oldHeaders.push(h)
           }
         }

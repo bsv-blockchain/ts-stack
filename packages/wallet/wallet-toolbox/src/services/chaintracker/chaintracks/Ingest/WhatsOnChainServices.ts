@@ -54,9 +54,9 @@ export class WhatsOnChainServices {
     return options
   }
 
-  static chainInfo: Array<WocChainInfo | undefined> = []
-  static chainInfoTime: Array<Date | undefined> = []
-  static chainInfoMsecs: number[] = []
+  static readonly chainInfo: Array<WocChainInfo | undefined> = []
+  static readonly chainInfoTime: Array<Date | undefined> = []
+  static readonly chainInfoMsecs: number[] = []
 
   chain: Chain
   woc: WhatsOnChain
