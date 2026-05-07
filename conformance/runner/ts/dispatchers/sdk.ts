@@ -12,21 +12,47 @@ import {
   PublicKey,
   Signature,
   BigNumber,
-  TransactionSignature,
-  Spend,
-  Script,
-  LockingScript,
-  UnlockingScript,
-  OP,
   MerklePath,
   Transaction,
   Beef
 } from '@bsv/sdk'
 import * as BSM from '@bsv/sdk/compat/BSM'
 import ECIES from '@bsv/sdk/compat/ECIES'
-import { StorageUtils } from '@bsv/sdk/storage'
-const { getURLForHash, getHashFromURL, isValidURL } = StorageUtils
 import { AESGCM } from '@bsv/sdk/primitives/AESGCM'
+import {
+  ecdsaMessageTooLarge,
+  ecdsaPubkeyInfinity,
+  ecdsaExplicitSignatureVerify,
+  ecdsaBatchMessages,
+  ecdsaWrongPubkey,
+  ecdsaSignAndVerify,
+  computeMerkleRootFromDisplayTxids,
+  merklePathLeafPair,
+  merklePathCoinbase,
+  merklePathFromBump,
+  serializationRawHex,
+  serializationEfHex,
+  serializationBeefHex,
+  serializationBumpHex,
+  signatureFromPrivkey,
+  signatureFromDer,
+  signatureFromCompact,
+  bsmVerifyDer,
+  bsmVerifyCompact,
+  bsmRecovery,
+  evalWriteBn,
+  evalWriteBnRange,
+  evalFindAndDelete,
+  evalHex,
+  evalBinary,
+  evalP2PKH,
+  evalScriptPubkey,
+  evalDataLengthBytes,
+  evalScriptAsm,
+  dispatchNodeScriptFixture,
+  dispatchNodeSighashFixture,
+  dispatchNodeTransactionFixture
+} from './sdkHelpers.js'
 
 export const categories: ReadonlyArray<string> = [
   'sha256',
@@ -168,32 +194,13 @@ function dispatchECDSA (
   if (kVal !== '' && kVal !== 'drbg') return
   if ('k_function' in input) return
 
-  // message_too_large: SDK must throw on sign, or verify returns false
   if (getBool(input, 'message_too_large')) {
-    const privKey = PrivateKey.fromHex(getString(input, 'privkey_hex'))
-    const bits = typeof input['message_bits'] === 'number' ? input['message_bits'] : 258
-    const bigMsg = new BigNumber(1).iushln(bits)
-
-    if (getBool(input, 'use_valid_signature')) {
-      // ecdsa-020: verify with oversized message should return false
-      const normalMsg = new BigNumber('deadbeef', 16)
-      const sig = ECDSA.sign(normalMsg, privKey, true)
-      expect(ECDSA.verify(bigMsg, sig, privKey.toPublicKey())).toBe(false)
-    } else {
-      // ecdsa-015: sign with oversized message must throw
-      expect(() => ECDSA.sign(bigMsg, privKey, true)).toThrow()
-    }
+    ecdsaMessageTooLarge(input)
     return
   }
 
-  // pubkey = infinity: verify must throw (ecdsa-013)
   if (getString(input, 'pubkey') === 'infinity') {
-    const privKey = PrivateKey.fromHex(getString(input, 'privkey_hex'))
-    const msgHex = getString(input, 'message_hex') || getString(input, 'signed_message_hex')
-    const msgBN = new BigNumber(hexToBytes(msgHex.length % 2 === 0 ? msgHex : '0' + msgHex))
-    const sig = ECDSA.sign(msgBN, privKey, true)
-    const infKey = new PublicKey(null)
-    expect(() => ECDSA.verify(msgBN, sig, infKey)).toThrow()
+    ecdsaPubkeyInfinity(input)
     return
   }
 
@@ -203,20 +210,12 @@ function dispatchECDSA (
     if (op === 'point_add_negation' || op === 'scalar_mul_zero') {
       expect(getBool(expected, 'is_infinity')).toBe(true)
     }
-    // Other operations not in TS public API
     return
   }
 
   // Explicit-signature verify (signature_r / signature_s present)
-  const rHex = getString(input, 'signature_r')
-  if (rHex !== '') {
-    const sHex = getString(input, 'signature_s')
-    const privHex = getString(input, 'privkey_hex')
-    const msgHex = getString(input, 'message_hex')
-    const msgBN = new BigNumber(hexToBytes(msgHex))
-    const sig = new Signature(new BigNumber(hexToBytes(rHex)), new BigNumber(hexToBytes(sHex)))
-    const pubKey = PrivateKey.fromHex(privHex).toPublicKey()
-    expect(ECDSA.verify(msgBN, sig, pubKey)).toBe(getBool(expected, 'valid'))
+  if (getString(input, 'signature_r') !== '') {
+    ecdsaExplicitSignatureVerify(input, expected)
     return
   }
 
@@ -227,63 +226,17 @@ function dispatchECDSA (
   // Batch forceLowS across multiple messages
   const msgs = input['messages']
   if (Array.isArray(msgs)) {
-    for (const mh of msgs) {
-      if (typeof mh !== 'string') continue
-      const sig = ECDSA.sign(new BigNumber(hexToBytes(mh)), privKey, true)
-      expect(sig).toBeDefined()
-    }
+    ecdsaBatchMessages(msgs, privKey)
     return
   }
 
   // Wrong-pubkey verify
-  const wrongScalar = getString(input, 'wrong_pubkey_scalar')
-  if (wrongScalar !== '') {
-    const signMsgHex = getString(input, 'message_hex') || getString(input, 'signed_message_hex')
-    const paddedHex = signMsgHex.length % 2 === 0 ? signMsgHex : '0' + signMsgHex
-    const signMsgBN = new BigNumber(hexToBytes(paddedHex))
-    const sig = ECDSA.sign(signMsgBN, privKey, true)
-
-    const scalarInt = new BigNumber(wrongScalar, 10)
-    const wrongPrivKey = PrivateKey.fromHex(scalarInt.toHex(32))
-    const valid = ECDSA.verify(signMsgBN, sig, wrongPrivKey.toPublicKey())
-    expect(valid).toBe(getBool(expected, 'valid'))
+  if (getString(input, 'wrong_pubkey_scalar') !== '') {
+    ecdsaWrongPubkey(input, expected, privKey)
     return
   }
 
-  const signMsgHex = getString(input, 'message_hex') || getString(input, 'signed_message_hex')
-  const paddedHex = signMsgHex.length % 2 === 0 ? signMsgHex : '0' + signMsgHex
-  const signMsgBN = new BigNumber(hexToBytes(paddedHex))
-
-  if (getBool(expected, 'throws')) {
-    expect(() => ECDSA.sign(signMsgBN, privKey, true)).toThrow()
-    return
-  }
-  const sig = ECDSA.sign(signMsgBN, privKey, true)
-
-  const verifyMsgHex = getString(input, 'verify_message_hex') || signMsgHex
-  const paddedVerify = verifyMsgHex.length % 2 === 0 ? verifyMsgHex : '0' + verifyMsgHex
-  const verifyMsgBN = new BigNumber(hexToBytes(paddedVerify))
-
-  if ('valid' in expected) {
-    expect(ECDSA.verify(verifyMsgBN, sig, privKey.toPublicKey())).toBe(expected['valid'])
-  }
-
-  if ('der_length_bytes' in expected) {
-    expect((sig.toDER() as number[]).length).toBe(expected['der_length_bytes'])
-  }
-  if ('der_hex_length_chars' in expected) {
-    expect(bytesToHex(sig.toDER() as number[]).length).toBe(expected['der_hex_length_chars'])
-  }
-  if (expected['roundtrip_r_s_equal'] === true) {
-    const der = sig.toDER() as number[]
-    const sig2 = Signature.fromDER(der)
-    expect(sig.r.eq(sig2.r)).toBe(true)
-    expect(sig.s.eq(sig2.s)).toBe(true)
-  }
-  // s_lte_half_n: forceLowS guarantees this — just check it's expected to be true
-  if ('s_lte_half_n' in expected) {
-    expect(expected['s_lte_half_n']).toBe(true)
-  }
+  ecdsaSignAndVerify(input, expected, privKey)
 }
 
 function dispatchECIES (
@@ -537,26 +490,6 @@ function dispatchPublicKey (
   if ('constructor_arg' in input) return
 }
 
-function computeMerkleRootFromDisplayTxids (txids: string[]): string {
-  if (txids.length === 0) throw new Error('empty txid list')
-  // txids are in display (byte-reversed) format. Convert to natural byte order for hashing.
-  let level: number[][] = txids.map(txidHex => {
-    const b = hexToBytes(txidHex)
-    b.reverse() // display → natural
-    return b
-  })
-  while (level.length > 1) {
-    if (level.length % 2 !== 0) level.push(level.at(-1)!)
-    const next: number[][] = []
-    for (let i = 0; i < level.length; i += 2) {
-      next.push(Hash.hash256([...level[i], ...level[i + 1]]))
-    }
-    level = next
-  }
-  const root = [...level[0]].reverse()
-  return bytesToHex(root)
-}
-
 function dispatchMerkleParent (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -572,43 +505,24 @@ function dispatchMerklePath (
   expected: Record<string, unknown>
 ): void {
   // Shape: findleaf — build parent from two raw leaf hashes
-  const leaf0Hex = getString(input, 'leaf0_hash')
-  if (leaf0Hex !== '') {
-    const leaf0 = hexToBytes(leaf0Hex)
-    const leaf1Dup = getBool(input, 'leaf1_duplicate')
-    const right = leaf1Dup ? [...leaf0] : hexToBytes(getString(input, 'leaf1_hash'))
-    const parent = Hash.hash256([...leaf0, ...right])
-    const parentDisplay = [...parent].reverse()
-    if (getString(expected, 'computed_hash') !== '') {
-      expect(bytesToHex(parentDisplay)).toBe(getString(expected, 'computed_hash'))
-    }
+  if (getString(input, 'leaf0_hash') !== '') {
+    merklePathLeafPair(input, expected)
     return
   }
 
-  let bumpHex = getString(input, 'bump_hex') || getString(input, 'combined_bump_hex')
+  const bumpHex = getString(input, 'bump_hex') || getString(input, 'combined_bump_hex')
 
   if (bumpHex === '') {
-    // Coinbase BUMP
     if ('height' in input) {
-      const txidStr = getString(input, 'txid')
-      const height = input['height'] as number
-      const mp = MerklePath.fromCoinbaseTxidAndHeight(txidStr, height)
-
-      if (getString(expected, 'bump_hex') !== '') expect(mp.toHex()).toBe(getString(expected, 'bump_hex'))
-      if ('block_height' in expected) expect(mp.blockHeight).toBe(expected['block_height'])
-      if (getString(expected, 'merkle_root') !== '') expect(mp.computeRoot(txidStr)).toBe(getString(expected, 'merkle_root'))
+      merklePathCoinbase(input, expected)
       return
     }
-
-    // Compute merkle root from all txids
     if ('txids' in input) {
       const txids = (input['txids'] as unknown[]).map(String)
       const root = computeMerkleRootFromDisplayTxids(txids)
       if (getString(expected, 'merkle_root') !== '') expect(root).toBe(getString(expected, 'merkle_root'))
       return
     }
-
-    // Extract proof
     if ('full_block_txids' in input) {
       const txids = (input['full_block_txids'] as unknown[]).map(String)
       const root = computeMerkleRootFromDisplayTxids(txids)
@@ -616,51 +530,15 @@ function dispatchMerklePath (
       if (getBool(expected, 'extracted_smaller_than_full')) expect(txids.length).toBeGreaterThanOrEqual(2)
       return
     }
-
-    // txids_to_extract with empty array → throws
     if ('txids_to_extract' in input) {
       const toExt = input['txids_to_extract'] as unknown[]
       if (toExt.length === 0 && getBool(expected, 'throws')) return
       return
     }
-
     return
   }
 
-  const mp = MerklePath.fromHex(bumpHex)
-
-  if ('block_height' in expected) expect(mp.blockHeight).toBe(expected['block_height'])
-  if ('path_levels' in expected) expect(mp.path.length).toBe(expected['path_levels'])
-  if ('path_level0_length' in expected) expect(mp.path[0].length).toBe(expected['path_level0_length'])
-
-  const wantHex = getString(expected, 'toHex') || getString(expected, 'serialized_bump_hex')
-  if (wantHex !== '') expect(mp.toHex()).toBe(wantHex)
-
-  const txid = getString(input, 'txid')
-  if (txid !== '') {
-    const wantRoot = getString(expected, 'merkle_root')
-    if (wantRoot !== '') expect(mp.computeRoot(txid)).toBe(wantRoot)
-  }
-
-  if ('txids_at_level_0' in input) {
-    const txidList = input['txids_at_level_0'] as string[]
-    for (let i = 0; i < txidList.length; i++) {
-      const key = `merkle_root_for_tx${i}`
-      const wantRoot = getString(expected, key) || getString(expected, 'merkle_root_for_tx0')
-      if (wantRoot !== '') expect(mp.computeRoot(txidList[i])).toBe(wantRoot)
-    }
-  }
-
-  for (const key of ['txid_tx2', 'txid_tx5', 'txid_tx8']) {
-    const txidVal = getString(input, key)
-    if (txidVal !== '') {
-      const wantRoot = getString(expected, 'merkle_root')
-      if (wantRoot !== '') {
-        expect(mp.computeRoot(txidVal)).toBe(wantRoot)
-        break
-      }
-    }
-  }
+  merklePathFromBump(MerklePath.fromHex(bumpHex), input, expected)
 }
 
 function dispatchBEEF (
@@ -730,7 +608,6 @@ function dispatchSerialization (
 
     case 'addInput': {
       if (getBool(expected, 'throws')) {
-        // TS SDK: addInput without sourceTXID throws
         const tx = new Transaction()
         expect(() => tx.addInput({} as any)).toThrow()
         return
@@ -772,108 +649,23 @@ function dispatchSerialization (
       break
   }
 
-  // raw_hex parse
-  const rawHex = getString(input, 'raw_hex')
-  if (rawHex !== '') {
-    const tx = Transaction.fromHex(rawHex)
-    if ('version' in expected) expect(tx.version).toBe(expected['version'])
-    if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
-    if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
-    if ('locktime' in expected) expect(tx.lockTime).toBe(expected['locktime'])
-    if (getString(expected, 'txid') !== '') expect(tx.id('hex')).toBe(getString(expected, 'txid'))
-    if (getString(expected, 'raw_hex_roundtrip') !== '') expect(tx.toHex()).toBe(getString(expected, 'raw_hex_roundtrip'))
-    return
-  }
-
-  // ef_hex parse
-  const efHex = getString(input, 'ef_hex')
-  if (efHex !== '') {
-    const tx = Transaction.fromHexEF(efHex)
-    if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
-    if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
-    return
-  }
-
-  // beef_hex parse → check merkle root
-  const beefHex = getString(input, 'beef_hex')
-  if (beefHex !== '') {
-    const beef = Beef.fromBinary(hexToBytes(beefHex))
-    if (getString(expected, 'merkle_root') !== '' && beef.bumps.length > 0) {
-      expect(beef.bumps[0].computeRoot()).toBe(getString(expected, 'merkle_root'))
-    }
-    return
-  }
-
-  // bump_hex parse
-  const bumpHex = getString(input, 'bump_hex')
-  if (bumpHex !== '') {
-    const mp = MerklePath.fromHex(bumpHex)
-    if ('block_height' in expected) expect(mp.blockHeight).toBe(expected['block_height'])
-    if ('path_leaf_count' in expected) expect(mp.path[0].length).toBe(expected['path_leaf_count'])
-  }
+  if (getString(input, 'raw_hex') !== '') { serializationRawHex(input, expected); return }
+  if (getString(input, 'ef_hex') !== '') { serializationEfHex(input, expected); return }
+  if (getString(input, 'beef_hex') !== '') { serializationBeefHex(input, expected); return }
+  if (getString(input, 'bump_hex') !== '') { serializationBumpHex(input, expected) }
 }
 
 function dispatchSignature (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
-  // Signing vectors (privkey + message)
-  const privHex = getString(input, 'privkey_hex')
-  if (privHex !== '') {
-    const msgHex = getString(input, 'message_hex')
-    if (msgHex === '') return
-
-    const msgBN = new BigNumber(hexToBytes(msgHex))
-
-    // Error case: invalid recovery param
-    if ('recovery' in input && getBool(expected, 'throws')) {
-      const recovVal = input['recovery'] as number
-      if (recovVal < 0 || recovVal > 3) {
-        expect(() => new Signature(new BigNumber(0), new BigNumber(0)).toCompact(recovVal, true)).toThrow()
-        return
-      }
-    }
-
-    const privKey = PrivateKey.fromHex(privHex)
-    if (getBool(expected, 'throws')) {
-      expect(() => ECDSA.sign(msgBN, privKey, true)).toThrow()
-      return
-    }
-    const sig = ECDSA.sign(msgBN, privKey, true)
-
-    if (getString(expected, 'der_hex') !== '') {
-      expect(sig.toDER('hex')).toBe(getString(expected, 'der_hex'))
-    }
-    if ('der_length_bytes' in expected) {
-      expect((sig.toDER() as number[]).length).toBe(expected['der_length_bytes'])
-    }
-
-    const compressed = input['compressed'] === true
-    const recoveryVal = 'recovery' in input ? (input['recovery'] as number) : 0
-
-    if (getString(expected, 'compact_hex') !== '') {
-      expect(sig.toCompact(recoveryVal, compressed, 'hex')).toBe(getString(expected, 'compact_hex'))
-    }
-    if ('first_byte' in expected) {
-      const compact = sig.toCompact(recoveryVal, compressed) as number[]
-      expect(compact[0]).toBe(expected['first_byte'])
-    }
-    if (getString(expected, 'r_hex') !== '') expect(sig.r.toHex(32)).toBe(getString(expected, 'r_hex'))
-    if (getString(expected, 's_hex') !== '') expect(sig.s.toHex(32)).toBe(getString(expected, 's_hex'))
+  if (getString(input, 'privkey_hex') !== '') {
+    signatureFromPrivkey(input, expected)
     return
   }
 
-  // DER parse vectors
-  const derHex = getString(input, 'der_hex')
-  if (derHex !== '') {
-    const derBytes = hexToBytes(derHex)
-    if (getBool(expected, 'throws')) {
-      expect(() => Signature.fromDER(derBytes)).toThrow()
-      return
-    }
-    const sig = Signature.fromDER(derBytes)
-    if (getString(expected, 'r_hex') !== '') expect(sig.r.toHex(32)).toBe(getString(expected, 'r_hex'))
-    if (getString(expected, 's_hex') !== '') expect(sig.s.toHex(32)).toBe(getString(expected, 's_hex'))
+  if (getString(input, 'der_hex') !== '') {
+    signatureFromDer(input, expected)
     return
   }
 
@@ -885,20 +677,8 @@ function dispatchSignature (
     return
   }
 
-  // Compact parse vectors
-  const compactHex = getString(input, 'compact_hex')
-  if (compactHex !== '') {
-    const compactBytes = hexToBytes(compactHex)
-    if (getBool(expected, 'throws')) {
-      expect(() => Signature.fromCompact(compactBytes)).toThrow()
-      return
-    }
-    if (getString(expected, 'r_hex') !== '') {
-      expect(bytesToHex(compactBytes.slice(1, 33))).toBe(getString(expected, 'r_hex'))
-    }
-    if (getString(expected, 's_hex') !== '') {
-      expect(bytesToHex(compactBytes.slice(33, 65))).toBe(getString(expected, 's_hex'))
-    }
+  if (getString(input, 'compact_hex') !== '') {
+    signatureFromCompact(input, expected)
     return
   }
 
@@ -943,216 +723,20 @@ function dispatchBSM (
 
   // verify vectors
   if ('valid' in expected) {
-    const wantValid = expected['valid'] as boolean
     const magicHashBN = new BigNumber(BSM.magicHash(msgBytes)) // NOSONAR — deprecated BSM API used intentionally for conformance testing
-
-    const derHexIn = getString(input, 'der_hex')
-    if (derHexIn !== '') {
-      let sig: Signature
-      try {
-        sig = Signature.fromDER(hexToBytes(derHexIn))
-      } catch (_e) {
-        expect(wantValid).toBe(false)
-        return
-      }
-      const pub = PublicKey.fromString(getString(input, 'pubkey_hex'))
-      expect(ECDSA.verify(magicHashBN, sig, pub)).toBe(wantValid)
+    if (getString(input, 'der_hex') !== '') {
+      bsmVerifyDer(input, expected, magicHashBN)
       return
     }
-
-    const compactHex = getString(input, 'compact_sig_hex')
-    if (compactHex !== '') {
-      const compactBytes = hexToBytes(compactHex)
-      let recoveredPub: PublicKey
-      try {
-        const recoveryFactor = (compactBytes[0] - 27) & ~4
-        recoveredPub = Signature.fromCompact(compactBytes).RecoverPublicKey(recoveryFactor, magicHashBN)
-      } catch (_e) {
-        expect(wantValid).toBe(false)
-        return
-      }
-      const wantPubHex = getString(input, 'pubkey_hex')
-      expect(bytesToHex(recoveredPub.encode(true) as number[]) === wantPubHex).toBe(wantValid)
+    if (getString(input, 'compact_sig_hex') !== '') {
+      bsmVerifyCompact(input, expected, magicHashBN)
       return
     }
   }
 
   // recovery vectors
   if (getString(expected, 'recovered_pubkey_hex') !== '' || 'recovery_factor' in expected) {
-    const compactHex = getString(input, 'compact_sig_hex')
-    if (compactHex === '') return
-
-    const compactBytes = hexToBytes(compactHex)
-    const magicHashBN = new BigNumber(BSM.magicHash(msgBytes)) // NOSONAR — deprecated BSM API used intentionally for conformance testing
-    const recoveryFactor = (compactBytes[0] - 27) & ~4
-    const sig = Signature.fromCompact(compactBytes)
-    const recoveredPub = sig.RecoverPublicKey(recoveryFactor, magicHashBN)
-
-    if (getString(expected, 'recovered_pubkey_hex') !== '') {
-      expect(bytesToHex(recoveredPub.encode(true) as number[])).toBe(getString(expected, 'recovered_pubkey_hex'))
-    }
-    if ('recovery_factor' in expected) {
-      expect(recoveryFactor).toBe(expected['recovery_factor'])
-    }
-  }
-}
-
-const ZERO_TXID = '0000000000000000000000000000000000000000000000000000000000000000'
-
-function emptyUnlockingScript (): UnlockingScript {
-  return UnlockingScript.fromBinary([])
-}
-
-function buildCreditingTransaction (lockingScript: LockingScript, amount: number): Transaction {
-  return new Transaction(
-    1,
-    [{
-      sourceTXID: ZERO_TXID,
-      sourceOutputIndex: 0xffffffff,
-      unlockingScript: new UnlockingScript([{ op: OP.OP_0 }, { op: OP.OP_0 }]),
-      sequence: 0xffffffff
-    }],
-    [{ lockingScript, satoshis: amount }],
-    0
-  )
-}
-
-function dispatchNodeScriptFixture (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
-  const amount = getNumber(input, 'amount_satoshis')
-  const lockingScript = LockingScript.fromHex(getString(input, 'script_pubkey_hex'))
-  const sigHex = getString(input, 'script_sig_hex')
-  const unlockingScript = sigHex === '' ? emptyUnlockingScript() : UnlockingScript.fromHex(sigHex)
-  const creditTx = buildCreditingTransaction(lockingScript, amount)
-
-  const spend = new Spend({
-    sourceTXID: creditTx.id('hex'),
-    sourceOutputIndex: 0,
-    sourceSatoshis: amount,
-    lockingScript,
-    transactionVersion: getNumber(input, 'tx_version', 1),
-    otherInputs: [],
-    outputs: [{ lockingScript: new LockingScript(), satoshis: amount }],
-    inputIndex: 0,
-    unlockingScript,
-    inputSequence: 0xffffffff,
-    lockTime: 0,
-    verifyFlags: getString(input, 'flags_csv')
-  })
-
-  let valid = false
-  try {
-    valid = spend.validate()
-  } catch (_e) {
-    valid = false
-  }
-  expect(valid).toBe(getBool(expected, 'valid'))
-}
-
-function dispatchNodeSighashFixture (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
-  const tx = Transaction.fromHex(getString(input, 'tx_hex'))
-  const inputIndex = getNumber(input, 'input_index')
-  const txInput = tx.inputs[inputIndex]
-  const otherInputs = [...tx.inputs]
-  otherInputs.splice(inputIndex, 1)
-
-  const params = {
-    sourceTXID: txInput.sourceTXID ?? '',
-    sourceOutputIndex: txInput.sourceOutputIndex,
-    sourceSatoshis: 0,
-    transactionVersion: tx.version,
-    otherInputs,
-    outputs: tx.outputs,
-    inputIndex,
-    subscript: Script.fromHex(getString(input, 'script_hex')),
-    inputSequence: txInput.sequence ?? 0xffffffff,
-    lockTime: tx.lockTime,
-    scope: getNumber(input, 'hash_type')
-  }
-
-  const regular = Hash.hash256(TransactionSignature.format({
-    ...params,
-    ignoreChronicle: getStringArray(input, 'sources').includes('teranode')
-  })).reverse()
-  const original = Hash.hash256(TransactionSignature.formatOTDA(params)).reverse()
-
-  expect(bytesToHex(regular)).toBe(getString(expected, 'regular_hash'))
-  expect(bytesToHex(original)).toBe(getString(expected, 'original_hash'))
-}
-
-function validateNodeTransactionSpend (
-  tx: Transaction,
-  prevouts: Array<Record<string, unknown>>,
-  flags: string,
-  inputIndex: number
-): boolean {
-  const txInput = tx.inputs[inputIndex]
-  const prevout = prevouts.find(candidate =>
-    getString(candidate, 'txid') === txInput.sourceTXID &&
-    (getNumber(candidate, 'vout') >>> 0) === txInput.sourceOutputIndex
-  )
-  if (prevout === undefined || txInput.unlockingScript === undefined) {
-    throw new Error(`Missing prevout fixture for input ${inputIndex}`)
-  }
-
-  const otherInputs = [...tx.inputs]
-  otherInputs.splice(inputIndex, 1)
-  const spend = new Spend({
-    sourceTXID: txInput.sourceTXID ?? '',
-    sourceOutputIndex: txInput.sourceOutputIndex,
-    sourceSatoshis: getNumber(prevout, 'amount_satoshis'),
-    lockingScript: LockingScript.fromHex(getString(prevout, 'script_pubkey_hex')),
-    transactionVersion: tx.version,
-    otherInputs,
-    outputs: tx.outputs,
-    inputIndex,
-    unlockingScript: txInput.unlockingScript,
-    inputSequence: txInput.sequence ?? 0xffffffff,
-    lockTime: tx.lockTime,
-    verifyFlags: flags
-  })
-  return spend.validate()
-}
-
-function dispatchNodeTransactionFixture (
-  input: Record<string, unknown>,
-  expected: Record<string, unknown>
-): void {
-  let tx: Transaction
-  try {
-    tx = Transaction.fromHex(getString(input, 'tx_hex'))
-    expect(bytesToHex(tx.toBinary())).toBe(getString(input, 'tx_hex'))
-  } catch (e) {
-    if (getBool(expected, 'valid')) throw e
-    return
-  }
-
-  const prevouts = Array.isArray(input.prevouts)
-    ? input.prevouts as Array<Record<string, unknown>>
-    : []
-  const flagStrings = getStringArray(input, 'flag_strings')
-  let rejectedSpendCases = 0
-
-  for (const flags of flagStrings) {
-    for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex++) {
-      try {
-        const valid = validateNodeTransactionSpend(tx, prevouts, flags, inputIndex)
-        if (!valid) rejectedSpendCases++
-        if (getBool(expected, 'valid')) expect(valid).toBe(true)
-      } catch (e) {
-        if (getBool(expected, 'valid')) throw e
-        rejectedSpendCases++
-      }
-    }
-  }
-
-  if (!getBool(expected, 'valid')) {
-    expect(rejectedSpendCases).toBeGreaterThan(0)
+    bsmRecovery(input, expected, msgBytes)
   }
 }
 
@@ -1161,168 +745,27 @@ function dispatchEvaluation (
   expected: Record<string, unknown>
 ): void {
   switch (getString(input, 'fixture_type')) {
-    case 'node-script':
-      return dispatchNodeScriptFixture(input, expected)
-    case 'node-sighash':
-      return dispatchNodeSighashFixture(input, expected)
-    case 'node-transaction':
-      return dispatchNodeTransactionFixture(input, expected)
+    case 'node-script':      return dispatchNodeScriptFixture(input, expected)
+    case 'node-sighash':     return dispatchNodeSighashFixture(input, expected)
+    case 'node-transaction': return dispatchNodeTransactionFixture(input, expected)
   }
 
   const op = getString(input, 'operation')
-
   if (op !== '') {
     switch (op) {
-      case 'writeBn': {
-        const s = new Script()
-        s.writeBn(new BigNumber(input['value'] as number))
-        if ('chunk_0_op' in expected) expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
-        return
-      }
-
-      case 'writeBn_range': {
-        const values = input['values'] as number[]
-        const opcodesExpected = expected['opcodes'] as number[]
-        for (let i = 0; i < values.length; i++) {
-          const s = new Script()
-          s.writeBn(new BigNumber(values[i]))
-          if (i < opcodesExpected.length) expect(s.chunks[0].op).toBe(opcodesExpected[i])
-        }
-        return
-      }
-
-      case 'findAndDelete': {
-        const dataLen = input['data_length_bytes'] as number
-        const fillHex = getString(input, 'fill_byte')
-        const fillByte = fillHex === '' ? 0x01 : hexToBytes(fillHex.replace('0x', ''))[0]
-        const hasTrailingOp1 = getBool(input, 'source_has_trailing_op1')
-
-        const data = new Array(dataLen).fill(fillByte)
-        const source = new Script()
-        source.writeBin(data)
-        source.writeBin(data)
-        if (hasTrailingOp1) source.writeOpCode(OP.OP_1)
-
-        const needle = new Script()
-        needle.writeBin(data)
-
-        const result = source.findAndDelete(needle)
-        if ('remaining_chunks_count' in expected) expect(result.chunks.length).toBe(expected['remaining_chunks_count'])
-        if ('remaining_chunk_0_op' in expected) expect(result.chunks[0].op).toBe(expected['remaining_chunk_0_op'])
-        return
-      }
-
-      default:
-        return
+      case 'writeBn':       evalWriteBn(input, expected); return
+      case 'writeBn_range': evalWriteBnRange(input, expected); return
+      case 'findAndDelete': evalFindAndDelete(input, expected); return
+      default:              return
     }
   }
 
-  // hex → parse
-  if ('hex' in input) {
-    const h = input['hex'] as string
-    if (getBool(expected, 'throws')) {
-      expect(() => Script.fromHex(h)).toThrow()
-      return
-    }
-    const s = Script.fromHex(h)
-    if ('chunks_count' in expected) expect(s.chunks.length).toBe(expected['chunks_count'])
-    if ('chunk_0_op' in expected && s.chunks.length > 0) expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
-    if (getString(expected, 'hex_roundtrip') !== '') expect(s.toHex()).toBe(getString(expected, 'hex_roundtrip'))
-    return
-  }
-
-  // binary array → parse
-  if ('binary' in input) {
-    const binArr = input['binary'] as number[]
-    const s = Script.fromBinary(binArr)
-    if ('chunks_count' in expected) expect(s.chunks.length).toBe(expected['chunks_count'])
-    if ('chunk_0_data' in expected) {
-      expect(s.chunks[0].data ?? []).toEqual(expected['chunk_0_data'])
-    }
-    return
-  }
-
-  // P2PKH locking script
-  if (getString(input, 'type') === 'P2PKH_lock') {
-    const hashBytes = hexToBytes(getString(input, 'pubkey_hash_hex'))
-    const scriptBytes = [0x76, 0xa9, 0x14, ...hashBytes, 0x88, 0xac]
-    const s = Script.fromBinary(scriptBytes)
-    if (getString(expected, 'hex') !== '') expect(s.toHex()).toBe(getString(expected, 'hex'))
-    if ('byte_length' in expected) expect(scriptBytes.length).toBe(expected['byte_length'])
-    const asm = s.toASM()
-    if (getString(expected, 'asm_prefix') !== '') expect(asm.startsWith(getString(expected, 'asm_prefix'))).toBe(true)
-    if (getString(expected, 'asm_suffix') !== '') expect(asm.endsWith(getString(expected, 'asm_suffix'))).toBe(true)
-    return
-  }
-
-  // Script evaluation with optional isRelaxed flag for Chronicle parity (script-006+)
-  if ('script_pubkey_hex' in input) {
-    const sigHex = getString(input, 'script_sig_hex')
-    const pubKeyHex = getString(input, 'script_pubkey_hex')
-
-    const lockingScript = LockingScript.fromHex(pubKeyHex)
-    const unlockingScript = sigHex === ''
-      ? UnlockingScript.fromBinary([])
-      : UnlockingScript.fromHex(sigHex)
-
-    const spend = new Spend({
-      sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
-      sourceOutputIndex: 0,
-      sourceSatoshis: 0,
-      lockingScript,
-      transactionVersion: 1,
-      otherInputs: [],
-      outputs: [],
-      inputIndex: 0,
-      unlockingScript,
-      inputSequence: 0xffffffff,
-      lockTime: 0,
-      isRelaxed: getBool(input, 'isRelaxed') || getBool(input, 'is_relaxed')
-    })
-
-    let valid = false
-    try {
-      valid = spend.validate()
-    } catch (_e) {
-      valid = false
-    }
-    expect(valid).toBe(getBool(expected, 'valid'))
-    return
-  }
-
-  // data_length_bytes push encoding
-  if ('data_length_bytes' in input) {
-    const dLen = input['data_length_bytes'] as number
-    const fillHex = getString(input, 'data_fill_byte')
-    const fillByte = fillHex === '' ? 0x01 : hexToBytes(fillHex.replace('0x', ''))[0]
-    const data = new Array(dLen).fill(fillByte)
-    const s = new Script()
-    s.writeBin(data)
-    if ('chunk_0_op' in expected) expect(s.chunks[0].op).toBe(expected['chunk_0_op'])
-    return
-  }
-
-  // script_asm: writeScript / setChunkOpCode
-  if ('script_asm' in input) {
-    const asm = input['script_asm'] as string
-    const s1 = Script.fromASM(asm)
-
-    if ('append_asm' in input) {
-      const s2 = Script.fromASM(input['append_asm'] as string)
-      s1.writeScript(s2)
-      if (getString(expected, 'result_asm') !== '') expect(s1.toASM()).toBe(getString(expected, 'result_asm'))
-      return
-    }
-
-    if ('index' in input) {
-      const chunkIdx = input['index'] as number
-      const newOp = input['new_op'] as number
-      s1.setChunkOpCode(chunkIdx, newOp)
-      const key = `chunk_${chunkIdx}_op`
-      if (key in expected) expect(s1.chunks[chunkIdx].op).toBe(expected[key])
-      return
-    }
-  }
+  if ('hex' in input)                                   { evalHex(input, expected); return }
+  if ('binary' in input)                                { evalBinary(input, expected); return }
+  if (getString(input, 'type') === 'P2PKH_lock')        { evalP2PKH(input, expected); return }
+  if ('script_pubkey_hex' in input)                     { evalScriptPubkey(input, expected); return }
+  if ('data_length_bytes' in input)                     { evalDataLengthBytes(input, expected); return }
+  if ('script_asm' in input)                            { evalScriptAsm(input, expected) }
 }
 
 // ── Main dispatch entry point ──────────────────────────────────────────────────
