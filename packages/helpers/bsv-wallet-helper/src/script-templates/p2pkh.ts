@@ -119,7 +119,7 @@ export default class P2PKH implements ScriptTemplate {
     }
 
     // Final validation
-    if (data == null || data.length !== 20) {
+    if (data?.length !== 20) {
       throw new Error('Failed to generate valid public key hash (must be 20 bytes)')
     }
 

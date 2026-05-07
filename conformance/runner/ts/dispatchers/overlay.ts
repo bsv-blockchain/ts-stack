@@ -501,7 +501,7 @@ function assertHealthReportShape (body: Record<string, unknown>, exp: VectorExpe
   }
   if ('status' in body) {
     // status_oneof in the body (topicmanagement.2 uses status_oneof in body)
-    const statusOneof = (body as Record<string, unknown>).status_oneof
+    const statusOneof = body.status_oneof
     if (Array.isArray(statusOneof)) {
       // Validate that each status value is one of the allowed enum values
       const allowed = ['ok', 'degraded', 'error']

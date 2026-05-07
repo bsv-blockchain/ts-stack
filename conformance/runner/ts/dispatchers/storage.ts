@@ -382,7 +382,7 @@ function dispatchUhrpHttp (
     const headers = (input['headers'] ?? {}) as Record<string, unknown>
     const lowerHeaders: Record<string, string> = {}
     for (const [k, v] of Object.entries(headers)) {
-      lowerHeaders[k.toLowerCase()] = String(v)
+      lowerHeaders[k.toLowerCase()] = `${v}`
     }
     const hasAuth = lowerHeaders['authorization'] !== undefined
 
@@ -424,7 +424,7 @@ function dispatchUhrpHttp (
     const headers = (input['headers'] ?? {}) as Record<string, unknown>
     const lowerHeaders: Record<string, string> = {}
     for (const [k, v] of Object.entries(headers)) {
-      lowerHeaders[k.toLowerCase()] = String(v)
+      lowerHeaders[k.toLowerCase()] = `${v}`
     }
     const hasAuth = lowerHeaders['authorization'] !== undefined
 
@@ -440,7 +440,7 @@ function dispatchUhrpHttp (
     const headers = (input['headers'] ?? {}) as Record<string, unknown>
     const lowerHeaders: Record<string, string> = {}
     for (const [k, v] of Object.entries(headers)) {
-      lowerHeaders[k.toLowerCase()] = String(v)
+      lowerHeaders[k.toLowerCase()] = `${v}`
     }
     const hasAuth = lowerHeaders['authorization'] !== undefined
     const status = expected['status'] as number | undefined

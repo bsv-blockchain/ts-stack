@@ -233,9 +233,7 @@ export function accumulateOutputIntoBalances (
 
   const current = assetBalances.get(assetId) ?? { balance: 0 }
   current.balance += decoded.amount
-  if (!current.metadata) {
-    current.metadata = parseMetadata(decoded.metadata)
-  }
+  current.metadata ??= parseMetadata(decoded.metadata)
   assetBalances.set(assetId, current)
 }
 

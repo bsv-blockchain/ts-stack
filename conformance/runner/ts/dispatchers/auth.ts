@@ -59,7 +59,7 @@ function dispatchInitialRequest (
   const headers = (input['headers'] ?? {}) as Record<string, unknown>
   const lowerHeaders: Record<string, string> = {}
   for (const [k, v] of Object.entries(headers)) {
-    lowerHeaders[k.toLowerCase()] = String(v)
+    lowerHeaders[k.toLowerCase()] = `${v}`
   }
   expect(lowerHeaders['x-bsv-auth-version']).toBeDefined()
   expect(lowerHeaders['x-bsv-auth-identity-key']).toBeDefined()

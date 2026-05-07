@@ -70,20 +70,20 @@ interface WalletPairingSessionOptions {
  * ```
  */
 declare class WalletPairingSession {
-    private wallet;
-    private params;
-    private options;
+    private readonly wallet;
+    private readonly params;
+    private readonly options;
     private ws;
     private _status;
     private connected;
     private _lastSeq;
     private _resolvedRelay;
-    private protocolID;
+    private readonly protocolID;
     private mobileIdentityKey;
     private requestHandler;
     private readonly implementedMethods;
     private readonly autoApproveMethods;
-    private listeners;
+    private readonly listeners;
     constructor(wallet: WalletLike, params: PairingParams, options?: WalletPairingSessionOptions);
     get status(): PairingSessionStatus;
     /**

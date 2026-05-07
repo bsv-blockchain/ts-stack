@@ -35,8 +35,8 @@ function useQRPairing(pairingUri, options) {
   const open = (0, import_react.useCallback)(() => {
     if (options?.openUrl) {
       options.openUrl(pairingUri);
-    } else if (typeof window !== "undefined") {
-      window.location.href = pairingUri;
+    } else if (globalThis.window !== void 0) {
+      globalThis.window.location.href = pairingUri;
     }
   }, [pairingUri, options?.openUrl]);
   return { open, pairingUri };
@@ -274,7 +274,12 @@ var WalletRelayClient = class {
       this._resolveLogEntry(requestId, response);
       return response;
     } catch (err) {
-      const relayErr = err instanceof WalletRelayError ? err : new WalletRelayError(err instanceof Error ? err.message : "Request failed", "NETWORK_ERROR");
+      let relayErr;
+      if (err instanceof WalletRelayError) {
+        relayErr = err;
+      } else {
+        relayErr = new WalletRelayError(err instanceof Error ? err.message : "Request failed", "NETWORK_ERROR");
+      }
       this._resolveLogEntry(requestId, {
         requestId,
         error: { code: 500, message: relayErr.message },
@@ -382,19 +387,17 @@ function useWalletRelayClient(options) {
   const clientRef = (0, import_react2.useRef)(null);
   const createdRef = (0, import_react2.useRef)(false);
   function ensureClient() {
-    if (!clientRef.current) {
-      clientRef.current = new WalletRelayClient({
-        apiUrl: options?.apiUrl,
-        pollInterval: options?.pollInterval,
-        connectedPollInterval: options?.connectedPollInterval,
-        persistSession: options?.persistSession,
-        sessionStorageKey: options?.sessionStorageKey,
-        sessionStorageTtl: options?.sessionStorageTtl,
-        onSessionChange: setSession,
-        onLogChange: setLog,
-        onError: setError
-      });
-    }
+    clientRef.current ?? (clientRef.current = new WalletRelayClient({
+      apiUrl: options?.apiUrl,
+      pollInterval: options?.pollInterval,
+      connectedPollInterval: options?.connectedPollInterval,
+      persistSession: options?.persistSession,
+      sessionStorageKey: options?.sessionStorageKey,
+      sessionStorageTtl: options?.sessionStorageTtl,
+      onSessionChange: setSession,
+      onLogChange: setLog,
+      onError: setError
+    }));
     return clientRef.current;
   }
   const createSession = (0, import_react2.useCallback)(async () => {
@@ -527,7 +530,14 @@ function RequestLog({
     return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { "data-state": "empty", ...emptyProps, children: children ?? "No requests yet" });
   }
   return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { ...rootProps, children: entries.map((entry) => {
-    const state = entry.pending ? "pending" : entry.response?.error ? "error" : "ok";
+    let state;
+    if (entry.pending) {
+      state = "pending";
+    } else if (entry.response?.error) {
+      state = "error";
+    } else {
+      state = "ok";
+    }
     return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { "data-state": state, ...entryProps, children: [
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { "data-log-method": true, children: entry.request.method }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { "data-log-status": true, children: state }),

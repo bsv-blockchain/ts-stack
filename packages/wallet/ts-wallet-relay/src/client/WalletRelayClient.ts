@@ -141,7 +141,7 @@ export class WalletRelayClient {
       ])
       this._walletProxy = Object.fromEntries(entries) as unknown as Pick<WalletInterface, WalletMethodName>
     }
-    return this._walletProxy as Pick<WalletInterface, WalletMethodName>
+    return this._walletProxy
   }
 
   /**

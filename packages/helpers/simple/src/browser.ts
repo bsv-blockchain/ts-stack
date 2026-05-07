@@ -14,7 +14,7 @@ import { createCredentialMethods } from './modules/credentials'
 // ============================================================================
 
 class _BrowserWallet extends WalletCore {
-  private client: WalletClient
+  private readonly client: WalletClient
 
   constructor(client: WalletClient, identityKey: string, defaults?: Partial<WalletDefaults>) {
     super(identityKey, defaults)

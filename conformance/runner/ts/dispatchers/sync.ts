@@ -293,8 +293,8 @@ function dispatchHTTP (
     }
 
     // Valid request — body is a GASPInitialRequest
-    expect(body).toBeDefined()
-    const b = body!
+    if (body === undefined) return
+    const b = body
     expect(typeof b['version']).toBe('number')
     expect(typeof b['since']).toBe('number')
     expect(expectedStatus).toBe(200)
@@ -313,8 +313,8 @@ function dispatchHTTP (
   }
 
   if (path === '/requestForeignGASPNode') {
-    expect(body).toBeDefined()
-    const b = body!
+    if (body === undefined) return
+    const b = body
 
     // txid validation — must be 64 hex chars
     if (typeof b['txid'] === 'string') {

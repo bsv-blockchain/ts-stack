@@ -24,15 +24,15 @@ type DisconnectHandler = (topic: string, role: Role) => void;
  * - role=desktop connections validated via onValidateDesktopToken callback when set
  */
 declare class WebSocketRelay {
-    private wss;
-    private topics;
+    private readonly wss;
+    private readonly topics;
     private onMessage;
     private validateTopic;
     private validateDesktopToken;
     private onDisconnectCb;
     private onMobileConnectCb;
-    private allowedOrigin;
-    private heartbeatTimer;
+    private readonly allowedOrigin;
+    private readonly heartbeatTimer;
     constructor(server: Server, options?: {
         allowedOrigin?: string;
     });
@@ -86,8 +86,8 @@ interface QRSessionManagerOptions {
  * Connected sessions expire after 30 days.
  */
 declare class QRSessionManager {
-    private sessions;
-    private gcTimer;
+    private readonly sessions;
+    private readonly gcTimer;
     private onExpired;
     private readonly maxSessions;
     constructor(options?: QRSessionManagerOptions);
@@ -213,17 +213,17 @@ interface WalletRelayServiceOptions {
  *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  */
 declare class WalletRelayService {
-    private opts;
-    private sessions;
-    private relay;
-    private handler;
-    private pending;
-    private mobileAuthTimers;
-    private wallet;
-    private relayUrl;
-    private origin;
-    private schema;
-    private signQrCodes;
+    private readonly opts;
+    private readonly sessions;
+    private readonly relay;
+    private readonly handler;
+    private readonly pending;
+    private readonly mobileAuthTimers;
+    private readonly wallet;
+    private readonly relayUrl;
+    private readonly origin;
+    private readonly schema;
+    private readonly signQrCodes;
     constructor(opts: WalletRelayServiceOptions);
     /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
     createSession(): Promise<{

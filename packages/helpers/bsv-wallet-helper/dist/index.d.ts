@@ -453,6 +453,9 @@ type OutputConfig = {
     customInstructions?: string;
 };
 
+/** Controls which outputs are covered by the signature. */
+type SignOutputs = 'all' | 'none' | 'single';
+
 /**
  * Parameters for adding a P2PKH output with a public key
  *
@@ -664,7 +667,7 @@ interface AddP2PKHInputParams {
     /** Optional description for tracking purposes */
     description?: string;
     /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-    signOutputs?: 'all' | 'none' | 'single';
+    signOutputs?: SignOutputs;
     /** Allow other inputs to be added later (default: false) */
     anyoneCanPay?: boolean;
     /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
@@ -684,7 +687,7 @@ interface AddOrdLockInputParams {
     description?: string;
     kind?: 'cancel' | 'purchase';
     walletParams?: WalletDerivationParams;
-    signOutputs?: 'all' | 'none' | 'single';
+    signOutputs?: SignOutputs;
     anyoneCanPay?: boolean;
     sourceSatoshis?: number;
     lockingScript?: Script;
@@ -711,7 +714,7 @@ interface AddOrdinalP2PKHInputParams {
     /** Optional description for tracking purposes */
     description?: string;
     /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-    signOutputs?: 'all' | 'none' | 'single';
+    signOutputs?: SignOutputs;
     /** Allow other inputs to be added later (default: false) */
     anyoneCanPay?: boolean;
     /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
@@ -1168,6 +1171,8 @@ interface AddressWithParams {
 }
 declare function getAddress(wallet: WalletInterface, amount?: number, counterparty?: string): Promise<AddressWithParams[]>;
 
+/** Accepted input types for script validation functions. */
+type ScriptInput = LockingScript | Script | string;
 /**
  * Checks if a locking script is a standard P2PKH (Pay-to-Public-Key-Hash) script.
  *
@@ -1197,7 +1202,7 @@ declare function isP2PKH(script: LockingScript | Script): boolean;
  * }
  */
 declare function isP2PKH(hex: string): boolean;
-declare function isP2PKH(input: LockingScript | Script | string): boolean;
+declare function isP2PKH(input: ScriptInput): boolean;
 /**
  * Checks if a locking script contains a BSV-20 Ordinal inscription envelope with P2PKH.
  *
@@ -1233,7 +1238,7 @@ declare function isOrdinal(script: LockingScript | Script): boolean;
  * }
  */
 declare function isOrdinal(hex: string): boolean;
-declare function isOrdinal(input: LockingScript | Script | string): boolean;
+declare function isOrdinal(input: ScriptInput): boolean;
 /**
  * Checks if a locking script contains a BSV-20 Ordinal inscription envelope.
  *
@@ -1269,7 +1274,7 @@ declare function hasOrd(script: LockingScript | Script): boolean;
  * }
  */
 declare function hasOrd(hex: string): boolean;
-declare function hasOrd(input: LockingScript | Script | string): boolean;
+declare function hasOrd(input: ScriptInput): boolean;
 /**
  * Checks if a locking script contains OP_RETURN data.
  *
@@ -1300,7 +1305,7 @@ declare function hasOpReturnData(script: LockingScript | Script): boolean;
  * }
  */
 declare function hasOpReturnData(hex: string): boolean;
-declare function hasOpReturnData(input: LockingScript | Script | string): boolean;
+declare function hasOpReturnData(input: ScriptInput): boolean;
 /**
  * Type representing the different script types that can be detected
  */

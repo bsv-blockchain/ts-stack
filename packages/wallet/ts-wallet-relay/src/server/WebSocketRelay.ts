@@ -180,7 +180,7 @@ export class WebSocketRelay {
 
     ws.on('message', (data) => {
       try {
-        const envelope = JSON.parse(String(data)) as WireEnvelope
+        const envelope = JSON.parse(`${data}`) as WireEnvelope
         if (!envelope.topic || !envelope.ciphertext) return
 
         // Route to the other side
