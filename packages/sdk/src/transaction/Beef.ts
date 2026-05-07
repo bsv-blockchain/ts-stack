@@ -190,7 +190,7 @@ export class Beef {
    */
   findBump (txid: string): MerklePath | undefined {
     return this.bumps.find((b) =>
-      b.path[0].some((leaf) => leaf.hash === txid) // ✅ Ensure boolean return with `.some()`
+      b.path[0].some((leaf) => leaf.hash === txid)
     )
   }
 
@@ -231,33 +231,42 @@ export class Beef {
     const beefTx = this.findTxid(txid)
     if ((beefTx == null) || (beefTx.tx == null)) return undefined // Ensure beefTx.tx exists before using it
 
-    const addInputProof = (beef: Beef, tx: Transaction): void => {
-      const mp = beef.findBump(tx.id('hex'))
-      if (mp != null) {
-        tx.merklePath = mp
-      } else {
-        for (const i of tx.inputs) {
-          if (i.sourceTransaction == null) {
-            const itx = beef.findTxid(verifyNotNull(i.sourceTXID, 'sourceTXID must be valid'))
-            if (itx != null) {
-              i.sourceTransaction = itx.tx
-            }
-          }
-          if (i.sourceTransaction != null) {
-            const mp = beef.findBump(i.sourceTransaction.id('hex'))
-            if (mp != null) {
-              i.sourceTransaction.merklePath = mp
-            } else {
-              addInputProof(beef, i.sourceTransaction)
-            }
-          }
-        }
-      }
-    }
-
-    addInputProof(this, beefTx.tx) // Safe because we checked that beefTx.tx exists
+    this.addInputProof(beefTx.tx)
 
     return beefTx.tx
+  }
+
+  /** Recursively attach merkle paths and source transactions to all inputs. */
+  private addInputProof (tx: Transaction): void {
+    const mp = this.findBump(tx.id('hex'))
+    if (mp != null) {
+      tx.merklePath = mp
+      return
+    }
+    for (const i of tx.inputs) {
+      this.resolveInputSource(i)
+      if (i.sourceTransaction != null) {
+        this.attachMerklePathOrRecurse(i.sourceTransaction)
+      }
+    }
+  }
+
+  private resolveInputSource (i: Transaction['inputs'][number]): void {
+    if (i.sourceTransaction == null) {
+      const itx = this.findTxid(verifyNotNull(i.sourceTXID, 'sourceTXID must be valid'))
+      if (itx != null) {
+        i.sourceTransaction = itx.tx
+      }
+    }
+  }
+
+  private attachMerklePathOrRecurse (sourceTx: Transaction): void {
+    const mp = this.findBump(sourceTx.id('hex'))
+    if (mp != null) {
+      sourceTx.merklePath = mp
+    } else {
+      this.addInputProof(sourceTx)
+    }
   }
 
   /**
@@ -267,50 +276,46 @@ export class Beef {
    */
   mergeBump (bump: MerklePath): number {
     this.markMutated(false)
-    let bumpIndex: number | undefined
-    // If this proof is identical to another one previously added, we use that first. Otherwise, we try to merge it with proofs from the same block.
-    for (let i = 0; i < this.bumps.length; i++) {
-      const b = this.bumps[i]
-      if (b === bump) {
-        // Literally the same
-        return i
-      }
-      if (b.blockHeight === bump.blockHeight) {
-        // Probably the same...
-        const rootA = b.computeRoot()
-        const rootB = bump.computeRoot()
-        if (rootA === rootB) {
-          // Definitely the same... combine them to save space
-          b.combine(bump)
-          bumpIndex = i
-          break
-        }
-      }
-    }
-
-    // if the proof is not yet added, add a new path.
-    if (bumpIndex === undefined) {
-      bumpIndex = this.bumps.length
-      this.bumps.push(bump)
-    }
+    const bumpIndex = this.findOrInsertBump(bump)
 
     // Review if any transactions are proven by this bump
     const b = this.bumps[bumpIndex]
     for (const tx of this.txs) {
-      const txid = tx.txid
-
-      if (tx.bumpIndex == null) { // ✅ Explicitly check for null or undefined
-        for (const n of b.path[0]) {
-          if (n.hash === txid) {
-            tx.bumpIndex = bumpIndex
-            n.txid = true
-            break
-          }
-        }
+      if (tx.bumpIndex == null) {
+        this.tryMarkTxProvenByBump(tx, b, bumpIndex)
       }
     }
 
     return bumpIndex
+  }
+
+  /**
+   * Find an existing compatible bump or insert a new one; return its index.
+   */
+  private findOrInsertBump (bump: MerklePath): number {
+    for (let i = 0; i < this.bumps.length; i++) {
+      const b = this.bumps[i]
+      if (b === bump) return i
+      if (b.blockHeight !== bump.blockHeight) continue
+      if (b.computeRoot() === bump.computeRoot()) {
+        b.combine(bump)
+        return i
+      }
+    }
+    this.bumps.push(bump)
+    return this.bumps.length - 1
+  }
+
+  /** If bump's level-0 path contains tx's txid, record the bumpIndex on tx. */
+  private tryMarkTxProvenByBump (tx: BeefTx, b: MerklePath, bumpIndex: number): void {
+    const txid = tx.txid
+    for (const n of b.path[0]) {
+      if (n.hash === txid) {
+        tx.bumpIndex = bumpIndex
+        n.txid = true
+        break
+      }
+    }
   }
 
   /**
@@ -509,56 +514,72 @@ export class Beef {
     // valid txids: only txids if allowed, bump txids, then txids with input's in txids
     const txids: Record<string, boolean> = {}
 
-    for (const tx of this.txs) {
-      if (tx.isTxidOnly) {
-        if (allowTxidOnly !== true) return r // ✅ Explicit check for `true`
-        txids[tx.txid] = true
-      }
-    }
+    if (!this.collectTxidOnlyTxids(txids, allowTxidOnly)) return r
 
-    const confirmComputedRoot = (b: MerklePath, txid: string): boolean => {
-      const root = b.computeRoot(txid)
-      if (r.roots[b.blockHeight] === undefined || r.roots[b.blockHeight] === '') {
-        // accept the root as valid for this block and reuse for subsequent txids
-        r.roots[b.blockHeight] = root
-      }
-      if (r.roots[b.blockHeight] !== root) {
-        return false
-      }
-      return true
-    }
+    if (!this.collectBumpTxids(txids, r)) return r
 
-    for (const b of this.bumps) {
-      for (const n of b.path[0]) {
-        if (n.txid === true && typeof n.hash === 'string' && n.hash.length > 0) {
-          txids[n.hash] = true
+    if (!this.verifyBumpIndexLeaves()) return r
 
-          // All txid hashes in all bumps must agree on computed merkle path roots
-          if (!confirmComputedRoot(b, n.hash)) {
-            return r
-          }
-        }
-      }
-    }
-
-    // All txs with a bumpIndex have matching txid leaf at level zero of BUMP.
-    for (const t of this.txs) {
-      if (t.bumpIndex !== undefined) {
-        const leaf = this.bumps[t.bumpIndex].path[0].find(l => l.hash === t.txid)
-        if (leaf == null) { return r }
-      }
-    }
-
-    for (const t of this.txs) {
-      // all input txids must be included before they are referenced
-      for (const i of t.inputTxids) {
-        if (!txids[i]) return r
-      }
-      txids[t.txid] = true
-    }
+    if (!this.verifyInputDependencies(txids)) return r
 
     r.valid = true
     return r
+  }
+
+  /** Add txidOnly transaction txids; return false if not allowed. */
+  private collectTxidOnlyTxids (txids: Record<string, boolean>, allowTxidOnly?: boolean): boolean {
+    for (const tx of this.txs) {
+      if (!tx.isTxidOnly) continue
+      if (allowTxidOnly !== true) return false
+      txids[tx.txid] = true
+    }
+    return true
+  }
+
+  /**
+   * Record txids proven by bumps; validate all bump roots agree per block height.
+   * Returns false if any root conflict is detected.
+   */
+  private collectBumpTxids (txids: Record<string, boolean>, r: { valid: boolean, roots: Record<number, string> }): boolean {
+    for (const b of this.bumps) {
+      for (const n of b.path[0]) {
+        if (n.txid !== true || typeof n.hash !== 'string' || n.hash.length === 0) continue
+        txids[n.hash] = true
+        if (!this.confirmComputedRoot(b, n.hash, r)) return false
+      }
+    }
+    return true
+  }
+
+  /** Verify that every tx with a bumpIndex has a matching txid leaf in its bump. */
+  private verifyBumpIndexLeaves (): boolean {
+    for (const t of this.txs) {
+      if (t.bumpIndex === undefined) continue
+      const leaf = this.bumps[t.bumpIndex].path[0].find(l => l.hash === t.txid)
+      if (leaf == null) return false
+    }
+    return true
+  }
+
+  /** Verify all input txids appear before the spending tx in sorted order. */
+  private verifyInputDependencies (txids: Record<string, boolean>): boolean {
+    for (const t of this.txs) {
+      for (const i of t.inputTxids) {
+        if (!txids[i]) return false
+      }
+      txids[t.txid] = true
+    }
+    return true
+  }
+
+  /** Confirm the computed merkle root for txid in bump matches previously accepted root for that height. */
+  private confirmComputedRoot (b: MerklePath, txid: string, r: { valid: boolean, roots: Record<number, string> }): boolean {
+    const root = b.computeRoot(txid)
+    if (r.roots[b.blockHeight] === undefined || r.roots[b.blockHeight] === '') {
+      // accept the root as valid for this block and reuse for subsequent txids
+      r.roots[b.blockHeight] = root
+    }
+    return r.roots[b.blockHeight] === root
   }
 
   /**
@@ -742,79 +763,19 @@ export class Beef {
     // Hashtable of all transaction txids to transaction
     const txidToTx: Record<string, BeefTx> = {}
 
-    // queue of unsorted transactions ...
-    let queue: BeefTx[] = []
-
     // sorted transactions: hasProof to with longest dependency chain
     const result: BeefTx[] = []
-
     const txidOnly: BeefTx[] = []
 
-    for (const tx of this.txs) {
-      txidToTx[tx.txid] = tx
-      tx.isValid = tx.hasProof
-      if (tx.isValid) {
-        validTxids[tx.txid] = true
-        result.push(tx)
-      } else if (tx.isTxidOnly && tx.inputTxids.length === 0) {
-        validTxids[tx.txid] = true
-        txidOnly.push(tx)
-      } else {
-        queue.push(tx)
-      }
-    }
+    // Partition into proven, txidOnly, and remaining queue
+    let queue = this.partitionTxs(txidToTx, validTxids, result, txidOnly)
 
-    // Hashtable of unknown input txids used to fund transactions without their own proof.
-    const missingInputs: Record<string, boolean> = {}
-    // transactions with one or more missing inputs
-    const txsMissingInputs: BeefTx[] = []
+    // Separate queue entries that have missing inputs
+    const { txsMissingInputs, missingInputs, remaining } = this.separateMissingInputs(queue, txidToTx)
+    queue = remaining
 
-    const possiblyMissingInputs = queue
-    queue = []
-
-    // all tx are isValid false, hasProof false.
-    // if isTxidOnly then has inputTxids
-    for (const tx of possiblyMissingInputs) {
-      let hasMissingInput = false
-
-      // For all the unproven transactions,
-      // link their inputs that exist in this beef,
-      // make a note of missing inputs.
-      for (const inputTxid of tx.inputTxids) {
-        if (txidToTx[inputTxid] === undefined) { // Explicitly check for undefined
-          missingInputs[inputTxid] = true
-          hasMissingInput = true
-        }
-      }
-
-      if (hasMissingInput) {
-        txsMissingInputs.push(tx)
-      } else {
-        queue.push(tx)
-      }
-    }
-
-    // As long as we have unsorted transactions...
-    while (queue.length > 0) {
-      const oldQueue = queue
-      queue = []
-      // all tx are isValid false, hasProof false.
-      // if isTxidOnly then has inputTxids
-      for (const tx of oldQueue) {
-        if (tx.inputTxids.every((txid) => validTxids[txid])) {
-          validTxids[tx.txid] = true
-          result.push(tx)
-        } else {
-          queue.push(tx)
-        }
-      }
-      if (oldQueue.length === queue.length) {
-        break
-      }
-    }
-
-    // transactions that don't have proofs and don't chain to proofs
-    const txsNotValid = queue
+    // Topological sort of remaining queue
+    const txsNotValid = this.topoSort(queue, validTxids, result)
 
     // New order of txs is unsortable (missing inputs or depends on missing inputs), txidOnly, sorted (so newest sorted is last)
     this.txs = txsMissingInputs
@@ -832,6 +793,82 @@ export class Beef {
       withMissingInputs: txsMissingInputs.map((tx) => tx.txid),
       txidOnly: txidOnly.map((tx) => tx.txid)
     }
+  }
+
+  /**
+   * Partition txs into proven (result), txidOnly, and a queue of the rest.
+   * Populates txidToTx and validTxids as side-effects.
+   */
+  private partitionTxs (
+    txidToTx: Record<string, BeefTx>,
+    validTxids: Record<string, boolean>,
+    result: BeefTx[],
+    txidOnly: BeefTx[]
+  ): BeefTx[] {
+    const queue: BeefTx[] = []
+    for (const tx of this.txs) {
+      txidToTx[tx.txid] = tx
+      tx.isValid = tx.hasProof
+      if (tx.isValid) {
+        validTxids[tx.txid] = true
+        result.push(tx)
+      } else if (tx.isTxidOnly && tx.inputTxids.length === 0) {
+        validTxids[tx.txid] = true
+        txidOnly.push(tx)
+      } else {
+        queue.push(tx)
+      }
+    }
+    return queue
+  }
+
+  /**
+   * Separate queue entries that have at least one input txid not present in txidToTx.
+   */
+  private separateMissingInputs (
+    candidates: BeefTx[],
+    txidToTx: Record<string, BeefTx>
+  ): { txsMissingInputs: BeefTx[], missingInputs: Record<string, boolean>, remaining: BeefTx[] } {
+    const missingInputs: Record<string, boolean> = {}
+    const txsMissingInputs: BeefTx[] = []
+    const remaining: BeefTx[] = []
+
+    for (const tx of candidates) {
+      let hasMissingInput = false
+      for (const inputTxid of tx.inputTxids) {
+        if (txidToTx[inputTxid] === undefined) {
+          missingInputs[inputTxid] = true
+          hasMissingInput = true
+        }
+      }
+      if (hasMissingInput) {
+        txsMissingInputs.push(tx)
+      } else {
+        remaining.push(tx)
+      }
+    }
+
+    return { txsMissingInputs, missingInputs, remaining }
+  }
+
+  /**
+   * Topologically sort queue into result; return anything that cannot be sorted.
+   */
+  private topoSort (queue: BeefTx[], validTxids: Record<string, boolean>, result: BeefTx[]): BeefTx[] {
+    while (queue.length > 0) {
+      const oldQueue = queue
+      queue = []
+      for (const tx of oldQueue) {
+        if (tx.inputTxids.every((txid) => validTxids[txid])) {
+          validTxids[tx.txid] = true
+          result.push(tx)
+        } else {
+          queue.push(tx)
+        }
+      }
+      if (oldQueue.length === queue.length) break
+    }
+    return queue
   }
 
   /**
@@ -854,6 +891,15 @@ export class Beef {
    * @param knownTxids
    */
   trimKnownTxids (knownTxids: string[]): void {
+    let mutated = this.removeKnownTxidOnlyTxs(knownTxids)
+    mutated = this.reindexBumps() || mutated
+    if (mutated) {
+      this.markMutated(true)
+    }
+  }
+
+  /** Remove txidOnly entries that appear in knownTxids; return true if any were removed. */
+  private removeKnownTxidOnlyTxs (knownTxids: string[]): boolean {
     let mutated = false
     for (let i = 0; i < this.txs.length;) {
       const tx = this.txs[i]
@@ -865,8 +911,14 @@ export class Beef {
         i++
       }
     }
+    return mutated
+  }
 
-    // Trim unreferenced bumps after removing known txids
+  /**
+   * Remove bumps that are no longer referenced by any tx and update bumpIndex references.
+   * Returns true if any bumps were removed.
+   */
+  private reindexBumps (): boolean {
     const referencedBumpIndices = new Set<number>()
     for (const tx of this.txs) {
       if (tx.bumpIndex !== undefined) {
@@ -874,38 +926,32 @@ export class Beef {
       }
     }
 
-    // Check if there are any unreferenced bumps to remove
-    if (referencedBumpIndices.size < this.bumps.length) {
-      // Build mapping of old indices to new indices after removal
-      const indexMap = new Map<number, number>()
-      let newIndex = 0
-      for (let i = 0; i < this.bumps.length; i++) {
-        if (referencedBumpIndices.has(i)) {
-          indexMap.set(i, newIndex)
-          newIndex++
-        }
+    if (referencedBumpIndices.size >= this.bumps.length) return false
+
+    // Build mapping of old indices to new indices after removal
+    const indexMap = new Map<number, number>()
+    let newIndex = 0
+    for (let i = 0; i < this.bumps.length; i++) {
+      if (referencedBumpIndices.has(i)) {
+        indexMap.set(i, newIndex)
+        newIndex++
       }
-
-      // Remove unreferenced bumps
-      this.bumps = this.bumps.filter((_, i) => referencedBumpIndices.has(i))
-
-      // Update all transaction bumpIndex references
-      for (const tx of this.txs) {
-        if (tx.bumpIndex !== undefined) {
-          const newIndex = indexMap.get(tx.bumpIndex)
-          if (newIndex === undefined) {
-            throw new Error(`Internal error: bumpIndex ${tx.bumpIndex} not found in indexMap`)
-          }
-          tx.bumpIndex = newIndex
-        }
-      }
-
-      mutated = true
     }
 
-    if (mutated) {
-      this.markMutated(true)
+    // Remove unreferenced bumps
+    this.bumps = this.bumps.filter((_, i) => referencedBumpIndices.has(i))
+
+    // Update all transaction bumpIndex references
+    for (const tx of this.txs) {
+      if (tx.bumpIndex === undefined) continue
+      const mapped = indexMap.get(tx.bumpIndex)
+      if (mapped === undefined) {
+        throw new Error(`Internal error: bumpIndex ${tx.bumpIndex} not found in indexMap`)
+      }
+      tx.bumpIndex = mapped
     }
+
+    return true
   }
 
   /**
@@ -927,7 +973,7 @@ export class Beef {
     for (const b of this.bumps) {
       i++
       log += `  BUMP ${i}\n    block: ${b.blockHeight}\n    txids: [\n${b.path[0]
-        .filter((n) => n.txid === true) // ✅ Explicitly check if txid is `true`
+        .filter((n) => n.txid === true)
         .map((n) => `      '${n.hash ?? ''}'`)
         .join(',\n')}\n    ]\n`
     }
@@ -942,7 +988,7 @@ export class Beef {
       if (t.isTxidOnly) {
         log += '    txidOnly\n'
       } else {
-        log += `    rawTx length=${t.rawTx?.length ?? 0}\n` // ✅ Fix applied here
+        log += `    rawTx length=${t.rawTx?.length ?? 0}\n`
       }
       if (t.inputTxids.length > 0) {
         log += `    inputs: [\n${t.inputTxids
@@ -959,32 +1005,29 @@ export class Beef {
  * leaves that can be computed from row zero.
  */
   addComputedLeaves (): void {
-    const hash = (m: string): string =>
-      toHex(hash256(toArray(m, 'hex').reverse()).reverse())
-
-    for (const bump of this.bumps) { // ✅ Use `this` instead of `beef`
+    for (const bump of this.bumps) {
       for (let row = 1; row < bump.path.length; row++) {
-        for (const leafL of bump.path[row - 1]) {
-          if (typeof leafL.hash === 'string' && (leafL.offset & 1) === 0) {
-            const leafR = bump.path[row - 1].find(
-              (l) => l.offset === leafL.offset + 1
-            )
-            const offsetOnRow = leafL.offset >> 1
+        this.addComputedLeavesForRow(bump, row)
+      }
+    }
+  }
 
-            if (
-              leafR !== undefined &&
-              typeof leafR.hash === 'string' &&
-              bump.path[row].every((l) => l.offset !== offsetOnRow)
-            ) {
-              // Computable leaf is missing... add it.
-              bump.path[row].push({
-                offset: offsetOnRow,
-                // String concatenation puts the right leaf on the left of the left leaf hash
-                hash: hash(leafR.hash + leafL.hash)
-              })
-            }
-          }
-        }
+  /** Add any missing computable leaf at `row` derived from two known leaves at `row - 1`. */
+  private addComputedLeavesForRow (bump: MerklePath, row: number): void {
+    const hashPair = (m: string): string =>
+      toHex(hash256(toArray(m, 'hex').reverse()).reverse())
+    for (const leafL of bump.path[row - 1]) {
+      if (typeof leafL.hash !== 'string' || (leafL.offset & 1) !== 0) continue
+      const leafR = bump.path[row - 1].find((l) => l.offset === leafL.offset + 1)
+      if (leafR === undefined || typeof leafR.hash !== 'string') continue
+      const offsetOnRow = leafL.offset >> 1
+      if (bump.path[row].every((l) => l.offset !== offsetOnRow)) {
+        // Computable leaf is missing... add it.
+        bump.path[row].push({
+          offset: offsetOnRow,
+          // String concatenation puts the right leaf on the left of the left leaf hash
+          hash: hashPair(leafR.hash + leafL.hash)
+        })
       }
     }
   }
