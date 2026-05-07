@@ -1,5 +1,4 @@
 import {
-  Transaction,
   AbortActionResult,
   Beef,
   InternalizeActionArgs,
@@ -15,6 +14,7 @@ import {
   WalletLoggerInterface,
   ChainTracker
 } from '@bsv/sdk'
+import { classifyReqStatus, mergeInputsIntoBeef, mergeInputBeefs, notifyTransactionsOfProof } from './storageProviderHelpers'
 import { getBeefForTransaction } from './methods/getBeefForTransaction'
 import { GetReqsAndBeefDetail, GetReqsAndBeefResult, processAction } from './methods/processAction'
 import { attemptToPostReqsToNetwork, PostReqsToNetworkResult } from './methods/attemptToPostReqsToNetwork'
@@ -329,34 +329,21 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       r.details.push(d)
       try {
         d.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
-        if (d.proven != null) d.status = 'alreadySent'
-        else {
-          const alreadySentStatus = ['unmined', 'callback', 'unconfirmed', 'completed']
-          const readyToSendStatus = ['sending', 'unsent', 'nosend', 'unprocessed']
-          const errorStatus = ['unknown', 'nonfinal', 'invalid', 'doubleSpend']
+        if (d.proven != null) {
+          d.status = 'alreadySent'
+          continue
+        }
 
-          d.req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
-          if (d.req == null) {
-            d.status = 'error'
-            d.error = `ERR_UNKNOWN_TXID: ${txid} was not found.`
-          } else if (errorStatus.includes(d.req.status)) {
-            d.status = 'error'
-            d.error = `ERR_INVALID_PARAMETER: ${txid} is not ready to send.`
-          } else if (alreadySentStatus.includes(d.req.status)) {
-            d.status = 'alreadySent'
-          } else if (readyToSendStatus.includes(d.req.status)) {
-            if (!d.req.rawTx || (d.req.inputBEEF == null)) {
-              d.status = 'error'
-              d.error = `ERR_INTERNAL: ${txid} req is missing rawTx or beef.`
-            } else d.status = 'readyToSend'
-          } else {
-            d.status = 'error'
-            d.error = `ERR_INTERNAL: ${txid} has unexpected req status ${d.req.status}`
-          }
+        d.req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
+        if (d.req == null) {
+          d.status = 'error'
+          d.error = `ERR_UNKNOWN_TXID: ${txid} was not found.`
+        } else {
+          classifyReqStatus(d, d.req)
+        }
 
-          if (d.status === 'readyToSend') {
-            await this.mergeReqToBeefToShareExternally(d.req!, r.beef, knownTxids, trx)
-          }
+        if (d.status === 'readyToSend') {
+          await this.mergeReqToBeefToShareExternally(d.req!, r.beef, knownTxids, trx)
         }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
@@ -376,16 +363,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (!rawTx || (beef == null)) throw new WERR_INTERNAL('req rawTx and beef must be valid.')
     mergeToBeef.mergeRawTx(asArray(rawTx))
     mergeToBeef.mergeBeef(asArray(beef))
-    const tx = Transaction.fromBinary(asArray(rawTx))
-    for (const input of tx.inputs) {
-      if (!input.sourceTXID) throw new WERR_INTERNAL('req all transaction inputs must have valid sourceTXID')
-      const txid = input.sourceTXID
-      const btx = mergeToBeef.findTxid(txid)
-      if (btx == null) {
-        if (knownTxids && knownTxids.includes(txid)) mergeToBeef.mergeTxidOnly(txid)
-        else await this.getValidBeefForKnownTxid(txid, mergeToBeef, undefined, knownTxids, trx)
-      }
-    }
+    await mergeInputsIntoBeef(
+      asArray(rawTx),
+      mergeToBeef,
+      knownTxids,
+      trx,
+      async (txid, beef, _trust, knownTxids, trx) => { await this.getValidBeefForKnownTxid(txid, beef, undefined, knownTxids, trx) }
+    )
   }
 
   /**
@@ -413,12 +397,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     for (let retry = 0; ; retry++) {
       try {
         r.req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
+
+        // Nothing found and nothing to insert — done
         if ((r.req == null) && (newReq == null)) break
-        if ((r.req == null) && (newReq != null)) {
-          await this.insertProvenTxReq(newReq, trx)
+
+        // Not found — insert the new req
+        if (r.req == null) {
+          await this.insertProvenTxReq(newReq!, trx)
+          break
         }
-        if ((r.req != null) && (newReq != null)) {
-          // Merge history and notify into existing
+
+        // Found existing — merge history/notify from newReq if provided
+        if (newReq != null) {
           const req1 = new EntityProvenTxReq(r.req)
           req1.mergeHistory(newReq, undefined, true)
           req1.mergeNotifyTransactionIds(newReq)
@@ -571,14 +561,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     chainTracker?: ChainTracker,
     skipInvalidProofs?: boolean
   ): Promise<Beef | undefined> {
-    const beef = mergeToBeef || new Beef()
+    const beef = mergeToBeef ?? new Beef()
 
     const r = await this.getProvenOrRawTx(txid, trx)
+
+    // --- proven-tx path ---
     if (r.proven != null) {
       if (requiredLevels) {
+        // Need more levels — fall through to rawTx path
         r.rawTx = r.proven.rawTx
       } else if (trustSelf === 'known') {
         beef.mergeTxidOnly(txid)
+        return beef
       } else {
         const mp = new EntityProvenTx(r.proven).getMerklePath()
         if (chainTracker != null) {
@@ -594,7 +588,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           }
         }
         if (r.proven != null) {
-          // If we still like this proof, merge it and return
+          // Proof is still good — merge and return
           beef.mergeRawTx(r.proven.rawTx)
           beef.mergeBump(mp)
           return beef
@@ -602,6 +596,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       }
     }
 
+    // --- rawTx path ---
     if (r.rawTx == null) return undefined
 
     if (trustSelf === 'known') {
@@ -609,14 +604,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     } else {
       beef.mergeRawTx(r.rawTx)
       if (r.inputBEEF != null) beef.mergeBeef(r.inputBEEF)
-      const tx = Transaction.fromBinary(r.rawTx)
       if (requiredLevels) requiredLevels--
-      for (const input of tx.inputs) {
-        const btx = beef.findTxid(input.sourceTXID!)
-        if (btx == null) {
-          if (!requiredLevels && (knownTxids != null) && knownTxids.includes(input.sourceTXID!)) { beef.mergeTxidOnly(input.sourceTXID!) } else await this.getValidBeefForKnownTxid(input.sourceTXID!, beef, trustSelf, knownTxids, trx, requiredLevels)
+      await mergeInputBeefs(
+        r.rawTx,
+        beef,
+        trustSelf,
+        knownTxids,
+        trx,
+        requiredLevels,
+        async (sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels) => {
+          await this.getValidBeefForKnownTxid(sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels)
         }
-      }
+      )
     }
     return beef
   }
@@ -718,23 +717,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         return { proven, isNew }
       }))
       if (isNew) {
-        const ids = req.notify.transactionIds || []
-        if (ids.length > 0) {
-          for (const id of ids) {
-            try {
-              await this.updateTransaction(id, {
-                provenTxId: proven.provenTxId,
-                status: 'completed'
-              })
-              req.addHistoryNote({ what: 'notifyTxOfProof', transactionId: id })
-            } catch (error_: unknown) {
-              const { code, description } = WalletError.fromUnknown(error_)
-              const { provenTxId } = proven
-              req.addHistoryNote({ what: 'notifyTxOfProofError', id, provenTxId, code, description })
-            }
-          }
-          await req.updateStorageDynamicProperties(this)
-        }
+        await notifyTransactionsOfProof(
+          req.notify.transactionIds ?? [],
+          proven.provenTxId,
+          note => req.addHistoryNote(note),
+          async () => { await req.updateStorageDynamicProperties(this) },
+          async (id, update) => { await this.updateTransaction(id, update) }
+        )
       }
     }
     const r: UpdateProvenTxReqWithNewProvenTxResult = {
@@ -757,29 +746,31 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }> {
     const invalidSpendableOutputs: TableOutput[] = []
     const users = await this.findUsers({ partial: {} })
+    const services = this.getServices()
+
     for (const { userId } of users) {
       const defaultBasket = verifyOne(await this.findOutputBaskets({ partial: { userId, name: 'default' } }))
-      const where: Partial<TableOutput> = {
-        userId,
-        basketId: defaultBasket.basketId,
-        spendable: true
-      }
-      const outputs = await this.findOutputs({ partial: where })
-      const services = this.getServices()
-      for (let i = outputs.length - 1; i >= 0; i--) {
-        const o = outputs[i]
-        if (o.spendable) {
-          let ok = false
-          if ((o.lockingScript != null) && o.lockingScript.length > 0) {
-            const hash = services.hashOutputScript(asString(o.lockingScript))
-            const r = await services.getUtxoStatus(hash, undefined, `${o.txid}.${o.vout}`)
-            if (r.isUtxo === true) ok = true
-          }
-          if (!ok) invalidSpendableOutputs.push(o)
-        }
+      const outputs = await this.findOutputs({
+        partial: { userId, basketId: defaultBasket.basketId, spendable: true }
+      })
+
+      for (const o of outputs) {
+        if (!o.spendable) continue
+        const isUtxo = await this.checkOutputIsUtxo(o, services)
+        if (!isUtxo) invalidSpendableOutputs.push(o)
       }
     }
     return { invalidSpendableOutputs }
+  }
+
+  private async checkOutputIsUtxo (
+    o: TableOutput,
+    services: { hashOutputScript: (s: string) => string, getUtxoStatus: (hash: string, fmt: undefined, outpoint: string) => Promise<{ isUtxo?: boolean }> }
+  ): Promise<boolean> {
+    if ((o.lockingScript == null) || o.lockingScript.length === 0) return false
+    const hash = services.hashOutputScript(asString(o.lockingScript))
+    const r = await services.getUtxoStatus(hash, undefined, `${o.txid ?? ''}.${o.vout ?? ''}`)
+    return r.isUtxo === true
   }
 
   async updateProvenTxReqDynamics (
