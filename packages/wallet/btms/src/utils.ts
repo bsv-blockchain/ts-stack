@@ -94,7 +94,7 @@ export function decodeInputAmount(
   let inputAssetId = decoded.assetId
   if (decoded.assetId === ISSUE_MARKER) {
     const [sourceTxid, sourceIndex] = input.sourceOutpoint.split('.')
-    inputAssetId = BTMSToken.computeAssetId(sourceTxid as TXIDHexString, Number(sourceIndex))
+    inputAssetId = BTMSToken.computeAssetId(sourceTxid, Number(sourceIndex))
   }
 
   if (inputAssetId !== assetId) return null

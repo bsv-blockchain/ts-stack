@@ -140,9 +140,9 @@ export function createServerWalletHandler (config?: ServerWalletManagerConfig): 
           const basket = params.get('basket') ?? 'default'
           const result = await client.listOutputs({ basket })
           const outputList = result?.outputs ?? []
-          const totalSatoshis = outputList.reduce((sum: number, o: any) => sum + (o.satoshis != null ? (o.satoshis as number) : 0), 0)
+          const totalSatoshis = outputList.reduce((sum: number, o: any) => sum + ((o.satoshis as number | undefined) ?? 0), 0)
           const spendable = outputList.filter((o: any) => o.spendable !== false)
-          const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + (o.satoshis != null ? (o.satoshis as number) : 0), 0)
+          const spendableSatoshis = spendable.reduce((sum: number, o: any) => sum + ((o.satoshis as number | undefined) ?? 0), 0)
           return jsonResponse({
             success: true,
             basket,

@@ -24,7 +24,7 @@ Change for:
   identityKey ${identityKey}
 `)
 
-    const { actions, totalActions } = await setup.wallet.listActions({
+    const { actions } = await setup.wallet.listActions({
       labels: [],
       includeOutputs: true,
       limit: 1000
@@ -34,7 +34,7 @@ Change for:
     actionsNewestFirst.reverse()
     for (const stati of [['nosend'], ['completed', 'unproven']])
       for (const a of actionsNewestFirst) {
-        if (stati.indexOf(a.status) >= 0) {
+        if (stati.includes(a.status)) {
           for (const o of a.outputs!) {
             if (o.spendable && o.basket === 'default') {
               console.log(

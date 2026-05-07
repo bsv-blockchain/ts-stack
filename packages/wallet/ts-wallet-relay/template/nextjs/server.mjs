@@ -29,17 +29,17 @@ const port = Number.parseInt(process.env.PORT ?? '3000', 10)
 const app    = next({ dev })
 const handle = app.getRequestHandler()
 
-app.prepare().then(() => {
-  const server = createServer((req, res) => {
-    // Let Next.js handle all HTTP requests (pages, API routes, assets)
-    handle(req, parse(req.url ?? '/', true), res)
-  })
+await app.prepare()
 
-  // Attach the WebSocket relay to this server before .listen()
-  // This is what makes ws://host/ws available on the same port.
-  initRelay(server)
+const server = createServer((req, res) => {
+  // Let Next.js handle all HTTP requests (pages, API routes, assets)
+  handle(req, parse(req.url ?? '/', true), res)
+})
 
-  server.listen(port, '0.0.0.0', () => {
-    console.log(`Ready on http://0.0.0.0:${port}`)
-  })
+// Attach the WebSocket relay to this server before .listen()
+// This is what makes ws://host/ws available on the same port.
+initRelay(server)
+
+server.listen(port, '0.0.0.0', () => {
+  console.log(`Ready on http://0.0.0.0:${port}`)
 })

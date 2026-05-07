@@ -165,7 +165,7 @@ function handleMigrate (
 
   // Required body fields
   expect(body).toBeDefined()
-  expect(typeof (body as Record<string, unknown>)['storageName']).toBe('string')
+  expect(typeof body!['storageName']).toBe('string')
 
   expect(expectedStatus).toBe(200)
 
@@ -219,7 +219,7 @@ function handleProcessAction (
 
   // Required body fields per StorageProcessActionArgs
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   expect(typeof b['reference']).toBe('string')
   expect(typeof b['isNewTx']).toBe('boolean')
   expect(typeof b['isSendWith']).toBe('boolean')
@@ -253,7 +253,7 @@ function handleAbortAction (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  expect(typeof (body as Record<string, unknown>)['reference']).toBe('string')
+  expect(typeof body!['reference']).toBe('string')
 
   expect(expectedStatus).toBe(200)
 
@@ -276,7 +276,7 @@ function handleInternalizeAction (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   // Required fields: tx (raw byte array or hex), outputs, description
   expect(b['tx']).toBeDefined()
   expect(Array.isArray(b['outputs'])).toBe(true)
@@ -314,7 +314,7 @@ function handleListActions (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   // limit and offset are optional but must be numbers if present
   if ('limit' in b) expect(typeof b['limit']).toBe('number')
   if ('offset' in b) expect(typeof b['offset']).toBe('number')
@@ -341,7 +341,7 @@ function handleListOutputs (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   if ('limit' in b) expect(typeof b['limit']).toBe('number')
   if ('offset' in b) expect(typeof b['offset']).toBe('number')
 
@@ -367,7 +367,7 @@ function handleSyncChunk (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   expect(typeof b['identityKey']).toBe('string')
 
   expect(expectedStatus).toBe(200)
@@ -390,7 +390,7 @@ function handleSyncState (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   expect(typeof b['storageIdentityKey']).toBe('string')
   expect(typeof b['storageName']).toBe('string')
 
@@ -421,7 +421,7 @@ function handleSyncActive (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  expect(typeof (body as Record<string, unknown>)['newActiveStorageIdentityKey']).toBe('string')
+  expect(typeof body!['newActiveStorageIdentityKey']).toBe('string')
 
   expect(expectedStatus).toBe(200)
 
@@ -444,7 +444,7 @@ function handleInsertCertificate (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   expect(typeof b['certifier']).toBe('string')
   expect(typeof b['serialNumber']).toBe('string')
   expect(typeof b['type']).toBe('string')
@@ -470,7 +470,7 @@ function handleRelinquishCertificate (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   expect(typeof b['certifier']).toBe('string')
   expect(typeof b['serialNumber']).toBe('string')
   expect(typeof b['type']).toBe('string')
@@ -496,7 +496,7 @@ function handleRelinquishOutput (
   assertJsonContentType(headers)
 
   expect(body).toBeDefined()
-  const b = body as Record<string, unknown>
+  const b = body!
   const outpoint = getString(b, 'output')
 
   // Validate outpoint format: must be {64-hex-chars}.{digit+}

@@ -10,6 +10,7 @@
 import type { WalletInterface } from '@bsv/sdk'
 import { BTMS } from '@bsv/btms'
 import { BasicTokenModule } from './BasicTokenModule.js'
+export { BasicTokenModule } from './BasicTokenModule.js'
 
 export type PermissionPromptHandler = (app: string, message: string) => Promise<boolean>
 
@@ -25,4 +26,3 @@ export const createBtmsModule = ({ wallet, promptHandler }: PermissionModuleFact
   return new BasicTokenModule(promptHandler ?? denyPrompt, btms)
 }
 
-export { BasicTokenModule }

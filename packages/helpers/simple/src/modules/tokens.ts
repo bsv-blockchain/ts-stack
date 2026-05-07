@@ -113,8 +113,8 @@ export function createTokenMethods (core: WalletCore): {
             try { ci = JSON.parse((output as any).customInstructions as string) } catch {}
           }
           const protocolID = ci.protocolID ?? defaultProtocolID
-          const keyID = ci.keyID != null ? (ci.keyID as string) : defaultKeyID
-          const counterparty = ci.counterparty != null ? (ci.counterparty as string) : defaultCounterparty
+          const keyID = (ci.keyID as string | undefined) ?? defaultKeyID
+          const counterparty = (ci.counterparty as string | undefined) ?? defaultCounterparty
 
           let data: any = null
           if (decoded.fields[0] != null) {
@@ -468,7 +468,7 @@ export function createTokenMethods (core: WalletCore): {
           }
           return {
             messageId: msg.messageId,
-            sender: (body?.sender != null ? body.sender : msg.sender) as string,
+            sender: (body?.sender ?? msg.sender) as string,
             transaction: body?.transaction,
             protocolID: body?.protocolID,
             keyID: body?.keyID,

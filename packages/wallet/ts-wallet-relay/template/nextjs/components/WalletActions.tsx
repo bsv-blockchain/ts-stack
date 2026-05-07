@@ -8,7 +8,7 @@ interface Props {
   onRequest: (method: WalletMethod, params?: unknown) => void
 }
 
-// ── TODO: Define your wallet actions ─────────────────────────────────────────
+// ── NOTE: Define your wallet actions ─────────────────────────────────────────
 //
 // Each entry becomes one button. `method` must match a WalletMethod in
 // types/wallet.ts AND a method the mobile wallet handler implements.
@@ -18,7 +18,7 @@ interface Props {
 //   { method: 'listOutputs',  label: 'List Outputs',     params: { basket: 'default' } },
 
 const actions: { method: WalletMethod; label: string; params?: unknown }[] = [
-  // TODO: Replace or extend this list with your app's wallet actions.
+  // NOTE: Replace or extend this list with your app's wallet actions.
   { method: 'getPublicKey', label: 'Get Public Key', params: { identityKey: true } },
 ]
 

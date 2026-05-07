@@ -52,7 +52,14 @@ export function RequestLog({
   return (
     <div {...rootProps}>
       {entries.map((entry) => {
-        const state = entry.pending ? 'pending' : entry.response?.error ? 'error' : 'ok'
+        let state: 'pending' | 'error' | 'ok'
+        if (entry.pending) {
+          state = 'pending'
+        } else if (entry.response?.error) {
+          state = 'error'
+        } else {
+          state = 'ok'
+        }
         return (
           <div key={entry.request.requestId} data-state={state} {...entryProps}>
             <span data-log-method>{entry.request.method}</span>

@@ -232,8 +232,6 @@ export async function redeemPushDropToken(
 }> {
   const { args, fromIdentityKey, satoshis, beef: inputBeef, outpoint } = token
 
-  const { keyDeriver } = setup
-
   const t = new PushDrop(setup.wallet)
 
   const unlock = t.unlock(
@@ -263,7 +261,7 @@ export async function redeemPushDropToken(
 
   const st = car.signableTransaction!
   const beef = Beef.fromBinary(st.tx)
-  const tx = beef.findAtomicTransaction(beef.txs.slice(-1)[0].txid)!
+  const tx = beef.findAtomicTransaction(beef.txs.at(-1)!.txid)!
   tx.inputs[0].unlockingScriptTemplate = unlock
   await tx.sign()
   const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
@@ -280,7 +278,6 @@ export async function redeemPushDropToken(
 
   {
     const beef = Beef.fromBinary(sar.tx!)
-    const txid = sar.txid!
 
     if (!options)
       console.log(`

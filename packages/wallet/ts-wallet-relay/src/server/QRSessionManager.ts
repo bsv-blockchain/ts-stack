@@ -26,8 +26,8 @@ export interface QRSessionManagerOptions {
  * Connected sessions expire after 30 days.
  */
 export class QRSessionManager {
-  private sessions = new Map<string, Session>()
-  private gcTimer: ReturnType<typeof setInterval>
+  private readonly sessions = new Map<string, Session>()
+  private readonly gcTimer: ReturnType<typeof setInterval>
   private onExpired: ((id: string) => void) | null = null
   private readonly maxSessions: number
 
@@ -86,7 +86,7 @@ export class QRSessionManager {
   /** Mark that a mobile WS has opened for this session, starting the grace window. */
   setPairingStarted(id: string): void {
     const session = this.sessions.get(id)
-    if (session && session.status === 'pending') session.pairingStartedAt = Date.now()
+    if (session?.status === 'pending') session.pairingStartedAt = Date.now()
   }
 
   setStatus(id: string, status: SessionStatus): void {

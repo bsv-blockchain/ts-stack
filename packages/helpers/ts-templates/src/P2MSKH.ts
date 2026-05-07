@@ -7,7 +7,7 @@ export interface MultiSigInstructions {
 }
 
 function concatPubkeys (pubkeys: PublicKey[]): number[] {
-  return pubkeys.map((p) => p.toDER() as number[]).reduce((a, b) => a.concat(b), [])
+  return pubkeys.map((p) => p.toDER() as number[]).flat()
 }
 
 function numberFromScriptChunk (chunk: ScriptChunk): number {
@@ -192,7 +192,7 @@ export class P2MSKH implements ScriptTemplate {
         workingUnlockingScript.writeBin(sigForScript)
         const chunkforSig = workingUnlockingScript.chunks.pop() as ScriptChunk
         // add it to the array before the pubkeys, pushing the other content to the right
-        workingUnlockingScript.chunks.splice(workingUnlockingScript.chunks.length - 1, 0, chunkforSig)
+        workingUnlockingScript.chunks.splice(-1, 0, chunkforSig)
         return workingUnlockingScript
       },
 

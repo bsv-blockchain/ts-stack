@@ -101,7 +101,7 @@ export class IdentityRegistry {
     if ((existing != null) && existing.identityKey !== identityKey) {
       return { success: false, message: `Tag "${normalizedTag}" is already registered to another identity`, tag: normalizedTag, error: `Tag "${normalizedTag}" is already registered to another identity` }
     }
-    if ((existing != null) && existing.identityKey === identityKey) {
+    if (existing?.identityKey === identityKey) {
       return { success: true, message: 'Tag already registered', tag: normalizedTag }
     }
 
@@ -178,14 +178,14 @@ export function createIdentityRegistryHandler (config?: IdentityRegistryConfig):
         if (action === 'register') {
           const result = registry.register(tag, identityKey)
           return jsonResponse(
-            (result.error != null) ? { success: false, error: result.error } : { success: true, message: result.message, tag: result.tag },
+            (result.error == null) ? { success: true, message: result.message, tag: result.tag } : { success: false, error: result.error },
             result.success ? 200 : 409
           )
         }
         if (action === 'revoke') {
           const result = registry.revoke(tag, identityKey)
           return jsonResponse(
-            (result.error != null) ? { success: false, error: result.error } : { success: true, message: result.message, tag: result.tag },
+            (result.error == null) ? { success: true, message: result.message, tag: result.tag } : { success: false, error: result.error },
             result.success ? 200 : 404
           )
         }

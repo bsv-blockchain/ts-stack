@@ -34,7 +34,7 @@ function hexToBytes (hex: string): number[] {
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
-    out.push(parseInt(hex.slice(i, i + 2), 16))
+    out.push(Number.parseInt(hex.slice(i, i + 2), 16))
   }
   return out
 }
@@ -90,7 +90,7 @@ function dispatchAuthSocket (
       const validTypes = input.valid_types as string[]
       const expectedEnum = expected.enum as string[]
       if (Array.isArray(expectedEnum) && Array.isArray(validTypes)) {
-        expect(validTypes.sort()).toEqual([...expectedEnum].sort())
+        expect(validTypes.toSorted((a, b) => a.localeCompare(b))).toEqual([...expectedEnum].toSorted((a, b) => a.localeCompare(b)))
       }
       return
     }
@@ -212,7 +212,7 @@ function dispatchAuthSocket (
 
   // authsocket.7: identity key known after handshake
   if ('expected_identity_key' in input) {
-    const expectedKey = getString(input as Record<string, unknown>, 'expected_identity_key')
+    const expectedKey = getString(input, 'expected_identity_key')
     if ('identity_key_known' in expected) {
       expect(getBool(expected, 'identity_key_known')).toBe(true)
     }
@@ -222,7 +222,6 @@ function dispatchAuthSocket (
     // Validate the identity key matches the compressed-pubkey format
     const pubkeyPattern = /^0[23][0-9a-fA-F]{64}$/
     expect(pubkeyPattern.test(expectedKey)).toBe(true)
-    return
   }
 }
 

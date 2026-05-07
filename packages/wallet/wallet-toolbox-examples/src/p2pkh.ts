@@ -47,7 +47,7 @@ export async function p2pkhToAddress() {
   })
 
   // create a new transaction with an output for setup2 in the amount of 42 satoshis.
-  const o = await outputP2PKH(setup1, setup2.identityKey, 10)
+  await outputP2PKH(setup1, setup2.identityKey, 10)
 }
 
 /**
@@ -235,7 +235,7 @@ export async function inputP2PKH(
    */
   const st = car.signableTransaction!
   const beef = Beef.fromBinary(st.tx)
-  const tx = beef.findAtomicTransaction(beef.txs.slice(-1)[0].txid)!
+  const tx = beef.findAtomicTransaction(beef.txs.at(-1)!.txid)!
   tx.inputs[0].unlockingScriptTemplate = unlock
   await tx.sign()
   const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
@@ -262,7 +262,6 @@ export async function inputP2PKH(
   // This completes the example by logging evidence of what was created.
   {
     const beef = Beef.fromBinary(sar.tx!)
-    const txid = sar.txid!
 
     console.log(`
 inputP2PKH to ${setup.identityKey}

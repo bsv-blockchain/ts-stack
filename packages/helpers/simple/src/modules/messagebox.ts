@@ -16,13 +16,11 @@ export function createMessageBoxMethods (core: WalletCore): {
   let peerPay: PeerPayClient | null = null
 
   function getPeerPay (): PeerPayClient {
-    if (peerPay == null) {
-      peerPay = new PeerPayClient({
-        walletClient: core.getClient() as any,
-        messageBoxHost: core.defaults.messageBoxHost,
-        enableLogging: false
-      })
-    }
+    peerPay ??= new PeerPayClient({
+      walletClient: core.getClient() as any,
+      messageBoxHost: core.defaults.messageBoxHost,
+      enableLogging: false
+    })
     return peerPay
   }
 
@@ -101,7 +99,7 @@ export function createMessageBoxMethods (core: WalletCore): {
         })
 
         return {
-          txid: paymentToken?.transaction != null ? 'sent' : '',
+          txid: paymentToken?.transaction == null ? '' : 'sent',
           amount: satoshis,
           recipient: to
         }
@@ -127,7 +125,27 @@ export function createMessageBoxMethods (core: WalletCore): {
       // message — the sender's tx data and derivation info must be preserved so
       // the caller can retry. Losing the message before successful internalization
       // would permanently orphan the funds.
-      if (basket != null) {
+      if (basket == null) {
+        // Wallet payment: output goes directly into wallet's spendable balance
+        try {
+          await (walletClient as any).internalizeAction({
+            tx: payment.token.transaction,
+            outputs: [{
+              outputIndex: payment.token.outputIndex ?? 0,
+              protocol: 'wallet payment',
+              paymentRemittance: {
+                senderIdentityKey: payment.sender,
+                derivationPrefix: payment.token.customInstructions.derivationPrefix,
+                derivationSuffix: payment.token.customInstructions.derivationSuffix
+              }
+            }],
+            labels: ['peerpay'],
+            description: 'MessageBox Payment'
+          })
+        } catch (error) {
+          throw new Error(`Internalization failed (wallet payment), message preserved: ${(error as Error).message}`)
+        }
+      } else {
         // Basket insertion: output goes into a named basket
         try {
           await (walletClient as any).internalizeAction({
@@ -150,26 +168,6 @@ export function createMessageBoxMethods (core: WalletCore): {
           })
         } catch (error) {
           throw new Error(`Internalization failed (basket insertion), message preserved: ${(error as Error).message}`)
-        }
-      } else {
-        // Wallet payment: output goes directly into wallet's spendable balance
-        try {
-          await (walletClient as any).internalizeAction({
-            tx: payment.token.transaction,
-            outputs: [{
-              outputIndex: payment.token.outputIndex ?? 0,
-              protocol: 'wallet payment',
-              paymentRemittance: {
-                senderIdentityKey: payment.sender,
-                derivationPrefix: payment.token.customInstructions.derivationPrefix,
-                derivationSuffix: payment.token.customInstructions.derivationSuffix
-              }
-            }],
-            labels: ['peerpay'],
-            description: 'MessageBox Payment'
-          })
-        } catch (error) {
-          throw new Error(`Internalization failed (wallet payment), message preserved: ${(error as Error).message}`)
         }
       }
 

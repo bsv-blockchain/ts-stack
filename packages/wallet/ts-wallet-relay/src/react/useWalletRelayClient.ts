@@ -38,19 +38,17 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
 
   // Lazily create the client once, wiring React state setters as callbacks
   function ensureClient(): WalletRelayClient {
-    if (!clientRef.current) {
-      clientRef.current = new WalletRelayClient({
-        apiUrl:                options?.apiUrl,
-        pollInterval:          options?.pollInterval,
-        connectedPollInterval: options?.connectedPollInterval,
-        persistSession:        options?.persistSession,
-        sessionStorageKey:     options?.sessionStorageKey,
-        sessionStorageTtl:     options?.sessionStorageTtl,
-        onSessionChange:       setSession,
-        onLogChange:           setLog,
-        onError:               setError,
-      })
-    }
+    clientRef.current ??= new WalletRelayClient({
+      apiUrl:                options?.apiUrl,
+      pollInterval:          options?.pollInterval,
+      connectedPollInterval: options?.connectedPollInterval,
+      persistSession:        options?.persistSession,
+      sessionStorageKey:     options?.sessionStorageKey,
+      sessionStorageTtl:     options?.sessionStorageTtl,
+      onSessionChange:       setSession,
+      onLogChange:           setLog,
+      onError:               setError,
+    })
     return clientRef.current
   }
 

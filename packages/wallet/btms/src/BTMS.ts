@@ -62,9 +62,9 @@ import {
  * ```
  */
 export class BTMS {
-  private wallet: WalletInterface
-  private networkPreset: 'local' | 'mainnet' | 'testnet'
-  private comms?: CommsLayer
+  private readonly wallet: WalletInterface
+  private readonly networkPreset: 'local' | 'mainnet' | 'testnet'
+  private readonly comms?: CommsLayer
   private tokenTemplate: BTMSToken
   private cachedIdentityKey?: PubKeyHex
   private originator?: string
@@ -1292,21 +1292,18 @@ export class BTMS {
           : label
       )
       let type: 'issue' | 'send' | 'receive' | 'burn' = 'send'
-      let direction: 'incoming' | 'outgoing' = 'outgoing'
       let counterparty: PubKeyHex | undefined
 
       // Extract type from labels
       if (labelPayloads.some(l => l.includes('type issue'))) {
         type = 'issue'
-      } else if (labelPayloads.some(l => l.includes('type send'))) {
-        type = 'send'
       } else if (labelPayloads.some(l => l.includes('type receive'))) {
         type = 'receive'
       } else if (labelPayloads.some(l => l.includes('type burn'))) {
         type = 'burn'
       }
 
-      direction = (type === 'send' || type === 'burn') ? 'outgoing' : 'incoming'
+      const direction: 'incoming' | 'outgoing' = (type === 'send' || type === 'burn') ? 'outgoing' : 'incoming'
 
       // Extract counterparty from labels
       const counterpartyLabel = labelPayloads.find(l => l.startsWith('counterparty '))
@@ -1876,7 +1873,7 @@ export class BTMS {
       const utxo = selected[i]
       const { keyID, senderIdentityKey } = parseCustomInstructions(utxo.customInstructions, utxo.txid, utxo.outputIndex)
       const counterparty = senderIdentityKey ?? 'self'
-      const unlocker = this.tokenTemplate.createUnlocker(counterparty, keyID)
+      const unlocker = this.tokenTemplate.createUnlocker(keyID, counterparty)
       const unlockingScript = await unlocker.sign(txForSigning, i)
       spends[i] = { unlockingScript: unlockingScript.toHex() }
     }
@@ -2181,7 +2178,7 @@ export class BTMS {
       case 'random':
         sorted = BTMS.shuffle(eligible)
         break
-      case 'exact-match':
+      case 'exact-match': {
         // Try to find exact match first
         const exactMatch = eligible.find(u => u.token.amount === amount)
         if (exactMatch) {
@@ -2201,6 +2198,7 @@ export class BTMS {
             break
         }
         break
+      }
       case 'largest-first':
       default:
         sorted = [...eligible].sort((a, b) => b.token.amount - a.token.amount)

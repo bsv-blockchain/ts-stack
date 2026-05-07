@@ -12,7 +12,6 @@ import {
   PublicKey,
   Signature,
   BigNumber,
-  SymmetricKey,
   TransactionSignature,
   Spend,
   Script,
@@ -55,7 +54,7 @@ export function hexToBytes (hex: string): number[] {
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out: number[] = []
   for (let i = 0; i < hex.length; i += 2) {
-    out.push(parseInt(hex.slice(i, i + 2), 16))
+    out.push(Number.parseInt(hex.slice(i, i + 2), 16))
   }
   return out
 }
@@ -122,12 +121,12 @@ function dispatchHash160 (
 ): void {
   let data: number[]
   const pubkey = getString(input, 'pubkey')
-  if (pubkey !== '') {
-    data = hexToBytes(pubkey)
-  } else {
+  if (pubkey === '') {
     const msg = getString(input, 'message')
     const encoding = getString(input, 'encoding')
     data = decodeMessage(msg, encoding)
+  } else {
+    data = hexToBytes(pubkey)
   }
   const result = Hash.hash160(data)
   expect(bytesToHex(result)).toBe(getString(expected, 'hash160'))
@@ -172,7 +171,7 @@ function dispatchECDSA (
   // message_too_large: SDK must throw on sign, or verify returns false
   if (getBool(input, 'message_too_large')) {
     const privKey = PrivateKey.fromHex(getString(input, 'privkey_hex'))
-    const bits = typeof input['message_bits'] === 'number' ? input['message_bits'] as number : 258
+    const bits = typeof input['message_bits'] === 'number' ? input['message_bits'] : 258
     const bigMsg = new BigNumber(1).iushln(bits)
 
     if (getBool(input, 'use_valid_signature')) {
@@ -375,7 +374,7 @@ function dispatchAES (
     const pt = new Uint8Array(hexToBytes(ptHex))
     const iv = new Uint8Array(hexToBytes(ivHex))
     const keyArr = new Uint8Array(key)
-    const aad = aadHex !== '' ? new Uint8Array(hexToBytes(aadHex)) : undefined
+    const aad = aadHex === '' ? undefined : new Uint8Array(hexToBytes(aadHex))
 
     // AESGCM does not support AAD in this SDK version; skip if aad is present
     if (aad !== undefined) return
@@ -547,10 +546,10 @@ function computeMerkleRootFromDisplayTxids (txids: string[]): string {
     return b
   })
   while (level.length > 1) {
-    if (level.length % 2 !== 0) level.push(level[level.length - 1])
+    if (level.length % 2 !== 0) level.push(level.at(-1)!)
     const next: number[][] = []
     for (let i = 0; i < level.length; i += 2) {
-      next.push(Hash.hash256([...level[i], ...level[i + 1]]) as number[])
+      next.push(Hash.hash256([...level[i], ...level[i + 1]]))
     }
     level = next
   }
@@ -603,7 +602,7 @@ function dispatchMerklePath (
 
     // Compute merkle root from all txids
     if ('txids' in input) {
-      const txids = (input['txids'] as unknown[]).map(t => String(t))
+      const txids = (input['txids'] as unknown[]).map(String)
       const root = computeMerkleRootFromDisplayTxids(txids)
       if (getString(expected, 'merkle_root') !== '') expect(root).toBe(getString(expected, 'merkle_root'))
       return
@@ -611,7 +610,7 @@ function dispatchMerklePath (
 
     // Extract proof
     if ('full_block_txids' in input) {
-      const txids = (input['full_block_txids'] as unknown[]).map(t => String(t))
+      const txids = (input['full_block_txids'] as unknown[]).map(String)
       const root = computeMerkleRootFromDisplayTxids(txids)
       if (getString(expected, 'merkle_root') !== '') expect(root).toBe(getString(expected, 'merkle_root'))
       if (getBool(expected, 'extracted_smaller_than_full')) expect(txids.length).toBeGreaterThanOrEqual(2)
@@ -686,7 +685,7 @@ function dispatchBEEF (
 
   if ('txid_non_null' in expected) {
     const wantTxidNonNull = getBool(expected, 'txid_non_null')
-    const hasTx = (beef!).txs.length > 0
+    const hasTx = beef!.txs.length > 0
     expect(hasTx).toBe(wantTxidNonNull)
   }
 }
@@ -714,7 +713,7 @@ function dispatchSerialization (
     }
 
     case 'new_transaction_id_binary': {
-      const txid = new Transaction().id() as number[]
+      const txid = new Transaction().id()
       if ('id_length_bytes' in expected) expect(txid.length).toBe(expected['id_length_bytes'])
       return
     }
@@ -916,31 +915,36 @@ function dispatchBSM (
 
   // magicHash vectors
   if (getString(expected, 'magic_hash_hex') !== '') {
-    expect(bytesToHex(BSM.magicHash(msgBytes))).toBe(getString(expected, 'magic_hash_hex'))
+    expect(bytesToHex(BSM.magicHash(msgBytes))).toBe(getString(expected, 'magic_hash_hex')) // NOSONAR — deprecated BSM API used intentionally for conformance testing
     return
   }
 
   const privHex = getString(input, 'privkey_hex')
   const privWif = getString(input, 'privkey_wif')
-  const privKey = privWif !== '' ? PrivateKey.fromWif(privWif) : (privHex !== '' ? PrivateKey.fromHex(privHex) : null)
+  let privKey: PrivateKey | null = null
+  if (privWif !== '') {
+    privKey = PrivateKey.fromWif(privWif)
+  } else if (privHex !== '') {
+    privKey = PrivateKey.fromHex(privHex)
+  }
 
   // sign → DER output
   if (getString(expected, 'der_hex') !== '' && privKey !== null) {
-    const sig = BSM.sign(msgBytes, privKey, 'raw') as Signature
+    const sig = BSM.sign(msgBytes, privKey, 'raw') as Signature // NOSONAR — deprecated BSM API used intentionally for conformance testing
     expect(sig.toDER('hex')).toBe(getString(expected, 'der_hex'))
     return
   }
 
   // sign → base64 compact
   if (getString(expected, 'base64_compact_sig') !== '' && privKey !== null) {
-    expect(BSM.sign(msgBytes, privKey, 'base64')).toBe(getString(expected, 'base64_compact_sig'))
+    expect(BSM.sign(msgBytes, privKey, 'base64')).toBe(getString(expected, 'base64_compact_sig')) // NOSONAR — deprecated BSM API used intentionally for conformance testing
     return
   }
 
   // verify vectors
   if ('valid' in expected) {
     const wantValid = expected['valid'] as boolean
-    const magicHashBN = new BigNumber(BSM.magicHash(msgBytes))
+    const magicHashBN = new BigNumber(BSM.magicHash(msgBytes)) // NOSONAR — deprecated BSM API used intentionally for conformance testing
 
     const derHexIn = getString(input, 'der_hex')
     if (derHexIn !== '') {
@@ -979,7 +983,7 @@ function dispatchBSM (
     if (compactHex === '') return
 
     const compactBytes = hexToBytes(compactHex)
-    const magicHashBN = new BigNumber(BSM.magicHash(msgBytes))
+    const magicHashBN = new BigNumber(BSM.magicHash(msgBytes)) // NOSONAR — deprecated BSM API used intentionally for conformance testing
     const recoveryFactor = (compactBytes[0] - 27) & ~4
     const sig = Signature.fromCompact(compactBytes)
     const recoveredPub = sig.RecoverPublicKey(recoveryFactor, magicHashBN)
@@ -1190,7 +1194,7 @@ function dispatchEvaluation (
       case 'findAndDelete': {
         const dataLen = input['data_length_bytes'] as number
         const fillHex = getString(input, 'fill_byte')
-        const fillByte = fillHex !== '' ? hexToBytes(fillHex.replace('0x', ''))[0] : 0x01
+        const fillByte = fillHex === '' ? 0x01 : hexToBytes(fillHex.replace('0x', ''))[0]
         const hasTrailingOp1 = getBool(input, 'source_has_trailing_op1')
 
         const data = new Array(dataLen).fill(fillByte)
@@ -1257,9 +1261,9 @@ function dispatchEvaluation (
     const pubKeyHex = getString(input, 'script_pubkey_hex')
 
     const lockingScript = LockingScript.fromHex(pubKeyHex)
-    const unlockingScript = sigHex !== ''
-      ? UnlockingScript.fromHex(sigHex)
-      : UnlockingScript.fromBinary([])
+    const unlockingScript = sigHex === ''
+      ? UnlockingScript.fromBinary([])
+      : UnlockingScript.fromHex(sigHex)
 
     const spend = new Spend({
       sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
@@ -1290,7 +1294,7 @@ function dispatchEvaluation (
   if ('data_length_bytes' in input) {
     const dLen = input['data_length_bytes'] as number
     const fillHex = getString(input, 'data_fill_byte')
-    const fillByte = fillHex !== '' ? hexToBytes(fillHex.replace('0x', ''))[0] : 0x01
+    const fillByte = fillHex === '' ? 0x01 : hexToBytes(fillHex.replace('0x', ''))[0]
     const data = new Array(dLen).fill(fillByte)
     const s = new Script()
     s.writeBin(data)

@@ -23,8 +23,8 @@
  *     )
  *   }
  *
- * TODO: Tailor the heading / description text to your application.
- * TODO: In onLocalWallet, store the wallet and use it for your app's wallet calls.
+ * NOTE: Tailor the heading / description text to your application.
+ * NOTE: In onLocalWallet, store the wallet and use it for your app's wallet calls.
  */
 
 import { useCallback, useState } from 'react'
@@ -47,7 +47,7 @@ export function MobileQRContent() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-3xl">
-        {/* TODO: Update this heading and subtitle for your app */}
+        {/* NOTE: Update this heading and subtitle for your app */}
         <h1 className="text-3xl font-bold text-gray-900 mb-1">BSV Mobile Wallet</h1>
         <p className="text-gray-500 mb-8 text-sm">
           Scan the QR code with your mobile wallet to connect
@@ -91,7 +91,7 @@ export function DesktopView() {
 
   const handleLocalWallet = useCallback((wallet: WalletClient) => {
     setMode('local')
-    // TODO: store `wallet` in your app state / context and use it for wallet calls.
+    // NOTE: store `wallet` in your app state / context and use it for wallet calls.
     // e.g. setAppWallet(wallet) or dispatch({ type: 'WALLET_READY', wallet })
     console.log('[DesktopView] local wallet connected', wallet)
   }, [])
@@ -110,7 +110,7 @@ export function DesktopView() {
         />
       )}
 
-      {/* Local wallet — TODO: replace this placeholder with your app's main UI */}
+      {/* Local wallet — NOTE: replace this placeholder with your app's main UI */}
       {mode === 'local' && (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
           <div className="text-center">
@@ -121,7 +121,7 @@ export function DesktopView() {
             </div>
             <h2 className="text-xl font-semibold text-gray-900 mb-1">Wallet connected</h2>
             <p className="text-sm text-gray-500">
-              {/* TODO: render your app content here using the local wallet */}
+              {/* NOTE: render your app content here using the local wallet */}
               Local BSV wallet is ready. Wire it into your app above in handleLocalWallet.
             </p>
           </div>

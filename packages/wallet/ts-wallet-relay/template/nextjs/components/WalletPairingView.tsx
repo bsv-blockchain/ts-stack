@@ -12,7 +12,7 @@
  *     return <WalletPairingView />
  *   }
  *
- * TODO: Update the heading and subtitle to match your application.
+ * NOTE: Update the heading and subtitle to match your application.
  */
 
 import { QRDisplay }        from './QRDisplay'
@@ -26,7 +26,7 @@ export function WalletPairingView() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-3xl">
-        {/* TODO: Update this heading and subtitle for your app */}
+        {/* NOTE: Update this heading and subtitle for your app */}
         <h1 className="text-3xl font-bold text-gray-900 mb-1">BSV Mobile Wallet</h1>
         <p className="text-gray-500 mb-8 text-sm">
           Scan the QR code with your mobile wallet to connect

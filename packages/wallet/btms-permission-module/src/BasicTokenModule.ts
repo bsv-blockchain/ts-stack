@@ -44,7 +44,7 @@ export class BasicTokenModule implements PermissionsModule {
    * Key: originator (dApp identifier)
    * Value: timestamp of approval (milliseconds since epoch)
    */
-  private sessionAuthorizations: Map<string, number> = new Map()
+  private readonly sessionAuthorizations: Map<string, number> = new Map()
   private readonly SESSION_TIMEOUT_MS = 60000 // 60 seconds
 
   /**
@@ -58,7 +58,7 @@ export class BasicTokenModule implements PermissionsModule {
    * Key: originator (dApp identifier)
    * Value: authorized transaction details (reference, hashOutputs, outpoints, timestamp)
    */
-  private authorizedTransactions: Map<string, AuthorizedTransaction> = new Map()
+  private readonly authorizedTransactions: Map<string, AuthorizedTransaction> = new Map()
 
   /**
    * Creates a new BasicTokenModule instance.
@@ -257,15 +257,9 @@ export class BasicTokenModule implements PermissionsModule {
       if (scriptLen < 0xfd) {
         outputBytes.push(scriptLen)
       } else if (scriptLen <= 0xffff) {
-        outputBytes.push(0xfd)
-        outputBytes.push(scriptLen & 0xff)
-        outputBytes.push((scriptLen >> 8) & 0xff)
+        outputBytes.push(0xfd, scriptLen & 0xff, (scriptLen >> 8) & 0xff)
       } else {
-        outputBytes.push(0xfe)
-        outputBytes.push(scriptLen & 0xff)
-        outputBytes.push((scriptLen >> 8) & 0xff)
-        outputBytes.push((scriptLen >> 16) & 0xff)
-        outputBytes.push((scriptLen >> 24) & 0xff)
+        outputBytes.push(0xfe, scriptLen & 0xff, (scriptLen >> 8) & 0xff, (scriptLen >> 16) & 0xff, (scriptLen >> 24) & 0xff)
       }
       outputBytes.push(...scriptBytes)
     }
@@ -1113,7 +1107,7 @@ export class BasicTokenModule implements PermissionsModule {
       const amount = Number(amountStr)
 
       // Validate amount
-      if (isNaN(amount) || amount <= 0 || !Number.isFinite(amount)) {
+      if (Number.isNaN(amount) || amount <= 0 || !Number.isFinite(amount)) {
         return null
       }
 

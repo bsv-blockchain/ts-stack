@@ -77,7 +77,7 @@ export async function releaseOnIdentity(
     rootKeyHex: env.devKeys[identityKey]
   })
 
-  const change = await setup.wallet.listOutputs({
+  await setup.wallet.listOutputs({
     basket: sdk.specOpInvalidChange,
     tags: ['release']
   })

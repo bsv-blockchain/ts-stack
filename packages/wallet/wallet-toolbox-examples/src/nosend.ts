@@ -110,14 +110,14 @@ export async function nosend() {
 
   const mr = await mintTokens(setup, args, 3, args.fields[0].length)
 
-  const swr1 = await sendWith(
+  await sendWith(
     setup,
     mr.tokens.map(t => t.beef.atomicTxid!)
   )
 
   const rr = await redeemTokens(setup, mr.tokens)
 
-  const swr2 = await sendWith(
+  await sendWith(
     setup,
     rr.beefs.map(b => b.atomicTxid!)
   )

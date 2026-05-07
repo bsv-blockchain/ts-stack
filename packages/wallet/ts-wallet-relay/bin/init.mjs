@@ -38,8 +38,8 @@ function flagValue(name) {
 const isNextjs     = args.includes('--nextjs')
 const backendOnly  = args.includes('--backend')
 const frontendOnly = args.includes('--frontend')
-const positional   = args.filter(a => !a.startsWith('--'))
-const targetRoot   = path.resolve(positional[0] ?? '.')
+const positional   = args.find(a => !a.startsWith('--'))
+const targetRoot   = path.resolve(positional ?? '.')
 
 const frontendDirName = flagValue('--frontend-dir') || 'frontend'
 const backendDirName  = flagValue('--backend-dir')  || 'backend'
@@ -74,21 +74,20 @@ if (isNextjs) {
   // Next.js template drops files directly at the target root so they land in
   // the right relative positions for App Router (app/api/..., lib/, components/).
   copyDir(path.join(templateDir, 'nextjs'), targetRoot, created)
-} else {
-  if (!frontendOnly) {
-    copyDir(
-      path.join(templateDir, 'backend'),
-      path.join(targetRoot, backendDirName),
-      created,
-    )
-  }
-  if (!backendOnly) {
-    copyDir(
-      path.join(templateDir, 'frontend'),
-      path.join(targetRoot, frontendDirName),
-      created,
-    )
-  }
+} else if (!frontendOnly) {
+  copyDir(
+    path.join(templateDir, 'backend'),
+    path.join(targetRoot, backendDirName),
+    created,
+  )
+}
+
+if (!isNextjs && !backendOnly) {
+  copyDir(
+    path.join(templateDir, 'frontend'),
+    path.join(targetRoot, frontendDirName),
+    created,
+  )
 }
 
 // ── Summary ──────────────────────────────────────────────────────────────────

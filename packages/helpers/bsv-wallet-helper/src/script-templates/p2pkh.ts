@@ -24,13 +24,13 @@ function validateWalletDerivationParams (params: any, paramName: string = 'param
     throw new Error(`Invalid ${paramName}: protocolID must be an array of [number, string]`)
   }
   if (typeof params.protocolID[0] !== 'number' || typeof params.protocolID[1] !== 'string') {
-    throw new Error(`Invalid ${paramName}: protocolID must be [number, string]`)
+    throw new TypeError(`Invalid ${paramName}: protocolID must be [number, string]`)
   }
   if (params.keyID === undefined || params.keyID === null) {
     throw new Error(`Invalid ${paramName}: keyID is required`)
   }
   if (typeof params.keyID !== 'string') {
-    throw new Error(`Invalid ${paramName}: keyID must be a string`)
+    throw new TypeError(`Invalid ${paramName}: keyID must be a string`)
   }
   // counterparty is optional, defaults to 'self'
   if (params.counterparty !== undefined && typeof params.counterparty !== 'string') {
@@ -119,7 +119,7 @@ export default class P2PKH implements ScriptTemplate {
     }
 
     // Final validation
-    if (!data || data.length !== 20) {
+    if (data == null || data.length !== 20) {
       throw new Error('Failed to generate valid public key hash (must be 20 bytes)')
     }
 
@@ -174,7 +174,7 @@ export default class P2PKH implements ScriptTemplate {
       throw new Error('protocolID must be an array of [number, string]')
     }
     if (typeof keyID !== 'string') {
-      throw new Error('keyID must be a string')
+      throw new TypeError('keyID must be a string')
     }
     if (counterparty !== undefined && typeof counterparty !== 'string') {
       throw new Error('counterparty must be a string (or omit for default "self")')
@@ -183,7 +183,7 @@ export default class P2PKH implements ScriptTemplate {
       throw new Error('signOutputs must be "all", "none", or "single"')
     }
     if (typeof anyoneCanPay !== 'boolean') {
-      throw new Error('anyoneCanPay must be a boolean')
+      throw new TypeError('anyoneCanPay must be a boolean')
     }
 
     const wallet = this.wallet

@@ -24,7 +24,7 @@ export async function encryptEnvelope(
     counterparty: params.counterparty,
     plaintext,
   })
-  return bytesToBase64url(ciphertext as number[])
+  return bytesToBase64url(ciphertext)
 }
 
 /**

@@ -261,7 +261,7 @@ function dispatchAuthMessageSchema (
  * requestId is 32 bytes, base64-encoded (44 chars with padding).
  * Pure math / encoding check — fully exercisable client-side.
  *
- * TODO (human review): The vector's `requestId_example` field
+ * NOTE (human review): The vector's `requestId_example` field
  * ("cmVxdWVzdElkMzJCeXRlc1JhbmRvbVZhbHVlQQ==") decodes to 28 bytes,
  * not the 32 bytes required by the spec (`requestId_length_bytes: 32`).
  * The correct 32-byte example would be 44 base64 chars with padding.
@@ -287,7 +287,7 @@ function dispatchRequestIdFormat (
   expect(computedBase64Length).toBe(expectedBase64Length)
 
   // Verify the example is valid base64 (even if the decoded length mismatches
-  // the spec — see TODO above; we do not change expected values)
+  // the spec — see NOTE above; we do not change expected values)
   const example = getString(input, 'requestId_example')
   if (example !== '') {
     expect(BASE64_PATTERN.test(example)).toBe(true)
@@ -358,12 +358,10 @@ export function dispatch (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void | Promise<void> {
-  switch (category) {
-    case 'brc31-handshake':
-      return dispatchBRC31Handshake(input, expected)
-    default:
-      throw new Error(`auth dispatcher: unknown category '${category}'`)
+  if (category === 'brc31-handshake') {
+    return dispatchBRC31Handshake(input, expected)
   }
+  throw new Error(`auth dispatcher: unknown category '${category}'`)
 }
 
 function dispatchBRC31Handshake (

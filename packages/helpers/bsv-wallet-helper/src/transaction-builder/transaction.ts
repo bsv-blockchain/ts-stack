@@ -8,6 +8,9 @@ import { WalletDerivationParams } from '../types/wallet'
 import { getDerivation } from '../utils'
 import { addOpReturnData } from '../utils/opreturn'
 import { DEFAULT_SAT_PER_KB } from '../utils/constants'
+
+/** Address string, wallet derivation params, or undefined (BRC-29 auto-derive). */
+type AddressOrParams = string | WalletDerivationParams | undefined
 import {
   BuildParams,
   InputConfig,
@@ -48,7 +51,7 @@ export class InputBuilder {
      */
   inputDescription (desc: string): this {
     if (typeof desc !== 'string') {
-      throw new Error('Input description must be a string')
+      throw new TypeError('Input description must be a string')
     }
     this.inputConfig.description = desc
     return this
@@ -316,7 +319,7 @@ export class OutputBuilder {
      */
   outputDescription (desc: string): this {
     if (typeof desc !== 'string') {
-      throw new Error('Output description must be a string')
+      throw new TypeError('Output description must be a string')
     }
     this.outputConfig.description = desc
     return this
@@ -390,7 +393,7 @@ export class TransactionBuilder {
      */
   transactionDescription (desc: string): this {
     if (typeof desc !== 'string') {
-      throw new Error('Description must be a string')
+      throw new TypeError('Description must be a string')
     }
     this._transactionDescription = desc
     return this
@@ -435,11 +438,11 @@ export class TransactionBuilder {
     // Validate array options
     if (opts.knownTxids !== undefined) {
       if (!Array.isArray(opts.knownTxids)) {
-        throw new Error('knownTxids must be an array')
+        throw new TypeError('knownTxids must be an array')
       }
       for (let i = 0; i < opts.knownTxids.length; i++) {
         if (typeof opts.knownTxids[i] !== 'string') {
-          throw new Error(`knownTxids[${i}] must be a string (hex txid)`)
+          throw new TypeError(`knownTxids[${i}] must be a string (hex txid)`)
         }
       }
     }
@@ -490,7 +493,7 @@ export class TransactionBuilder {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -528,7 +531,7 @@ export class TransactionBuilder {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -577,7 +580,7 @@ export class TransactionBuilder {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -620,13 +623,13 @@ export class TransactionBuilder {
       throw new Error('unlockingScriptTemplate is required for custom input')
     }
     if (typeof params.unlockingScriptTemplate.estimateLength !== 'function') {
-      throw new Error('unlockingScriptTemplate must have an estimateLength() method')
+      throw new TypeError('unlockingScriptTemplate must have an estimateLength() method')
     }
     if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
       throw new Error('sourceTransaction is required and must be a Transaction object')
     }
     if (typeof params.sourceTransaction.id !== 'function') {
-      throw new Error('sourceTransaction must be a valid Transaction object with an id() method')
+      throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
     }
     if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
       throw new Error('sourceOutputIndex must be a non-negative number')
@@ -658,14 +661,14 @@ export class TransactionBuilder {
   addP2PKHOutput (params: AddP2PKHOutputParams): OutputBuilder {
     // Validate parameters
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new Error('satoshis must be a non-negative number')
+      throw new TypeError('satoshis must be a non-negative number')
     }
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
     }
 
     // Determine addressOrParams from named parameters
-    let addressOrParams: string | WalletDerivationParams | undefined
+    let addressOrParams: AddressOrParams
     if ('publicKey' in params) {
       addressOrParams = params.publicKey
     } else if ('address' in params) {
@@ -695,7 +698,7 @@ export class TransactionBuilder {
   addOrdLockOutput (params: AddOrdLockOutputParams): OutputBuilder {
     // Validate parameters
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new Error('satoshis must be a non-negative number')
+      throw new TypeError('satoshis must be a non-negative number')
     }
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
@@ -727,7 +730,7 @@ export class TransactionBuilder {
     }
 
     // Determine addressOrParams from named parameters
-    let addressOrParams: string | WalletDerivationParams | undefined
+    let addressOrParams: AddressOrParams
     if ((params != null) && 'publicKey' in params) {
       addressOrParams = params.publicKey
     } else if ((params != null) && 'walletParams' in params) {
@@ -754,14 +757,14 @@ export class TransactionBuilder {
   addOrdinalP2PKHOutput (params: AddOrdinalP2PKHOutputParams): OutputBuilder {
     // Validate parameters
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new Error('satoshis must be a non-negative number')
+      throw new TypeError('satoshis must be a non-negative number')
     }
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
     }
 
     // Determine addressOrParams from named parameters
-    let addressOrParams: string | WalletDerivationParams | undefined
+    let addressOrParams: AddressOrParams
     if ('publicKey' in params) {
       addressOrParams = params.publicKey
     } else if ('address' in params) {
@@ -799,7 +802,7 @@ export class TransactionBuilder {
       throw new Error('lockingScript must be a LockingScript instance')
     }
     if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new Error('satoshis must be a non-negative number')
+      throw new TypeError('satoshis must be a non-negative number')
     }
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
@@ -852,8 +855,7 @@ export class TransactionBuilder {
     const preimageInputs = []
 
     // Process each input
-    for (let i = 0; i < this.inputs.length; i++) {
-      const config = this.inputs[i]
+    for (const config of this.inputs) {
 
       let unlockingScriptTemplate
 
@@ -971,13 +973,12 @@ export class TransactionBuilder {
           if (isDerivationParams(addressOrParams)) {
             // Use wallet param overload
             lockingScript = await p2pkh.lock({ walletParams: addressOrParams })
+          } else if (isHexPublicKey(addressOrParams)) {
+            // Use string overload (publicKey for hex)
+            lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
           } else {
-            // Use string overload (address by default; publicKey for hex)
-            if (isHexPublicKey(addressOrParams)) {
-              lockingScript = await p2pkh.lock({ publicKey: addressOrParams })
-            } else {
-              lockingScript = await p2pkh.lock({ address: addressOrParams })
-            }
+            // Use string overload (address by default)
+            lockingScript = await p2pkh.lock({ address: addressOrParams })
           }
           break
         }
@@ -1011,21 +1012,20 @@ export class TransactionBuilder {
               inscription: config.inscription,
               metadata: config.metadata
             })
+          } else if (isHexPublicKey(addressOrParams)) {
+            // Use string overload (publicKey for hex)
+            lockingScript = await ordinal.lock({
+              publicKey: addressOrParams,
+              inscription: config.inscription,
+              metadata: config.metadata
+            })
           } else {
-            // Use string overload (address by default; publicKey for hex)
-            if (isHexPublicKey(addressOrParams)) {
-              lockingScript = await ordinal.lock({
-                publicKey: addressOrParams,
-                inscription: config.inscription,
-                metadata: config.metadata
-              })
-            } else {
-              lockingScript = await ordinal.lock({
-                address: addressOrParams,
-                inscription: config.inscription,
-                metadata: config.metadata
-              })
-            }
+            // Use string overload (address by default)
+            lockingScript = await ordinal.lock({
+              address: addressOrParams,
+              inscription: config.inscription,
+              metadata: config.metadata
+            })
           }
           break
         }
@@ -1192,7 +1192,7 @@ export class TransactionBuilder {
         const template = unlockingScriptTemplates[i]
         const fn = template?.estimateLength
         if (typeof fn !== 'function') {
-          throw new Error('unlockingScriptTemplate must have an estimateLength() method')
+          throw new TypeError('unlockingScriptTemplate must have an estimateLength() method')
         }
 
         const argc = fn.length
@@ -1357,10 +1357,10 @@ export class TransactionBuilder {
      */
   async pay (to: string, satoshis: number): Promise<any> {
     if (typeof to !== 'string') {
-      throw new Error('to must be a string')
+      throw new TypeError('to must be a string')
     }
     if (typeof satoshis !== 'number' || satoshis < 0) {
-      throw new Error('satoshis must be a non-negative number')
+      throw new TypeError('satoshis must be a non-negative number')
     }
 
     if (isHexPublicKey(to)) {

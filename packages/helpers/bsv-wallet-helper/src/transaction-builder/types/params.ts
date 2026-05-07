@@ -1,4 +1,7 @@
 import { Transaction, LockingScript, Script } from '@bsv/sdk'
+
+/** Controls which outputs are covered by the signature. */
+export type SignOutputs = 'all' | 'none' | 'single'
 import { WalletDerivationParams } from '../../types/wallet'
 import { Inscription, MAP } from '../../script-templates/ordinal'
 import { OrdLockLockParams } from '../../script-templates/types'
@@ -249,7 +252,7 @@ export interface AddP2PKHInputParams {
   /** Optional description for tracking purposes */
   description?: string
   /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-  signOutputs?: 'all' | 'none' | 'single'
+  signOutputs?: SignOutputs
   /** Allow other inputs to be added later (default: false) */
   anyoneCanPay?: boolean
   /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
@@ -270,7 +273,7 @@ export interface AddOrdLockInputParams {
   description?: string
   kind?: 'cancel' | 'purchase'
   walletParams?: WalletDerivationParams
-  signOutputs?: 'all' | 'none' | 'single'
+  signOutputs?: SignOutputs
   anyoneCanPay?: boolean
   sourceSatoshis?: number
   lockingScript?: Script
@@ -298,7 +301,7 @@ export interface AddOrdinalP2PKHInputParams {
   /** Optional description for tracking purposes */
   description?: string
   /** Signature scope: 'all', 'none', or 'single' (default: 'all') */
-  signOutputs?: 'all' | 'none' | 'single'
+  signOutputs?: SignOutputs
   /** Allow other inputs to be added later (default: false) */
   anyoneCanPay?: boolean
   /** Optional amount in satoshis being unlocked (otherwise requires sourceTransaction) */
