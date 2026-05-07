@@ -589,4 +589,132 @@ describe('WalletRelayService E2E', () => {
       expect(body.error.toLowerCase()).toMatch(/disconnect/)
     }, 10_000)
   })
+
+  // ── Per-session origin & allowedOrigins ─────────────────────────────────────
+  //
+  // These cover the multi-app deployment shape: one relay shared by N webapps,
+  // each passing its own origin per call. The legacy single-`origin` path stays
+  // covered by the rest of the suite — every other test in this file is set up
+  // with `origin: ${baseUrl}` and no `allowedOrigins`, so back-compat is the
+  // implicit baseline.
+
+  describe('per-session origin', () => {
+    it('embeds the constructor origin in the QR by default (legacy behavior)', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      expect(params?.origin).toBe(baseUrl)
+    })
+
+    it('embeds the per-call origin in the QR when passed', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.commonsource\.nl$/,
+      })
+      try {
+        const created = await svc.createSession({ origin: 'https://app.commonsource.nl' })
+        const { params } = parsePairingUri(created.pairingUri)
+        expect(params?.origin).toBe('https://app.commonsource.nl')
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('rejects per-call origin when not in allowedOrigins', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: ['https://app.commonsource.nl'],
+      })
+      try {
+        await expect(
+          svc.createSession({ origin: 'https://evil.com' })
+        ).rejects.toThrow(/not in the allowedOrigins list/)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('forwards the request Origin header via GET /api/session', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.commonsource\.nl$/,
+      })
+      try {
+        const res = await fetch(`http://localhost:${port}/api/session`, {
+          headers: { Origin: 'https://app.commonsource.nl' },
+        })
+        expect(res.ok).toBe(true)
+        const body = await res.json() as { pairingUri: string }
+        const { params } = parsePairingUri(body.pairingUri)
+        expect(params?.origin).toBe('https://app.commonsource.nl')
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('returns 403 from GET /api/session when Origin header is not in allowlist', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: ['https://app.commonsource.nl'],
+      })
+      try {
+        const res = await fetch(`http://localhost:${port}/api/session`, {
+          headers: { Origin: 'https://evil.com' },
+        })
+        expect(res.status).toBe(403)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('falls back to constructor origin when GET /api/session has no Origin header', async () => {
+      // Same-origin / curl / mobile native fetch — no Origin header. Should use
+      // the constructor default rather than rejecting.
+      const res = await fetch(`${baseUrl}/api/session`)
+      expect(res.ok).toBe(true)
+      const body = await res.json() as { pairingUri: string }
+      const { params } = parsePairingUri(body.pairingUri)
+      expect(params?.origin).toBe(baseUrl)
+    })
+
+    it('signs the QR over the per-session origin (signature verifies)', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.commonsource\.nl$/,
+      })
+      try {
+        const created = await svc.createSession({ origin: 'https://app.commonsource.nl' })
+        const { params } = parsePairingUri(created.pairingUri)
+        // verifyPairingSignature reconstructs the signed string from params.origin —
+        // if origin was wrong, signature verification would fail.
+        expect(await verifyPairingSignature(params!)).toBe(true)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+  })
 })

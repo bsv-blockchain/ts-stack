@@ -20,6 +20,9 @@ import { WalletRequestHandler } from './WalletRequestHandler.js'
 import { buildPairingUri } from '../shared/pairingUri.js'
 import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
 import { bytesToBase64url } from '../shared/encoding.js'
+import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
+import { PROTOCOL_ID } from '../types.js'
+import type { WireEnvelope, RpcResponse } from '../types.js'
 
 export interface WalletRelayServiceOptions {
   /**
@@ -47,10 +50,26 @@ export interface WalletRelayServiceOptions {
    */
   relayUrl?: string
   /**
-   * http(s):// URL of the desktop frontend — used for CORS and the pairing URI.
+   * Default http(s):// URL of the desktop frontend — embedded in the QR pairing
+   * URI when `createSession()` is called without a per-session origin override.
    * Defaults to the `ORIGIN` environment variable, then `http://localhost:5173`.
+   *
+   * For multi-app deployments (one relay shared by N webapps) leave this unset
+   * or set it to a sensible fallback, and pass `origin` per-call to
+   * `createSession({ origin })` instead. Use `allowedOrigins` to restrict which
+   * origins are accepted.
    */
   origin?: string
+  /**
+   * Origin allowlist — controls (a) which origins may be claimed by callers of
+   * `createSession({ origin })`, and (b) which browser origins may open a
+   * desktop-role WebSocket connection.
+   *
+   * Accepts a string, string[], RegExp, or predicate function. When unset, the
+   * lib falls back to the single-value `origin` for backward compatibility with
+   * the original API.
+   */
+  allowedOrigins?: AllowedOrigins
   /** Called when a mobile completes pairing and the session transitions to 'connected'. */
   onSessionConnected?: (sessionId: string) => void
   /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
@@ -119,11 +138,13 @@ export class WalletRelayService {
   private readonly mobileAuthTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   // Resolved options — always defined after construction
-  private readonly wallet: WalletLike
-  private readonly relayUrl: string
-  private readonly origin: string
-  private readonly schema: string
-  private readonly signQrCodes: boolean
+  private wallet: WalletLike
+  private relayUrl: string
+  private origin: string
+  private schema: string
+  private signQrCodes: boolean
+  /** Compiled allowlist used for both per-session origin claims and WS upgrades. */
+  private isOriginAllowed: ((origin: string) => boolean) | null
 
   constructor(private readonly opts: WalletRelayServiceOptions) {
     this.wallet      = opts.wallet
@@ -132,8 +153,16 @@ export class WalletRelayService {
     this.schema      = opts.schema   ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-browser'
     this.signQrCodes = opts.signQrCodes ?? true
 
+    // Compile the allowlist. Precedence: explicit `allowedOrigins` → legacy
+    // single `origin` (when explicitly provided) → null (no validation).
+    // We deliberately do NOT fall back to the env-var-derived `this.origin`
+    // here, so a default localhost ORIGIN doesn't accidentally lock multi-app
+    // setups out via the WS allowlist.
+    const matcherSource = opts.allowedOrigins ?? opts.origin
+    this.isOriginAllowed = compileOriginMatcher(matcherSource)
+
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions })
-    this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin })
+    this.relay = new WebSocketRelay(opts.server, { allowedOrigins: matcherSource })
 
     // B6: clean up relay topic when a session is GC'd
     this.sessions.onSessionExpired(id => this.relay.removeTopic(id))
@@ -185,8 +214,26 @@ export class WalletRelayService {
     if (opts.app) this.registerRoutes(opts.app)
   }
 
-  /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
-  async createSession(): Promise<{ sessionId: string; status: string; qrDataUrl: string; pairingUri: string; desktopToken: string }> {
+  /**
+   * Create a session and return its QR data URL, pairing URI, and desktop token.
+   *
+   * Pass `options.origin` to embed a per-session origin in the QR (multi-app
+   * deployments where the caller's URL — not the relay's — is the trust anchor).
+   * When omitted, falls back to the constructor `origin`.
+   *
+   * If an allowlist is configured, the per-session origin must match — otherwise
+   * a malicious caller could mint QRs claiming to be any domain.
+   */
+  async createSession(
+    options?: { origin?: string }
+  ): Promise<{ sessionId: string; status: string; qrDataUrl: string; pairingUri: string; desktopToken: string }> {
+    const origin = options?.origin ?? this.origin
+
+    // Validate caller-claimed origin against the allowlist (when set).
+    if (options?.origin !== undefined && this.isOriginAllowed && !this.isOriginAllowed(options.origin)) {
+      throw new Error(`Origin '${options.origin}' is not in the allowedOrigins list`)
+    }
+
     const session = this.sessions.createSession()
     const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true })
 
@@ -196,7 +243,7 @@ export class WalletRelayService {
     let sig: string | undefined
     if (this.signQrCodes) {
       const data = Array.from(
-        new TextEncoder().encode(`${session.id}|${backendIdentityKey}|${this.origin}|${expiry}`)
+        new TextEncoder().encode(`${session.id}|${backendIdentityKey}|${origin}|${expiry}`)
       )
       const { signature } = await this.wallet.createSignature({
         data,
@@ -211,7 +258,7 @@ export class WalletRelayService {
       sessionId: session.id,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
-      origin: this.origin,
+      origin,
       expiry,
       sig,
       schema: this.schema,
@@ -302,11 +349,19 @@ export class WalletRelayService {
 
   private registerRoutes(app: RouterLike): void {
     app.get('/api/session', (req: Request, res: Response) => {
-      void this.createSession()
+      // Browsers automatically attach the `Origin` header on cross-origin requests.
+      // We forward it as the per-session claimed origin so the QR points back at
+      // the calling webapp rather than the relay's own URL. createSession()
+      // validates the claim against the allowlist before embedding it.
+      const claimedOrigin = req.headers.origin as string | undefined
+      void this.createSession(claimedOrigin ? { origin: claimedOrigin } : undefined)
         .then(info => res.json(info))
         .catch((err: unknown) => {
           const msg = err instanceof Error ? err.message : 'Failed'
-          const status = (err as { code?: number }).code === 429 ? 429 : 500
+          const code = (err as { code?: number }).code
+          const status = code === 429 ? 429
+            : msg.includes('allowedOrigins') ? 403
+            : 500
           res.status(status).json({ error: msg })
         })
     })
