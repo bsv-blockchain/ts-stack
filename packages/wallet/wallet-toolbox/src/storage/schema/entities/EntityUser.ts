@@ -96,7 +96,7 @@ export class EntityUser extends EntityBase<TableUser> {
     const ef = verifyOneOrNone(await storage.findUsers({ partial: { identityKey: ei.identityKey }, trx }))
     if ((ef != null) && ef.userId != userId) throw new WERR_INTERNAL('logic error, userIds don not match.')
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityUser(ef || { ...ei }),
       eiId: verifyId(ei.userId)
     }

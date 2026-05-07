@@ -36,7 +36,9 @@ export abstract class WalletMonitorTask {
    *
    * Called before first call to `trigger`
    */
-  async asyncSetup (): Promise<void> {}
+  async asyncSetup (): Promise<void> {
+    // Default no-op; override in subclasses that require async setup
+  }
 
   /**
    * Return true if `runTask` needs to be called now.

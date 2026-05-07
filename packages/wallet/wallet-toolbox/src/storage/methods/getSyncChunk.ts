@@ -235,7 +235,7 @@ export async function getSyncChunk (storage: StorageReader, args: RequestSyncChu
     let { offset, name: oname } = args.offsets[i++]
     if (a.name !== oname) { throw new WERR_INVALID_PARAMETER('offsets', `in dependency order. '${a.name}' expected, found ${oname}.`) }
     let preAddCalled = false
-    for (; !done;) {
+    while (!done) {
       const limit = Math.min(itemCount, Math.max(10, args.maxItems / a.maxDivider))
       if (limit <= 0) break
       const items = await a.findItems(storage, {

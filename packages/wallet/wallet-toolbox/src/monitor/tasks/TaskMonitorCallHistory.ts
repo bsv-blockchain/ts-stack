@@ -2,7 +2,7 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 export class TaskMonitorCallHistory extends WalletMonitorTask {
-  static taskName = 'MonitorCallHistory'
+  static readonly taskName = 'MonitorCallHistory'
 
   constructor (
     monitor: Monitor,
@@ -18,7 +18,7 @@ export class TaskMonitorCallHistory extends WalletMonitorTask {
   }
 
   async runTask (): Promise<string> {
-    const r = await this.monitor.services.getServicesCallHistory(true)
+    const r = this.monitor.services.getServicesCallHistory(true)
     const log = JSON.stringify(r)
     return log
   }

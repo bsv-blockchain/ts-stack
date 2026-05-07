@@ -77,13 +77,11 @@ export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
   override equals (ei: TableOutputTagMap, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
 
-    if (
-      eo.outputId !== ((syncMap != null) ? syncMap.output.idMap[verifyId(ei.outputId)] : ei.outputId) ||
-      eo.outputTagId !== ((syncMap != null) ? syncMap.outputTag.idMap[verifyId(ei.outputTagId)] : ei.outputTagId) ||
-      eo.isDeleted !== ei.isDeleted
-    ) { return false }
-
-    return true
+    return (
+      eo.outputId === ((syncMap != null) ? syncMap.output.idMap[verifyId(ei.outputId)] : ei.outputId) &&
+      eo.outputTagId === ((syncMap != null) ? syncMap.outputTag.idMap[verifyId(ei.outputTagId)] : ei.outputTagId) &&
+      eo.isDeleted === ei.isDeleted
+    )
   }
 
   static async mergeFind (
@@ -102,7 +100,7 @@ export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
       })
     )
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityOutputTagMap(ef || { ...ei }),
       eiId: -1
     }

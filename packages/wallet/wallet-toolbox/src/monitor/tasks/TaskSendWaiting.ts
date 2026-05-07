@@ -10,7 +10,7 @@ import { TableProvenTxReq } from '../../storage/schema/tables/TableProvenTxReq'
 import { EntityProvenTxReq } from '../../storage/schema/entities/EntityProvenTxReq'
 
 export class TaskSendWaiting extends WalletMonitorTask {
-  static taskName = 'SendWaiting'
+  static readonly taskName = 'SendWaiting'
 
   lastSendingRunMsecsSinceEpoch: number | undefined
   includeSending: boolean = true
@@ -161,8 +161,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
       const reqApi = reqApis[i]
       logs[reqApi.txid] = `${i} reqId=${reqApi.provenTxReqId} attempts=${reqApi.attempts} txid=${reqApi.txid}:`
     }
-    for (let i = 0; i < reqApis.length; i++) {
-      const reqApi = reqApis[i]
+    for (const reqApi of reqApis) {
       if (groupedReqIds.has(reqApi.provenTxReqId)) {
         logs[reqApi.txid] += ' processed with batch'
         continue

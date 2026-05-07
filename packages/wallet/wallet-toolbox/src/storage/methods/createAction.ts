@@ -240,7 +240,7 @@ async function createNewInputs (
   }
 
   const knownInputRows = newInputs.filter(
-    (ni): ni is { i: XValidCreateActionInput, o: TableOutput } => !(ni.i == null) && !(ni.o == null)
+    (ni): ni is { i: XValidCreateActionInput, o: TableOutput } => ni.i != null && ni.o != null
   )
   if (knownInputRows.length > 0) {
     let doubleSpendTxid: string | undefined
@@ -397,7 +397,7 @@ async function createNewOutputs (
       newOutputs.push({ o, tags: [] })
     } else {
       // The user wants tracking if they put their output in a basket
-      const basketId = !xo.basket ? undefined : txBaskets[xo.basket].basketId
+      const basketId = xo.basket ? txBaskets[xo.basket].basketId : undefined
 
       const o = makeDefaultOutput(userId, ctx.transactionId, xo.satoshis, xo.vout)
       o.lockingScript = lockingScript
@@ -448,7 +448,7 @@ async function createNewOutputs (
     }
 
     let vout = -1
-    const newVouts = Array<number>(newOutputs.length)
+    const newVouts = new Array<number>(newOutputs.length)
     for (let i = 0; i < newVouts.length; i++) newVouts[i] = i
     shuffleArray(newVouts)
     for (const no of newOutputs) {
@@ -465,8 +465,8 @@ async function createNewOutputs (
     if (o.change && o.purpose === 'change' && o.providedBy === 'storage') changeVouts.push(o.vout)
 
     // Add tags to the output
-    for (const tagName of [...new Set(tags)]) {
-      const tag = txTags[tagName]!
+    for (const tagName of new Set(tags)) {
+      const tag = txTags[tagName]
       await storage.insertOutputTagMap({
         outputId: verifyId(o.outputId),
         outputTagId: verifyId(tag.outputTagId),
@@ -688,7 +688,7 @@ async function validateRequiredInputs (
   for (const input of xinputs) {
     const { txid, vout } = input.outpoint
     let output: TableOutput | undefined = preloadedOutputsByOutpoint[`${txid}.${vout}`]
-    if (!output) output = verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
+    output ??= verifyOneOrNone(await storage.findOutputs({ partial: { userId, txid, vout } }))
     if (output != null) {
       if (output.change) {
         throw new WERR_INVALID_PARAMETER(
@@ -754,7 +754,7 @@ async function validateNoSendChange (
         output.basketId !== changeBasket.basketId
       )
         {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'valid')}
-      if (r.findIndex(o => o.outputId === output.outputId) > -1)
+      if (r.some(o => o.outputId === output.outputId))
         // noSendChange duplicate OutPoints are not allowed.
         {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'unique. Duplicates are not allowed.')}
       r.push(output)
@@ -941,7 +941,7 @@ async function fundNewTransactionSdk (
           transactionId: ctx.transactionId,
           vout: params.fixedOutputs.length + i,
           satoshis: o.satoshis,
-          basketId: ctx.changeBasket.basketId!,
+          basketId: ctx.changeBasket.basketId,
           spendable: false,
           change: true,
           type: 'P2PKH',
@@ -999,7 +999,7 @@ async function mergeAllocatedChangeBeefs (
   }
   if (vargs.options.returnTXIDOnly) return undefined
   for (const o of allocatedChange) {
-    if ((beef.findTxid(o.txid!) == null) && !(vargs.options.knownTxids || []).find(txid => txid === o.txid)) {
+    if ((beef.findTxid(o.txid!) == null) && !(vargs.options.knownTxids ?? []).some(txid => txid === o.txid)) {
       await storage.getBeefForTransaction(o.txid!, options)
     }
   }

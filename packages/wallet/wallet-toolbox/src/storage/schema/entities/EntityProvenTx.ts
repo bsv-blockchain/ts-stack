@@ -28,8 +28,6 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   static async fromTxid (txid: string, services: WalletServices, rawTx?: number[]): Promise<ProvenTxFromTxidResult> {
     const r: ProvenTxFromTxidResult = { proven: undefined, rawTx }
 
-    const chain = services.chain
-
     if (r.rawTx == null) {
       const gr = await services.getRawTx(txid)
       if ((gr?.rawTx) == null)
@@ -206,8 +204,8 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     ) { return false }
     if (syncMap != null) {
       if (eo.provenTxId !== syncMap.provenTx.idMap[ei.provenTxId]) return false
-    } else {
-      if (eo.provenTxId !== ei.provenTxId) return false
+    } else if (eo.provenTxId !== ei.provenTxId) {
+      return false
     }
     return true
   }
@@ -221,7 +219,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   ): Promise<{ found: boolean, eo: EntityProvenTx, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findProvenTxs({ partial: { txid: ei.txid }, trx }))
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityProvenTx(ef || { ...ei }),
       eiId: verifyId(ei.provenTxId)
     }
@@ -229,7 +227,7 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
 
   override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.provenTxId = 0
-    // TODO: Since these records are a shared resource, the record must be validated before accepting it...
+    // Since these records are a shared resource, the record should be validated before accepting it
     this.provenTxId = await storage.insertProvenTx(this.toApi(), trx)
   }
 
@@ -247,12 +245,12 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
   /**
    * How high attempts can go before status is forced to invalid
    */
-  static getProofAttemptsLimit = 8
+  static readonly getProofAttemptsLimit = 8
 
   /**
    * How many hours we have to try for a poof
    */
-  static getProofMinutes = 60
+  static readonly getProofMinutes = 60
 
   /**
    * Try to create a new ProvenTx from a ProvenTxReq and GetMerkleProofResultApi

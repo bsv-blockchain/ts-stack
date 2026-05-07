@@ -104,7 +104,7 @@ export class EntityTxLabel extends EntityBase<TableTxLabel> {
   ): Promise<{ found: boolean, eo: EntityTxLabel, eiId: number }> {
     const ef = verifyOneOrNone(await storage.findTxLabels({ partial: { label: ei.label, userId }, trx }))
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityTxLabel(ef || { ...ei }),
       eiId: verifyId(ei.txLabelId)
     }

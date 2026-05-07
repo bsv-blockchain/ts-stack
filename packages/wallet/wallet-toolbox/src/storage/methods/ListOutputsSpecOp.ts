@@ -191,18 +191,14 @@ export function getListOutputsSpecOp (
 ): { specOp: ListOutputsSpecOp | undefined, basket?: string, tags: string[] } {
   let specOp: ListOutputsSpecOp | undefined
   if (basket) {
-    if (_basketSpecOps === undefined) {
-      _basketSpecOps = getBasketToSpecOp()
-    }
+    _basketSpecOps ??= getBasketToSpecOp()
     specOp = _basketSpecOps[basket]
     if (specOp) {
       return { specOp, basket: specOp.useBasket, tags: tags || [] }
     }
   }
   if (tags) {
-    if (_tagSpecOps === undefined) {
-      _tagSpecOps = getTagToSpecOp()
-    }
+    _tagSpecOps ??= getTagToSpecOp()
     for (const tag of tags) {
       specOp = _tagSpecOps[tag]
       if (specOp) {

@@ -1,7 +1,6 @@
 import { MerklePath } from '@bsv/sdk'
 import { ProvenTxReqTerminalStatus } from '../../sdk/types'
 import { EntityProvenTxReq } from '../../storage/schema/entities/EntityProvenTxReq'
-import { EntityProvenTx } from '../../storage/schema/entities/EntityProvenTx'
 import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
@@ -13,7 +12,7 @@ import { Services } from '../../services/Services'
  * when transactions are MINED.
  */
 export class TaskArcadeSSE extends WalletMonitorTask {
-  static taskName = 'ArcadeSSE'
+  static readonly taskName = 'ArcadeSSE'
 
   sseClient: ArcSSEClient | null = null
   private readonly pendingEvents: ArcSSEEvent[] = []
@@ -232,20 +231,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       const blockHash = data.blockHash || ''
       const height = data.blockHeight || merklePath.blockHeight
 
-      // Create ProvenTx entity
-      const now = new Date()
-      const ptx = new EntityProvenTx({
-        created_at: now,
-        updated_at: now,
-        provenTxId: 0,
-        txid,
-        height,
-        index: leaf.offset,
-        merklePath: merklePath.toBinary(),
-        rawTx: req.rawTx,
-        merkleRoot,
-        blockHash
-      })
+      // Persist via merkle proof data
 
       // Persist via the same path as TaskCheckForProofs
       await req.refreshFromStorage(this.storage)

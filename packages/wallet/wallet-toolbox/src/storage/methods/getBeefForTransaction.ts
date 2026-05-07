@@ -48,8 +48,7 @@ async function getProvenOrRawTxFromServices (
   txid: string,
   options: StorageGetBeefOptions
 ): Promise<ProvenOrRawTx> {
-  const services = storage.getServices()
-  const por = await EntityProvenTx.fromTxid(txid, await storage.getServices())
+  const por = await EntityProvenTx.fromTxid(txid, storage.getServices())
   if ((por.proven != null) && !options.ignoreStorage && !options.ignoreNewProven) {
     por.proven.provenTxId = await storage.insertProvenTx(por.proven.toApi())
   }
@@ -66,7 +65,7 @@ async function mergeBeefForTransactionRecurse (
   const maxDepth = storage.maxRecursionDepth
   if (maxDepth && maxDepth <= recursionDepth) { throw new WERR_INVALID_OPERATION(`Maximum BEEF depth exceeded. Limit is ${storage.maxRecursionDepth}`) }
 
-  if ((options.knownTxids != null) && options.knownTxids.includes(txid)) {
+  if (options.knownTxids?.includes(txid)) {
     // This txid is one of the txids the caller claims to already know are valid...
     beef.mergeTxidOnly(txid)
     return beef

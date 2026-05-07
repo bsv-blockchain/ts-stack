@@ -176,7 +176,7 @@ export class EntityCertificate extends EntityBase<TableCertificate> {
       })
     )
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityCertificate(ef || { ...ei }),
       eiId: verifyId(ei.certificateId)
     }

@@ -10,7 +10,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * The task itself is disabled and will not run on a schedule; review must be triggered manually by calling reviewByIdentityKey.
  */
 export class TaskReviewUtxos extends WalletMonitorTask {
-  static taskName = 'ReviewUtxos'
+  static readonly taskName = 'ReviewUtxos'
 
   static checkNow = false
 

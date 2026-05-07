@@ -3,7 +3,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 import { MockServices } from '../../mockchain/MockServices'
 
 export class TaskMineBlock extends WalletMonitorTask {
-  static taskName = 'MineBlock'
+  static readonly taskName = 'MineBlock'
   static mineNow = false
 
   constructor (

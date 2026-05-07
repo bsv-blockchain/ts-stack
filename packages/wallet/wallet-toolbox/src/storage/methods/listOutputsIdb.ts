@@ -57,10 +57,10 @@ export async function listOutputsIdb (
   }
 
   const specOpTags: string[] = []
-  if ((specOp != null) && specOp.tagsParamsCount) {
+  if (specOp?.tagsParamsCount) {
     specOpTags.push(...tags.splice(0, Math.min(tags.length, specOp.tagsParamsCount)))
   }
-  if ((specOp != null) && (specOp.tagsToIntercept != null)) {
+  if (specOp?.tagsToIntercept != null) {
     // Pull out tags used by current specOp
     const ts = tags
     tags = []
@@ -76,7 +76,7 @@ export async function listOutputsIdb (
     }
   }
 
-  if ((specOp != null) && (specOp.resultFromTags != null)) {
+  if (specOp?.resultFromTags != null) {
     const r = await specOp.resultFromTags(storage, auth, vargs, specOpTags)
     return r
   }
@@ -99,7 +99,6 @@ export async function listOutputsIdb (
   // any and only non-existing labels, impossible to satisfy.
   { return r }
 
-  const noTags = tagIds.length === 0
   const includeSpent = false
 
   const stati: TransactionStatus[] = ['completed', 'unproven', 'nosend', 'sending']
@@ -108,13 +107,13 @@ export async function listOutputsIdb (
     partial: {
       userId,
       basketId,
-      spendable: !includeSpent ? true : undefined
+      spendable: includeSpent ? undefined : true
     },
     txStatus: stati,
     noScript: true,
     orderDescending
   }
-  if ((specOp == null) || !specOp.ignoreLimit) args.paged = { limit, offset }
+  if (!specOp?.ignoreLimit) args.paged = { limit, offset }
 
   let outputs = await storage.findOutputs(args, tagIds, isQueryModeAll)
   if (outputs.length === vargs.limit) {
@@ -171,9 +170,7 @@ export async function listOutputsIdb (
     r.outputs.push(wo)
     if (vargs.includeCustomInstructions && o.customInstructions) wo.customInstructions = o.customInstructions
     if (vargs.includeLabels && o.txid) {
-      if (labelsByTxid[o.txid] === undefined) {
-        labelsByTxid[o.txid] = (await storage.getLabelsForTransactionId(o.transactionId)).map(l => l.label)
-      }
+      labelsByTxid[o.txid] ??= (await storage.getLabelsForTransactionId(o.transactionId)).map(l => l.label)
       wo.labels = labelsByTxid[o.txid]
     }
     if (vargs.includeTags) {

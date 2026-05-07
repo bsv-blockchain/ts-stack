@@ -15,7 +15,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * with that header height as the limit for which proofs are accepted.
  */
 export class TaskNewHeader extends WalletMonitorTask {
-  static taskName = 'NewHeader'
+  static readonly taskName = 'NewHeader'
   /**
    * This is always the most recent chain tip header returned from the chaintracker.
    */
@@ -39,7 +39,7 @@ export class TaskNewHeader extends WalletMonitorTask {
   }
 
   /**
-   * TODO: This is a temporary incomplete solution for which a full chaintracker
+   * This is a temporary incomplete solution for which a full chaintracker
    * with new header and reorg event notification is required.
    *
    * New header events drive retrieving merklePaths for newly mined transactions.
@@ -51,7 +51,9 @@ export class TaskNewHeader extends WalletMonitorTask {
    * and sometimes which block. In the case of coinbase transactions, a transaction may
    * also fail after a reorg.
    */
-  override async asyncSetup (): Promise<void> {}
+  override async asyncSetup (): Promise<void> {
+    // No async setup required for this task
+  }
 
   trigger (nowMsecsSinceEpoch: number): { run: boolean } {
     const run = true
@@ -83,7 +85,7 @@ export class TaskNewHeader extends WalletMonitorTask {
       this.queuedHeaderWhen = new Date()
     } else if (this.queuedHeader != null) {
       // Only process new block header if it has remained the chain tip for a full cycle
-      const delay = (new Date().getTime() - this.queuedHeaderWhen!.getTime()) / 1000 // seconds
+      const delay = (Date.now() - this.queuedHeaderWhen!.getTime()) / 1000 // seconds
       log = `process header: ${this.header.height} ${this.header.hash} delayed ${delay.toFixed(1)} secs`
       this.monitor.processNewBlockHeader(this.queuedHeader)
       this.queuedHeader = undefined

@@ -40,8 +40,8 @@ export async function listActions (
     remainingLabels: ordinaryLabelsPreSpecOp
   } = parseBrc114ActionTimeLabels(vargs.labels)
 
-  const createdAtFrom = actionTimeFrom !== undefined ? new Date(actionTimeFrom) : undefined
-  const createdAtTo = actionTimeTo !== undefined ? new Date(actionTimeTo) : undefined
+  const createdAtFrom = actionTimeFrom === undefined ? undefined : new Date(actionTimeFrom)
+  const createdAtTo = actionTimeTo === undefined ? undefined : new Date(actionTimeTo)
 
   let specOp: ListActionsSpecOp | undefined
   let specOpLabels: string[] = []
@@ -105,9 +105,9 @@ export async function listActions (
     'lockTime'
   ]
 
-  const stati: string[] = ((specOp?.setStatusFilter) != null)
-    ? specOp.setStatusFilter()
-    : ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
+  const stati: string[] = (specOp?.setStatusFilter == null)
+    ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
+    : specOp.setStatusFilter()
 
   const noLabels = labelIds.length === 0
 
@@ -186,7 +186,7 @@ export async function listActions (
         if (vargs.includeLabels) {
           action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
           if (timeFilterRequested) {
-            const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : NaN
+            const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : Number.NaN
             if (!Number.isNaN(ts)) {
               const timeLabel = makeBrc114ActionTimeLabel(ts)
               if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)

@@ -19,7 +19,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * the original ProvenTxReq status is advanced to 'notifying'.
  */
 export class TaskCheckForProofs extends WalletMonitorTask {
-  static taskName = 'CheckForProofs'
+  static readonly taskName = 'CheckForProofs'
 
   /**
    * An external service such as the chaintracks new block header
@@ -65,7 +65,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
       })
       if (reqs.length === 0) break
       log += `${reqs.length} reqs with status 'callback', 'unmined', 'sending', 'unknown', or 'unconfirmed'\n`
-      const r = await getProofs(this, reqs, 2, countsAsAttempt, false, maxAcceptableHeight)
+      const r = await getProofs(this, reqs, maxAcceptableHeight, 2, countsAsAttempt, false)
       log += `${r.log}\n`
       if (reqs.length < limit) break
       offset += limit
@@ -92,10 +92,10 @@ export class TaskCheckForProofs extends WalletMonitorTask {
 export async function getProofs (
   task: WalletMonitorTask,
   reqs: TableProvenTxReq[],
+  maxAcceptableHeight: number,
   indent = 0,
   countsAsAttempt = false,
-  ignoreStatus = false,
-  maxAcceptableHeight: number
+  ignoreStatus = false
 ): Promise<{
     proven: TableProvenTxReq[]
     invalid: TableProvenTxReq[]
@@ -241,10 +241,8 @@ export async function getProofs (
         merklePath,
         merkleRoot
       })
-    } else {
-      if (countsAsAttempt && ['callback', 'unmined', 'unknown', 'unconfirmed', 'sending'].includes(req.status)) {
-        req.attempts++
-      }
+    } else if (countsAsAttempt && ['callback', 'unmined', 'unknown', 'unconfirmed', 'sending'].includes(req.status)) {
+      req.attempts++
     }
     await req.updateStorageDynamicProperties(task.storage)
     await req.refreshFromStorage(task.storage)

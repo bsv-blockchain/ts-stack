@@ -31,7 +31,7 @@ interface ReviewProvenTxsCheckpoint {
  * the currently canonical merkleRoot at a height no longer matches stored proven_txs roots.
  */
 export class TaskReviewProvenTxs extends WalletMonitorTask {
-  static taskName = 'ReviewProvenTxs'
+  static readonly taskName = 'ReviewProvenTxs'
 
   static checkNow = false
 

@@ -77,13 +77,11 @@ export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
   override equals (ei: TableTxLabelMap, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
 
-    if (
-      eo.transactionId !== ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) ||
-      eo.txLabelId !== ((syncMap != null) ? syncMap.txLabel.idMap[verifyId(ei.txLabelId)] : ei.txLabelId) ||
-      eo.isDeleted !== ei.isDeleted
-    ) { return false }
-
-    return true
+    return (
+      eo.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
+      eo.txLabelId === ((syncMap != null) ? syncMap.txLabel.idMap[verifyId(ei.txLabelId)] : ei.txLabelId) &&
+      eo.isDeleted === ei.isDeleted
+    )
   }
 
   static async mergeFind (
@@ -102,7 +100,7 @@ export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
       })
     )
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityTxLabelMap(ef || { ...ei }),
       eiId: -1
     }

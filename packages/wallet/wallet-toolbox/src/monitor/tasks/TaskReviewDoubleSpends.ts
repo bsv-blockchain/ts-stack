@@ -18,7 +18,7 @@ interface ReviewDoubleSpendsCheckpoint {
  * back to 'unfail' so existing recovery handling can re-process them.
  */
 export class TaskReviewDoubleSpends extends WalletMonitorTask {
-  static taskName = 'ReviewDoubleSpends'
+  static readonly taskName = 'ReviewDoubleSpends'
 
   static checkNow = false
 
@@ -94,12 +94,12 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
       const gsr = await this.monitor.services.getStatusForTxids([req.txid])
       const status = gsr.results[0]?.status
       reviewed.push(req)
-      if (status !== 'unknown') {
-        unfails.push(req.provenTxReqId)
-        log += `unfail ${req.provenTxReqId} ${req.txid} status:${status}\n`
-      } else {
+      if (status === 'unknown') {
         lastRetainedDoubleSpendIndex = reviewed.length - 1
         retainedDoubleSpendCount += 1
+      } else {
+        unfails.push(req.provenTxReqId)
+        log += `unfail ${req.provenTxReqId} ${req.txid} status:${status}\n`
       }
     }
 
@@ -128,15 +128,15 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
   ): Promise<TableProvenTxReq[] & { sourceOffset?: number }> {
     let offset = checkpoint?.resumeOffset || 0
 
-    if ((checkpoint != null) && checkpoint.expectedProvenTxReqId !== undefined) {
+    if (checkpoint?.expectedProvenTxReqId !== undefined) {
       const verify = await this.storage.findProvenTxReqs({
         partial: { status: 'doubleSpend' },
         paged: { limit: 1, offset: checkpoint.resumeOffset }
       })
-      if (verify[0]?.provenTxReqId !== checkpoint.expectedProvenTxReqId) {
-        offset = 0
-      } else {
+      if (verify[0]?.provenTxReqId === checkpoint.expectedProvenTxReqId) {
         offset += 1
+      } else {
+        offset = 0
       }
     }
 

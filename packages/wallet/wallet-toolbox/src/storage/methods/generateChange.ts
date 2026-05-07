@@ -150,11 +150,11 @@ export async function generateChangeSdk (
     const size = (addedChangeInputs?: number, addedChangeOutputs?: number): number => {
       const inputScriptLengths = [
         ...fixedInputs.map(x => x.unlockingScriptLength),
-        ...Array(r.allocatedChangeInputs.length + (addedChangeInputs || 0)).fill(params.changeUnlockingScriptLength)
+        ...new Array(r.allocatedChangeInputs.length + (addedChangeInputs || 0)).fill(params.changeUnlockingScriptLength)
       ]
       const outputScriptLengths = [
         ...fixedOutputs.map(x => x.lockingScriptLength),
-        ...Array(r.changeOutputs.length + (addedChangeOutputs || 0)).fill(params.changeLockingScriptLength)
+        ...new Array(r.changeOutputs.length + (addedChangeOutputs || 0)).fill(params.changeLockingScriptLength)
       ]
       const size = transactionSize(inputScriptLengths, outputScriptLengths)
       return size
@@ -297,7 +297,7 @@ export async function generateChangeSdk (
         // And remove change inputs that funded only a single change output (along with that output)...
         const changeInputs = [...r.allocatedChangeInputs]
         while (changeInputs.length > 1 && r.changeOutputs.length > 1) {
-          const lastOutput = r.changeOutputs.slice(-1)[0]
+          const lastOutput = r.changeOutputs.at(-1)!
           const i = changeInputs.findIndex(ci => ci.satoshis <= lastOutput.satoshis)
           if (i < 0) break
           r.changeOutputs.pop()

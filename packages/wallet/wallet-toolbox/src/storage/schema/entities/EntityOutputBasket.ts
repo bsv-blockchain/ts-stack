@@ -113,8 +113,8 @@ export class EntityOutputBasket extends EntityBase<TableOutputBasket> {
     ) { return false }
     if (syncMap != null) {
       if (eo.basketId !== syncMap.outputBasket.idMap[verifyId(ei.basketId)]) return false
-    } else {
-      if (eo.basketId !== ei.basketId || eo.userId !== ei.userId) return false
+    } else if (eo.basketId !== ei.basketId || eo.userId !== ei.userId) {
+      return false
     }
     return true
   }
@@ -133,7 +133,7 @@ export class EntityOutputBasket extends EntityBase<TableOutputBasket> {
       })
     )
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityOutputBasket(ef || { ...ei }),
       eiId: verifyId(ei.basketId)
     }

@@ -16,7 +16,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * the original ProvenTxReq status is advanced to 'notifying'.
  */
 export class TaskCheckNoSends extends WalletMonitorTask {
-  static taskName = 'CheckNoSends'
+  static readonly taskName = 'CheckNoSends'
 
   /**
    * An external service such as the chaintracks new block header
@@ -62,7 +62,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       })
       if (reqs.length === 0) break
       log += `${reqs.length} reqs with status 'nosend'\n`
-      const r = await getProofs(this, reqs, 2, countsAsAttempt, false, maxAcceptableHeight)
+      const r = await getProofs(this, reqs, maxAcceptableHeight, 2, countsAsAttempt, false)
       log += `${r.log}\n`
       if (reqs.length < limit) break
       offset += limit

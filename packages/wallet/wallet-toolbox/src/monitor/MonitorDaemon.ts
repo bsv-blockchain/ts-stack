@@ -89,7 +89,7 @@ export class MonitorDaemon {
 
       if (a.storageProvider != null) {
         await a.storageProvider.makeAvailable()
-        const settings = await a.storageProvider.getSettings()
+        const settings = a.storageProvider.getSettings()
         a.storageManager = new WalletStorageManager(settings.storageIdentityKey, a.storageProvider)
         await a.storageManager.makeAvailable()
       } else if (a.storageManager == null) {
@@ -101,13 +101,11 @@ export class MonitorDaemon {
 
       if (a.servicesOptions != null) {
         if (a.servicesOptions.chain != a.chain) { throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain') }
-        a.servicesOptions.chaintracks ||= a.chaintracks
+        a.servicesOptions.chaintracks ??= a.chaintracks
         a.services = new Services(a.servicesOptions)
       }
 
-      if (a.services == null) {
-        a.services = new Services(a.chain)
-      }
+      a.services ??= new Services(a.chain)
 
       a.storageManager.setServices(a.services)
 

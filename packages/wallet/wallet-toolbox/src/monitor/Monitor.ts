@@ -104,7 +104,7 @@ export class Monitor {
     chaintracks?: Chaintracks,
     startupTaskMode: MonitorStartupTaskMode = 'none'
   ): MonitorOptions {
-    services ||= new Services(chain)
+    services ??= new Services(chain)
     if (services.options.chaintracks == null) throw new WERR_INVALID_PARAMETER('services.options.chaintracks', 'valid')
     const o: MonitorOptions = {
       chain,
@@ -207,23 +207,22 @@ export class Monitor {
   }
 
   addAllTasksToOther (): void {
-    this._otherTasks.push(new TaskClock(this))
-    this._otherTasks.push(new TaskNewHeader(this))
-    this._otherTasks.push(new TaskMonitorCallHistory(this))
-    this._otherTasks.push(new TaskSendWaiting(this))
-    this._otherTasks.push(new TaskCheckForProofs(this))
-    this._otherTasks.push(new TaskCheckNoSends(this))
-    this._otherTasks.push(new TaskFailAbandoned(this))
-    this._otherTasks.push(new TaskUnFail(this))
-    this._otherTasks.push(new TaskReviewStatus(this))
-    this._otherTasks.push(new TaskReorg(this))
-
-    this._otherTasks.push(new TaskReviewUtxos(this))
-    this._otherTasks.push(new TaskReviewDoubleSpends(this))
-    this._otherTasks.push(new TaskReviewProvenTxs(this))
-
-    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
-    // this._otherTasks.push(new TaskSyncWhenIdle(this))
+    this._otherTasks.push(
+      new TaskClock(this),
+      new TaskNewHeader(this),
+      new TaskMonitorCallHistory(this),
+      new TaskSendWaiting(this),
+      new TaskCheckForProofs(this),
+      new TaskCheckNoSends(this),
+      new TaskFailAbandoned(this),
+      new TaskUnFail(this),
+      new TaskReviewStatus(this),
+      new TaskReorg(this),
+      new TaskReviewUtxos(this),
+      new TaskReviewDoubleSpends(this),
+      new TaskReviewProvenTxs(this),
+      new TaskPurge(this, this.defaultPurgeParams)
+    )
     if (this.chain === 'mock') {
       this._otherTasks.push(new TaskMineBlock(this))
     }
@@ -233,23 +232,25 @@ export class Monitor {
    * Default tasks with settings appropriate for a single user storage
    */
   addDefaultTasks (): void {
-    this._tasks.push(new TaskClock(this))
-    this._tasks.push(new TaskNewHeader(this))
-    this._tasks.push(new TaskMonitorCallHistory(this))
-    this._tasks.push(new TaskSendWaiting(this, 8 * Monitor.oneSecond, 7 * Monitor.oneSecond)) // Check every 8 seconds but must be 7 seconds old
-    this._tasks.push(new TaskCheckForProofs(this, 2 * Monitor.oneHour)) // Every two hours if no block found
-    this._tasks.push(new TaskCheckNoSends(this))
-    this._tasks.push(new TaskFailAbandoned(this, 8 * Monitor.oneMinute))
-    this._tasks.push(new TaskUnFail(this))
-    this._tasks.push(new TaskReviewStatus(this))
-    this._tasks.push(new TaskReorg(this))
-    this._tasks.push(new TaskReviewDoubleSpends(this))
-    this._tasks.push(new TaskReviewProvenTxs(this))
-
-    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour))
-    this._otherTasks.push(new TaskReviewUtxos(this))
-
-    this._tasks.push(new TaskArcadeSSE(this))
+    this._tasks.push(
+      new TaskClock(this),
+      new TaskNewHeader(this),
+      new TaskMonitorCallHistory(this),
+      new TaskSendWaiting(this, 8 * Monitor.oneSecond, 7 * Monitor.oneSecond), // Check every 8 seconds but must be 7 seconds old
+      new TaskCheckForProofs(this, 2 * Monitor.oneHour), // Every two hours if no block found
+      new TaskCheckNoSends(this),
+      new TaskFailAbandoned(this, 8 * Monitor.oneMinute),
+      new TaskUnFail(this),
+      new TaskReviewStatus(this),
+      new TaskReorg(this),
+      new TaskReviewDoubleSpends(this),
+      new TaskReviewProvenTxs(this),
+      new TaskArcadeSSE(this)
+    )
+    this._otherTasks.push(
+      new TaskPurge(this, this.defaultPurgeParams, 6 * Monitor.oneHour),
+      new TaskReviewUtxos(this)
+    )
     if (this.chain === 'mock') {
       this._tasks.push(new TaskMineBlock(this))
     }
@@ -259,22 +260,24 @@ export class Monitor {
    * Tasks appropriate for multi-user storage
    */
   addMultiUserTasks (): void {
-    this._tasks.push(new TaskClock(this))
-    this._tasks.push(new TaskNewHeader(this))
-    this._tasks.push(new TaskMonitorCallHistory(this))
-    this._tasks.push(new TaskSendWaiting(this, 8 * Monitor.oneSecond, 7 * Monitor.oneSecond)) // Check every 8 seconds but must be 7 seconds old
-    this._tasks.push(new TaskCheckForProofs(this, 2 * Monitor.oneHour)) // Every two hours if no block found
-    this._tasks.push(new TaskCheckNoSends(this))
-    this._tasks.push(new TaskFailAbandoned(this, 8 * Monitor.oneMinute))
-    this._tasks.push(new TaskUnFail(this))
-    this._tasks.push(new TaskReviewStatus(this))
-    this._tasks.push(new TaskReorg(this))
-    this._tasks.push(new TaskReviewDoubleSpends(this))
-    this._tasks.push(new TaskReviewProvenTxs(this))
-
-    this._otherTasks.push(new TaskPurge(this, this.defaultPurgeParams))
-    this._otherTasks.push(new TaskReviewUtxos(this))
-
+    this._tasks.push(
+      new TaskClock(this),
+      new TaskNewHeader(this),
+      new TaskMonitorCallHistory(this),
+      new TaskSendWaiting(this, 8 * Monitor.oneSecond, 7 * Monitor.oneSecond), // Check every 8 seconds but must be 7 seconds old
+      new TaskCheckForProofs(this, 2 * Monitor.oneHour), // Every two hours if no block found
+      new TaskCheckNoSends(this),
+      new TaskFailAbandoned(this, 8 * Monitor.oneMinute),
+      new TaskUnFail(this),
+      new TaskReviewStatus(this),
+      new TaskReorg(this),
+      new TaskReviewDoubleSpends(this),
+      new TaskReviewProvenTxs(this)
+    )
+    this._otherTasks.push(
+      new TaskPurge(this, this.defaultPurgeParams),
+      new TaskReviewUtxos(this)
+    )
     if (this.chain === 'mock') {
       this._tasks.push(new TaskMineBlock(this))
     }
@@ -318,7 +321,7 @@ export class Monitor {
 
     if (this.storage.getActive().isStorageProvider()) {
       const tasksToRun: WalletMonitorTask[] = []
-      const now = new Date().getTime()
+      const now = Date.now()
       for (const t of this._tasks) {
         try {
           if (t.trigger(now).run) tasksToRun.push(t)
@@ -349,7 +352,7 @@ export class Monitor {
           console.log(details)
           await this.logEvent('error1', details)
         } finally {
-          ttr.lastRunMsecsSinceEpoch = new Date().getTime()
+          ttr.lastRunMsecsSinceEpoch = Date.now()
         }
       }
     }
@@ -367,7 +370,7 @@ export class Monitor {
       this.resolveCompletion = resolve
     })
 
-    for (; this._tasksRunning;) {
+    while (this._tasksRunning) {
       await this.runOnce()
 
       // console.log(`${new Date().toISOString()} tasks run, waiting...`)
@@ -493,7 +496,9 @@ export class Monitor {
    * @param header
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  processHeader (header: BlockHeader): void {}
+  processHeader (header: BlockHeader): void {
+    // Intentional no-op: new headers are aged via TaskNewHeader before processing
+  }
 }
 
 export interface DeactivedHeader {

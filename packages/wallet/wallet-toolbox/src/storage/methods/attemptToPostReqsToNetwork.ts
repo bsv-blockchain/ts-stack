@@ -199,7 +199,7 @@ async function updateReqsFromAggregateResults (
 ): Promise<void> {
   logger?.group('update storage from aggregate results')
   for (const txid of txids) {
-    const ar = apbrs[txid]!
+    const ar = apbrs[txid]
     const req = ar.vreq.req
     await req.refreshFromStorage(storage, trx)
 
@@ -300,11 +300,11 @@ async function confirmDoubleSpend (
   for (let retry = 0; retry < 3; retry++) {
     const gsr = await services.getStatusForTxids([req.txid])
     note[`getStatus${retry}`] = `${gsr.status}${(gsr.error != null) ? `${gsr.error.code}` : ''},${gsr.results[0]?.status}`
-    if (gsr.status === 'success' && gsr.results[0].status !== 'unknown') {
+    if (gsr.status !== 'success' || gsr.results[0].status === 'unknown') {
+      await wait(1000)
+    } else {
       known = true
       break
-    } else {
-      await wait(1000)
     }
   }
 

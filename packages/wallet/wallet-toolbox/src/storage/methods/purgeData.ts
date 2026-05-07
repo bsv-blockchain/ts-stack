@@ -209,25 +209,28 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
         .whereIn('transactionId', transactionIds)
       const outputIds = outputs.map(o => o.outputId)
       if (outputIds.length > 0) {
-        qs.push({
-          log: `${reason} output_tags_map deleted`,
-          q: storage.toDb(trx)<TableOutputTagMap>('output_tags_map').whereIn('outputId', outputIds).delete()
-        })
-        qs.push({
-          log: `${reason} outputs deleted`,
-          q: storage.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).delete()
-        })
+        qs.push(
+          {
+            log: `${reason} output_tags_map deleted`,
+            q: storage.toDb(trx)<TableOutputTagMap>('output_tags_map').whereIn('outputId', outputIds).delete()
+          },
+          {
+            log: `${reason} outputs deleted`,
+            q: storage.toDb(trx)<TableOutput>('outputs').whereIn('outputId', outputIds).delete()
+          }
+        )
       }
 
-      qs.push({
-        log: `${reason} tx_labels_map deleted`,
-        q: storage.toDb(trx)<TableTxLabelMap>('tx_labels_map').whereIn('transactionId', transactionIds).delete()
-      })
-
-      qs.push({
-        log: `${reason} commissions deleted`,
-        q: storage.toDb(trx)<TableCommission>('commissions').whereIn('transactionId', transactionIds).delete()
-      })
+      qs.push(
+        {
+          log: `${reason} tx_labels_map deleted`,
+          q: storage.toDb(trx)<TableTxLabelMap>('tx_labels_map').whereIn('transactionId', transactionIds).delete()
+        },
+        {
+          log: `${reason} commissions deleted`,
+          q: storage.toDb(trx)<TableCommission>('commissions').whereIn('transactionId', transactionIds).delete()
+        }
+      )
 
       if (markNotSpentBy) {
         qs.push({

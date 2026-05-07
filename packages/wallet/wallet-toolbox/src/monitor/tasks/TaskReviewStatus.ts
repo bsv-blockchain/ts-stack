@@ -11,7 +11,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * Looks for reqs with 'invalid' status that have corresonding transactions with status other than 'failed'.
  */
 export class TaskReviewStatus extends WalletMonitorTask {
-  static taskName = 'ReviewStatus'
+  static readonly taskName = 'ReviewStatus'
 
   /**
    * Set to true to trigger running this task

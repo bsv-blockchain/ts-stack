@@ -93,14 +93,12 @@ export class EntityCertificateField extends EntityBase<TableCertificateField> {
   }
 
   override equals (ei: TableCertificateField, syncMap?: SyncMap | undefined): boolean {
-    if (
-      this.certificateId !== ((syncMap != null) ? syncMap.certificate.idMap[ei.certificateId] : ei.certificateId) ||
-      this.fieldName !== ei.fieldName ||
-      this.fieldValue !== ei.fieldValue ||
-      this.masterKey !== ei.masterKey
-    ) { return false }
-
-    return true
+    return (
+      this.certificateId === ((syncMap != null) ? syncMap.certificate.idMap[ei.certificateId] : ei.certificateId) &&
+      this.fieldName === ei.fieldName &&
+      this.fieldValue === ei.fieldValue &&
+      this.masterKey === ei.masterKey
+    )
   }
 
   static async mergeFind (
@@ -118,7 +116,7 @@ export class EntityCertificateField extends EntityBase<TableCertificateField> {
       })
     )
     return {
-      found: !(ef == null),
+      found: ef != null,
       eo: new EntityCertificateField(ef || { ...ei }),
       eiId: -1
     }
