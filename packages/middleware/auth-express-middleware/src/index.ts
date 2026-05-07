@@ -536,15 +536,19 @@ export class ExpressTransport implements Transport {
       onCertificatesReceived(senderPublicKey, certs, req, res, next)
     }
 
-    const nextFn = this.openNextHandlers[message.identityKey]
-    if (typeof nextFn === 'function') {
-      const timeoutHandle = this.openNextHandlerTimeouts[message.identityKey]
+    // Validate that identityKey is an own property of the handler map before
+    // invoking, preventing CodeQL js/unvalidated-dynamic-method-call from
+    // flagging prototype-chain dispatch on a user-supplied key.
+    const identityKey = message.identityKey
+    if (typeof identityKey === 'string' && Object.hasOwn(this.openNextHandlers, identityKey)) {
+      const nextFn = this.openNextHandlers[identityKey]
+      const timeoutHandle = this.openNextHandlerTimeouts[identityKey]
       if (timeoutHandle != null) {
         clearTimeout(timeoutHandle)
-        delete this.openNextHandlerTimeouts[message.identityKey]
+        delete this.openNextHandlerTimeouts[identityKey]
       }
       nextFn()
-      delete this.openNextHandlers[message.identityKey]
+      delete this.openNextHandlers[identityKey]
     }
   }
 

@@ -4,12 +4,6 @@ import { Utils } from '@bsv/sdk'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
-const LOG_METHOD_MAP: Record<LogLevel, keyof typeof console> = {
-  debug: 'debug',
-  info: 'info',
-  warn: 'warn',
-  error: 'error'
-}
 
 /**
  * Helper to determine if a given message-level log should be output
@@ -25,14 +19,21 @@ export function isLogLevelEnabled (
 /**
  * Retrieves the appropriate logging method from the logger,
  * falling back to `log` if not found.
+ *
+ * Uses an explicit switch to avoid dynamic property access on a user-influenced
+ * key, which prevents CodeQL js/unvalidated-dynamic-method-call alerts.
  */
 export function getLogMethod (
   logger: typeof console,
   level: LogLevel
 ): (...args: any[]) => void {
-  const key = LOG_METHOD_MAP[level]
-  const method = logger[key]
-  return typeof method === 'function' ? (method as Function).bind(logger) : logger.log.bind(logger)
+  switch (level) {
+    case 'debug': return (typeof logger.debug === 'function' ? logger.debug : logger.log).bind(logger)
+    case 'info': return (typeof logger.info === 'function' ? logger.info : logger.log).bind(logger)
+    case 'warn': return (typeof logger.warn === 'function' ? logger.warn : logger.log).bind(logger)
+    case 'error': return (typeof logger.error === 'function' ? logger.error : logger.log).bind(logger)
+    default: return logger.log.bind(logger)
+  }
 }
 
 /**
@@ -63,14 +64,19 @@ export function writeRequestHeadersToWriter (req: Request, writer: Utils.Writer)
   const includedHeaders: Array<[string, string]> = []
   for (let [k, v] of Object.entries(req.headers)) {
     k = k.toLowerCase()
+    // Normalise to a single string — Express may return string[] when a header
+    // is repeated (e.g. `Set-Cookie`).  Take the first value to avoid
+    // type-confusion (CodeQL js/type-confusion-through-parameter-tampering).
+    const vStr: string = Array.isArray(v) ? v[0] : (typeof v === 'string' ? v : '')
+    let headerValue = vStr
     if (k === 'content-type') {
-      v = (v as string).split(';')[0].trim()
+      headerValue = vStr.split(';')[0].trim()
     }
     if (
       (k.startsWith('x-bsv-') || k === 'content-type' || k === 'authorization') &&
       !k.startsWith('x-bsv-auth')
     ) {
-      includedHeaders.push([k, v as string])
+      includedHeaders.push([k, headerValue])
     }
   }
   includedHeaders.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
