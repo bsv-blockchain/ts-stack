@@ -6,12 +6,12 @@
 
 import { expect } from '@jest/globals'
 import { ARC, MerklePath, FetchHttpClient } from '@bsv/sdk'
-import { getString as sdkGetString } from './sdk.js'
+import { getString } from './sdk.js'
 
 // ── Utility helpers ────────────────────────────────────────────────────────────
 
 // Re-export sdk.ts getString so broadcast.ts callers get one shared implementation.
-export { sdkGetString as getString }
+export { getString }
 
 export function getNumber (m: Record<string, unknown>, key: string): number | undefined {
   const v = m[key]
