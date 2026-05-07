@@ -111,6 +111,16 @@ export function writeBodyToWriter (
   const { body, headers } = req
   const debugLog = makeDebugLogger(logger, logLevel)
 
+  // Normalise a header to a single string — Express may return string[] when a
+  // header is repeated.  Take the first value to avoid type-confusion (CodeQL
+  // js/type-confusion-through-parameter-tampering).
+  const getHeader = (name: string): string => {
+    const v = headers[name]
+    if (Array.isArray(v)) return v[0] ?? ''
+    return typeof v === 'string' ? v : ''
+  }
+  const contentType = getHeader('content-type')
+
   if (Array.isArray(body) && body.every((item) => typeof item === 'number')) {
     writer.writeVarIntNum(body.length)
     writer.write(body)
@@ -125,7 +135,7 @@ export function writeBodyToWriter (
     return
   }
 
-  if (headers['content-type'] === 'application/json' && typeof body === 'object') {
+  if (contentType === 'application/json' && typeof body === 'object') {
     const bodyAsArray = Utils.toArray(JSON.stringify(body), 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
@@ -134,7 +144,7 @@ export function writeBodyToWriter (
   }
 
   if (
-    headers['content-type'] === 'application/x-www-form-urlencoded' &&
+    contentType === 'application/x-www-form-urlencoded' &&
     body &&
     Object.keys(body).length > 0
   ) {
@@ -146,7 +156,7 @@ export function writeBodyToWriter (
     return
   }
 
-  if (headers['content-type'] === 'text/plain' && typeof body === 'string' && body.length > 0) {
+  if (contentType === 'text/plain' && typeof body === 'string' && body.length > 0) {
     const bodyAsArray = Utils.toArray(body, 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
