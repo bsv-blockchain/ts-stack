@@ -979,6 +979,8 @@ export class Engine {
             foundNode = await hydrator(outputFound)
             break
           } catch (error) {
+            // Best-effort: output may not be found or hydration fails for this candidate; try the next one
+            this.logger.debug(`Unable to hydrate output ${currentOutput.txid}.${currentOutput.outputIndex}: ${error}`)
             continue
           }
         }
@@ -1074,7 +1076,10 @@ export class Engine {
               output.outputIndex,
               output.topic
             )
-          } catch (_) { }
+          } catch (e) {
+            // Best-effort notification; lookup service failure must not abort UTXO deletion
+            this.logger.debug(`outputNoLongerRetainedInHistory notification failed for ${output.txid}.${output.outputIndex}: ${e}`)
+          }
         }
       }
 
@@ -1216,7 +1221,7 @@ export class Engine {
       try {
         result[t] = await this.managers[t].getMetaData()
       } catch (e) {
-        this.logger.warn(`Unable to get metadata for topic manager: ${t}`)
+        this.logger.warn(`Unable to get metadata for topic manager: ${t}: ${e}`)
         result[t] = {
           name: t,
           shortDescription: 'No topical tagline.'
@@ -1249,7 +1254,7 @@ export class Engine {
       try {
         result[ls] = await this.lookupServices[ls].getMetaData()
       } catch (e) {
-        this.logger.warn(`Unable to get metadata for lookup service: ${ls}`)
+        this.logger.warn(`Unable to get metadata for lookup service: ${ls}: ${e}`)
         result[ls] = {
           name: ls,
           shortDescription: 'No lookup service tagline.'
@@ -1327,8 +1332,8 @@ export class Engine {
 
       // If none of the disallowed conditions matched, the URL is valid
       return true
-    } catch (error) {
-      // If the input is not a valid URL, return false
+    } catch (_e) {
+      // URL constructor throws on malformed input — not a valid URL, return false
       return false
     }
   }

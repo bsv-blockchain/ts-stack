@@ -64,6 +64,7 @@ export default class UMPTopicManager implements TopicManager {
 
       return { coinsToRetain: previousCoins, outputsToAdmit: outputs }
     } catch (error) {
+      console.warn(`[UMPTopicManager] identifyAdmissibleOutputs failed: ${error}`)
       return { coinsToRetain: [], outputsToAdmit: [] }
     }
   }

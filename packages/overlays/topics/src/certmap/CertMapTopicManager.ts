@@ -53,6 +53,8 @@ export default class CertMapTopicManager implements TopicManager {
 
           outputsToAdmit.push(i)
         } catch (error) {
+          // Output does not meet CertMap protocol requirements; skip it
+          console.debug(`[CertMapTopicManager] Skipping output ${i}: ${error}`)
           continue
         }
       }

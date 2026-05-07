@@ -51,6 +51,8 @@ export default class BasketMapTopicManager implements TopicManager {
 
           outputsToAdmit.push(i)
         } catch (error) {
+          // Output does not meet BasketMap protocol requirements; skip it
+          console.debug(`[BasketMapTopicManager] Skipping output ${i}: ${error}`)
           continue
         }
       }

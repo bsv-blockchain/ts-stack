@@ -41,8 +41,8 @@ export class SHIPTopicManager implements TopicManager {
           if (!(await isTokenSignatureCorrectlyLinked(result.lockingPublicKey, result.fields))) continue // Signatures must be properly linked
 
           outputsToAdmit.push(i)
-        } catch (error) {
-          // It's common for other outputs to be invalid; no need to log an error here
+        } catch (_error) {
+          // It's common for other outputs to be invalid SHIP advertisements; skip silently
           continue
         }
       }

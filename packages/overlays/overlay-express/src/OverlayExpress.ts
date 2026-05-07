@@ -588,7 +588,7 @@ export default class OverlayExpress {
           `https://${this.advertisableFQDN}`
         )
       } catch (e) {
-        this.logger.log(`Advertiser not initialized for FQDN ${this.advertisableFQDN} - SHIP and SLAP will be disabled.`)
+        this.logger.log(`Advertiser not initialized for FQDN ${this.advertisableFQDN} - SHIP and SLAP will be disabled. Reason: ${e}`)
       }
     }
 
@@ -645,7 +645,7 @@ export default class OverlayExpress {
 
       this.logger.log(chalk.blue('Server wallet initialized for BSV mutual authentication.'))
     } catch (e) {
-      this.logger.log(chalk.yellow('Server wallet could not be initialized. BSV auth will not be available.'))
+      this.logger.log(chalk.yellow(`Server wallet could not be initialized. BSV auth will not be available. Reason: ${e}`))
     }
 
     this.logger.log(chalk.green('Engine has been configured.'))

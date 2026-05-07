@@ -40,7 +40,8 @@ class KVStoreLookupService implements LookupService {
       if (hasTagsField && decoded.fields[kvProtocol.tags]) {
         try {
           tags = JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.tags]))
-        } catch (e) {
+        } catch (_e) {
+          // Tags field is not valid JSON; treat as absent rather than failing admission
           tags = undefined
         }
       }
@@ -136,7 +137,8 @@ class KVStoreLookupService implements LookupService {
       if (protocolID !== undefined && outputProtocolID !== protocolID) return false
 
       return true
-    } catch (error) {
+    } catch (_e) {
+      // Malformed BEEF or script — output is not a valid KVStore token; exclude from history
       return false
     }
   }

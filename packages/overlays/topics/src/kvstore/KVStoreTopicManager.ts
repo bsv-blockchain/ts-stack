@@ -47,6 +47,8 @@ export default class KVStoreTopicManager implements TopicManager {
 
         outputsToAdmit.push(i)
       } catch (error) {
+        // Output does not meet KVStore protocol requirements; skip it
+        console.debug(`[KVStoreTopicManager] Skipping output ${i}: ${error}`)
         continue
       }
     }
