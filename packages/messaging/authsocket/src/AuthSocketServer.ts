@@ -32,7 +32,7 @@ interface PeerInfo {
 **/
 export class AuthSocketServer {
   // The real Socket.IO server underneath
-  private realIo: IoServer
+  private readonly realIo: IoServer
 
   /** 
    * Map from socket.id -> peer info 
@@ -40,8 +40,8 @@ export class AuthSocketServer {
    * Once we discover the identity key, we store `identityKey` 
    * for that connection to skip re-handshaking.
    */
-  private peers = new Map<string, PeerInfo>()
-  private connectionCallbacks: Array<(socket: AuthSocket) => void> = []
+  private readonly peers = new Map<string, PeerInfo>()
+  private readonly connectionCallbacks: Array<(socket: AuthSocket) => void> = []
 
   /**
    * @param httpServer - The underlying HTTP server
@@ -49,7 +49,7 @@ export class AuthSocketServer {
    */
   constructor(
     httpServer: HttpServer,
-    private options: AuthSocketServerOptions
+    private readonly options: AuthSocketServerOptions
   ) {
     this.realIo = new IoServer(httpServer, options)
 
@@ -140,7 +140,7 @@ export class AuthSocketServer {
  */
 export class AuthSocket {
   // We store event callbacks for re-dispatch
-  private eventCallbacks: Map<string, Array<(data: any) => void>> = new Map()
+  private readonly eventCallbacks: Map<string, Array<(data: any) => void>> = new Map()
 
   /**
    * Current known identity key of the server, if discovered 
@@ -151,12 +151,12 @@ export class AuthSocket {
 
   constructor(
     public readonly ioSocket: IoSocket,
-    private peer: Peer,
+    private readonly peer: Peer,
     /**
-     * A function the server passes in so we can 
+     * A function the server passes in so we can
      * notify it once we discover the peer's identity key.
      */
-    private onIdentityKeyDiscovered: (socketId: string, identityKey: string) => void
+    private readonly onIdentityKeyDiscovered: (socketId: string, identityKey: string) => void
   ) {
     // Listen for 'general' messages from the Peer
     this.peer.listenForGeneralMessages((senderPublicKey, payload) => {
