@@ -208,7 +208,6 @@ export default class BigNumber {
     endian: 'be' | 'le' = 'be'
   ) {
     this.red = null
-
     number ??= 0
 
     if (number === null) { this._initializeState(0n, 0); return }
@@ -216,62 +215,73 @@ export default class BigNumber {
 
     let effectiveBase: number | 'hex' = base
     let effectiveEndian: 'be' | 'le' = endian
-
     if (base === 'le' || base === 'be') { effectiveEndian = base; effectiveBase = 10 }
 
     if (typeof number === 'number') { this.initNumber(number, effectiveEndian); return }
     if (Array.isArray(number)) { this.initArray(number, effectiveEndian); return }
+    if (typeof number === 'string') { this._initFromString(number, effectiveBase, effectiveEndian); return }
 
-    if (typeof number === 'string') {
-      if (effectiveBase === 'hex') effectiveBase = 16
-      this.assert(typeof effectiveBase === 'number' && effectiveBase === (effectiveBase | 0) && effectiveBase >= 2 && effectiveBase <= 36, 'Base must be an integer between 2 and 36')
-      const originalNumberStr = number.toString().replace(/\s+/g, '')
-      let start = 0; let sign = 0
-      if (originalNumberStr.startsWith('-')) { start++; sign = 1 } else if (originalNumberStr.startsWith('+')) { start++ }
-
-      const numStr = originalNumberStr.substring(start)
-      if (numStr.length === 0) { this._initializeState(0n, (sign === 1 && originalNumberStr.startsWith('-')) ? 1 : 0); this.normSign(); return }
-
-      if (effectiveBase === 16) {
-        let tempMagnitude: bigint
-        if (effectiveEndian === 'le') {
-          const bytes: number[] = []; let hexStr = numStr
-          if (hexStr.length % 2 !== 0) hexStr = '0' + hexStr
-          for (let i = 0; i < hexStr.length; i += 2) {
-            const byteHex = hexStr.substring(i, i + 2); const byteVal = Number.parseInt(byteHex, 16)
-            if (Number.isNaN(byteVal)) throw new Error('Invalid character in ' + hexStr)
-            bytes.push(byteVal)
-          }
-          this.initArray(bytes, 'le'); this._sign = sign; this.normSign(); return
-        } else {
-          try { tempMagnitude = BigInt('0x' + numStr) } catch (e) { throw new Error('Invalid character in ' + numStr) }
-        }
-        this._initializeState(tempMagnitude, sign); this.normSign()
-      } else {
-        try {
-          this._parseBaseString(numStr, effectiveBase)
-          this._sign = sign; this.normSign()
-          if (effectiveEndian === 'le') {
-            const currentSign = this._sign
-            this.initArray(this.toArray('be'), 'le')
-            this._sign = currentSign; this.normSign()
-          }
-        } catch (err) {
-          const error = err as Error
-          if (
-            error.message.includes('Invalid character in string') ||
-            error.message.includes('Invalid digit for base') ||
-            error.message.startsWith('Invalid character:')
-          ) {
-            throw new Error('Invalid character')
-          }
-          throw error
-        }
-      }
-    } else if (number !== 0) {
+    if (number !== 0) {
       this.assert(false, 'Unsupported input type for BigNumber constructor')
     } else {
       this._initializeState(0n, 0)
+    }
+  }
+
+  private _initFromString (number: string, effectiveBase: number | 'hex', effectiveEndian: 'be' | 'le'): void {
+    if (effectiveBase === 'hex') effectiveBase = 16
+    // eslint-disable-next-line no-bitwise -- ToInt32 (ECMA-262); required for integer base validation.
+    this.assert(typeof effectiveBase === 'number' && effectiveBase === (effectiveBase | 0) && effectiveBase >= 2 && effectiveBase <= 36, 'Base must be an integer between 2 and 36')
+    const originalNumberStr = number.toString().replace(/\s+/g, '')
+    let start = 0; let sign = 0
+    if (originalNumberStr.startsWith('-')) { start++; sign = 1 } else if (originalNumberStr.startsWith('+')) { start++ }
+
+    const numStr = originalNumberStr.substring(start)
+    if (numStr.length === 0) { this._initializeState(0n, (sign === 1 && originalNumberStr.startsWith('-')) ? 1 : 0); this.normSign(); return }
+
+    if (effectiveBase === 16) {
+      this._initFromHexString(numStr, sign, effectiveEndian)
+    } else {
+      this._initFromNonHexString(numStr, effectiveBase as number, sign, effectiveEndian)
+    }
+  }
+
+  private _initFromHexString (numStr: string, sign: number, effectiveEndian: 'be' | 'le'): void {
+    if (effectiveEndian === 'le') {
+      const bytes: number[] = []; let hexStr = numStr
+      if (hexStr.length % 2 !== 0) hexStr = '0' + hexStr
+      for (let i = 0; i < hexStr.length; i += 2) {
+        const byteHex = hexStr.substring(i, i + 2); const byteVal = Number.parseInt(byteHex, 16)
+        if (Number.isNaN(byteVal)) throw new Error('Invalid character in ' + hexStr)
+        bytes.push(byteVal)
+      }
+      this.initArray(bytes, 'le'); this._sign = sign; this.normSign()
+    } else {
+      let tempMagnitude: bigint
+      try { tempMagnitude = BigInt('0x' + numStr) } catch (e) { throw new Error('Invalid character in ' + numStr) }
+      this._initializeState(tempMagnitude, sign); this.normSign()
+    }
+  }
+
+  private _initFromNonHexString (numStr: string, base: number, sign: number, effectiveEndian: 'be' | 'le'): void {
+    try {
+      this._parseBaseString(numStr, base)
+      this._sign = sign; this.normSign()
+      if (effectiveEndian === 'le') {
+        const currentSign = this._sign
+        this.initArray(this.toArray('be'), 'le')
+        this._sign = currentSign; this.normSign()
+      }
+    } catch (err) {
+      const error = err as Error
+      if (
+        error.message.includes('Invalid character in string') ||
+        error.message.includes('Invalid digit for base') ||
+        error.message.startsWith('Invalid character:')
+      ) {
+        throw new Error('Invalid character')
+      }
+      throw error
     }
   }
 
@@ -461,25 +471,20 @@ export default class BigNumber {
     while (tempMag > 0n) {
       const remainder = tempMag % groupBaseBigInt
       tempMag /= groupBaseBigInt
-
       const chunkStr = this._bigIntToStringInBase(remainder, base)
-
-      if (tempMag > 0n) {
-        const zerosToPrepend = groupSize - chunkStr.length
-        if (zerosToPrepend > 0 && zerosToPrepend < BigNumber.zeros.length) {
-          out = BigNumber.zeros[zerosToPrepend] + chunkStr + out
-        } else if (zerosToPrepend > 0) {
-          out = '0'.repeat(zerosToPrepend) + chunkStr + out
-        } else {
-          out = chunkStr + out
-        }
-      } else {
-        out = chunkStr + out
-      }
+      out = (tempMag > 0n ? this._zeroPaddedChunk(chunkStr, groupSize) : chunkStr) + out
     }
 
     if (padding > 0) { while (out.length < padding) out = '0' + out }
     return (this._sign === 1 ? '-' : '') + out
+  }
+
+  /** Returns a chunk string zero-padded to groupSize (used by toBaseString for interior chunks). */
+  private _zeroPaddedChunk (chunkStr: string, groupSize: number): string {
+    const zerosToPrepend = groupSize - chunkStr.length
+    if (zerosToPrepend <= 0) return chunkStr
+    if (zerosToPrepend < BigNumber.zeros.length) return BigNumber.zeros[zerosToPrepend] + chunkStr
+    return '0'.repeat(zerosToPrepend) + chunkStr
   }
 
   /**
@@ -849,18 +854,23 @@ export default class BigNumber {
     }
     const tV = this._getSignedValue()
     const nV = num._getSignedValue()
-    let dV: bigint | null = null
-    let mV: bigint | null = null
-    if (mode !== 'mod') dV = tV / nV
-    if (mode !== 'div') {
-      mV = tV % nV
-      if (positive === true && mV < 0n) mV += nV < 0n ? -nV : nV
-    }
-    const rd = dV !== null ? new BigNumber(0n) : null
-    if (rd !== null && dV !== null) rd._setValueFromSigned(dV)
-    const rm = mV !== null ? new BigNumber(0n) : null
-    if (rm !== null && mV !== null) rm._setValueFromSigned(mV)
-    return { div: rd, mod: rm }
+    const dV = mode !== 'mod' ? tV / nV : null
+    const mV = this._computeMod(tV, nV, mode, positive)
+    return { div: this._bigNumberFromSigned(dV), mod: this._bigNumberFromSigned(mV) }
+  }
+
+  private _computeMod (tV: bigint, nV: bigint, mode?: 'div' | 'mod', positive?: boolean): bigint | null {
+    if (mode === 'div') return null
+    let mV = tV % nV
+    if (positive === true && mV < 0n) mV += nV < 0n ? -nV : nV
+    return mV
+  }
+
+  private _bigNumberFromSigned (v: bigint | null): BigNumber | null {
+    if (v === null) return null
+    const r = new BigNumber(0n)
+    r._setValueFromSigned(v)
+    return r
   }
 
   div (num: BigNumber): BigNumber {
