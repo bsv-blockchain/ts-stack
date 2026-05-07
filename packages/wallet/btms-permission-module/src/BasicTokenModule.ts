@@ -46,6 +46,7 @@ export class BasicTokenModule implements PermissionsModule {
    */
   private readonly sessionAuthorizations: Map<string, number> = new Map()
   private readonly SESSION_TIMEOUT_MS = 60000 // 60 seconds
+  private readonly DEFAULT_TOKEN_NAME = 'BTMS Token'
 
   /**
    * Authorized transaction data from createAction responses.
@@ -166,16 +167,16 @@ export class BasicTokenModule implements PermissionsModule {
 
   /**
    * Captures authorized transaction data from createAction response.
-   * 
+   *
    * SECURITY: This data is used to verify that createSignature calls are signing
    * the exact transaction the user approved. Prevents transaction substitution attacks.
-   * 
+   *
    * Captured data:
    * 1. reference - Transaction reference for matching
    * 2. hashOutputs - BIP-143 hash of all outputs (prevents output modification)
    * 3. authorizedOutpoints - Whitelist of inputs that can be signed (prevents input substitution)
    * 4. timestamp - For expiry checking
-   * 
+   *
    * @param result - createAction response
    * @param originator - dApp identifier
    */
@@ -200,21 +201,7 @@ export class BasicTokenModule implements PermissionsModule {
       const hashOutputs = this.computeHashOutputs(transaction)
 
       // Collect all input outpoints as authorized
-      const authorizedOutpoints = new Set<string>()
-      if (Array.isArray(transaction.inputs)) {
-        for (const input of transaction.inputs) {
-          if (!input || typeof input !== 'object') continue
-
-          const txid = input.sourceTXID || input.sourceTransaction?.id('hex')
-          if (txid && typeof txid === 'string') {
-            const vout = input.sourceOutputIndex
-            if (typeof vout === 'number' && vout >= 0) {
-              const outpoint = `${txid}.${vout}`
-              authorizedOutpoints.add(outpoint)
-            }
-          }
-        }
-      }
+      const authorizedOutpoints = this.collectAuthorizedOutpoints(transaction)
 
       // Store the authorized transaction data
       this.authorizedTransactions.set(originator, {
@@ -226,6 +213,25 @@ export class BasicTokenModule implements PermissionsModule {
     } catch (error) {
       // Don't throw - we'll fall back to session-based auth
     }
+  }
+
+  /**
+   * Collects authorized outpoints from all inputs of a transaction.
+   */
+  private collectAuthorizedOutpoints(transaction: Transaction): Set<string> {
+    const authorizedOutpoints = new Set<string>()
+    if (!Array.isArray(transaction.inputs)) return authorizedOutpoints
+
+    for (const input of transaction.inputs) {
+      if (!input || typeof input !== 'object') continue
+      const txid = input.sourceTXID || input.sourceTransaction?.id('hex')
+      if (!txid || typeof txid !== 'string') continue
+      const vout = input.sourceOutputIndex
+      if (typeof vout === 'number' && vout >= 0) {
+        authorizedOutpoints.add(`${txid}.${vout}`)
+      }
+    }
+    return authorizedOutpoints
   }
 
   /**
@@ -370,134 +376,31 @@ export class BasicTokenModule implements PermissionsModule {
 
   /**
    * Extracts comprehensive token spend information from createAction args.
-   * 
+   *
    * Parses ALL output locking scripts to get token data, and extracts
    * recipient info from the action description.
    */
   private extractTokenSpendInfo(args: CreateActionArgs): TokenSpendInfo {
-    let sendAmount = 0
-    let changeAmount = 0
-    let totalInputAmount = 0
-    let outputSendAmount = 0
-    let outputChangeAmount = 0
-    let hasTokenOutputs = false
-    let inputAmountSource: TokenSpendInfo['inputAmountSource'] = 'none'
-    let inputAssetId: string | undefined
-    let outputAssetId: string | undefined
-    let assetIdMismatch = false
-    let tokenName = 'BTMS Token'
-    let assetId = ''
-    let iconURL: string | undefined
-    let recipient: string | undefined
-
-    // Input validation
     if (!args || typeof args !== 'object') {
       throw new Error('Invalid args for extractTokenSpendInfo')
     }
 
-    // Parse inputs using inputBEEF to get total input amount (if available)
-    let beefInputAmount = 0
-    if (args.inputBEEF && Array.isArray(args.inputs)) {
-      for (const input of args.inputs) {
-        if (!input?.outpoint || typeof input.outpoint !== 'string') continue
-        const [txid, voutStr] = input.outpoint.split('.')
-        const outputIndex = Number(voutStr)
-        if (!txid || !Number.isFinite(outputIndex) || outputIndex < 0) continue
+    const inputResult = this.parseInputAmounts(args)
+    const outputResult = this.parseOutputAmounts(args, inputResult.assetId)
 
-        try {
-          const tx = Transaction.fromBEEF(args.inputBEEF as number[], txid)
-          const lockingScript = tx.outputs?.[outputIndex]?.lockingScript
-          const scriptHex = lockingScript?.toHex?.()
-          if (!scriptHex) continue
+    const assetId = outputResult.assetId || inputResult.assetId
+    const assetIdMismatch =
+      inputResult.assetIdMismatch ||
+      outputResult.assetIdMismatch ||
+      (inputResult.assetId && outputResult.assetId && inputResult.assetId !== outputResult.assetId)
 
-          const parsed = this.parseTokenLockingScript(scriptHex)
-          if (!parsed || parsed.assetId === ISSUE_MARKER) continue
-
-          if (!inputAssetId) {
-            inputAssetId = parsed.assetId
-          } else if (parsed.assetId !== inputAssetId) {
-            assetIdMismatch = true
-            continue
-          }
-
-          if (!assetId) {
-            assetId = parsed.assetId
-          } else if (parsed.assetId !== assetId) {
-            assetIdMismatch = true
-            continue
-          }
-
-          beefInputAmount += parsed.amount
-
-          if (parsed.metadata?.name && typeof parsed.metadata.name === 'string') {
-            tokenName = parsed.metadata.name
-          }
-          if (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string') {
-            iconURL = parsed.metadata.iconURL
-          }
-        } catch {
-          // Ignore malformed input BEEF
-        }
-      }
-    }
-
-    if (beefInputAmount > 0) {
-      totalInputAmount = beefInputAmount
-      inputAmountSource = 'beef'
-    }
-
-    // Parse ALL output locking scripts to extract token metadata
-    if (Array.isArray(args.outputs)) {
-      for (const output of args.outputs) {
-        if (output?.lockingScript && typeof output.lockingScript === 'string') {
-          const parsed = this.parseTokenLockingScript(output.lockingScript)
-          if (parsed) {
-            if (parsed.assetId === ISSUE_MARKER) {
-              continue
-            }
-            // Get asset ID from first valid token
-            if (!outputAssetId) {
-              outputAssetId = parsed.assetId
-            } else if (parsed.assetId !== outputAssetId) {
-              assetIdMismatch = true
-              continue
-            }
-
-            if (!assetId) {
-              assetId = parsed.assetId
-            } else if (parsed.assetId !== assetId) {
-              assetIdMismatch = true
-              continue
-            }
-
-            hasTokenOutputs = true
-            if (parsed.metadata?.name && typeof parsed.metadata.name === 'string') {
-              tokenName = parsed.metadata.name
-            }
-            if (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string') {
-              iconURL = parsed.metadata.iconURL
-            }
-
-            // Determine if this is a change output or send output
-            // Basket presence indicates change (returning to self)
-            if (output.basket && typeof output.basket === 'string' && output.basket.startsWith(P_BASKET_PREFIX)) {
-              outputChangeAmount += parsed.amount
-            } else {
-              outputSendAmount += parsed.amount
-            }
-          }
-        }
-      }
-    }
-
-    if (hasTokenOutputs) {
-      sendAmount = outputSendAmount
-      changeAmount = outputChangeAmount
-    }
-
-    if (assetIdMismatch || (inputAssetId && outputAssetId && inputAssetId !== outputAssetId)) {
+    if (assetIdMismatch) {
       throw new Error('Asset swap support coming soon')
     }
+
+    let { totalInputAmount, inputAmountSource } = inputResult
+    let sendAmount = outputResult.hasTokenOutputs ? outputResult.outputSendAmount : 0
+    const changeAmount = outputResult.hasTokenOutputs ? outputResult.outputChangeAmount : 0
 
     // If we have token outputs, derive total input amount from them
     if (sendAmount + changeAmount > 0 && totalInputAmount === 0) {
@@ -514,16 +417,123 @@ export class BasicTokenModule implements PermissionsModule {
       sendAmount,
       totalInputAmount,
       changeAmount,
-      outputSendAmount,
-      outputChangeAmount,
-      hasTokenOutputs,
+      outputSendAmount: outputResult.outputSendAmount,
+      outputChangeAmount: outputResult.outputChangeAmount,
+      hasTokenOutputs: outputResult.hasTokenOutputs,
       inputAmountSource,
-      tokenName,
-      assetId,
-      recipient,
-      iconURL,
+      tokenName: outputResult.tokenName || inputResult.tokenName,
+      assetId: assetId || '',
+      recipient: undefined,
+      iconURL: outputResult.iconURL || inputResult.iconURL,
       actionDescription: args.description || 'Token transaction'
     }
+  }
+
+  /**
+   * Parses input BEEF to extract token amounts and asset metadata from inputs.
+   */
+  private parseInputAmounts(args: CreateActionArgs): {
+    assetId: string
+    tokenName: string
+    iconURL: string | undefined
+    totalInputAmount: number
+    inputAmountSource: TokenSpendInfo['inputAmountSource']
+    assetIdMismatch: boolean
+  } {
+    let assetId = ''
+    let tokenName = this.DEFAULT_TOKEN_NAME
+    let iconURL: string | undefined
+    let beefInputAmount = 0
+    let assetIdMismatch = false
+
+    if (!args.inputBEEF || !Array.isArray(args.inputs)) {
+      return { assetId, tokenName, iconURL, totalInputAmount: 0, inputAmountSource: 'none', assetIdMismatch }
+    }
+
+    for (const input of args.inputs) {
+      if (!input?.outpoint || typeof input.outpoint !== 'string') continue
+      const [txid, voutStr] = input.outpoint.split('.')
+      const outputIndex = Number(voutStr)
+      if (!txid || !Number.isFinite(outputIndex) || outputIndex < 0) continue
+
+      try {
+        const tx = Transaction.fromBEEF(args.inputBEEF as number[], txid)
+        const scriptHex = tx.outputs?.[outputIndex]?.lockingScript?.toHex?.()
+        if (!scriptHex) continue
+
+        const parsed = this.parseTokenLockingScript(scriptHex)
+        if (!parsed || parsed.assetId === ISSUE_MARKER) continue
+
+        if (!assetId) {
+          assetId = parsed.assetId
+        } else if (parsed.assetId !== assetId) {
+          assetIdMismatch = true
+          continue
+        }
+
+        beefInputAmount += parsed.amount
+        if (parsed.metadata?.name && typeof parsed.metadata.name === 'string') tokenName = parsed.metadata.name
+        if (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string') iconURL = parsed.metadata.iconURL
+      } catch {
+        // Ignore malformed input BEEF
+      }
+    }
+
+    const totalInputAmount = beefInputAmount
+    const inputAmountSource: TokenSpendInfo['inputAmountSource'] = beefInputAmount > 0 ? 'beef' : 'none'
+    return { assetId, tokenName, iconURL, totalInputAmount, inputAmountSource, assetIdMismatch }
+  }
+
+  /**
+   * Parses outputs to extract token send/change amounts and asset metadata.
+   */
+  private parseOutputAmounts(args: CreateActionArgs, knownAssetId: string): {
+    assetId: string
+    tokenName: string
+    iconURL: string | undefined
+    outputSendAmount: number
+    outputChangeAmount: number
+    hasTokenOutputs: boolean
+    assetIdMismatch: boolean
+  } {
+    let assetId = knownAssetId
+    let tokenName = this.DEFAULT_TOKEN_NAME
+    let iconURL: string | undefined
+    let outputSendAmount = 0
+    let outputChangeAmount = 0
+    let hasTokenOutputs = false
+    let assetIdMismatch = false
+
+    if (!Array.isArray(args.outputs)) {
+      return { assetId, tokenName, iconURL, outputSendAmount, outputChangeAmount, hasTokenOutputs, assetIdMismatch }
+    }
+
+    for (const output of args.outputs) {
+      if (!output?.lockingScript || typeof output.lockingScript !== 'string') continue
+
+      const parsed = this.parseTokenLockingScript(output.lockingScript)
+      if (!parsed || parsed.assetId === ISSUE_MARKER) continue
+
+      if (!assetId) {
+        assetId = parsed.assetId
+      } else if (parsed.assetId !== assetId) {
+        assetIdMismatch = true
+        continue
+      }
+
+      hasTokenOutputs = true
+      if (parsed.metadata?.name && typeof parsed.metadata.name === 'string') tokenName = parsed.metadata.name
+      if (parsed.metadata?.iconURL && typeof parsed.metadata.iconURL === 'string') iconURL = parsed.metadata.iconURL
+
+      // Basket presence indicates change (returning to self)
+      if (output.basket && typeof output.basket === 'string' && output.basket.startsWith(P_BASKET_PREFIX)) {
+        outputChangeAmount += parsed.amount
+      } else {
+        outputSendAmount += parsed.amount
+      }
+    }
+
+    return { assetId, tokenName, iconURL, outputSendAmount, outputChangeAmount, hasTokenOutputs, assetIdMismatch }
   }
 
   /**
@@ -648,32 +658,40 @@ export class BasicTokenModule implements PermissionsModule {
       throw new Error('Invalid originator')
     }
 
-    // Check if we have session authorization from createAction
-    if (this.hasSessionAuthorization(originator)) {
-      // Session auth exists - proceed to verification
-    } else {
-      // No session auth - check if this is token issuance
-
-      // Method 1: Parse BIP-143 preimage for ISSUE_MARKER
-      if (args.data && args.data.length >= 157) {
-        if (this.isIssuanceFromPreimage(args.data)) {
-          this.grantSessionAuthorization(originator)
-          return
-        }
-      }
-
-      // Method 2: Short signatures (not full BIP-143 preimages) are assumed to be issuance
-      // This handles PushDrop signatures that don't include full transaction context
-      if (args.data && args.data.length > 0 && args.data.length < 157) {
-        this.grantSessionAuthorization(originator)
-        return
-      }
-
-      // No authorization and not issuance - require user approval
-      await this.promptForGenericAuthorization(originator)
+    // Ensure session authorization exists (grant it if this is issuance; prompt otherwise)
+    if (!this.hasSessionAuthorization(originator)) {
+      await this.authorizeOrGrantIssuance(args, originator)
     }
 
     // Verify the signature request matches the authorized transaction
+    this.verifyAuthorizedTransaction(args, originator)
+  }
+
+  /**
+   * Grants session authorization for issuance requests, or prompts the user otherwise.
+   */
+  private async authorizeOrGrantIssuance(args: CreateSignatureArgs, originator: string): Promise<void> {
+    // Method 1: Parse BIP-143 preimage for ISSUE_MARKER
+    if (args.data && args.data.length >= 157 && this.isIssuanceFromPreimage(args.data)) {
+      this.grantSessionAuthorization(originator)
+      return
+    }
+
+    // Method 2: Short signatures (not full BIP-143 preimages) are assumed to be issuance
+    // This handles PushDrop signatures that don't include full transaction context
+    if (args.data && args.data.length > 0 && args.data.length < 157) {
+      this.grantSessionAuthorization(originator)
+      return
+    }
+
+    // No authorization and not issuance - require user approval
+    await this.promptForGenericAuthorization(originator)
+  }
+
+  /**
+   * Verifies the preimage/data against the stored authorized transaction (if any).
+   */
+  private verifyAuthorizedTransaction(args: CreateSignatureArgs, originator: string): void {
     const authorizedTx = this.authorizedTransactions.get(originator)
     if (!authorizedTx) {
       // No transaction data captured - allow based on session auth alone
@@ -753,37 +771,18 @@ export class BasicTokenModule implements PermissionsModule {
         throw new Error(`Unauthorized outpoint: ${outpoint}. This transaction was not approved.`)
       }
 
-      // Parse scriptCode length to find hashOutputs position
+      // Parse scriptCode varint to find hashOutputs position
       const scriptCodeLenStart = outpointStart + 36
-
       if (data.length < scriptCodeLenStart + 1) {
         throw new Error('Preimage too short to parse scriptCode length')
       }
 
-      let scriptCodeLen: number
-      let scriptCodeDataStart: number
-
-      const firstByte = data[scriptCodeLenStart]
-      if (firstByte < 0xfd) {
-        scriptCodeLen = firstByte
-        scriptCodeDataStart = scriptCodeLenStart + 1
-      } else if (firstByte === 0xfd) {
-        if (data.length < scriptCodeLenStart + 3) {
-          throw new Error('Preimage too short for varint')
-        }
-        scriptCodeLen = data[scriptCodeLenStart + 1] | (data[scriptCodeLenStart + 2] << 8)
-        scriptCodeDataStart = scriptCodeLenStart + 3
-      } else if (firstByte === 0xfe) {
-        if (data.length < scriptCodeLenStart + 5) {
-          throw new Error('Preimage too short for varint')
-        }
-        scriptCodeLen = data[scriptCodeLenStart + 1] | (data[scriptCodeLenStart + 2] << 8) |
-          (data[scriptCodeLenStart + 3] << 16) | (data[scriptCodeLenStart + 4] << 24)
-        scriptCodeDataStart = scriptCodeLenStart + 5
-      } else {
+      const varint = this.readVarint(data, scriptCodeLenStart, true)
+      if (varint === null) {
         // 0xff varint not expected for script lengths
         return
       }
+      const { value: scriptCodeLen, nextOffset: scriptCodeDataStart } = varint
 
       // Validate scriptCode length is reasonable (prevent DoS)
       if (scriptCodeLen < 0 || scriptCodeLen > 10000) {
@@ -814,6 +813,40 @@ export class BasicTokenModule implements PermissionsModule {
       }
       // For parsing errors, fall back to session auth (don't block legitimate transactions)
     }
+  }
+
+  /**
+   * Reads a Bitcoin varint from a byte array at a given offset.
+   * Returns { value, nextOffset } on success, or null if unsupported (0xff) or truncated.
+   * When throwOnTruncated is true, throws instead of returning null for truncated varints.
+   */
+  private readVarint(
+    data: number[],
+    offset: number,
+    throwOnTruncated = false
+  ): { value: number; nextOffset: number } | null {
+    const firstByte = data[offset]
+    if (firstByte < 0xfd) {
+      return { value: firstByte, nextOffset: offset + 1 }
+    }
+    if (firstByte === 0xfd) {
+      if (data.length < offset + 3) {
+        if (throwOnTruncated) throw new Error('Preimage too short for varint')
+        return null
+      }
+      return { value: data[offset + 1] | (data[offset + 2] << 8), nextOffset: offset + 3 }
+    }
+    if (firstByte === 0xfe) {
+      if (data.length < offset + 5) {
+        if (throwOnTruncated) throw new Error('Preimage too short for varint')
+        return null
+      }
+      return {
+        value: data[offset + 1] | (data[offset + 2] << 8) | (data[offset + 3] << 16) | (data[offset + 4] << 24),
+        nextOffset: offset + 5
+      }
+    }
+    return null // 0xff not expected for script lengths
   }
 
   /**
@@ -877,44 +910,27 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     try {
-      // Skip to scriptCode position
-      let offset = 4 + 32 + 32 + 36 // version + hashPrevouts + hashSequence + outpoint
+      // Skip to scriptCode position: version(4) + hashPrevouts(32) + hashSequence(32) + outpoint(36)
+      const scriptCodeLenOffset = 4 + 32 + 32 + 36
 
-      if (offset >= preimage.length) {
-        return false
-      }
+      if (scriptCodeLenOffset >= preimage.length) return false
 
       // Parse varint scriptCode length
-      const firstByte = preimage[offset]
-      let scriptLength: number
+      const varint = this.readVarint(preimage, scriptCodeLenOffset)
+      if (varint === null) return false // 0xff not expected
 
-      if (firstByte < 0xfd) {
-        scriptLength = firstByte
-        offset += 1
-      } else if (firstByte === 0xfd) {
-        if (offset + 3 > preimage.length) return false
-        scriptLength = preimage[offset + 1] | (preimage[offset + 2] << 8)
-        offset += 3
-      } else if (firstByte === 0xfe) {
-        if (offset + 5 > preimage.length) return false
-        scriptLength = preimage[offset + 1] | (preimage[offset + 2] << 8) |
-          (preimage[offset + 3] << 16) | (preimage[offset + 4] << 24)
-        offset += 5
-      } else {
-        return false // 0xff not expected
-      }
+      const { value: scriptLength, nextOffset: scriptDataOffset } = varint
 
       // Validate scriptLength
-      if (scriptLength < 0 || scriptLength > 10000 || offset + scriptLength > preimage.length) {
+      if (scriptLength < 0 || scriptLength > 10000 || scriptDataOffset + scriptLength > preimage.length) {
         return false
       }
 
       // Extract and decode scriptCode
-      const scriptBytes = preimage.slice(offset, offset + scriptLength)
+      const scriptBytes = preimage.slice(scriptDataOffset, scriptDataOffset + scriptLength)
       const lockingScript = LockingScript.fromBinary(scriptBytes)
       const decoded = PushDrop.decode(lockingScript)
 
-      // Check for ISSUE_MARKER in first field
       if (decoded.fields.length >= 1) {
         const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
         return assetId === ISSUE_MARKER
@@ -1045,33 +1061,35 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     for (const output of args.outputs) {
-      if (!output || typeof output !== 'object') {
-        continue
-      }
-
-      // Check for btms_type_issue tag
-      if (Array.isArray(output.tags) && output.tags.includes('btms_type_issue')) {
-        return true
-      }
-
-      // Check locking script for ISSUE_MARKER
-      if (output.lockingScript && typeof output.lockingScript === 'string') {
-        try {
-          const lockingScript = LockingScript.fromHex(output.lockingScript)
-          const decoded = PushDrop.decode(lockingScript)
-
-          if (decoded.fields.length >= 1) {
-            const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
-            if (assetId === ISSUE_MARKER) {
-              return true
-            }
-          }
-        } catch (e) {
-          // Not a valid PushDrop script, continue checking
-        }
-      }
+      if (!output || typeof output !== 'object') continue
+      if (this.outputIndicatesIssuance(output)) return true
     }
 
+    return false
+  }
+
+  /**
+   * Checks whether a single output indicates token issuance via tag or locking script.
+   */
+  private outputIndicatesIssuance(output: { tags?: unknown; lockingScript?: unknown }): boolean {
+    // Check for btms_type_issue tag
+    if (Array.isArray(output.tags) && output.tags.includes('btms_type_issue')) {
+      return true
+    }
+
+    // Check locking script for ISSUE_MARKER
+    if (!output.lockingScript || typeof output.lockingScript !== 'string') return false
+
+    try {
+      const lockingScript = LockingScript.fromHex(output.lockingScript)
+      const decoded = PushDrop.decode(lockingScript)
+      if (decoded.fields.length >= 1) {
+        const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
+        return assetId === ISSUE_MARKER
+      }
+    } catch (e) {
+      // Not a valid PushDrop script
+    }
     return false
   }
 
