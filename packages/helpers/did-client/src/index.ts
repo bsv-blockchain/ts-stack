@@ -200,7 +200,8 @@ export class DIDClient {
       const instructions = JSON.parse(output.customInstructions)
       derivationPrefix = instructions.derivationPrefix
       derivationSuffix = instructions.derivationSuffix
-    } catch (e) {
+    } catch (_malformedJson) {
+      // customInstructions is not valid JSON — return a structured error rather than throwing.
       return {
         status: 'error',
         code: 'ERR_INVALID_INSTRUCTIONS',

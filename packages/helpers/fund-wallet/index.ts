@@ -50,7 +50,8 @@ async function fundWallet (
   try {
     const { version } = await localWallet.getVersion()
     console.log(chalk.blue(`💰 Using local wallet version: ${version}`))
-  } catch (err) {
+  } catch (_notRunning) {
+    // Metanet Desktop is not installed or not reachable — nothing to recover from.
     console.error(
       chalk.red('❌ Metanet Desktop is not installed or not running.')
     )
@@ -192,7 +193,8 @@ if (cliNetwork && cliPrivateKey) {
   const walletPrivateKey = cliPrivateKey
   try {
     PrivateKey.fromHex(walletPrivateKey)
-  } catch (err) {
+  } catch (_invalidKey) {
+    // Key format is bad — showHelp exits with an error message.
     showHelp(`Invalid private key: Must be valid hex format`)
   }
 
@@ -236,7 +238,8 @@ if (cliNetwork && cliPrivateKey) {
         }
         try {
           PrivateKey.fromHex(walletPrivateKey)
-        } catch (err) {
+        } catch (_invalidKey) {
+          // Key format is bad — log and abort; nothing to recover from interactively.
           console.error('❌ Invalid private key: ', walletPrivateKey);
           process.exit(1);
         }
