@@ -3,7 +3,7 @@ import {
   PrivateKey,
   RequestedCertificateTypeIDAndFieldList,
   AuthFetch,
-  MasterCertificate,
+  MasterCertificate
 } from '@bsv/sdk'
 import { Server } from 'http'
 import { startCertServer } from './testCertExpressServer'
@@ -61,14 +61,13 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     })
   })
 
-
   test('Test 12: Certificate request', async () => {
     const requestedCertificates: RequestedCertificateSet = {
       certifiers: [
-        '03caa1baafa05ecbf1a5b310a7a0b00bc1633f56267d9f67b1fd6bb23b3ef1abfa',
+        '03caa1baafa05ecbf1a5b310a7a0b00bc1633f56267d9f67b1fd6bb23b3ef1abfa'
       ],
       types: {
-        'z40BOInXkI8m7f/wBrv4MJ09bZfzZbTj2fJqCtONqCY=': ['firstName'],
+        'z40BOInXkI8m7f/wBrv4MJ09bZfzZbTj2fJqCtONqCY=': ['firstName']
       }
     }
     const walletWithRequests = new MockWallet(privKey)
@@ -84,7 +83,6 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     expect(certs.length).toBe(1)
     // Add further assertions based on expected certificates
   }, 30000)
-
 
   test('Test 16: Simple POST on /cert-protected-endpoint', async () => {
     const walletWithCerts = new MockWallet(privKey)
@@ -106,18 +104,18 @@ describe('AuthFetch and AuthExpress Certificates Tests', () => {
     try {
       res = await authFetch.fetch(
         'http://localhost:3001/cert-protected-endpoint', {
-        method: 'POST', headers: {
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({ message: 'Hello protected Route!' })
-      })
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify({ message: 'Hello protected Route!' })
+        })
     } catch (error) {
       console.error('Error during fetch:', error)
     }
-    expect(res!.status).toBe(200)
-    const body = await res!.text()
+    expect(res.status).toBe(200)
+    const body = await res.text()
     expect(body).toBeDefined()
     console.log(body)
-
   }, 300000)
 })

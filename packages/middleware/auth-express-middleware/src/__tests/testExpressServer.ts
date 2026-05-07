@@ -27,7 +27,7 @@ export const startServer = (port = 3000): Server => {
   }
 
   const privKey = new PrivateKey(1)
-  const mockWallet = new MockWallet(privKey);
+  const mockWallet = new MockWallet(privKey)
   const sessionManager = new SessionManager();
 
   // Asynchronous setup for certificates and middleware
@@ -92,7 +92,7 @@ export const startServer = (port = 3000): Server => {
     sessionManager,
     onCertificatesReceived: (_senderPublicKey: string, certs: VerifiableCertificate[], req: Request, res: Response, next: NextFunction) => {
       console.log('Certificates received:', certs)
-    },
+    }
     // certificatesToRequest
   })
 
@@ -119,9 +119,9 @@ export const startServer = (port = 3000): Server => {
     res.status(200).send({ message: 'This is another endpoint. 😅' })
   })
 
-  app.post('/cert-protected-endpoint',  (req: Request, res: Response) => {
-  console.log('Received POST body:', req.body)
-   res.status(200).send({ message: 'You must have certs!' })
+  app.post('/cert-protected-endpoint', (req: Request, res: Response) => {
+    console.log('Received POST body:', req.body)
+    res.status(200).send({ message: 'You must have certs!' })
     // await (res as any).sendCertificateRequest(certsToRequest, identityKey)
   })
 

@@ -27,7 +27,7 @@ export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { 
   }
 
   const privKey = new PrivateKey(2)
-  const mockWallet = new MockWallet(privKey);
+  const mockWallet = new MockWallet(privKey)
 
   // Asynchronous setup for certificates — exposed as server.ready
   const ready = (async () => {
@@ -87,7 +87,7 @@ export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { 
 
   app.post('/cert-protected-endpoint', async (req: Request, res: Response) => {
     console.log('Received POST body:', req.body)
-    //wait a moment for the certificates to be received
+    // wait a moment for the certificates to be received
     await new Promise(resolve => {
       const t = setTimeout(resolve, 5000)
       if (typeof t.unref === 'function') t.unref()
@@ -111,7 +111,7 @@ export const startCertServer = (port = 3001): ReturnType<typeof app.listen> & { 
 
   const server = app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`)
-  }) as ReturnType<typeof app.listen> & { ready: Promise<void> }
+  })
   server.ready = ready
   return server
 }

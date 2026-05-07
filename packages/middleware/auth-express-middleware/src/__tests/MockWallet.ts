@@ -63,9 +63,8 @@ import {
  */
 export class MockWallet extends ProtoWallet
   implements WalletInterface {
-
   keyDeriver: KeyDeriver
-  constructor(rootKeyOrKeyDeriver: PrivateKey | 'anyone' | KeyDeriverApi) {
+  constructor (rootKeyOrKeyDeriver: PrivateKey | 'anyone' | KeyDeriverApi) {
     super(rootKeyOrKeyDeriver)
 
     if (rootKeyOrKeyDeriver instanceof KeyDeriver) {
@@ -110,16 +109,15 @@ export class MockWallet extends ProtoWallet
   /**
    * Add a master certificate to the wallet for testing purposes.
    */
-  addMasterCertificate(masterCertificate: MasterCertificate): void {
+  addMasterCertificate (masterCertificate: MasterCertificate): void {
     this.storedCertificates.push(masterCertificate)
   }
-
 
   /**
    * Given a certificate and fields to reveal, this method creates a keyring
    * for the verifier by leveraging the masterCertificate’s capabilities.
    */
-  async proveCertificate(args: ProveCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ProveCertificateResult> {
+  async proveCertificate (args: ProveCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ProveCertificateResult> {
     const storedCert = this.storedCertificates.find(sc =>
       sc.type === args.certificate.type &&
       sc.subject === args.certificate.subject &&
@@ -149,7 +147,7 @@ export class MockWallet extends ProtoWallet
    * Mock implementation of internalizeAction.
    * Logs the provided action details and returns a successful response.
    */
-  async internalizeAction(args: InternalizeActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<InternalizeActionResult> {
+  async internalizeAction (args: InternalizeActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<InternalizeActionResult> {
     console.log('Mock internalizeAction called with:', { args, originator })
     return await Promise.resolve({ accepted: true })
   }
@@ -157,7 +155,7 @@ export class MockWallet extends ProtoWallet
   /**
    * Returns any certificates whose certifier and type match the requested sets.
    */
-  async listCertificates(args: ListCertificatesArgs,
+  async listCertificates (args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListCertificatesResult> {
     // Filter certificates by requested certifiers and types
     const filtered = this.storedCertificates.filter(cert => {
