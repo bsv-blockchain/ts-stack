@@ -612,12 +612,12 @@ describe('WalletRelayService E2E', () => {
         app, server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: /^https:\/\/[a-z0-9-]+\.commonsource\.nl$/,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
       })
       try {
-        const created = await svc.createSession({ origin: 'https://app.commonsource.nl' })
+        const created = await svc.createSession({ origin: 'https://app.example.com' })
         const { params } = parsePairingUri(created.pairingUri)
-        expect(params?.origin).toBe('https://app.commonsource.nl')
+        expect(params?.origin).toBe('https://app.example.com')
       } finally {
         svc.stop()
         await stopServer(server)
@@ -631,7 +631,7 @@ describe('WalletRelayService E2E', () => {
         app, server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: ['https://app.commonsource.nl'],
+        allowedOrigins: ['https://app.example.com'],
       })
       try {
         await expect(
@@ -650,16 +650,16 @@ describe('WalletRelayService E2E', () => {
         app, server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: /^https:\/\/[a-z0-9-]+\.commonsource\.nl$/,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
       })
       try {
         const res = await fetch(`http://localhost:${port}/api/session`, {
-          headers: { Origin: 'https://app.commonsource.nl' },
+          headers: { Origin: 'https://app.example.com' },
         })
         expect(res.ok).toBe(true)
         const body = await res.json() as { pairingUri: string }
         const { params } = parsePairingUri(body.pairingUri)
-        expect(params?.origin).toBe('https://app.commonsource.nl')
+        expect(params?.origin).toBe('https://app.example.com')
       } finally {
         svc.stop()
         await stopServer(server)
@@ -673,7 +673,7 @@ describe('WalletRelayService E2E', () => {
         app, server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: ['https://app.commonsource.nl'],
+        allowedOrigins: ['https://app.example.com'],
       })
       try {
         const res = await fetch(`http://localhost:${port}/api/session`, {
@@ -703,10 +703,10 @@ describe('WalletRelayService E2E', () => {
         app, server,
         wallet: new ProtoWallet(PrivateKey.fromRandom()),
         relayUrl: `ws://localhost:${port}`,
-        allowedOrigins: /^https:\/\/[a-z0-9-]+\.commonsource\.nl$/,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
       })
       try {
-        const created = await svc.createSession({ origin: 'https://app.commonsource.nl' })
+        const created = await svc.createSession({ origin: 'https://app.example.com' })
         const { params } = parsePairingUri(created.pairingUri)
         // verifyPairingSignature reconstructs the signed string from params.origin —
         // if origin was wrong, signature verification would fail.

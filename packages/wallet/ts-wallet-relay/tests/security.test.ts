@@ -139,38 +139,38 @@ describe('compileOriginMatcher', () => {
   describe('string array', () => {
     it('matches any value in the list', () => {
       const m = compileOriginMatcher([
-        'https://app.commonsource.nl',
-        'https://cities.commonsource.nl',
-        'https://eu4.commonsource.nl',
+        'https://app.example.com',
+        'https://cities.example.com',
+        'https://eu4.example.com',
       ])!
-      expect(m('https://app.commonsource.nl')).toBe(true)
-      expect(m('https://cities.commonsource.nl')).toBe(true)
-      expect(m('https://eu4.commonsource.nl')).toBe(true)
+      expect(m('https://app.example.com')).toBe(true)
+      expect(m('https://cities.example.com')).toBe(true)
+      expect(m('https://eu4.example.com')).toBe(true)
     })
 
     it('rejects origins not in the list', () => {
-      const m = compileOriginMatcher(['https://app.commonsource.nl'])!
-      expect(m('https://evil.commonsource.nl')).toBe(false)
+      const m = compileOriginMatcher(['https://app.example.com'])!
+      expect(m('https://evil.example.com')).toBe(false)
     })
 
     it('rejects when list is empty', () => {
       const m = compileOriginMatcher([])!
-      expect(m('https://app.commonsource.nl')).toBe(false)
+      expect(m('https://app.example.com')).toBe(false)
     })
   })
 
   describe('RegExp', () => {
     it('matches by pattern', () => {
-      const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.commonsource\.nl$/)!
-      expect(m('https://app.commonsource.nl')).toBe(true)
-      expect(m('https://cities.commonsource.nl')).toBe(true)
+      const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.example\.com$/)!
+      expect(m('https://app.example.com')).toBe(true)
+      expect(m('https://cities.example.com')).toBe(true)
     })
 
     it('rejects origins that do not match the pattern', () => {
-      const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.commonsource\.nl$/)!
-      expect(m('https://commonsource.nl')).toBe(false)        // no subdomain
-      expect(m('http://app.commonsource.nl')).toBe(false)     // wrong scheme
-      expect(m('https://app.commonsource.nl.evil.com')).toBe(false) // trailing
+      const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.example\.com$/)!
+      expect(m('https://example.com')).toBe(false)        // no subdomain
+      expect(m('http://app.example.com')).toBe(false)     // wrong scheme
+      expect(m('https://app.example.com.evil.com')).toBe(false) // trailing
     })
   })
 
