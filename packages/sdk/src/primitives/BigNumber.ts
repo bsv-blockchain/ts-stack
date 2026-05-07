@@ -69,9 +69,9 @@ export default class BigNumber {
   private static readonly MAX_IMULN_ARG: number = 0x4000000 - 1
   private static readonly MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT: bigint = (1n << 53n) - 1n
 
-  private _magnitude: bigint
-  private _sign: 0 | 1
-  private _nominalWordLength: number
+  private _magnitude: bigint = 0n
+  private _sign: 0 | 1 = 0
+  private _nominalWordLength: number = 1
 
   /**
    * Reduction context of the big number.
@@ -207,9 +207,6 @@ export default class BigNumber {
     base: number | 'be' | 'le' | 'hex' = 10,
     endian: 'be' | 'le' = 'be'
   ) {
-    this._magnitude = 0n
-    this._sign = 0
-    this._nominalWordLength = 1
     this.red = null
 
     number ??= 0
@@ -242,7 +239,7 @@ export default class BigNumber {
           if (hexStr.length % 2 !== 0) hexStr = '0' + hexStr
           for (let i = 0; i < hexStr.length; i += 2) {
             const byteHex = hexStr.substring(i, i + 2); const byteVal = Number.parseInt(byteHex, 16)
-            if (isNaN(byteVal)) throw new Error('Invalid character in ' + hexStr)
+            if (Number.isNaN(byteVal)) throw new Error('Invalid character in ' + hexStr)
             bytes.push(byteVal)
           }
           this.initArray(bytes, 'le'); this._sign = sign; this.normSign(); return
@@ -334,7 +331,7 @@ export default class BigNumber {
   private _parseBaseWord (str: string, base: number): number {
     let r = 0
     for (let i = 0; i < str.length; i++) {
-      const charCode = str.charCodeAt(i)
+      const charCode = str.codePointAt(i) as number
       let digitVal
       if (charCode >= 48 && charCode <= 57) digitVal = charCode - 48
       else if (charCode >= 65 && charCode <= 90) digitVal = charCode - 65 + 10
@@ -383,7 +380,7 @@ export default class BigNumber {
     if (bytes.length === 0) { this._initializeState(0n, 0); return this }
     let magnitude = 0n
     if (endian === 'be') {
-      for (let i = 0; i < bytes.length; i++) magnitude = (magnitude << 8n) | BigInt(bytes[i] & 0xff)
+      for (const byte of bytes) magnitude = (magnitude << 8n) | BigInt(byte & 0xff)
     } else {
       for (let i = bytes.length - 1; i >= 0; i--) magnitude = (magnitude << 8n) | BigInt(bytes[i] & 0xff)
     }
@@ -1110,17 +1107,16 @@ export default class BigNumber {
       beBytes[0] &= 0x7f
     }
 
-    let magnitude = 0n
+    let hexStr: string
     if (CAN_USE_BUFFER) {
-      const hex = BufferCtor.from(beBytes).toString('hex') as string
-      magnitude = hex.length === 0 ? 0n : BigInt('0x' + hex)
+      hexStr = BufferCtor.from(beBytes).toString('hex') as string
     } else {
-      let hex = ''
+      hexStr = ''
       for (const byte of beBytes) {
-        hex += byte < 16 ? '0' + byte.toString(16) : byte.toString(16)
+        hexStr += byte < 16 ? '0' + byte.toString(16) : byte.toString(16)
       }
-      magnitude = hex.length === 0 ? 0n : BigInt('0x' + hex)
     }
+    const magnitude = hexStr.length === 0 ? 0n : BigInt('0x' + hexStr)
 
     const r = new BigNumber(0n)
     r._initializeState(magnitude, sign)
@@ -1145,8 +1141,8 @@ export default class BigNumber {
     const byteLen = hex.length / 2
     const bytes = new Array(byteLen)
     for (let i = 0, j = 0; i < hex.length; i += 2) {
-      const high = HEX_CHAR_TO_VALUE[hex.charCodeAt(i)]
-      const low = HEX_CHAR_TO_VALUE[hex.charCodeAt(i + 1)]
+      const high = HEX_CHAR_TO_VALUE[hex.codePointAt(i) as number]
+      const low = HEX_CHAR_TO_VALUE[hex.codePointAt(i + 1) as number]
       bytes[j++] = ((high & 0xf) << 4) | (low & 0xf)
     }
 

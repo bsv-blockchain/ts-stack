@@ -77,7 +77,7 @@ export default class K256 extends Mersenne {
     let currentInputNewWordCount = 0
 
     for (let i = 10; i < inputNominalLength; i++) {
-      const next = inputWords[i] | 0
+      const next = Math.trunc(inputWords[i])
       if (currentInputNewWordCount < tempInputNewWords.length) { // Boundary check
         tempInputNewWords[currentInputNewWordCount++] = ((next & mask) << 4) | (prev >>> 22)
       }
@@ -123,10 +123,10 @@ export default class K256 extends Mersenne {
 
     let lo = 0
     for (let i = 0; i < newNominalLength; i++) { // Iterate up to new expanded length
-      const w = tempWords[i] | 0
+      const w = Math.trunc(tempWords[i])
       lo += w * 0x3d1 // 0x3d1 = 977
       tempWords[i] = lo & 0x3ffffff // 26-bit mask
-      lo = w * 0x40 + ((lo / 0x4000000) | 0) // 0x40 = 64. 0x4000000 = 2^26
+      lo = w * 0x40 + Math.trunc(lo / 0x4000000) // 0x40 = 64. 0x4000000 = 2^26
     }
 
     num.words = tempWords // Use setter to re-initialize from tempWords

@@ -14,15 +14,14 @@ export function defaultHttpClient(): HttpClient {
     }
   }
 
-  if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+  if (typeof globalThis.window !== 'undefined' && typeof globalThis.window.fetch === 'function') {
     // Browser tab/page context
-    return new FetchHttpClient(window.fetch.bind(window))
+    return new FetchHttpClient(globalThis.window.fetch.bind(globalThis.window))
   } else if (typeof globalThis.fetch === 'function') {
     // Service workers, Deno, Node 18+ (any environment with global fetch)
     return new FetchHttpClient(globalThis.fetch.bind(globalThis))
   } else if (typeof require !== 'undefined') {
     // Older Node.js — use https module
-    // eslint-disable-next-line
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const https = require('node:https')

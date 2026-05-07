@@ -280,7 +280,7 @@ function hexStringToArray (msg: string): number[] {
 function numberArrayToByteArray (msg: number[]): number[] {
   const res: number[] = []
   for (let i = 0; i < msg.length; i++) {
-    res[i] = msg[i] | 0
+    res[i] = Math.trunc(msg[i])
   }
   return res
 }
@@ -320,8 +320,7 @@ export function htonl (w: number): number {
 
 function toHex32 (msg: number[], endian?: 'little' | 'big'): string {
   let res = ''
-  for (let i = 0; i < msg.length; i++) {
-    let w = msg[i]
+  for (let w of msg) {
     if (endian === 'little') {
       w = htonl(w)
     }
@@ -711,7 +710,7 @@ export class SHA1 extends BaseHash {
     let e = this.h[4]
 
     for (i = 0; i < W.length; i++) {
-      const s = ~~(i / 20)
+      const s = Math.trunc(i / 20)
       const t = SUM32_5(rotl32(a, 5), FT_1(s, b, c, d), e, W[i], this.k[s])
       e = d
       d = c
@@ -830,7 +829,7 @@ export class SHA256HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: Uint8Array | number[] | string, enc?: 'hex'): SHA256HMAC {
+  update (msg: Uint8Array | number[] | string, enc?: 'hex'): this {
     const data =
       msg instanceof Uint8Array ? msg : Uint8Array.from(toArray(msg, enc))
     this.h.update(data)
@@ -894,7 +893,7 @@ export class SHA1HMAC {
     this.outer = new SHA1().update(key)
   }
 
-  update (msg: number[] | string, enc?: 'hex'): SHA1HMAC {
+  update (msg: number[] | string, enc?: 'hex'): this {
     this.inner.update(msg, enc)
     return this
   }
@@ -964,7 +963,7 @@ export class SHA512HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: Uint8Array | number[] | string, enc?: 'hex' | 'utf8'): SHA512HMAC {
+  update (msg: Uint8Array | number[] | string, enc?: 'hex' | 'utf8'): this {
     const data =
       msg instanceof Uint8Array ? msg : Uint8Array.from(toArray(msg, enc))
     this.h.update(data)
@@ -1196,7 +1195,7 @@ type TypedArray =
   | Int32Array
 
 function clean (...arrays: TypedArray[]): void {
-  for (let i = 0; i < arrays.length; i++) arrays[i].fill(0)
+  for (const arr of arrays) arr.fill(0)
 }
 function createView (arr: TypedArray): DataView {
   return new DataView(arr.buffer, arr.byteOffset, arr.byteLength)
@@ -1590,7 +1589,7 @@ const K512 = (() =>
     '0x597f299cfc657e2a',
     '0x5fcb6fab3ad6faec',
     '0x6c44198c4a475817'
-  ].map((n) => BigInt(n)))
+  ].map(BigInt))
 )()
 const SHA512_Kh = (() => K512[0])()
 const SHA512_Kl = (() => K512[1])()
@@ -1660,9 +1659,9 @@ class FastSHA512 extends HashMD<FastSHA512> {
   }
 
   protected process (view: DataView, offset: number): void {
-    for (let i = 0; i < 16; i++, offset += 4) {
+    for (let i = 0; i < 16; i++, offset += 8) {
       SHA512_W_H[i] = view.getUint32(offset)
-      SHA512_W_L[i] = view.getUint32((offset += 4))
+      SHA512_W_L[i] = view.getUint32(offset + 4)
     }
     for (let i = 16; i < 80; i++) {
       const W15h = SHA512_W_H[i - 15] | 0
@@ -1820,7 +1819,8 @@ function pbkdf2Core (hash: (msg: Input) => Uint8Array & { create: () => FastSHA5
   for (let ti = 1, pos = 0; pos < dkLen; ti++, pos += PRF.outputLen) {
     const Ti = DK.subarray(pos, pos + PRF.outputLen)
     view.setInt32(0, ti, false)
-    ;(prfW = PRFSalt._cloneInto(prfW)).update(arr).digestInto(u)
+    prfW = PRFSalt._cloneInto(prfW)
+    prfW.update(arr).digestInto(u)
     Ti.set(u.subarray(0, Ti.length))
     for (let ui = 1; ui < c; ui++) {
       PRF._cloneInto(prfW).update(u).digestInto(u)

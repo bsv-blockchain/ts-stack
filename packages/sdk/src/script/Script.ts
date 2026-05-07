@@ -177,8 +177,7 @@ export default class Script {
    */
   toASM (): string {
     let str = ''
-    for (let i = 0; i < this.chunks.length; i++) {
-      const chunk = this.chunks[i]
+    for (const chunk of this.chunks) {
       str += this._chunkToString(chunk)
     }
 
@@ -194,9 +193,7 @@ export default class Script {
     if (this.hexCache != null) {
       return this.hexCache
     }
-    if (this.rawBytesCache == null) {
-      this.rawBytesCache = this.serializeChunksToBytes()
-    }
+    this.rawBytesCache ??= this.serializeChunksToBytes()
     const hex =
       BufferCtor != null
         ? BufferCtor.from(this.rawBytesCache).toString('hex')
@@ -215,9 +212,7 @@ export default class Script {
   }
 
   toUint8Array (): Uint8Array {
-    if (this.rawBytesCache == null) {
-      this.rawBytesCache = this.serializeChunksToBytes()
-    }
+    this.rawBytesCache ??= this.serializeChunksToBytes()
     return this.rawBytesCache
   }
 
@@ -227,7 +222,7 @@ export default class Script {
    * @param script - The script to append.
    * @returns This script instance for chaining.
    */
-  writeScript (script: Script): Script {
+  writeScript (script: Script): this {
     this.invalidateSerializationCaches()
     this.chunks = this.chunks.concat(script.chunks)
     return this
@@ -239,7 +234,7 @@ export default class Script {
    * @param op - The opcode to append.
    * @returns This script instance for chaining.
    */
-  writeOpCode (op: number): Script {
+  writeOpCode (op: number): this {
     this.invalidateSerializationCaches()
     this.chunks.push({ op })
     return this
@@ -252,7 +247,7 @@ export default class Script {
    * @param op - The opcode to set.
    * @returns This script instance for chaining.
    */
-  setChunkOpCode (i: number, op: number): Script {
+  setChunkOpCode (i: number, op: number): this {
     this.invalidateSerializationCaches()
     this.chunks[i] = { op }
     return this
@@ -264,7 +259,7 @@ export default class Script {
    * @param bn - The BigNumber to append.
    * @returns This script instance for chaining.
    */
-  writeBn (bn: BigNumber): Script {
+  writeBn (bn: BigNumber): this {
     this.invalidateSerializationCaches()
     if (bn.cmpn(0) === OP.OP_0) {
       this.chunks.push({
@@ -293,7 +288,7 @@ export default class Script {
    * @returns This script instance for chaining.
    * @throws {Error} Throws an error if the data is too large to be pushed.
    */
-  writeBin (bin: number[]): Script {
+  writeBin (bin: number[]): this {
     this.invalidateSerializationCaches()
     let op: number
     const data = bin.length > 0 ? bin : undefined
@@ -323,7 +318,7 @@ export default class Script {
    * @param num - The number to append.
    * @returns This script instance for chaining.
    */
-  writeNumber (num: number): Script {
+  writeNumber (num: number): this {
     this.invalidateSerializationCaches()
     this.writeBn(new BigNumber(num))
     return this
@@ -334,7 +329,7 @@ export default class Script {
    * Removes all OP_CODESEPARATOR opcodes from the script.
    * @returns This script instance for chaining.
    */
-  removeCodeseparators (): Script {
+  removeCodeseparators (): this {
     const bytes = this.toUint8Array()
     this.rawBytesCache = Uint8Array.from(Script.removeOpcodeBytes(bytes, OP.OP_CODESEPARATOR))
     this.hexCache = undefined
@@ -350,7 +345,7 @@ export default class Script {
    *
    * @returns This script instance for chaining.
    */
-  findAndDelete (script: Script): Script {
+  findAndDelete (script: Script): this {
     this.invalidateSerializationCaches()
     const targetBytes = script.toUint8Array()
     const targetLen = targetBytes.length
@@ -434,8 +429,7 @@ export default class Script {
    * @returns True if the script is push-only, otherwise false.
    */
   isPushOnly (): boolean {
-    for (let i = 0; i < this.chunks.length; i++) {
-      const chunk = this.chunks[i]
+    for (const chunk of this.chunks) {
       const opCodeNum = chunk.op
       if (opCodeNum > OP.OP_16) {
         return false
@@ -498,13 +492,11 @@ export default class Script {
     const bytes = new Uint8Array(totalLength)
     let offset = 0
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
+    for (const chunk of chunks) {
       bytes[offset++] = chunk.op
       if (chunk.data == null) continue
       if (chunk.op === OP.OP_RETURN) {
         bytes.set(chunk.data, offset)
-        offset += chunk.data.length
         break
       }
       offset = Script.writeChunkData(bytes, offset, chunk.op, chunk.data)

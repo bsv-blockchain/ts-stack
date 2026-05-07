@@ -35,12 +35,12 @@ export default class Mnemonic {
    */
   public toBinary (): number[] {
     const bw = new Writer()
-    if (this.mnemonic !== '') {
+    if (this.mnemonic === '') {
+      bw.writeVarIntNum(0)
+    } else {
       const buf = toArray(this.mnemonic, 'utf8')
       bw.writeVarIntNum(buf.length)
       bw.write(buf)
-    } else {
-      bw.writeVarIntNum(0)
     }
     if (this.seed.length > 0) {
       bw.writeVarIntNum(this.seed.length)
@@ -76,7 +76,7 @@ export default class Mnemonic {
    * @throws {Error} If the bit length is not a multiple of 32 or is less than 128.
    */
   public fromRandom (bits?: number): this {
-    if (bits === undefined || bits === null || isNaN(bits) || bits === 0) {
+    if (bits === undefined || bits === null || Number.isNaN(bits) || bits === 0) {
       bits = 128
     }
     if (bits % 32 !== 0) {
@@ -179,8 +179,8 @@ export default class Mnemonic {
     const hash = Hash.sha256(buf)
     let bin = ''
     const bits = buf.length * 8
-    for (let i = 0; i < buf.length; i++) {
-      bin = bin + ('00000000' + buf[i].toString(2)).slice(-8)
+    for (const byte of buf) {
+      bin = bin + ('00000000' + byte.toString(2)).slice(-8)
     }
     let hashbits = hash[0].toString(2)
     hashbits = ('00000000' + hashbits).slice(-8).slice(0, bits / 32)
@@ -218,8 +218,8 @@ export default class Mnemonic {
     // confirm no invalid words
     const words = mnemonic.split(this.Wordlist.space)
     let bin = ''
-    for (let i = 0; i < words.length; i++) {
-      const ind = this.Wordlist.value.indexOf(words[i])
+    for (const word of words) {
+      const ind = this.Wordlist.value.indexOf(word)
       if (ind < 0) {
         return false
       }

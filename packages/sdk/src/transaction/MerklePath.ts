@@ -431,7 +431,7 @@ export default class MerklePath {
    */
   trim (): void {
     const pushIfNew = (v: number, a: number[]): void => {
-      if (a.length === 0 || a.slice(-1)[0] !== v) {
+      if (a.length === 0 || a.at(-1) !== v) {
         a.push(v)
       }
     }
@@ -457,9 +457,9 @@ export default class MerklePath {
 
     let computedOffsets: number[] = [] // in next level
     let dropOffsets: number[] = []
-    for (let h = 0; h < this.path.length; h++) {
+    for (const level of this.path) {
       // Sort each level by increasing offset order
-      this.path[h].sort((a, b) => a.offset - b.offset)
+      level.sort((a, b) => a.offset - b.offset)
     }
     for (let l = 0; l < this.path[0].length; l++) {
       const n = this.path[0][l]

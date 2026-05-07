@@ -526,7 +526,7 @@ export class AuthFetch {
       throw new Error('Missing x-bsv-payment-satoshis-required response header.')
     }
     const satoshisRequired = Number.parseInt(satoshisRequiredHeader)
-    if (isNaN(satoshisRequired) || satoshisRequired <= 0) {
+    if (Number.isNaN(satoshisRequired) || satoshisRequired <= 0) {
       throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
     }
 

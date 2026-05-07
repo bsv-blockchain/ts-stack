@@ -138,11 +138,15 @@ export default class Transaction {
     if (b.txs.length < 1) {
       throw new Error('beef must include at least one transaction.')
     }
-    const target = txid ?? b.atomicTxid ?? b.txs.slice(-1)[0].txid
+    const lastTx = b.txs.at(-1)
+    if (lastTx == null) {
+      throw new Error('beef must include at least one transaction.')
+    }
+    const target = txid ?? b.atomicTxid ?? lastTx.txid
     const tx = b.findAtomicTransaction(target)
     if (tx == null) {
       if (txid != null) {
-        throw new Error(`Transaction with TXID ${target} not found in BEEF data.`)
+        throw new Error(`Transaction with TXID ${String(target)} not found in BEEF data.`)
       } else {
         throw new Error('beef does not contain transaction for atomic txid.')
       }
@@ -173,7 +177,7 @@ export default class Transaction {
       const lockingScriptBin = br.read(lockingScriptLength)
       const lockingScript = LockingScript.fromBinary(lockingScriptBin)
       const sourceTransaction = new Transaction(undefined, [], [], undefined)
-      sourceTransaction.outputs = Array(sourceOutputIndex + 1).fill(null)
+      sourceTransaction.outputs = new Array(sourceOutputIndex + 1).fill(null)
       sourceTransaction.outputs[sourceOutputIndex] = {
         satoshis,
         lockingScript
@@ -373,9 +377,7 @@ export default class Transaction {
       )
     }
     // If the input sequence number hasn't been set, the expectation is that it is final.
-    if (input.sequence === undefined) {
-      input.sequence = 0xffffffff
-    }
+    input.sequence ??= 0xffffffff
     this.invalidateSerializationCaches()
     this.inputs.push(input)
   }
@@ -508,7 +510,7 @@ export default class Transaction {
   ): number {
     let distributedChange = 0
     let changeToUse = change
-    const benfordNumbers = Array(changeOutputs.length).fill(1)
+    const benfordNumbers = new Array(changeOutputs.length).fill(1)
     changeToUse -= changeOutputs.length
     distributedChange += changeOutputs.length
     for (let i = 0; i < changeOutputs.length - 1; i++) {
@@ -651,9 +653,7 @@ export default class Transaction {
   }
 
   private getSerializedBytes (): Uint8Array {
-    if (this.rawBytesCache == null) {
-      this.rawBytesCache = this.buildSerializedBytes()
-    }
+    this.rawBytesCache ??= this.buildSerializedBytes()
     return this.rawBytesCache
   }
 
@@ -784,9 +784,7 @@ export default class Transaction {
    * @returns {string | number[]} - The hash of the transaction in the specified format.
    */
   hash (enc?: 'hex'): number[] | string {
-    if (this.cachedHash == null) {
-      this.cachedHash = hash256(this.getSerializedBytes())
-    }
+    this.cachedHash ??= hash256(this.getSerializedBytes())
     if (enc === 'hex') {
       return toHex(this.cachedHash)
     }
@@ -910,9 +908,7 @@ export default class Transaction {
         }
 
         const otherInputs = tx.inputs.filter((_, idx) => idx !== i)
-        if (input.sourceTXID === undefined) {
-          input.sourceTXID = sourceTxid
-        }
+        input.sourceTXID ??= sourceTxid
 
         const spend = new Spend({
           sourceTXID: input.sourceTXID,

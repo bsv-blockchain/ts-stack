@@ -18,7 +18,6 @@ import { computeSignatureScope, resolveSourceDetails, formatPreimage } from './S
  * For a given piece of data to push onto the stack in script, creates the correct minimally-encoded script chunk,
  * including the correct push operation.
  *
- * TODO: This should be made into a TS-SDK util (distinct from the `minimallyEncode` util)
  */
 const createMinimallyEncodedScriptChunk = (
   data: number[]
@@ -163,7 +162,7 @@ export default class PushDrop implements ScriptTemplate {
     })
     lockChunks.push({ op: OP.OP_CHECKSIG })
     if (includeSignature) {
-      const dataToSign = fields.reduce((a, e) => [...a, ...e], [])
+      const dataToSign = fields.flat()
       const { signature } = await this.wallet.createSignature({
         data: dataToSign,
         protocolID,

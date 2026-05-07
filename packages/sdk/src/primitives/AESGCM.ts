@@ -54,7 +54,7 @@ const Rcon = [
 const mul2 = new Uint8Array(256)
 const mul3 = new Uint8Array(256)
 for (let i = 0; i < 256; i++) {
-  const m2 = ((i << 1) ^ ((i & 0x80) !== 0 ? 0x1b : 0)) & 0xff
+  const m2 = ((i << 1) ^ ((i & 0x80) === 0 ? 0 : 0x1b)) & 0xff
   mul2[i] = m2
   mul3[i] = m2 ^ i
 }
@@ -217,7 +217,7 @@ export const checkBit = function (
   byteIndex: number,
   bitIndex: number
 ): 1 | 0 {
-  return (byteArray[byteIndex] & (0x01 << bitIndex)) !== 0 ? 1 : 0
+  return (byteArray[byteIndex] & (0x01 << bitIndex)) === 0 ? 0 : 1
 }
 
 export const getBytes = function (numericValue: number): number[] {
