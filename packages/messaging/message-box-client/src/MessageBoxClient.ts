@@ -59,6 +59,27 @@ import {
 const DEFAULT_MAINNET_HOST = 'https://message-box-us-1.bsvb.tech'
 const DEFAULT_TESTNET_HOST = DEFAULT_MAINNET_HOST
 
+/** Build status + description for a batch send result. */
+function buildBatchSendResult (
+  sentCount: number,
+  allowedCount: number,
+  blockedCount: number
+): { status: SendListResult['status'], description: string } {
+  if (sentCount === allowedCount) {
+    return { status: 'success', description: `Sent to ${sentCount} recipients.` }
+  }
+  if (sentCount > 0) {
+    return {
+      status: 'partial',
+      description: `Sent to ${sentCount} recipients; ${allowedCount - sentCount} failed; ${blockedCount} blocked.`
+    }
+  }
+  return {
+    status: 'error',
+    description: `Failed to send to ${allowedCount} allowed recipients. ${blockedCount} blocked.`
+  }
+}
+
 type MessageBoxRecipientQuote = MessageBoxMultiQuote['quotesByRecipient'][number]
 type MessageBoxQuoteStatus = MessageBoxRecipientQuote['status']
 
@@ -953,87 +974,14 @@ export class MessageBoxClient {
     overrideHost?: string
   ): Promise<SendMessageResponse> {
     await this.assertInitialized()
-    if (message.recipient == null || message.recipient.trim() === '') {
-      throw new Error('You must provide a message recipient!')
-    }
-    if (message.messageBox == null || message.messageBox.trim() === '') {
-      throw new Error('You must provide a messageBox to send this message into!')
-    }
-    if (message.body == null || (typeof message.body === 'string' && message.body.trim().length === 0)) {
-      throw new Error('Every message must have a body!')
-    }
+    this.validateSendMessageParams(message)
 
-    // Optional permission checking for backwards compatibility
-    let paymentData: Payment | undefined
-    if (message.checkPermissions === true) {
-      try {
-        Logger.log('[MB CLIENT] Checking permissions and fees for message...')
-
-        // Get quote to check if payment is required
-        const quote = await this.getMessageBoxQuote({
-          recipient: message.recipient,
-          messageBox: message.messageBox
-        }, overrideHost) as MessageBoxQuote
-
-        if (quote.recipientFee === -1) {
-          throw new Error('You have been blocked from sending messages to this recipient.')
-        }
-
-        if (quote.recipientFee > 0 || quote.deliveryFee > 0) {
-          const requiredPayment = quote.recipientFee + quote.deliveryFee
-
-          if (requiredPayment > 0) {
-            Logger.log(`[MB CLIENT] Creating payment of ${requiredPayment} sats for message...`)
-
-            // Create payment using helper method
-            paymentData = await this.createMessagePayment(
-              message.recipient,
-              quote,
-              overrideHost
-            )
-
-            Logger.log('[MB CLIENT] Payment data prepared:', paymentData)
-          }
-        }
-      } catch (error) {
-        throw new Error(`Permission check failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-    }
-
-    let messageId: string
-    try {
-      const hmac = await this.walletClient.createHmac({
-        data: Array.from(new TextEncoder().encode(JSON.stringify(message.body))),
-        protocolID: [1, 'messagebox'],
-        keyID: '1',
-        counterparty: message.recipient
-      }, this.originator)
-      messageId = message.messageId ?? Array.from(hmac.hmac).map(b => b.toString(16).padStart(2, '0')).join('')
-    } catch (error) {
-      Logger.error('[MB CLIENT ERROR] Failed to generate HMAC:', error)
-      throw new Error('Failed to generate message identifier.')
-    }
-
-    let finalBody: string | EncryptedMessage
-    if (message.skipEncryption === true) {
-      finalBody = typeof message.body === 'string' ? message.body : JSON.stringify(message.body)
-    } else {
-      const encryptedMessage = await this.walletClient.encrypt({
-        protocolID: [1, 'messagebox'],
-        keyID: '1',
-        counterparty: message.recipient,
-        plaintext: Utils.toArray(typeof message.body === 'string' ? message.body : JSON.stringify(message.body), 'utf8')
-      }, this.originator)
-
-      finalBody = JSON.stringify({ encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext) })
-    }
+    const paymentData = await this.resolveMessagePayment(message, overrideHost)
+    const messageId = await this.generateMessageId(message)
+    const finalBody = await this.encodeMessageBody(message)
 
     const requestBody = {
-      message: {
-        ...message,
-        messageId,
-        body: finalBody
-      },
+      message: { ...message, messageId, body: finalBody },
       ...(paymentData != null && { payment: paymentData })
     }
 
@@ -1043,28 +991,15 @@ export class MessageBoxClient {
       Logger.log('[MB CLIENT] Sending HTTP request to:', `${finalHost}/sendMessage`)
       Logger.log('[MB CLIENT] Request Body:', JSON.stringify(requestBody, null, 2))
 
-      if (this.myIdentityKey == null || this.myIdentityKey === '') {
-        try {
-          const keyResult = await this.walletClient.getPublicKey({ identityKey: true }, this.originator)
-          this.myIdentityKey = keyResult.publicKey
-          Logger.log(`[MB CLIENT] Fetched identity key before sending request: ${this.myIdentityKey}`)
-        } catch (error) {
-          Logger.error('[MB CLIENT ERROR] Failed to fetch identity key:', error)
-          throw new Error('Identity key retrieval failed')
-        }
-      }
+      await this.ensureIdentityKey()
 
       const response = await this.authFetch.fetch(`${finalHost}/sendMessage`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
       })
 
-      if (response.bodyUsed) {
-        throw new Error('[MB CLIENT ERROR] Response body has already been used!')
-      }
+      if (response.bodyUsed) throw new Error('[MB CLIENT ERROR] Response body has already been used!')
 
       const parsedResponse = await response.json()
       Logger.log('[MB CLIENT] Raw Response Body:', parsedResponse)
@@ -1073,7 +1008,6 @@ export class MessageBoxClient {
         Logger.error(`[MB CLIENT ERROR] Failed to send message. HTTP ${response.status}: ${response.statusText}`)
         throw new Error(`Message sending failed: HTTP ${response.status} - ${response.statusText}`)
       }
-
       if (parsedResponse.status !== 'success') {
         Logger.error(`[MB CLIENT ERROR] Server returned an error: ${String(parsedResponse.description)}`)
         throw new Error(parsedResponse.description ?? 'Unknown error from server.')
@@ -1085,6 +1019,148 @@ export class MessageBoxClient {
       Logger.error('[MB CLIENT ERROR] Network or timeout error:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       throw new Error(`Failed to send message: ${errorMessage}`)
+    }
+  }
+
+  /** Validate required fields on SendMessageParams. */
+  private validateSendMessageParams (message: SendMessageParams): void {
+    if (message.recipient == null || message.recipient.trim() === '') {
+      throw new Error('You must provide a message recipient!')
+    }
+    if (message.messageBox == null || message.messageBox.trim() === '') {
+      throw new Error('You must provide a messageBox to send this message into!')
+    }
+    if (message.body == null || (typeof message.body === 'string' && message.body.trim().length === 0)) {
+      throw new Error('Every message must have a body!')
+    }
+  }
+
+  /** Resolve optional payment data if permission checking is enabled. */
+  private async resolveMessagePayment (message: SendMessageParams, overrideHost?: string): Promise<Payment | undefined> {
+    if (message.checkPermissions !== true) return undefined
+    try {
+      Logger.log('[MB CLIENT] Checking permissions and fees for message...')
+      const quote = await this.getMessageBoxQuote({
+        recipient: message.recipient,
+        messageBox: message.messageBox
+      }, overrideHost) as MessageBoxQuote
+
+      if (quote.recipientFee === -1) {
+        throw new Error('You have been blocked from sending messages to this recipient.')
+      }
+      if (quote.recipientFee <= 0 && quote.deliveryFee <= 0) return undefined
+
+      const requiredPayment = quote.recipientFee + quote.deliveryFee
+      if (requiredPayment <= 0) return undefined
+
+      Logger.log(`[MB CLIENT] Creating payment of ${requiredPayment} sats for message...`)
+      const paymentData = await this.createMessagePayment(message.recipient, quote, overrideHost)
+      Logger.log('[MB CLIENT] Payment data prepared:', paymentData)
+      return paymentData
+    } catch (error) {
+      throw new Error(`Permission check failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /** Generate the HMAC-based message ID. */
+  private async generateMessageId (message: SendMessageParams): Promise<string> {
+    try {
+      const hmac = await this.walletClient.createHmac({
+        data: Array.from(new TextEncoder().encode(JSON.stringify(message.body))),
+        protocolID: [1, 'messagebox'],
+        keyID: '1',
+        counterparty: message.recipient
+      }, this.originator)
+      return message.messageId ?? Array.from(hmac.hmac).map(b => b.toString(16).padStart(2, '0')).join('')
+    } catch (error) {
+      Logger.error('[MB CLIENT ERROR] Failed to generate HMAC:', error)
+      throw new Error('Failed to generate message identifier.')
+    }
+  }
+
+  /** Encode the message body (encrypt unless skipEncryption is set). */
+  private async encodeMessageBody (message: SendMessageParams): Promise<string | EncryptedMessage> {
+    const bodyStr = typeof message.body === 'string' ? message.body : JSON.stringify(message.body)
+    if (message.skipEncryption === true) return bodyStr
+    const encryptedMessage = await this.walletClient.encrypt({
+      protocolID: [1, 'messagebox'],
+      keyID: '1',
+      counterparty: message.recipient,
+      plaintext: Utils.toArray(bodyStr, 'utf8')
+    }, this.originator)
+    return JSON.stringify({ encryptedMessage: Utils.toBase64(encryptedMessage.ciphertext) })
+  }
+
+  /** Ensure myIdentityKey is populated, fetching it if needed. */
+  private async ensureIdentityKey (): Promise<void> {
+    if (this.myIdentityKey != null && this.myIdentityKey !== '') return
+    try {
+      const keyResult = await this.walletClient.getPublicKey({ identityKey: true }, this.originator)
+      this.myIdentityKey = keyResult.publicKey
+      Logger.log(`[MB CLIENT] Fetched identity key before sending request: ${this.myIdentityKey}`)
+    } catch (error) {
+      Logger.error('[MB CLIENT ERROR] Failed to fetch identity key:', error)
+      throw new Error('Identity key retrieval failed')
+    }
+  }
+
+  /** Parse a raw PeerMessage into its envelope components (body, payload, payment). */
+  private parseMessageEnvelope (message: PeerMessage): { message: PeerMessage, parsedBody: unknown, messageContent: any, paymentData: Payment | undefined } {
+    const parsedBody: unknown = typeof message.body === 'string' ? this.tryParse(message.body) : message.body
+    let messageContent: any = parsedBody
+    let paymentData: Payment | undefined
+
+    if (parsedBody != null && typeof parsedBody === 'object' && 'message' in parsedBody) {
+      const wrappedMessage = (parsedBody as any).message
+      messageContent = typeof wrappedMessage === 'string' ? this.tryParse(wrappedMessage) : wrappedMessage
+      paymentData = (parsedBody as any).payment
+    }
+    return { message, parsedBody, messageContent, paymentData }
+  }
+
+  /** Internalize wallet-payment outputs from a payment-carrying message. */
+  private async internalizeRecipientPayment (p: { message: PeerMessage, paymentData?: Payment }): Promise<void> {
+    try {
+      Logger.log(`[MB CLIENT] Processing recipient payment in message from ${String(p.message.sender)}…`)
+      const recipientOutputs = p.paymentData!.outputs.filter(output => output.protocol === 'wallet payment')
+      if (recipientOutputs.length === 0) {
+        Logger.log('[MB CLIENT] No wallet payment outputs found in payment data')
+        return
+      }
+      Logger.log(`[MB CLIENT] Internalizing ${recipientOutputs.length} recipient payment output(s)…`)
+      const result = await this.walletClient.internalizeAction({
+        tx: p.paymentData!.tx,
+        outputs: recipientOutputs,
+        description: p.paymentData!.description ?? 'MessageBox recipient payment'
+      }, this.originator)
+      if (result.accepted) {
+        Logger.log('[MB CLIENT] Successfully internalized recipient payment')
+      } else {
+        Logger.warn('[MB CLIENT] Recipient payment internalization was not accepted')
+      }
+    } catch (paymentError) {
+      Logger.error('[MB CLIENT ERROR] Failed to internalize recipient payment:', paymentError)
+    }
+  }
+
+  /** Decrypt or unwrap an encrypted message in place. */
+  private async decryptMessageBody (p: { message: PeerMessage, parsedBody: unknown, messageContent: any }): Promise<void> {
+    try {
+      if (p.messageContent != null && typeof p.messageContent === 'object' && typeof (p.messageContent as any).encryptedMessage === 'string') {
+        Logger.log(`[MB CLIENT] Decrypting message from ${String(p.message.sender)}…`)
+        const decrypted = await this.walletClient.decrypt({
+          protocolID: [1, 'messagebox'],
+          keyID: '1',
+          counterparty: p.message.sender,
+          ciphertext: Utils.toArray((p.messageContent as any).encryptedMessage, 'base64')
+        }, this.originator)
+        p.message.body = this.tryParse(Utils.toUTF8(decrypted.plaintext))
+      } else {
+        p.message.body = p.messageContent ?? p.parsedBody
+      }
+    } catch (err) {
+      Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt message in list:', err)
+      p.message.body = '[Error: Failed to decrypt or parse message]'
     }
   }
 
@@ -1221,28 +1297,9 @@ export class MessageBoxClient {
         throw new Error(msg)
       }
 
-      // server returns { results: [{ recipient, messageId }] }
       const sent = Array.isArray(parsed.results) ? parsed.results : []
-      const failed: Array<{ recipient: string, error: string }> = [] // handled server-side now
-
-      let status: SendListResult['status']
-      if (sent.length === allowedRecipients.length) {
-        status = 'success'
-      } else if (sent.length > 0) {
-        status = 'partial'
-      } else {
-        status = 'error'
-      }
-
-      let description: string
-      if (status === 'success') {
-        description = `Sent to ${sent.length} recipients.`
-      } else if (status === 'partial') {
-        description = `Sent to ${sent.length} recipients; ${allowedRecipients.length - sent.length} failed; ${blocked.length} blocked.`
-      } else {
-        description = `Failed to send to ${allowedRecipients.length} allowed recipients. ${blocked.length} blocked.`
-      }
-
+      const failed: Array<{ recipient: string, error: string }> = []
+      const { status, description } = buildBatchSendResult(sent.length, allowedRecipients.length, blocked.length)
       return { status, description, sent, blocked, failed, totals }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -1584,110 +1641,18 @@ export class MessageBoxClient {
 
     const messages: PeerMessage[] = Array.from(dedupMap.values())
 
-    const parsed = messages.map(message => {
-      const parsedBody: unknown =
-        typeof message.body === 'string' ? this.tryParse(message.body) : message.body
-
-      let messageContent: any = parsedBody
-      let paymentData: Payment | undefined
-
-      if (
-        parsedBody != null &&
-        typeof parsedBody === 'object' &&
-        'message' in parsedBody
-      ) {
-        const wrappedMessage = (parsedBody as any).message
-        messageContent = typeof wrappedMessage === 'string'
-          ? this.tryParse(wrappedMessage)
-          : wrappedMessage
-        paymentData = (parsedBody as any).payment
-      }
-
-      return { message, parsedBody, messageContent, paymentData }
-    })
+    const parsed = messages.map(message => this.parseMessageEnvelope(message))
 
     if (acceptPayments) {
-      const paymentJobs = parsed
-        .filter(p => p.paymentData?.tx != null && p.paymentData.outputs != null)
-
+      const paymentJobs = parsed.filter(p => p.paymentData?.tx != null && p.paymentData.outputs != null)
       await this.mapWithConcurrency(paymentJobs, 2, async (p) => {
-        try {
-          Logger.log(
-            `[MB CLIENT] Processing recipient payment in message from ${String(p.message.sender)}…`
-          )
-
-          const recipientOutputs = p.paymentData!.outputs.filter(
-            output => output.protocol === 'wallet payment'
-          )
-
-          if (recipientOutputs.length > 0) {
-            Logger.log(
-              `[MB CLIENT] Internalizing ${recipientOutputs.length} recipient payment output(s)…`
-            )
-
-            const internalizeResult = await this.walletClient.internalizeAction({
-              tx: p.paymentData!.tx,
-              outputs: recipientOutputs,
-              description: p.paymentData!.description ?? 'MessageBox recipient payment'
-            }, this.originator)
-
-            if (internalizeResult.accepted) {
-              Logger.log(
-                '[MB CLIENT] Successfully internalized recipient payment'
-              )
-            } else {
-              Logger.warn(
-                '[MB CLIENT] Recipient payment internalization was not accepted'
-              )
-            }
-          } else {
-            Logger.log(
-              '[MB CLIENT] No wallet payment outputs found in payment data'
-            )
-          }
-        } catch (paymentError) {
-          Logger.error(
-            '[MB CLIENT ERROR] Failed to internalize recipient payment:',
-            paymentError
-          )
-        }
+        await this.internalizeRecipientPayment(p)
         return null
       })
     }
 
     await this.mapWithConcurrency(parsed, 4, async (p) => {
-      try {
-        if (
-          p.messageContent != null &&
-          typeof p.messageContent === 'object' &&
-          typeof (p.messageContent).encryptedMessage === 'string'
-        ) {
-          Logger.log(
-            `[MB CLIENT] Decrypting message from ${String(p.message.sender)}…`
-          )
-
-          const decrypted = await this.walletClient.decrypt({
-            protocolID: [1, 'messagebox'],
-            keyID: '1',
-            counterparty: p.message.sender,
-            ciphertext: Utils.toArray(
-              (p.messageContent).encryptedMessage,
-              'base64'
-            )
-          }, this.originator)
-
-          const decryptedText = Utils.toUTF8(decrypted.plaintext)
-          p.message.body = this.tryParse(decryptedText)
-        } else {
-          p.message.body = p.messageContent ?? p.parsedBody
-        }
-      } catch (err) {
-        Logger.error(
-          '[MB CLIENT ERROR] Failed to parse or decrypt message in list:',
-          err
-        )
-        p.message.body = '[Error: Failed to decrypt or parse message]'
-      }
+      await this.decryptMessageBody(p)
       return null
     })
 
