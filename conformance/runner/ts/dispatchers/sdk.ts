@@ -7,7 +7,6 @@
 import { expect } from '@jest/globals'
 import {
   Hash,
-  ECDSA,
   PrivateKey,
   PublicKey,
   Signature,

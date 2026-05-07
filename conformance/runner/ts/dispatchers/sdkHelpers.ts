@@ -27,7 +27,6 @@ import { expect } from '@jest/globals'
 import {
   hexToBytes,
   bytesToHex,
-  decodeMessage,
   getString,
   getBool,
   getNumber,
