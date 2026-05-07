@@ -34,6 +34,14 @@ export class SimpleWalletManager implements WalletInterface {
   authenticated: boolean
 
   /**
+   * Resolves once the optional snapshot (if provided to the constructor) has been
+   * fully loaded and the wallet is ready to accept calls.
+   * When no snapshot is provided this resolves immediately.
+   * Await `ready` before calling wallet methods after constructing with a snapshot.
+   */
+  ready: Promise<void>
+
+  /**
    * The domain name of the administrative originator (wallet operator / vendor, or your own).
    */
   private readonly adminOriginator: OriginatorDomainNameStringUnder250Bytes
@@ -79,9 +87,10 @@ export class SimpleWalletManager implements WalletInterface {
     this.adminOriginator = adminOriginator
     this.walletBuilder = walletBuilder
 
-    if (stateSnapshot != null) {
-      this.loadSnapshot(stateSnapshot)
-    }
+    // Callers that pass a snapshot should await ready before calling wallet methods.
+    this.ready = stateSnapshot != null
+      ? this.loadSnapshot(stateSnapshot)
+      : Promise.resolve()
   }
 
   /**
