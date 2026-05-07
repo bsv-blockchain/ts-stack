@@ -189,7 +189,8 @@ export default class Secp256r1 {
     try {
       this.assertOnCurve(p)
       return true
-    } catch (err) {
+    } catch (_notOnCurve) {
+      // assertOnCurve throws when the point is not on the curve; return false
       return false
     }
   }

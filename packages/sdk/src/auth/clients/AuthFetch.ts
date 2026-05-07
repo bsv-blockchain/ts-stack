@@ -754,8 +754,8 @@ export class AuthFetch {
       if (typeof serialized === 'string') {
         return { type: 'object', byteLength: Utils.toArray(serialized, 'utf8').length }
       }
-    } catch (_) {
-      // Ignore JSON serialization issues for logging purposes.
+    } catch (_jsonSerializationError) {
+      // Ignore JSON serialization issues for logging purposes only
     }
 
     return { type: typeof body, byteLength: 0 }

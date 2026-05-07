@@ -110,7 +110,8 @@ export function binaryHttpClient(): HttpClient {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const https = require('node:https')
       return new BinaryNodejsHttpClient(https)
-    } catch (e) {
+    } catch (_httpsModuleUnavailable) {
+      // node:https not available in this runtime; fall through to noHttpClient
       return noHttpClient
     }
   } else {
