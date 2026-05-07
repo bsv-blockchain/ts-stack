@@ -471,7 +471,7 @@ export class GlobalKVStore {
             protocolID: JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.protocolID])),
             keyID: Utils.toUTF8(decoded.fields[kvProtocol.key])
           })
-        } catch (error) {
+        } catch (_signatureVerificationError) {
           // Skip all outputs that fail signature verification
           continue
         }
@@ -481,7 +481,7 @@ export class GlobalKVStore {
         if (hasTagsField && decoded.fields[kvProtocol.tags] != null) {
           try {
             tags = JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.tags]))
-          } catch (e) {
+          } catch (_tagsParseError) {
             // If tags parsing fails, continue without tags
             tags = undefined
           }
@@ -512,7 +512,8 @@ export class GlobalKVStore {
         }
 
         entries.push(entry)
-      } catch (error) {
+      } catch (_malformedOutputError) {
+        // Skip malformed or undecodable outputs rather than failing the entire query
         continue
       }
     }

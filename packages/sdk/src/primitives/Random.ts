@@ -47,8 +47,8 @@ class Rand {
           }
           return
         }
-      } catch (e) {
-        // crypto module not available, continue to other checks
+      } catch (_cryptoModuleUnavailable) {
+        // node:crypto not available in this runtime; continue to other crypto API checks
       }
     }
 

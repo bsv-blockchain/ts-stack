@@ -207,7 +207,7 @@ export class ContactsManager {
             existingOutput = output
             break
           }
-        } catch (e) {
+        } catch (_malformedOrUndecryptableOutput) {
           // Skip malformed or undecryptable outputs
         }
       }
@@ -380,7 +380,7 @@ export class ContactsManager {
           if (deleteTx == null) throw new Error('Failed to delete contact output')
           return
         }
-      } catch (e) {
+      } catch (_malformedOrUndecryptableOutput) {
         // Skip malformed or undecryptable outputs
       }
     }

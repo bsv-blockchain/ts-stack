@@ -26,7 +26,8 @@ export function defaultHttpClient(): HttpClient {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const https = require('node:https')
       return new NodejsHttpClient(https)
-    } catch (e) {
+    } catch (_httpsModuleUnavailable) {
+      // node:https not available in this runtime; fall through to noHttpClient
       return noHttpClient
     }
   } else {
