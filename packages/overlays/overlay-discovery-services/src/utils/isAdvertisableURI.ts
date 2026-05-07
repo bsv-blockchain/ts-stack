@@ -80,22 +80,22 @@ export const isAdvertisableURI = (uri: string): boolean => {
     if (!latStr || !longStr || !freqStr || !radiusStr) return false
 
     // Validate latitude and longitude ranges.
-    const lat = parseFloat(latStr)
-    const lon = parseFloat(longStr)
-    if (isNaN(lat) || lat < -90 || lat > 90) return false
-    if (isNaN(lon) || lon < -180 || lon > 180) return false
+    const lat = Number.parseFloat(latStr)
+    const lon = Number.parseFloat(longStr)
+    if (Number.isNaN(lat) || lat < -90 || lat > 90) return false
+    if (Number.isNaN(lon) || lon < -180 || lon > 180) return false
 
     // Validate frequency: extract the first number from the freq string.
     const freqMatch = freqStr.match(/(\d+(\.\d+)?)/)
     if (!freqMatch) return false
-    const freqVal = parseFloat(freqMatch[1])
-    if (isNaN(freqVal) || freqVal <= 0) return false
+    const freqVal = Number.parseFloat(freqMatch[1])
+    if (Number.isNaN(freqVal) || freqVal <= 0) return false
 
     // Validate radius: extract the first number from the radius string.
     const radiusMatch = radiusStr.match(/(\d+(\.\d+)?)/)
     if (!radiusMatch) return false
-    const radiusVal = parseFloat(radiusMatch[1])
-    if (isNaN(radiusVal) || radiusVal <= 0) return false
+    const radiusVal = Number.parseFloat(radiusMatch[1])
+    if (Number.isNaN(radiusVal) || radiusVal <= 0) return false
 
     // JS8 is more of a "demo" / "example". We include it to demonstrate that
     // overlays can be advertised in many, many ways.

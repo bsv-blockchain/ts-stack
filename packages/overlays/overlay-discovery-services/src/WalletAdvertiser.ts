@@ -140,7 +140,7 @@ export class WalletAdvertiser implements Advertiser {
           // Parse out the advertisements using the provided parser
           const tx = Transaction.fromBEEF(output.beef)
           const advertisement = this.parseAdvertisement(tx.outputs[output.outputIndex].lockingScript)
-          if (advertisement !== undefined && advertisement !== null && advertisement.protocol === protocol) {
+          if (advertisement?.protocol === protocol) {
             console.log(`Found current advertisement of ${advertisement.topicOrService} at ${advertisement.domain}`)
             advertisements.push({
               ...advertisement,
