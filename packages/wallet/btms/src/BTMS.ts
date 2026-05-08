@@ -620,8 +620,8 @@ export class BTMS {
         if (!assetId || payment.assetId === assetId) {
           payments.push(payment)
         }
-      } catch {
-        // Skip invalid messages
+      } catch (_parseError) {
+        // Malformed message body — skip invalid messages
       }
     }
 
@@ -653,7 +653,8 @@ export class BTMS {
         const tx = Transaction.fromBEEF(token.beef)
         try {
           await this.broadcastWithRetry(tx, `accept rebroadcast ${token.txid}`)
-        } catch {
+        } catch (_broadcastError) {
+          // Broadcast failed — surface as user-visible error
           throw new Error('Token not found on overlay and broadcast failed!')
         }
       }
@@ -782,7 +783,8 @@ export class BTMS {
         const tx = Transaction.fromBEEF(token.beef)
         try {
           await this.broadcastWithRetry(tx, `refund rebroadcast ${token.txid}`)
-        } catch {
+        } catch (_broadcastError) {
+          // Broadcast failed — surface as user-visible error
           throw new Error('Token not found on overlay and broadcast failed!')
         }
       }
@@ -1027,7 +1029,8 @@ export class BTMS {
         return { name: meta?.name, metadata: meta }
       }
       return { name: undefined, metadata: undefined }
-    } catch {
+    } catch (_decodeError) {
+      // Locking script not decodable as BTMS token — return null
       return null
     }
   }
@@ -1082,7 +1085,8 @@ export class BTMS {
         allIncoming.push(payment)
         if (BTMSToken.isValidAssetId(payment.assetId)) assetIds.add(payment.assetId)
       }
-    } catch {
+    } catch (_commsError) {
+      // Comms layer unavailable — skip incoming messages
       console.warn('[BTMS] listAssets failed to read incoming comms messages')
     }
     return allIncoming
@@ -1200,7 +1204,8 @@ export class BTMS {
         spendable: true,
         beef: includeBeef && pageBEEF ? pageBEEF : undefined
       }
-    } catch {
+    } catch (_decodeError) {
+      // Output could not be decoded as a valid token — skip
       return null
     }
   }
@@ -1453,7 +1458,8 @@ export class BTMS {
         return { found: true, beef }
       }
       return { found: false }
-    } catch {
+    } catch (_lookupError) {
+      // Overlay lookup failed — treat as not found
       return { found: false }
     }
   }
@@ -1894,8 +1900,8 @@ export class BTMS {
       if (response.status === 'success') {
         return { found: true, beef: Beef.fromBinary(beefArr) }
       }
-    } catch {
-      // fall through
+    } catch (_broadcastError) {
+      // Broadcast failed — fall through to return not found
     }
     return { found: false }
   }

@@ -13,7 +13,7 @@ export class JsonFileStore<T> {
       if (existsSync(this.filePath)) {
         return JSON.parse(readFileSync(this.filePath, 'utf-8'))
       }
-    } catch {
+    } catch (_readError) {
       // Corrupted file — treat as missing
     }
     return null
@@ -26,7 +26,7 @@ export class JsonFileStore<T> {
   delete (): void {
     try {
       if (existsSync(this.filePath)) unlinkSync(this.filePath)
-    } catch {
+    } catch (_deleteError) {
       // Already gone
     }
   }

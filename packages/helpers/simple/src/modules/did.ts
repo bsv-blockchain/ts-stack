@@ -94,7 +94,8 @@ function parseOpReturnSegments (scriptHex: string): string[] {
       }
     }
     return segments
-  } catch {
+  } catch (_parseError) {
+    // Malformed script — return empty segments
     return []
   }
 }
@@ -139,7 +140,7 @@ async function tryProxyResolver (didString: string, proxyUrl: string | undefined
     if ((data.didDocument != null) || (data.didDocumentMetadata?.deactivated === true)) {
       return data as DIDResolutionResult
     }
-  } catch {
+  } catch (_proxyError) {
     // Proxy unavailable — fall through
   }
   return null
@@ -166,7 +167,7 @@ async function tryDirectResolver (didString: string, resolverUrl: string | undef
         didResolutionMetadata: { contentType: DID_CONTENT_TYPE, ...data.didResolutionMetadata }
       }
     }
-  } catch {
+  } catch (_resolverError) {
     // Resolver unavailable — fall through
   }
   return null
@@ -181,7 +182,9 @@ function findLatestChainStateForDID (outputs: any[], didString: string): any | n
       const ci = JSON.parse((output as any).customInstructions)
       if (ci.did !== didString) continue
       latestCI = ci
-    } catch {}
+    } catch (_parseError) {
+      // Malformed customInstructions JSON — skip entry
+    }
   }
   return latestCI
 }
@@ -195,7 +198,9 @@ function findActiveChainState (outputs: any[], didString: string): { chainCI: an
       if (ci.did === didString && ci.status === 'active') {
         return { chainCI: ci, chainOutpoint: output.outpoint }
       }
-    } catch {}
+    } catch (_parseError) {
+      // Malformed customInstructions JSON — skip entry
+    }
   }
   return null
 }
@@ -272,7 +277,9 @@ async function fetchNextTxidViaSpend (currentTxid: string, wocFetch: (url: strin
       const data: any = await resp.json()
       return data?.txid ?? null
     }
-  } catch { /* fall through */ }
+  } catch (_fetchError) {
+    // Network error — fall through
+  }
   return null
 }
 
@@ -292,7 +299,8 @@ async function fetchNextTxidViaHistory (
       .filter(e => !visited.has(e.tx_hash))
       .sort((a, b) => b.height - a.height)
     return candidates.length > 0 ? candidates[0].tx_hash : null
-  } catch {
+  } catch (_fetchError) {
+    // Network error — return null
     return null
   }
 }
@@ -340,7 +348,9 @@ function processWocSegments (
       state.lastDocument = JSON.parse(payload) as DIDDocumentV2
       state.lastDocTxid = currentTxid
       state.updated = timestamp
-    } catch { /* Not valid JSON — skip */ }
+    } catch (_parseError) {
+      // Not valid JSON — skip
+    }
   }
   return null
 }
@@ -442,7 +452,8 @@ export class DID { // eslint-disable-line @typescript-eslint/no-extraneous-class
     try {
       DID.parse(didString)
       return true
-    } catch {
+    } catch (_parseError) {
+      // Invalid DID format — return false
       return false
     }
   }
@@ -784,7 +795,7 @@ function _buildDIDMethods (core: WalletCore): {
       try {
         const localResult = await this._resolveFromBasket(didString)
         if (localResult != null) return localResult
-      } catch {
+      } catch (_basketError) {
         // Fall through to external resolvers
       }
 
@@ -1023,7 +1034,9 @@ function _buildDIDMethods (core: WalletCore): {
               created: ci.created ?? new Date().toISOString(),
               updated: ci.updated ?? new Date().toISOString()
             })
-          } catch {}
+          } catch (_parseError) {
+            // Malformed customInstructions JSON — skip entry
+          }
         }
 
         return Array.from(didMap.values())

@@ -62,7 +62,7 @@ export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string
     }
 
     let originUrl: URL
-    try { originUrl = new URL(origin) } catch { return { params: null, error: 'Origin URL is not valid' } }
+    try { originUrl = new URL(origin) } catch (_urlError) { return { params: null, error: 'Origin URL is not valid' } }
     if (originUrl.protocol !== 'http:' && originUrl.protocol !== 'https:') {
       return { params: null, error: 'Origin must use http:// or https://' }
     }
@@ -72,13 +72,14 @@ export function parsePairingUri(raw: string, acceptedSchemas: ReadonlySet<string
     }
 
     let proto: unknown
-    try { proto = JSON.parse(protocolID) } catch { return { params: null, error: 'protocolID is not valid JSON' } }
+    try { proto = JSON.parse(protocolID) } catch (_parseError) { return { params: null, error: 'protocolID is not valid JSON' } }
     if (!Array.isArray(proto) || proto.length !== 2 || typeof proto[0] !== 'number' || typeof proto[1] !== 'string') {
       return { params: null, error: 'protocolID must be a [number, string] tuple' }
     }
 
     return { params: { topic, backendIdentityKey, protocolID, origin, expiry, sig }, error: null }
-  } catch {
+  } catch (_uriError) {
+    // Could not parse URI — return error
     return { params: null, error: 'Could not read QR code' }
   }
 }
@@ -141,7 +142,8 @@ export async function verifyPairingSignature(params: PairingParams): Promise<boo
       counterparty: params.backendIdentityKey,
     })
     return valid
-  } catch {
+  } catch (_verifyError) {
+    // Signature verification failed — return false
     return false
   }
 }

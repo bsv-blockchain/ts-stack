@@ -58,7 +58,8 @@ export function createMessageBoxMethods (core: WalletCore): {
         const data = await res.json() as { success: boolean, tags?: Array<{ tag: string }> }
         if (!data.success || (data.tags == null) || data.tags.length === 0) return null
         return data.tags[0].tag
-      } catch {
+      } catch (_fetchError) {
+        // Registry unavailable — return null
         return null
       }
     },

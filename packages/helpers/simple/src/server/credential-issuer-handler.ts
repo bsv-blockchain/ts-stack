@@ -59,7 +59,7 @@ function createIssuerFactory (
               config.revocationStorePath ?? join(process.cwd(), '.revocation-secrets.json')
             )
           }
-        } catch {
+        } catch (_revocationError) {
           // Revocation not available — continue without it
         }
       }
@@ -94,7 +94,7 @@ function getLegacySubPath (url: string): string | null {
       const segment = match[1]
       if (segment === 'info' || segment === 'certify') return segment
     }
-  } catch {
+  } catch (_urlError) {
     // Not a full URL — skip legacy detection
   }
   return null

@@ -171,7 +171,8 @@ export class WalletRelayClient {
       const interval = data.status === 'connected' ? this._connectedPollInterval : this._pollInterval
       this._startPolling(stored.sessionId, interval)
       return session
-    } catch {
+    } catch (_storageError) {
+      // Storage unavailable or session data malformed — return null
       return null
     }
   }
@@ -293,7 +294,7 @@ export class WalletRelayClient {
             this._startPolling(sessionId, this._pollInterval)
           }
         }
-      } catch {
+      } catch (_pollError) {
         // Ignore transient network errors — next poll will retry
       }
     }, interval)
@@ -324,11 +325,11 @@ export class WalletRelayClient {
         savedAt:      Date.now(),
       }
       sessionStorage.setItem(this._storageKey, JSON.stringify(entry))
-    } catch { /* SSR or storage unavailable */ }
+    } catch (_storageError) { /* SSR or storage unavailable */ }
   }
 
   private _clearStorage(): void {
-    try { sessionStorage.removeItem(this._storageKey) } catch {}
+    try { sessionStorage.removeItem(this._storageKey) } catch (_storageError) { /* SSR or storage unavailable */ }
   }
 
   private _loadFromStorage(): PersistedSession | null {
@@ -341,7 +342,7 @@ export class WalletRelayClient {
         return null
       }
       return entry
-    } catch { return null }
+    } catch (_storageError) { return null }
   }
 
   private _addLogEntry(entry: RequestLogEntry): void {

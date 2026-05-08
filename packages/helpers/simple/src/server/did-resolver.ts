@@ -74,7 +74,8 @@ function parseOpReturnSegments (hexScript: string): string[] {
     }
 
     return segments
-  } catch {
+  } catch (_parseError) {
+    // Malformed script — return empty segments
     return []
   }
 }
@@ -132,7 +133,7 @@ export class DIDResolverService {
           }
         }
       }
-    } catch {
+    } catch (_resolverError) {
       // nChain timeout/error — fall through to WoC
     }
 
@@ -205,8 +206,8 @@ export class DIDResolverService {
             lastDocument = JSON.parse(payload)
             lastDocTxid = currentTxid
             updated = (txData.time == null) ? undefined : new Date(txData.time * 1000).toISOString()
-          } catch {
-            // Not valid JSON
+          } catch (_parseError) {
+            // Not valid JSON — skip
           }
         }
       }
@@ -221,7 +222,7 @@ export class DIDResolverService {
           const spendData: any = await spendResp.json()
           nextTxid = spendData?.txid ?? null
         }
-      } catch { /* fall through */ }
+      } catch (_spendFetchError) { /* fall through */ }
 
       // Strategy 2: address history fallback
       if (nextTxid == null) {
@@ -238,7 +239,7 @@ export class DIDResolverService {
                 nextTxid = candidates[0].tx_hash
               }
             }
-          } catch { /* address history unavailable */ }
+          } catch (_historyFetchError) { /* address history unavailable */ }
         }
       }
 

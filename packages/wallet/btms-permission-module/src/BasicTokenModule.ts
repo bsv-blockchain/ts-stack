@@ -483,7 +483,8 @@ export class BasicTokenModule implements PermissionsModule {
       const parsed = this.parseTokenLockingScript(scriptHex)
       if (!parsed || parsed.assetId === ISSUE_MARKER) return null
       return parsed
-    } catch {
+    } catch (_parseError) {
+      // BEEF or script parsing failed — cannot identify token
       return null
     }
   }
@@ -1065,8 +1066,8 @@ export class BasicTokenModule implements PermissionsModule {
           iconURL: info.metadata?.iconURL
         }
       }
-    } catch {
-      // Ignore errors
+    } catch (_lookupError) {
+      // Asset info lookup failed — return null
     }
     return null
   }

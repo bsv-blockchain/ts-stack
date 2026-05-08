@@ -73,7 +73,8 @@ export function WalletConnectionModal({
           setStatus('available')
           onLocalWalletRef.current(wallet)
         }
-      } catch {
+      } catch (_authError) {
+        // Wallet not available or authentication failed — show QR pairing
         if (!cancelled) setStatus('unavailable')
       }
     }, 0)

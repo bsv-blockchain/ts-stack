@@ -199,7 +199,8 @@ export function parseMetadata (raw: unknown): BTMSAssetMetadata | undefined {
   if (!raw) return undefined
   try {
     return typeof raw === 'string' ? JSON.parse(raw) : (raw as BTMSAssetMetadata)
-  } catch {
+  } catch (_parseError) {
+    // Invalid metadata JSON — return undefined
     return undefined
   }
 }
@@ -246,7 +247,8 @@ export function parseIncomingMessage (
     if (msg.messageId !== undefined) payment.messageId = msg.messageId
     if (msg.sender !== undefined) payment.sender = msg.sender
     return payment
-  } catch {
+  } catch (_parseError) {
+    // Malformed message body — return null
     return null
   }
 }

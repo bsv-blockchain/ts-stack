@@ -146,7 +146,9 @@ export function createCertificationMethods (core: WalletCore): {
                   serialNumber: cert.serialNumber,
                   certifier: certifierPublicKey
                 })
-              } catch {}
+              } catch (_relinquishError) {
+                // Relinquish failed — continue with replacement
+              }
             }
           }
         }

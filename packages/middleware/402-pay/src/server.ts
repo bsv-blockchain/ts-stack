@@ -164,7 +164,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
       req.payment = { ...result, satoshisPaid: price }
       console.log(`Payment accepted: ${req.path} | ${price} sats | txid: ${result.txid}`)
       next()
-    } catch {
+    } catch (_paymentError) {
+      // Payment validation failed — send 402 or 500 depending on server state
       if (identityKey) {
         const price = calculatePrice(req.path) ?? 100
         send402(res, identityKey, price)

@@ -110,7 +110,7 @@ export function createTokenMethods (core: WalletCore): {
 
           let ci: any = {}
           if ((output as any).customInstructions != null) {
-            try { ci = JSON.parse((output as any).customInstructions as string) } catch {}
+            try { ci = JSON.parse((output as any).customInstructions as string) } catch (_ciError) { /* malformed JSON — use defaults */ }
           }
           const protocolID = ci.protocolID ?? defaultProtocolID
           const keyID = (ci.keyID as string | undefined) ?? defaultKeyID
@@ -126,8 +126,8 @@ export function createTokenMethods (core: WalletCore): {
                 counterparty
               } as any)
               const text = new TextDecoder().decode(new Uint8Array(plaintext))
-              try { data = JSON.parse(text) } catch { data = text }
-            } catch {
+              try { data = JSON.parse(text) } catch (_jsonError) { data = text }
+            } catch (_decryptError) {
               // Fallback: try 'anyone' for pre-fix tokens
               if (counterparty === 'self') {
                 try {
@@ -138,8 +138,8 @@ export function createTokenMethods (core: WalletCore): {
                     counterparty: 'anyone'
                   } as any)
                   const text = new TextDecoder().decode(new Uint8Array(plaintext))
-                  try { data = JSON.parse(text) } catch { data = text }
-                } catch {
+                  try { data = JSON.parse(text) } catch (_jsonError) { data = text }
+                } catch (_decryptError2) {
                   data = null
                 }
               } else {
@@ -156,7 +156,7 @@ export function createTokenMethods (core: WalletCore): {
             keyID,
             counterparty
           })
-        } catch {
+        } catch (_decodeError) {
           // Skip non-PushDrop outputs
         }
       }
@@ -185,7 +185,7 @@ export function createTokenMethods (core: WalletCore): {
 
         let ci: any = {}
         if ((targetOutput as any).customInstructions != null) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
+          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch (_ciError) { /* malformed JSON — use defaults */ }
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
@@ -285,7 +285,7 @@ export function createTokenMethods (core: WalletCore): {
 
         let ci: any = {}
         if ((targetOutput as any).customInstructions != null) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
+          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch (_ciError) { /* malformed JSON — use defaults */ }
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
@@ -358,7 +358,7 @@ export function createTokenMethods (core: WalletCore): {
 
         let ci: any = {}
         if ((targetOutput as any).customInstructions != null) {
-          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch {}
+          try { ci = JSON.parse((targetOutput as any).customInstructions as string) } catch (_ciError) { /* malformed JSON — use defaults */ }
         }
         const protocolID = ci.protocolID ?? defaultProtocolID
         const keyID = ci.keyID == null ? defaultKeyID : (ci.keyID as string)
@@ -464,7 +464,7 @@ export function createTokenMethods (core: WalletCore): {
         return messages.map((msg: any) => {
           let body = msg.body
           if (typeof body === 'string') {
-            try { body = JSON.parse(body) } catch {}
+            try { body = JSON.parse(body) } catch (_parseError) { /* not JSON — use raw body */ }
           }
           return {
             messageId: msg.messageId,

@@ -344,7 +344,10 @@ export class WalletRelayService {
         { protocolID: PROTOCOL_ID, keyID: topic, counterparty: session.mobileIdentityKey },
         envelope.ciphertext
       )
-    } catch { return }
+    } catch (_decryptError) {
+      // Decryption failed — message from unrecognised sender; drop silently
+      return
+    }
 
     const msg = this.handler.parseMessage(plaintext)
     if (this.handler.isResponse(msg)) {
@@ -368,7 +371,8 @@ export class WalletRelayService {
         { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
         envelope.ciphertext
       )
-    } catch {
+    } catch (_decryptError) {
+      // Pairing proof failed — mobile cannot prove ECDH ownership; disconnect
       this.relay.disconnectMobile(topic)
       return
     }
