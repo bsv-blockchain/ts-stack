@@ -224,7 +224,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
 
     // Properties that are never updated
     if (
-      eo.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
+      eo.transactionId === (syncMap?.transaction.idMap[verifyId(ei.transactionId)] ?? ei.transactionId) &&
       eo.reference === ei.reference &&
       eo.version === ei.version &&
       eo.lockTime === ei.lockTime &&
@@ -236,7 +236,7 @@ export class EntityTransaction extends EntityBase<TableTransaction> {
       optionalArraysEqual(eo.rawTx, ei.rawTx) &&
       optionalArraysEqual(eo.inputBEEF, ei.inputBEEF) &&
       (eo.provenTxId == null) === (ei.provenTxId == null) &&
-      !(ei.provenTxId && eo.provenTxId !== ((syncMap != null) ? syncMap.provenTx.idMap[verifyId(ei.provenTxId)] : ei.provenTxId))
+      !(ei.provenTxId && eo.provenTxId !== (syncMap?.provenTx.idMap[verifyId(ei.provenTxId)] ?? ei.provenTxId))
     ) { return true }
 
     return false

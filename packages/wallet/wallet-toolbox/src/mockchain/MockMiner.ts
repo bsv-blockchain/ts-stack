@@ -56,8 +56,8 @@ export class MockMiner {
    */
   async mineBlock (storage: MockChainStorage): Promise<BlockHeader> {
     const tip = await storage.getChainTip()
-    const newHeight = (tip != null) ? tip.height + 1 : 0
-    const previousHash = (tip != null) ? tip.hash : '00'.repeat(32)
+    const newHeight = tip ? tip.height + 1 : 0
+    const previousHash = tip ? tip.hash : '00'.repeat(32)
 
     const unminedTxs = await storage.getUnminedTransactions()
 

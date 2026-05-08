@@ -93,7 +93,7 @@ export class BulkFilesReader {
 
   async readHeaderForHeightOrUndefined (height: number): Promise<BaseBlockHeader | undefined> {
     const buffer = await this.readBufferForHeightOrUndefined(height)
-    return buffer != null ? deserializeBaseBlockHeader(buffer, 0) : undefined
+    return buffer ? deserializeBaseBlockHeader(buffer, 0) : undefined
   }
 
   /**

@@ -132,7 +132,7 @@ function removeUnlockScripts (args: Validation.ValidCreateActionArgs) {
     for (const i of args.inputs) {
       const di: Validation.ValidCreateActionInput = {
         ...i,
-        unlockingScriptLength: i.unlockingScript !== undefined ? i.unlockingScript.length : i.unlockingScriptLength
+        unlockingScriptLength: i.unlockingScript?.length ?? i.unlockingScriptLength
       }
       delete di.unlockingScript
       storageArgs.inputs.push(di)
@@ -152,9 +152,9 @@ export async function processAction (
     isSendWith: vargs.isSendWith,
     isNoSend: vargs.isNoSend,
     isDelayed: vargs.isDelayed,
-    reference: (prior != null) ? prior.reference : undefined,
-    txid: (prior != null) ? prior.tx.id('hex') : undefined,
-    rawTx: (prior != null) ? prior.tx.toBinary() : undefined,
+    reference: prior?.reference,
+    txid: prior?.tx.id('hex'),
+    rawTx: prior?.tx.toBinary(),
     sendWith: vargs.isSendWith ? vargs.options.sendWith : [],
     logger: vargs.logger
   }

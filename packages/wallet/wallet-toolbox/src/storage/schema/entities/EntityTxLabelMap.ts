@@ -78,8 +78,8 @@ export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
     const eo = this.toApi()
 
     return (
-      eo.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
-      eo.txLabelId === ((syncMap != null) ? syncMap.txLabel.idMap[verifyId(ei.txLabelId)] : ei.txLabelId) &&
+      eo.transactionId === (syncMap?.transaction.idMap[verifyId(ei.transactionId)] ?? ei.transactionId) &&
+      eo.txLabelId === (syncMap?.txLabel.idMap[verifyId(ei.txLabelId)] ?? ei.txLabelId) &&
       eo.isDeleted === ei.isDeleted
     )
   }

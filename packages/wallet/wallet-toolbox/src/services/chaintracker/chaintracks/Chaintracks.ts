@@ -511,12 +511,7 @@ export class Chaintracks implements ChaintracksManagementApi {
 
     while (!needSyncCheck && !this.stopMainThread) {
       const liveHeader = this.liveHeaders.shift()
-      if (liveHeader != null) {
-        const result = await this.processOneLiveHeader(liveHeader)
-        if (result.needSyncCheck) { needSyncCheck = true; continue }
-        if (result.dupe) liveHeaderDupes++
-        if (result.added) count++
-      } else {
+      if (liveHeader == null) {
         const bheader = this.baseHeaders.shift()
         if (bheader != null) {
           const added = await this.processOneBaseHeader(bheader)
@@ -534,6 +529,11 @@ export class Chaintracks implements ChaintracksManagementApi {
           needSyncCheck = Date.now() - lastSyncCheck > syncCheckRepeatMsecs
           if (!needSyncCheck) await wait(1000)
         }
+      } else {
+        const result = await this.processOneLiveHeader(liveHeader)
+        if (result.needSyncCheck) { needSyncCheck = true; continue }
+        if (result.dupe) liveHeaderDupes++
+        if (result.added) count++
       }
     }
   }

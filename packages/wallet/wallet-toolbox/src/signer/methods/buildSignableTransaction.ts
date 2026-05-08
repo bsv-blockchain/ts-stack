@@ -22,7 +22,7 @@ export function buildSignableTransaction (
   } {
   const changeKeys = wallet.getClientChangeKeyPair()
 
-  const inputBeef = (args.inputBEEF != null) ? Beef.fromBinary(args.inputBEEF) : undefined
+  const inputBeef = args.inputBEEF ? Beef.fromBinary(args.inputBEEF) : undefined
 
   const { inputs: storageInputs, outputs: storageOutputs } = dctr
 
@@ -100,23 +100,7 @@ export function buildSignableTransaction (
   let totalChangeInputs = 0
   for (const { storageInput, argsInput } of inputs) {
     // Two types of inputs are handled: user specified wth/without unlockingScript and storage specified using SABPPP template.
-    if (argsInput != null) {
-      // Type 1: User supplied input, with or without an explicit unlockingScript.
-      // If without, signAction must be used to provide the actual unlockScript.
-      const hasUnlock = typeof argsInput.unlockingScript === 'string'
-      const unlock = hasUnlock ? asBsvSdkScript(argsInput.unlockingScript!) : new Script()
-      const sourceTransaction = args.isSignAction ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx : undefined
-      const inputToAdd: TransactionInput = {
-        sourceTXID: argsInput.outpoint.txid,
-        sourceOutputIndex: argsInput.outpoint.vout,
-        // Include the source transaction for access to the outputs locking script and output satoshis for user side fee calculation.
-        // TODO: Make this conditional to improve performance when user can supply locking scripts themselves.
-        sourceTransaction,
-        unlockingScript: unlock,
-        sequence: argsInput.sequenceNumber
-      }
-      tx.addInput(inputToAdd)
-    } else {
+    if (argsInput == null) {
       // Type2: SABPPP protocol inputs which are signed using ScriptTemplateBRC29.
       if (storageInput.type !== 'P2PKH') {
         throw new WERR_INVALID_PARAMETER(
@@ -137,7 +121,7 @@ export function buildSignableTransaction (
       const inputToAdd: TransactionInput = {
         sourceTXID: storageInput.sourceTxid,
         sourceOutputIndex: storageInput.sourceVout,
-        sourceTransaction: (storageInput.sourceTransaction != null)
+        sourceTransaction: storageInput.sourceTransaction
           ? Transaction.fromBinary(storageInput.sourceTransaction)
           : undefined,
         unlockingScript: new Script(),
@@ -145,6 +129,22 @@ export function buildSignableTransaction (
       }
       tx.addInput(inputToAdd)
       totalChangeInputs += Validation.validateSatoshis(storageInput.sourceSatoshis, 'storageInput.sourceSatoshis')
+    } else {
+      // Type 1: User supplied input, with or without an explicit unlockingScript.
+      // If without, signAction must be used to provide the actual unlockScript.
+      const hasUnlock = typeof argsInput.unlockingScript === 'string'
+      const unlock = hasUnlock ? asBsvSdkScript(argsInput.unlockingScript!) : new Script()
+      const sourceTransaction = args.isSignAction ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx : undefined
+      const inputToAdd: TransactionInput = {
+        sourceTXID: argsInput.outpoint.txid,
+        sourceOutputIndex: argsInput.outpoint.vout,
+        // Include the source transaction for access to the outputs locking script and output satoshis for user side fee calculation.
+        // TODO: Make this conditional to improve performance when user can supply locking scripts themselves.
+        sourceTransaction,
+        unlockingScript: unlock,
+        sequence: argsInput.sequenceNumber
+      }
+      tx.addInput(inputToAdd)
     }
   }
 

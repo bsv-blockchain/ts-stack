@@ -236,7 +236,10 @@ class InternalizeActionContext {
 
     for (const payment of this.walletPayments) {
       if (this.isMerge) {
-        if (payment.eo != null) {
+        if (payment.eo == null) {
+          // adding a previously untracked output of an existing transaction as change... increase net satoshis
+          this.satoshis += payment.txo.satoshis!
+        } else {
           // merging with an existing user output
           if (payment.eo.basketId === this.changeBasket.basketId) {
             // ignore attempts to internalize an existing change output.
@@ -245,9 +248,6 @@ class InternalizeActionContext {
             // converting an existing non-change output to change... increases net satoshis
             this.satoshis += payment.txo.satoshis!
           }
-        } else {
-          // adding a previously untracked output of an existing transaction as change... increase net satoshis
-          this.satoshis += payment.txo.satoshis!
         }
       } else {
         // If there are no existing outputs, all incoming wallet payment outputs add to net satoshis
@@ -287,7 +287,7 @@ class InternalizeActionContext {
   async findOrInsertTargetTransaction (satoshis: number, provenTx?: TableProvenTx): Promise<TableTransaction> {
     const now = new Date()
     const provenTxId = provenTx?.provenTxId
-    const status: TransactionStatus = (provenTx != null) ? 'completed' : 'unproven'
+    const status: TransactionStatus = provenTx ? 'completed' : 'unproven'
     const newTx: TableTransaction = {
       created_at: now,
       updated_at: now,
@@ -335,8 +335,8 @@ class InternalizeActionContext {
     }
 
     for (const basket of this.basketInsertions) {
-      if (basket.eo != null) await this.mergeBasketInsertionForOutput(transactionId, basket)
-      else await this.storeNewBasketInsertionForOutput(transactionId, basket)
+      if (basket.eo == null) await this.storeNewBasketInsertionForOutput(transactionId, basket)
+      else await this.mergeBasketInsertionForOutput(transactionId, basket)
     }
   }
 

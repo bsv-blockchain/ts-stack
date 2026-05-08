@@ -139,10 +139,7 @@ export class Bitails {
       if (response.ok) {
         // status: 201, statusText: 'Created'
         const btrs: BitailsPostRawsResult[] = response.data
-        if (btrs.length !== raws.length) {
-          r.status = 'error'
-          r.notes!.push({ ...nne(), what: 'postRawsErrorResultsCount' })
-        } else {
+        if (btrs.length === raws.length) {
           // Check that each response result has a txid that matches corresponding rawTxids
           let i = -1
           for (const btr of btrs) {
@@ -161,7 +158,9 @@ export class Bitails {
             for (const rt of r.txidResults) {
               const btr = btrs.find(btr => btr.txid === rt.txid)!
               const txid = rt.txid
-              if (btr.error != null) {
+              if (btr.error == null) {
+                rt.notes!.push({ ...nn(), what: 'postRawsSuccess' })
+              } else {
                 // code: -25, message: 'missing-inputs'
                 // code: -27, message: 'already-in-mempool'
                 const { code, message } = btr.error
@@ -179,12 +178,13 @@ export class Bitails {
                     rt.notes!.push({ ...nne(), what: 'postRawsError', txid, code, message })
                   }
                 }
-              } else {
-                rt.notes!.push({ ...nn(), what: 'postRawsSuccess' })
               }
               if (rt.status !== 'success' && r.status === 'success') r.status = 'error'
             }
           }
+        } else {
+          r.status = 'error'
+          r.notes!.push({ ...nne(), what: 'postRawsErrorResultsCount' })
         }
       } else {
         r.status = 'error'

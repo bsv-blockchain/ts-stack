@@ -238,14 +238,14 @@ export async function buildBeefForOutpoints (outpoints: string[], maxDepth = 10)
     const tx = parseTxAndAssertId(rawHex, txid)
     const merklePath = await fetchMerklePath(txid)
 
-    if (merklePath != null) {
-      tx.merklePath = merklePath
-    } else {
+    if (merklePath == null) {
       for (const input of tx.inputs) {
         if (input.sourceTXID) {
           await addTxToBeef(input.sourceTXID, depth + 1)
         }
       }
+    } else {
+      tx.merklePath = merklePath
     }
 
     beef.mergeTransaction(tx)

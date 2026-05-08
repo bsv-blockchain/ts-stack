@@ -94,7 +94,7 @@ export class EntityCertificateField extends EntityBase<TableCertificateField> {
 
   override equals (ei: TableCertificateField, syncMap?: SyncMap | undefined): boolean {
     return (
-      this.certificateId === ((syncMap != null) ? syncMap.certificate.idMap[ei.certificateId] : ei.certificateId) &&
+      this.certificateId === (syncMap?.certificate.idMap[ei.certificateId] ?? ei.certificateId) &&
       this.fieldName === ei.fieldName &&
       this.fieldValue === ei.fieldValue &&
       this.masterKey === ei.masterKey

@@ -141,9 +141,9 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
   }
 
   historyPretty (since?: Date, indent = 0): string {
-    const h = (since != null) ? this.historySince(since) : { ...this.history }
+    const h = since ? this.historySince(since) : { ...this.history }
     if (h.notes == null) return ''
-    const whenLimit = (since != null) ? since.toISOString() : undefined
+    const whenLimit = since?.toISOString()
     let log = ''
     for (const note of h.notes) {
       if (whenLimit && note.when && note.when < whenLimit) continue
@@ -443,7 +443,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
 
   get wasBroadcast (): boolean {
     const wasBroadcast = this.api.wasBroadcast as boolean | number | undefined
-    if (wasBroadcast === true || wasBroadcast === 1) return true
+    if (wasBroadcast === 1 || wasBroadcast) return true
     if (EntityProvenTxReq.wasBroadcastStatuses.includes(this.status)) return true
     const h = this.getHistorySummary()
     return h.setToUnmined || h.setToCallback || h.setToUnconfirmed || h.setToCompleted
@@ -568,7 +568,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     if (eie.notify.transactionIds != null) {
       this.notify.transactionIds ||= []
       for (const transactionId of eie.notify.transactionIds) {
-        const localTxId: number | undefined = (syncMap != null) ? syncMap.transaction.idMap[transactionId] : transactionId
+        const localTxId: number | undefined = syncMap?.transaction.idMap[transactionId] ?? transactionId
         if (localTxId) {
           this.addNotifyTransactionId(localTxId)
         }
