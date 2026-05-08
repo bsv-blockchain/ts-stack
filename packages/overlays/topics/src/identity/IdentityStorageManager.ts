@@ -8,28 +8,33 @@ interface Query {
 
 export class IdentityStorageManager {
   private readonly records: Collection<IdentityRecord>
-  readonly ready: Promise<void>
+  private indexInit?: Promise<void>
 
   constructor(private readonly db: Db) {
     this.records = db.collection<IdentityRecord>('identityRecords')
-    this.ready = this.createIndices()
   }
 
-  private async createIndices(): Promise<void> {
-    await Promise.all([
-      this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-      this.records.createIndex({ 'certificate.serialNumber': 1 }),
-      this.records.createIndex({ 'certificate.subject': 1 }),
-      this.records.createIndex({ 'certificate.certifier': 1 }),
-      this.records.createIndex({ 'certificate.subject': 1, 'certificate.certifier': 1 }),
-      this.records.createIndex({ 'certificate.subject': 1, 'certificate.type': 1 }),
-      this.records.createIndex({ 'certificate.fields.userName': 1 }),
-      this.records.createIndex({ 'certificate.fields.userName': 1, 'certificate.certifier': 1 }),
-      this.records.createIndex({ searchableAttributes: 'text' })
-    ])
+  private ensureIndexes(): Promise<void> {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
+        await Promise.all([
+          this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
+          this.records.createIndex({ 'certificate.serialNumber': 1 }),
+          this.records.createIndex({ 'certificate.subject': 1 }),
+          this.records.createIndex({ 'certificate.certifier': 1 }),
+          this.records.createIndex({ 'certificate.subject': 1, 'certificate.certifier': 1 }),
+          this.records.createIndex({ 'certificate.subject': 1, 'certificate.type': 1 }),
+          this.records.createIndex({ 'certificate.fields.userName': 1 }),
+          this.records.createIndex({ 'certificate.fields.userName': 1, 'certificate.certifier': 1 }),
+          this.records.createIndex({ searchableAttributes: 'text' })
+        ])
+      })()
+    }
+    return this.indexInit
   }
 
   async storeRecord(txid: string, outputIndex: number, certificate: Certificate): Promise<void> {
+    await this.ensureIndexes()
     await this.records.insertOne({
       txid,
       outputIndex,
@@ -43,6 +48,7 @@ export class IdentityStorageManager {
   }
 
   async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+    await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
@@ -63,6 +69,7 @@ export class IdentityStorageManager {
   }
 
   async findByAttribute(attributes: IdentityAttributes, certifiers?: string[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     if (attributes === undefined || Object.keys(attributes).length === 0) {
       return []
     }
@@ -100,6 +107,7 @@ export class IdentityStorageManager {
   }
 
   async findByIdentityKey(identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     if (identityKey === undefined) return []
 
     const query: any = { 'certificate.subject': identityKey }
@@ -112,6 +120,7 @@ export class IdentityStorageManager {
   }
 
   async findByCertifier(certifiers: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     if (certifiers === undefined || certifiers.length === 0) return []
 
     const query = { 'certificate.certifier': { $in: certifiers } }
@@ -119,6 +128,7 @@ export class IdentityStorageManager {
   }
 
   async findByCertificateType(certificateTypes: Base64String[], identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     if (certificateTypes === undefined || certificateTypes.length === 0 || identityKey === undefined) return []
 
     const query: any = {
@@ -134,6 +144,7 @@ export class IdentityStorageManager {
   }
 
   async findByCertificateSerialNumber(serialNumber: Base64String, limit?: number, offset?: number): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     if (serialNumber === undefined || serialNumber === '') return []
 
     const query = { 'certificate.serialNumber': serialNumber }

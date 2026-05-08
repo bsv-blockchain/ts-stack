@@ -7,22 +7,26 @@ import { PubKeyHex } from '@bsv/sdk'
  */
 export class BTMSStorageManager {
   private readonly records: Collection<BTMSRecord>
-  readonly ready: Promise<void>
+  private indexInit?: Promise<void>
 
   /**
    * @param db A connected MongoDB database handle.
    */
   constructor (private readonly db: Db) {
     this.records = db.collection<BTMSRecord>('btmsRecords')
-    this.ready = this.createIndices()
   }
 
-  private async createIndices (): Promise<void> {
-    await Promise.all([
-      this.records.createIndex({ assetId: 1 }),
-      this.records.createIndex({ ownerKey: 1 }),
-      this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
-    ])
+  private ensureIndexes (): Promise<void> {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
+        await Promise.all([
+          this.records.createIndex({ assetId: 1 }),
+          this.records.createIndex({ ownerKey: 1 }),
+          this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
+        ])
+      })()
+    }
+    return this.indexInit
   }
 
   /**
@@ -36,6 +40,7 @@ export class BTMSStorageManager {
     ownerKey: PubKeyHex,
     metadata?: string
   ): Promise<void> {
+    await this.ensureIndexes()
     const record: BTMSRecord = {
       txid,
       outputIndex,
@@ -52,6 +57,7 @@ export class BTMSStorageManager {
    * Remove a BTMS record identified by its UTXO.
    */
   async deleteRecord (txid: string, outputIndex: number): Promise<void> {
+    await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
@@ -67,6 +73,7 @@ export class BTMSStorageManager {
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
   ): Promise<BTMSRecord[]> {
+    await this.ensureIndexes()
     const query: Record<string, unknown> = {}
 
     if (filters.assetId) {
@@ -88,6 +95,7 @@ export class BTMSStorageManager {
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
   ): Promise<BTMSRecord[]> {
+    await this.ensureIndexes()
     return await this.findRecordWithQuery({}, limit, skip, sortOrder)
   }
 
@@ -95,6 +103,7 @@ export class BTMSStorageManager {
    * Find a specific record by txid and outputIndex.
    */
   async findByTxidOutputIndex (txid: string, outputIndex: number): Promise<BTMSRecord | null> {
+    await this.ensureIndexes()
     return await this.records.findOne({ txid, outputIndex })
   }
 
