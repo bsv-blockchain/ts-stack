@@ -806,6 +806,23 @@ export class CWIStyleWalletManager implements WalletInterface {
   authenticated: boolean
 
   /**
+   * Resolves once the optional snapshot (if provided to the constructor) has been
+   * fully loaded and the wallet is ready to accept calls.
+   * When no snapshot is provided this resolves immediately.
+   * Await `ready` before calling wallet methods after constructing with a snapshot.
+   */
+  get ready (): Promise<void> {
+    if (this._readyInit === undefined) {
+      this._readyInit = this._init()
+    }
+    return this._readyInit
+  }
+
+  private _readyInit?: Promise<void>
+
+  private readonly _initSnapshot?: number[]
+
+  /**
    * The domain name of the administrative originator (wallet operator / vendor, or your own).
    */
   private readonly adminOriginator: OriginatorDomainNameStringUnder250Bytes
@@ -958,14 +975,15 @@ export class CWIStyleWalletManager implements WalletInterface {
       hashLength: kdfConfig?.hashLength ?? ARGON2ID_DEFAULT_HASH_LENGTH
     }
 
-    // If a saved snapshot is provided, attempt to load it.
-    // Note: loadSnapshot now returns a promise. We don't await it here,
-    // as the constructor must be synchronous. The caller should check
-    // `this.authenticated` after construction if a snapshot was provided.
-    if (stateSnapshot != null) {
-      this.loadSnapshot(stateSnapshot).catch(err => {
+    // Store snapshot for lazy init; callers await ready before calling wallet methods.
+    this._initSnapshot = stateSnapshot
+  }
+
+  private async _init (): Promise<void> {
+    if (this._initSnapshot !== undefined) {
+      await this.loadSnapshot(this._initSnapshot).catch((err: unknown) => {
         console.error('Failed to load snapshot during construction:', err)
-        // Clear potentially partially loaded state
+        // Clear potentially partially loaded state. destroy() is synchronous.
         this.destroy()
       })
     }

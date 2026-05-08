@@ -135,6 +135,20 @@ export class Monitor {
   onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>
   onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>
 
+  /**
+   * Resolves once the optional Chaintracks subscriptions have been registered.
+   * Await this before calling `startTasks()` if `chaintracksWithEvents` is provided
+   * and you need subscriptions to be active before the first task loop runs.
+   */
+  get ready (): Promise<void> {
+    if (this._readyInit === undefined) {
+      this._readyInit = this._init()
+    }
+    return this._readyInit
+  }
+
+  private _readyInit?: Promise<void>
+
   constructor (options: MonitorOptions) {
     this.options = { ...options }
     this.services = options.services
@@ -146,13 +160,15 @@ export class Monitor {
     this.onTransactionBroadcasted = options.onTransactionBroadcasted
     this.onTransactionStatusChanged = options.onTransactionStatusChanged
 
-    if (this.chaintracksWithEvents != null) {
-      const c = this.chaintracksWithEvents
-      this.reorgSubscriptionPromise = c.subscribeReorgs(this.processReorg.bind(this))
-      this.headersSubscriptionPromise = c.subscribeHeaders(this.processHeader.bind(this))
-    }
-
     this.applyStartupTaskMode(options.startupTaskMode || 'none')
+  }
+
+  private async _init (): Promise<void> {
+    if (this.chaintracksWithEvents != null) {
+      this.reorgSubscriptionPromise = this.chaintracksWithEvents.subscribeReorgs(this.processReorg.bind(this))
+      this.headersSubscriptionPromise = this.chaintracksWithEvents.subscribeHeaders(this.processHeader.bind(this))
+      await Promise.all([this.reorgSubscriptionPromise, this.headersSubscriptionPromise])
+    }
   }
 
   private applyStartupTaskMode (mode: MonitorStartupTaskMode): void {

@@ -927,8 +927,9 @@ describe('CWIStyleWalletManager Tests', () => {
         snapshot
       )
 
-      // currentUMPToken is set synchronously before loadSnapshot's first await,
-      // so no timer wait is needed here
+      // Await ready so that snapshot loading (including async Argon2id KDF) completes
+      await manager2.ready
+
       const loadedToken = (manager2 as any).currentUMPToken as UMPToken
       expect(loadedToken.umpVersion).toBe(3)
       expect(loadedToken.passwordKdf?.algorithm).toBe('argon2id')
