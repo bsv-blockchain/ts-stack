@@ -140,7 +140,14 @@ export class Monitor {
    * Await this before calling `startTasks()` if `chaintracksWithEvents` is provided
    * and you need subscriptions to be active before the first task loop runs.
    */
-  ready: Promise<void>
+  get ready (): Promise<void> {
+    if (this._readyInit === undefined) {
+      this._readyInit = this._init()
+    }
+    return this._readyInit
+  }
+
+  private _readyInit?: Promise<void>
 
   constructor (options: MonitorOptions) {
     this.options = { ...options }
@@ -154,16 +161,14 @@ export class Monitor {
     this.onTransactionStatusChanged = options.onTransactionStatusChanged
 
     this.applyStartupTaskMode(options.startupTaskMode || 'none')
+  }
 
-    // Await monitor.ready before calling startTasks() to ensure subscriptions are active.
-    const chaintracksWithEvents = this.chaintracksWithEvents
-    this.ready = chaintracksWithEvents != null
-      ? (async () => {
-          this.reorgSubscriptionPromise = chaintracksWithEvents.subscribeReorgs(this.processReorg.bind(this))
-          this.headersSubscriptionPromise = chaintracksWithEvents.subscribeHeaders(this.processHeader.bind(this))
-          await Promise.all([this.reorgSubscriptionPromise, this.headersSubscriptionPromise])
-        })()
-      : Promise.resolve()
+  private async _init (): Promise<void> {
+    if (this.chaintracksWithEvents != null) {
+      this.reorgSubscriptionPromise = this.chaintracksWithEvents.subscribeReorgs(this.processReorg.bind(this))
+      this.headersSubscriptionPromise = this.chaintracksWithEvents.subscribeHeaders(this.processHeader.bind(this))
+      await Promise.all([this.reorgSubscriptionPromise, this.headersSubscriptionPromise])
+    }
   }
 
   private applyStartupTaskMode (mode: MonitorStartupTaskMode): void {
