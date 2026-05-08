@@ -3,25 +3,33 @@ import { MonsterBattleRecord, UTXOReference } from './types.js'
 
 export class MonsterBattleStorage {
   private readonly records: Collection<MonsterBattleRecord>
+  private indexInit?: Promise<void>
 
   constructor(private readonly db: Db) {
     this.records = db.collection<MonsterBattleRecord>('monsterBattleRecords')
-    this.createSearchableIndex()
   }
 
-  private async createSearchableIndex(): Promise<void> {
-    await this.records.createIndex({ txid: 1 })
+  private ensureIndexes(): Promise<void> {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
+        await this.records.createIndex({ txid: 1 })
+      })()
+    }
+    return this.indexInit
   }
 
   async storeRecord(txid: string, outputIndex: number): Promise<void> {
+    await this.ensureIndexes()
     await this.records.insertOne({ txid, outputIndex, createdAt: new Date() })
   }
 
   async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+    await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
   async findByTxid(txid: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     if (!txid) return []
     const direction = sortOrder === 'asc' ? 1 : -1
     return this.records
@@ -34,6 +42,7 @@ export class MonsterBattleStorage {
   }
 
   async findAll(limit = 50, skip = 0, startDate?: Date, endDate?: Date, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
     const query: any = {}
     if (startDate || endDate) {
       query.createdAt = {}

@@ -4,14 +4,25 @@ import { PubKeyHex, WalletProtocol } from '@bsv/sdk'
 
 export class KVStoreStorageManager {
   private readonly records: Collection<KVStoreRecord>
+  private indexInit?: Promise<void>
 
   constructor(private readonly db: Db) {
     this.records = db.collection<KVStoreRecord>('kvstoreRecords')
-    this.records.createIndex({ key: 1 }).catch(console.error)
-    this.records.createIndex({ protocolID: 1 }).catch(console.error)
-    this.records.createIndex({ controller: 1 }).catch(console.error)
-    this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }).catch(console.error)
-    this.records.createIndex({ tags: 1 }).catch(console.error)
+  }
+
+  private ensureIndexes(): Promise<void> {
+    if (this.indexInit === undefined) {
+      this.indexInit = (async () => {
+        await Promise.all([
+          this.records.createIndex({ key: 1 }),
+          this.records.createIndex({ protocolID: 1 }),
+          this.records.createIndex({ controller: 1 }),
+          this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
+          this.records.createIndex({ tags: 1 })
+        ])
+      })()
+    }
+    return this.indexInit
   }
 
   async storeRecord(
@@ -22,6 +33,7 @@ export class KVStoreStorageManager {
     controller: PubKeyHex,
     tags?: string[]
   ): Promise<void> {
+    await this.ensureIndexes()
     const record: KVStoreRecord = {
       txid,
       outputIndex,
@@ -35,6 +47,7 @@ export class KVStoreStorageManager {
   }
 
   async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+    await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
@@ -50,6 +63,7 @@ export class KVStoreStorageManager {
     skip: number = 0,
     sortOrder: 'asc' | 'desc' = 'desc'
   ): Promise<KVStoreRecord[]> {
+    await this.ensureIndexes()
     const query: any = {}
 
     if (filters.key) query.key = filters.key
@@ -68,6 +82,7 @@ export class KVStoreStorageManager {
   }
 
   async findAllRecords(limit: number = 50, skip: number = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<KVStoreRecord[]> {
+    await this.ensureIndexes()
     return this.findRecordWithQuery({}, limit, skip, sortOrder)
   }
 
