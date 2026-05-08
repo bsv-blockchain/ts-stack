@@ -48,9 +48,11 @@ ORIGIN=http://localhost:5173
 ```
 
 - `RELAY_URL` — WebSocket address the mobile connects to. In production use a publicly reachable URL (e.g. `wss://yourapp.com`).
-- `ORIGIN` — URL your frontend runs on. Used for CORS and embedded in the QR so the mobile knows which server to contact.
+- `ORIGIN` — Default URL embedded in the QR when no per-session origin is supplied. Used as the fallback by `createSession()` when its `Origin` header is missing.
 
 > **Production note:** in a typical deployment, both `RELAY_URL` and `ORIGIN` share the same domain (`wss://yourapp.com` + `https://yourapp.com`). No extra configuration is needed. The relay can freely be on a separate domain or a third-party service — the mobile fetches the relay address from the origin server over HTTPS, making the origin's TLS certificate the trust anchor rather than hostname matching.
+
+> **Multi-app deployments:** one relay can serve N webapps. Pass an `allowedOrigins` allowlist (`string[]`, `RegExp`, or predicate) to `WalletRelayService` and the built-in `GET /api/session` route forwards each browser's `Origin` header into `createSession({ origin })` — every QR points back at the calling webapp instead of the relay's own URL. See [API.md](./API.md#walletrelayservice) for the full option.
 
 > **Local dev with split frontend/backend:** if Vite and your Node server run on different ports, add `MOBILE_ORIGIN=http://<your-lan-ip>:3000` (the backend port) so the mobile device can reach `GET /api/session/:id`. `ORIGIN` stays as the Vite URL for browser CORS. This variable is not needed in production.
 
@@ -136,7 +138,18 @@ That's the entire backend. `WalletRelayService` registers four REST routes and t
 | `POST` | `/api/request/:id` | Send a wallet RPC call to the paired mobile |
 | `DELETE` | `/api/session/:id` | Terminate session — closes the mobile's WebSocket so the mobile app is notified |
 
-`relayUrl` and `origin` are optional — they default to `process.env.RELAY_URL` / `process.env.ORIGIN`, then `ws://localhost:3000` / `http://localhost:5173`.
+`relayUrl` and `origin` are optional — they default to `process.env.RELAY_URL` / `process.env.ORIGIN`, then `ws://localhost:3000` / `http://localhost:5173`. For multi-app deployments, also pass `allowedOrigins` (a `string[]`, `RegExp`, or predicate). Without it, the only origin a caller can claim is the constructor `origin`:
+
+```ts
+new WalletRelayService({
+  app, server, wallet,
+  allowedOrigins: ['https://app-a.example.com', 'https://app-b.example.com'],
+  // or: /\.example\.com$/
+  // or: (origin) => origin.endsWith('.example.com')
+})
+```
+
+The built-in `GET /api/session` route forwards the request's `Origin` header into `createSession({ origin })`, so the QR points back at the calling webapp rather than the relay's own URL. Origins not in `allowedOrigins` get a `403`.
 
 > **`desktopToken`** is returned by `GET /api/session` and must be sent as an `X-Desktop-Token` header on every `POST /api/request/:id` call. It ensures that only the frontend that created the session can send wallet requests — even if another client somehow learns the `sessionId`. `useWalletRelayClient` / `WalletRelayClient` handle this automatically. If you are calling `relay.sendRequest()` directly from your own route handlers (Next.js, etc.) you must forward the header yourself — see [Next.js setup](#nextjs-setup) below.
 

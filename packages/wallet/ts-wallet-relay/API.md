@@ -25,7 +25,9 @@
   - [encryptEnvelope](#encryptenvelope)
   - [decryptEnvelope](#decryptenvelope)
   - [bytesToBase64url / base64urlToBytes](#bytestobase64url--base64urltobytes)
+  - [compileOriginMatcher](#compileoriginmatcher)
 - [Types](#types)
+  - [AllowedOrigins](#allowedorigins)
   - [WalletRequest / WalletResponse / RequestLogEntry](#walletrequest--walletresponse--requestlogentry)
 
 ---
@@ -50,7 +52,8 @@ new WalletRelayService(options: WalletRelayServiceOptions)
 | `server` | `http.Server` | **Yes** | — | HTTP server. The WebSocket upgrade handler is attached here. |
 | `wallet` | `WalletLike` | **Yes** | — | Backend wallet for encrypting/decrypting messages. Use `ProtoWallet` with a stable private key: `new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))`. The same key must be used across restarts — the mobile derives its ECDH shared secret from the backend identity key embedded in the QR code. |
 | `relayUrl` | `string` | No | `process.env.RELAY_URL` → `ws://localhost:3000` | `ws://` or `wss://` base URL of this server. Returned by `GET /api/session/:id` so the mobile can resolve it after scanning the QR. Not embedded in the QR itself. |
-| `origin` | `string` | No | `process.env.ORIGIN` → `http://localhost:5173` | `http://` or `https://` URL of the backend API root. Used for WebSocket origin validation and embedded in the QR pairing URI. The mobile calls `{origin}/api/session/{topic}` over HTTPS to resolve the relay URL — this is the trust anchor. In production this is your app domain. In local dev with a split Vite/Node setup, set this to the backend's LAN address so the mobile device can reach it (see `MOBILE_ORIGIN` in the quickstart). |
+| `origin` | `string` | No | `process.env.ORIGIN` → `http://localhost:5173` | Default `http://` or `https://` URL embedded in the QR pairing URI when `createSession()` is called without a per-session `origin` override. The mobile calls `{origin}/api/session/{topic}` over HTTPS to resolve the relay URL — this is the trust anchor. In production this is your app domain. For multi-app deployments (one relay shared by N webapps) leave this unset or set a sensible fallback, and pass `origin` per-call to `createSession({ origin })` instead. In local dev with a split Vite/Node setup, set this to the backend's LAN address so the mobile device can reach it (see `MOBILE_ORIGIN` in the quickstart). |
+| `allowedOrigins` | `AllowedOrigins` | No | `origin` (legacy fallback) | Origin allowlist controlling (a) which origins may be claimed by callers of `createSession({ origin })`, and (b) which browser origins may open a desktop-role WebSocket. Accepts a `string`, `string[]`, `RegExp`, or `(origin: string) => boolean` predicate. When unset, falls back to the single-value `origin` for backward compatibility. Required for multi-app deployments. |
 | `maxSessions` | `number` | No | unlimited | Maximum number of sessions held in memory at once. `GET /api/session` returns HTTP 429 when the limit is reached. |
 | `schema` | `string` | No | `process.env.PAIRING_SCHEMA` → `'bsv-browser'` | Deep-link scheme used in the generated QR URI (without `://`). Defaults to `'bsv-browser'`. Set to your wallet's own scheme (e.g. `'bsv-browser'`, `'my-wallet'`) to target a specific app — the OS will open that app directly instead of showing a picker when multiple wallets are installed. The mobile app must register this scheme and pass it to `parsePairingUri` via `acceptedSchemas`. |
 | `signQrCodes` | `boolean` | No | `true` | Sign the QR pairing URI with the backend wallet key. The mobile can verify the signature using `verifyPairingSignature` before connecting — this proves the QR fields have not been tampered with. Set to `false` only for backward compatibility with mobile apps that do not yet call `verifyPairingSignature`. |
@@ -59,10 +62,10 @@ new WalletRelayService(options: WalletRelayServiceOptions)
 
 #### Methods
 
-**`createSession()`**
+**`createSession(options?)`**
 
 ```ts
-createSession(): Promise<{
+createSession(options?: { origin?: string }): Promise<{
   sessionId:    string
   status:       string
   qrDataUrl:    string
@@ -74,6 +77,8 @@ createSession(): Promise<{
 Creates a new pairing session, builds the `wallet://pair?…` URI, and generates a QR code data URL. Returns the session ID, its initial status (`'pending'`), the base64 QR image, the raw pairing URI (pass this to `QRPairingCode` or `useQRPairing`), and a `desktopToken`.
 
 The `desktopToken` is a cryptographically random secret that must be passed as a `?token=` query parameter when the desktop opens its WebSocket connection (`role=desktop`). Keep it server-side — do not embed it in the QR code or share it with the mobile.
+
+Pass `options.origin` to embed a per-session origin in the QR — used by multi-app deployments where the caller's URL (not the relay's) is the trust anchor. When omitted, the constructor `origin` is used. The built-in `GET /api/session` route forwards the request's `Origin` header automatically. If `allowedOrigins` is configured, a per-session origin that does not match throws (and the route responds with `403`).
 
 ---
 
@@ -131,6 +136,8 @@ Stops the session GC timer and closes the WebSocket server. Call on process shut
 | `GET` | `/api/session/:id` | — | `{ sessionId, status, relay }` |
 | `POST` | `/api/request/:id` | Body: `{ method, params }` · Header: `X-Desktop-Token` | `RpcResponse` |
 | `DELETE` | `/api/session/:id` | Header: `X-Desktop-Token` | `204 No Content` |
+
+`GET /api/session` automatically forwards the request's `Origin` header into `createSession({ origin })`, so the QR points back at the calling webapp rather than the relay's own URL. Returns `403` when the claimed origin is not in `allowedOrigins`, and `429` when `maxSessions` is reached.
 
 `GET /api/session/:id` is called by the mobile app after scanning the QR to resolve the relay WebSocket URL. The mobile trusts this response because it is served over HTTPS from the origin embedded in the QR.
 
@@ -764,12 +771,20 @@ Topic-keyed WebSocket bridge. Mounts at `/ws`. Connections use `?topic=<sessionI
 #### Constructor
 
 ```ts
-new WebSocketRelay(server: http.Server, options?: { allowedOrigin?: string })
+new WebSocketRelay(server: http.Server, options?: WebSocketRelayOptions)
+
+interface WebSocketRelayOptions {
+  allowedOrigin?:  string           // legacy single-string match — kept for backward compatibility
+  allowedOrigins?: AllowedOrigins   // string | string[] | RegExp | (origin: string) => boolean
+}
 ```
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `allowedOrigin` | `string` | If set, incoming WebSocket connections that include an `Origin` header must match this value exactly or the connection is rejected with close code `1008`. Browser clients always send `Origin` and cannot spoof it. Native clients (React Native, server-to-server) omit the header and are exempt. |
+| `allowedOrigins` | `AllowedOrigins` | Origin allowlist for browser WS upgrades (`role=desktop`). Accepts a `string`, `string[]`, `RegExp`, or `(origin: string) => boolean` predicate. Connections whose `Origin` header does not match are rejected with close code `1008`. Native clients (React Native, server-to-server) omit `Origin` and are exempt. |
+| `allowedOrigin` | `string` | Legacy single-value form, kept for backward compatibility. Equivalent to passing the same string as `allowedOrigins`. If both are set, `allowedOrigins` takes precedence. |
+
+When neither option is set, no origin validation runs.
 
 #### Methods
 
@@ -1135,6 +1150,20 @@ Converts between `number[]` byte arrays and base64url strings using `@bsv/sdk`'s
 
 ---
 
+### compileOriginMatcher
+
+```ts
+function compileOriginMatcher(
+  allowed: AllowedOrigins | undefined | null
+): ((origin: string) => boolean) | null
+```
+
+Compiles an [`AllowedOrigins`](#allowedorigins) declaration into a single predicate. Returns `null` when `allowed` is `null` / `undefined` (treated by callers as "allow all"). Used internally by `WalletRelayService` and `WebSocketRelay`; exported for advanced compositions where the same matcher logic is needed in custom routes or middleware.
+
+Available from `@bsv/wallet-relay` (server entry).
+
+---
+
 ## Types
 
 All types are exported from both `@bsv/wallet-relay` and `@bsv/wallet-relay/client`.
@@ -1148,6 +1177,29 @@ type WalletLike = Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt' |
 ```
 
 Minimal wallet interface required by the library. Satisfied by `ProtoWallet` and `WalletClient` from `@bsv/sdk`, as well as any object that implements the four methods. `createSignature` is used by `WalletRelayService` when signing QR codes (`signQrCodes: true`).
+
+---
+
+### AllowedOrigins
+
+```ts
+type AllowedOrigins =
+  | string
+  | string[]
+  | RegExp
+  | ((origin: string) => boolean)
+```
+
+Origin allowlist shape accepted by `WalletRelayService.allowedOrigins` and `WebSocketRelay.allowedOrigins`.
+
+| Form | Match rule |
+|------|-----------|
+| `string` | exact equality |
+| `string[]` | membership in the list |
+| `RegExp` | `pattern.test(origin)` (e.g. `/\.example\.com$/`) |
+| `(origin) => boolean` | custom predicate |
+
+Compile a declaration into a single predicate with [`compileOriginMatcher`](#compileoriginmatcher).
 
 ---
 
