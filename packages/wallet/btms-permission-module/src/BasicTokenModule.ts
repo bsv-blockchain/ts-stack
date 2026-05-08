@@ -210,7 +210,7 @@ export class BasicTokenModule implements PermissionsModule {
         authorizedOutpoints,
         timestamp: Date.now()
       })
-    } catch (error) {
+    } catch (_captureError) {
       // Don't throw - we'll fall back to session-based auth
     }
   }
@@ -961,7 +961,7 @@ export class BasicTokenModule implements PermissionsModule {
         const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
         return assetId === ISSUE_MARKER
       }
-    } catch (e) {
+    } catch (_notPushDrop) {
       // Not a valid PushDrop script or parsing failed
       return false
     }
@@ -1113,7 +1113,7 @@ export class BasicTokenModule implements PermissionsModule {
         const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
         return assetId === ISSUE_MARKER
       }
-    } catch (e) {
+    } catch (_notPushDropScript) {
       // Not a valid PushDrop script
     }
     return false
@@ -1173,13 +1173,13 @@ export class BasicTokenModule implements PermissionsModule {
               metadata = parsed
             }
           }
-        } catch (e) {
+        } catch (_notJsonMetadata) {
           // Field 2 might be a signature, not metadata - that's fine
         }
       }
 
       return { assetId, amount, metadata }
-    } catch (e) {
+    } catch (_parseFailure) {
       // Parsing failed - not a valid BTMS token
       return null
     }

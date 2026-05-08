@@ -28,7 +28,7 @@ function hexToBytes (hex: string): number[] {
 function safeParse<T> (input: any): T | undefined {
   try {
     return typeof input === 'string' ? JSON.parse(input) : input
-  } catch (e) {
+  } catch (_parseError) {
     Logger.error('[PP CLIENT] Failed to parse input in safeParse:', input)
     return undefined
   }

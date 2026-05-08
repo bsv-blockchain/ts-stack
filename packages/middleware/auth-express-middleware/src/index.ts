@@ -643,8 +643,8 @@ export class ExpressTransport implements Transport {
             code: 'ERR_RESPONSE_SIGNING_FAILED',
             description: err instanceof Error ? err.message : 'Failed to sign response'
           })
-        } catch (_) {
-          // Response may already be partially sent
+        } catch (_responseAlreadySent) {
+          // Response may already be partially sent — nothing to do
         }
       }
     }
