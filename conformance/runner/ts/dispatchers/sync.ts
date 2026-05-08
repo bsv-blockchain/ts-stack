@@ -61,7 +61,7 @@ function getNumber (m: Record<string, unknown>, key: string): number {
 }
 
 /** Assert a GASPOutput object has correct field types and constraint values. */
-function assertGASPOutput (output: unknown, ctx: string): void {
+function assertGASPOutput (output: unknown, _ctx: string): void {
   expect(output).toBeDefined()
   expect(typeof output).toBe('object')
   const o = output as Record<string, unknown>
@@ -71,10 +71,10 @@ function assertGASPOutput (output: unknown, ctx: string): void {
   // outputIndex: integer >= 0
   expect(typeof o['outputIndex']).toBe('number')
   expect(Number.isInteger(o['outputIndex'])).toBe(true)
-  expect(o['outputIndex'] as number).toBeGreaterThanOrEqual(0)
+  expect(o['outputIndex']).toBeGreaterThanOrEqual(0)
   // score: number >= 0 (0 = unconfirmed)
   expect(typeof o['score']).toBe('number')
-  expect(o['score'] as number).toBeGreaterThanOrEqual(0)
+  expect(o['score']).toBeGreaterThanOrEqual(0)
 }
 
 // ── Channel dispatchers ────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ function dispatchInitialRequest (
   if ('limit' in msg && msg['limit'] !== undefined) {
     expect(typeof msg['limit']).toBe('number')
     expect(Number.isInteger(msg['limit'])).toBe(true)
-    expect(msg['limit'] as number).toBeGreaterThanOrEqual(1)
+    expect(msg['limit']).toBeGreaterThanOrEqual(1)
   }
 }
 
@@ -138,7 +138,7 @@ function dispatchInitialResponse (
 
   expect(typeof msg['since']).toBe('number')
   expect(Number.isInteger(msg['since'])).toBe(true)
-  expect(msg['since'] as number).toBeGreaterThanOrEqual(0)
+  expect(msg['since']).toBeGreaterThanOrEqual(0)
 }
 
 /**
@@ -176,7 +176,7 @@ function dispatchRequestNode (
 
   expect(typeof msg['outputIndex']).toBe('number')
   expect(Number.isInteger(msg['outputIndex'])).toBe(true)
-  expect(msg['outputIndex'] as number).toBeGreaterThanOrEqual(0)
+  expect(msg['outputIndex']).toBeGreaterThanOrEqual(0)
 
   expect(typeof msg['metadata']).toBe('boolean')
 }
@@ -200,7 +200,7 @@ function dispatchNode (
 
   expect(typeof msg['outputIndex']).toBe('number')
   expect(Number.isInteger(msg['outputIndex'])).toBe(true)
-  expect(msg['outputIndex'] as number).toBeGreaterThanOrEqual(0)
+  expect(msg['outputIndex']).toBeGreaterThanOrEqual(0)
 
   // Optional fields — validate types when present
   if ('proof' in msg && msg['proof'] !== undefined) {

@@ -22,7 +22,7 @@ export default class AppsTopicManager implements TopicManager {
           let metadata: PublishedAppMetadata
           try {
             metadata = JSON.parse(metadataJSON)
-          } catch {
+          } catch (_jsonErr) {
             throw new Error('Metadata field is not valid JSON')
           }
 

@@ -713,7 +713,7 @@ export default class OverlayExpress {
       return
     }
     for (const svc of Object.values(engine.lookupServices)) {
-      try { await svc.outputEvicted(txid, outputIndex) } catch { /* best-effort */ }
+      try { await svc.outputEvicted(txid, outputIndex) } catch (_evictErr) { /* best-effort */ }
     }
   }
 
@@ -1742,7 +1742,7 @@ export default class OverlayExpress {
             for (const service of services) {
               try {
                 await service.outputEvicted(req.body.txid, req.body.outputIndex)
-              } catch {
+              } catch (_evictErr) {
                 continue
               }
             }

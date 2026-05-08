@@ -55,7 +55,7 @@ export class BanAwareLookupWrapper implements LookupService {
             return
           }
         }
-      } catch {
+      } catch (_pushDropErr) {
         // If we can't parse PushDrop fields, let it through to the wrapped service
         // which will apply its own validation
       }

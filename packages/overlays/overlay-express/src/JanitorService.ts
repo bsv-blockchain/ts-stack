@@ -335,7 +335,8 @@ export class JanitorService {
         }
       }
       return null
-    } catch {
+    } catch (_parseErr) {
+      // malformed output — skip
       return null
     }
   }
@@ -351,7 +352,8 @@ export class JanitorService {
       const localhostRegex = /^localhost$/i
       const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/
       return domainRegex.test(hostname) || localhostRegex.test(hostname) || ipv4Regex.test(hostname)
-    } catch {
+    } catch (_urlErr) {
+      // invalid URL — not a valid domain
       return false
     }
   }

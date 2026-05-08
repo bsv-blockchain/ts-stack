@@ -532,7 +532,7 @@ export class MessageBoxClient {
             lockingScript: script,
             beef: output.beef
           })
-        } catch {
+        } catch (_pushDropErr) {
           // skip any malformed / non-PushDrop outputs
         }
       }
@@ -558,7 +558,8 @@ export class MessageBoxClient {
           hostname.endsWith('.localhost')
         ) return false
         return true
-      } catch {
+      } catch (_urlParseErr) {
+        // malformed URL — exclude from valid hosts
         return false
       }
     })
@@ -680,7 +681,7 @@ export class MessageBoxClient {
           if (typeof parsedBody === 'string') {
             try {
               parsedBody = JSON.parse(parsedBody)
-            } catch {
+            } catch (_jsonErr) {
               // Leave it as-is (plain text)
             }
           }
@@ -703,7 +704,7 @@ export class MessageBoxClient {
             Logger.log('[MB CLIENT] Message is not encrypted.')
             message.body = typeof parsedBody === 'string'
               ? parsedBody
-              : (() => { try { return JSON.stringify(parsedBody) } catch { return '[Error: Unstringifiable message]' } })()
+              : (() => { try { return JSON.stringify(parsedBody) } catch (_stringifyErr) { return '[Error: Unstringifiable message]' } })()
           }
         } catch (err) {
           Logger.error('[MB CLIENT ERROR] Failed to parse or decrypt live message:', err)
@@ -1772,7 +1773,8 @@ export class MessageBoxClient {
   tryParse(raw: string): any {
     try {
       return JSON.parse(raw)
-    } catch {
+    } catch (_jsonErr) {
+      // not valid JSON — return as-is
       return raw
     }
   }
@@ -2112,12 +2114,11 @@ export class MessageBoxClient {
     })
 
     Logger.log('[MB CLIENT] Getting messageBox quote (single)...')
-    console.log('HELP IM QUOTING', `${finalHost}/permissions/quote?${queryParams.toString()}`)
+    Logger.log('[MB CLIENT] GET', `${finalHost}/permissions/quote?${queryParams.toString()}`)
     const response = await this.authFetch.fetch(
       `${finalHost}/permissions/quote?${queryParams.toString()}`,
       { method: 'GET' }
     )
-    console.log('server response from getquote]', response)
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(
@@ -2131,7 +2132,7 @@ export class MessageBoxClient {
     }
 
     const deliveryAgentIdentityKey = response.headers.get('x-bsv-auth-identity-key')
-    console.log('deliveryAgentIdentityKey', deliveryAgentIdentityKey)
+    Logger.log('[MB CLIENT] deliveryAgentIdentityKey', deliveryAgentIdentityKey)
     if (deliveryAgentIdentityKey == null) {
       throw new Error('Failed to get quote: Delivery agent did not provide their identity key')
     }
@@ -2153,7 +2154,6 @@ export class MessageBoxClient {
     }
 
     Logger.log('[MB CLIENT] Getting messageBox quotes (multi)...')
-    console.log('[MB CLIENT] Getting messageBox quotes (multi)...')
     const hostGroups = await this.groupQuoteRecipientsByHost(recipients, overrideHost)
     const accumulator = this.createMultiQuoteAccumulator()
 
@@ -2691,7 +2691,7 @@ export class MessageBoxClient {
       const derivationSuffix = Utils.toBase64(Random(32))
 
       // Get host's derived public key
-      console.log('delivery agent:', quote.deliveryAgentIdentityKey)
+      Logger.log('[MB CLIENT] delivery agent:', quote.deliveryAgentIdentityKey)
       const { publicKey: derivedKeyResult } = await this.walletClient.getPublicKey({
         protocolID: [2, '3241645161d8'],
         keyID: `${derivationPrefix} ${derivationSuffix}`,
