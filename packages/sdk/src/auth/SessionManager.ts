@@ -97,11 +97,8 @@ export class SessionManager {
       // We can prefer authenticated sessions
       if (best == null) {
         best = s
-      } else {
-        // If we want the "most recently updated" AND isAuthenticated
-        if ((s.lastUpdate ?? 0) > (best.lastUpdate ?? 0)) {
-          best = s
-        }
+      } else if ((s.lastUpdate ?? 0) > (best.lastUpdate ?? 0)) {
+        best = s
       }
     }
     // Optionally, you could also filter out isAuthenticated===false if you only want
@@ -140,6 +137,6 @@ export class SessionManager {
     if (direct) return true
     // if not directly a nonce, interpret as identityKey
     const nonces = this.identityKeyToNonces.get(identifier)
-    return !(nonces == null) && nonces.size > 0
+    return (nonces != null) && nonces.size > 0
   }
 }

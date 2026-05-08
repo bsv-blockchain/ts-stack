@@ -994,12 +994,13 @@ export class RemittanceManager {
         } else if (takerRequests && !makerRequests) {
           requesterRole = 'taker'
         } else if (makerRequests && takerRequests && makerRequest !== takerRequest) {
-          requesterRole =
-            makerRequest === 'beforeInvoicing' && takerRequest === 'beforeSettlement'
-              ? 'maker'
-              : makerRequest === 'beforeSettlement' && takerRequest === 'beforeInvoicing'
-                ? 'taker'
-                : undefined
+          if (makerRequest === 'beforeInvoicing' && takerRequest === 'beforeSettlement') {
+            requesterRole = 'maker'
+          } else if (makerRequest === 'beforeSettlement' && takerRequest === 'beforeInvoicing') {
+            requesterRole = 'taker'
+          } else {
+            requesterRole = undefined
+          }
         }
 
         if (typeof requesterRole !== 'string') return 'taker'
@@ -1430,9 +1431,7 @@ export class RemittanceManager {
     thread.protocolLog ??= []
     thread.stateLog ??= []
 
-    if (thread.state == null) {
-      thread.state = this.deriveThreadState(thread)
-    }
+    thread.state ??= this.deriveThreadState(thread)
     return thread
   }
 

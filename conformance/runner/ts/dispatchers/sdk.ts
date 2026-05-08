@@ -341,6 +341,36 @@ function dispatchAES (
   }
 }
 
+// ── Key-derivation sub-handlers ───────────────────────────────────────────────
+
+function keyDerivationPrivkeyRoundtrip (privHexIn: string, expected: Record<string, unknown>): boolean {
+  const wantRound = getString(expected, 'privkey_hex_roundtrip')
+  if (wantRound !== '') {
+    expect(PrivateKey.fromHex(privHexIn).toHex()).toBe(wantRound)
+    return true
+  }
+  const wantPrefix = getString(expected, 'pubkey_der_prefix')
+  if (wantPrefix !== '') {
+    const der = PrivateKey.fromHex(privHexIn).toPublicKey().encode(true) as number[]
+    if ('pubkey_der_length_bytes' in expected) {
+      expect(der.length).toBe(expected['pubkey_der_length_bytes'])
+    }
+    const gotPrefix = bytesToHex([der[0]])
+    const prefixes = wantPrefix.split(' or ').map(p => p.trim())
+    expect(prefixes).toContain(gotPrefix)
+    return true
+  }
+  return false
+}
+
+function keyDerivationOffCurve (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const xF = input['pubkey_x'] as number
+  const yF = input['pubkey_y'] as number
+  const xHex = BigInt(Math.round(xF)).toString(16).padStart(64, '0')
+  const yHex = BigInt(Math.round(yF)).toString(16).padStart(64, '0')
+  expect(() => PublicKey.fromString('04' + xHex + yHex)).toThrow()
+}
+
 function dispatchKeyDerivation (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -348,22 +378,7 @@ function dispatchKeyDerivation (
   // Shape 1: privkey hex round-trip / pubkey DER properties
   const privHexIn = getString(input, 'privkey_hex')
   if (privHexIn !== '') {
-    const wantRound = getString(expected, 'privkey_hex_roundtrip')
-    if (wantRound !== '') {
-      expect(PrivateKey.fromHex(privHexIn).toHex()).toBe(wantRound)
-      return
-    }
-    const wantPrefix = getString(expected, 'pubkey_der_prefix')
-    if (wantPrefix !== '') {
-      const der = PrivateKey.fromHex(privHexIn).toPublicKey().encode(true) as number[]
-      if ('pubkey_der_length_bytes' in expected) {
-        expect(der.length).toBe(expected['pubkey_der_length_bytes'])
-      }
-      const gotPrefix = bytesToHex([der[0]])
-      const prefixes = wantPrefix.split(' or ').map(p => p.trim())
-      expect(prefixes).toContain(gotPrefix)
-      return
-    }
+    if (keyDerivationPrivkeyRoundtrip(privHexIn, expected)) return
   }
 
   // Shape 2: BRC-42 recipient key derivation (private)
@@ -382,18 +397,13 @@ function dispatchKeyDerivation (
     const recipPub = PublicKey.fromString(getString(input, 'recipient_public_key_hex'))
     const invoiceNum = getString(input, 'invoice_number')
     const derived = recipPub.deriveChild(PrivateKey.fromHex(senderPrivHex), invoiceNum)
-    const derivedHex = bytesToHex(derived.encode(true) as number[])
-    expect(derivedHex).toBe(getString(expected, 'derived_public_key_hex'))
+    expect(bytesToHex(derived.encode(true) as number[])).toBe(getString(expected, 'derived_public_key_hex'))
     return
   }
 
   // key-017: off-curve point → error
   if ('pubkey_x' in input && getBool(expected, 'throws')) {
-    const xF = input['pubkey_x'] as number
-    const yF = input['pubkey_y'] as number
-    const xHex = BigInt(Math.round(xF)).toString(16).padStart(64, '0')
-    const yHex = BigInt(Math.round(yF)).toString(16).padStart(64, '0')
-    expect(() => PublicKey.fromString('04' + xHex + yHex)).toThrow()
+    keyDerivationOffCurve(input, expected)
     return
   }
 
@@ -449,6 +459,22 @@ function dispatchPrivateKey (
   }
 }
 
+// ── Public-key sub-handlers ────────────────────────────────────────────────────
+
+function pubkeyFromPrivkey (privHex: string, expected: Record<string, unknown>): void {
+  if (getString(expected, 'pubkey_der_hex') !== '') {
+    const der = PrivateKey.fromHex(privHex).toPublicKey().encode(true) as number[]
+    expect(bytesToHex(der)).toBe(getString(expected, 'pubkey_der_hex'))
+  }
+}
+
+function pubkeyRoundtrip (pubHex: string, expected: Record<string, unknown>): void {
+  if (getString(expected, 'pubkey_der_hex_roundtrip') !== '') {
+    const der = PublicKey.fromString(pubHex).encode(true) as number[]
+    expect(bytesToHex(der)).toBe(getString(expected, 'pubkey_der_hex_roundtrip'))
+  }
+}
+
 function dispatchPublicKey (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
@@ -456,31 +482,19 @@ function dispatchPublicKey (
   // Shape: privkey_hex → pubkey_der_hex
   const privHex = getString(input, 'privkey_hex')
   if (privHex !== '') {
-    if (getString(expected, 'pubkey_der_hex') !== '') {
-      const der = PrivateKey.fromHex(privHex).toPublicKey().encode(true) as number[]
-      expect(bytesToHex(der)).toBe(getString(expected, 'pubkey_der_hex'))
-    }
+    pubkeyFromPrivkey(privHex, expected)
     return
   }
 
   // Shape: pubkey_der_hex → round-trip
   const pubHex = getString(input, 'pubkey_der_hex')
   if (pubHex !== '') {
-    if (getString(expected, 'pubkey_der_hex_roundtrip') !== '') {
-      const der = PublicKey.fromString(pubHex).encode(true) as number[]
-      expect(bytesToHex(der)).toBe(getString(expected, 'pubkey_der_hex_roundtrip'))
-    }
+    pubkeyRoundtrip(pubHex, expected)
     return
   }
 
-  // BRC-42 public derivation
-  if (getString(input, 'sender_private_key_hex') !== '') {
-    dispatchKeyDerivation(input, expected)
-    return
-  }
-
-  // off-curve (x,y) → error
-  if ('pubkey_x' in input) {
+  // BRC-42 public derivation or off-curve error
+  if (getString(input, 'sender_private_key_hex') !== '' || 'pubkey_x' in input) {
     dispatchKeyDerivation(input, expected)
     return
   }
@@ -567,86 +581,90 @@ function dispatchBEEF (
   }
 }
 
+// ── Serialization op handlers ─────────────────────────────────────────────────
+
+function serOpNewTransaction (expected: Record<string, unknown>): void {
+  const tx = new Transaction()
+  if ('version' in expected) expect(tx.version).toBe(expected['version'])
+  if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
+  if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
+  if ('locktime' in expected) expect(tx.lockTime).toBe(expected['locktime'])
+}
+
+function serOpFromAtomicBEEF (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const beefBytes = hexToBytes(getString(input, 'beef_hex'))
+  if (getBool(expected, 'throws')) {
+    expect(() => Transaction.fromAtomicBEEF(beefBytes)).toThrow()
+  } else {
+    expect(Transaction.fromAtomicBEEF(beefBytes)).toBeDefined()
+  }
+}
+
+function serOpAddInput (expected: Record<string, unknown>): void {
+  if (getBool(expected, 'throws')) {
+    const tx = new Transaction()
+    expect(() => tx.addInput({} as any)).toThrow()
+    return
+  }
+  if ('sequence' in expected) {
+    expect(expected['sequence']).toBe(0xffffffff)
+  }
+}
+
+function serOpGetFeeNoSource (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  if (!getBool(expected, 'throws')) return
+  const sourceTxid = getString(input, 'source_txid')
+  const sourceOutputIdx = (input['source_output_index'] as number) ?? 0
+  const tx = new Transaction()
+  tx.addInput({ sourceTXID: sourceTxid, sourceOutputIndex: sourceOutputIdx, sequence: 0xffffffff })
+  expect(() => tx.getFee()).toThrow()
+}
+
+function serOpParseScriptOffsets (input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const tx = Transaction.fromHex(getString(input, 'raw_hex'))
+  if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
+  if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
+}
+
+/** Dispatch named operation vectors via a lookup table to keep CC low. */
+function dispatchSerializationOp (
+  op: string,
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): boolean {
+  switch (op) {
+    case 'new_transaction':          serOpNewTransaction(expected); return true
+    case 'new_transaction_hash_hex': {
+      const txid = new Transaction().id('hex')
+      if ('hash_length_chars' in expected) expect(txid.length).toBe(expected['hash_length_chars'])
+      return true
+    }
+    case 'new_transaction_id_binary': {
+      const txid = new Transaction().id()
+      if ('id_length_bytes' in expected) expect(txid.length).toBe(expected['id_length_bytes'])
+      return true
+    }
+    case 'fromAtomicBEEF':    serOpFromAtomicBEEF(input, expected); return true
+    case 'addInput':          serOpAddInput(expected); return true
+    case 'addOutput': {
+      if (getBool(expected, 'throws')) {
+        const tx = new Transaction()
+        expect(() => tx.addOutput({ satoshis: -1 } as any)).toThrow()
+      }
+      return true
+    }
+    case 'getFee_no_source':    serOpGetFeeNoSource(input, expected); return true
+    case 'parseScriptOffsets':  serOpParseScriptOffsets(input, expected); return true
+    default:                    return false
+  }
+}
+
 function dispatchSerialization (
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
   const op = getString(input, 'operation')
-
-  switch (op) {
-    case 'new_transaction': {
-      const tx = new Transaction()
-      if ('version' in expected) expect(tx.version).toBe(expected['version'])
-      if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
-      if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
-      if ('locktime' in expected) expect(tx.lockTime).toBe(expected['locktime'])
-      return
-    }
-
-    case 'new_transaction_hash_hex': {
-      const txid = new Transaction().id('hex')
-      if ('hash_length_chars' in expected) expect(txid.length).toBe(expected['hash_length_chars'])
-      return
-    }
-
-    case 'new_transaction_id_binary': {
-      const txid = new Transaction().id()
-      if ('id_length_bytes' in expected) expect(txid.length).toBe(expected['id_length_bytes'])
-      return
-    }
-
-    case 'fromAtomicBEEF': {
-      const beefBytes = hexToBytes(getString(input, 'beef_hex'))
-      if (getBool(expected, 'throws')) {
-        expect(() => Transaction.fromAtomicBEEF(beefBytes)).toThrow()
-      } else {
-        expect(Transaction.fromAtomicBEEF(beefBytes)).toBeDefined()
-      }
-      return
-    }
-
-    case 'addInput': {
-      if (getBool(expected, 'throws')) {
-        const tx = new Transaction()
-        expect(() => tx.addInput({} as any)).toThrow()
-        return
-      }
-      if ('sequence' in expected) {
-        expect(expected['sequence']).toBe(0xffffffff)
-      }
-      return
-    }
-
-    case 'addOutput': {
-      if (getBool(expected, 'throws')) {
-        const tx = new Transaction()
-        expect(() => tx.addOutput({ satoshis: -1 } as any)).toThrow()
-        return
-      }
-      return
-    }
-
-    case 'getFee_no_source': {
-      if (getBool(expected, 'throws')) {
-        const sourceTxid = getString(input, 'source_txid')
-        const sourceOutputIdx = (input['source_output_index'] as number) ?? 0
-        const tx = new Transaction()
-        tx.addInput({ sourceTXID: sourceTxid, sourceOutputIndex: sourceOutputIdx, sequence: 0xffffffff })
-        expect(() => tx.getFee()).toThrow()
-      }
-      return
-    }
-
-    case 'parseScriptOffsets': {
-      const tx = Transaction.fromHex(getString(input, 'raw_hex'))
-      if ('inputs_count' in expected) expect(tx.inputs.length).toBe(expected['inputs_count'])
-      if ('outputs_count' in expected) expect(tx.outputs.length).toBe(expected['outputs_count'])
-      return
-    }
-
-    default:
-      break
-  }
+  if (op !== '' && dispatchSerializationOp(op, input, expected)) return
 
   if (getString(input, 'raw_hex') !== '') { serializationRawHex(input, expected); return }
   if (getString(input, 'ef_hex') !== '') { serializationEfHex(input, expected); return }

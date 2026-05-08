@@ -39,6 +39,69 @@ export interface GenerateChangeSdkResult {
 }
 
 /**
+ * Remove change input/output pairs that represent pointless churn —
+ * a change input whose satoshis are covered by a single change output.
+ * Mutates both arrays in place.
+ */
+function removeChurnPairs (
+  allocatedChangeInputs: GenerateChangeSdkChangeInput[],
+  changeOutputs: GenerateChangeSdkChangeOutput[]
+): void {
+  const changeInputs = [...allocatedChangeInputs]
+  while (changeInputs.length > 1 && changeOutputs.length > 1) {
+    const lastOutput = changeOutputs.at(-1)!
+    const i = changeInputs.findIndex(ci => ci.satoshis <= lastOutput.satoshis)
+    if (i < 0) break
+    changeOutputs.pop()
+    changeInputs.splice(i, 1)
+  }
+}
+
+/**
+ * Distribute excess fee satoshis across the change outputs.
+ * Returns the updated feeExcessNow (will be 0 after distribution).
+ */
+function distributeExcessFees (
+  changeOutputs: GenerateChangeSdkChangeOutput[],
+  changeInitialSatoshis: number,
+  feeExcessNow: number,
+  rand: (min: number, max: number) => number
+): number {
+  while (changeOutputs.length > 0 && feeExcessNow > 0) {
+    if (changeOutputs.length === 1) {
+      changeOutputs[0].satoshis += feeExcessNow
+      feeExcessNow = 0
+    } else if (changeOutputs[0].satoshis < changeInitialSatoshis) {
+      const sats = Math.min(feeExcessNow, changeInitialSatoshis - changeOutputs[0].satoshis)
+      feeExcessNow -= sats
+      changeOutputs[0].satoshis += sats
+    } else {
+      // Distribute a random percentage between 25% and 50% but at least one satoshi
+      const sats = Math.max(1, Math.floor((rand(2500, 5000) / 10000) * feeExcessNow))
+      feeExcessNow -= sats
+      const index = rand(0, changeOutputs.length - 1)
+      changeOutputs[index].satoshis += sats
+    }
+  }
+  return feeExcessNow
+}
+
+/**
+ * Remove change outputs below dustFloor, consolidating their satoshis into the largest output.
+ * Always keeps at least one output.
+ */
+function removeDustOutputs (changeOutputs: GenerateChangeSdkChangeOutput[], dustFloor: number): void {
+  for (let i = changeOutputs.length - 1; i >= 0; i--) {
+    if (changeOutputs[i].satoshis < dustFloor && changeOutputs.length > 1) {
+      const [removed] = changeOutputs.splice(i, 1)
+      // Add the removed sats to the largest remaining output so no sats are lost.
+      const largest = changeOutputs.reduce((best, o) => (o.satoshis > best.satoshis ? o : best), changeOutputs[0])
+      largest.satoshis += removed.satoshis
+    }
+  }
+}
+
+/**
  * Simplifications:
  *  - only support one change type with fixed length scripts.
  *  - only support satsPerKb fee model.
@@ -291,14 +354,7 @@ export async function generateChangeSdk (
         // At this point we have a funded transaction, but there may be change outputs that are each costing as change input,
         // resulting in pointless churn of change outputs.
         // And remove change inputs that funded only a single change output (along with that output)...
-        const changeInputs = [...r.allocatedChangeInputs]
-        while (changeInputs.length > 1 && r.changeOutputs.length > 1) {
-          const lastOutput = r.changeOutputs.at(-1)!
-          const i = changeInputs.findIndex(ci => ci.satoshis <= lastOutput.satoshis)
-          if (i < 0) break
-          r.changeOutputs.pop()
-          changeInputs.splice(i, 1)
-        }
+        removeChurnPairs(r.allocatedChangeInputs, r.changeOutputs)
         // and try again...
       }
     }
@@ -339,42 +395,13 @@ export async function generateChangeSdk (
     /**
      * Distribute the excess fees across the changeOutputs added.
      */
-    while (r.changeOutputs.length > 0 && feeExcessNow > 0) {
-      if (r.changeOutputs.length === 1) {
-        r.changeOutputs[0].satoshis += feeExcessNow
-        feeExcessNow = 0
-      } else if (r.changeOutputs[0].satoshis < params.changeInitialSatoshis) {
-        const sats = Math.min(feeExcessNow, params.changeInitialSatoshis - r.changeOutputs[0].satoshis)
-        feeExcessNow -= sats
-        r.changeOutputs[0].satoshis += sats
-      } else {
-        // Distribute a random percentage between 25% and 50% but at least one satoshi
-        const sats = Math.max(1, Math.floor((rand(2500, 5000) / 10000) * feeExcessNow))
-        feeExcessNow -= sats
-        const index = rand(0, r.changeOutputs.length - 1)
-        r.changeOutputs[index].satoshis += sats
-      }
-    }
+    feeExcessNow = distributeExcessFees(r.changeOutputs, params.changeInitialSatoshis, feeExcessNow, rand)
 
     /**
-     * Remove any change outputs that ended up below the dust floor after
-     * distribution, consolidating their satoshis into the largest remaining
-     * output.  This can occur when the excess distribution leaves a small
-     * output that is uneconomical to spend in a future transaction.
-     *
-     * We iterate in reverse so that splicing does not disturb earlier indices.
-     * We always keep at least one change output — the loop guarantees at least
-     * one output remains because we only remove if `r.changeOutputs.length > 1`.
+     * Remove any change outputs that ended up below the dust floor after distribution.
+     * Consolidates removed satoshis into the largest remaining output.
      */
-    for (let i = r.changeOutputs.length - 1; i >= 0; i--) {
-      if (r.changeOutputs[i].satoshis < dustFloor && r.changeOutputs.length > 1) {
-        const [removed] = r.changeOutputs.splice(i, 1)
-        // Add the removed sats to the largest remaining output so no sats are lost.
-        const largest = r.changeOutputs.reduce((best, o) => (o.satoshis > best.satoshis ? o : best), r.changeOutputs[0])
-        largest.satoshis += removed.satoshis
-        // feeExcessNow does not need updating: total change satoshis are unchanged.
-      }
-    }
+    removeDustOutputs(r.changeOutputs, dustFloor)
 
     r.size = size()
     ;((r.fee = fee()), (r.satsPerKb = satsPerKb))

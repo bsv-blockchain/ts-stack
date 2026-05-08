@@ -1211,13 +1211,10 @@ export class WalletPermissionsManager implements WalletInterface {
     // 1) adminOriginator can do anything
     if (this.isAdminOriginator(originator)) return true
 
-    // 2) If security level=0, we consider it "open" usage
+    // 2) If security level=0, we consider it “open” usage
     const [level, protoName] = protocolID
     if (level === 0) return true
-
-    if (level === 1) {
-      counterparty = ''
-    }
+    if (level === 1) counterparty = ''
 
     // 3) If protocol is admin-reserved, block
     if (this.isAdminProtocol(protocolID)) {
@@ -1225,54 +1222,23 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     // Allow the configured exceptions.
-    if (this.isProtocolUsageTypeExempted(usageType)) {
-      return true
-    }
-    if (!this.config.differentiatePrivilegedOperations) {
-      privileged = false
-    }
+    if (this.isProtocolUsageTypeExempted(usageType)) return true
+    if (!this.config.differentiatePrivilegedOperations) privileged = false
+    if (!privileged && this.isWhitelistedCounterpartyProtocol(counterparty, protocolID)) return true
 
-    if (!privileged && this.isWhitelistedCounterpartyProtocol(counterparty, protocolID)) {
-      return true
-    }
-
-    const cacheKey = this.buildRequestKey({
-      type: 'protocol',
-      originator,
-      privileged,
-      protocolID,
-      counterparty
-    })
-    if (this.isPermissionCached(cacheKey)) {
-      return true
-    }
-    if (this.isRecentlyGranted(cacheKey)) {
-      return true
-    }
+    const cacheKey = this.buildRequestKey({ type: 'protocol', originator, privileged, protocolID, counterparty })
+    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
 
     // 4) Attempt to find a valid token in the internal basket
     const token = await this.findProtocolToken(
-      originator,
-      privileged,
-      protocolID,
-      counterparty,
-      /* includeExpired= */ true,
-      lookupValues
+      originator, privileged, protocolID, counterparty, /* includeExpired= */ true, lookupValues
     )
+
     if (token == null) {
       // No token found => request a new one if allowed
-      if (!seekPermission) {
-        throw new Error('No protocol permission token found (seekPermission=false).')
-      }
+      if (!seekPermission) throw new Error('No protocol permission token found (seekPermission=false).')
       return await this.requestPermissionFlow({
-        type: 'protocol',
-        originator,
-        privileged,
-        protocolID,
-        counterparty,
-        usageType,
-        reason,
-        renewal: false
+        type: 'protocol', originator, privileged, protocolID, counterparty, usageType, reason, renewal: false
       })
     }
 
@@ -1282,15 +1248,8 @@ export class WalletPermissionsManager implements WalletInterface {
         throw new Error('Protocol permission expired and no further user consent allowed (seekPermission=false).')
       }
       return await this.requestPermissionFlow({
-        type: 'protocol',
-        originator,
-        privileged,
-        protocolID,
-        counterparty,
-        usageType,
-        reason,
-        renewal: true,
-        previousToken: token
+        type: 'protocol', originator, privileged, protocolID, counterparty, usageType, reason,
+        renewal: true, previousToken: token
       })
     }
 
@@ -1319,51 +1278,34 @@ export class WalletPermissionsManager implements WalletInterface {
     const { normalized: normalizedOriginator, lookupValues } = this.prepareOriginator(originator)
     originator = normalizedOriginator
     if (this.isAdminOriginator(originator)) return true
-    if (this.isAdminBasket(basket)) {
-      throw new Error(`Basket “${basket}” is admin-only.`)
-    }
-    if (usageType === 'insertion' && !this.config.seekBasketInsertionPermissions) return true
-    if (usageType === 'removal' && !this.config.seekBasketRemovalPermissions) return true
-    if (usageType === 'listing' && !this.config.seekBasketListingPermissions) return true
+    if (this.isAdminBasket(basket)) throw new Error(`Basket “${basket}” is admin-only.`)
+    if (!this.isBasketUsageRequired(usageType)) return true
+
     const cacheKey = this.buildRequestKey({ type: 'basket', originator, basket })
-    if (this.isPermissionCached(cacheKey)) {
-      return true
-    }
-    if (this.isRecentlyGranted(cacheKey)) {
-      return true
-    }
+    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
 
     const token = await this.findBasketToken(originator, basket, true, lookupValues)
     if (token == null) {
-      if (!seekPermission) {
-        throw new Error('No basket permission found, and no user consent allowed (seekPermission=false).')
-      }
-      return await this.requestPermissionFlow({
-        type: 'basket',
-        originator,
-        basket,
-        usageType,
-        reason,
-        renewal: false
-      })
+      if (!seekPermission) throw new Error('No basket permission found, and no user consent allowed (seekPermission=false).')
+      return await this.requestPermissionFlow({ type: 'basket', originator, basket, usageType, reason, renewal: false })
     }
 
     if (this.isTokenExpired(token.expiry)) {
-      if (!seekPermission) {
-        throw new Error('Basket permission expired (seekPermission=false).')
-      }
+      if (!seekPermission) throw new Error('Basket permission expired (seekPermission=false).')
       return await this.requestPermissionFlow({
-        type: 'basket',
-        originator,
-        basket,
-        usageType,
-        reason,
-        renewal: true,
-        previousToken: token
+        type: 'basket', originator, basket, usageType, reason, renewal: true, previousToken: token
       })
     }
 
     this.cachePermission(cacheKey, token.expiry)
+    return true
+  }
+
+  /** Returns false when the basket usageType does NOT need a permission check (config-gated). */
+  private isBasketUsageRequired (usageType: 'insertion' | 'removal' | 'listing'): boolean {
+    if (usageType === 'insertion' && !this.config.seekBasketInsertionPermissions) return false
+    if (usageType === 'removal' && !this.config.seekBasketRemovalPermissions) return false
+    if (usageType === 'listing' && !this.config.seekBasketListingPermissions) return false
     return true
   }
 
@@ -2241,28 +2183,45 @@ export class WalletPermissionsManager implements WalletInterface {
     const key = this.buildActiveRequestKey(preparedRequest)
 
     // If there's already a queue for the same resource, we piggyback on it
-    const existingQueue = this.activeRequests.get(key)
-
-    if ((existingQueue != null) && existingQueue.pending.length > 0) {
-      return await new Promise<boolean>((resolve, reject) => {
-        existingQueue.pending.push({ resolve, reject })
-      })
+    if (this.isPiggybacking(key)) {
+      return await this.piggybackOnExistingQueue(key)
     }
 
     const pactResult = await this.maybeRequestPact(preparedRequest)
-    if (pactResult !== null) {
-      return pactResult
-    }
+    if (pactResult !== null) return pactResult
 
     const peerGroupResult = await this.maybeRequestPeerGroupedLevel2ProtocolPermissions(preparedRequest)
-    if (peerGroupResult !== null) {
-      return peerGroupResult
-    }
+    if (peerGroupResult !== null) return peerGroupResult
 
+    const groupResult = await this.resolveGroupedFlow(preparedRequest, key)
+    if (groupResult !== null) return groupResult
+
+    // Re-check after grouped flow — another waiter may have set up a queue
+    if (this.isPiggybacking(key)) return await this.piggybackOnExistingQueue(key)
+
+    return await this.enqueueAndFireEvent(preparedRequest, key)
+  }
+
+  /** Returns true when an active-request queue already has pending waiters for this key. */
+  private isPiggybacking (key: string): boolean {
+    const q = this.activeRequests.get(key)
+    return (q != null) && q.pending.length > 0
+  }
+
+  /** Appends to an existing request queue and waits for resolution. */
+  private async piggybackOnExistingQueue (key: string): Promise<boolean> {
+    const q = this.activeRequests.get(key)!
+    return await new Promise<boolean>((resolve, reject) => {
+      q.pending.push({ resolve, reject })
+    })
+  }
+
+  /** Runs the grouped-permission flow (with or without a lock) and checks post-group satisfaction. */
+  private async resolveGroupedFlow (preparedRequest: PermissionRequest, key: string): Promise<boolean | null> {
     const hadPendingGroupedFlowBefore =
       this.config.seekGroupedPermission && this.groupedPermissionFlowTail.has(preparedRequest.originator)
 
-    let groupResult: boolean | null = null
+    let groupResult: boolean | null
     if (this.config.seekGroupedPermission) {
       groupResult = await this.withGroupedPermissionFlowLock(preparedRequest.originator, async () => {
         return await this.maybeRequestGroupedPermissions(preparedRequest)
@@ -2271,29 +2230,20 @@ export class WalletPermissionsManager implements WalletInterface {
       groupResult = await this.maybeRequestGroupedPermissions(preparedRequest)
     }
 
-    if (groupResult !== null) {
-      return groupResult
-    }
+    if (groupResult !== null) return groupResult
 
-    if (this.config.seekGroupedPermission && hadPendingGroupedFlowBefore) {
+    if (hadPendingGroupedFlowBefore) {
       const satisfiedAfterGroup = await this.checkSpecificPermissionAfterGroupFlow(preparedRequest)
-      if (satisfiedAfterGroup) {
-        return true
-      }
+      if (satisfiedAfterGroup) return true
     }
 
-    const existingQueueAfterGroups = this.activeRequests.get(key)
-    if ((existingQueueAfterGroups != null) && existingQueueAfterGroups.pending.length > 0) {
-      return await new Promise<boolean>((resolve, reject) => {
-        existingQueueAfterGroups.pending.push({ resolve, reject })
-      })
-    }
+    return null
+  }
 
+  /** Creates a new active-request queue entry, fires the event, and returns the promise. */
+  private async enqueueAndFireEvent (preparedRequest: PermissionRequest, key: string): Promise<boolean> {
     const requestPromise = new Promise<boolean>((resolve, reject) => {
-      this.activeRequests.set(key, {
-        request: preparedRequest,
-        pending: [{ resolve, reject }]
-      })
+      this.activeRequests.set(key, { request: preparedRequest, pending: [{ resolve, reject }] })
     })
 
     try {
@@ -2301,9 +2251,7 @@ export class WalletPermissionsManager implements WalletInterface {
     } catch (e) {
       const matching = this.activeRequests.get(key)
       if (matching != null) {
-        for (const p of matching.pending) {
-          p.reject(e)
-        }
+        for (const p of matching.pending) p.reject(e)
         this.activeRequests.delete(key)
       }
     }
@@ -3359,75 +3307,60 @@ export class WalletPermissionsManager implements WalletInterface {
     protocolSecurityLevel?: number
     counterparty?: string
   } = {}): Promise<PermissionToken[]> {
-    const basketName = BASKET_MAP.protocol
-    const baseTags: string[] = []
-
-    if (privileged !== undefined) {
-      baseTags.push(`privileged ${!!privileged}`)
-    }
-
-    if (protocolName) {
-      baseTags.push(`protocolName ${protocolName}`)
-    }
-
-    if (protocolSecurityLevel !== undefined) {
-      baseTags.push(`protocolSecurityLevel ${protocolSecurityLevel}`)
-    }
-
-    if (counterparty) {
-      baseTags.push(`counterparty ${counterparty}`)
-    }
-
+    const baseTags = this.buildProtocolFilterTags({ privileged, protocolName, protocolSecurityLevel, counterparty })
     const originFilter = originator ? this.prepareOriginator(originator) : undefined
     const originVariants = (originFilter == null) ? [undefined] : originFilter.lookupValues
     const seen = new Set<string>()
     const tokens: PermissionToken[] = []
 
     for (const originTag of originVariants) {
-      const tags = [...baseTags]
-      if (originTag) {
-        tags.push(`originator ${originTag}`)
-      }
+      const tags = originTag != null ? [...baseTags, `originator ${originTag}`] : [...baseTags]
       const result = await this.underlying.listOutputs(
-        {
-          basket: basketName,
-          tags,
-          tagQueryMode: 'all',
-          include: 'entire transactions',
-          limit: 10000
-        },
+        { basket: BASKET_MAP.protocol, tags, tagQueryMode: 'all', include: 'entire transactions', limit: 10000 },
         this.adminOriginator
       )
-
-      for (const out of result.outputs) {
-        if (seen.has(out.outpoint)) continue
-        const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
-        const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
-        if (!dec?.fields || dec.fields.length < 6) continue
-
-        const f = await this.decryptProtocolTokenFields(dec.fields)
-        const normalizedDomain = this.normalizeOriginator(f.domainDecoded)
-        if ((originFilter != null) && normalizedDomain !== originFilter.normalized) continue
-
-        seen.add(out.outpoint)
-        tokens.push({
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex,
-          outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
-          satoshis: out.satoshis,
-          originator: normalizedDomain,
-          rawOriginator: f.domainDecoded,
-          expiry: f.expiryDecoded,
-          privileged: f.privDecoded,
-          securityLevel: f.secLevelDecoded,
-          protocol: f.protoNameDecoded,
-          counterparty: f.cptyDecoded
-        })
-      }
+      await this.collectProtocolTokens(result, originFilter, seen, tokens)
     }
     return tokens
+  }
+
+  /** Builds the base tag array for protocol permission listing. */
+  private buildProtocolFilterTags ({
+    privileged, protocolName, protocolSecurityLevel, counterparty
+  }: { privileged?: boolean, protocolName?: string, protocolSecurityLevel?: number, counterparty?: string }): string[] {
+    const tags: string[] = []
+    if (privileged !== undefined) tags.push(`privileged ${!!privileged}`)
+    if (protocolName) tags.push(`protocolName ${protocolName}`)
+    if (protocolSecurityLevel !== undefined) tags.push(`protocolSecurityLevel ${protocolSecurityLevel}`)
+    if (counterparty) tags.push(`counterparty ${counterparty}`)
+    return tags
+  }
+
+  /** Decodes and appends protocol permission tokens from a listOutputs result. */
+  private async collectProtocolTokens (
+    result: Awaited<ReturnType<WalletInterface['listOutputs']>>,
+    originFilter: ReturnType<WalletPermissionsManager['prepareOriginator']> | undefined,
+    seen: Set<string>,
+    tokens: PermissionToken[]
+  ): Promise<void> {
+    for (const out of result.outputs) {
+      if (seen.has(out.outpoint)) continue
+      const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
+      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+      if (!dec?.fields || dec.fields.length < 6) continue
+      const f = await this.decryptProtocolTokenFields(dec.fields)
+      const normalizedDomain = this.normalizeOriginator(f.domainDecoded)
+      if ((originFilter != null) && normalizedDomain !== originFilter.normalized) continue
+      seen.add(out.outpoint)
+      tokens.push({
+        tx: tx.toBEEF(), txid, outputIndex,
+        outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
+        satoshis: out.satoshis, originator: normalizedDomain, rawOriginator: f.domainDecoded,
+        expiry: f.expiryDecoded, privileged: f.privDecoded,
+        securityLevel: f.secLevelDecoded, protocol: f.protoNameDecoded, counterparty: f.cptyDecoded
+      })
+    }
   }
 
   /**
@@ -3611,20 +3544,10 @@ export class WalletPermissionsManager implements WalletInterface {
       verifier?: PubKeyHex
     } = {}
   ): Promise<PermissionToken[]> {
-    const basketName = BASKET_MAP.certificate
     const baseTags: string[] = []
-
-    if (params.privileged !== undefined) {
-      baseTags.push(`privileged ${!!params.privileged}`)
-    }
-
-    if (params.certType) {
-      baseTags.push(`type ${params.certType}`)
-    }
-
-    if (params.verifier) {
-      baseTags.push(`verifier ${params.verifier}`)
-    }
+    if (params.privileged !== undefined) baseTags.push(`privileged ${!!params.privileged}`)
+    if (params.certType) baseTags.push(`type ${params.certType}`)
+    if (params.verifier) baseTags.push(`verifier ${params.verifier}`)
 
     const originFilter = params.originator ? this.prepareOriginator(params.originator) : undefined
     const originVariants = (originFilter == null) ? [undefined] : originFilter.lookupValues
@@ -3632,54 +3555,47 @@ export class WalletPermissionsManager implements WalletInterface {
     const tokens: PermissionToken[] = []
 
     for (const originTag of originVariants) {
-      const tags = [...baseTags]
-      if (originTag) {
-        tags.push(`originator ${originTag}`)
-      }
+      const tags = originTag != null ? [...baseTags, `originator ${originTag}`] : [...baseTags]
       const result = await this.underlying.listOutputs(
-        {
-          basket: basketName,
-          tags,
-          tagQueryMode: 'all',
-          include: 'entire transactions',
-          limit: 10000
-        },
+        { basket: BASKET_MAP.certificate, tags, tagQueryMode: 'all', include: 'entire transactions', limit: 10000 },
         this.adminOriginator
       )
-
-      for (const out of result.outputs) {
-        if (seen.has(out.outpoint)) continue
-        const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
-        const tx = Transaction.fromBEEF(result.BEEF!, txid)
-        const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
-        if (!dec?.fields || dec.fields.length < 6) continue
-        const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
-        const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
-        const normalizedDomain = this.normalizeOriginator(domainDecoded)
-        if ((originFilter != null) && normalizedDomain !== originFilter.normalized) continue
-        const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
-        const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
-        const typeDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
-        const verifierDec = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
-        const allFields = JSON.parse(Utils.toUTF8(await this.decryptPermissionTokenField(fieldsRaw))) as string[]
-        seen.add(out.outpoint)
-        tokens.push({
-          tx: tx.toBEEF(),
-          txid,
-          outputIndex,
-          satoshis: out.satoshis,
-          outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
-          originator: normalizedDomain,
-          rawOriginator: domainDecoded,
-          privileged: privDecoded,
-          certType: typeDecoded,
-          certFields: allFields,
-          verifier: verifierDec,
-          expiry: expiryDecoded
-        })
-      }
+      await this.collectCertificateTokens(result, originFilter, seen, tokens)
     }
     return tokens
+  }
+
+  /** Decodes and appends certificate permission tokens from a listOutputs result. */
+  private async collectCertificateTokens (
+    result: Awaited<ReturnType<WalletInterface['listOutputs']>>,
+    originFilter: ReturnType<WalletPermissionsManager['prepareOriginator']> | undefined,
+    seen: Set<string>,
+    tokens: PermissionToken[]
+  ): Promise<void> {
+    for (const out of result.outputs) {
+      if (seen.has(out.outpoint)) continue
+      const [txid, outputIndex] = this.parseOutpoint(out.outpoint)
+      const tx = Transaction.fromBEEF(result.BEEF!, txid)
+      const dec = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+      if (!dec?.fields || dec.fields.length < 6) continue
+      const [domainRaw, expiryRaw, privRaw, typeRaw, fieldsRaw, verifierRaw] = dec.fields
+      const domainDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(domainRaw))
+      const normalizedDomain = this.normalizeOriginator(domainDecoded)
+      if ((originFilter != null) && normalizedDomain !== originFilter.normalized) continue
+      const expiryDecoded = Number.parseInt(Utils.toUTF8(await this.decryptPermissionTokenField(expiryRaw)), 10)
+      const privDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(privRaw)) === 'true'
+      const typeDecoded = Utils.toUTF8(await this.decryptPermissionTokenField(typeRaw))
+      const verifierDec = Utils.toUTF8(await this.decryptPermissionTokenField(verifierRaw))
+      const allFields = JSON.parse(Utils.toUTF8(await this.decryptPermissionTokenField(fieldsRaw))) as string[]
+      seen.add(out.outpoint)
+      tokens.push({
+        tx: tx.toBEEF(), txid, outputIndex, satoshis: out.satoshis,
+        outputScript: tx.outputs[outputIndex].lockingScript.toHex(),
+        originator: normalizedDomain, rawOriginator: domainDecoded,
+        privileged: privDecoded, certType: typeDecoded, certFields: allFields,
+        verifier: verifierDec, expiry: expiryDecoded
+      })
+    }
   }
 
   /**
@@ -3895,68 +3811,101 @@ export class WalletPermissionsManager implements WalletInterface {
   ): ReturnType<WalletInterface['createAction']> {
     // 1) Identify unique P-modules involved (one per schemeID) from both baskets and labels
     const pModulesByScheme = new Map<string, PermissionsModule>()
-    const nonPBaskets: string[] = []
-
-    // Check baskets for p modules
-    if (args.outputs != null) {
-      for (const out of args.outputs) {
-        if (out.basket) {
-          if (out.basket.startsWith('p ')) {
-            const schemeID = out.basket.split(' ')[1]
-            this.addPModuleByScheme(schemeID, 'basket', pModulesByScheme)
-          } else {
-            // Track non-P baskets for normal permission checks
-            nonPBaskets.push(out.basket)
-          }
-        }
-      }
-    }
-
-    // Check labels for p modules
+    const nonPBaskets = this.collectNonPBaskets(args.outputs, pModulesByScheme)
     const nonPLabels = this.splitLabelsByPermissionModule(args.labels, pModulesByScheme)
 
     // 2) Check permissions for non-P baskets
     for (const basket of nonPBaskets) {
-      await this.ensureBasketAccess({
-        originator: originator!,
-        basket,
-        reason: args.description,
-        usageType: 'insertion'
-      })
+      await this.ensureBasketAccess({ originator: originator!, basket, reason: args.description, usageType: 'insertion' })
     }
-
     // 3) Check permissions for non-P labels
     for (const lbl of nonPLabels) {
-      await this.ensureLabelAccess({
-        originator: originator!,
-        label: lbl,
-        reason: args.description,
-        usageType: 'apply'
-      })
+      await this.ensureLabelAccess({ originator: originator!, label: lbl, reason: args.description, usageType: 'apply' })
     }
 
-    /**
-     * 4) Force signAndProcess=false unless the originator is admin and explicitly sets it to true.
-     *    This ensures the underlying wallet returns a signableTransaction, letting us parse the transaction
-     *    to determine net spending and request authorization if needed.
-     */
-    const modifiedOptions = { ...args.options }
+    // 4) Force signAndProcess=false unless the originator is admin and explicitly sets it to true.
+    const modifiedOptions = this.enforceSignAndProcess(args.options, originator)
+
+    // 5) Encrypt transaction metadata, saving originals for spending auth and line items.
+    const originalDescription = args.description
+    const { originalInputDescriptions, originalOutputDescriptions } = await this.encryptActionMetadata(args)
+
+    // 6) Call the underlying wallet's createAction with P-module chaining as needed.
+    const finalArgs = {
+      ...args,
+      options: modifiedOptions,
+      labels: [...(args.labels || []), `admin originator ${originator}`, `admin month ${this.getCurrentMonthYearUTC()}`]
+    }
+    let createResult = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator)
+
+    if (createResult.signableTransaction == null) return createResult
+
+    // 7) Parse the signable tx to determine net spend, then gate on spending authorization.
+    const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
+    const reference = createResult.signableTransaction.reference
+    const { netSpent, lineItems } = this.computeNetSpend(tx, args, originalInputDescriptions, originalOutputDescriptions)
+
+    // 8) If netSpent > 0, require spending authorization. Abort if denied.
+    if (netSpent > 0) {
+      try {
+        await this.ensureSpendingAuthorization({ originator: originator!, satoshis: netSpent, lineItems, reason: originalDescription })
+      } catch (err) {
+        await this.underlying.abortAction({ reference })
+        throw err
+      }
+    }
+
+    // 9) Finalize or return the signable transaction based on whether more signatures are needed.
+    const vargs = Validation.validateCreateActionArgs(args)
+    if (vargs.isSignAction) return createResult
+
+    const signResult = await this.underlying.signAction({ reference, spends: {}, options: args.options }, originator)
+    return { ...createResult, ...signResult, signableTransaction: undefined }
+  }
+
+  /** Scans outputs to split P-scheme baskets from regular baskets; registers P-modules as a side effect. */
+  private collectNonPBaskets (
+    outputs: Parameters<WalletInterface['createAction']>[0]['outputs'],
+    pModulesByScheme: Map<string, PermissionsModule>
+  ): string[] {
+    const nonPBaskets: string[] = []
+    if (outputs == null) return nonPBaskets
+    for (const out of outputs) {
+      if (!out.basket) continue
+      if (out.basket.startsWith('p ')) {
+        this.addPModuleByScheme(out.basket.split(' ')[1], 'basket', pModulesByScheme)
+      } else {
+        nonPBaskets.push(out.basket)
+      }
+    }
+    return nonPBaskets
+  }
+
+  /** Enforces signAndProcess=false for non-admin originators; throws if admin override is missing. */
+  private enforceSignAndProcess (
+    options: Parameters<WalletInterface['createAction']>[0]['options'],
+    originator?: string
+  ): typeof options {
+    const modifiedOptions = { ...options }
     if (modifiedOptions.signAndProcess !== true) {
       modifiedOptions.signAndProcess = false
     } else if (!this.isAdminOriginator(originator!)) {
       throw new Error('Only the admin originator can set signAndProcess=true explicitly.')
     }
+    return modifiedOptions
+  }
 
-    // 5) Encrypt transaction metadata, saving originals for use in permissions and line items.
-    const originalDescription = args.description
-    const originalInputDescriptions = {}
-    const originalOutputDescriptions = {}
+  /** Encrypts all description/instruction fields in args in-place; returns original (plaintext) copies. */
+  private async encryptActionMetadata (
+    args: Parameters<WalletInterface['createAction']>[0]
+  ): Promise<{ originalInputDescriptions: Record<number, string>, originalOutputDescriptions: Record<number, string> }> {
+    const originalInputDescriptions: Record<number, string> = {}
+    const originalOutputDescriptions: Record<number, string> = {}
     const inputEncryptionTasks = (args.inputs || []).map(async (input, i) => {
       if (!input.inputDescription) return
       originalInputDescriptions[i] = input.inputDescription
       input.inputDescription = await this.maybeEncryptMetadata(input.inputDescription)
     })
-
     const outputEncryptionTasks = (args.outputs || []).map(async (output, i) => {
       if (output.outputDescription) {
         originalOutputDescriptions[i] = output.outputDescription
@@ -3966,107 +3915,33 @@ export class WalletPermissionsManager implements WalletInterface {
         output.customInstructions = await this.maybeEncryptMetadata(output.customInstructions)
       }
     })
-
     await Promise.all([
-      (async () => {
-        args.description = await this.maybeEncryptMetadata(args.description)
-      })(),
+      (async () => { args.description = await this.maybeEncryptMetadata(args.description) })(),
       ...inputEncryptionTasks,
       ...outputEncryptionTasks
     ])
+    return { originalInputDescriptions, originalOutputDescriptions }
+  }
 
-    /**
-     * 6) Call the underlying wallet's createAction.
-     *    - If P-modules are involved, chain request transformations through them first
-     *    - Add two "admin" labels for tracking: "admin originator <domain>" and "admin month YYYY-MM"
-     *    - If P-modules are involved, chain response transformations back through them
-     */
-    const finalArgs = {
-      ...args,
-      options: modifiedOptions,
-      labels: [...(args.labels || []), `admin originator ${originator}`, `admin month ${this.getCurrentMonthYearUTC()}`]
+  /** Calls underlying createAction, chaining P-module request/response transforms when needed. */
+  private async callCreateActionWithPModules (
+    finalArgs: CreateActionArgs & { labels: string[] },
+    pModulesByScheme: Map<string, PermissionsModule>,
+    originator?: string
+  ): Promise<Awaited<ReturnType<WalletInterface['createAction']>>> {
+    if (pModulesByScheme.size === 0) return await this.underlying.createAction(finalArgs, originator)
+
+    const pModules = Array.from(pModulesByScheme.values())
+    let transformedArgs: object = finalArgs
+    for (const module of pModules) {
+      const transformed = await module.onRequest({ method: 'createAction', args: transformedArgs, originator: originator! })
+      transformedArgs = transformed.args
     }
-
-    let createResult: Awaited<ReturnType<WalletInterface['createAction']>>
-
-    if (pModulesByScheme.size > 0) {
-      // P-modules are involved - chain transformations
-      const pModules = Array.from(pModulesByScheme.values())
-
-      // Chain onRequest calls through all modules
-      let transformedArgs: object = finalArgs
-      for (const module of pModules) {
-        const transformed = await module.onRequest({
-          method: 'createAction',
-          args: transformedArgs,
-          originator: originator!
-        })
-        transformedArgs = transformed.args
-      }
-
-      // Call underlying wallet with transformed args
-      createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
-
-      // Chain onResponse calls in reverse order
-      for (let i = pModules.length - 1; i >= 0; i--) {
-        createResult = await pModules[i].onResponse(createResult, {
-          method: 'createAction',
-          originator: originator!
-        })
-      }
-    } else {
-      // No P-modules - call underlying wallet directly
-      createResult = await this.underlying.createAction(finalArgs, originator)
+    let createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
+    for (let i = pModules.length - 1; i >= 0; i--) {
+      createResult = await pModules[i].onResponse(createResult, { method: 'createAction', originator: originator! })
     }
-
-    // If there's no signableTransaction, the underlying wallet must have fully finalized it. Return as is.
-    if (createResult.signableTransaction == null) {
-      return createResult
-    }
-
-    /**
-     * 7) We have a signable transaction. Parse it to determine how much the originator is actually spending.
-     *    We only consider inputs the originator explicitly listed in args.inputs.
-     *    netSpent = (sum of originator-requested outputs) - (sum of matching originator inputs).
-     *    If netSpent > 0, we need spending authorization.
-     */
-    const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
-    const reference = createResult.signableTransaction.reference
-
-    const { netSpent, lineItems } = this.computeNetSpend(tx, args, originalInputDescriptions, originalOutputDescriptions)
-
-    // 8) If netSpent > 0, require spending authorization. Abort if denied.
-    if (netSpent > 0) {
-      try {
-        await this.ensureSpendingAuthorization({
-          originator: originator!,
-          satoshis: netSpent,
-          lineItems,
-          reason: originalDescription
-        })
-      } catch (err) {
-        await this.underlying.abortAction({ reference })
-        throw err
-      }
-    }
-
-    /**
-     * 9) Decide whether to finalize the transaction automatically or return the signableTransaction:
-     *    - If the user originally wanted signAndProcess (the default when undefined), we forcibly set it to false earlier, so check if we should now finalize it.
-     *    - If the transaction still needs more signatures, we must return the signableTransaction.
-     */
-    const vargs = Validation.validateCreateActionArgs(args)
-    if (vargs.isSignAction) {
-      return createResult
-    }
-
-    const signResult = await this.underlying.signAction({ reference, spends: {}, options: args.options }, originator)
-    // Merge signResult into createResult and remove signableTransaction:
-    return {
-      ...createResult,
-      ...signResult,
-      signableTransaction: undefined
-    }
+    return createResult
   }
 
   /**

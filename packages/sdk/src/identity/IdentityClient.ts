@@ -98,7 +98,7 @@ export class IdentityClient {
       true,
       true
     )
-    // TODO: Consider verification and if this is necessary
+    // Consider verification and if this is necessary
     // counterpartyCanVerifyMyOwnership: true
 
     const { tx } = await this.wallet.createAction(
@@ -347,42 +347,42 @@ export class IdentityClient {
         avatarURL = decryptedFields.profilePhoto
         badgeLabel = `X account certified by ${certifierInfo.name}`
         badgeIconURL = certifierInfo.iconUrl
-        badgeClickURL = 'https://socialcert.net' // TODO Make a specific page for this.
+        badgeClickURL = 'https://socialcert.net' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.discordCert:
         name = decryptedFields.userName
         avatarURL = decryptedFields.profilePhoto
         badgeLabel = `Discord account certified by ${certifierInfo.name}`
         badgeIconURL = certifierInfo.iconUrl
-        badgeClickURL = 'https://socialcert.net' // TODO Make a specific page for this.
+        badgeClickURL = 'https://socialcert.net' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.emailCert:
         name = decryptedFields.email
         avatarURL = 'XUTZxep7BBghAJbSBwTjNfmcsDdRFs5EaGEgkESGSgjJVYgMEizu'
         badgeLabel = `Email certified by ${certifierInfo.name}`
         badgeIconURL = certifierInfo.iconUrl
-        badgeClickURL = 'https://socialcert.net' // TODO Make a specific page for this.
+        badgeClickURL = 'https://socialcert.net' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.phoneCert:
         name = decryptedFields.phoneNumber
         avatarURL = 'XUTLxtX3ELNUwRhLwL7kWNGbdnFM8WG2eSLv84J7654oH8HaJWrU'
         badgeLabel = `Phone certified by ${certifierInfo.name}`
         badgeIconURL = certifierInfo.iconUrl
-        badgeClickURL = 'https://socialcert.net' // TODO Make a specific page for this.
+        badgeClickURL = 'https://socialcert.net' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.identiCert:
         name = `${decryptedFields.firstName} ${decryptedFields.lastName}`
         avatarURL = decryptedFields.profilePhoto
         badgeLabel = `Government ID certified by ${certifierInfo.name}`
         badgeIconURL = certifierInfo.iconUrl
-        badgeClickURL = 'https://identicert.me' // TODO Make a specific page for this.
+        badgeClickURL = 'https://identicert.me' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.registrant:
         name = decryptedFields.name
         avatarURL = decryptedFields.icon
         badgeLabel = `Entity certified by ${certifierInfo.name}`
         badgeIconURL = certifierInfo.iconUrl
-        badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // TODO: Make this doc page exist
+        badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.coolCert:
         name = decryptedFields.cool === 'true' ? 'Cool Person!' : 'Not cool!'
@@ -393,14 +393,14 @@ export class IdentityClient {
         badgeLabel =
           'Represents the ability for anyone to access this information.'
         badgeIconURL = 'XUUV39HVPkpmMzYNTx7rpKzJvXfeiVyQWg2vfSpjBAuhunTCA9uG'
-        badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // TODO: Make this doc page exist
+        badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // (no dedicated page yet)
         break
       case KNOWN_IDENTITY_TYPES.self:
         name = 'You'
         avatarURL = 'XUT9jHGk2qace148jeCX5rDsMftkSGYKmigLwU2PLLBc7Hm63VYR'
         badgeLabel = 'Represents your ability to access this information.'
         badgeIconURL = 'XUUV39HVPkpmMzYNTx7rpKzJvXfeiVyQWg2vfSpjBAuhunTCA9uG'
-        badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // TODO: Make this doc page exist
+        badgeClickURL = 'https://bsv-blockchain.github.io/ts-sdk/reference/identity/' // (no dedicated page yet)
         break
       default: {
         const parsed = IdentityClient.tryToParseGenericIdentity(
@@ -456,34 +456,41 @@ export class IdentityClient {
     // Try to construct a name from common field patterns
     const firstName = decryptedFields.firstName
     const lastName = decryptedFields.lastName
-    const fullName =
-      IdentityClient.hasValue(firstName) && IdentityClient.hasValue(lastName)
-        ? `${firstName} ${lastName}`
-        : IdentityClient.hasValue(firstName)
-          ? firstName
-          : IdentityClient.hasValue(lastName)
-            ? lastName
-            : undefined
+    let fullName: string | undefined
+    if (IdentityClient.hasValue(firstName) && IdentityClient.hasValue(lastName)) {
+      fullName = `${firstName} ${lastName}`
+    } else if (IdentityClient.hasValue(firstName)) {
+      fullName = firstName
+    } else if (IdentityClient.hasValue(lastName)) {
+      fullName = lastName
+    }
 
-    const name = IdentityClient.hasValue(decryptedFields.name)
-      ? decryptedFields.name
-      : IdentityClient.hasValue(decryptedFields.userName)
-        ? decryptedFields.userName
-        : (fullName ??
-          (IdentityClient.hasValue(decryptedFields.email)
-            ? decryptedFields.email
-            : defaultIdentity.name))
+    let name: string | undefined
+    if (IdentityClient.hasValue(decryptedFields.name)) {
+      name = decryptedFields.name
+    } else if (IdentityClient.hasValue(decryptedFields.userName)) {
+      name = decryptedFields.userName
+    } else if (fullName !== undefined) {
+      name = fullName
+    } else if (IdentityClient.hasValue(decryptedFields.email)) {
+      name = decryptedFields.email
+    } else {
+      name = defaultIdentity.name
+    }
 
     // Try to find an avatar/photo from common field names
-    const avatarURL = IdentityClient.hasValue(decryptedFields.profilePhoto)
-      ? decryptedFields.profilePhoto
-      : IdentityClient.hasValue(decryptedFields.avatar)
-        ? decryptedFields.avatar
-        : IdentityClient.hasValue(decryptedFields.icon)
-          ? decryptedFields.icon
-          : IdentityClient.hasValue(decryptedFields.photo)
-            ? decryptedFields.photo
-            : defaultIdentity.avatarURL
+    let avatarURL: string | undefined
+    if (IdentityClient.hasValue(decryptedFields.profilePhoto)) {
+      avatarURL = decryptedFields.profilePhoto
+    } else if (IdentityClient.hasValue(decryptedFields.avatar)) {
+      avatarURL = decryptedFields.avatar
+    } else if (IdentityClient.hasValue(decryptedFields.icon)) {
+      avatarURL = decryptedFields.icon
+    } else if (IdentityClient.hasValue(decryptedFields.photo)) {
+      avatarURL = decryptedFields.photo
+    } else {
+      avatarURL = defaultIdentity.avatarURL
+    }
 
     // Generate badge information
     const badgeLabel = IdentityClient.hasValue(certifierInfo?.name)

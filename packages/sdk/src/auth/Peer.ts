@@ -74,6 +74,19 @@ export class Peer {
   private identityPublicKey?: string
 
   /**
+   * Resolves when the transport's `onData` listener has been registered and
+   * the peer is ready to send and receive messages.  Await this after
+   * construction before calling `toPeer` or any other method that requires
+   * the transport to be listening.
+   *
+   * @example
+   * const peer = new Peer(wallet, transport)
+   * await peer.ready
+   * await peer.toPeer(payload)
+   */
+  readonly ready: Promise<void>
+
+  /**
    * Creates a new Peer instance
    *
    * @param {WalletInterface} wallet - The wallet instance used for cryptographic operations.
@@ -81,6 +94,7 @@ export class Peer {
    * @param {RequestedCertificateSet} [certificatesToRequest] - Optional set of certificates to request from a peer during the initial handshake.
    * @param {SessionManager} [sessionManager] - Optional SessionManager to be used for managing peer sessions.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
+   * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
    */
   constructor (
     wallet: WalletInterface,
@@ -97,9 +111,7 @@ export class Peer {
       certifiers: [],
       types: {}
     }
-    this.transport.onData(this.handleIncomingMessage.bind(this)).catch(e => {
-      throw e
-    })
+    this.ready = this.transport.onData(this.handleIncomingMessage.bind(this))
     this.sessionManager =
       sessionManager ?? new SessionManager()
     if (autoPersistLastSession === false) {

@@ -192,14 +192,14 @@ export class SimplifiedFetchTransport implements Transport {
 
       // nHeaders
       payloadWriter.writeVarIntNum(includedHeaders.length)
-      for (let i = 0; i < includedHeaders.length; i++) {
+      for (const [headerKey, headerValue] of includedHeaders) {
         // headerKeyLength
-        const headerKeyAsArray = Utils.toArray(includedHeaders[i][0], 'utf8')
+        const headerKeyAsArray = Utils.toArray(headerKey, 'utf8')
         payloadWriter.writeVarIntNum(headerKeyAsArray.length)
         // headerKey
         payloadWriter.write(headerKeyAsArray)
         // headerValueLength
-        const headerValueAsArray = Utils.toArray(includedHeaders[i][1], 'utf8')
+        const headerValueAsArray = Utils.toArray(headerValue, 'utf8')
         payloadWriter.writeVarIntNum(headerValueAsArray.length)
         // headerValue
         payloadWriter.write(headerValueAsArray)

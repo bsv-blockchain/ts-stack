@@ -509,7 +509,6 @@ export default class OverlayExpress {
     const knex = this.ensureKnex()
 
     if (autoConfigureShipSlap) {
-      // Auto-configure SHIP and SLAP services
       this.configureTopicManager('tm_ship', new DiscoveryServices.SHIPTopicManager())
       this.configureTopicManager('tm_slap', new DiscoveryServices.SLAPTopicManager())
       this.configureLookupServiceWithMongo('ls_ship', (db) => new DiscoveryServices.SHIPLookupService(
@@ -520,135 +519,109 @@ export default class OverlayExpress {
       ))
     }
 
-    // Wrap SHIP/SLAP lookup services with ban-aware wrappers if BanService is available.
-    // This prevents GASP from re-syncing tokens whose domains or outpoints have been banned.
-    if (this.banService !== undefined) {
-      if (this.services.ls_ship !== undefined) {
-        this.services.ls_ship = new BanAwareLookupWrapper(
-          this.services.ls_ship,
-          this.banService,
-          'SHIP',
-          this.logger
-        )
-        this.logger.log(chalk.blue('SHIP lookup service wrapped with ban-aware filter.'))
-      }
-      if (this.services.ls_slap !== undefined) {
-        this.services.ls_slap = new BanAwareLookupWrapper(
-          this.services.ls_slap,
-          this.banService,
-          'SLAP',
-          this.logger
-        )
-        this.logger.log(chalk.blue('SLAP lookup service wrapped with ban-aware filter.'))
-      }
-    }
+    this.wrapBanAwareServices()
 
-    // Construct a default sync configuration, in case the user doesn't want GASP at all:
-    let syncConfig: Record<string, string[] | 'SHIP' | false> = {}
-    if (this.enableGASPSync) {
-      // If the user provided a syncConfiguration, use that. Otherwise default to an empty object.
-      syncConfig = this.engineConfig.syncConfiguration ?? {}
-    } else {
-      // For each manager, disable sync
-      for (const managerName of Object.keys(this.managers)) {
-        syncConfig[managerName] = false
-      }
-    }
-
-    // Build the actual Storage
+    const syncConfig = this.buildSyncConfig()
     const storage = new KnexStorage(knex)
-    // Include the KnexStorage migrations
     this.migrationsToRun = [...KnexStorageMigrations.default, ...this.migrationsToRun]
 
-    // Prepare broadcaster if arcApiKey is set
-    let broadcaster: Broadcaster | undefined
-    if (typeof this.arcApiKey === 'string') {
-      broadcaster = new ARC(
-        // We hard-code some ARC URLs for now, but we should make this configurable later.
-        this.network === 'test' ? 'https://arc-test.taal.com' : 'https://arc.taal.com',
-        {
-          apiKey: this.arcApiKey
-        })
-    }
+    const broadcaster = this.buildBroadcaster()
+    const advertiser = await this.buildAdvertiser()
 
-    // Prepare advertiser if not set by the user
-    let advertiser: Advertiser | undefined = this.engineConfig.advertiser
-    if (advertiser === undefined) {
-      try {
-        advertiser = new DiscoveryServices.WalletAdvertiser(
-          this.network,
-          this.privateKey,
-          // Default to Babbage-hosted storage for SHIP/SLAP advertisement
-          // metadata. This is a vendor-hosted default, not a protocol
-          // requirement, and should become configurable.
-          this.network === 'test'
-            ? 'https://staging-storage.babbage.systems'
-            : 'https://storage.babbage.systems',
-          // Until multiple protocols (like https+bsvauth+smf) are fully supported, HTTPS is the one to always use.
-          `https://${this.advertisableFQDN}`
-        )
-      } catch (e) {
-        this.logger.log(`Advertiser not initialized for FQDN ${this.advertisableFQDN} - SHIP and SLAP will be disabled. Reason: ${e}`)
-      }
-    }
-
-    // Construct the Engine with any advanced config overrides. Fallback to defaults.
     this.engine = new Engine(
       this.managers,
       this.services,
       storage,
-      // chainTracker
       this.engineConfig.chainTracker ?? this.chainTracker,
-      // hostingURL
       `https://${this.advertisableFQDN}`,
-      // shipTrackers
       this.network === 'test'
         ? (this.engineConfig.shipTrackers ?? DEFAULT_TESTNET_SLAP_TRACKERS)
         : this.engineConfig.shipTrackers,
-      // slapTrackers
-      (() => {
-        if (Array.isArray(this.engineConfig.slapTrackers)) return this.engineConfig.slapTrackers
-        return this.network === 'test' ? DEFAULT_TESTNET_SLAP_TRACKERS : DEFAULT_SLAP_TRACKERS
-      })(),
-      // broadcaster
+      this.resolveSlapTrackers(),
       broadcaster ?? this.engineConfig.broadcaster,
-      // advertiser
       advertiser,
-      // syncConfiguration
       syncConfig,
-      // logTime
       this.engineConfig.logTime ?? false,
-      // logPrefix
       this.engineConfig.logPrefix ?? '[OVERLAY_ENGINE] ',
-      // throwOnBroadcastFailure
       this.engineConfig.throwOnBroadcastFailure ?? false,
-      // overlayBroadcastFacilitator
       this.engineConfig.overlayBroadcastFacilitator ?? new HTTPSOverlayBroadcastFacilitator(),
-      // logger
       this.logger,
-      // suppressDefaultSyncAdvertisements
       this.engineConfig.suppressDefaultSyncAdvertisements ?? true
     )
 
-    // Create the server wallet for BSV mutual authentication.
-    // This uses the same private key as the WalletAdvertiser.
+    this.initServerWallet()
+    this.logger.log(chalk.green('Engine has been configured.'))
+  }
+
+  /** Wrap SHIP/SLAP with ban-aware filter if BanService is configured. */
+  private wrapBanAwareServices (): void {
+    if (this.banService === undefined) return
+    for (const key of ['ls_ship', 'ls_slap'] as const) {
+      if (this.services[key] !== undefined) {
+        const label = key === 'ls_ship' ? 'SHIP' : 'SLAP'
+        this.services[key] = new BanAwareLookupWrapper(this.services[key], this.banService, label, this.logger)
+        this.logger.log(chalk.blue(`${label} lookup service wrapped with ban-aware filter.`))
+      }
+    }
+  }
+
+  /** Build the sync config based on enableGASPSync and engineConfig. */
+  private buildSyncConfig (): Record<string, string[] | 'SHIP' | false> {
+    if (this.enableGASPSync) {
+      return this.engineConfig.syncConfiguration ?? {}
+    }
+    const syncConfig: Record<string, string[] | 'SHIP' | false> = {}
+    for (const name of Object.keys(this.managers)) {
+      syncConfig[name] = false
+    }
+    return syncConfig
+  }
+
+  /** Build the ARC broadcaster if an API key is configured. */
+  private buildBroadcaster (): Broadcaster | undefined {
+    if (typeof this.arcApiKey !== 'string') return undefined
+    const arcUrl = this.network === 'test' ? 'https://arc-test.taal.com' : 'https://arc.taal.com'
+    return new ARC(arcUrl, { apiKey: this.arcApiKey })
+  }
+
+  /** Resolve the SLAP trackers from config or network defaults. */
+  private resolveSlapTrackers (): string[] | undefined {
+    if (Array.isArray(this.engineConfig.slapTrackers)) return this.engineConfig.slapTrackers
+    return this.network === 'test' ? DEFAULT_TESTNET_SLAP_TRACKERS : DEFAULT_SLAP_TRACKERS
+  }
+
+  /** Build the WalletAdvertiser (or use user-provided one). */
+  private async buildAdvertiser (): Promise<Advertiser | undefined> {
+    if (this.engineConfig.advertiser !== undefined) return this.engineConfig.advertiser
+    const storageBase = this.network === 'test'
+      ? 'https://staging-storage.babbage.systems'
+      : 'https://storage.babbage.systems'
+    try {
+      return new DiscoveryServices.WalletAdvertiser(
+        this.network,
+        this.privateKey,
+        storageBase,
+        `https://${this.advertisableFQDN}`
+      )
+    } catch (e) {
+      this.logger.log(`Advertiser not initialized for FQDN ${this.advertisableFQDN} - SHIP and SLAP will be disabled. Reason: ${e}`)
+      return undefined
+    }
+  }
+
+  /** Initialize the server wallet for BSV mutual authentication. */
+  private initServerWallet (): void {
     try {
       const keyDeriver = new KeyDeriver(new PrivateKey(this.privateKey, 'hex'))
       const storageManager = new WalletStorageManager(keyDeriver.identityKey)
       const signer = new WalletSigner(this.network, keyDeriver, storageManager)
       const services = new Services(this.network)
-      const wallet = new Wallet(signer, services)
-      this.serverWallet = wallet
-
-      // Auto-set the admin identity key from the server's own key if not configured
+      this.serverWallet = new Wallet(signer, services)
       this.adminIdentityKey ??= keyDeriver.identityKey
-
       this.logger.log(chalk.blue('Server wallet initialized for BSV mutual authentication.'))
     } catch (e) {
       this.logger.log(chalk.yellow(`Server wallet could not be initialized. BSV auth will not be available. Reason: ${e}`))
     }
-
-    this.logger.log(chalk.green('Engine has been configured.'))
   }
 
   /**
@@ -697,6 +670,71 @@ export default class OverlayExpress {
       banService: this.banService,
       autoBanOnRemoval: this.janitorConfig.autoBanOnRemoval
     })
+  }
+
+  /** Ban a domain and remove all its SHIP/SLAP records from MongoDB. */
+  private async handleBanDomain (res: express.Response, value: string, reason?: string): Promise<express.Response> {
+    await this.banService!.banDomain(value, reason)
+    const db = this.ensureMongo()
+    const [shipDeleted, slapDeleted] = await Promise.all([
+      db.collection('shipRecords').deleteMany({ domain: value }),
+      db.collection('slapRecords').deleteMany({ domain: value })
+    ])
+    return res.status(200).json({
+      status: 'success',
+      message: `Domain "${value}" banned. Removed ${shipDeleted.deletedCount} SHIP and ${slapDeleted.deletedCount} SLAP records.`
+    })
+  }
+
+  /** Parse outpoint string, ban it, and evict it from all lookup services. */
+  private async handleBanOutpoint (res: express.Response, engine: Engine, value: string, reason?: string): Promise<express.Response> {
+    const dotIndex = value.lastIndexOf('.')
+    if (dotIndex === -1) {
+      return res.status(400).json({ status: 'error', message: 'Outpoint format must be "txid.outputIndex"' })
+    }
+    const txid = value.substring(0, dotIndex)
+    const outputIndex = Number.parseInt(value.substring(dotIndex + 1))
+    if (Number.isNaN(outputIndex)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid outputIndex in outpoint' })
+    }
+    await this.banService!.banOutpoint(txid, outputIndex, reason)
+    await this.evictFromServices(engine, txid, outputIndex)
+    return res.status(200).json({
+      status: 'success',
+      message: `Outpoint "${value}" banned and evicted from lookup services.`
+    })
+  }
+
+  /** Evict an output from a specific service or all services (silent per-service errors). */
+  private async evictFromServices (engine: Engine, txid: string, outputIndex: number, service?: string): Promise<void> {
+    if (typeof service === 'string') {
+      const svc = engine.lookupServices[service]
+      if (svc !== undefined) await svc.outputEvicted(txid, outputIndex)
+      return
+    }
+    for (const svc of Object.values(engine.lookupServices)) {
+      try { await svc.outputEvicted(txid, outputIndex) } catch { /* best-effort */ }
+    }
+  }
+
+  /** Look up the domain of an outpoint from SHIP or SLAP records. */
+  private async lookupDomainForOutpoint (txid: string, outputIndex: number): Promise<string | undefined> {
+    const db = this.ensureMongo()
+    const [shipRecord, slapRecord] = await Promise.all([
+      db.collection('shipRecords').findOne({ txid, outputIndex }),
+      db.collection('slapRecords').findOne({ txid, outputIndex })
+    ])
+    return (shipRecord?.domain ?? slapRecord?.domain) as string | undefined
+  }
+
+  /** Ban a domain and delete all SHIP/SLAP records for it. */
+  private async banDomainAndRemoveRecords (domain: string, reason: string): Promise<void> {
+    await this.banService!.banDomain(domain, reason)
+    const db = this.ensureMongo()
+    await Promise.all([
+      db.collection('shipRecords').deleteMany({ domain }),
+      db.collection('slapRecords').deleteMany({ domain })
+    ])
   }
 
   private async runHealthCheck (
@@ -1530,48 +1568,9 @@ export default class OverlayExpress {
           }
 
           if (type === 'domain') {
-            await this.banService.banDomain(value, reason)
-
-            // Also remove any existing records for this domain from SHIP and SLAP
-            const db = this.ensureMongo()
-            const [shipDeleted, slapDeleted] = await Promise.all([
-              db.collection('shipRecords').deleteMany({ domain: value }),
-              db.collection('slapRecords').deleteMany({ domain: value })
-            ])
-
-            return res.status(200).json({
-              status: 'success',
-              message: `Domain "${value}" banned. Removed ${shipDeleted.deletedCount} SHIP and ${slapDeleted.deletedCount} SLAP records.`
-            })
-          } else {
-            // Parse outpoint: "txid.outputIndex"
-            const dotIndex = value.lastIndexOf('.')
-            if (dotIndex === -1) {
-              return res.status(400).json({ status: 'error', message: 'Outpoint format must be "txid.outputIndex"' })
-            }
-            const txid = value.substring(0, dotIndex)
-            const outputIndex = Number.parseInt(value.substring(dotIndex + 1))
-            if (Number.isNaN(outputIndex)) {
-              return res.status(400).json({ status: 'error', message: 'Invalid outputIndex in outpoint' })
-            }
-
-            await this.banService.banOutpoint(txid, outputIndex, reason)
-
-            // Also evict from lookup services
-            const services = Object.values(engine.lookupServices)
-            for (const service of services) {
-              try {
-                await service.outputEvicted(txid, outputIndex)
-              } catch {
-                continue
-              }
-            }
-
-            return res.status(200).json({
-              status: 'success',
-              message: `Outpoint "${value}" banned and evicted from lookup services.`
-            })
+            return await this.handleBanDomain(res, value, reason)
           }
+          return await this.handleBanOutpoint(res, engine, value, reason)
         } catch (error) {
           return res.status(400).json({
             status: 'error',
@@ -1648,52 +1647,29 @@ export default class OverlayExpress {
             return res.status(400).json({ status: 'error', message: 'txid (string) and outputIndex (number) are required' })
           }
 
-          // Get the domain before removing (for ban option)
+          // Look up domain before eviction if needed for banning
           let removedDomain: string | undefined
           if (shouldBanDomain === true || ban === true) {
-            const db = this.ensureMongo()
-            const shipRecord = await db.collection('shipRecords').findOne({ txid, outputIndex })
-            const slapRecord = await db.collection('slapRecords').findOne({ txid, outputIndex })
-            removedDomain = (shipRecord?.domain ?? slapRecord?.domain) as string | undefined
+            removedDomain = await this.lookupDomainForOutpoint(txid, outputIndex)
           }
 
-          // Evict from specified service or all services
-          if (typeof service === 'string') {
-            const svc = engine.lookupServices[service]
-            if (svc !== undefined) {
-              await svc.outputEvicted(txid, outputIndex)
-            }
-          } else {
-            const services = Object.values(engine.lookupServices)
-            for (const svc of services) {
-              try {
-                await svc.outputEvicted(txid, outputIndex)
-              } catch {
-                continue
-              }
-            }
-          }
+          await this.evictFromServices(engine, txid, outputIndex, service)
 
-          // Ban the outpoint if requested
           if (ban === true && this.banService !== undefined) {
             await this.banService.banOutpoint(txid, outputIndex, 'Manually removed by admin', removedDomain)
           }
 
-          // Ban the domain if requested
           if (shouldBanDomain === true && typeof removedDomain === 'string' && this.banService !== undefined) {
-            await this.banService.banDomain(removedDomain, 'Domain banned by admin via token removal')
-
-            // Remove all records for this domain
-            const banDb = this.ensureMongo()
-            await Promise.all([
-              banDb.collection('shipRecords').deleteMany({ domain: removedDomain }),
-              banDb.collection('slapRecords').deleteMany({ domain: removedDomain })
-            ])
+            await this.banDomainAndRemoveRecords(removedDomain, 'Domain banned by admin via token removal')
           }
 
+          const banMsg = ban === true ? ' Outpoint banned.' : ''
+          const domainMsg = shouldBanDomain === true && typeof removedDomain === 'string'
+            ? ` Domain "${removedDomain}" banned.`
+            : ''
           return res.status(200).json({
             status: 'success',
-            message: `Token ${txid}.${outputIndex} removed.${ban === true ? ' Outpoint banned.' : ''}` + (shouldBanDomain === true && typeof removedDomain === 'string' ? ` Domain "${removedDomain}" banned.` : '')
+            message: `Token ${txid}.${outputIndex} removed.${banMsg}${domainMsg}`
           })
         } catch (error) {
           return res.status(400).json({

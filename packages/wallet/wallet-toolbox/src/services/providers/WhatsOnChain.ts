@@ -324,13 +324,7 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     outputFormat?: GetUtxoStatusOutputFormat,
     outpoint?: string
   ): Promise<GetUtxoStatusResult> {
-    const r: GetUtxoStatusResult = {
-      name: 'WoC',
-      status: 'error',
-      error: new WERR_INTERNAL(),
-      details: []
-    }
-
+    const r: GetUtxoStatusResult = { name: 'WoC', status: 'error', error: new WERR_INTERNAL(), details: [] }
     const scriptHash = validateScriptHash(output, outputFormat)
     const url = `${this.URL}/script/${scriptHash}/unspent/all`
     const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
@@ -338,39 +332,32 @@ export class WhatsOnChainNoServices extends SdkWhatsOnChain {
     for (let retry = 0; retry <= 2; retry++) {
       try {
         const response = await this.httpClient.request<WhatsOnChainUtxoStatus>(url, requestOptions)
-
-        if (response.statusText === 'Too Many Requests' && retry < 2) {
-          await wait(2000)
-          continue
-        }
-
-        // response.statusText is often, but not always 'OK' on success...
-        if (!response.data || !response.ok || response.status !== 200) {
-          throw new WERR_INVALID_OPERATION(`WoC getUtxoStatus response ${response.statusText}`)
-        }
-
-        const data = response.data
-        if (data.script !== scriptHash || !Array.isArray(data.result)) {
-          throw new WERR_INTERNAL('data. is not an array')
-        }
-
-        r.status = 'success'
-        r.error = undefined
-
-        if (data.result.length === 0) {
-          r.isUtxo = false
-        } else {
-          populateUtxoDetails(r, data.result, outpoint)
-        }
-
+        if (response.statusText === 'Too Many Requests' && retry < 2) { await wait(2000); continue }
+        this.applyUtxoStatusResponse(r, response, scriptHash, outpoint)
         return r
       } catch (error_: unknown) {
         const shouldRetry = handleUtxoConnReset(r, error_, url, retry, 2)
         if (!shouldRetry) return r
       }
     }
-
     return r
+  }
+
+  private applyUtxoStatusResponse (
+    r: GetUtxoStatusResult,
+    response: { data?: WhatsOnChainUtxoStatus, ok: boolean, status: number, statusText: string },
+    scriptHash: string,
+    outpoint?: string
+  ): void {
+    if (!response.data || !response.ok || response.status !== 200) {
+      throw new WERR_INVALID_OPERATION(`WoC getUtxoStatus response ${response.statusText}`)
+    }
+    const data = response.data
+    if (data.script !== scriptHash || !Array.isArray(data.result)) throw new WERR_INTERNAL('data. is not an array')
+    r.status = 'success'
+    r.error = undefined
+    if (data.result.length === 0) r.isUtxo = false
+    else populateUtxoDetails(r, data.result, outpoint)
   }
 
   async getScriptHashConfirmedHistory (hash: string): Promise<GetScriptHashHistoryResult> {
@@ -543,14 +530,12 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
   async getMerklePath (txid: string, services: WalletServices): Promise<GetMerklePathResult> {
     const r: GetMerklePathResult = { name: 'WoCTsc', notes: [] }
     const name = r.name!
-
     const requestOptions = { method: 'GET', headers: this.getHttpHeaders() }
     const url = `${this.URL}/tx/${txid}/proof/tsc`
 
     for (let retry = 0; retry < 2; retry++) {
       try {
         const response = await this.httpClient.request<WhatsOnChainTscProof | WhatsOnChainTscProof[]>(url, requestOptions)
-
         const classification = classifyMerklePathResponse(response.status, response.statusText, retry)
 
         if (classification === 'retry') {
@@ -562,30 +547,7 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
           r.notes!.push(makeMerklePathNote('getMerklePathNotFound', name, { status: response.status, statusText: response.statusText }))
           return r
         }
-        // response.statusText is often, but not always 'OK' on success...
-        if (!response.ok || response.status !== 200) {
-          r.notes!.push(makeMerklePathNote('getMerklePathBadStatus', name, { status: response.status, statusText: response.statusText }))
-          throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`)
-        }
-        if (!response.data) {
-          // Unmined, proof not yet available.
-          r.notes!.push(makeMerklePathNote('getMerklePathNoData', name, { status: response.status, statusText: response.statusText }))
-          return r
-        }
-
-        if (!Array.isArray(response.data)) response.data = [response.data]
-        if (response.data.length != 1) return r
-
-        const p = response.data[0]
-        const header = await services.hashToHeader(p.target)
-        if (header) {
-          r.merklePath = convertProofToMerklePath(txid, { index: p.index, nodes: p.nodes, height: header.height })
-          r.header = header
-          r.notes!.push(makeMerklePathNote('getMerklePathSuccess', name, { status: response.status, statusText: response.statusText }))
-        } else {
-          r.notes!.push(makeMerklePathNote('getMerklePathNoHeader', name, { target: p.target, status: response.status, statusText: response.statusText }))
-          throw new WERR_INVALID_PARAMETER('blockhash', 'a valid on-chain block hash')
-        }
+        await this.applyMerklePathResponse(r, name, txid, response, services)
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
         r.notes!.push(makeMerklePathNote('getMerklePathError', name, { code: e.code, description: e.description }))
@@ -595,6 +557,37 @@ export class WhatsOnChain extends WhatsOnChainNoServices {
     }
     r.notes!.push(makeMerklePathNote('getMerklePathInternal', name))
     throw new WERR_INTERNAL()
+  }
+
+  private async applyMerklePathResponse (
+    r: GetMerklePathResult,
+    name: string,
+    txid: string,
+    response: { data?: WhatsOnChainTscProof | WhatsOnChainTscProof[], ok: boolean, status: number, statusText: string },
+    services: WalletServices
+  ): Promise<void> {
+    if (!response.ok || response.status !== 200) {
+      r.notes!.push(makeMerklePathNote('getMerklePathBadStatus', name, { status: response.status, statusText: response.statusText }))
+      throw new WERR_INVALID_PARAMETER('txid', `valid transaction. '${txid}' response ${response.statusText}`)
+    }
+    if (!response.data) {
+      // Unmined, proof not yet available.
+      r.notes!.push(makeMerklePathNote('getMerklePathNoData', name, { status: response.status, statusText: response.statusText }))
+      return
+    }
+    if (!Array.isArray(response.data)) response.data = [response.data]
+    if (response.data.length !== 1) return
+
+    const p = response.data[0]
+    const header = await services.hashToHeader(p.target)
+    if (header) {
+      r.merklePath = convertProofToMerklePath(txid, { index: p.index, nodes: p.nodes, height: header.height })
+      r.header = header
+      r.notes!.push(makeMerklePathNote('getMerklePathSuccess', name, { status: response.status, statusText: response.statusText }))
+    } else {
+      r.notes!.push(makeMerklePathNote('getMerklePathNoHeader', name, { target: p.target, status: response.status, statusText: response.statusText }))
+      throw new WERR_INVALID_PARAMETER('blockhash', 'a valid on-chain block hash')
+    }
   }
 }
 

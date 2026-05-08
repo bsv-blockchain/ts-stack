@@ -399,13 +399,13 @@ export default class PrivateKey extends BigNumber {
     let sharedSecret: Point
     if (typeof retrieveCachedSharedSecret === 'function') {
       const retrieved = retrieveCachedSharedSecret(this, publicKey)
-      if (retrieved !== undefined) {
-        sharedSecret = retrieved
-      } else {
+      if (retrieved === undefined) {
         sharedSecret = this.deriveSharedSecret(publicKey)
         if (typeof cacheSharedSecret === 'function') {
           cacheSharedSecret(this, publicKey, sharedSecret)
         }
+      } else {
+        sharedSecret = retrieved
       }
     } else {
       sharedSecret = this.deriveSharedSecret(publicKey)

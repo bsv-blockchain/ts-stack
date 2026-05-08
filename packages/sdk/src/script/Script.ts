@@ -11,7 +11,7 @@ import BigNumber from '../primitives/BigNumber.js'
  * @property {ScriptChunk[]} chunks - An array of script chunks that make up the script.
  */
 const BufferCtor =
-  typeof globalThis !== 'undefined' ? (globalThis as any).Buffer : undefined
+  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
 export default class Script {
   private _chunks: ScriptChunk[]
@@ -179,9 +179,9 @@ export default class Script {
     }
     this.rawBytesCache ??= this.serializeChunksToBytes()
     const hex =
-      BufferCtor != null
-        ? BufferCtor.from(this.rawBytesCache).toString('hex')
-        : (encode(Array.from(this.rawBytesCache), 'hex') as string)
+      BufferCtor == null
+        ? (encode(Array.from(this.rawBytesCache), 'hex') as string)
+        : BufferCtor.from(this.rawBytesCache).toString('hex')
     this.hexCache = hex
     return hex
   }
@@ -611,8 +611,8 @@ export default class Script {
           for (let i = start; i < end; i++) out.push(bytes[i] ?? 0)
         }
         pos = end
-      } else {
-        if (op !== opcode) out.push(op)
+      } else if (op !== opcode) {
+        out.push(op)
       }
     }
 

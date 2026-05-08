@@ -124,10 +124,10 @@ export default class Transaction {
   static fromAtomicBEEF (beef: number[] | Uint8Array): Transaction {
     const { tx, txid, beef: b } = Transaction.fromAnyBeef(beef)
     if (txid !== b.atomicTxid) {
-      if (b.atomicTxid != null) {
-        throw new Error(`Transaction with TXID ${b.atomicTxid} not found in BEEF data.`)
-      } else {
+      if (b.atomicTxid == null) {
         throw new Error('beef must conform to BRC-95 and must contain the subject txid.')
+      } else {
+        throw new Error(`Transaction with TXID ${b.atomicTxid} not found in BEEF data.`)
       }
     }
     return tx
@@ -145,10 +145,10 @@ export default class Transaction {
     const target = txid ?? b.atomicTxid ?? lastTx.txid
     const tx = b.findAtomicTransaction(target)
     if (tx == null) {
-      if (txid != null) {
-        throw new Error(`Transaction with TXID ${String(target)} not found in BEEF data.`)
-      } else {
+      if (txid == null) {
         throw new Error('beef does not contain transaction for atomic txid.')
+      } else {
+        throw new Error(`Transaction with TXID ${String(target)} not found in BEEF data.`)
       }
     }
     return { tx, beef: b, txid: target }
@@ -496,10 +496,10 @@ export default class Transaction {
     }
     if (distributedChange < change) {
       const lastOutput = this.outputs.at(-1)
-      if (lastOutput.satoshis !== undefined) {
-        lastOutput.satoshis += change - distributedChange
-      } else {
+      if (lastOutput.satoshis === undefined) {
         lastOutput.satoshis = change - distributedChange
+      } else {
+        lastOutput.satoshis += change - distributedChange
       }
     }
   }
@@ -619,10 +619,10 @@ export default class Transaction {
     writer.writeVarIntNum(this.inputs.length)
     for (const i of this.inputs) {
       if (i.sourceTXID === undefined) {
-        if (i.sourceTransaction != null) {
-          writer.write(i.sourceTransaction.hash() as number[])
-        } else {
+        if (i.sourceTransaction == null) {
           throw new Error('sourceTransaction is undefined')
+        } else {
+          writer.write(i.sourceTransaction.hash() as number[])
         }
       } else {
         writer.writeReverse(toArray(i.sourceTXID, 'hex'))
@@ -1237,14 +1237,14 @@ export default class Transaction {
       }
 
       // Extract options that apply to signAction (subset of CreateActionOptions)
-      const signActionOptions: SignActionOptions | undefined = options != null
-        ? {
+      const signActionOptions: SignActionOptions | undefined = options == null
+        ? undefined
+        : {
             acceptDelayedBroadcast: options.acceptDelayedBroadcast,
             returnTXIDOnly: options.returnTXIDOnly,
             noSend: options.noSend,
             sendWith: options.sendWith
           }
-        : undefined
 
       // Call signAction with the generated unlocking scripts
       const signResult = await wallet.signAction({

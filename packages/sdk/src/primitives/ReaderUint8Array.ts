@@ -61,7 +61,7 @@ export class ReaderUint8Array {
     const val = this.bin[this.pos]
     this.pos += 1
     // If the sign bit is set, convert to negative value
-    return (val & 0x80) !== 0 ? val - 0x100 : val
+    return (val & 0x80) === 0 ? val : val - 0x100
   }
 
   public readUInt16BE (): number {
@@ -73,10 +73,10 @@ export class ReaderUint8Array {
   public readInt16BE (): number {
     const val = this.readUInt16BE()
     // If the sign bit is set, convert to negative value
-    return (val & 0x8000) !== 0 ? val - 0x10000 : val
+    return (val & 0x8000) === 0 ? val : val - 0x10000
   }
 
-  public readUInt16LE (): number {
+  public readUInt16LE(): number {
     const val = this.bin[this.pos] | (this.bin[this.pos + 1] << 8)
     this.pos += 2
     return val
@@ -85,7 +85,7 @@ export class ReaderUint8Array {
   public readInt16LE (): number {
     const val = this.readUInt16LE()
     // If the sign bit is set, convert to negative value
-    const x = (val & 0x8000) !== 0 ? val - 0x10000 : val
+    const x = (val & 0x8000) === 0 ? val : val - 0x10000
     return x
   }
 
@@ -102,7 +102,7 @@ export class ReaderUint8Array {
   public readInt32BE (): number {
     const val = this.readUInt32BE()
     // If the sign bit is set, convert to negative value
-    return (val & 0x80000000) !== 0 ? val - 0x100000000 : val
+    return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
   public readUInt32LE (): number {
@@ -119,7 +119,7 @@ export class ReaderUint8Array {
   public readInt32LE (): number {
     const val = this.readUInt32LE()
     // Explicitly check if the sign bit is set and then convert to a negative value
-    return (val & 0x80000000) !== 0 ? val - 0x100000000 : val
+    return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
   public readUInt64BEBn (): BigNumber {

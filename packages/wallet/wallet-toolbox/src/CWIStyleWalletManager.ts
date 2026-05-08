@@ -523,7 +523,42 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     token: UMPToken,
     oldTokenToConsume?: UMPToken
   ): Promise<OutpointString> {
-    // 1) Construct the data fields for the new UMP token.
+    // 1) Construct the data fields and PushDrop locking script for the new UMP token.
+    const fields = this.buildUMPTokenFields(token)
+    const script = await new PushDrop(wallet, adminOriginator).lock(
+      fields,
+      [2, 'admin user management token'],
+      '1',
+      'self',
+      /* forSelf= */ true,
+      /* includeSignature= */ true
+    )
+    const tokenOutput = [{ lockingScript: script.toHex(), satoshis: 1, outputDescription: 'New UMP token output' }]
+
+    // 2) Resolve the old-token input (if provided) and create the action.
+    const { resolvedOldToken, inputToken } = await this.resolveOldTokenInput(oldTokenToConsume)
+    const inputs: CreateActionInput[] = resolvedOldToken?.currentOutpoint
+      ? [{ outpoint: resolvedOldToken.currentOutpoint, unlockingScriptLength: 73, inputDescription: 'Consume old UMP token' }]
+      : []
+
+    const createResult = await this.createUMPAction(wallet, adminOriginator, inputs, tokenOutput, inputToken, resolvedOldToken)
+
+    // 3) If the wallet fully processed it (no signable tx), broadcast and return.
+    if (!createResult.signableTransaction) {
+      return await this.broadcastFinishedUMPAction(createResult)
+    }
+
+    // 4) Sign and broadcast: with old token input or without.
+    const reference = createResult.signableTransaction.reference
+    const partialTx = Transaction.fromBEEF(createResult.signableTransaction.tx)
+    if (resolvedOldToken?.currentOutpoint) {
+      return await this.signAndBroadcastWithOldToken(wallet, adminOriginator, reference, partialTx)
+    }
+    return await this.signAndBroadcastNewToken(wallet, adminOriginator, reference)
+  }
+
+  /** Assembles the ordered number[][] fields array from a UMPToken. */
+  private buildUMPTokenFields (token: UMPToken): number[][] {
     const fields: number[][] = []
     fields[0] = token.passwordSalt
     fields[1] = token.passwordPresentationPrimary
@@ -536,170 +571,101 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     fields[8] = token.presentationKeyEncrypted
     fields[9] = token.passwordKeyEncrypted
     fields[10] = token.recoveryKeyEncrypted
-
-    // Optional field for encrypted profiles
-    if (token.profilesEncrypted != null) {
-      fields[11] = token.profilesEncrypted
+    if (token.profilesEncrypted != null) fields[11] = token.profilesEncrypted
+    if (token.umpVersion === 3 && token.passwordKdf != null) {
+      const vi = (token.profilesEncrypted == null) ? 11 : 12
+      fields[vi] = [token.umpVersion]
+      fields[vi + 1] = Utils.toArray(token.passwordKdf.algorithm, 'utf8')
+      const kdfParams: Record<string, number> = { iterations: token.passwordKdf.iterations }
+      if (token.passwordKdf.memoryKiB !== undefined) kdfParams.memoryKiB = token.passwordKdf.memoryKiB
+      if (token.passwordKdf.parallelism !== undefined) kdfParams.parallelism = token.passwordKdf.parallelism
+      if (token.passwordKdf.hashLength !== undefined) kdfParams.hashLength = token.passwordKdf.hashLength
+      fields[vi + 2] = Utils.toArray(JSON.stringify(kdfParams), 'utf8')
     }
+    return fields
+  }
 
-    // V3 fields: umpVersion, kdfAlgorithm, kdfParams
-    if (token.umpVersion === 3 && (token.passwordKdf != null)) {
-      const versionFieldIndex = (token.profilesEncrypted == null) ? 11 : 12
+  /** Looks up the old token on the overlay; returns undefined resolved token if not found. */
+  private async resolveOldTokenInput (
+    oldTokenToConsume?: UMPToken
+  ): Promise<{ resolvedOldToken?: UMPToken, inputToken?: { beef: number[], outputIndex: number } }> {
+    if (!oldTokenToConsume?.currentOutpoint) return { resolvedOldToken: undefined, inputToken: undefined }
+    const inputToken = await this.findByOutpoint(oldTokenToConsume.currentOutpoint)
+    if (inputToken == null) return { resolvedOldToken: undefined, inputToken: undefined }
+    return { resolvedOldToken: oldTokenToConsume, inputToken }
+  }
 
-      fields[versionFieldIndex] = [token.umpVersion] // Single byte
-      fields[versionFieldIndex + 1] = Utils.toArray(token.passwordKdf.algorithm, 'utf8')
-
-      // Construct kdfParams JSON
-      const kdfParams: Record<string, number> = {
-        iterations: token.passwordKdf.iterations
-      }
-      if (token.passwordKdf.memoryKiB !== undefined) {
-        kdfParams.memoryKiB = token.passwordKdf.memoryKiB
-      }
-      if (token.passwordKdf.parallelism !== undefined) {
-        kdfParams.parallelism = token.passwordKdf.parallelism
-      }
-      if (token.passwordKdf.hashLength !== undefined) {
-        kdfParams.hashLength = token.passwordKdf.hashLength
-      }
-      fields[versionFieldIndex + 2] = Utils.toArray(JSON.stringify(kdfParams), 'utf8')
-    }
-
-    // 2) Create a PushDrop script referencing these fields, locked with the admin key.
-    // The signature will be added as trailing metadata by PushDrop (not part of protocol fields).
-    const script = await new PushDrop(wallet, adminOriginator).lock(
-      fields,
-      [2, 'admin user management token'], // protocolID
-      '1', // keyID
-      'self', // counterparty
-      /* forSelf= */ true,
-      /* includeSignature= */ true
-    )
-
-    // 3) Prepare the createAction call. If oldTokenToConsume is provided, gather the outpoint.
-    const inputs: CreateActionInput[] = []
-    let inputToken: { beef: number[], outputIndex: number } | undefined
-    if (oldTokenToConsume?.currentOutpoint) {
-      inputToken = await this.findByOutpoint(oldTokenToConsume.currentOutpoint)
-      // If there is no token on the overlay, we can't consume it. Just start over with a new token.
-      if (inputToken == null) {
-        oldTokenToConsume = undefined
-
-        // Otherwise, add the input
-      } else {
-        inputs.push({
-          outpoint: oldTokenToConsume.currentOutpoint,
-          unlockingScriptLength: 73, // typical signature length
-          inputDescription: 'Consume old UMP token'
-        })
-      }
-    }
-
-    const outputs = [
-      {
-        lockingScript: script.toHex(),
-        satoshis: 1,
-        outputDescription: 'New UMP token output'
-      }
-    ]
-
-    // 4) Build the partial transaction via createAction.
-    let createResult
+  /** Creates the UMP action; falls back to a bare recovery action on failure. */
+  private async createUMPAction (
+    wallet: WalletInterface,
+    adminOriginator: OriginatorDomainNameStringUnder250Bytes,
+    inputs: CreateActionInput[],
+    outputs: Array<{ lockingScript: string, satoshis: number, outputDescription: string }>,
+    inputToken: { beef: number[], outputIndex: number } | undefined,
+    resolvedOldToken: UMPToken | undefined
+  ): Promise<Awaited<ReturnType<WalletInterface['createAction']>>> {
     try {
-      createResult = await wallet.createAction(
-        {
-          description: (oldTokenToConsume == null) ? 'Create new UMP token' : 'Renew UMP token (consume old, create new)',
-          inputs,
-          outputs,
-          inputBEEF: inputToken?.beef,
-          options: {
-            randomizeOutputs: false,
-            acceptDelayedBroadcast: false
-          }
-        },
-        adminOriginator
-      )
+      return await wallet.createAction({
+        description: (resolvedOldToken == null) ? 'Create new UMP token' : 'Renew UMP token (consume old, create new)',
+        inputs,
+        outputs,
+        inputBEEF: inputToken?.beef,
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      }, adminOriginator)
     } catch (e) {
       console.error('Error with UMP token update. Attempting a last-ditch effort to get a new one', e)
-      createResult = await wallet.createAction(
-        {
-          description: 'Recover UMP token',
-          outputs,
-          options: {
-            randomizeOutputs: false,
-            acceptDelayedBroadcast: false
-          }
-        },
-        adminOriginator
-      )
+      return await wallet.createAction({
+        description: 'Recover UMP token',
+        outputs,
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      }, adminOriginator)
     }
+  }
 
-    // If the transaction is fully processed by the wallet
-    if (!createResult.signableTransaction) {
-      const finalTxid =
-        createResult.txid || (createResult.tx ? Transaction.fromAtomicBEEF(createResult.tx).id('hex') : undefined)
-      if (!finalTxid) {
-        throw new Error('No signableTransaction and no final TX found.')
-      }
-      // Now broadcast to `tm_users` using SHIP
-      const broadcastTx = Transaction.fromAtomicBEEF(createResult.tx)
-      const result = await this.broadcaster.broadcast(broadcastTx)
-      console.log('BROADCAST RESULT', result)
-      return `${finalTxid}.0`
-    }
+  /** Handles a fully-finalized (no signable tx) createAction result — broadcasts and returns outpoint. */
+  private async broadcastFinishedUMPAction (
+    createResult: Awaited<ReturnType<WalletInterface['createAction']>>
+  ): Promise<OutpointString> {
+    const finalTxid = createResult.txid || (createResult.tx != null ? Transaction.fromAtomicBEEF(createResult.tx).id('hex') : undefined)
+    if (!finalTxid) throw new Error('No signableTransaction and no final TX found.')
+    if (createResult.tx == null) throw new Error('No final TX data to broadcast.')
+    const broadcastTx = Transaction.fromAtomicBEEF(createResult.tx)
+    const result = await this.broadcaster.broadcast(broadcastTx)
+    console.log('BROADCAST RESULT', result)
+    return `${finalTxid}.0`
+  }
 
-    // 5) If oldTokenToConsume is present, we must sign the input referencing it.
-    //    (If there's no old token, there's nothing to sign for the input.)
-    let finalTxid = ''
-    const reference = createResult.signableTransaction.reference
-    const partialTx = Transaction.fromBEEF(createResult.signableTransaction.tx)
+  /** Signs the old-token input and broadcasts — used during UMP token renewal. */
+  private async signAndBroadcastWithOldToken (
+    wallet: WalletInterface,
+    adminOriginator: OriginatorDomainNameStringUnder250Bytes,
+    reference: string,
+    partialTx: Transaction
+  ): Promise<OutpointString> {
+    const unlocker = new PushDrop(wallet, adminOriginator).unlock([2, 'admin user management token'], '1', 'self')
+    const unlockingScript = await unlocker.sign(partialTx, 0)
+    const signResult = await wallet.signAction({ reference, spends: { 0: { unlockingScript: unlockingScript.toHex() } } }, adminOriginator)
+    const finalTxid = signResult.txid || ((signResult.tx == null) ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
+    if (!finalTxid) throw new Error('Could not finalize transaction for renewed UMP token.')
+    if (signResult.tx == null) throw new Error('Final transaction data missing after signing renewed UMP token.')
+    const result = await this.broadcaster.broadcast(Transaction.fromAtomicBEEF(signResult.tx))
+    console.log('BROADCAST RESULT', result)
+    return `${finalTxid}.0`
+  }
 
-    if (oldTokenToConsume?.currentOutpoint) {
-      // Unlock the old token with a matching PushDrop unlocker
-      const unlocker = new PushDrop(wallet, adminOriginator).unlock([2, 'admin user management token'], '1', 'self')
-      const unlockingScript = await unlocker.sign(partialTx, 0)
-
-      // Provide it to the wallet
-      const signResult = await wallet.signAction(
-        {
-          reference,
-          spends: {
-            0: {
-              unlockingScript: unlockingScript.toHex()
-            }
-          }
-        },
-        adminOriginator
-      )
-      finalTxid = signResult.txid || ((signResult.tx == null) ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
-      if (!finalTxid) {
-        throw new Error('Could not finalize transaction for renewed UMP token.')
-      }
-      // 6) Broadcast to `tm_users`
-      const finalAtomicTx = signResult.tx
-      if (finalAtomicTx == null) {
-        throw new Error('Final transaction data missing after signing renewed UMP token.')
-      }
-      const broadcastTx = Transaction.fromAtomicBEEF(finalAtomicTx)
-      const result = await this.broadcaster.broadcast(broadcastTx)
-      console.log('BROADCAST RESULT', result)
-      return `${finalTxid}.0`
-    } else {
-      // Fallback for creating a new token (no input spending)
-      const signResult = await wallet.signAction({ reference, spends: {} }, adminOriginator)
-      finalTxid = signResult.txid || ((signResult.tx == null) ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
-      if (!finalTxid) {
-        throw new Error('Failed to finalize new UMP token transaction.')
-      }
-      const finalAtomicTx = signResult.tx
-      if (finalAtomicTx == null) {
-        throw new Error('Final transaction data missing after signing new UMP token.')
-      }
-      const broadcastTx = Transaction.fromAtomicBEEF(finalAtomicTx)
-      const result = await this.broadcaster.broadcast(broadcastTx)
-      console.log('BROADCAST RESULT', result)
-      return `${finalTxid}.0`
-    }
+  /** Signs without input spending and broadcasts — used when creating a brand-new UMP token. */
+  private async signAndBroadcastNewToken (
+    wallet: WalletInterface,
+    adminOriginator: OriginatorDomainNameStringUnder250Bytes,
+    reference: string
+  ): Promise<OutpointString> {
+    const signResult = await wallet.signAction({ reference, spends: {} }, adminOriginator)
+    const finalTxid = signResult.txid || ((signResult.tx == null) ? '' : Transaction.fromAtomicBEEF(signResult.tx).id('hex'))
+    if (!finalTxid) throw new Error('Failed to finalize new UMP token transaction.')
+    if (signResult.tx == null) throw new Error('Final transaction data missing after signing new UMP token.')
+    const result = await this.broadcaster.broadcast(Transaction.fromAtomicBEEF(signResult.tx))
+    console.log('BROADCAST RESULT', result)
+    return `${finalTxid}.0`
   }
 
   /**
@@ -1037,138 +1003,104 @@ export class CWIStyleWalletManager implements WalletInterface {
    * Provides the password.
    */
   async providePassword (password: string): Promise<void> {
-    if (this.authenticated) {
-      throw new Error('User is already authenticated')
-    }
+    if (this.authenticated) throw new Error('User is already authenticated')
     if (this.authenticationMode === 'presentation-key-and-recovery-key') {
       throw new Error('Password is not needed in this mode')
     }
-
     if (this.authenticationFlow === 'existing-user') {
-      // Existing user flow
-      if (this.currentUMPToken == null) {
-        throw new Error('Provide presentation or recovery key first.')
-      }
-      // Use token-driven KDF (legacy PBKDF2 or v3 Argon2id)
-      const derivedPasswordKey = await derivePasswordKey(this.currentUMPToken, Utils.toArray(password, 'utf8'))
-
-      let rootPrimaryKey: number[]
-      let rootPrivilegedKey: number[] | undefined // Only needed for recovery mode
-
-      if (this.authenticationMode === 'presentation-key-and-password') {
-        if (this.presentationKey == null) throw new Error('No presentation key found!')
-        const xorKey = this.XOR(this.presentationKey, derivedPasswordKey)
-        rootPrimaryKey = new SymmetricKey(xorKey).decrypt(this.currentUMPToken.passwordPresentationPrimary) as number[]
-      } else {
-        // 'recovery-key-and-password'
-        if (this.recoveryKey == null) throw new Error('No recovery key found!')
-        const primaryDecryptionKey = this.XOR(this.recoveryKey, derivedPasswordKey)
-        rootPrimaryKey = new SymmetricKey(primaryDecryptionKey).decrypt(
-          this.currentUMPToken.passwordRecoveryPrimary
-        ) as number[]
-        const privilegedDecryptionKey = this.XOR(rootPrimaryKey, derivedPasswordKey)
-        rootPrivilegedKey = new SymmetricKey(privilegedDecryptionKey).decrypt(
-          this.currentUMPToken.passwordPrimaryPrivileged
-        ) as number[]
-      }
-      // Build root infrastructure, load profiles, and switch to default profile initially
-      await this.setupRootInfrastructure(rootPrimaryKey, rootPrivilegedKey)
-      await this.switchProfile(this.activeProfileId)
+      await this.handleExistingUserPassword(password)
     } else {
-      // New user flow (only 'presentation-key-and-password')
-      if (this.authenticationMode !== 'presentation-key-and-password') {
-        throw new Error('New-user flow requires presentation key and password mode.')
-      }
-      if (this.presentationKey == null) {
-        throw new Error('No presentation key provided for new-user flow.')
-      }
-
-      // Generate new keys/salt
-      const recoveryKey = Random(32)
-      await this.recoveryKeySaver(recoveryKey)
-      const passwordSalt = Random(32)
-
-      // Build temporary token with KDF config for password derivation
-      const tempTokenForKdf = {
-        passwordSalt,
-        passwordKdf: this.kdfConfig
-      }
-      const passwordKey = await derivePasswordKey(tempTokenForKdf, Utils.toArray(password, 'utf8'))
-      const rootPrimaryKey = Random(32)
-      const rootPrivilegedKey = Random(32)
-
-      // Build XOR keys
-      const presentationPassword = new SymmetricKey(this.XOR(this.presentationKey, passwordKey))
-      const presentationRecovery = new SymmetricKey(this.XOR(this.presentationKey, recoveryKey))
-      const recoveryPassword = new SymmetricKey(this.XOR(recoveryKey, passwordKey))
-      const primaryPassword = new SymmetricKey(this.XOR(rootPrimaryKey, passwordKey))
-
-      // Temp manager for encryption
-      const tempPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
-
-      // Build new UMP token (v3 with KDF metadata, no profiles initially)
-      const newToken: UMPToken = {
-        passwordSalt,
-        passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
-        passwordRecoveryPrimary: recoveryPassword.encrypt(rootPrimaryKey) as number[],
-        presentationRecoveryPrimary: presentationRecovery.encrypt(rootPrimaryKey) as number[],
-        passwordPrimaryPrivileged: primaryPassword.encrypt(rootPrivilegedKey) as number[],
-        presentationRecoveryPrivileged: presentationRecovery.encrypt(rootPrivilegedKey) as number[],
-        presentationHash: Hash.sha256(this.presentationKey),
-        recoveryHash: Hash.sha256(recoveryKey),
-        presentationKeyEncrypted: (
-          await tempPrivilegedKeyManager.encrypt({
-            plaintext: this.presentationKey,
-            protocolID: [2, 'admin key wrapping'],
-            keyID: '1'
-          })
-        ).ciphertext,
-        passwordKeyEncrypted: (
-          await tempPrivilegedKeyManager.encrypt({
-            plaintext: passwordKey,
-            protocolID: [2, 'admin key wrapping'],
-            keyID: '1'
-          })
-        ).ciphertext,
-        recoveryKeyEncrypted: (
-          await tempPrivilegedKeyManager.encrypt({
-            plaintext: recoveryKey,
-            protocolID: [2, 'admin key wrapping'],
-            keyID: '1'
-          })
-        ).ciphertext,
-        profilesEncrypted: undefined, // No profiles yet
-        umpVersion: 3, // UMP protocol version 3
-        passwordKdf: this.kdfConfig // KDF metadata for v3
-      }
-      this.currentUMPToken = newToken
-
-      // Setup root infrastructure and switch to default profile
-      await this.setupRootInfrastructure(rootPrimaryKey)
-      await this.switchProfile(DEFAULT_PROFILE_ID)
-
-      // Fund the *default* wallet if funder provided
-      if ((this.newWalletFunder != null) && (this.underlying != null)) {
-        try {
-          await this.newWalletFunder(this.presentationKey, this.underlying, this.adminOriginator)
-        } catch (e) {
-          console.error('Error funding new wallet:', e)
-          const message = e instanceof Error ? e.message : String(e)
-          throw new Error(`Failed to fund new wallet before publishing UMP token: ${message}`)
-        }
-      }
-
-      // Publish the new UMP token *after* potentially funding
-      // We need the default profile wallet to sign the UMP creation TX
-      if (this.underlying == null) {
-        throw new Error('Default profile wallet not built before attempting to publish UMP token.')
-      }
-      this.currentUMPToken.currentOutpoint = await this.UMPTokenInteractor.buildAndSend(
-        this.underlying, // Use the default profile wallet
-        this.adminOriginator,
-        newToken
-      )
+      await this.handleNewUserPassword(password)
     }
+  }
+
+  /** Handles the password step for an existing user — derives keys, sets up infrastructure. */
+  private async handleExistingUserPassword (password: string): Promise<void> {
+    if (this.currentUMPToken == null) throw new Error('Provide presentation or recovery key first.')
+    const derivedPasswordKey = await derivePasswordKey(this.currentUMPToken, Utils.toArray(password, 'utf8'))
+    let rootPrimaryKey: number[]
+    let rootPrivilegedKey: number[] | undefined
+
+    if (this.authenticationMode === 'presentation-key-and-password') {
+      if (this.presentationKey == null) throw new Error('No presentation key found!')
+      rootPrimaryKey = new SymmetricKey(this.XOR(this.presentationKey, derivedPasswordKey))
+        .decrypt(this.currentUMPToken.passwordPresentationPrimary) as number[]
+    } else {
+      // 'recovery-key-and-password'
+      if (this.recoveryKey == null) throw new Error('No recovery key found!')
+      const primaryDecryptionKey = this.XOR(this.recoveryKey, derivedPasswordKey)
+      rootPrimaryKey = new SymmetricKey(primaryDecryptionKey).decrypt(this.currentUMPToken.passwordRecoveryPrimary) as number[]
+      rootPrivilegedKey = new SymmetricKey(this.XOR(rootPrimaryKey, derivedPasswordKey))
+        .decrypt(this.currentUMPToken.passwordPrimaryPrivileged) as number[]
+    }
+    await this.setupRootInfrastructure(rootPrimaryKey, rootPrivilegedKey)
+    await this.switchProfile(this.activeProfileId)
+  }
+
+  /** Handles the password step for a new user — generates keys, builds UMP token, publishes on-chain. */
+  private async handleNewUserPassword (password: string): Promise<void> {
+    if (this.authenticationMode !== 'presentation-key-and-password') {
+      throw new Error('New-user flow requires presentation key and password mode.')
+    }
+    if (this.presentationKey == null) throw new Error('No presentation key provided for new-user flow.')
+
+    // Generate new keys/salt
+    const recoveryKey = Random(32)
+    await this.recoveryKeySaver(recoveryKey)
+    const passwordSalt = Random(32)
+    const passwordKey = await derivePasswordKey({ passwordSalt, passwordKdf: this.kdfConfig }, Utils.toArray(password, 'utf8'))
+    const rootPrimaryKey = Random(32)
+    const rootPrivilegedKey = Random(32)
+
+    // Build XOR-combined symmetric keys
+    const presentationPassword = new SymmetricKey(this.XOR(this.presentationKey, passwordKey))
+    const presentationRecovery = new SymmetricKey(this.XOR(this.presentationKey, recoveryKey))
+    const recoveryPassword = new SymmetricKey(this.XOR(recoveryKey, passwordKey))
+    const primaryPassword = new SymmetricKey(this.XOR(rootPrimaryKey, passwordKey))
+
+    const tempPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
+    const wrapKey = async (plaintext: number[]): Promise<number[]> =>
+      (await tempPrivilegedKeyManager.encrypt({ plaintext, protocolID: [2, 'admin key wrapping'], keyID: '1' })).ciphertext
+
+    // Build new UMP token (v3 with KDF metadata, no profiles initially)
+    const newToken: UMPToken = {
+      passwordSalt,
+      passwordPresentationPrimary: presentationPassword.encrypt(rootPrimaryKey) as number[],
+      passwordRecoveryPrimary: recoveryPassword.encrypt(rootPrimaryKey) as number[],
+      presentationRecoveryPrimary: presentationRecovery.encrypt(rootPrimaryKey) as number[],
+      passwordPrimaryPrivileged: primaryPassword.encrypt(rootPrivilegedKey) as number[],
+      presentationRecoveryPrivileged: presentationRecovery.encrypt(rootPrivilegedKey) as number[],
+      presentationHash: Hash.sha256(this.presentationKey),
+      recoveryHash: Hash.sha256(recoveryKey),
+      presentationKeyEncrypted: await wrapKey(this.presentationKey),
+      passwordKeyEncrypted: await wrapKey(passwordKey),
+      recoveryKeyEncrypted: await wrapKey(recoveryKey),
+      profilesEncrypted: undefined,
+      umpVersion: 3,
+      passwordKdf: this.kdfConfig
+    }
+    this.currentUMPToken = newToken
+
+    await this.setupRootInfrastructure(rootPrimaryKey)
+    await this.switchProfile(DEFAULT_PROFILE_ID)
+
+    // Fund the *default* wallet if funder provided
+    if ((this.newWalletFunder != null) && (this.underlying != null)) {
+      try {
+        await this.newWalletFunder(this.presentationKey, this.underlying, this.adminOriginator)
+      } catch (e) {
+        console.error('Error funding new wallet:', e)
+        const message = e instanceof Error ? e.message : String(e)
+        throw new Error(`Failed to fund new wallet before publishing UMP token: ${message}`)
+      }
+    }
+
+    if (this.underlying == null) throw new Error('Default profile wallet not built before attempting to publish UMP token.')
+    this.currentUMPToken.currentOutpoint = await this.UMPTokenInteractor.buildAndSend(
+      this.underlying,
+      this.adminOriginator,
+      newToken
+    )
   }
 
   /**

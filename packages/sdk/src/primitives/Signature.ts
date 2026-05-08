@@ -82,17 +82,17 @@ export default class Signature {
     }
     let s = data.slice(p.place, slen + p.place)
     if (r[0] === 0) {
-      if ((r[1] & 0x80) !== 0) {
-        r = r.slice(1)
-      } else {
+      if ((r[1] & 0x80) === 0) {
         throw new Error('Invalid R-value in signature DER')
+      } else {
+        r = r.slice(1)
       }
     }
     if (s[0] === 0) {
-      if ((s[1] & 0x80) !== 0) {
-        s = s.slice(1)
-      } else {
+      if ((s[1] & 0x80) === 0) {
         throw new Error('Invalid S-value in signature DER')
+      } else {
+        s = s.slice(1)
       }
     }
 
@@ -332,7 +332,7 @@ export default class Signature {
     const G = curve.g
 
     // 1.1 LEt x = r + jn
-    const x = isSecondKey !== 0 ? r.add(n) : r
+    const x = isSecondKey === 0 ? r : r.add(n)
     const R = Point.fromX(x, isYOdd)
 
     // 1.4 Check that nR is at infinity
