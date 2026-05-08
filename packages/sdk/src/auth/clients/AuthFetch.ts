@@ -120,8 +120,10 @@ export class AuthFetch {
         if (this.peers[baseURL] === undefined) {
           // Create a peer for the request
           const newTransport = new SimplifiedFetchTransport(baseURL)
+          const newPeer = new Peer(this.wallet, newTransport, this.requestedCertificates, this.sessionManager, undefined, this.originator)
+          await newPeer.ready
           peerToUse = {
-            peer: new Peer(this.wallet, newTransport, this.requestedCertificates, this.sessionManager, undefined, this.originator),
+            peer: newPeer,
             pendingCertificateRequests: []
           }
           this.peers[baseURL] = peerToUse
@@ -317,15 +319,15 @@ export class AuthFetch {
     let peerToUse: { peer: Peer; identityKey?: string }
     if (this.peers[baseURL] === undefined) {
       const newTransport = new SimplifiedFetchTransport(baseURL)
-      peerToUse = {
-        peer: new Peer(
-          this.wallet,
-          newTransport,
-          this.requestedCertificates,
-          this.sessionManager,
-          this.originator
-        )
-      }
+      const newPeer = new Peer(
+        this.wallet,
+        newTransport,
+        this.requestedCertificates,
+        this.sessionManager,
+        this.originator
+      )
+      await newPeer.ready
+      peerToUse = { peer: newPeer }
       this.peers[baseURL] = peerToUse
     } else {
       peerToUse = { peer: this.peers[baseURL].peer }
