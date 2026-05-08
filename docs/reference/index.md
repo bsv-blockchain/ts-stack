@@ -21,7 +21,7 @@ Quick reference material for API details and protocol indices.
 
 ## Packages by Domain
 
-All 26 packages in the monorepo, with published npm names.
+All 27 packages in the monorepo, with published npm names.
 
 ### SDK
 
@@ -72,6 +72,7 @@ All 26 packages in the monorepo, with published npm names.
 | Package | npm | Purpose |
 |---------|-----|---------|
 | simple | `@bsv/simple` | High-level wrapper for app developers (`./browser` and `./server` entry points) |
+| did | `@bsv/did` | SD-JWT VC and optional `did:key` helpers |
 | did-client | `@bsv/did-client` | DID creation and resolution client |
 | wallet-helper | `@bsv/wallet-helper` | Fluent transaction builder |
 | amountinator | `@bsv/amountinator` | BSV amount formatting and conversion |

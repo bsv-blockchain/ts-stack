@@ -1,0 +1,72 @@
+{
+  "name": "@bsv/did",
+  "version": "0.1.0",
+  "description": "SD-JWT VC and did:key helpers for BSV SDK identities",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "dist/cjs/mod.js",
+  "module": "dist/esm/mod.js",
+  "types": "dist/types/mod.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "mod.ts",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/mod.d.ts",
+      "import": "./dist/esm/mod.js",
+      "require": "./dist/cjs/mod.js"
+    },
+    "./*.ts": {
+      "types": "./dist/types/src/*.d.ts",
+      "import": "./dist/esm/src/*.js",
+      "require": "./dist/cjs/src/*.js"
+    }
+  },
+  "scripts": {
+    "test": "npm run build && jest --passWithNoTests",
+    "test:watch": "npm run build && jest --watch",
+    "test:coverage": "npm run build && jest --coverage",
+    "lint:ci": "ts-standard src/**/*.ts tests/**/*.ts",
+    "lint": "ts-standard --fix src/**/*.ts tests/**/*.ts",
+    "build": "tsc -b && tsconfig-to-dual-package tsconfig.cjs.json",
+    "dev": "tsc -b -w",
+    "prepublish": "npm run build"
+  },
+  "ts-standard": {
+    "project": "tsconfig.eslint.json",
+    "ignore": [
+      "dist"
+    ]
+  },
+  "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
+  "license": "Open BSV License",
+  "dependencies": {
+    "@bsv/sdk": "^2.1.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.13.14",
+    "@types/qrcode": "^1.5.6",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "ts-standard": "^12.0.2",
+    "tsconfig-to-dual-package": "^1.2.0",
+    "typescript": "^5.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/did"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did#readme"
+}
