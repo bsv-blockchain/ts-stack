@@ -840,116 +840,115 @@ export default class Transaction {
 
     while (txQueue.length > 0) {
       const tx = txQueue.shift()
-      const txid = tx?.id('hex') ?? ''
-      if (txid != null && txid !== '' && verifiedTxids.has(txid)) {
+      if (tx === undefined) throw new Error('Transaction is undefined')
+      const txid = tx.id('hex')
+      if (txid !== '' && verifiedTxids.has(txid)) continue
+
+      if (typeof tx.merklePath === 'object') {
+        await this.verifyMerklePath(tx, txid, chainTracker, verifiedTxids)
         continue
       }
 
-      // If the transaction has a valid merkle path, verification is complete.
-      if (typeof tx?.merklePath === 'object') {
-        if (chainTracker === 'scripts only') {
-          if (txid != null) {
-            verifiedTxids.add(txid)
-          }
-          continue
-        } else {
-          const proofValid = await tx.merklePath.verify(txid, chainTracker)
-          // If the proof is valid, no need to verify inputs.
-          if (proofValid) {
-            verifiedTxids.add(txid)
-            continue
-          } else {
-            throw new Error(`Invalid merkle path for transaction ${txid}`)
-          }
-        }
-      }
+      if (feeModel !== undefined) await this.verifyFee(tx, txid, feeModel)
 
-      // Verify fee if feeModel is provided
-      if (feeModel !== undefined) {
-        if (tx === undefined) {
-          throw new Error('Transaction is undefined')
-        }
-        const cpTx = Transaction.fromEF(tx.toEF())
-        delete cpTx.outputs[0].satoshis
-        cpTx.outputs[0].change = true
-        await cpTx.fee(feeModel)
-        if (tx.getFee() < cpTx.getFee()) {
-          throw new Error(
-            `Verification failed because the transaction ${txid} has an insufficient fee and has not been mined.`
-          )
-        }
-      }
+      const inputTotal = await this.verifyInputs(tx, txid, verifiedTxids, txQueue, memoryLimit)
+      if (inputTotal === -1) return false
 
-      // Verify each input transaction and evaluate the spend events.
-      // Also, keep a total of the input amounts for later.
-      let inputTotal = 0
-      if (tx === undefined) {
-        throw new Error('Transaction is undefined')
-      }
-      for (let i = 0; i < tx.inputs.length; i++) {
-        const input = tx.inputs[i]
-        if (typeof input.sourceTransaction !== 'object') {
-          throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
-          )
-        }
-        if (typeof input.unlockingScript !== 'object') {
-          throw new TypeError(
-            `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
-          )
-        }
-        const sourceOutput =
-          input.sourceTransaction.outputs[input.sourceOutputIndex]
-        inputTotal += sourceOutput.satoshis ?? 0
-
-        const sourceTxid = input.sourceTransaction.id('hex')
-        if (!verifiedTxids.has(sourceTxid)) {
-          txQueue.push(input.sourceTransaction)
-        }
-
-        const otherInputs = tx.inputs.filter((_, idx) => idx !== i)
-        input.sourceTXID ??= sourceTxid
-
-        const spend = new Spend({
-          sourceTXID: input.sourceTXID,
-          sourceOutputIndex: input.sourceOutputIndex,
-          lockingScript: sourceOutput.lockingScript,
-          sourceSatoshis: sourceOutput.satoshis ?? 0,
-          transactionVersion: tx.version,
-          otherInputs,
-          unlockingScript: input.unlockingScript,
-          inputSequence: input.sequence ?? 0xffffffff, // default to max sequence
-          inputIndex: i,
-          outputs: tx.outputs,
-          lockTime: tx.lockTime,
-          memoryLimit
-        })
-        const spendValid = spend.validate()
-
-        if (!spendValid) {
-          return false
-        }
-      }
-
-      // Total the outputs to ensure they don't amount to more than the inputs
-      let outputTotal = 0
-      for (const out of tx.outputs) {
-        if (typeof out.satoshis !== 'number') {
-          throw new TypeError(
-            'Every output must have a defined amount during transaction verification.'
-          )
-        }
-        outputTotal += out.satoshis
-      }
-
-      if (outputTotal > inputTotal) {
-        return false
-      }
-
+      if (!this.verifyOutputTotal(tx, inputTotal)) return false
       verifiedTxids.add(txid)
     }
 
     return true
+  }
+
+  private async verifyMerklePath (
+    tx: Transaction,
+    txid: string,
+    chainTracker: ChainTracker | 'scripts only',
+    verifiedTxids: Set<string>
+  ): Promise<void> {
+    if (chainTracker === 'scripts only') {
+      verifiedTxids.add(txid)
+      return
+    }
+    if (tx.merklePath == null) throw new Error(`Missing merkle path for transaction ${txid}`)
+    const proofValid = await tx.merklePath.verify(txid, chainTracker)
+    if (proofValid) {
+      verifiedTxids.add(txid)
+    } else {
+      throw new Error(`Invalid merkle path for transaction ${txid}`)
+    }
+  }
+
+  private async verifyFee (tx: Transaction, txid: string, feeModel: FeeModel): Promise<void> {
+    const cpTx = Transaction.fromEF(tx.toEF())
+    delete cpTx.outputs[0].satoshis
+    cpTx.outputs[0].change = true
+    await cpTx.fee(feeModel)
+    if (tx.getFee() < cpTx.getFee()) {
+      throw new Error(
+        `Verification failed because the transaction ${txid} has an insufficient fee and has not been mined.`
+      )
+    }
+  }
+
+  /** Returns summed inputTotal, or -1 if any spend is invalid. */
+  private async verifyInputs (
+    tx: Transaction,
+    txid: string,
+    verifiedTxids: Set<string>,
+    txQueue: Transaction[],
+    memoryLimit?: number
+  ): Promise<number> {
+    let inputTotal = 0
+    for (let i = 0; i < tx.inputs.length; i++) {
+      const input = tx.inputs[i]
+      if (typeof input.sourceTransaction !== 'object') {
+        throw new TypeError(
+          `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated source transaction. This source transaction is required for transaction verification because there is no merkle proof for the transaction spending a UTXO it contains.`
+        )
+      }
+      if (typeof input.unlockingScript !== 'object') {
+        throw new TypeError(
+          `Verification failed because the input at index ${i} of transaction ${txid} is missing an associated unlocking script. This script is required for transaction verification because there is no merkle proof for the transaction spending the UTXO.`
+        )
+      }
+      const sourceOutput = input.sourceTransaction.outputs[input.sourceOutputIndex]
+      inputTotal += sourceOutput.satoshis ?? 0
+
+      const sourceTxid = input.sourceTransaction.id('hex')
+      if (!verifiedTxids.has(sourceTxid)) txQueue.push(input.sourceTransaction)
+
+      input.sourceTXID ??= sourceTxid
+      const spend = new Spend({
+        sourceTXID: input.sourceTXID,
+        sourceOutputIndex: input.sourceOutputIndex,
+        lockingScript: sourceOutput.lockingScript,
+        sourceSatoshis: sourceOutput.satoshis ?? 0,
+        transactionVersion: tx.version,
+        otherInputs: tx.inputs.filter((_, idx) => idx !== i),
+        unlockingScript: input.unlockingScript,
+        inputSequence: input.sequence ?? 0xffffffff,
+        inputIndex: i,
+        outputs: tx.outputs,
+        lockTime: tx.lockTime,
+        memoryLimit
+      })
+      if (!spend.validate()) return -1
+    }
+    return inputTotal
+  }
+
+  /** Returns false if outputTotal > inputTotal. */
+  private verifyOutputTotal (tx: Transaction, inputTotal: number): boolean {
+    let outputTotal = 0
+    for (const out of tx.outputs) {
+      if (typeof out.satoshis !== 'number') {
+        throw new TypeError('Every output must have a defined amount during transaction verification.')
+      }
+      outputTotal += out.satoshis
+    }
+    return outputTotal <= inputTotal
   }
 
   /**
@@ -1119,10 +1118,25 @@ export default class Transaction {
    * @returns {Promise<void>}
    */
   async completeWithWallet (wallet: WalletInterface, actionDescription?: DescriptionString5to50Bytes, originator?: string, options?: CreateActionOptions): Promise<void> {
-    const inputCount = this.inputs.length
-    const outputCount = this.outputs.length
-    const description = actionDescription ?? `Transaction with ${inputCount} input(s) and ${outputCount} output(s)`
+    const description = actionDescription ?? `Transaction with ${this.inputs.length} input(s) and ${this.outputs.length} output(s)`
+    const hasTemplates = this.inputs.some(input => input.unlockingScriptTemplate != null)
+    const actionArgs = await this.buildActionArgs(description, hasTemplates)
 
+    const atomicBEEF = hasTemplates
+      ? await this.executeWithTemplates(wallet, actionArgs, originator, options)
+      : await this.executeStandard(wallet, actionArgs, originator, options)
+
+    const newTransaction = Transaction.fromAtomicBEEF(atomicBEEF)
+    this.version = newTransaction.version
+    this.inputs = newTransaction.inputs
+    this.outputs = newTransaction.outputs
+    this.lockTime = newTransaction.lockTime
+    this.merklePath = newTransaction.merklePath
+    this.cachedHash = newTransaction.cachedHash
+    this.metadata = { ...this.metadata, ...newTransaction.metadata }
+  }
+
+  private async buildActionArgs (description: string, hasTemplates: boolean): Promise<CreateActionArgs> {
     const actionArgs: CreateActionArgs = {
       description,
       inputs: [] as any[],
@@ -1130,60 +1144,36 @@ export default class Transaction {
       lockTime: this.lockTime,
       version: this.version
     }
-
-    // Check if any input has an unlocking script template
-    const hasTemplates = this.inputs.some(input => input.unlockingScriptTemplate != null)
-
-    // Process inputs - collect all source transactions and convert them to BEEF
     const beefData = new Beef()
     for (let i = 0; i < this.inputs.length; i++) {
       const input = this.inputs[i]
-
       if (input.sourceTransaction == null) {
         throw new Error('All inputs must have a sourceTransaction when using completeWithWallet')
       }
-
-      // Merge source transaction into BEEF
-      const sourceBEEF = input.sourceTransaction.toBEEF()
-      beefData.mergeBeef(sourceBEEF)
-
+      beefData.mergeBeef(input.sourceTransaction.toBEEF())
       const sourceTXID = input.sourceTransaction.id('hex')
-
       const inputArg: any = {
         outpoint: `${sourceTXID}.${input.sourceOutputIndex}`,
         inputDescription: 'Input from source transaction',
         sequenceNumber: input.sequence
       }
-
-      // Handle inputs with templates vs scripts
       if (hasTemplates) {
-        // When using signAction flow, need to provide length for templates
         if (input.unlockingScriptTemplate != null) {
-          const estimatedLength = await input.unlockingScriptTemplate.estimateLength(this, i)
-          inputArg.unlockingScriptLength = estimatedLength
+          inputArg.unlockingScriptLength = await input.unlockingScriptTemplate.estimateLength(this, i)
         } else if (input.unlockingScript != null) {
-          // Still provide the script if it exists
           inputArg.unlockingScript = input.unlockingScript.toHex()
         } else {
           throw new Error(`Input ${i} must have either an unlockingScript or unlockingScriptTemplate`)
         }
       } else {
-        // Original flow: all inputs must have unlocking scripts
         if (input.unlockingScript == null) {
           throw new Error('All inputs must have an unlockingScript when using completeWithWallet')
         }
         inputArg.unlockingScript = input.unlockingScript.toHex()
       }
-
       actionArgs.inputs.push(inputArg)
     }
-
-    // Add inputBEEF if there are inputs
-    if (this.inputs.length > 0) {
-      actionArgs.inputBEEF = beefData.toBinary()
-    }
-
-    // Process outputs
+    if (this.inputs.length > 0) actionArgs.inputBEEF = beefData.toBinary()
     for (const output of this.outputs) {
       actionArgs.outputs.push({
         satoshis: output.satoshis,
@@ -1191,104 +1181,39 @@ export default class Transaction {
         outputDescription: 'Output from source transaction'
       })
     }
-
-    // Add any labels from metadata if they exist
     if (this.metadata?.labels != null && Array.isArray(this.metadata.labels)) {
       actionArgs.labels = this.metadata.labels
     }
+    return actionArgs
+  }
 
-    let atomicBEEF: number[]
-
-    // Use signAction flow for templates
-    if (hasTemplates) {
-      // Merge user options with required signAndProcess: false for template flow
-      actionArgs.options = {
-        ...options,
-        signAndProcess: false
+  private async executeWithTemplates (wallet: WalletInterface, actionArgs: CreateActionArgs, originator?: string, options?: CreateActionOptions): Promise<number[]> {
+    actionArgs.options = { ...options, signAndProcess: false }
+    const { signableTransaction } = await wallet.createAction(actionArgs, originator)
+    if (signableTransaction == null) throw new Error('Wallet createAction did not return signableTransaction')
+    const partialTx = Transaction.fromBEEF(signableTransaction.tx)
+    const spends: Record<number, { unlockingScript: string }> = {}
+    for (let i = 0; i < this.inputs.length; i++) {
+      const input = this.inputs[i]
+      if (input.unlockingScriptTemplate != null) {
+        spends[i] = { unlockingScript: (await input.unlockingScriptTemplate.sign(partialTx, i)).toHex() }
+      } else if (input.unlockingScript != null) {
+        spends[i] = { unlockingScript: input.unlockingScript.toHex() }
       }
-
-      const { signableTransaction } = await wallet.createAction(actionArgs, originator)
-
-      if (signableTransaction == null) {
-        throw new Error('Wallet createAction did not return signableTransaction')
-      }
-
-      // Parse the signable transaction BEEF to get the unsigned transaction
-      const partialTx = Transaction.fromBEEF(signableTransaction.tx)
-
-      // Sign inputs with templates and collect all unlocking scripts
-      const spends: Record<number, { unlockingScript: string }> = {}
-
-      for (let i = 0; i < this.inputs.length; i++) {
-        const input = this.inputs[i]
-
-        if (input.unlockingScriptTemplate != null) {
-          // Use the template to sign this input
-          const unlockingScript = await input.unlockingScriptTemplate.sign(partialTx, i)
-          spends[i] = {
-            unlockingScript: unlockingScript.toHex()
-          }
-        } else if (input.unlockingScript != null) {
-          // Include pre-existing unlocking scripts
-          spends[i] = {
-            unlockingScript: input.unlockingScript.toHex()
-          }
-        }
-      }
-
-      // Extract options that apply to signAction (subset of CreateActionOptions)
-      const signActionOptions: SignActionOptions | undefined = options == null
-        ? undefined
-        : {
-            acceptDelayedBroadcast: options.acceptDelayedBroadcast,
-            returnTXIDOnly: options.returnTXIDOnly,
-            noSend: options.noSend,
-            sendWith: options.sendWith
-          }
-
-      // Call signAction with the generated unlocking scripts
-      const signResult = await wallet.signAction({
-        reference: signableTransaction.reference,
-        spends,
-        options: signActionOptions
-      }, originator)
-
-      if (signResult.tx == null) {
-        throw new Error('Wallet signAction did not return transaction data')
-      }
-
-      atomicBEEF = signResult.tx
-    } else {
-      // Pass through user options for standard flow
-      if (options != null) {
-        actionArgs.options = options
-      }
-
-      const { tx } = await wallet.createAction(actionArgs, originator)
-
-      if (tx == null) {
-        throw new Error('Wallet createAction did not return transaction data')
-      }
-
-      atomicBEEF = tx
     }
+    const signActionOptions: SignActionOptions | undefined = options == null
+      ? undefined
+      : { acceptDelayedBroadcast: options.acceptDelayedBroadcast, returnTXIDOnly: options.returnTXIDOnly, noSend: options.noSend, sendWith: options.sendWith }
+    const signResult = await wallet.signAction({ reference: signableTransaction.reference, spends, options: signActionOptions }, originator)
+    if (signResult.tx == null) throw new Error('Wallet signAction did not return transaction data')
+    return signResult.tx
+  }
 
-    // Create a new transaction from the atomic BEEF
-    const newTransaction = Transaction.fromAtomicBEEF(atomicBEEF)
-
-    // Update this transaction's properties with the new transaction's properties
-    this.version = newTransaction.version
-    this.inputs = newTransaction.inputs
-    this.outputs = newTransaction.outputs
-    this.lockTime = newTransaction.lockTime
-    this.merklePath = newTransaction.merklePath
-    this.cachedHash = newTransaction.cachedHash
-
-    // Preserve metadata from the original transaction but update with any new metadata
-    this.metadata = {
-      ...this.metadata,
-      ...newTransaction.metadata
-    }
+  private async executeStandard (wallet: WalletInterface, actionArgs: CreateActionArgs, originator?: string, options?: CreateActionOptions): Promise<number[]> {
+    if (options != null) actionArgs.options = options
+    const { tx } = await wallet.createAction(actionArgs, originator)
+    if (tx == null) throw new Error('Wallet createAction did not return transaction data')
+    return tx
   }
 
   /**
