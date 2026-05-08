@@ -23,7 +23,7 @@ export interface RouteHandler {
 export function getSearchParams (url: string): URLSearchParams {
   try {
     return new URL(url).searchParams
-  } catch {
+  } catch (_urlError) {
     // Fallback for relative URLs
     const qIndex = url.indexOf('?')
     return new URLSearchParams(qIndex >= 0 ? url.substring(qIndex + 1) : '')

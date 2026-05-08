@@ -22,7 +22,9 @@ export class FileRevocationStore implements RevocationStore {
       if (nodeFs.existsSync(this.filePath)) {
         return JSON.parse(nodeFs.readFileSync(this.filePath, 'utf-8')) as Record<string, RevocationRecord>
       }
-    } catch {}
+    } catch (_readError) {
+      // Corrupted file — return empty records
+    }
     return {}
   }
 

@@ -81,7 +81,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): (req
         if (!valid) {
           throw new Error('ERR_INVALID_DERIVATION_PREFIX');
         }
-      } catch {
+      } catch (_nonceError) {
+        // Nonce verification failed — reject payment
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_DERIVATION_PREFIX',

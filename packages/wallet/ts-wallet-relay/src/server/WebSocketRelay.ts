@@ -196,7 +196,7 @@ export class WebSocketRelay {
 
         // Notify service layer (e.g. to process pairing_approved)
         this.onMessage?.(topic, envelope, role)
-      } catch {
+      } catch (_msgError) {
         // Malformed message — drop silently
       }
     })

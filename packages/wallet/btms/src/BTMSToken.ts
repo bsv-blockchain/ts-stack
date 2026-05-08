@@ -208,7 +208,8 @@ export class BTMSToken {
       if (metadata) {
         try {
           JSON.parse(metadata)
-        } catch {
+        } catch (_parseError) {
+          // Metadata is not parseable JSON — reject token
           return {
             valid: false,
             error: 'Metadata is not valid JSON'

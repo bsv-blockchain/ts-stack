@@ -268,8 +268,8 @@ export class WalletPairingSession {
         if ('method' in msg && msg.id) {
           await this.handleRpc(msg)
         }
-      } catch {
-        // silently drop malformed messages
+      } catch (_msgError) {
+        // Malformed message — drop silently
       }
     }
 
