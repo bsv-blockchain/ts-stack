@@ -374,7 +374,8 @@ function useWalletRelayClient(options) {
   const [log, setLog] = useState([]);
   const [error, setError] = useState(null);
   const clientRef = useRef(null);
-  const createdRef = useRef(false);
+  const creatingRef = useRef(null);
+  const resumingRef = useRef(null);
   function ensureClient() {
     clientRef.current ?? (clientRef.current = new WalletRelayClient({
       apiUrl: options?.apiUrl,
@@ -390,12 +391,28 @@ function useWalletRelayClient(options) {
     return clientRef.current;
   }
   const createSession = useCallback2(async () => {
+    if (creatingRef.current) return creatingRef.current;
     setError(null);
-    return ensureClient().createSession();
+    const promise = ensureClient().createSession().finally(() => {
+      if (creatingRef.current === promise) creatingRef.current = null;
+    });
+    creatingRef.current = promise;
+    return promise;
+  }, []);
+  const resumeSession = useCallback2(async () => {
+    if (resumingRef.current) return resumingRef.current;
+    setError(null);
+    const promise = ensureClient().resumeSession().finally(() => {
+      if (resumingRef.current === promise) resumingRef.current = null;
+    });
+    resumingRef.current = promise;
+    return promise;
   }, []);
   const cancelSession = useCallback2(() => {
     const client = clientRef.current;
     clientRef.current = null;
+    creatingRef.current = null;
+    resumingRef.current = null;
     setSession(null);
     setError(null);
     setLog([]);
@@ -407,25 +424,23 @@ function useWalletRelayClient(options) {
     // eslint-disable-line react-hooks/exhaustive-deps
   );
   useEffect(() => {
-    if (options?.autoCreate === false) return;
-    if (createdRef.current) return;
-    createdRef.current = true;
+    const wantCreate = options?.autoCreate !== false;
+    const wantResumeOnly = !wantCreate && options?.autoResume === true;
+    if (!wantCreate && !wantResumeOnly) return;
     const timer = setTimeout(() => {
-      const client = ensureClient();
-      void client.resumeSession().then((resumed) => {
-        if (!resumed) void createSession();
+      void resumeSession().then((resumed) => {
+        if (!resumed && wantCreate) void createSession();
       });
     }, 0);
     return () => {
       clearTimeout(timer);
-      createdRef.current = false;
       const client = clientRef.current;
       clientRef.current = null;
       if (client) void client.disconnect();
     };
-  }, [createSession]);
+  }, [createSession, resumeSession]);
   const wallet = session?.status === "connected" ? clientRef.current?.wallet ?? null : null;
-  return { session, log, error, createSession, cancelSession, sendRequest, wallet };
+  return { session, log, error, createSession, resumeSession, cancelSession, sendRequest, wallet };
 }
 
 // src/react/QRDisplay.tsx

@@ -497,6 +497,7 @@ All options are optional.
 | `sessionStorageKey` | `string` | `'wallet-relay-session:<apiUrl>'` | Override the storage key. |
 | `sessionStorageTtl` | `number` | `86400000` | Max age (ms) before a persisted session is discarded client-side. |
 | `autoCreate` | `boolean` | `true` | When `true`, `resumeSession()` is tried on mount, falling back to `createSession()` if nothing to resume. Set to `false` to control timing manually. |
+| `autoResume` | `boolean` | `false` | When `true` *and* `autoCreate` is `false`, attempts `resumeSession()` on mount but never auto-creates. Useful when a "Sign in with phone" button owns session creation while you still want refreshes to keep the user paired. No effect when `autoCreate !== false` — resume is already part of that path. |
 
 #### Return value
 
@@ -506,6 +507,7 @@ All options are optional.
 | `log` | `RequestLogEntry[]` | Request history, newest first. |
 | `error` | `string \| null` | Error from the last failed `createSession()`, or `null`. |
 | `createSession` | `() => Promise<SessionInfo>` | Create a new session and restart polling. Safe to call multiple times — replaces the existing session. |
+| `resumeSession` | `() => Promise<SessionInfo \| null>` | Try to resume a persisted session from `sessionStorage`. Returns the resumed `SessionInfo` (which exposes the `wallet` proxy when status is `'connected'`), or `null` if nothing to resume or the server says it's expired. Concurrent calls are deduped — the second caller gets the in-flight promise. |
 | `cancelSession` | `() => void` | Resets all state to `null`, then calls `disconnect()` on the client (fire-and-forget). This terminates the session server-side and closes the mobile's WebSocket so the mobile app is notified. Call this on unmount when leaving a QR page, or on user logout. A subsequent `createSession()` starts fresh. |
 | `sendRequest` | `(method: string, params?: unknown) => Promise<WalletResponse>` | Send an RPC call to the paired mobile. Throws if no session is active. |
 | `wallet` | `Pick<WalletInterface, WalletMethodName> \| null` | Drop-in `WalletInterface` proxy when connected, `null` otherwise. See [wallet proxy](#wallet-proxy). |

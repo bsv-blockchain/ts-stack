@@ -317,6 +317,15 @@ useEffect(() => {
 }, [session?.status, wallet])
 ```
 
+If you want refreshes to keep the user paired without auto-creating a session for users who never clicked "Sign in with phone", add `autoResume: true`:
+
+```tsx
+const { session, wallet, createSession } = useWalletRelayClient({
+  autoCreate: false,
+  autoResume: true, // resume on mount only — never auto-create
+})
+```
+
 The proxy is created once and cached for the lifetime of the session. Available methods: `getPublicKey`, `listOutputs`, `createAction`, `signAction`, `createSignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `listCertificates`, `revealCounterpartyKeyLinkage`.
 
 > **Lower-level option:** `sendRequest(method, params)` is still available if you need the raw `{ result, error, requestId, timestamp }` response envelope — useful for request logging or custom error handling.
