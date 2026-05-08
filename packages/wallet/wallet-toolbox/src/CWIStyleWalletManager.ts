@@ -1017,8 +1017,8 @@ export class CWIStyleWalletManager implements WalletInterface {
     if (this._initSnapshot !== undefined) {
       await this.loadSnapshot(this._initSnapshot).catch((err: unknown) => {
         console.error('Failed to load snapshot during construction:', err)
-        // Clear potentially partially loaded state
-        void this.destroy()
+        // Clear potentially partially loaded state. destroy() is synchronous.
+        this.destroy()
       })
     }
   }
