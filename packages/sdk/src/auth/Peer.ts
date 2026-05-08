@@ -84,6 +84,11 @@ export class Peer {
    * await peer.ready
    * await peer.toPeer(payload)
    */
+  /*
+   * Listener must register synchronously so paired-peer mocks/transports see
+   * onDataCallback set immediately. The returned Promise resolves once registration
+   * is fully acknowledged. A lazy getter pattern would break paired-peer test mocks.
+   */
   readonly ready: Promise<void>
 
   /**
@@ -111,7 +116,7 @@ export class Peer {
       certifiers: [],
       types: {}
     }
-    this.ready = this.transport.onData(this.handleIncomingMessage.bind(this))
+    this.ready = this.transport.onData(this.handleIncomingMessage.bind(this)) // NOSONAR(typescript:S7059): listener must register synchronously — see ready field comment
     this.sessionManager =
       sessionManager ?? new SessionManager()
     if (autoPersistLastSession === false) {
