@@ -279,14 +279,16 @@ export default class LocalKVStore {
         }
 
         if (signableTransaction == null) {
-          outpoint = `${txid as string}.0`
+          if (txid == null) throw new Error('createAction must return a txid when no inputs are present')
+          outpoint = `${txid}.0`
         } else {
           const spends = await this.getSpends(key, outputs, pushdrop, signableTransaction.tx)
-          const { txid } = await this.wallet.signAction({
+          const { txid: signedTxid } = await this.wallet.signAction({
             reference: signableTransaction.reference,
             spends
           }, this.originator)
-          outpoint = `${txid as string}.0`
+          if (signedTxid == null) throw new Error('signAction must return a txid')
+          outpoint = `${signedTxid}.0`
         }
       } catch (error) {
         throw new Error(`There are ${outputs.length} outputs with tag ${key} that cannot be unlocked. Original error: ${error instanceof Error ? error.message : String(error)}`)

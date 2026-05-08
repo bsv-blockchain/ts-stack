@@ -157,7 +157,7 @@ export class HostReputationTracker {
         try { return s.getItem(key) } catch { return null }
       },
       set: (key: string, value: string) => {
-        try { s.setItem(key, value) } catch { }
+        try { s.setItem(key, value) } catch (_storageWriteError) { /* storage unavailable */ }
       }
     }
   }
@@ -188,7 +188,7 @@ export class HostReputationTracker {
           this.stats.set(entry.host, entry)
         }
       }
-    } catch {}
+    } catch (_storageLoadError) { /* corrupt or missing storage data — start fresh */ }
   }
 
   private saveToStorage (): void {
@@ -200,7 +200,7 @@ export class HostReputationTracker {
         obj[host] = entry
       }
       s.set(STORAGE_KEY, JSON.stringify(obj))
-    } catch {}
+    } catch (_storageSaveError) { /* storage unavailable */ }
   }
 
   private computeScore (entry: HostReputationEntry, now: number): number {

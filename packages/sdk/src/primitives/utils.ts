@@ -405,8 +405,7 @@ export class Writer {
           ret[offset++] = byte
         }
       } else {
-        const arr = buf as number[]
-        for (const item of arr) {
+        for (const item of buf) {
           ret[offset++] = item
         }
       }

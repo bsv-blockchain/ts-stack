@@ -108,164 +108,36 @@ export class AuthFetch {
     }
     const response = await new Promise<Response>((async (resolve, reject) => {
       try {
-        // Apply defaults
         const { method = 'GET', headers = {}, body } = config
-
-        // Extract a base url
         const parsedUrl = new URL(url)
         const baseURL = parsedUrl.origin
 
-        // Create a new transport for this base url if needed
-        let peerToUse: AuthPeer
-        if (this.peers[baseURL] === undefined) {
-          // Create a peer for the request
-          const newTransport = new SimplifiedFetchTransport(baseURL)
-          const newPeer = new Peer(this.wallet, newTransport, this.requestedCertificates, this.sessionManager, undefined, this.originator)
-          await newPeer.ready
-          peerToUse = {
-            peer: newPeer,
-            pendingCertificateRequests: []
-          }
-          this.peers[baseURL] = peerToUse
-          this.peers[baseURL].peer.listenForCertificatesReceived((senderPublicKey: string, certs: VerifiableCertificate[]) => {
-            this.certificatesReceived.push(...certs)
-          })
-          this.peers[baseURL].peer.listenForCertificatesRequested((async (verifier: string, requestedCertificates: RequestedCertificateSet) => {
-            try {
-              this.peers[baseURL].pendingCertificateRequests.push(true)
-              const certificatesToInclude = await getVerifiableCertificates(
-                this.wallet,
-                requestedCertificates,
-                verifier,
-                this.originator
-              )
-              if (certificatesToInclude.length > 0) {
-                await this.peers[baseURL].peer.sendCertificateResponse(verifier, certificatesToInclude)
-              }
-            } finally {
-              // Give the backend 500 ms to process the certificates we just sent, before releasing the queue entry
-              await new Promise(resolve => setTimeout(resolve, 500))
-              this.peers[baseURL].pendingCertificateRequests.shift()
-            }
-          }) as Function)
-        } else {
-          // Check if there's a session associated with this baseURL
-          if (this.peers[baseURL].supportsMutualAuth === false) {
-            // Use standard fetch if mutual authentication is not supported
-            try {
-              const response = await this.handleFetchAndValidate(url, config, this.peers[baseURL])
-              resolve(response)
-            } catch (error) {
-              reject(error)
-            }
-            return
-          }
-          peerToUse = this.peers[baseURL]
+        const peerToUse = await this.ensurePeer(baseURL)
+        if (peerToUse === 'non-mutual') {
+          try { resolve(await this.handleFetchAndValidate(url, config, this.peers[baseURL])) }
+          catch (error) { reject(error) }
+          return
         }
 
-        // Serialize the simplified fetch request.
         const requestNonce = Random(32)
         const requestNonceAsBase64 = Utils.toBase64(requestNonce)
+        const writer = await this.serializeRequest(method, headers, body, parsedUrl, requestNonce)
 
-        const writer = await this.serializeRequest(
-          method,
-          headers,
-          body,
-          parsedUrl,
-          requestNonce
-        )
-
-        // Setup general message listener to resolve requests once a response is received
         this.callbacks[requestNonceAsBase64] = { resolve, reject }
         const listenerId = peerToUse.peer.listenForGeneralMessages((senderPublicKey: string, payload: number[]) => {
-          // Create a reader
           const responseReader = new Utils.Reader(payload)
-          // Deserialize first 32 bytes of payload
           const responseNonceAsBase64 = Utils.toBase64(responseReader.read(32))
-          if (responseNonceAsBase64 !== requestNonceAsBase64) {
-            return
-          }
+          if (responseNonceAsBase64 !== requestNonceAsBase64) return
           peerToUse.peer.stopListeningForGeneralMessages(listenerId)
-
-          // Save the identity key for the peer for future requests, since we have it here.
           this.peers[baseURL].identityKey = senderPublicKey
           this.peers[baseURL].supportsMutualAuth = true
-
-          // Status code
-          const statusCode = responseReader.readVarIntNum()
-
-          // Headers
-          const responseHeaders = {}
-          const nHeaders = responseReader.readVarIntNum()
-          if (nHeaders > 0) {
-            for (let i = 0; i < nHeaders; i++) {
-              const nHeaderKeyBytes = responseReader.readVarIntNum()
-              const headerKeyBytes = responseReader.read(nHeaderKeyBytes)
-              const headerKey = Utils.toUTF8(headerKeyBytes)
-              const nHeaderValueBytes = responseReader.readVarIntNum()
-              const headerValueBytes = responseReader.read(nHeaderValueBytes)
-              const headerValue = Utils.toUTF8(headerValueBytes)
-              responseHeaders[headerKey] = headerValue
-            }
-          }
-
-          // Add back the server identity key header
-          responseHeaders['x-bsv-auth-identity-key'] = senderPublicKey
-
-          // Body
-          let responseBody
-          const responseBodyBytes = responseReader.readVarIntNum()
-          if (responseBodyBytes > 0) {
-            responseBody = responseReader.read(responseBodyBytes)
-          }
-
-          // Create the Response object
-          const responseValue = new Response(
-            responseBody ? new Uint8Array(responseBody) : null,
-            {
-              status: statusCode,
-              statusText: `${statusCode}`,
-              headers: new Headers(responseHeaders)
-            }
-          )
-
-          // Resolve or reject the correct request with the response data
+          const responseValue = this.deserializeResponse(responseReader, senderPublicKey)
           this.callbacks[requestNonceAsBase64].resolve(responseValue)
-
-          // Clean up
           delete this.callbacks[requestNonceAsBase64]
         })
 
-        // Before sending general messages to the peer, ensure that no certificate requests are pending.
-        // This way, the user would need to choose to either allow or reject the certificate request first.
-        // If the server has a resource that requires certificates to be sent before access would be granted,
-        // this makes sure the user has a chance to send the certificates before the resource is requested.
-        if (peerToUse.pendingCertificateRequests.length > 0) {
-          const CERTIFICATE_WAIT_TIMEOUT_MS = 30000
-          const CHECK_INTERVAL_MS = 100
+        await this.waitForPendingCertificates(peerToUse)
 
-          await new Promise<void>((resolve, reject) => {
-            const startTime = Date.now()
-
-            const checkPending = (): void => {
-              if (peerToUse.pendingCertificateRequests.length === 0) {
-                resolve()
-                return
-              }
-
-              if (Date.now() - startTime > CERTIFICATE_WAIT_TIMEOUT_MS) {
-                reject(new Error('Timeout waiting for certificate request to complete'))
-                return
-              }
-
-              setTimeout(checkPending, CHECK_INTERVAL_MS)
-            }
-
-            checkPending()
-          })
-        }
-
-        // Send the request, now that all listeners are set up
         await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey).catch(async error => {
           const isStaleSession =
             error.message.includes('Session not found for nonce') ||
@@ -273,9 +145,6 @@ export class AuthFetch {
               peerToUse.identityKey != null &&
               (error as any).details?.status === 401)
           if (isStaleSession) {
-            // Stale session: server no longer recognises the session nonce
-            // (e.g. after a server restart). Clear the cached peer so a fresh
-            // handshake is performed on retry.
             delete this.peers[baseURL]
             config.retryCounter ??= 3
             const response = await this.fetch(url, config)
@@ -389,6 +258,71 @@ export class AuthFetch {
    *
    * @throws Will throw an error if unsupported headers are used or serialization fails.
    */
+  private async ensurePeer (baseURL: string): Promise<AuthPeer | 'non-mutual'> {
+    if (this.peers[baseURL] !== undefined) {
+      if (this.peers[baseURL].supportsMutualAuth === false) return 'non-mutual'
+      return this.peers[baseURL]
+    }
+    const newTransport = new SimplifiedFetchTransport(baseURL)
+    const newPeer = new Peer(this.wallet, newTransport, this.requestedCertificates, this.sessionManager, undefined, this.originator)
+    await newPeer.ready
+    const peerToUse: AuthPeer = { peer: newPeer, pendingCertificateRequests: [] }
+    this.peers[baseURL] = peerToUse
+    this.peers[baseURL].peer.listenForCertificatesReceived((senderPublicKey: string, certs: VerifiableCertificate[]) => {
+      this.certificatesReceived.push(...certs)
+    })
+    this.peers[baseURL].peer.listenForCertificatesRequested((async (verifier: string, requestedCertificates: RequestedCertificateSet) => {
+      try {
+        this.peers[baseURL].pendingCertificateRequests.push(true)
+        const certificatesToInclude = await getVerifiableCertificates(this.wallet, requestedCertificates, verifier, this.originator)
+        if (certificatesToInclude.length > 0) {
+          await this.peers[baseURL].peer.sendCertificateResponse(verifier, certificatesToInclude)
+        }
+      } finally {
+        // Give the backend 500 ms to process the certificates we just sent, before releasing the queue entry
+        await new Promise(resolve => setTimeout(resolve, 500))
+        this.peers[baseURL].pendingCertificateRequests.shift()
+      }
+    }) as Function)
+    return peerToUse
+  }
+
+  private deserializeResponse (reader: Utils.Reader, senderPublicKey: string): Response {
+    const statusCode = reader.readVarIntNum()
+    const responseHeaders: Record<string, string> = {}
+    const nHeaders = reader.readVarIntNum()
+    for (let i = 0; i < nHeaders; i++) {
+      const headerKey = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+      const headerValue = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+      responseHeaders[headerKey] = headerValue
+    }
+    responseHeaders['x-bsv-auth-identity-key'] = senderPublicKey
+    const responseBodyBytes = reader.readVarIntNum()
+    const responseBody = responseBodyBytes > 0 ? reader.read(responseBodyBytes) : undefined
+    return new Response(
+      responseBody ? new Uint8Array(responseBody) : null,
+      { status: statusCode, statusText: `${statusCode}`, headers: new Headers(responseHeaders) }
+    )
+  }
+
+  private async waitForPendingCertificates (peerToUse: AuthPeer): Promise<void> {
+    if (peerToUse.pendingCertificateRequests.length === 0) return
+    const CERTIFICATE_WAIT_TIMEOUT_MS = 30000
+    const CHECK_INTERVAL_MS = 100
+    await new Promise<void>((resolve, reject) => {
+      const startTime = Date.now()
+      const checkPending = (): void => {
+        if (peerToUse.pendingCertificateRequests.length === 0) { resolve(); return }
+        if (Date.now() - startTime > CERTIFICATE_WAIT_TIMEOUT_MS) {
+          reject(new Error('Timeout waiting for certificate request to complete'))
+          return
+        }
+        setTimeout(checkPending, CHECK_INTERVAL_MS)
+      }
+      checkPending()
+    })
+  }
+
   private async serializeRequest(
     method: string,
     headers: Record<string, string>,

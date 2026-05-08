@@ -960,60 +960,37 @@ export class RemittanceManager {
     return mid
   }
 
+  private inferMyRoleFromEnvelope (env: RemittanceEnvelope): Thread['myRole'] {
+    if (env.kind === 'invoice' || env.kind === 'receipt' || env.kind === 'termination') return 'taker'
+    if (env.kind === 'settlement') return 'maker'
+
+    // identity messages: infer from which side is configured to request identity
+    const makerRequest = this.runtime.identityOptions?.makerRequestIdentity ?? 'never'
+    const takerRequest = this.runtime.identityOptions?.takerRequestIdentity ?? 'never'
+    const makerRequests = makerRequest !== 'never'
+    const takerRequests = takerRequest !== 'never'
+
+    let requesterRole: Thread['myRole'] | undefined
+    if (makerRequests && !takerRequests) {
+      requesterRole = 'maker'
+    } else if (takerRequests && !makerRequests) {
+      requesterRole = 'taker'
+    } else if (makerRequests && takerRequests && makerRequest !== takerRequest) {
+      if (makerRequest === 'beforeInvoicing' && takerRequest === 'beforeSettlement') requesterRole = 'maker'
+      else if (makerRequest === 'beforeSettlement' && takerRequest === 'beforeInvoicing') requesterRole = 'taker'
+    }
+
+    if (typeof requesterRole !== 'string') return 'taker'
+    if (env.kind === 'identityVerificationResponse') return requesterRole
+    return requesterRole === 'maker' ? 'taker' : 'maker'
+  }
+
   private getOrCreateThreadFromInboundEnvelope (env: RemittanceEnvelope, msg: PeerMessage): Thread {
     const existing = this.getThread(env.threadId)
     if (typeof existing === 'object') return existing
 
-    // If we didn't create the thread, infer roles from the first message kind:
-    // - Receiving identity verification request/response/acknowledgment -> we are either maker or taker depending on config
-    // - Receiving an invoice -> we are taker (payer)
-    // - Receiving a settlement -> we are maker (payee)
-    // - Receiving a receipt -> we are taker
-    // - Receiving a termination -> assume we are taker
     const createdAt = this.now()
-
-    const inferredMyRole: Thread['myRole'] = (() => {
-      if (env.kind === 'invoice') return 'taker'
-      if (env.kind === 'settlement') return 'maker'
-      if (env.kind === 'receipt') return 'taker'
-      if (env.kind === 'termination') return 'taker'
-
-      if (
-        env.kind === 'identityVerificationRequest' ||
-        env.kind === 'identityVerificationResponse' ||
-        env.kind === 'identityVerificationAcknowledgment'
-      ) {
-        const makerRequest = this.runtime.identityOptions?.makerRequestIdentity ?? 'never'
-        const takerRequest = this.runtime.identityOptions?.takerRequestIdentity ?? 'never'
-        const makerRequests = makerRequest !== 'never'
-        const takerRequests = takerRequest !== 'never'
-
-        let requesterRole: Thread['myRole'] | undefined
-        if (makerRequests && !takerRequests) {
-          requesterRole = 'maker'
-        } else if (takerRequests && !makerRequests) {
-          requesterRole = 'taker'
-        } else if (makerRequests && takerRequests && makerRequest !== takerRequest) {
-          if (makerRequest === 'beforeInvoicing' && takerRequest === 'beforeSettlement') {
-            requesterRole = 'maker'
-          } else if (makerRequest === 'beforeSettlement' && takerRequest === 'beforeInvoicing') {
-            requesterRole = 'taker'
-          } else {
-            requesterRole = undefined
-          }
-        }
-
-        if (typeof requesterRole !== 'string') return 'taker'
-
-        if (env.kind === 'identityVerificationResponse') {
-          return requesterRole
-        }
-
-        return requesterRole === 'maker' ? 'taker' : 'maker'
-      }
-
-      return 'taker'
-    })()
+    const inferredMyRole: Thread['myRole'] = this.inferMyRoleFromEnvelope(env)
     const inferredTheirRole: Thread['theirRole'] = inferredMyRole === 'maker' ? 'taker' : 'maker'
 
     const t: Thread = {
@@ -1081,223 +1058,175 @@ export class RemittanceManager {
     this.emitEvent({ type: 'envelopeReceived', threadId: thread.threadId, envelope: env, transportMessageId: msg.messageId })
 
     switch (env.kind) {
-      case 'identityVerificationRequest': {
-        const payload = env.payload as IdentityVerificationRequest
-        if (typeof payload !== 'object') {
-          throw new TypeError('Identity verification request payload missing data')
-        }
+      case 'identityVerificationRequest': return await this.handleIdentityRequest(thread, env, msg)
+      case 'identityVerificationResponse': return await this.handleIdentityResponse(thread, env, msg)
+      case 'identityVerificationAcknowledgment': return await this.handleIdentityAcknowledgment(thread, env, msg)
+      case 'invoice': return this.handleInvoice(thread, env)
+      case 'settlement': return await this.handleSettlement(thread, env, msg)
+      case 'receipt': return await this.handleReceipt(thread, env, msg)
+      case 'termination': return await this.handleTermination(thread, env, msg)
+      default: throw new Error(`Unknown envelope kind: ${String((env as { kind?: unknown }).kind)}`)
+    }
+  }
 
-        if (this.cfg.identityLayer == null) {
-          await this.sendTermination(thread, msg.sender, 'Identity verification requested but no identity layer is configured')
-          return
-        }
+  private async handleIdentityRequest (thread: Thread, env: RemittanceEnvelope, msg: PeerMessage): Promise<void> {
+    const payload = env.payload as IdentityVerificationRequest
+    if (typeof payload !== 'object') throw new TypeError('Identity verification request payload missing data')
+    if (this.cfg.identityLayer == null) {
+      await this.sendTermination(thread, msg.sender, 'Identity verification requested but no identity layer is configured')
+      return
+    }
+    this.transitionThreadState(thread, 'identityRequested', 'identity request received')
+    this.emitEvent({ type: 'identityRequested', threadId: thread.threadId, direction: 'in', request: payload })
+    const response = await this.cfg.identityLayer.respondToRequest(
+      { counterparty: msg.sender, threadId: thread.threadId, request: payload },
+      this.moduleContext()
+    )
+    if (response.action === 'terminate') {
+      await this.sendTermination(thread, msg.sender, response.termination.message, response.termination.details, response.termination.code)
+      return
+    }
+    const responseEnv = this.makeEnvelope('identityVerificationResponse', thread.threadId, response.response)
+    const mid = await this.sendEnvelope(msg.sender, responseEnv)
+    thread.protocolLog.push({ direction: 'out', envelope: responseEnv, transportMessageId: mid })
+    thread.identity.certsSent = response.response.certificates
+    thread.identity.responseSent = true
+    this.transitionThreadState(thread, 'identityResponded', 'identity response sent')
+    this.emitEvent({ type: 'identityResponded', threadId: thread.threadId, direction: 'out', response: response.response })
+  }
 
-        this.transitionThreadState(thread, 'identityRequested', 'identity request received')
-        this.emitEvent({ type: 'identityRequested', threadId: thread.threadId, direction: 'in', request: payload })
+  private async handleIdentityResponse (thread: Thread, env: RemittanceEnvelope, msg: PeerMessage): Promise<void> {
+    const payload = env.payload as IdentityVerificationResponse
+    if (typeof payload !== 'object') throw new TypeError('Identity verification response payload missing data')
+    if (this.cfg.identityLayer == null) {
+      await this.sendTermination(thread, msg.sender, 'Identity verification response received but no identity layer is configured')
+      return
+    }
+    thread.identity.certsReceived = payload.certificates
+    this.transitionThreadState(thread, 'identityResponded', 'identity response received')
+    this.emitEvent({ type: 'identityResponded', threadId: thread.threadId, direction: 'in', response: payload })
+    const decision = await this.cfg.identityLayer.assessReceivedCertificateSufficiency(msg.sender, payload, thread.threadId)
+    if ('message' in decision) {
+      await this.sendTermination(thread, msg.sender, decision.message, decision.details, decision.code)
+      return
+    }
+    if (decision.kind !== 'identityVerificationAcknowledgment') throw new Error('Unknown identity verification decision')
+    const ackEnv = this.makeEnvelope('identityVerificationAcknowledgment', thread.threadId, decision)
+    const mid = await this.sendEnvelope(msg.sender, ackEnv)
+    thread.protocolLog.push({ direction: 'out', envelope: ackEnv, transportMessageId: mid })
+    thread.identity.acknowledgmentSent = true
+    thread.flags.hasIdentified = true
+    this.transitionThreadState(thread, 'identityAcknowledged', 'identity acknowledgment sent')
+    this.emitEvent({ type: 'identityAcknowledged', threadId: thread.threadId, direction: 'out', acknowledgment: decision })
+  }
 
-        const response = await this.cfg.identityLayer.respondToRequest(
-          { counterparty: msg.sender, threadId: thread.threadId, request: payload },
+  private async handleIdentityAcknowledgment (thread: Thread, env: RemittanceEnvelope, msg: PeerMessage): Promise<void> {
+    const payload = env.payload as IdentityVerificationAcknowledgment
+    if (typeof payload !== 'object') throw new TypeError('Identity verification acknowledgment payload missing data')
+    thread.identity.acknowledgmentReceived = true
+    thread.flags.hasIdentified = true
+    this.transitionThreadState(thread, 'identityAcknowledged', 'identity acknowledgment received')
+    this.emitEvent({ type: 'identityAcknowledged', threadId: thread.threadId, direction: 'in', acknowledgment: payload })
+  }
+
+  private handleInvoice (thread: Thread, env: RemittanceEnvelope): void {
+    const invoice = env.payload as Invoice
+    if (typeof invoice !== 'object') throw new TypeError('Invoice payload missing invoice data')
+    thread.invoice = invoice
+    thread.flags.hasInvoiced = true
+    this.transitionThreadState(thread, 'invoiced', 'invoice received')
+    this.emitEvent({ type: 'invoiceReceived', threadId: thread.threadId, invoice })
+  }
+
+  private async handleSettlement (thread: Thread, env: RemittanceEnvelope, msg: PeerMessage): Promise<void> {
+    const settlement = env.payload as Settlement
+    if (typeof settlement !== 'object') throw new TypeError('Settlement payload missing settlement data')
+    if (this.shouldRequireIdentityBeforeSettlement(thread) && !thread.flags.hasIdentified) {
+      await this.sendTermination(thread, msg.sender, 'Identity verification is required before settlement')
+      return
+    }
+    thread.settlement = settlement
+    thread.flags.hasPaid = true
+    this.transitionThreadState(thread, 'settled', 'settlement received')
+    this.emitEvent({ type: 'settlementReceived', threadId: thread.threadId, settlement })
+    const module = this.moduleRegistry.get(settlement.moduleId)
+    if (typeof module !== 'object') {
+      await this.maybeSendTermination(thread, settlement, msg.sender, `Unsupported module: ${settlement.moduleId}`)
+      return
+    }
+    if ((thread.invoice == null) && !module.allowUnsolicitedSettlements) {
+      await this.maybeSendTermination(thread, settlement, msg.sender, 'Unsolicited settlement not supported')
+      return
+    }
+    const result = await module.acceptSettlement({
+      threadId: thread.threadId,
+      invoice: thread.invoice,
+      settlement: settlement.artifact,
+      sender: msg.sender
+    }, this.moduleContext()).catch(async (e) => {
+      const errMsg = e instanceof Error ? e.message : String(e)
+      await this.maybeSendTermination(thread, settlement, msg.sender, `Settlement processing failed: ${errMsg}`)
+      throw e
+    })
+    if (result.action === 'accept') {
+      const myKey = this.requireMyIdentityKey('Receiving settlement requires identity key')
+      const receipt: Receipt = {
+        kind: 'receipt',
+        threadId: thread.threadId,
+        moduleId: settlement.moduleId,
+        optionId: settlement.optionId,
+        payee: myKey,
+        payer: msg.sender,
+        createdAt: this.now(),
+        receiptData: result.receiptData
+      }
+      thread.receipt = receipt
+      thread.flags.hasReceipted = true
+      this.transitionThreadState(thread, 'receipted', 'receipt issued')
+      if (this.runtime.receiptProvided && this.runtime.autoIssueReceipt) {
+        const receiptEnv = this.makeEnvelope('receipt', thread.threadId, receipt)
+        const mid = await this.sendEnvelope(msg.sender, receiptEnv)
+        thread.protocolLog.push({ direction: 'out', envelope: receiptEnv, transportMessageId: mid })
+        this.emitEvent({ type: 'receiptSent', threadId: thread.threadId, receipt })
+      }
+    } else if (result.action === 'terminate') {
+      await this.maybeSendTermination(thread, settlement, msg.sender, result.termination.message, result.termination.details)
+    } else {
+      throw new Error('Unknown settlement acceptance action')
+    }
+  }
+
+  private async handleReceipt (thread: Thread, env: RemittanceEnvelope, msg: PeerMessage): Promise<void> {
+    const receipt = env.payload as Receipt
+    if (typeof receipt !== 'object') throw new TypeError('Receipt payload missing receipt data')
+    thread.receipt = receipt
+    thread.flags.hasReceipted = true
+    this.transitionThreadState(thread, 'receipted', 'receipt received')
+    this.emitEvent({ type: 'receiptReceived', threadId: thread.threadId, receipt })
+    const module = this.moduleRegistry.get(receipt.moduleId)
+    if (module?.processReceipt != null) {
+      await module.processReceipt(
+        { threadId: thread.threadId, invoice: thread.invoice, receiptData: receipt.receiptData, sender: msg.sender },
+        this.moduleContext()
+      )
+    }
+  }
+
+  private async handleTermination (thread: Thread, env: RemittanceEnvelope, msg: PeerMessage): Promise<void> {
+    const payload = env.payload as Termination
+    if (typeof payload !== 'object') throw new TypeError('Termination payload missing data')
+    thread.termination = payload
+    thread.lastError = { message: payload.message, at: this.now() }
+    thread.flags.error = true
+    this.transitionThreadState(thread, 'terminated', 'termination received')
+    this.emitEvent({ type: 'terminationReceived', threadId: thread.threadId, termination: payload })
+    if (thread.settlement != null) {
+      const module = this.moduleRegistry.get(thread.settlement.moduleId)
+      if ((module?.processTermination) != null) {
+        await module.processTermination(
+          { threadId: thread.threadId, invoice: thread.invoice, settlement: thread.settlement, termination: payload, sender: msg.sender },
           this.moduleContext()
         )
-
-        if (response.action === 'terminate') {
-          await this.sendTermination(thread, msg.sender, response.termination.message, response.termination.details, response.termination.code)
-          return
-        }
-
-        const responseEnv = this.makeEnvelope('identityVerificationResponse', thread.threadId, response.response)
-        const mid = await this.sendEnvelope(msg.sender, responseEnv)
-        thread.protocolLog.push({ direction: 'out', envelope: responseEnv, transportMessageId: mid })
-        thread.identity.certsSent = response.response.certificates
-        thread.identity.responseSent = true
-        this.transitionThreadState(thread, 'identityResponded', 'identity response sent')
-        this.emitEvent({ type: 'identityResponded', threadId: thread.threadId, direction: 'out', response: response.response })
-        return
-      }
-
-      case 'identityVerificationResponse': {
-        const payload = env.payload as IdentityVerificationResponse
-        if (typeof payload !== 'object') {
-          throw new TypeError('Identity verification response payload missing data')
-        }
-
-        if (this.cfg.identityLayer == null) {
-          await this.sendTermination(thread, msg.sender, 'Identity verification response received but no identity layer is configured')
-          return
-        }
-
-        thread.identity.certsReceived = payload.certificates
-        this.transitionThreadState(thread, 'identityResponded', 'identity response received')
-        this.emitEvent({ type: 'identityResponded', threadId: thread.threadId, direction: 'in', response: payload })
-        const decision = await this.cfg.identityLayer.assessReceivedCertificateSufficiency(
-          msg.sender,
-          payload,
-          thread.threadId
-        )
-
-        if ('message' in decision) {
-          await this.sendTermination(thread, msg.sender, decision.message, decision.details, decision.code)
-          return
-        }
-
-        if (decision.kind === 'identityVerificationAcknowledgment') {
-          const ackEnv = this.makeEnvelope('identityVerificationAcknowledgment', thread.threadId, decision)
-          const mid = await this.sendEnvelope(msg.sender, ackEnv)
-          thread.protocolLog.push({ direction: 'out', envelope: ackEnv, transportMessageId: mid })
-          thread.identity.acknowledgmentSent = true
-          thread.flags.hasIdentified = true
-          this.transitionThreadState(thread, 'identityAcknowledged', 'identity acknowledgment sent')
-          this.emitEvent({ type: 'identityAcknowledged', threadId: thread.threadId, direction: 'out', acknowledgment: decision })
-          return
-        }
-        throw new Error('Unknown identity verification decision')
-      }
-
-      case 'identityVerificationAcknowledgment': {
-        const payload = env.payload as IdentityVerificationAcknowledgment
-        if (typeof payload !== 'object') {
-          throw new TypeError('Identity verification acknowledgment payload missing data')
-        }
-
-        thread.identity.acknowledgmentReceived = true
-        thread.flags.hasIdentified = true
-        this.transitionThreadState(thread, 'identityAcknowledged', 'identity acknowledgment received')
-        this.emitEvent({ type: 'identityAcknowledged', threadId: thread.threadId, direction: 'in', acknowledgment: payload })
-        return
-      }
-
-      case 'invoice': {
-        const invoice = env.payload as Invoice
-        if (typeof invoice !== 'object') {
-          throw new TypeError('Invoice payload missing invoice data')
-        }
-
-        thread.invoice = invoice
-        thread.flags.hasInvoiced = true
-        this.transitionThreadState(thread, 'invoiced', 'invoice received')
-        this.emitEvent({ type: 'invoiceReceived', threadId: thread.threadId, invoice })
-        return
-      }
-
-      case 'settlement': {
-        const settlement = env.payload as Settlement
-        if (typeof settlement !== 'object') {
-          throw new TypeError('Settlement payload missing settlement data')
-        }
-
-        if (this.shouldRequireIdentityBeforeSettlement(thread) && !thread.flags.hasIdentified) {
-          await this.sendTermination(thread, msg.sender, 'Identity verification is required before settlement')
-          return
-        }
-
-        // Persist settlement immediately (even if we later reject); it is part of the audit trail.
-        thread.settlement = settlement
-        thread.flags.hasPaid = true
-        this.transitionThreadState(thread, 'settled', 'settlement received')
-        this.emitEvent({ type: 'settlementReceived', threadId: thread.threadId, settlement })
-
-        const module = this.moduleRegistry.get(settlement.moduleId)
-        if (typeof module !== 'object') {
-          await this.maybeSendTermination(thread, settlement, msg.sender, `Unsupported module: ${settlement.moduleId}`)
-          return
-        }
-
-        if ((thread.invoice == null) && !module.allowUnsolicitedSettlements) {
-          await this.maybeSendTermination(thread, settlement, msg.sender, 'Unsolicited settlement not supported')
-          return
-        }
-
-        const result = await module.acceptSettlement({
-          threadId: thread.threadId,
-          invoice: thread.invoice,
-          settlement: settlement.artifact,
-          sender: msg.sender
-        }, this.moduleContext()).catch(async (e) => {
-          const errMsg = e instanceof Error ? e.message : String(e)
-          await this.maybeSendTermination(thread, settlement, msg.sender, `Settlement processing failed: ${errMsg}`)
-          throw e // re-throw to stop further processing
-        })
-
-        if (result.action === 'accept') {
-          const myKey = this.requireMyIdentityKey('Receiving settlement requires identity key')
-          const payerKey = msg.sender
-
-          const receipt: Receipt = {
-            kind: 'receipt',
-            threadId: thread.threadId,
-            moduleId: settlement.moduleId,
-            optionId: settlement.optionId,
-            payee: myKey,
-            payer: payerKey,
-            createdAt: this.now(),
-            receiptData: result.receiptData
-          }
-
-          thread.receipt = receipt
-          thread.flags.hasReceipted = true
-          this.transitionThreadState(thread, 'receipted', 'receipt issued')
-
-          if (this.runtime.receiptProvided && this.runtime.autoIssueReceipt) {
-            const receiptEnv = this.makeEnvelope('receipt', thread.threadId, receipt)
-            const mid = await this.sendEnvelope(msg.sender, receiptEnv)
-            thread.protocolLog.push({ direction: 'out', envelope: receiptEnv, transportMessageId: mid })
-            this.emitEvent({ type: 'receiptSent', threadId: thread.threadId, receipt })
-          }
-        } else if (result.action === 'terminate') {
-          await this.maybeSendTermination(thread, settlement, msg.sender, result.termination.message, result.termination.details)
-        } else {
-          throw new Error('Unknown settlement acceptance action')
-        }
-
-        return
-      }
-      case 'receipt': {
-        const receipt = env.payload as Receipt
-        if (typeof receipt !== 'object') {
-          throw new TypeError('Receipt payload missing receipt data')
-        }
-
-        thread.receipt = receipt
-        thread.flags.hasReceipted = true
-        this.transitionThreadState(thread, 'receipted', 'receipt received')
-        this.emitEvent({ type: 'receiptReceived', threadId: thread.threadId, receipt })
-
-        const module = this.moduleRegistry.get(receipt.moduleId)
-        if (module?.processReceipt != null) {
-          await module.processReceipt(
-            { threadId: thread.threadId, invoice: thread.invoice, receiptData: receipt.receiptData, sender: msg.sender },
-            this.moduleContext()
-          )
-        }
-
-        return
-      }
-
-      case 'termination': {
-        const payload = env.payload as Termination
-        if (typeof payload !== 'object') {
-          throw new TypeError('Termination payload missing data')
-        }
-        thread.termination = payload
-        thread.lastError = { message: payload.message, at: this.now() }
-        thread.flags.error = true
-        this.transitionThreadState(thread, 'terminated', 'termination received')
-        this.emitEvent({ type: 'terminationReceived', threadId: thread.threadId, termination: payload })
-        if (thread.settlement != null) {
-          const module = this.moduleRegistry.get(thread.settlement.moduleId)
-          if ((module?.processTermination) != null) {
-            await module.processTermination(
-              { threadId: thread.threadId, invoice: thread.invoice, settlement: thread.settlement, termination: payload, sender: msg.sender },
-              this.moduleContext()
-            )
-          }
-        }
-        return
-      }
-
-      default: {
-        const kind = (env as { kind?: unknown }).kind
-        throw new Error(`Unknown envelope kind: ${String(kind)}`)
       }
     }
   }

@@ -1122,7 +1122,7 @@ export default class BigNumber {
 
     let hexStr: string
     if (CAN_USE_BUFFER) {
-      hexStr = BufferCtor.from(beBytes).toString('hex') as string
+      hexStr = BufferCtor.from(beBytes).toString('hex')
     } else {
       hexStr = ''
       for (const byte of beBytes) {
