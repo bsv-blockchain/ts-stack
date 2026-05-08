@@ -25,7 +25,7 @@ class AppsLookupService implements LookupService {
     let metadata: PublishedAppMetadata
     try {
       metadata = JSON.parse(metadataJSON)
-    } catch {
+    } catch (_jsonErr) {
       throw new Error('Metadata field is not valid JSON')
     }
     if (metadata == null) throw new Error('App token must contain valid metadata')

@@ -62,14 +62,14 @@ export function assertSteakShape (body: Record<string, unknown>): void {
     expect(Array.isArray(r.outputsToAdmit)).toBe(true)
     for (const idx of (r.outputsToAdmit as unknown[])) {
       expect(typeof idx).toBe('number')
-      expect(idx as number).toBeGreaterThanOrEqual(0)
+      expect(idx).toBeGreaterThanOrEqual(0)
     }
 
     if ('coinstakeOutputsToRetain' in r) {
       expect(Array.isArray(r.coinstakeOutputsToRetain)).toBe(true)
       for (const idx of (r.coinstakeOutputsToRetain as unknown[])) {
         expect(typeof idx).toBe('number')
-        expect(idx as number).toBeGreaterThanOrEqual(0)
+        expect(idx).toBeGreaterThanOrEqual(0)
       }
     }
   }
@@ -112,13 +112,14 @@ export function assertSteakTopicsMatch (
   let parsedTopics: unknown
   try {
     parsedTopics = JSON.parse(headers[topicsKey])
-  } catch {
+  } catch (_parseErr) {
+    // malformed JSON — treat as no topics
     parsedTopics = null
   }
 
   if (Array.isArray(parsedTopics) && parsedTopics.length > 0) {
     for (const topicKey of Object.keys(body)) {
-      expect((parsedTopics as string[])).toContain(topicKey)
+      expect(parsedTopics).toContain(topicKey)
     }
   }
 }
@@ -164,19 +165,19 @@ export function assertLookupAnswerOutputList (body: Record<string, unknown>): vo
     expect(Array.isArray(o.beef)).toBe(true)
     for (const b of (o.beef as unknown[])) {
       expect(typeof b).toBe('number')
-      expect(b as number).toBeGreaterThanOrEqual(0)
-      expect(b as number).toBeLessThanOrEqual(255)
+      expect(b).toBeGreaterThanOrEqual(0)
+      expect(b).toBeLessThanOrEqual(255)
     }
 
     expect(typeof o.outputIndex).toBe('number')
-    expect(o.outputIndex as number).toBeGreaterThanOrEqual(0)
+    expect(o.outputIndex).toBeGreaterThanOrEqual(0)
 
     if ('context' in o) {
       expect(Array.isArray(o.context)).toBe(true)
       for (const c of (o.context as unknown[])) {
         expect(typeof c).toBe('number')
-        expect(c as number).toBeGreaterThanOrEqual(0)
-        expect(c as number).toBeLessThanOrEqual(255)
+        expect(c).toBeGreaterThanOrEqual(0)
+        expect(c).toBeLessThanOrEqual(255)
       }
     }
   }
@@ -321,19 +322,19 @@ export function assertPaginatedRecordShape (body: Record<string, unknown>): void
   if ('records' in data) expect(Array.isArray(data.records)).toBe(true)
   if ('total' in data) {
     expect(typeof data.total).toBe('number')
-    expect(data.total as number).toBeGreaterThanOrEqual(0)
+    expect(data.total).toBeGreaterThanOrEqual(0)
   }
   if ('page' in data) {
     expect(typeof data.page).toBe('number')
-    expect(data.page as number).toBeGreaterThanOrEqual(1)
+    expect(data.page).toBeGreaterThanOrEqual(1)
   }
   if ('limit' in data) {
     expect(typeof data.limit).toBe('number')
-    expect(data.limit as number).toBeGreaterThanOrEqual(1)
+    expect(data.limit).toBeGreaterThanOrEqual(1)
   }
   if ('pages' in data) {
     expect(typeof data.pages).toBe('number')
-    expect(data.pages as number).toBeGreaterThanOrEqual(0)
+    expect(data.pages).toBeGreaterThanOrEqual(0)
   }
 }
 
@@ -350,7 +351,7 @@ export function assertArcIngestRequestShape (inp: VectorInput): void {
   }
   if ('blockHeight' in body) {
     expect(typeof body.blockHeight).toBe('number')
-    expect(body.blockHeight as number).toBeGreaterThanOrEqual(0)
+    expect(body.blockHeight).toBeGreaterThanOrEqual(0)
   }
 }
 
@@ -367,7 +368,7 @@ export function assertEvictRequestShape (body: Record<string, unknown>): void {
   }
   if ('outputIndex' in body) {
     expect(typeof body.outputIndex).toBe('number')
-    expect(body.outputIndex as number).toBeGreaterThanOrEqual(0)
+    expect(body.outputIndex).toBeGreaterThanOrEqual(0)
   }
   if ('service' in body) {
     expect(typeof body.service).toBe('string')
@@ -419,7 +420,7 @@ export function handleAdminBanUnban (
   status: number,
   body: Record<string, unknown>,
   reqBody: Record<string, unknown> | undefined,
-  exp: VectorExpected
+  _exp: VectorExpected
 ): void {
   if (reqBody !== undefined) {
     assertBanRequestShape(reqBody)

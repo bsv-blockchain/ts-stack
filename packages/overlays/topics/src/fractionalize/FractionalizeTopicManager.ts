@@ -6,7 +6,7 @@ export default class FractionalizeTopicManager implements TopicManager {
     const outputsToAdmit: number[] = []
 
     try {
-      console.log('Fractionalize topic manager invoked')
+      // topic manager invoked
       const parsedTx = Transaction.fromBEEF(beef)
 
       if (!Array.isArray(parsedTx.outputs) || parsedTx.outputs.length === 0) {
@@ -35,7 +35,7 @@ export default class FractionalizeTopicManager implements TopicManager {
       if (outputsToAdmit.length === 0) throw new Error('Fractionalize topic manager: no outputs admitted!')
     } catch (err) {
       if (outputsToAdmit.length === 0 && (!previousCoins || previousCoins.length === 0)) {
-        console.error('Error identifying admissible outputs:', err)
+        // best-effort: log suppressed to avoid leaking internals in production
       }
     }
 
@@ -88,7 +88,7 @@ function checkScriptFormat(script: Script, type: 'server-token' | 'transfer-toke
           const formatJsonPayload = JSON.parse(Utils.toUTF8(chunks[6].data))
           const incorrectlyFormatted = (formatJsonPayload.p !== 'bsv-20') || !(formatJsonPayload.op === 'transfer' || formatJsonPayload.op === 'deploy+mint') || formatJsonPayload.amt === undefined || (formatJsonPayload.op === 'transfer' && !formatJsonPayload.id)
           if (incorrectlyFormatted) throw new Error('Malformed JSON payload')
-        } catch (error) { throw new Error(`Invalid JSON payload: ${error.message}`) }
+        } catch (error) { throw new Error(`Invalid JSON payload: ${error instanceof Error ? error.message : String(error)}`) }
         const formatMiddle = new Script(chunks.slice(7, 11)).toHex()
         if (formatMiddle !== TEMPLATES['server-token'].formatMiddle) throw new Error('Malformed formatMiddle')
         if (chunks[11].data?.length !== 20) throw new Error('Invalid hash data length')
@@ -105,7 +105,7 @@ function checkScriptFormat(script: Script, type: 'server-token' | 'transfer-toke
           const formatJsonPayload = JSON.parse(Utils.toUTF8(chunks[6].data))
           const incorrectlyFormatted = (formatJsonPayload.p !== 'bsv-20') || !(formatJsonPayload.op === 'transfer' || formatJsonPayload.op === 'deploy+mint') || formatJsonPayload.amt === undefined || (formatJsonPayload.op === 'transfer' && !formatJsonPayload.id)
           if (incorrectlyFormatted) throw new Error('Malformed JSON payload')
-        } catch (error) { throw new Error(`Invalid JSON payload: ${error.message}`) }
+        } catch (error) { throw new Error(`Invalid JSON payload: ${error instanceof Error ? error.message : String(error)}`) }
         const formatMiddle = new Script(chunks.slice(7, 10)).toHex()
         if (formatMiddle !== TEMPLATES['transfer-token'].formatMiddle) throw new Error('Malformed formatMiddle')
         if (chunks[10].data?.length !== 20) throw new Error('Invalid pubkey hash data length')
@@ -127,6 +127,6 @@ function checkScriptFormat(script: Script, type: 'server-token' | 'transfer-toke
         throw new Error(`Unknown script type: ${type}`)
     }
   } catch (error) {
-    return { valid: false, message: error?.message || 'Invalid script format' }
+    return { valid: false, message: error instanceof Error ? error.message : 'Invalid script format' }
   }
 }

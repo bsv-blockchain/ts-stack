@@ -61,7 +61,7 @@ export default class MessageBoxTopicManager implements TopicManager {
 
           try {
             Utils.toUTF8(hostBuf)
-          } catch {
+          } catch (_utf8Err) {
             console.warn(`[ADMISSIBILITY] Output ${i} skipped due to UTF-8 decoding failure`)
             continue
           }
