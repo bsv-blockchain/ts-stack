@@ -4,6 +4,10 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox (unreleased)
+
+- Fix: auto-evict confirmed-stale inputs after any failed broadcast, regardless of how the broadcaster classifies the failure. When a tx is marked failed, `updateTransactionStatus(failed)` previously restored ALL consumed inputs to `spendable: true` to support transient retry. That's correct for fee/script/malformed failures where inputs are still UTXOs, but wrong for cases where the input has been spent on chain by a different tx — the wallet then picks the same already-spent UTXO on the next createAction → infinite missing-inputs broadcast loop. The new `markStaleInputsAsSpent` helper runs after `updateTransactionsStatus(failed)` and queries `services.isUtxo` per consumed input, overriding `spendable: false` only for inputs the chain authoritatively confirms are spent. Inputs still on chain (transient/false-positive failures) keep the existing retry semantics. Service errors leave inputs untouched (eviction is opt-in based on positive evidence). Helper is broadcaster-agnostic — applies to ARC's `doubleSpend` (`SEEN_IN_ORPHAN_MEMPOOL`) and to WhatsOnChain/Bitails `invalidTx` (`missing-inputs`) classifications alike.
+
 ## wallet-toolbox 2.1.21
 
 - Fix spending authorization bypass in querySpentSince, PR#150
