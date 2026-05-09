@@ -21,7 +21,7 @@
     "test": "exit 0"
   },
   "dependencies": {
-    "@bsv/sdk": "^2.0.14",
+    "@bsv/sdk": "^2.1.0",
     "@bsv/wallet-toolbox": "^2.1.24",
     "chalk": "^5.4.1",
     "crypto": "^1.0.1",

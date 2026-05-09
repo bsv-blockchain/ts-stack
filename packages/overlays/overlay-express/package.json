@@ -71,7 +71,7 @@
     "@bsv/auth-express-middleware": "^2.0.5",
     "@bsv/overlay": "^2.0.2",
     "@bsv/overlay-discovery-services": "^2.0.2",
-    "@bsv/sdk": "^2.0.14",
+    "@bsv/sdk": "^2.1.0",
     "@bsv/wallet-toolbox-client": "^2.1.18",
     "body-parser": "^2.2.2",
     "chalk": "^5.6.2",

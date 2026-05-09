@@ -63,9 +63,10 @@ function docsAssetsPlugin(): import('vite').Plugin {
     closeBundle() {
       const distAssets = resolve(__dirname, 'dist/assets')
       for (const folder of ['diagrams', 'images']) {
-        cpSync(join(DOCS_ASSETS, folder), join(distAssets, folder), {
+        const sourceRoot = join(DOCS_ASSETS, folder)
+        cpSync(sourceRoot, join(distAssets, folder), {
           recursive: true,
-          filter: (source) => !source.split(/[/\\]/).some((part) => part.startsWith('.')),
+          filter: (source) => !relative(sourceRoot, source).split(/[/\\]/).some((part) => part.startsWith('.')),
         })
       }
     },

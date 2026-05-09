@@ -46,7 +46,7 @@
   "license": "MIT",
   "dependencies": {
     "@bsv/message-box-client": "^2.1.1",
-    "@bsv/sdk": "^2.0.14",
+    "@bsv/sdk": "^2.1.0",
     "@bsv/wallet-toolbox": "^2.1.24",
     "@bsv/wallet-toolbox-client": "^2.1.18"
   },

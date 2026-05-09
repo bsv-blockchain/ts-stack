@@ -75,6 +75,7 @@ Independent HTTP 402 flow:
 **Shared utilities, codecs, templates, and adapters.**
 
 - [@bsv/templates](./helpers/templates.md) — Predefined `ScriptTemplate` examples for protocol engineers; `OpReturn` is one template among several
+- [@bsv/did](./helpers/did.md) — SD-JWT VC and optional `did:key` helpers for BSV SDK identity keys
 - [@bsv/did-client](./helpers/did-client.md) — DID resolver (Decentralized Identifiers)
 - [@bsv/simple](./helpers/simple.md) — Simplified API for common operations
 - [@bsv/wallet-helper](./helpers/wallet-helper.md) — Wallet utility functions

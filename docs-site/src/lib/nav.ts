@@ -92,6 +92,7 @@ export const NAV: NavSection[] = [
         items: [
           { label: '@bsv/simple', href: '/packages/helpers/simple/' },
           { label: '@bsv/templates', href: '/packages/helpers/templates/' },
+          { label: '@bsv/did', href: '/packages/helpers/did/' },
           { label: '@bsv/did-client', href: '/packages/helpers/did-client/' },
           { label: '@bsv/wallet-helper', href: '/packages/helpers/wallet-helper/' },
           { label: '@bsv/amountinator', href: '/packages/helpers/amountinator/' },
