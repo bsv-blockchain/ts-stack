@@ -142,8 +142,8 @@ importers:
   packages/helpers/bsv-wallet-helper:
     dependencies:
       '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
+        specifier: ^2.1.0
+        version: 2.1.0
       '@bsv/wallet-toolbox-client':
         specifier: ^2.1.18
         version: 2.1.22
@@ -882,8 +882,8 @@ importers:
         specifier: ^2.0.2
         version: 2.0.3
       '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
+        specifier: ^2.1.0
+        version: 2.1.0
       '@bsv/wallet-toolbox-client':
         specifier: ^2.1.18
         version: 2.1.22
@@ -928,8 +928,8 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2(socks@2.8.7)
       '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
+        specifier: ^2.1.0
+        version: 2.1.0
       '@bsv/wallet-toolbox-client':
         specifier: ^2.1.18
         version: 2.1.22
