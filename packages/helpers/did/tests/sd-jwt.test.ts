@@ -92,6 +92,39 @@ describe('SD-JWT VC', () => {
     expect(result.payload?.is_over_21).toBe(true)
     expect(result.payload?.email).toBeUndefined()
     expect(result.payload?.family_name).toBe('Ng')
+
+    const objectResult = await SdJwtVcVerifier.verify(presentation, {
+      expectedAudience: 'https://verifier.example',
+      expectedNonce: 'nonce-123',
+      requireKeyBinding: true
+    })
+    expect(objectResult.verified).toBe(true)
+    expect(objectResult.keyBindingVerified).toBe(true)
+  })
+
+  test('verifies object presentations without key binding when it is optional', async () => {
+    const credential = await SdJwtVcIssuer.create({
+      issuer: issuerDid,
+      issuerPrivateKey,
+      holderPublicKey: holderPrivateKey.toPublicKey(),
+      vct: 'https://credentials.example.com/identity_credential',
+      claims: {
+        given_name: 'Alice',
+        family_name: 'Ng'
+      },
+      disclosureFrame: {
+        given_name: true
+      },
+      issuedAt: 1770000000
+    })
+    const presentation = await SdJwtVcHolder.generatePresentation(credential, ['given_name'])
+    const result = await SdJwtVcVerifier.verify(presentation)
+
+    expect(result.verified).toBe(true)
+    expect(result.issuerSignedJwtVerified).toBe(true)
+    expect(result.keyBindingVerified).toBeNull()
+    expect(result.disclosedClaims).toEqual({ given_name: 'Alice' })
+    expect(result.payload?.family_name).toBe('Ng')
   })
 
   test('rejects tampered disclosures', async () => {
@@ -159,8 +192,14 @@ describe('SD-JWT VC', () => {
     })
     const didSvg = generateQrCode(issuerDid, 'did')
     const vcSvg = generateQrCode(credential.sdJwt, 'vc')
+    const dataUrl = generateQrCode({ sdJwt: credential.sdJwt }, 'vc', {
+      output: 'data-url',
+      darkColor: '<black&"',
+      lightColor: '#fff'
+    })
 
     expect(didSvg).toContain('<svg')
     expect(vcSvg).toContain('<rect')
+    expect(dataUrl).toMatch(/^data:image\/svg\+xml;charset=utf-8,/)
   })
 })

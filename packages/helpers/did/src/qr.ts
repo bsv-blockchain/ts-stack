@@ -19,9 +19,9 @@ export function generateQrCode (
   mode: QrMode,
   options: QrCodeOptions = {}
 ): string {
-  const payload = mode === 'vc' && typeof value !== 'string'
-    ? JSON.stringify(value)
-    : String(value)
+  const payload = typeof value === 'string'
+    ? value
+    : JSON.stringify(value)
   const qr = (QRCode as unknown as QrFactory).create(payload, {
     errorCorrectionLevel: options.errorCorrectionLevel ?? 'M'
   })
@@ -63,8 +63,8 @@ function renderSvg (modules: QrBitMatrix, options: QrCodeOptions): string {
 
 function escapeAttribute (value: string): string {
   return value
-    .replace(/&/gu, '&amp;')
-    .replace(/"/gu, '&quot;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
+    .split('&').join('&amp;')
+    .split('"').join('&quot;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
 }

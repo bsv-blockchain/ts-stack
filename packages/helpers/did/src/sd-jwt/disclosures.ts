@@ -141,7 +141,10 @@ function transformObject (
     }
   }
 
-  if (sd.length > 0) out._sd = sd.sort()
+  if (sd.length > 0) {
+    sd.sort((left, right) => left.localeCompare(right))
+    out._sd = sd
+  }
   return out
 }
 
@@ -173,7 +176,9 @@ function setAtPath (target: JsonObject, path: string[], value: JsonValue): void 
     if (!isPlainObject(next)) cursor[segment] = {}
     cursor = cursor[segment] as JsonObject
   }
-  cursor[path[path.length - 1]] = value
+  const lastSegment = path.at(-1)
+  if (lastSegment == null) throw new Error('Cannot set an empty disclosure path')
+  cursor[lastSegment] = value
 }
 
 function stripSdMetadata (value: JsonValue): void {
@@ -202,7 +207,7 @@ function assertSupportedSdAlg (value: JsonValue): void {
 }
 
 function cloneJson<T extends JsonValue> (value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
+  return structuredClone(value)
 }
 
 function isPlainObject (value: unknown): value is JsonObject {
