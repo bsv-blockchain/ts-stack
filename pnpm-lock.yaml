@@ -274,8 +274,8 @@ importers:
   packages/helpers/fund-wallet:
     dependencies:
       '@bsv/sdk':
-        specifier: ^2.0.14
-        version: 2.0.14
+        specifier: ^2.1.0
+        version: 2.1.0
       '@bsv/wallet-toolbox':
         specifier: ^2.1.24
         version: 2.1.24(@types/node@22.19.17)
