@@ -50,7 +50,7 @@
     "typescript": "^5.2.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.0.14"
+    "@bsv/sdk": "^2.1.0"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"

@@ -10,8 +10,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write   # required for npm OIDC provenance
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -58,3 +59,51 @@ jobs:
         #   Workflow: release.yaml
         #   Environment: (leave blank)
         run: pnpm -r --filter="${{ steps.publish-filter.outputs.filter }}" publish --access public --no-git-checks --provenance
+
+      - name: Wait for npm registry propagation
+        run: sleep 300
+
+      - name: Sync published workspace versions
+        id: sync-versions
+        env:
+          SYNC_BRANCH: automation/sync-published-versions
+        run: |
+          git fetch origin main
+          git switch --force-create "$SYNC_BRANCH" origin/main
+
+          pnpm sync-versions
+          pnpm install --lockfile-only
+
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml 'packages/**/package.json'
+          git commit -m "chore: sync published workspace versions"
+          git push --force-with-lease origin "HEAD:$SYNC_BRANCH"
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$SYNC_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open version sync PR
+        if: steps.sync-versions.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: ${{ steps.sync-versions.outputs.branch }}
+        run: |
+          existing_pr="$(gh pr list --base main --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number')"
+
+          if [[ -n "$existing_pr" ]]; then
+            gh pr edit "$existing_pr" \
+              --title "chore: sync published workspace versions" \
+              --body "Updates workspace package references and pnpm-lock.yaml after a successful npm publish."
+          else
+            gh pr create \
+              --base main \
+              --head "$SYNC_BRANCH" \
+              --title "chore: sync published workspace versions" \
+              --body "Updates workspace package references and pnpm-lock.yaml after a successful npm publish."
+          fi

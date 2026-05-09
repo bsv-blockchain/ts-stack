@@ -1157,10 +1157,11 @@ declare function calculatePreimage(tx: Transaction, inputIndex: number, signOutp
  */
 declare const addOpReturnData: (script: LockingScript, fields: Array<string | number[]>) => LockingScript;
 
-declare function getDerivation(): {
+interface Derivation {
     protocolID: WalletProtocol;
     keyID: string;
-};
+}
+declare function getDerivation(): Derivation;
 interface AddressWithParams {
     address: string;
     walletParams: {

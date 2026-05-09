@@ -21,7 +21,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client#readme",
   "dependencies": {
-    "@bsv/sdk": "^2.0.14",
+    "@bsv/sdk": "^2.1.0",
     "hash-wasm": "^4.12.0",
     "idb": "^8.0.2"
   }
