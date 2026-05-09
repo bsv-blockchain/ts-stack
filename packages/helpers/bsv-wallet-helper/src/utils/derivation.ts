@@ -1,7 +1,12 @@
 import { brc29ProtocolID } from '@bsv/wallet-toolbox-client'
 import { Random, Utils, WalletInterface, PublicKey, WalletProtocol } from '@bsv/sdk'
 
-export function getDerivation () {
+export interface Derivation {
+  protocolID: WalletProtocol
+  keyID: string
+}
+
+export function getDerivation (): Derivation {
   const derivationPrefix = Utils.toBase64(Random(8))
   const derivationSuffix = Utils.toBase64(Random(8))
   return {
