@@ -48,19 +48,21 @@ jobs:
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
         run: pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run test
 
-      - name: Generate SDK coverage
+      - name: Generate coverage
         run: |
           pnpm --filter @bsv/sdk run test:coverage
           node scripts/normalize-lcov-paths.mjs packages/sdk/coverage/lcov.info packages/sdk
+          pnpm --filter @bsv/did run test:coverage
+          node scripts/normalize-lcov-paths.mjs packages/helpers/did/coverage/lcov.info packages/helpers/did
 
-      - name: Upload SDK coverage to Codecov
+      - name: Upload coverage to Codecov
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: packages/sdk/coverage/lcov.info
-          flags: sdk
-          name: ts-stack-sdk
+          files: packages/sdk/coverage/lcov.info,packages/helpers/did/coverage/lcov.info
+          flags: sdk,did
+          name: ts-stack
           slug: bsv-blockchain/ts-stack
           fail_ci_if_error: true
 
