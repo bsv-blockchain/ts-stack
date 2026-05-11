@@ -417,6 +417,38 @@ export function upgradeSyncStates (db: IDBPDatabase<StorageIdbSchema>): void {
   store.createIndex('status', 'status')
 }
 
+export function upgradeTransactionsV7 (db: IDBPDatabase<StorageIdbSchema>): void {
+  const store = db.createObjectStore('transactions_v7', { keyPath: 'transactionId', autoIncrement: true })
+  store.createIndex('txid', 'txid', { unique: true })
+  store.createIndex('processing', 'processing')
+  store.createIndex('batch', 'batch')
+  store.createIndex('idempotencyKey', 'idempotencyKey', { unique: true })
+}
+
+export function upgradeActions (db: IDBPDatabase<StorageIdbSchema>): void {
+  const store = db.createObjectStore('actions', { keyPath: 'actionId', autoIncrement: true })
+  store.createIndex('userId', 'userId')
+  store.createIndex('transactionId', 'transactionId')
+  store.createIndex('userId_transactionId', ['userId', 'transactionId'], { unique: true })
+  store.createIndex('userId_reference', ['userId', 'reference'], { unique: true })
+}
+
+export function upgradeChainTip (db: IDBPDatabase<StorageIdbSchema>): void {
+  db.createObjectStore('chain_tip', { keyPath: 'id' })
+}
+
+export function upgradeTxAudit (db: IDBPDatabase<StorageIdbSchema>): void {
+  const store = db.createObjectStore('tx_audit', { keyPath: 'auditId', autoIncrement: true })
+  store.createIndex('transactionId', 'transactionId')
+  store.createIndex('actionId', 'actionId')
+  store.createIndex('event', 'event')
+}
+
+export function upgradeMonitorLease (db: IDBPDatabase<StorageIdbSchema>): void {
+  const store = db.createObjectStore('monitor_lease', { keyPath: 'taskName' })
+  store.createIndex('expiresAt', 'expiresAt')
+}
+
 // ─── Bulk store initialisation (called by the version-1 upgrade) ─────────────
 
 /** Upgrade handler for every store that existed at schema version 1. */
@@ -437,4 +469,9 @@ export function upgradeAllStoresV1 (db: IDBPDatabase<StorageIdbSchema>): void {
   if (!names.contains('tx_labels_map')) upgradeTxLabelsMap(db)
   if (!names.contains('monitor_events')) upgradeMonitorEvents(db)
   if (!names.contains('sync_states')) upgradeSyncStates(db)
+  if (!names.contains('transactions_v7')) upgradeTransactionsV7(db)
+  if (!names.contains('actions')) upgradeActions(db)
+  if (!names.contains('chain_tip')) upgradeChainTip(db)
+  if (!names.contains('tx_audit')) upgradeTxAudit(db)
+  if (!names.contains('monitor_lease')) upgradeMonitorLease(db)
 }

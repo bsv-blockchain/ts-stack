@@ -91,6 +91,91 @@ export type TransactionStatus =
   | 'nonfinal'
   | 'unfail'
 
+/**
+ * V7 granular FSM for the per-txid `transactions` table.
+ *
+ * - queued: created locally, not yet attempted on the network
+ * - sending: at least one broadcast attempt in flight
+ * - sent: handed off to a transaction processor without ack
+ * - seen: first observation that the network has accepted the txid
+ * - seen_multi: same as `seen`, confirmed by N>=2 independent providers
+ * - unconfirmed: provider returned a proof candidate not yet validated by chaintracks
+ * - proven: validated merkle proof acquired
+ * - reorging: a previously proven txid lost confirmations and is being re-evaluated
+ * - invalid: rawTx is structurally invalid or was rejected; will not retry
+ * - doubleSpend: confirmed to spend the same input as another tx
+ * - unfail: operator-forced re-review of an `invalid` row
+ * - frozen: operator-paused row, will not progress until thawed
+ * - nosend: signed but intentionally never broadcast by this wallet
+ * - nonfinal: live nLockTime, eligible for replacement
+ */
+export type ProcessingStatus =
+  | 'queued'
+  | 'sending'
+  | 'sent'
+  | 'seen'
+  | 'seen_multi'
+  | 'unconfirmed'
+  | 'proven'
+  | 'reorging'
+  | 'invalid'
+  | 'doubleSpend'
+  | 'unfail'
+  | 'frozen'
+  | 'nosend'
+  | 'nonfinal'
+
+export const ProcessingTerminalStatus: ProcessingStatus[] = ['proven', 'invalid', 'doubleSpend']
+
+export const ProcessingSpendableStatus: ProcessingStatus[] = [
+  'sent',
+  'seen',
+  'seen_multi',
+  'unconfirmed',
+  'proven'
+]
+
+/**
+ * Maps a legacy `ProvenTxReqStatus` to the V7 `ProcessingStatus`.
+ * Used by the additive backfill — does not mutate the source row.
+ */
+export function provenTxReqStatusToProcessing (s: ProvenTxReqStatus): ProcessingStatus {
+  switch (s) {
+    case 'completed': return 'proven'
+    case 'unmined': return 'sent'
+    case 'callback': return 'sent'
+    case 'unconfirmed': return 'unconfirmed'
+    case 'sending': return 'sending'
+    case 'unsent': return 'queued'
+    case 'unprocessed': return 'queued'
+    case 'unknown': return 'sent'
+    case 'nonfinal': return 'nonfinal'
+    case 'nosend': return 'nosend'
+    case 'invalid': return 'invalid'
+    case 'doubleSpend': return 'doubleSpend'
+    case 'unfail': return 'unfail'
+  }
+}
+
+/**
+ * Maps a legacy per-user `TransactionStatus` to the V7 `ProcessingStatus`.
+ * Used when there is no `proven_tx_reqs` row to consult (locally-created actions
+ * that never reached the broadcast queue).
+ */
+export function transactionStatusToProcessing (s: TransactionStatus): ProcessingStatus {
+  switch (s) {
+    case 'completed': return 'proven'
+    case 'failed': return 'invalid'
+    case 'unprocessed': return 'queued'
+    case 'sending': return 'sending'
+    case 'unproven': return 'sent'
+    case 'unsigned': return 'queued'
+    case 'nosend': return 'nosend'
+    case 'nonfinal': return 'nonfinal'
+    case 'unfail': return 'unfail'
+  }
+}
+
 export interface Paged {
   limit: number
   offset?: number

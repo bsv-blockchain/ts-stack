@@ -75,6 +75,132 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-05-11-001 V7 additive schema (actions, transactions_v7, chain_tip, tx_audit, monitor_lease)'] = {
+      async up (knex) {
+        const dbtype = await determineDBType(knex)
+
+        // Per-txid canonical record. Source of truth for broadcast + proof state.
+        await knex.schema.createTable('transactions_v7', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('transactionId')
+          table.string('txid', 64).notNullable().unique()
+          table.string('processing', 16).notNullable().defaultTo('queued')
+          table.timestamp('processing_changed_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+          table.timestamp('next_action_at', { precision: 3 }).nullable()
+          table.integer('attempts').unsigned().notNullable().defaultTo(0)
+          table.integer('rebroadcast_cycles').unsigned().notNullable().defaultTo(0)
+          table.boolean('was_broadcast').notNullable().defaultTo(false)
+          table.string('idempotency_key', 128).nullable().unique()
+          table.string('batch', 64).nullable()
+          table.binary('raw_tx').nullable()
+          table.binary('input_beef').nullable()
+          table.integer('height').unsigned().nullable()
+          table.integer('merkle_index').unsigned().nullable()
+          table.binary('merkle_path').nullable()
+          table.string('merkle_root', 64).nullable()
+          table.string('block_hash', 64).nullable()
+          table.boolean('is_coinbase').notNullable().defaultTo(false)
+          table.string('last_provider', 64).nullable()
+          table.string('last_provider_status', 64).nullable()
+          table.string('frozen_reason', 255).nullable()
+          table.integer('row_version').unsigned().notNullable().defaultTo(0)
+          table.index('processing')
+          table.index('batch')
+          table.index(['processing', 'next_action_at'], 'idx_tx_v7_processing_next')
+        })
+
+        // Per-user view of a transactions_v7 row.
+        await knex.schema.createTable('actions', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('actionId')
+          table.integer('userId').unsigned().references('userId').inTable('users').notNullable()
+          table
+            .integer('transactionId')
+            .unsigned()
+            .references('transactionId')
+            .inTable('transactions_v7')
+            .notNullable()
+          table.string('reference', 64).notNullable()
+          table.string('description', 2000).notNullable()
+          table.boolean('isOutgoing').notNullable()
+          table.bigint('satoshis_delta').notNullable().defaultTo(0)
+          table.boolean('user_nosend').notNullable().defaultTo(false)
+          table.boolean('hidden').notNullable().defaultTo(false)
+          table.boolean('user_aborted').notNullable().defaultTo(false)
+          table.text('notify_json', 'longtext').nullable()
+          table.integer('row_version').unsigned().notNullable().defaultTo(0)
+          table.unique(['userId', 'transactionId'])
+          table.unique(['userId', 'reference'])
+          table.index(['userId', 'hidden'], 'idx_actions_user_hidden')
+        })
+
+        // Singleton chain tip cache.
+        await knex.schema.createTable('chain_tip', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.integer('id').notNullable().primary()
+          table.integer('height').unsigned().notNullable()
+          table.string('block_hash', 64).notNullable()
+          table.string('merkle_root', 64).nullable()
+          table.timestamp('observed_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+        })
+
+        // Append-only audit log keyed by transactionId and/or actionId.
+        await knex.schema.createTable('tx_audit', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.increments('auditId')
+          table
+            .integer('transactionId')
+            .unsigned()
+            .references('transactionId')
+            .inTable('transactions_v7')
+            .nullable()
+          table
+            .integer('actionId')
+            .unsigned()
+            .references('actionId')
+            .inTable('actions')
+            .nullable()
+          table.string('event', 64).notNullable()
+          table.string('from_state', 16).nullable()
+          table.string('to_state', 16).nullable()
+          table.text('details_json', 'longtext').nullable()
+          table.index('event')
+          table.index('transactionId')
+          table.index('actionId')
+        })
+
+        // Monitor task leases.
+        await knex.schema.createTable('monitor_lease', table => {
+          addTimeStamps(knex, table, dbtype)
+          table.string('task_name', 64).notNullable().primary()
+          table.string('owner_id', 64).notNullable()
+          table.timestamp('expires_at', { precision: 3 }).notNullable()
+          table.integer('renew_count').unsigned().notNullable().defaultTo(0)
+          table.string('note', 255).nullable()
+          table.index('expires_at')
+        })
+
+        if (dbtype === 'MySQL') {
+          await knex.raw('ALTER TABLE transactions_v7 MODIFY COLUMN raw_tx LONGBLOB')
+          await knex.raw('ALTER TABLE transactions_v7 MODIFY COLUMN input_beef LONGBLOB')
+          await knex.raw('ALTER TABLE transactions_v7 MODIFY COLUMN merkle_path LONGBLOB')
+        } else {
+          await knex.schema.alterTable('transactions_v7', table => {
+            table.binary('raw_tx', 10000000).alter()
+            table.binary('input_beef', 10000000).alter()
+            table.binary('merkle_path', 10000000).alter()
+          })
+        }
+      },
+      async down (knex) {
+        await knex.schema.dropTableIfExists('monitor_lease')
+        await knex.schema.dropTableIfExists('tx_audit')
+        await knex.schema.dropTableIfExists('chain_tip')
+        await knex.schema.dropTableIfExists('actions')
+        await knex.schema.dropTableIfExists('transactions_v7')
+      }
+    }
+
     migrations['2026-04-30-001 add wasBroadcast and rebroadcastAttempts to proven_tx_reqs'] = {
       async up (knex) {
         await knex.schema.alterTable('proven_tx_reqs', table => {

@@ -1,10 +1,13 @@
 import { Base64String, PubKeyHex, HexString } from '@bsv/sdk'
-import { ProvenTxReqStatus, SyncStatus, TransactionStatus } from '../../sdk'
+import { ProcessingStatus, ProvenTxReqStatus, SyncStatus, TransactionStatus } from '../../sdk'
 import {
+  TableAction,
   TableCertificate,
   TableCertificateField,
+  TableChainTip,
   TableCommission,
   TableMonitorEvent,
+  TableMonitorLease,
   TableOutput,
   TableOutputBasket,
   TableOutputTag,
@@ -14,6 +17,8 @@ import {
   TableSyncState,
   TableSettings,
   TableTransaction,
+  TableTransactionV7,
+  TableTxAudit,
   TableTxLabel,
   TableTxLabelMap,
   TableUser
@@ -145,6 +150,48 @@ export interface StorageIdbSchema {
     value: TableUser
     indexes: {
       identityKey: string
+    }
+  }
+  // V7 additive object stores. Existing stores remain unchanged for compatibility.
+  transactionsV7: {
+    key: number
+    value: TableTransactionV7
+    indexes: {
+      txid: HexString
+      processing: ProcessingStatus
+      batch: string
+      idempotencyKey: string
+    }
+  }
+  actions: {
+    key: number
+    value: TableAction
+    indexes: {
+      userId: number
+      transactionId: number
+      userId_transactionId: [number, number]
+      userId_reference: [number, string]
+    }
+  }
+  chainTip: {
+    key: number
+    value: TableChainTip
+    indexes: Record<string, never>
+  }
+  txAudit: {
+    key: number
+    value: TableTxAudit
+    indexes: {
+      transactionId: number
+      actionId: number
+      event: string
+    }
+  }
+  monitorLease: {
+    key: string
+    value: TableMonitorLease
+    indexes: {
+      expiresAt: Date
     }
   }
 }
