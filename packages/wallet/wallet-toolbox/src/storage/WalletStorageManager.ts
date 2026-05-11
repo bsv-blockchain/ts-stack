@@ -182,8 +182,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
     // Partition backups into proper backups vs conflicting actives.
     const si = this._active!.settings?.storageIdentityKey
     for (const store of backups) {
-      if (store.user!.activeStorage !== si) this._conflictingActives.push(store)
-      else this._backups.push(store)
+      if (store.user!.activeStorage === si) this._backups.push(store)
+      else this._conflictingActives.push(store)
     }
 
     this._isAvailable = true

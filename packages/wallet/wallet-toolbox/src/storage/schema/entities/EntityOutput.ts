@@ -251,7 +251,7 @@ export class EntityOutput extends EntityBase<TableOutput> {
 
   override equals (ei: TableOutput, syncMap?: SyncMap | undefined): boolean {
     return (
-      this.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) &&
+      this.transactionId === (syncMap?.transaction.idMap[ei.transactionId] ?? ei.transactionId) &&
       this.basketId === ((syncMap != null) && ei.basketId ? syncMap.outputBasket.idMap[ei.basketId] : ei.basketId) &&
       this.spentBy === ((syncMap != null) && ei.spentBy ? syncMap.transaction.idMap[ei.spentBy] : ei.spentBy) &&
       this.vout === ei.vout &&

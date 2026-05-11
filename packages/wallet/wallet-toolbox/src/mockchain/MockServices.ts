@@ -116,7 +116,7 @@ export class MockServices implements WalletServices {
     const currentHeight = await this.tracker.currentHeight()
     for (let i = 0; i < tx.inputs.length; i++) {
       const input = tx.inputs[i]
-      const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
+      const sourceTxid = input.sourceTXID || input.sourceTransaction?.id('hex')
       if (!sourceTxid) throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${i}`)
 
       const utxo = await this.storage.getUtxo(sourceTxid, input.sourceOutputIndex)
@@ -165,7 +165,7 @@ export class MockServices implements WalletServices {
 
   private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
     for (const input of tx.inputs) {
-      const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
+      const sourceTxid = input.sourceTXID || input.sourceTransaction?.id('hex') || ''
       await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
     }
   }
@@ -378,7 +378,7 @@ export class MockServices implements WalletServices {
     }
     const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
     const or = await this.getUtxoStatus(hash, undefined, `${output.txid}.${output.vout}`)
-    return or.isUtxo === true
+    return or.isUtxo ?? false
   }
 
   async getBsvExchangeRate (): Promise<number> {

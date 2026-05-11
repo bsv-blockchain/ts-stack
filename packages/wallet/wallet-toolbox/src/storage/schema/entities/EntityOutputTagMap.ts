@@ -78,8 +78,8 @@ export class EntityOutputTagMap extends EntityBase<TableOutputTagMap> {
     const eo = this.toApi()
 
     return (
-      eo.outputId === ((syncMap != null) ? syncMap.output.idMap[verifyId(ei.outputId)] : ei.outputId) &&
-      eo.outputTagId === ((syncMap != null) ? syncMap.outputTag.idMap[verifyId(ei.outputTagId)] : ei.outputTagId) &&
+      eo.outputId === (syncMap?.output.idMap[verifyId(ei.outputId)] ?? ei.outputId) &&
+      eo.outputTagId === (syncMap?.outputTag.idMap[verifyId(ei.outputTagId)] ?? ei.outputTagId) &&
       eo.isDeleted === ei.isDeleted
     )
   }

@@ -67,15 +67,15 @@ export class TaskUnFail extends WalletMonitorTask {
       log += ' '.repeat(indent)
       log += `reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
       const r = await this.monitor.services.getMerklePath(req.txid)
-      if (r.merklePath != null) {
+      if (r.merklePath == null) {
+        req.status = 'invalid'
+        log += 'returned to status \'invalid\'\n'
+      } else {
         // 1. set the req status to 'unmined'
         req.status = 'unmined'
         req.attempts = 0
         log += 'unfailed. status is now \'unmined\'\n'
         log += await this.unfailReq(req, indent + 2)
-      } else {
-        req.status = 'invalid'
-        log += 'returned to status \'invalid\'\n'
       }
       await req.updateStorageDynamicProperties(this.storage)
     }

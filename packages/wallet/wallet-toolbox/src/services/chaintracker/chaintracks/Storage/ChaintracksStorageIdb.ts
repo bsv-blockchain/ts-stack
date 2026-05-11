@@ -195,7 +195,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const store = trx.objectStore('live_headers')
 
     const maxCursor = await store.openKeyCursor(null, 'prev')
-    const maxValue: number = maxCursor != null ? Number(maxCursor.key) : 0
+    const maxValue: number = maxCursor ? Number(maxCursor.key) : 0
     await trx.done
     return maxValue
   }

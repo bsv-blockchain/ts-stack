@@ -123,7 +123,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       `select ${sub} as rawTx from proven_tx_reqs where txid = '${txid}' and status in ('unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail')`
     )
     const req = verifyOneOrNone(this.normaliseKnexRawResult(rs))
-    return req?.rawTx != null ? Array.from(req.rawTx) : undefined
+    return req?.rawTx ? Array.from(req.rawTx) : undefined
   }
 
   override async getRawTxOfKnownValidTransaction (
@@ -138,7 +138,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       return this.getRawTxSlice(txid, offset!, length!, trx)
     }
     const r = await this.getProvenOrRawTx(txid, trx)
-    return r.proven != null ? r.proven.rawTx : r.rawTx
+    return r.proven?.rawTx ?? r.rawTx
   }
 
   getProvenTxsForUserQuery (args: FindForUserSincePagedArgs): Knex.QueryBuilder {
@@ -326,15 +326,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
-    try {
-      const e = await this.validateEntityForInsert(output, trx)
-      if (e.outputId === 0) delete e.outputId
-      const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
-      output.outputId = id
-      return output.outputId
-    } catch (e) {
-      throw e
-    }
+    const e = await this.validateEntityForInsert(output, trx)
+    if (e.outputId === 0) delete e.outputId
+    const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
+    output.outputId = id
+    return output.outputId
   }
 
   override async insertOutputTag (tag: TableOutputTag, trx?: TrxToken): Promise<number> {

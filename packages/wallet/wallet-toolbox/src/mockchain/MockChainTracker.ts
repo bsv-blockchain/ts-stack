@@ -18,7 +18,7 @@ export class MockChainTracker implements ChaintracksClientApi {
 
   async currentHeight (): Promise<number> {
     const tip = await this.storage.getChainTip()
-    return (tip != null) ? tip.height : -1
+    return tip?.height ?? -1
   }
 
   async isValidRootForHeight (root: string, height: number): Promise<boolean> {
@@ -35,8 +35,8 @@ export class MockChainTracker implements ChaintracksClientApi {
     const tip = await this.storage.getChainTip()
     return {
       chain: this.chain,
-      heightBulk: (tip != null) ? tip.height : -1,
-      heightLive: (tip != null) ? tip.height : -1,
+      heightBulk: tip?.height ?? -1,
+      heightLive: tip?.height ?? -1,
       storage: 'mockchain',
       bulkIngestors: [],
       liveIngestors: [],

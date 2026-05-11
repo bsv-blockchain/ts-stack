@@ -278,7 +278,7 @@ export class BulkFileDataManager {
     if (newBulkHeaders.length === 0) return
     return await this.lock.withWriteLock(async () => {
       const lbf = this.getLastFileNoLock()
-      const nextHeight = lbf != null ? lbf.firstHeight + lbf.count : 0
+      const nextHeight = lbf ? lbf.firstHeight + lbf.count : 0
 
       // Trim headers that already exist in bulk storage, adjusting chain work accordingly.
       ;({ headers: newBulkHeaders, incrementalChainWork } = trimAlreadyStoredHeaders(newBulkHeaders, nextHeight, incrementalChainWork))
@@ -646,8 +646,11 @@ export class BulkFileDataManager {
   private dropLastBulkFile (lbf: BulkFileData): void {
     delete this.fileHashToIndex[lbf.fileHash]
     const index = this.bfds.indexOf(lbf)
-    if (index !== this.bfds.length - 1) { throw new WERR_INTERNAL('dropLastBulkFile requires lbf is the current last file.') }
-    this.bfds.pop()
+    if (index === this.bfds.length - 1) {
+      this.bfds.pop()
+    } else {
+      throw new WERR_INTERNAL('dropLastBulkFile requires lbf is the current last file.')
+    }
   }
 
   /**
@@ -664,19 +667,19 @@ export class BulkFileDataManager {
     // replaced will be valid if the update replaced it and it must become the new last file.
     // truncateIndex will be updateIndex + 1 if the existing last file is being truncated and update is second to last.
     const truncateIndex = this.fileHashToIndex[truncate.fileHash]
-    if (truncateIndex !== undefined && truncateIndex !== updateIndex + 1) { throw new WERR_INTERNAL('shiftWork requires update to have replaced truncate or truncate to follow update') }
-    if (truncateIndex !== undefined && (replaced == null)) { throw new WERR_INTERNAL('shiftWork requires valid replaced when update hasn\'t replaced truncate') }
+    if (truncateIndex != null && truncateIndex !== updateIndex + 1) { throw new WERR_INTERNAL('shiftWork requires update to have replaced truncate or truncate to follow update') }
+    if (truncateIndex != null && replaced == null) { throw new WERR_INTERNAL('shiftWork requires valid replaced when update hasn\'t replaced truncate') }
 
     truncate.prevHash = update.lastHash!
     truncate.prevChainWork = update.lastChainWork
     // truncate.lastChainWork, truncate.lastHash remain unchanged
     let count = update.count
-    if (replaced != null) {
-      count -= replaced.count
-    } else {
+    if (replaced == null) {
       // The truncated file is itself being replaced by the update and must be inserted as a new file.
       truncate.fileId = undefined
       this.bfds.push(truncate) // Add the truncated file as a new entry.
+    } else {
+      count -= replaced.count
     }
     truncate.count -= count
     truncate.firstHeight += count
@@ -710,7 +713,7 @@ export class BulkFileDataManager {
         console.debug(`BulkFileDataManager: first download attempt failed for ${url}, retrying`, firstAttemptErr)
         bfd.data = await this.fetch.download(url)
       }
-      if (!bfd.data) throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
+      if (bfd.data == null) throw new WERR_INVALID_PARAMETER('sourceUrl', `data not found for sourceUrl ${url}`)
     }
 
     if (bfd.data == null) throw new WERR_INVALID_PARAMETER('data', `defined. Unable to retrieve data for ${bfd.fileName}`)

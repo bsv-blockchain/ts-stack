@@ -158,7 +158,7 @@ DEV_KEYS = '{
     const services = new Services(serviceOptions)
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, 'default')
     const monitor = new Monitor(monopts)
-    const privilegedKeyManager = (args.privilegedKeyGetter != null)
+    const privilegedKeyManager = args.privilegedKeyGetter
       ? new PrivilegedKeyManager(args.privilegedKeyGetter)
       : undefined
     const wallet = new Wallet({
@@ -197,12 +197,12 @@ DEV_KEYS = '{
     privilegedKeyGetter?: () => Promise<PrivateKey>
   }): Promise<Wallet> {
     const chain = args.chain
-    const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
+    const endpointUrl = args.storageUrl || `https://${args.chain === 'main' ? '' : 'staging-'}storage.babbage.systems`
     const rootKey = PrivateKey.fromHex(args.rootKeyHex)
     const keyDeriver = new CachedKeyDeriver(rootKey)
     const storage = new WalletStorageManager(keyDeriver.identityKey)
     const services = new Services(chain)
-    const privilegedKeyManager = (args.privilegedKeyGetter != null)
+    const privilegedKeyManager = args.privilegedKeyGetter
       ? new PrivilegedKeyManager(args.privilegedKeyGetter)
       : undefined
     const wallet = new Wallet({
@@ -225,7 +225,7 @@ DEV_KEYS = '{
     const wo = await Setup.createWallet(args)
 
     const endpointUrl =
-      args.endpointUrl || `https://${args.env.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
+      args.endpointUrl || `https://${args.env.chain === 'main' ? '' : 'staging-'}storage.babbage.systems`
 
     const client = new StorageClient(wo.wallet, endpointUrl)
     await wo.storage.addWalletStorageProvider(client)

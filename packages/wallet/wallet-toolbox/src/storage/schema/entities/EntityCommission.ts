@@ -116,7 +116,7 @@ export class EntityCommission extends EntityBase<TableCommission> {
   override equals (ei: TableCommission, syncMap?: SyncMap | undefined): boolean {
     return (
       this.isRedeemed === ei.isRedeemed &&
-      this.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[ei.transactionId] : ei.transactionId) &&
+      this.transactionId === (syncMap?.transaction.idMap[ei.transactionId] ?? ei.transactionId) &&
       this.keyOffset === ei.keyOffset &&
       arraysEqual(this.lockingScript, ei.lockingScript) &&
       this.satoshis === ei.satoshis

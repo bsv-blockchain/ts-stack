@@ -346,7 +346,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       : await this.getRawTxFull(txid, trx)
 
     if (rawTx != null && sliceRequested) {
-      return rawTx.slice(offset, (offset as number) + (length as number))
+      return rawTx.slice(offset!, offset! + length!)
     }
     return rawTx
   }
@@ -1361,7 +1361,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       },
       r => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (args.noScript === true) (r as any).script = undefined
+        if (args.noScript) (r as any).script = undefined
         filtered(r)
       }
     )
