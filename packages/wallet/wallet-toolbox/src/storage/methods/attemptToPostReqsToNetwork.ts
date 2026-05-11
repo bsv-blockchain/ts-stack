@@ -425,6 +425,10 @@ async function confirmDoubleSpend (
  * decision is based on services.isUtxo, not the aggregate failure
  * classification.
  *
+ * Pre-broadcast races where concurrent createActions reach the same
+ * UTXO across separate app processes are out of scope; see PR
+ * description.
+ *
  * Conservatively scoped:
  *   - Only inputs found in the failing user's basket are touched.
  *   - Inputs whose on-chain UTXO status cannot be determined (service
@@ -470,39 +474,73 @@ export async function markStaleInputsAsSpent (
 
   const byOutpoint = await storage.findOutputsByOutpoints(userId, outpoints, trx)
 
-  for (const outpoint of outpoints) {
-    const localOutput = byOutpoint[`${outpoint.txid}.${outpoint.vout}`]
-    if (localOutput == null) continue
-
-    // services.isUtxo requires the lockingScript; load it lazily.
-    if (localOutput.lockingScript == null) {
-      try {
-        await storage.validateOutputScript(localOutput, trx)
-      } catch {
-        continue
+  // Two-phase processing:
+  //   Phase 1 (parallel, read-only): validateOutputScript + services.isUtxo
+  //     run concurrently across all outpoints. Both are network-bound on
+  //     the slow path; serializing them produces O(N) wall-time for no
+  //     correctness benefit. validateOutputScript only lazily fills the
+  //     in-memory lockingScript from a known-valid tx (no shared state
+  //     to race). services.isUtxo is provider HTTP — independent calls.
+  //     Per-provider rate limiters that 429 some calls fall into the
+  //     existing service-error branch and preserve retry semantics for
+  //     those inputs; the surviving inputs still get correct treatment.
+  //   Phase 2 (serial, in-trx writes): drain the per-input classification
+  //     into result.checked / staleConfirmed accumulators and the
+  //     storage.updateOutput writes, in iteration order. Storage writes
+  //     stay serialized inside the trx — no change in transactional
+  //     semantics from the pre-parallel version.
+  type CheckResult =
+    | { kind: 'skipped' }
+    | { kind: 'service-error'; localOutput: typeof byOutpoint[keyof typeof byOutpoint] }
+    | { kind: 'still-utxo'; localOutput: typeof byOutpoint[keyof typeof byOutpoint] }
+    | {
+        kind: 'stale'
+        localOutput: typeof byOutpoint[keyof typeof byOutpoint]
+        outpoint: { txid: string; vout: number }
       }
-    }
 
+  const checks: CheckResult[] = await Promise.all(
+    outpoints.map(async (outpoint): Promise<CheckResult> => {
+      const localOutput = byOutpoint[`${outpoint.txid}.${outpoint.vout}`]
+      if (localOutput == null) return { kind: 'skipped' }
+
+      // services.isUtxo requires the lockingScript; load it lazily.
+      if (localOutput.lockingScript == null) {
+        try {
+          await storage.validateOutputScript(localOutput, trx)
+        } catch {
+          return { kind: 'skipped' }
+        }
+      }
+
+      let isStillUtxo: boolean
+      try {
+        isStillUtxo = await services.isUtxo(localOutput)
+      } catch {
+        // Service error — preserve current behavior (keep spendable=true).
+        // Eviction requires positive evidence of stale state.
+        return { kind: 'service-error', localOutput }
+      }
+
+      return isStillUtxo
+        ? { kind: 'still-utxo', localOutput }
+        : { kind: 'stale', localOutput, outpoint }
+    })
+  )
+
+  for (const c of checks) {
+    if (c.kind === 'skipped') continue
     result.checked++
-    let isStillUtxo: boolean
-    try {
-      isStillUtxo = await services.isUtxo(localOutput)
-    } catch {
-      // Service error — preserve current behavior (keep spendable=true).
-      // Eviction requires positive evidence of stale state.
-      continue
-    }
-
-    if (!isStillUtxo) {
+    if (c.kind === 'stale') {
       // Authoritative on-chain evidence the input is spent. Override
       // the optimistic restore from updateTransactionStatus(failed).
       await storage.updateOutput(
-        localOutput.outputId!,
+        c.localOutput.outputId!,
         { spendable: false },
         trx
       )
       result.staleConfirmed++
-      result.staleOutpoints.push(`${outpoint.txid}.${outpoint.vout}`)
+      result.staleOutpoints.push(`${c.outpoint.txid}.${c.outpoint.vout}`)
     }
   }
 
