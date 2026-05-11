@@ -1,7 +1,46 @@
-# CLAUDE.md — @bsv/wallet-toolbox v2.1.24
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# @bsv/wallet-toolbox v2.1.24
 
 ## Purpose
 The Wallet Toolbox is the reference implementation of the BRC-100 wallet standard. It connects the SDK's cryptographic primitives to real storage backends (SQLite, MySQL, IndexedDB), network services (ARC, WhatsOnChain, Chaintracks), and signing flows to provide a complete, production-ready wallet that developers can use directly or customize for their own wallet apps (like BSV Desktop or BSV Browser).
+
+## Commands
+
+```bash
+npm install              # install deps
+npm run build            # tsc --build (compiles all 3 tsconfigs: all/client/mobile)
+npm test                 # build + jest, excludes *.man.test.ts (manual/network)
+npm run test:watch       # build + jest --watch
+npm run test:coverage    # build + jest --coverage
+npm run lint             # ts-standard --fix on src/**/*.ts
+npm run lint:ci          # ts-standard (no fix) — CI gate
+npm run doc              # ts2md → docs/*.md from JSDoc
+npm run sync-versions    # propagate root version to client/ and mobile/ package.json
+```
+
+### Run a single test
+Tests live in `src/__tests/` and `test/`. Match patterns include `**/*.test.ts` and `**/__test/**/*.test.ts`. Build runs first (`npm test` does `npm run build && jest`), so to skip rebuild use jest directly after a build:
+```bash
+npx jest test/Wallet/createAction.test.ts          # one file
+npx jest -t "creates action with single output"    # one test name
+npx jest --testPathPattern=monitor                  # one folder
+```
+
+`*.man.test.ts` files are manual/integration tests requiring network or long runs; they are intentionally excluded from `npm test` and CI.
+
+### Three-bundle build architecture
+This single source tree publishes three npm packages from `out/`, `client/out/`, `mobile/out/`. Each has its own tsconfig and its own entry file in `src/`:
+
+| Package | Entry | tsconfig | Includes |
+|---------|-------|----------|----------|
+| `@bsv/wallet-toolbox` | `src/index.ts` (re-exports `index.all.ts`) | `tsconfig.all.json` | All backends (Knex/SQLite/MySQL + IndexedDB + remote) |
+| `@bsv/wallet-toolbox-client` | `src/index.client.ts` | `tsconfig.client.json` | Browser only — no Knex/SQLite/MySQL |
+| `@bsv/wallet-toolbox-mobile` | `src/index.mobile.ts` | `tsconfig.mobile.json` | Mobile only — IndexedDB + remote |
+
+When adding a new export, decide which bundles it belongs in and update the matching `index.*.ts`. **Do not add Node-only imports (knex, mysql2, better-sqlite3, fs, express) to code that ends up in client/mobile builds** — `tsc --build` will succeed (skipLibCheck), but the bundled output will fail at runtime in the browser. `client/package.json` and `mobile/package.json` deliberately omit those packages from `dependencies`.
 
 ## Public API Surface
 
@@ -239,6 +278,14 @@ const broadcastResp = await tx.broadcast()
 ### Other ts-stack packages
 - **`@bsv/sdk`** — Core crypto and transactions
 - (Others in wallet family are peer deps, not runtime deps)
+
+## Conventions
+
+- **Linter**: `ts-standard` (TypeScript Standard). `.eslintrc.json` disables a long list of rules (no-floating-promises, strict-boolean-expressions, naming-convention, etc.) — match existing style rather than introducing strict equivalents.
+- **TS strictness**: `strict: true` and `noImplicitOverride: true` across all three tsconfigs; `noImplicitAny: false`. Targets `es2018`, `commonjs`.
+- **No new runtime deps without discussion** — CONTRIBUTING.md states the library should stay lean. Prefer adding to `@bsv/sdk` or implementing in-tree.
+- **JSDoc is required** on public APIs — `npm run doc` regenerates `docs/*.md` from JSDoc via `ts2md` and is part of `prepublish`. PRs that touch the public surface should rerun `npm run doc`.
+- **Version sync**: `syncVersions.js` keeps `client/package.json` and `mobile/package.json` versions aligned with the root. Run `npm run sync-versions` after a version bump, never edit the sub-package versions by hand.
 
 ## Common Pitfalls / Gotchas
 
