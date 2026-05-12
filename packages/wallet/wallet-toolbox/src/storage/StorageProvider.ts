@@ -277,6 +277,62 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           'an inprocess, outgoing action that has not been signed and shared to the network.'
         )
       }
+      // Chain-status protection for signed nosend txs.
+      //
+      // Background: a nosend tx (created via createAction({noSend:true}))
+      // can be externally broadcast by the caller and reach 'mined' or
+      // mempool-'known' status before any internalizeAction or Monitor
+      // cycle has retired its 'nosend' status in storage. If abortAction
+      // is invoked on it in that window, the destructive transitions
+      // below (transactions.status='failed' + proven_tx_reqs.status='invalid')
+      // orphan every output the tx produced — including auto-fund change
+      // outputs the wallet itself emitted — because listOutputs filters
+      // them out of the spendable set on parent-tx 'failed' status.
+      //
+      // Protection: if the tx has a txid AND status is 'nosend', ask
+      // the network whether it already knows about the tx before
+      // invalidating. getStatusForTxids returns 'mined' | 'known' |
+      // 'unknown' per StatusForTxidResult (WalletServices.interfaces.ts).
+      // Refuse the abort for 'mined' OR 'known' — a tx that's broadcast
+      // and propagating in mempool returns 'known' (depth===0) and
+      // protecting it avoids orphaning during the propagation window.
+      //
+      // Service-unreachable handling is conservative-refuse: both the
+      // thrown-error path AND the graceful r.status==='error' return
+      // (with typically empty results[]) treat the chainStatus as
+      // 'known'. Reading r.results.find(...) directly without the
+      // r.status check would silently fall through with chainStatus
+      // undefined on graceful service errors, proceeding-with-abort
+      // and re-introducing the bug.
+      if (tx.txid && tx.status === 'nosend') {
+        const services = this.getServices()
+        let chainStatus: 'mined' | 'known' | 'unknown' | undefined
+        try {
+          const r = await services.getStatusForTxids([tx.txid])
+          if (r.status !== 'success') {
+            chainStatus = 'known'
+          } else {
+            chainStatus = r.results.find(x => x.txid === tx.txid)?.status
+          }
+        } catch {
+          chainStatus = 'known'
+        }
+        if (chainStatus === 'mined' || chainStatus === 'known') {
+          const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+          if (req != null) {
+            req.addHistoryNote({
+              what: 'abortAction-skipped-onchain',
+              reference: args.reference,
+              chainStatus
+            })
+            await req.updateStorageDynamicProperties(this, trx)
+          }
+          throw new WERR_INVALID_PARAMETER(
+            'reference',
+            `transaction is already on chain (status='${chainStatus}'); call internalizeAction instead of abortAction.`
+          )
+        }
+      }
       await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
       if (tx.txid) {
         const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)

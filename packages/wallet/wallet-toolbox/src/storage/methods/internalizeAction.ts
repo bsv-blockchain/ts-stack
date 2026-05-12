@@ -34,7 +34,11 @@ import { TableProvenTx } from '../schema/tables/TableProvenTx'
  * Processing starts with simple validation and then checks for a pre-existing transaction.
  * If the transaction is already known to the user, then the outputs are reviewed against the existing outputs treatment,
  * and merge rules are added to the arguments passed to the storage layer.
- * The existing transaction must be in the 'unproven' or 'completed' status. Any other status is an error.
+ * The existing transaction must be in the 'unproven', 'completed', or 'nosend' status. Any other status is an error.
+ *
+ * When merging into a 'nosend' tx, the merge path also advances the lifecycle: transactions.status is promoted
+ * to 'completed' (if a BUMP is included in the BEEF) or 'unproven' (otherwise), and the proven_tx_req is moved
+ * out of 'nosend' so Monitor's standard proof-fetching flow can finalize it.
  *
  * When the transaction already exists, the description is updated. The isOutgoing sense is not changed.
  *
@@ -326,6 +330,7 @@ class InternalizeActionContext {
 
   async mergedInternalize () {
     const transactionId = this.etx!.transactionId
+    const wasNoSend = this.etx!.status === 'nosend'
 
     await this.addLabels(transactionId)
 
@@ -337,6 +342,85 @@ class InternalizeActionContext {
     for (const basket of this.basketInsertions) {
       if (basket.eo != null) await this.mergeBasketInsertionForOutput(transactionId, basket)
       else await this.storeNewBasketInsertionForOutput(transactionId, basket)
+    }
+
+    // Lifecycle advance when merging into a tx that was 'nosend'.
+    //
+    // Background: an internalizeAction call against an existing tx in
+    // 'nosend' status is the caller asserting the tx has now been
+    // externally broadcast (and potentially mined if the BEEF includes
+    // a BUMP). Before this advance, mergedInternalize only updated
+    // labels + per-output ownership records and left transactions.status
+    // and proven_tx_reqs.status unchanged. The nosend state then had no
+    // reliable retirement path: TaskCheckNoSends's default daily cadence
+    // combined with intermittent wallet uptime meant the req could sit
+    // in 'nosend' indefinitely, and a subsequent abortAction call would
+    // unconditionally invalidate the on-chain tx — orphaning every
+    // output the tx produced.
+    //
+    // BUMP-present path: mirror newInternalize's findOrInsertProvenTx
+    // path, then promote the existing transaction record to 'completed'
+    // with the new provenTxId and retire the proven_tx_req to
+    // 'completed' too.
+    //
+    // BUMP-absent path: promote transactions.status to 'unproven' (so
+    // listOutputs filters the tx's outputs into the spendable set
+    // immediately) and transition the proven_tx_req to 'unmined' so
+    // TaskCheckForProofs picks it up on its next nudge cycle. This
+    // hands off to Monitor's standard proof-fetching flow.
+    if (wasNoSend) {
+      const bump = this.ab.findBump(this.txid)
+      if (bump != null) {
+        const btx = this.ab.findTxid(this.txid)
+        if (btx == null) {
+          throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
+        }
+        const now = new Date()
+        const merkleRoot = bump.computeRoot(this.txid)
+        const indexEntry = bump.path[0].find(p => p.hash === this.txid)
+        if (indexEntry == null) {
+          throw new WERR_INTERNAL(
+            `Could not determine transaction index for txid ${this.txid} in bump path. Expected to find txid in bump.path[0]: ${JSON.stringify(bump.path[0])}`
+          )
+        }
+        const index = indexEntry.offset
+        const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
+        if (!header) {
+          throw new WERR_INTERNAL(`Block header not found for height ${bump.blockHeight}`)
+        }
+        const hash = blockHash(header)
+        const provenTxR = await this.storage.findOrInsertProvenTx({
+          created_at: now,
+          updated_at: now,
+          provenTxId: 0,
+          txid: this.txid,
+          height: bump.blockHeight,
+          index,
+          merklePath: bump.toBinary(),
+          rawTx: btx.rawTx!,
+          blockHash: hash,
+          merkleRoot
+        })
+        await this.storage.updateTransaction(transactionId, {
+          provenTxId: provenTxR.proven.provenTxId,
+          status: 'completed'
+        })
+        const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
+        if (req != null && req.status === 'nosend') {
+          req.addHistoryNote({ what: 'internalizeAction-bumpRetire', userId: this.userId })
+          req.provenTxId = provenTxR.proven.provenTxId
+          req.status = 'completed'
+          await req.updateStorageDynamicProperties(this.storage)
+        }
+      } else {
+        await this.storage.updateTransaction(transactionId, { status: 'unproven' })
+        const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
+        if (req != null && req.status === 'nosend') {
+          req.addHistoryNote({ what: 'internalizeAction-nosendRetire', userId: this.userId })
+          req.status = 'unmined'
+          await req.updateStorageDynamicProperties(this.storage)
+        }
+      }
     }
   }
 

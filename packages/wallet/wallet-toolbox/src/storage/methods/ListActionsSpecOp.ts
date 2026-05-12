@@ -58,13 +58,63 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
         specOpLabels: string[],
         txs: Array<Partial<TableTransaction>>
       ): Promise<void> => {
-        if (specOpLabels.includes('abort')) {
-          for (const tx of txs) {
-            if (tx.status === 'nosend') {
-              await s.abortAction(auth, { reference: tx.reference! })
-              tx.status = 'failed'
+        if (!specOpLabels.includes('abort')) return
+
+        // Pre-filter: which rows have txids the network already knows
+        // about? Don't call abortAction for those — the abortAction
+        // chain-check (in StorageProvider) will throw for chain-known
+        // nosend rows, which would propagate out of the await below
+        // and bail the entire bulk call halfway, leaving genuinely
+        // off-chain nosend rows in the same page un-aborted.
+        //
+        // The pre-filter does one batched getStatusForTxids call for
+        // the whole page, builds a protectedTxids set, then in the
+        // loop below skips protected rows (leaving their tx.status as
+        // 'nosend' so the caller sees clearly that those rows were
+        // NOT aborted) and proceeds normally for off-chain rows.
+        //
+        // Service-unreachable handling is conservative-refuse: both
+        // the thrown-error path AND the graceful r.status==='error'
+        // return (with typically empty results[]) protect ALL
+        // candidate rows. Better to leave nosend rows alone than risk
+        // orphaning outputs of txs that may be on chain.
+        const candidates = txs.filter(tx => tx.status === 'nosend' && !!tx.txid)
+        const candidateTxids = candidates.map(tx => tx.txid as string)
+        const protectedTxids = new Set<string>()
+        if (candidateTxids.length > 0) {
+          const services = s.getServices()
+          let serviceFailed = false
+          try {
+            const r = await services.getStatusForTxids(candidateTxids)
+            if (r.status !== 'success') {
+              serviceFailed = true
+            } else {
+              for (const result of r.results) {
+                if (result.status === 'mined' || result.status === 'known') {
+                  protectedTxids.add(result.txid)
+                }
+              }
             }
+          } catch {
+            serviceFailed = true
           }
+          if (serviceFailed) {
+            for (const txid of candidateTxids) protectedTxids.add(txid)
+          }
+        }
+
+        for (const tx of txs) {
+          if (tx.status !== 'nosend') continue
+          if (tx.txid && protectedTxids.has(tx.txid)) {
+            // Skip: tx is on chain or in mempool. Leave the returned
+            // row's status as 'nosend' so the caller sees clearly
+            // that this row was NOT aborted. Monitor's TaskCheckNoSends
+            // will retire the nosend lifecycle on the next block tick
+            // (per the processNewBlockHeader nudge added in this PR).
+            continue
+          }
+          await s.abortAction(auth, { reference: tx.reference! })
+          tx.status = 'failed'
         }
       }
     },

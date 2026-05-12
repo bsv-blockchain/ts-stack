@@ -16,7 +16,8 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
  * Processing starts with simple validation and then checks for a pre-existing transaction.
  * If the transaction is already known to the user, then the outputs are reviewed against the existing outputs treatment,
  * and merge rules are added to the arguments passed to the storage layer.
- * The existing transaction must be in the 'unproven' or 'completed' status. Any other status is an error.
+ * The existing transaction must be in the 'unproven', 'completed', or 'nosend' status. Any other status is an error.
+ * Merging into a 'nosend' tx additionally retires the nosend lifecycle (see storage-layer internalizeAction docs).
  *
  * When the transaction already exists, the description is updated. The isOutgoing sense is not changed.
  *
