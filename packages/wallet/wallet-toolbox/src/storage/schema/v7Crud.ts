@@ -7,27 +7,27 @@ import {
 } from './tables'
 import { auditProcessingTransition } from './v7TxAudit'
 
-/** Read a single `transactions_v7` row by txid, returning `undefined` if absent. */
+/** Read a single `transactions` (V7 canonical) row by txid, returning `undefined` if absent. */
 export async function findTransactionV7ByTxid (knex: Knex, txid: string): Promise<TableTransactionV7 | undefined> {
-  const row = await knex('transactions_v7').where({ txid }).first()
+  const row = await knex('transactions').where({ txid }).first()
   return row != null ? mapTransactionRow(row) : undefined
 }
 
-/** Read a single `transactions_v7` row by PK. */
+/** Read a single `transactions` (V7 canonical) row by PK. */
 export async function findTransactionV7 (knex: Knex, transactionId: number): Promise<TableTransactionV7 | undefined> {
-  const row = await knex('transactions_v7').where({ transactionId }).first()
+  const row = await knex('transactions').where({ transactionId }).first()
   return row != null ? mapTransactionRow(row) : undefined
 }
 
-/** Insert a new `transactions_v7` row. Caller supplies the full body. */
+/** Insert a new `transactions` (V7 canonical) row. Caller supplies the full body. */
 export async function insertTransactionV7 (
   knex: Knex,
   row: Omit<TableTransactionV7, 'transactionId' | 'created_at' | 'updated_at'>,
   now: Date = new Date()
 ): Promise<number> {
-  const [id] = await knex('transactions_v7').insert(unmapTransactionRow(row, now))
+  const [id] = await knex('transactions').insert(unmapTransactionRow(row, now))
   if (typeof id === 'number' && id > 0) return id
-  const r = await knex('transactions_v7').where({ txid: row.txid }).first('transactionId')
+  const r = await knex('transactions').where({ txid: row.txid }).first('transactionId')
   return r.transactionId
 }
 
@@ -62,7 +62,7 @@ export async function transitionProcessing (
     now
   )
   if (!ok) return undefined
-  const updated = await knex('transactions_v7')
+  const updated = await knex('transactions')
     .where({ transactionId: args.transactionId, processing: args.expectedFromState })
     .update({
       processing: args.toState,
@@ -72,7 +72,7 @@ export async function transitionProcessing (
       updated_at: now
     })
   if (updated === 0) return undefined
-  const row = await knex('transactions_v7').where({ transactionId: args.transactionId }).first()
+  const row = await knex('transactions').where({ transactionId: args.transactionId }).first()
   return mapTransactionRow(row)
 }
 

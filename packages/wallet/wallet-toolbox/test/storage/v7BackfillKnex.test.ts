@@ -11,10 +11,17 @@ describe('V7 backfill (Knex / SQLite)', () => {
   beforeAll(async () => {
     const file = await _tu.newTmpFile('v7backfill.sqlite', true, false, false)
     knex = _tu.createLocalSQLite(file)
-    const config = {
-      migrationSource: new KnexMigrations('test', 'v7 backfill test', '1'.repeat(64), 1000)
+    const source = new KnexMigrations('test', 'v7 backfill test', '1'.repeat(64), 1000)
+    // Run every migration up to but not including the cutover. The standalone
+    // backfill helpers exercised by this suite are intended to run pre-cutover,
+    // while legacy table names still apply.
+    const names = (await source.getMigrations()).filter(
+      n => n !== '2026-05-12-001 V7 cutover (remap FKs, rename legacy tables, swap transactions_v7)'
+    )
+    for (const name of names) {
+      const m = await source.getMigration(name)
+      await m.up(knex)
     }
-    await knex.migrate.latest(config)
   })
 
   afterAll(async () => {

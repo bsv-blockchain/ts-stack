@@ -10,6 +10,7 @@ import {
   transitionProcessing
 } from '../../src/storage/schema/v7Crud'
 import { appendTxAudit, listAuditForTransaction } from '../../src/storage/schema/v7TxAudit'
+import { runV7Cutover } from '../../src/storage/schema/v7Cutover'
 
 describe('V7 CRUD + audit (Knex / SQLite)', () => {
   jest.setTimeout(60_000)
@@ -20,6 +21,8 @@ describe('V7 CRUD + audit (Knex / SQLite)', () => {
     knex = _tu.createLocalSQLite(file)
     const config = { migrationSource: new KnexMigrations('test', 'v7 crud test', '1'.repeat(64), 1000) }
     await knex.migrate.latest(config)
+    // CRUD module targets the post-cutover `transactions` table.
+    await runV7Cutover(knex)
   })
 
   afterAll(async () => {

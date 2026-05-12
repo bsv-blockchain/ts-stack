@@ -676,3 +676,4 @@ export async function determineDBType (knex: Knex<any, any[]>): Promise<DBType> 
     throw new WERR_NOT_IMPLEMENTED('Attempting to create database on unsuported engine.')
   }
 }
+
