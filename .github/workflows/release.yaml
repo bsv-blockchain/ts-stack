@@ -30,15 +30,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build all packages
-        run: pnpm -r --filter '!@bsv/ts-stack' run build
-
       - name: Resolve publish filter
         id: publish-filter
         run: |
           tag="${GITHUB_REF_NAME}"
           if [[ "$tag" == v* ]]; then
             echo "filter=...[origin/main]" >> "$GITHUB_OUTPUT"
+            echo "build_filter=...[origin/main]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -49,6 +47,12 @@ jobs:
           fi
 
           echo "filter=./$package_path" >> "$GITHUB_OUTPUT"
+          # `...` suffix includes the target package plus all of its workspace dependencies,
+          # so we build only what's needed for the tagged package instead of the full monorepo.
+          echo "build_filter=./$package_path..." >> "$GITHUB_OUTPUT"
+
+      - name: Build target package and workspace dependencies
+        run: pnpm --filter="${{ steps.publish-filter.outputs.build_filter }}" run build
 
       - name: Publish packages
         # No token needed — npm authenticates via GitHub OIDC.
