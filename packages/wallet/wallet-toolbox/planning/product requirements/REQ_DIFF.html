@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wallet Toolbox vs UTXO Management Requirements</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --surface-2: #f0f3f8;
+      --text: #172033;
+      --muted: #5e6a7d;
+      --border: #d8dfeb;
+      --ok: #16864a;
+      --ok-bg: #e8f6ee;
+      --warn: #986c00;
+      --warn-bg: #fff4cf;
+      --bad: #b42318;
+      --bad-bg: #fde8e7;
+      --neutral: #697386;
+      --neutral-bg: #edf0f5;
+      --accent: #2258a8;
+      --code-bg: #101828;
+      --code-text: #e6edf6;
+      --shadow: 0 18px 45px rgba(18, 32, 56, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+      gap: 28px;
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    aside {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 34px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.35rem;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 1.05rem;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      padding: 0.12rem 0.32rem;
+      border-radius: 4px;
+      background: var(--surface-2);
+      color: #23344f;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+
+    pre {
+      margin: 14px 0;
+      padding: 16px;
+      overflow: auto;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      border: 1px solid #1d2939;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 0.9rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: table;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-2);
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.055em;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    ul {
+      margin: 10px 0 16px;
+      padding-left: 1.25rem;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+    }
+
+    .lede {
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
+    .badge.ok {
+      background: var(--ok-bg);
+      color: var(--ok);
+    }
+
+    .badge.warn {
+      background: var(--warn-bg);
+      color: var(--warn);
+    }
+
+    .badge.bad {
+      background: var(--bad-bg);
+      color: var(--bad);
+    }
+
+    .badge.neutral {
+      background: var(--neutral-bg);
+      color: var(--neutral);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 2rem;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .toc-title {
+      margin: 0 0 10px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .toc {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .toc li {
+      margin: 0;
+    }
+
+    .toc a {
+      display: block;
+      padding: 7px 8px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .toc a:hover {
+      background: var(--surface-2);
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 26px;
+      margin-bottom: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+
+    .section-title h2 {
+      max-width: 900px;
+    }
+
+    .callout {
+      margin: 16px 0 0;
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .callout.bad {
+      border-color: #f5b5b0;
+      background: var(--bad-bg);
+    }
+
+    .callout.warn {
+      border-color: #f2d175;
+      background: var(--warn-bg);
+    }
+
+    .callout.ok {
+      border-color: #a6d8b9;
+      background: var(--ok-bg);
+    }
+
+    .summary-table td:nth-child(3),
+    .summary-table th:nth-child(3) {
+      white-space: nowrap;
+    }
+
+    .refs {
+      columns: 2 320px;
+      column-gap: 28px;
+    }
+
+    .refs li {
+      break-inside: avoid;
+    }
+
+    @media (max-width: 980px) {
+      .shell {
+        display: block;
+        padding: 16px;
+      }
+
+      aside {
+        position: static;
+        max-height: none;
+        margin-bottom: 16px;
+      }
+
+      header,
+      .section {
+        padding: 20px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .section-title {
+        display: block;
+      }
+
+      .section-title .badge {
+        margin-bottom: 10px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .shell {
+        display: block;
+        max-width: none;
+        padding: 0;
+      }
+
+      aside {
+        display: none;
+      }
+
+      header,
+      .section {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside aria-label="Table of contents">
+      <p class="toc-title">Contents</p>
+      <ol class="toc">
+        <li><a href="#status-model">1. Status Model</a></li>
+        <li><a href="#unconfirmed-completed">2. One-block Completion Rule</a></li>
+        <li><a href="#internalize-tip">3. Internalize Tip vs Deep</a></li>
+        <li><a href="#internalize-discard">4. Broadcast Failure Discard</a></li>
+        <li><a href="#coinbase">5. Coinbase Maturity</a></li>
+        <li><a href="#reorg">6. Reorg Revert</a></li>
+        <li><a href="#sequential">7. Sequential Broadcast</a></li>
+        <li><a href="#invalid-after-all">8. Invalid After All Fail</a></li>
+        <li><a href="#mixed-results">9. Mixed Broadcast Results</a></li>
+        <li><a href="#spendable-sync">10. Spendable Sync</a></li>
+        <li><a href="#unfail">11. Unfail Output Mutation</a></li>
+        <li><a href="#merkle">12. Merkle Validation</a></li>
+        <li><a href="#atomicity">13. Atomicity</a></li>
+        <li><a href="#audit">14. Audit Logging</a></li>
+        <li><a href="#performance">15. Performance</a></li>
+        <li><a href="#arc">16. ARC Unavailable</a></li>
+        <li><a href="#summary">Summary Table</a></li>
+        <li><a href="#sources">Source References</a></li>
+      </ol>
+    </aside>
+
+    <main>
+      <header>
+        <p class="eyebrow">REQ_DIFF.md</p>
+        <h1>Wallet Toolbox vs UTXO Management Requirements</h1>
+        <p class="lede">
+          Compared <code>bsv_wallet_transaction_requirements.md</code> (v1.0, May 2026) against
+          <code>@bsv/wallet-toolbox</code> v2.1.24 source.
+        </p>
+        <div class="legend" aria-label="Legend">
+          <span class="badge ok">✅ Matches</span>
+          <span class="badge warn">⚠️ Partial / nuance</span>
+          <span class="badge bad">❌ Diverges / not implemented</span>
+          <span class="badge neutral">⚪ Not measured</span>
+        </div>
+      </header>
+
+      <section class="stats" aria-label="Status totals">
+        <div class="stat"><strong>6</strong><span>Matches</span></div>
+        <div class="stat"><strong>2</strong><span>Partial / nuanced</span></div>
+        <div class="stat"><strong>7</strong><span>Divergences</span></div>
+        <div class="stat"><strong>1</strong><span>Not measured</span></div>
+      </section>
+
+      <section id="status-model" class="section">
+        <div class="section-title">
+          <h2>1. Status Model — Two-table model, requirements assume one</h2>
+          <span class="badge warn">⚠️ Partial</span>
+        </div>
+        <p>Requirements present a single status enum on the Transactions table. Code splits status across <strong>two tables</strong>:</p>
+        <table>
+          <thead>
+            <tr><th>Table</th><th>Type</th><th>Values</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>transactions.status</code></td>
+              <td><code>TransactionStatus</code> (<code>src/sdk/types.ts:83</code>)</td>
+              <td><code>completed</code>, <code>failed</code>, <code>unprocessed</code>, <code>sending</code>, <code>unproven</code>, <code>unsigned</code>, <code>nosend</code>, <code>nonfinal</code>, <code>unfail</code></td>
+            </tr>
+            <tr>
+              <td><code>proven_tx_reqs.status</code></td>
+              <td><code>ProvenTxReqStatus</code> (<code>src/sdk/types.ts:54</code>)</td>
+              <td><code>sending</code>, <code>unsent</code>, <code>nosend</code>, <code>unknown</code>, <code>nonfinal</code>, <code>unprocessed</code>, <code>unmined</code>, <code>callback</code>, <code>unconfirmed</code>, <code>completed</code>, <code>invalid</code>, <code>doubleSpend</code>, <code>unfail</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>Lifecycle terms in requirements (<code>unmined</code>, <code>callback</code>, <code>unconfirmed</code>, <code>invalid</code>, <code>doubleSpend</code>) live on <code>ProvenTxReq</code>, not on <code>transactions</code>. Mapping observed in <code>attemptToPostReqsToNetwork.ts:236-254</code>:</p>
+        <table>
+          <thead>
+            <tr><th>Broadcast outcome</th><th><code>req.status</code></th><th><code>tx.status</code></th></tr>
+          </thead>
+          <tbody>
+            <tr><td>success</td><td><code>unmined</code></td><td><code>unproven</code></td></tr>
+            <tr><td>doubleSpend</td><td><code>doubleSpend</code></td><td><code>failed</code></td></tr>
+            <tr><td>invalidTx</td><td><code>invalid</code></td><td><code>failed</code></td></tr>
+            <tr><td>serviceError</td><td><code>sending</code></td><td><code>sending</code></td></tr>
+          </tbody>
+        </table>
+        <div class="callout warn">
+          <strong>Diff</strong>
+          Any future req-table change (rename, value adjust) needs to be mirrored against this dual model. Requirements doc should be updated to acknowledge the two tables, OR the code should expose a unified view.
+        </div>
+      </section>
+
+      <section id="unconfirmed-completed" class="section">
+        <div class="section-title">
+          <h2>2. <code>unconfirmed</code> → <code>completed</code> rule (1 block on top)</h2>
+          <span class="badge bad">❌ Not enforced</span>
+        </div>
+        <p>Requirement §1, §2: <code>completed</code> requires Merkle path <strong>AND</strong> at least 1 block mined on top.</p>
+        <p>Code path (<code>TaskCheckForProofs.ts:111-253</code>): when proof acquired, <code>req.status</code> is set directly to <code>completed</code> via <code>EntityProvenTx.fromReq</code> + <code>updateProvenTxReqWithNewProvenTx</code>. There is no second-stage gate that waits for <code>tipHeight &gt; proofHeight</code>.</p>
+        <p>Closest mitigation: <code>TaskNewHeader.ts:83-92</code> queues new headers for one cycle (default 1 minute) before triggering proof solicitation, and <code>TaskCheckForProofs.ts:199</code> rejects proofs whose <code>header.height &gt; maxAcceptableHeight</code> (the queued tip height). This delays proof acquisition but does not require an actual confirmation <strong>on top</strong> — a proof from the tip block is acceptable as soon as it has been the tip for more than one cycle.</p>
+        <div class="callout bad">
+          <strong>Diff</strong>
+          Requirement asks for a block-depth gate. Code has a time-delay gate. No <code>unconfirmed</code> waiting state in the transaction table. To match, would need a new task that promotes <code>req.status='unconfirmed'</code> to <code>completed</code> only when <code>tipHeight - ptx.height &gt;= 1</code>.
+        </div>
+      </section>
+
+      <section id="internalize-tip" class="section">
+        <div class="section-title">
+          <h2>3. <code>internalizeAction</code> — tip vs deep block</h2>
+          <span class="badge bad">❌ Not differentiated</span>
+        </div>
+        <p>Requirement §4.1: confirmed incoming tx with proof → <code>completed</code> if block deep, <code>unconfirmed</code> if block is current tip.</p>
+        <p>Code (<code>internalizeAction.ts:287-324</code>):</p>
+        <pre><code class="language-ts">const status: TransactionStatus = (provenTx != null) ? 'completed' : 'unproven'</code></pre>
+        <p>Single branch. No tip-height check. Any incoming BEEF with a valid bump becomes <code>completed</code> immediately.</p>
+      </section>
+
+      <section id="internalize-discard" class="section">
+        <div class="section-title">
+          <h2>4. <code>internalizeAction</code> — discard on broadcast failure</h2>
+          <span class="badge bad">❌ Throws instead of discarding</span>
+        </div>
+        <p>Requirement §4.2: third-party unconfirmed tx whose self-broadcast fails or returns Invalid → <strong>completely discard, do not store</strong>.</p>
+        <p>Code (<code>internalizeAction.ts:406-426</code>): inserts <code>transactions</code> and <code>proven_tx_reqs</code> rows <strong>before</strong> broadcast (<code>findOrInsertTargetTransaction</code>, <code>getProvenOrReq</code> happen at lines 387-403). When <code>shareReqsWithWorld</code> returns non-success, control returns from <code>newInternalize()</code> and <code>WERR_REVIEW_ACTIONS</code> is thrown by the caller — but the partially-written rows are <strong>not rolled back</strong>. There is no enclosing <code>storage.transaction(...)</code> around the insert + broadcast pair.</p>
+        <div class="callout bad">
+          <strong>Diff</strong>
+          “Strict” discard semantics not implemented. Failing third-party broadcasts leave a row with status <code>unsent</code> and <code>tx.status='unproven'</code>.
+        </div>
+      </section>
+
+      <section id="coinbase" class="section">
+        <div class="section-title">
+          <h2>5. Coinbase 100-block maturity</h2>
+          <span class="badge bad">❌ Not implemented</span>
+        </div>
+        <p>Requirement §2 note, §5, §6: detect coinbase via merkle offset == 0; outputs remain <code>spendable=false</code> until block depth ≥ 100, regardless of tx status.</p>
+        <p>Search of <code>src/</code>: no maturity check. Only mentions of “coinbase”:</p>
+        <ul>
+          <li><code>Monitor.ts:491</code> — comment only, “Coinbase transactions always become invalid” (about reorg, also misleading)</li>
+          <li><code>MockChain</code> has an <code>isCoinbase</code> flag for test fixtures but does not gate <code>spendable</code></li>
+        </ul>
+        <p><code>internalizeAction.ts:452-525</code> always sets <code>spendable: true</code> on inserted wallet payment / basket insertion outputs once the tx is <code>completed</code>. No offset-0 detection, no 100-block deferred enable.</p>
+      </section>
+
+      <section id="reorg" class="section">
+        <div class="section-title">
+          <h2>6. Reorg → revert to <code>unconfirmed</code></h2>
+          <span class="badge bad">❌ Code reproves in place</span>
+        </div>
+        <p>Requirement §5 reorg rule: revert to <code>unconfirmed</code>, never mark <code>invalid</code> or <code>doubleSpend</code>, wait for new confirmation+1 block.</p>
+        <p>Code:</p>
+        <ul>
+          <li><code>TaskReorg.ts</code> + <code>WalletStorageManager.ts:547-578</code> (<code>reproveHeader</code>): on orphaned block hash, attempts to fetch a fresh merkle path and <strong>update</strong> the <code>proven_txs</code> record in place. If unavailable after 3 retries, the <code>proven_txs</code> record is left with the stale data (logged but not invalidated).</li>
+          <li><code>StorageProvider.ts:470</code> hard-blocks de-completing a completed transaction:</li>
+        </ul>
+        <pre><code class="language-ts">if ((status !== 'completed' &amp;&amp; tx.status === 'completed') || tx.provenTxId) {
+  throw new WERR_INVALID_OPERATION('The status of a "completed" transaction cannot be changed.')
+}</code></pre>
+        <div class="callout bad">
+          <strong>Diff</strong>
+          No code path reverts a transaction’s status on reorg. Reorg handling is limited to merkle path repair; spendable values for outputs are not touched on reorg. Requirement §6 (“preserve spendable”) is satisfied trivially because nothing flips them, but only because the revert step is missing entirely.
+        </div>
+      </section>
+
+      <section id="sequential" class="section">
+        <div class="section-title">
+          <h2>7. Sequential broadcast fallback</h2>
+          <span class="badge ok">✅ Default matches</span>
+        </div>
+        <p>Requirement §3: sequential, never simultaneous.</p>
+        <p>Code (<code>Services.ts:383-433</code>):</p>
+        <ul>
+          <li>Default <code>postBeefMode = 'UntilSuccess'</code> → <code>for</code> loop, breaks on first <code>success</code>. ✅</li>
+          <li><code>'PromiseAll'</code> mode also exists and would broadcast in parallel. ⚠️ Configurable away from spec.</li>
+          <li>Soft timeout (<code>postBeefUntilSuccessSoftTimeoutMs = 5000</code>, scales by KiB) per provider — covers “indefinite hang”.</li>
+          <li>Service that returns <code>serviceError</code> is moved to end of list (<code>moveServiceToLast</code>) for next cycle.</li>
+        </ul>
+      </section>
+
+      <section id="invalid-after-all" class="section">
+        <div class="section-title">
+          <h2>8. “Mark Invalid only after all services fail”</h2>
+          <span class="badge ok">✅ Matches</span>
+        </div>
+        <p><code>aggregatePostBeefResultsByTxid</code> (<code>attemptToPostReqsToNetwork.ts:146-175</code>):</p>
+        <pre><code class="language-ts">if (ar.successCount &gt; 0 &amp;&amp; ar.doubleSpendCount === 0) ar.status = 'success'
+else if (ar.doubleSpendCount &gt; 0) ar.status = 'doubleSpend'
+else if (ar.statusErrorCount &gt; 0) ar.status = 'invalidTx'
+else ar.status = 'serviceError'</code></pre>
+        <p><code>invalidTx</code> requires zero successes AND zero doubleSpends across all attempted services. ✅</p>
+      </section>
+
+      <section id="mixed-results" class="section">
+        <div class="section-title">
+          <h2>9. Mixed broadcast results</h2>
+          <span class="badge bad">❌ DoubleSpend overrides success</span>
+        </div>
+        <p>Requirement §3: “Mixed results (one accepts, another rejects) SHALL be resolved by trusting the positive response.”</p>
+        <p>Code (<code>attemptToPostReqsToNetwork.ts:169-170</code>): <code>doubleSpend &gt; 0</code> is checked <strong>after</strong> <code>success &gt; 0 &amp;&amp; doubleSpend === 0</code>. So a <code>(success=1, doubleSpend=1)</code> mix is classified as <code>doubleSpend</code>, not <code>success</code>.</p>
+        <p>Sequential mode partly hides this — first success breaks the loop before subsequent providers can report doubleSpend. But in <code>PromiseAll</code> mode, doubleSpend wins.</p>
+        <div class="callout bad">
+          <strong>Diff</strong>
+          Requirement says trust positive; code prefers the more conservative <code>doubleSpend</code> outcome on conflict.
+        </div>
+      </section>
+
+      <section id="spendable-sync" class="section">
+        <div class="section-title">
+          <h2>10. Output <code>spendable</code> synchronization on terminal status</h2>
+          <span class="badge warn">⚠️ Partial</span>
+        </div>
+        <p>Requirement §6: on <code>Invalid</code> / <code>DoubleSpend</code> set <code>spendable=false</code> on <strong>all outputs of the transaction</strong>.</p>
+        <p>Code (<code>StorageProvider.ts:474-497</code>, <code>updateTransactionStatus</code> <code>case 'failed'</code>):</p>
+        <ul>
+          <li>Releases this tx’s <strong>inputs</strong> back to spendable (<code>spendable: true</code>, <code>spentBy: undefined</code>). ✅ partial.</li>
+          <li>Does <strong>not</strong> explicitly walk the tx’s own outputs and force them to <code>spendable=false</code>. Relies on those outputs already being <code>spendable=false</code> (change outputs created with <code>spendable: false</code> at <code>createAction.ts:920</code>, then flipped to true elsewhere in the lifecycle).</li>
+        </ul>
+        <div class="callout warn">
+          <strong>Diff</strong>
+          No explicit defensive flip of generated outputs. If an output was promoted to <code>spendable=true</code> and the tx later flips to <code>failed</code>, the output is not retroactively marked toxic by <code>updateTransactionStatus</code>. There is no test confirming the “all outputs to spendable=false on failed” invariant.
+        </div>
+      </section>
+
+      <section id="unfail" class="section">
+        <div class="section-title">
+          <h2>11. <code>unfail</code> must not modify outputs</h2>
+          <span class="badge bad">❌ Diverges</span>
+        </div>
+        <p>Requirement §6: <code>Status → Unfail</code> — do not modify the outputs table.</p>
+        <p>Code (<code>TaskUnFail.ts:94-144</code> <code>unfailReq</code>):</p>
+        <ul>
+          <li>Sets <code>spentBy</code> and <code>spendable=false</code> on inputs that match user outputs (line 123).</li>
+          <li>Re-walks the tx’s outputs and updates <code>spendable</code> based on UTXO check (lines 128-141).</li>
+        </ul>
+        <div class="callout bad">
+          <strong>Diff</strong>
+          Direct violation. Code rebuilds output state during unfail; requirement says leave outputs untouched.
+        </div>
+      </section>
+
+      <section id="merkle" class="section">
+        <div class="section-title">
+          <h2>12. Merkle path validation against local chaintracks</h2>
+          <span class="badge ok">✅ Matches</span>
+        </div>
+        <p><code>internalizeAction.ts:274-285</code> <code>validateAtomicBeef</code>: <code>ab.verify(chainTracker, false)</code> validates merkle root against chain headers. Failure throws <code>WERR_INVALID_PARAMETER</code>, transaction is not persisted. ✅</p>
+        <p><code>TaskCheckForProofs.ts:198-209</code> for self-created txs likewise validates via <code>services.getMerklePath</code> which goes through chaintracks-backed verification.</p>
+      </section>
+
+      <section id="atomicity" class="section">
+        <div class="section-title">
+          <h2>13. Atomicity</h2>
+          <span class="badge ok">✅ Mostly matches</span>
+        </div>
+        <p>Requirement §8: status + outputs updated atomically or rolled back.</p>
+        <p>Code:</p>
+        <ul>
+          <li><code>createAction</code> → <code>storage.transaction(async trx =&gt; ...)</code> (<code>createAction.ts:230</code>). ✅</li>
+          <li><code>attemptToPostReqsToNetwork</code> → uses <code>runAsStorageProvider</code> and accepts a <code>trx</code> param. ✅</li>
+          <li><code>updateTransactionStatus</code> → wraps in <code>this.transaction(...)</code> (<code>StorageProvider.ts:457</code>). ✅</li>
+          <li><strong>Gap:</strong> <code>internalizeAction</code> insert + self-broadcast (item 4) is <strong>not</strong> wrapped in a single transaction.</li>
+        </ul>
+      </section>
+
+      <section id="audit" class="section">
+        <div class="section-title">
+          <h2>14. Audit logging</h2>
+          <span class="badge ok">✅ Matches</span>
+        </div>
+        <p>Requirement §8: log every status change with timestamp + reason.</p>
+        <p>Code: <code>EntityProvenTxReq.history</code> is a JSON object mutated via <code>addHistoryNote({ when: ISO timestamp, what: &lt;reason&gt;, ...details })</code>, persisted on every <code>updateStorageDynamicProperties</code>. Notes are added at every aggregation/broadcast/proof-attempt step (e.g. <code>attemptToPostReqsToNetwork.ts:215-265</code>). ✅</p>
+        <p>No equivalent history on the <code>transactions</code> table itself, but the linked <code>proven_tx_reqs</code> row carries the trail.</p>
+      </section>
+
+      <section id="performance" class="section">
+        <div class="section-title">
+          <h2>15. Performance &lt; 100 ms</h2>
+          <span class="badge neutral">⚪ Not measured</span>
+        </div>
+        <p>Non-functional. No benchmark in repo gates this. Both Knex and IDB backends have batched query patterns, but no SLA test. Out of scope for diff.</p>
+      </section>
+
+      <section id="arc" class="section">
+        <div class="section-title">
+          <h2>16. Wallet functional with ARC unavailable</h2>
+          <span class="badge ok">✅ Matches</span>
+        </div>
+        <p>Default <code>postBeefServices</code> registration (<code>Services.ts:96-110</code>) registers ARC GorillaPool, ARC Taal, Bitails, WhatsOnChain. Sequential <code>UntilSuccess</code> mode walks all four. As long as one provider responds, broadcast succeeds. ✅</p>
+      </section>
+
+      <section id="summary" class="section">
+        <h2>Summary table</h2>
+        <table class="summary-table">
+          <thead>
+            <tr><th>§</th><th>Requirement</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Status enum</td><td><span class="badge warn">⚠️ split across 2 tables</span></td><td>Doc both, or unify</td></tr>
+            <tr><td>2</td><td><code>completed</code> requires +1 block</td><td><span class="badge bad">❌ time delay only</span></td><td>Add depth gate task</td></tr>
+            <tr><td>4.1</td><td>tip vs deep distinction in <code>internalizeAction</code></td><td><span class="badge bad">❌ always <code>completed</code></span></td><td>Branch on <code>tipHeight - bump.blockHeight</code></td></tr>
+            <tr><td>4.2</td><td>discard third-party broadcast failure</td><td><span class="badge bad">❌ partial state persists</span></td><td>Wrap insert+broadcast in trx; rollback on failure</td></tr>
+            <tr><td>2/5/6</td><td>Coinbase 100-block maturity</td><td><span class="badge bad">❌ missing</span></td><td>Detect offset==0; gate <code>spendable</code> until depth ≥ 100</td></tr>
+            <tr><td>5</td><td>Reorg revert to <code>unconfirmed</code></td><td><span class="badge bad">❌ blocked by code</span></td><td>Allow <code>completed</code> → <code>unconfirmed</code> revert path</td></tr>
+            <tr><td>3</td><td>Sequential fallback</td><td><span class="badge ok">✅ default</span></td><td>—</td></tr>
+            <tr><td>3</td><td>Mark Invalid only after all fail</td><td><span class="badge ok">✅</span></td><td>—</td></tr>
+            <tr><td>3</td><td>Mixed results → trust positive</td><td><span class="badge bad">❌ doubleSpend wins</span></td><td>Reorder aggregation: success-first</td></tr>
+            <tr><td>6</td><td>Outputs → <code>spendable=false</code> on Invalid/DoubleSpend</td><td><span class="badge warn">⚠️ inputs only</span></td><td>Add explicit walk over tx outputs in <code>case 'failed'</code></td></tr>
+            <tr><td>6</td><td>Unfail leaves outputs untouched</td><td><span class="badge bad">❌ rebuilds output state</span></td><td>Strip output mutation from <code>TaskUnFail.unfailReq</code></td></tr>
+            <tr><td>4.1</td><td>Merkle path validation</td><td><span class="badge ok">✅</span></td><td>—</td></tr>
+            <tr><td>8</td><td>Atomicity</td><td><span class="badge warn">⚠️ except <code>internalizeAction</code></span></td><td>Wrap insert+broadcast</td></tr>
+            <tr><td>8</td><td>Audit log</td><td><span class="badge ok">✅ on req</span></td><td>Mirror to tx for completeness?</td></tr>
+            <tr><td>8</td><td>&lt;100 ms perf</td><td><span class="badge neutral">⚪ not measured</span></td><td>Add benchmark</td></tr>
+            <tr><td>8</td><td>ARC-down resilience</td><td><span class="badge ok">✅</span></td><td>—</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="sources" class="section">
+        <h2>Source references</h2>
+        <ul class="refs">
+          <li><code>src/sdk/types.ts:54-92</code> — both status enums</li>
+          <li><code>src/storage/methods/attemptToPostReqsToNetwork.ts:146-281</code> — broadcast aggregation + status mapping</li>
+          <li><code>src/services/Services.ts:383-489</code> — postBeef sequential vs parallel + soft timeout</li>
+          <li><code>src/storage/methods/createAction.ts:230-924</code> — output spendable lifecycle</li>
+          <li><code>src/storage/methods/internalizeAction.ts:274-525</code> — third-party tx flow</li>
+          <li><code>src/storage/StorageProvider.ts:429-501</code> — <code>updateTransactionsStatus</code> / <code>updateTransactionStatus</code></li>
+          <li><code>src/monitor/tasks/TaskCheckForProofs.ts:108-256</code> — proof acquisition + completed transition</li>
+          <li><code>src/monitor/tasks/TaskNewHeader.ts:54-95</code> — queued-header delay</li>
+          <li><code>src/monitor/tasks/TaskReorg.ts</code> + <code>src/storage/WalletStorageManager.ts:547-615</code> — reorg handling</li>
+          <li><code>src/monitor/tasks/TaskUnFail.ts:60-148</code> — unfail flow (outputs touched)</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
