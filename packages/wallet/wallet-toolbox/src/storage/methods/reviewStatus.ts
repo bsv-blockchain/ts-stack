@@ -41,6 +41,16 @@ export async function reviewStatus (
 
   const k = storage.toDb(args.trx)
 
+  // Post-V7-cutover: `proven_txs` → `proven_txs_legacy`, `proven_tx_reqs` →
+  // `proven_tx_reqs_legacy`, and `transactions` (legacy-shaped with `status`
+  // column) → `transactions_legacy`.  Pre-cutover: the original table names.
+  const txTable = await storage.provenTxsTableName()    // proven_txs or proven_txs_legacy
+  const reqTable = await storage.provenTxReqsTableName() // proven_tx_reqs or proven_tx_reqs_legacy
+  // The legacy-shaped `transactions` table (with status, satoshis, etc. columns).
+  // Post-cutover that table is renamed to `transactions_legacy`; the new
+  // `transactions` table has `processing` instead of `status`.
+  const txnsTable = txTable === 'proven_txs_legacy' ? 'transactions_legacy' : 'transactions'
+
   const qs: ReviewStatusQuery[] = []
 
   qs.push(
@@ -50,13 +60,13 @@ export async function reviewStatus (
           UPDATE transactions SET status = 'failed'
           WHERE exists(select 1 from proven_tx_reqs as r where transactions.txid = r.txid and r.status = 'invalid')
           */
-      q: k<TableTransaction>('transactions')
+      q: k<TableTransaction>(txnsTable)
         .update({ status: 'failed' })
         .whereNot({ status: 'failed' })
         .whereExists(function () {
           this.select(k.raw(1))
-            .from('proven_tx_reqs as r')
-            .whereRaw('transactions.txid = r.txid and r.status = \'invalid\'')
+            .from(`${reqTable} as r`)
+            .whereRaw(`${txnsTable}.txid = r.txid and r.status = 'invalid'`)
         })
     },
     {
@@ -70,13 +80,13 @@ export async function reviewStatus (
         .update({ spentBy: null as unknown as undefined, spendable: true })
         .whereExists(function () {
           this.select(k.raw(1))
-            .from('transactions as t')
-            .whereRaw('outputs.spentBy = t.transactionId and t.status = \'failed\'')
+            .from(`${txnsTable} as t`)
+            .whereRaw(`outputs.spentBy = t.transactionId and t.status = 'failed'`)
             .whereNotExists(function () {
               // A failed transaction can still be reconciled from active or valid reqs.
               // Only terminal failure reqs are safe for input restoration.
               this.select(k.raw(1))
-                .from('proven_tx_reqs as r')
+                .from(`${reqTable} as r`)
                 .whereRaw('r.txid = t.txid')
                 .whereNotIn('r.status', provenTxReqStatusesSafeForInputRestore)
             })
@@ -89,14 +99,14 @@ export async function reviewStatus (
           FROM proven_txs p
           WHERE transactions.txid = p.txid AND transactions.provenTxId IS NULL
           */
-      q: k<TableTransaction>('transactions')
+      q: k<TableTransaction>(txnsTable)
         .update({
           status: 'completed',
-          provenTxId: k.raw('(SELECT provenTxId FROM proven_txs AS p WHERE transactions.txid = p.txid)')
+          provenTxId: k.raw(`(SELECT provenTxId FROM ${txTable} AS p WHERE ${txnsTable}.txid = p.txid)`)
         })
         .whereNull('provenTxId')
         .whereExists(function () {
-          this.select(k.raw(1)).from('proven_txs as p').whereRaw('transactions.txid = p.txid')
+          this.select(k.raw(1)).from(`${txTable} as p`).whereRaw(`${txnsTable}.txid = p.txid`)
         })
     }
   )

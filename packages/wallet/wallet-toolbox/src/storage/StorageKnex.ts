@@ -15,6 +15,7 @@ import {
   TableSettings,
   TableSyncState,
   TableTransaction,
+  TableTransactionV7,
   TableTxLabel,
   TableTxLabelMap,
   TableUser,
@@ -116,9 +117,23 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   /**
    * Returns the canonical name of the `proven_txs` table — `proven_txs_legacy`
    * post-V7-cutover, `proven_txs` otherwise.
+   *
+   * Public so that helper modules (reviewStatus, purgeData) can resolve the
+   * correct table name without duplicating the post-cutover detection logic.
    */
-  private async provenTxsTableName (): Promise<string> {
+  async provenTxsTableName (): Promise<string> {
     return (await this.isPostCutover()) ? 'proven_txs_legacy' : 'proven_txs'
+  }
+
+  /**
+   * Returns the canonical name of the `proven_tx_reqs` table —
+   * `proven_tx_reqs_legacy` post-V7-cutover, `proven_tx_reqs` otherwise.
+   *
+   * Public so that helper modules (reviewStatus, purgeData) can resolve the
+   * correct table name without duplicating the post-cutover detection logic.
+   */
+  async provenTxReqsTableName (): Promise<string> {
+    return (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
   }
 
   /**
@@ -197,6 +212,43 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntity(verifyOne(await this.toDb(undefined)<TableSettings>('settings')))
   }
 
+  /**
+   * Synthesise a `ProvenOrRawTx` from a V7 `TableTransactionV7` row.
+   *
+   * - If the V7 row carries a `merklePath` (i.e. processing is `proven`), build
+   *   a `TableProvenTx`-shaped object so the BEEF assembly code can extract the
+   *   merkle path and merge it into the Beef without hitting the legacy tables.
+   * - If the V7 row only has `rawTx` (broadcast/queued state), return it as the
+   *   raw-tx path.
+   * - Returns `null` when the V7 row has neither rawTx nor merklePath.
+   */
+  private v7TxToProvenOrRawTx (v7: TableTransactionV7, txid: string): ProvenOrRawTx | null {
+    // Only use V7 as the primary source when the row carries a *non-empty* merklePath
+    // and a rawTx — both are required for `handleProvenTxBranch` to assemble a valid
+    // BEEF.  An empty merklePath (e.g. a backfill race or a req whose proof was never
+    // stored) must fall through to the legacy `proven_txs_legacy` path.
+    // Rawt-only V7 rows (no merklePath) are likewise forwarded to the legacy path so
+    // that the legacy `inputBEEF` column is available for recursive BEEF assembly.
+    if (v7.merklePath != null && v7.merklePath.length > 0 && v7.rawTx != null && v7.rawTx.length > 0) {
+      // Full proof available — synthesise TableProvenTx shape
+      const proven: TableProvenTx = {
+        created_at: v7.created_at,
+        updated_at: v7.updated_at,
+        provenTxId: v7.transactionId,
+        txid,
+        height: v7.height ?? 0,
+        index: v7.merkleIndex ?? 0,
+        merklePath: v7.merklePath,
+        rawTx: v7.rawTx,
+        blockHash: v7.blockHash ?? '',
+        merkleRoot: v7.merkleRoot ?? ''
+      }
+      return { proven, rawTx: undefined, inputBEEF: undefined }
+    }
+    // No complete proof in V7 — let the caller fall through to legacy tables.
+    return null
+  }
+
   override async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
     const k = this.toDb(trx)
     const r: ProvenOrRawTx = {
@@ -205,9 +257,27 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       inputBEEF: undefined
     }
 
+    // Post-cutover: try V7 `transactions` table first. The V7 row is the single
+    // source of truth for rawTx and merklePath; legacy tables are read-only
+    // archives after cutover.
+    if (await this.isPostCutover()) {
+      try {
+        const v7svc = this.getV7Service()
+        if (v7svc != null) {
+          const v7tx = await v7svc.findByTxid(txid)
+          if (v7tx != null) {
+            const v7result = this.v7TxToProvenOrRawTx(v7tx, txid)
+            if (v7result != null) return v7result
+          }
+        }
+      } catch {
+        // V7 lookup failed (e.g. table not yet available) — fall through to legacy
+      }
+    }
+
     r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid } }))
     if (r.proven == null) {
-      const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+      const reqTable = await this.provenTxReqsTableName()
       const reqRawTx = verifyOneOrNone(
         await k(reqTable)
           .where('txid', txid)
@@ -233,9 +303,26 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   private async getRawTxSlice (txid: string, offset: number, length: number, trx?: TrxToken): Promise<number[] | undefined> {
+    // Post-cutover: try V7 transactions table first — V7 is the canonical store
+    // for rawTx after the cutover. Apply the slice in JS to avoid raw SQL
+    // column naming differences between the two schemas.
+    if (await this.isPostCutover()) {
+      try {
+        const v7svc = this.getV7Service()
+        if (v7svc != null) {
+          const v7tx = await v7svc.findByTxid(txid)
+          if (v7tx?.rawTx != null) {
+            return v7tx.rawTx.slice(offset, offset + length)
+          }
+        }
+      } catch {
+        // V7 lookup failed — fall through to legacy tables
+      }
+    }
+
     const sub = this.dbTypeSubstring('rawTx', offset + 1, length)
     const provenTable = await this.provenTxsTableName()
-    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const reqTable = await this.provenTxReqsTableName()
     let rs = await this.toDb(trx).raw(`select ${sub} as rawTx from ${provenTable} where txid = '${txid}'`)
     const proven = verifyOneOrNone(this.normaliseKnexRawResult(rs))
     if (proven?.rawTx != null) return Array.from(proven.rawTx)
@@ -415,10 +502,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
-    const postCutover = await this.isPostCutover()
     // Post-V7-cutover: route to proven_tx_reqs_legacy.
     // FK bypass is handled by the caller (disableForeignKeys before any transaction).
-    const reqTable = postCutover ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const reqTable = await this.provenTxReqsTableName()
     const [id] = await this.toDb(trx)<TableProvenTxReq>(reqTable).insert(e)
     tx.provenTxReqId = id
     return tx.provenTxReqId
@@ -625,7 +711,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     trx?: TrxToken
   ): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
-    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const reqTable = await this.provenTxReqsTableName()
     let r: number
     if (Array.isArray(id)) {
       r = await this.toDb(trx)<TableProvenTxReq>(reqTable)
@@ -975,7 +1061,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
-    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const reqTable = await this.provenTxReqsTableName()
     const q = this.findProvenTxReqsQuery(args, reqTable)
     const r = await q
     return this.validateEntities(r, undefined, ['notified', 'wasBroadcast'])
@@ -1253,7 +1339,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async countProvenTxReqs (args: FindProvenTxReqsArgs): Promise<number> {
-    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const reqTable = await this.provenTxReqsTableName()
     return await this.getCount(this.findProvenTxReqsQuery(args, reqTable))
   }
 

@@ -1573,6 +1573,14 @@ export abstract class TestUtilsWalletStorage {
     const now = new Date()
     const inputTxMap: Record<string, any> = {}
     const outputMap: Record<string, any> = {}
+    // Tracks source-only V7 transaction rows already created (keyed by original txid).
+    // Prevents duplicate V7 rows when multiple inputs share the same source txid.
+    const sourceTxByOrigTxid: Record<string, { transactionId: number }> = {}
+
+    // Determine V7 post-cutover once for this setup call.
+    const v7svc = (storage as StorageKnex).getV7Service?.()
+    const isPostCutover = v7svc != null &&
+      !!(await (storage as StorageKnex).knex?.schema.hasTable('transactions_legacy'))
 
     // only one user
     const user = await _tu.insertTestUser(storage, identityKey)
@@ -1583,16 +1591,44 @@ export abstract class TestUtilsWalletStorage {
         let prevOutput = outputMap[input.sourceOutpoint]
 
         if (!prevOutput) {
-          const { tx: transaction } = await _tu.insertTestTransaction(storage, user, false, {
-            txid: input.sourceOutpoint.split('.')[0],
-            satoshis: input.sourceSatoshis,
-            status: 'confirmed' as TransactionStatus,
-            description: 'Generated transaction for input',
-            lockTime: 0,
-            version: 1,
-            inputBEEF: [1, 2, 3, 4],
-            rawTx: [4, 3, 2, 1]
-          })
+          const origSourceTxid = input.sourceOutpoint.split('.')[0]
+
+          // Build a lightweight transaction-shaped object for insertTestOutput.
+          // Post-cutover: source transactions must NOT have an `actions` row so they
+          // do NOT appear in listActions results. Use v7svc.create() directly to
+          // write only a `transactions_v7` row (no actions row). Give them a ':src'
+          // suffix so their V7 txid doesn't collide with action transactions that
+          // share the same display txid (e.g. action 'tx1' vs source 'tx1:src').
+          // The output's `txid` column is set to the ORIGINAL txid so listActions
+          // reconstructs the correct `sourceOutpoint` (e.g. "tx1.1" not "tx1:src.1").
+          let sourceTxRow: { transactionId: number; userId: number; txid?: string }
+
+          if (isPostCutover && v7svc != null) {
+            let existing = sourceTxByOrigTxid[origSourceTxid]
+            if (!existing) {
+              const v7tx = await v7svc.create({
+                txid: origSourceTxid + ':src',
+                processing: 'proven',
+                rawTx: [4, 3, 2, 1],
+                now
+              })
+              existing = { transactionId: v7tx.transactionId }
+              sourceTxByOrigTxid[origSourceTxid] = existing
+            }
+            sourceTxRow = { transactionId: existing.transactionId, userId: user.userId, txid: origSourceTxid }
+          } else {
+            const { tx } = await _tu.insertTestTransaction(storage, user, false, {
+              txid: origSourceTxid,
+              satoshis: input.sourceSatoshis,
+              status: 'confirmed' as TransactionStatus,
+              description: 'Generated transaction for input',
+              lockTime: 0,
+              version: 1,
+              inputBEEF: [1, 2, 3, 4],
+              rawTx: [4, 3, 2, 1]
+            })
+            sourceTxRow = tx
+          }
 
           const basket = await _tu.insertTestOutputBasket(storage, user, {
             name: randomBytesHex(6)
@@ -1605,7 +1641,7 @@ export abstract class TestUtilsWalletStorage {
 
           prevOutput = await _tu.insertTestOutput(
             storage,
-            transaction,
+            sourceTxRow as TableTransaction,
             0,
             input.sourceSatoshis,
             basket,
@@ -1615,12 +1651,14 @@ export abstract class TestUtilsWalletStorage {
               spendable: true,
               vout: Number(input.sourceOutpoint.split('.')[1]),
               lockingScript: lockingScriptValue,
-              txid: transaction.txid
+              // Use the ORIGINAL source txid so listActions returns the correct
+              // sourceOutpoint (e.g. "tx1.1" not "tx1:src.1").
+              txid: origSourceTxid
             }
           )
 
           // Store in maps for later use
-          inputTxMap[input.sourceOutpoint] = transaction
+          inputTxMap[input.sourceOutpoint] = sourceTxRow
           outputMap[input.sourceOutpoint] = prevOutput
         }
       }
@@ -1673,7 +1711,11 @@ export abstract class TestUtilsWalletStorage {
             {
               outputDescription: output.outputDescription,
               spendable: output.spendable,
-              txid: transaction.txid
+              txid: transaction.txid,
+              // Clear script offset/length so validateOutputScript does not attempt
+              // to fetch locking script from rawTx (which is fake test data).
+              scriptLength: undefined,
+              scriptOffset: undefined
             }
           )
 

@@ -709,10 +709,14 @@ export class V7TransactionService {
     }
 
     if (args.createdAtFrom != null) {
+      // IDB path uses >= for `from` (inclusive); mirror that here.
       q = q.where('a.created_at', '>=', args.createdAtFrom)
     }
     if (args.createdAtTo != null) {
-      q = q.where('a.created_at', '<=', args.createdAtTo)
+      // IDB path uses EXCLUSIVE `to` semantics:
+      //   r.created_at.getTime() >= args.to.getTime() → exclude
+      // Mirror that: exclude rows where created_at >= createdAtTo (use '<' not '<=').
+      q = q.where('a.created_at', '<', args.createdAtTo)
     }
 
     // Label filtering via tx_labels_map (post-cutover: transactionId = actionId)
@@ -745,6 +749,7 @@ export class V7TransactionService {
 
     const rows = await q
       .orderBy('a.created_at', 'desc')
+      .orderBy('a.actionId', 'asc')
       .limit(args.limit)
       .offset(args.offset)
       .select(

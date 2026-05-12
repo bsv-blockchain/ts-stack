@@ -1,4 +1,4 @@
-import { wait } from '../utility/utilityHelpers'
+import { randomBytesHex, wait } from '../utility/utilityHelpers'
 
 import { WalletMonitorTask } from './tasks/WalletMonitorTask'
 import { WalletStorageManager } from '../storage/WalletStorageManager'
@@ -122,6 +122,14 @@ export class Monitor {
     }
     return o
   }
+
+  /**
+   * Stable identifier for this Monitor instance, used as the `ownerId` when
+   * acquiring V7 monitor_lease rows. Generated once at construction time via
+   * 8 cryptographically random bytes (16 hex chars). Callers may override this
+   * after construction if a deterministic / persisted id is preferred.
+   */
+  instanceId: string = randomBytesHex(8)
 
   options: MonitorOptions
   services: Services | WalletServices

@@ -1,3 +1,240 @@
+# Session 10 — proven_txs/proven_tx_reqs table-name routing + V7 BEEF regression fix
+
+## Branch
+`wallet-toolbox-v3`
+
+## What was done
+
+Fixed all `proven_txs` / `proven_tx_reqs` bare table-name string literals in
+`StorageKnex.ts` and method files so they route to `_legacy` tables post-V7-cutover.
+Also fixed a regression introduced by the V7 BEEF lookup path.
+
+### Helpers added to StorageKnex.ts
+
+- **`provenTxsTableName(): Promise<string>`** — changed from `private` to `public`.
+  Returns `'proven_txs_legacy'` post-cutover, `'proven_txs'` pre-cutover.
+
+- **`provenTxReqsTableName(): Promise<string>`** — new public helper, same pattern.
+  Returns `'proven_tx_reqs_legacy'` post-cutover, `'proven_tx_reqs'` pre-cutover.
+
+### References flipped
+
+All inline `(await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'`
+patterns replaced with `await this.provenTxReqsTableName()` throughout `StorageKnex.ts`.
+
+`reviewStatus.ts` and `purgeData.ts` updated to resolve table names at function start:
+```typescript
+const txTable = await storage.provenTxsTableName()     // proven_txs or proven_txs_legacy
+const reqTable = await storage.provenTxReqsTableName() // proven_tx_reqs or proven_tx_reqs_legacy
+const txnsTable = txTable === 'proven_txs_legacy' ? 'transactions_legacy' : 'transactions'
+```
+
+### V7 BEEF lookup added to getProvenOrRawTx
+
+Added `v7TxToProvenOrRawTx()` private helper and V7-first lookup in `getProvenOrRawTx()`.
+Also added V7-first lookup in `getRawTxSlice()`.
+
+### Regression fix (v7TxToProvenOrRawTx)
+
+**Bug**: V7 rows with `rawTx` but no `merklePath` (or empty `merklePath`) caused
+`getValidBeefForTxid` to take the rawTx path and call `mergeInputBeefs`, which then
+called `getValidBeefForKnownTxid` on parent txids not in storage → threw
+`WERR_INVALID_PARAMETER: txid not known`.
+
+**Fix**: `v7TxToProvenOrRawTx` now only returns the proven path when BOTH
+`merklePath.length > 0` AND `rawTx.length > 0`. Otherwise returns `null`, causing
+the caller to fall through to legacy `proven_txs_legacy` / `proven_tx_reqs_legacy`
+which carry the full `inputBEEF` needed for recursive BEEF assembly.
+
+Key lines in `/Users/personal/git/ts-stack/packages/wallet/wallet-toolbox/src/storage/StorageKnex.ts`:
+- `v7TxToProvenOrRawTx` ~line 225: checks `v7.merklePath.length > 0 && v7.rawTx.length > 0`
+- `getProvenOrRawTx` ~line 252: V7 block at top, falls through to legacy on null result
+- `getRawTxSlice` ~line 305: V7 block at top, falls through to legacy SQL
+
+### Files modified
+
+- `src/storage/StorageKnex.ts`
+- `src/storage/methods/reviewStatus.ts`
+- `src/storage/methods/purgeData.ts`
+
+### Test results
+
+- `listOutputs.test.ts`: **17/17 pass** (including `8_BEEF` — was failing before fix)
+- V7 tests: **164/164 pass**
+- `getBeef|listTransactions|listActions` tests: **68 pass, 1 skip**
+- `reviewStatus|purgeData` tests: **17/17 pass**
+
+### Sites intentionally left untouched
+
+- `findProvenTxsQuery` default param `tableName = 'proven_txs'` (line ~928): callers
+  already pass the resolved table name via `provenTxsTableName()`.
+- `findProvenTxReqsQuery` default param `tableName = 'proven_tx_reqs'` (line ~911):
+  same pattern.
+- `findStaleMerkleRootsQuery` default param `tableName = 'proven_txs'` (line ~939):
+  callers pass resolved name.
+- `v7Backfill.knex.ts` and `v7Cutover.ts`: explicitly excluded per task requirements.
+
+## Next steps for subsequent engineers
+
+1. `StorageKnex.findTransactionsQuery` (line ~856): still uses `status` column which
+   doesn't exist in V7 `transactions`. Needs to query `transactions_legacy` post-cutover
+   for `updateTransactionsStatus` bridge-period path.
+2. Admin stats queries (lines ~1697–1744): multiple raw SQL `status` references on V7
+   `transactions` table. Need update to `processing`.
+3. `findOutputsQuery txStatus filter` (line ~786): `select status from transactions`
+   subquery needs update for V7 `processing`.
+
+---
+
+# Session 9 — V7 monitor_lease + recordProof wiring
+
+## Branch
+`wallet-toolbox-v3`
+
+## What was done
+
+Integrated the V7 `monitor_lease` primitive into `Monitor.ts` and `TaskCheckForProofs.ts`
+and wired `recordProof` calls so that monitor proof discoveries flow through
+`V7TransactionService`. Shipped a new `V7LeasedTask` helper class plus 5 integration tests.
+
+### Files created
+
+- **`src/monitor/V7LeasedTask.ts`** — New helper class wrapping async task bodies in
+  `tryClaimLease` / `renewLease` / `releaseLease` semantics:
+  - `run(taskName, ownerId, ttlMs, body): Promise<{ ran: boolean }>`
+  - Returns `{ ran: false }` if lease cannot be claimed (another owner holds it).
+  - Renews lease every `ttlMs * 0.4` via `setInterval`.
+  - Clears interval and calls `releaseLease` in `finally` block (runs even if body throws).
+  - Logs all lease events to `console.log` for diagnostic visibility.
+
+- **`test/storage/methods/v7MonitorLeaseIntegration.test.ts`** — 5 integration tests:
+  - Test 1: Concurrent claim — two owners race; exactly one wins, other observes `ran: false`.
+  - Test 2: Winner calls `recordProof`; `tx_audit` has `processing.changed` with `to_state='proven'`;
+    loser does not write proof.
+  - Test 3: Release and retry — B cannot claim while A holds lease; after A releases, B claims.
+  - Test 4: Stale lease takeover — expired `expiresAt` row is claimed by new owner.
+  - Test 5: `recordProof` end-to-end — creates `sent` tx, calls `recordProof`, verifies
+    `proven` state + `tx_audit` entry (uses `to_state` column, not `details_json`).
+
+### Files modified
+
+- **`src/monitor/Monitor.ts`**:
+  - Added `randomBytesHex` import from `../utility/utilityHelpers`.
+  - Added `instanceId: string = randomBytesHex(8)` field to `Monitor` class — 16-hex-char
+    identifier generated at construction time; used as `ownerId` in V7 lease claims.
+    Callers may override for deterministic / persisted ids.
+
+- **`src/monitor/index.all.ts`**:
+  - Added `export * from './V7LeasedTask'` so the helper is part of the public monitor API.
+
+- **`src/monitor/tasks/TaskCheckForProofs.ts`**:
+  - Added `import { V7LeasedTask } from '../V7LeasedTask'`.
+  - Rewrote `runTask()`:
+    - Calls `this.storage.runAsStorageProvider(sp => sp.getV7Service())` to detect V7.
+    - If V7 available: wraps the inner loop in `V7LeasedTask.run(taskName, ownerId, 60_000, ...)`.
+      If lease not acquired, re-arms `TaskCheckForProofs.checkNow = true` and returns early.
+    - If no V7 (pre-cutover / IDB): falls through to legacy behaviour unchanged.
+  - Extracted inner proof loop to `_runProofLoop(maxAcceptableHeight, countsAsAttempt)`.
+  - Added V7 `recordProof` hook inside `getProofs()` function, after
+    `updateProvenTxReqWithNewProvenTx` succeeds:
+    - `sp.getV7Service()` — gates on V7 availability.
+    - `v7svc.findByTxid(txid)` — locates the V7 tx row.
+    - `v7svc.recordProof({ transactionId, height, merkleIndex: index, merklePath, merkleRoot, blockHash, expectedFrom: v7tx.processing })`.
+    - Entire V7 block is in try/catch — never disrupts the legacy proof path.
+
+### Lease semantics
+
+- TTL for `CheckForProofs` task: 60 seconds.
+- Renewal fires at `60_000 * 0.4 = 24 s`.
+- `instanceId` (8 random bytes = 16 hex) is stable for the lifetime of the `Monitor` instance.
+- On lease-miss: `checkNow` is re-armed so the next `runOnce` cycle retries claiming.
+- Pre-cutover or IDB storage (`getV7Service()` returns `undefined`): the V7 lease path is
+  bypassed entirely; `_runProofLoop` runs unconditionally. Existing behaviour preserved.
+
+### V7 recordProof hook
+
+The hook is purely additive:
+1. Legacy `updateProvenTxReqWithNewProvenTx` writes `proven_txs` + `proven_tx_reqs_legacy` rows (unchanged).
+2. V7 block then calls `findByTxid` to resolve the V7 transaction row (if any).
+3. `recordProof` transitions `transactions.processing` to `'proven'` and writes a
+   `tx_audit` row with `event='processing.changed'`, `to_state='proven'`.
+4. If the V7 row doesn't exist yet (bridge period: processAction hasn't been called for this
+   tx) `findByTxid` returns `undefined` and the hook silently skips.
+
+### tx_audit column names (critical for test queries)
+- `transactionId` — camelCase FK to `transactions.transactionId`
+- `to_state` — snake_case V7 target state column
+- `from_state` — snake_case V7 source state column
+- `details_json` — JSON-encoded detail blob (NOT `details`)
+- `event` — e.g. `'processing.changed'`, `'processing.rejected'`
+
+### Test counts
+
+- `test/storage/methods/v7MonitorLeaseIntegration.test.ts`: **5 tests**, all pass.
+- All V7 tests: **164 tests, 100% pass** (was 159; +5 new tests).
+- `test/monitor/Monitor.test.ts`: FAIL — pre-existing TypeScript error in
+  `test/utils/TestUtilsWalletStorage.ts` line 1630 (`TableTransaction.txid` optional/required
+  mismatch introduced by session 8). NOT caused by session 9 changes.
+- `src/monitor/__test/MonitorDaemon.man.test.ts`: FAIL — "Jest worker OOM"; this is a
+  `.man.` (manual) test requiring live resources, expected to fail in automated runs.
+
+### Pre-existing failures (not introduced by session 9)
+
+1. `test/monitor/Monitor.test.ts` — TypeScript compile error from `TestUtilsWalletStorage.ts`
+   line 1630 (pre-existing from session 8 working-tree changes).
+2. `src/monitor/__test/MonitorDaemon.man.test.ts` — OOM in Jest worker; manual test.
+
+## Key architectural facts
+
+### `instanceId` on Monitor
+`monitor.instanceId` is a 16-char hex string generated via `randomBytesHex(8)`. It is:
+- Available immediately after `new Monitor(options)` (field initializer, not constructor body).
+- Passed to `V7LeasedTask.run()` as `ownerId` for every lease operation.
+- Can be overridden before `startTasks()` if a deterministic value is needed.
+
+### V7LeasedTask renewal timer
+The `setInterval` fires at `Math.max(1000, Math.floor(ttlMs * 0.4))`. For 60 s TTL = 24 s.
+`renewFailures` counter tracks consecutive renew failures for diagnostics.
+The interval is always cleared in the `finally` block before `releaseLease`.
+
+### getV7Service() in TaskCheckForProofs
+```typescript
+const v7svc = await this.storage.runAsStorageProvider(async sp => sp.getV7Service())
+```
+`runAsStorageProvider` returns the typed storage provider, allowing `getV7Service()` which
+returns `V7TransactionService | undefined`. The second call inside `getProofs` uses the same
+pattern to access the service within the `sp` callback scope.
+
+### FSM states eligible for recordProof (→ `proven`)
+From `v7Fsm.ts`:
+- `sent → proven`
+- `seen → proven`
+- `seen_multi → proven`
+- `unconfirmed → proven`
+- `reorging → proven`
+
+States NOT allowed: `sending`, `queued`, `nosend`, `invalid`, `doubleSpend`.
+The `recordProof` hook uses `expectedFrom: v7tx.processing` (current state) so the FSM
+will accept or reject based on the actual state at call time.
+
+## Next steps for subsequent engineers
+
+1. **`test/utils/TestUtilsWalletStorage.ts` line 1630**: Fix TypeScript error
+   (`sourceTxRow = tx` — `TableTransaction.txid` is optional but type expects required `txid`).
+   This un-breaks `test/monitor/Monitor.test.ts`.
+
+2. **Other Monitor tasks for V7 lease wiring**: `TaskSendWaiting`, `TaskFailAbandoned`,
+   `TaskReviewStatus`, `TaskCheckNoSends` — each could claim a V7 lease to prevent
+   concurrent multi-instance execution. Follow the same pattern as `TaskCheckForProofs`.
+
+3. **`StorageKnex.findTransactionsQuery`** (documented in sessions 6-8): Still queries
+   `transactions` table with `status` column (broken post-cutover).
+
+4. **Admin stats queries** and `findOutputsQuery txStatus filter** — still reference
+   `t.status` post-cutover (documented in sessions 6-8).
+
+---
+
 # Session 8 — createAction FK bypass + output remapping fix
 
 ## Branch

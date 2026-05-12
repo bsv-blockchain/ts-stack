@@ -28,6 +28,14 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     }
   }
 
+  // Post-V7-cutover: `proven_txs`, `proven_tx_reqs`, and the legacy-shaped
+  // `transactions` table (with `status` column) are all renamed to `*_legacy`.
+  // Resolve canonical table names once and reuse throughout.
+  const txTable = await storage.provenTxsTableName()     // proven_txs or proven_txs_legacy
+  const reqTable = await storage.provenTxReqsTableName() // proven_tx_reqs or proven_tx_reqs_legacy
+  // `transactions` with `status` column → `transactions_legacy` post-cutover.
+  const txnsTable = txTable === 'proven_txs_legacy' ? 'transactions_legacy' : 'transactions'
+
   if (params.purgeCompleted) {
     const age = params.purgeCompletedAge || defaultAge
     const before = toSqlWhereDate(new Date(Date.now() - age))
@@ -39,7 +47,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     qs.push({
       log: 'conpleted transactions purged of transient data',
       q: storage
-        .toDb(trx)('transactions')
+        .toDb(trx)(txnsTable)
         .update({
           inputBEEF: null,
           rawTx: null
@@ -54,7 +62,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     })
 
     const completedReqs = await storage
-      .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
+      .toDb(trx)<{ provenTxReqId: number }>(reqTable)
       .select('provenTxReqId')
       .where('updated_at', '<', before)
       .where('status', 'completed')
@@ -65,7 +73,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     if (completedReqIds.length > 0) {
       qs.push({
         log: 'completed proven_tx_reqs deleted',
-        q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', completedReqIds).delete()
+        q: storage.toDb(trx)(reqTable).whereIn('provenTxReqId', completedReqIds).delete()
       })
     }
 
@@ -79,7 +87,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     const qs: PurgeQuery[] = []
 
     const failedTxsQ = storage
-      .toDb(trx)<{ transactionId: number }>('transactions')
+      .toDb(trx)<{ transactionId: number }>(txnsTable)
       .select('transactionId')
       .where('updated_at', '<', before)
       .where('status', 'failed')
@@ -89,7 +97,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     await deleteTransactions(failedTxIds, qs, 'failed', true)
 
     const invalidReqs = await storage
-      .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
+      .toDb(trx)<{ provenTxReqId: number }>(reqTable)
       .select('provenTxReqId')
       .where('updated_at', '<', before)
       .where('status', 'invalid')
@@ -97,12 +105,12 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     if (invalidReqIds.length > 0) {
       qs.push({
         log: 'invalid proven_tx_reqs deleted',
-        q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', invalidReqIds).delete()
+        q: storage.toDb(trx)(reqTable).whereIn('provenTxReqId', invalidReqIds).delete()
       })
     }
 
     const doubleSpendReqs = await storage
-      .toDb(trx)<{ provenTxReqId: number }>('proven_tx_reqs')
+      .toDb(trx)<{ provenTxReqId: number }>(reqTable)
       .select('provenTxReqId')
       .where('updated_at', '<', before)
       .where('status', 'doubleSpend')
@@ -110,7 +118,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     if (doubleSpendReqIds.length > 0) {
       qs.push({
         log: 'doubleSpend proven_tx_reqs deleted',
-        q: storage.toDb(trx)('proven_tx_reqs').whereIn('provenTxReqId', doubleSpendReqIds).delete()
+        q: storage.toDb(trx)(reqTable).whereIn('provenTxReqId', doubleSpendReqIds).delete()
       })
     }
 
@@ -148,11 +156,11 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     const qs: PurgeQuery[] = []
 
     const spentTxsQ = storage
-      .toDb(trx)<TableTransaction>('transactions')
+      .toDb(trx)<TableTransaction>(txnsTable)
       .where('updated_at', '<', before)
       .where('status', 'completed')
       .whereRaw(
-        'not exists(select outputId from outputs as o where o.transactionId = transactions.transactionId and o.spendable = 1)'
+        `not exists(select outputId from outputs as o where o.transactionId = ${txnsTable}.transactionId and o.spendable = 1)`
       )
     const txs: TableTransaction[] = await spentTxsQ
     // Save any spent txid still needed to prove a utxo:
@@ -179,16 +187,17 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
   }
 
   // Delete proven_txs no longer referenced by remaining transactions.
+  // Use canonical table names for post-cutover correctness.
   const qs: PurgeQuery[] = []
   qs.push({
     log: 'orphan proven_txs deleted',
     q: storage
-      .toDb(trx)('proven_txs')
+      .toDb(trx)(txTable)
       .whereRaw(
-        'not exists(select * from transactions as t where t.txid = proven_txs.txid or t.provenTxId = proven_txs.provenTxId)'
+        `not exists(select * from ${txnsTable} as t where t.txid = ${txTable}.txid or t.provenTxId = ${txTable}.provenTxId)`
       )
       .whereRaw(
-        'not exists(select * from proven_tx_reqs as r where r.txid = proven_txs.txid or r.provenTxId = proven_txs.provenTxId)'
+        `not exists(select * from ${reqTable} as r where r.txid = ${txTable}.txid or r.provenTxId = ${txTable}.provenTxId)`
       )
       .delete()
   })
@@ -244,7 +253,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
 
       qs.push({
         log: `${reason} transactions deleted`,
-        q: storage.toDb(trx)<TableTransaction>('transactions').whereIn('transactionId', transactionIds).delete()
+        q: storage.toDb(trx)<TableTransaction>(txnsTable).whereIn('transactionId', transactionIds).delete()
       })
     }
   }
