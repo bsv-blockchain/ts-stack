@@ -234,7 +234,7 @@ async function markKnownInputsSpent (
       const { i, o } = ni
       const o2 = knownOutputsById[verifyId(o.outputId)]
       if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
-      if (o2.spentBy !== undefined) {
+      if (o2.spentBy !== undefined && o2.spentBy !== null) {
         const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
         if (spendingTx?.txid) { doubleSpendTxid = spendingTx.txid; return }
       }
@@ -608,11 +608,27 @@ async function validateRequiredInputs (
 
   const trustSelf = vargs.options.trustSelf === 'known'
 
-  const inputTxids: Record<string, boolean> = {}
-  for (const input of xinputs) inputTxids[input.outpoint.txid] = true
+  const preloadedOutputsByOutpoint = await storage.findOutputsByOutpoints(
+    userId,
+    xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout }))
+  )
 
-  await validateBeefTxidOnlyEntries(beef, inputTxids, trustSelf, storage)
-  await ensureBeefContainsAllInputTxids(beef, inputTxids, trustSelf, storage)
+  const inputsByTxid: Record<string, XValidCreateActionInput[]> = {}
+  for (const input of xinputs) {
+    inputsByTxid[input.outpoint.txid] ||= []
+    inputsByTxid[input.outpoint.txid].push(input)
+  }
+
+  const localKnownInputTxids: Record<string, boolean> = {}
+  for (const [txid, txInputs] of Object.entries(inputsByTxid)) {
+    localKnownInputTxids[txid] = txInputs.every(input => {
+      const output = preloadedOutputsByOutpoint[`${input.outpoint.txid}.${input.outpoint.vout}`]
+      return output?.lockingScript !== undefined && Number.isInteger(output?.satoshis)
+    })
+  }
+
+  await validateBeefTxidOnlyEntries(beef, inputsByTxid, trustSelf, storage)
+  await ensureBeefContainsAllInputTxids(beef, inputsByTxid, localKnownInputTxids, trustSelf, storage)
 
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
     console.log(`verifyInputBeef failed, inputBEEF failed to verify.\n${beef.toLogString()}\n`)
@@ -620,7 +636,6 @@ async function validateRequiredInputs (
   }
 
   const storageBeef = beef.clone()
-  const preloadedOutputsByOutpoint = await storage.findOutputsByOutpoints(userId, xinputs.map(i => ({ txid: i.outpoint.txid, vout: i.outpoint.vout })))
 
   for (const input of xinputs) {
     await resolveInputScript(storage, userId, vargs, input, beef, preloadedOutputsByOutpoint)
@@ -632,14 +647,14 @@ async function validateRequiredInputs (
 /** Check all txidOnly entries in beef: require either trustSelf vouch or throw. */
 async function validateBeefTxidOnlyEntries (
   beef: Beef,
-  inputTxids: Record<string, boolean>,
+  inputsByTxid: Record<string, XValidCreateActionInput[]>,
   trustSelf: boolean,
   storage: StorageProvider
 ): Promise<void> {
   for (const btx of beef.txs) {
     if (!btx.isTxidOnly) continue
     if (!trustSelf) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain complete proof data for ${btx.txid}`)
-    if (!inputTxids[btx.txid]) {
+    if (inputsByTxid[btx.txid] == null) {
       const isKnown = await storage.verifyKnownValidTransaction(btx.txid)
       if (!isKnown) throw new WERR_INVALID_PARAMETER('inputBEEF', `valid and contain complete proof data for unknown ${btx.txid}`)
     }
@@ -649,12 +664,14 @@ async function validateBeefTxidOnlyEntries (
 /** Ensure beef has an entry (or txidOnly) for every input txid. */
 async function ensureBeefContainsAllInputTxids (
   beef: Beef,
-  inputTxids: Record<string, boolean>,
+  inputsByTxid: Record<string, XValidCreateActionInput[]>,
+  localKnownInputTxids: Record<string, boolean>,
   trustSelf: boolean,
   storage: StorageProvider
 ): Promise<void> {
-  for (const txid of Object.keys(inputTxids)) {
+  for (const txid of Object.keys(inputsByTxid)) {
     let btx = beef.findTxid(txid)
+    if (btx == null && localKnownInputTxids[txid]) continue
     if (btx == null && trustSelf) {
       if (await storage.verifyKnownValidTransaction(txid)) btx = beef.mergeTxidOnly(txid)
     }
@@ -679,10 +696,12 @@ async function resolveInputScript (
   if (output != null) {
     if (output.change) throw new WERR_INVALID_PARAMETER(`inputs[${input.vin}]`, 'an unmanaged input. Change outputs are managed by your wallet.')
     input.output = output
-    if (!Array.isArray(output.lockingScript) || !Number.isInteger(output.satoshis))
+    if (output.lockingScript === undefined || !Number.isInteger(output.satoshis)) {
       throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'output with valid lockingScript and satoshis')
-    if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend)
+    }
+    if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend) {
       throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'spendable output unless noSend is true')
+    }
     input.satoshis = Validation.validateSatoshis(output.satoshis, 'output.satoshis')
     input.lockingScript = Script.fromBinary(asArray(output.lockingScript))
   } else {
