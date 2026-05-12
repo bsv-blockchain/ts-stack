@@ -13,20 +13,36 @@ import * as sdk from '../../sdk'
  * provider acknowledged) are enforced at the call site.
  */
 const TRANSITIONS: Record<sdk.ProcessingStatus, sdk.ProcessingStatus[]> = {
-  queued: ['sending', 'sent', 'nosend', 'frozen', 'nonfinal', 'invalid'],
+  // `queued -> doubleSpend`: a tx queued locally may be reported as a
+  // double-spend by the network before our first send attempt (e.g. another
+  // wallet broadcast the same outpoint first). See V7_STORAGE_METHOD_WIRING §4
+  // legacy mapping `* -> doubleSpend (rejection)`.
+  queued: ['sending', 'sent', 'nosend', 'frozen', 'nonfinal', 'invalid', 'doubleSpend'],
   sending: ['sent', 'seen', 'seen_multi', 'invalid', 'doubleSpend', 'frozen', 'queued'],
   sent: ['seen', 'seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend', 'frozen', 'sending'],
-  seen: ['seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend', 'reorging', 'frozen'],
-  seen_multi: ['unconfirmed', 'proven', 'invalid', 'doubleSpend', 'reorging', 'frozen'],
-  unconfirmed: ['proven', 'invalid', 'reorging', 'frozen', 'seen', 'seen_multi'],
+  // `seen -> sending`: provider re-acknowledgment lost; legacy mapping
+  // `* -> sending (serviceError retry)` from V7_STORAGE_METHOD_WIRING §4.
+  seen: ['seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend', 'reorging', 'frozen', 'sending'],
+  // `seen_multi -> sending`: same retry semantics as `seen -> sending`.
+  seen_multi: ['unconfirmed', 'proven', 'invalid', 'doubleSpend', 'reorging', 'frozen', 'sending'],
+  // `unconfirmed -> doubleSpend`: a provider's proof candidate may be retracted
+  // when a competing tx is mined. `unconfirmed -> sending`: candidate failed
+  // chaintracks validation, restart broadcast attempts. Both per §4.
+  unconfirmed: ['proven', 'invalid', 'reorging', 'frozen', 'seen', 'seen_multi', 'doubleSpend', 'sending'],
   proven: ['reorging'],
   reorging: ['proven', 'seen', 'seen_multi', 'unconfirmed', 'invalid', 'doubleSpend', 'frozen'],
   invalid: ['unfail'],
   doubleSpend: ['unfail'],
   unfail: ['queued', 'sending', 'sent', 'seen', 'seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend'],
   frozen: ['queued', 'sending', 'sent', 'seen', 'seen_multi', 'unconfirmed', 'invalid', 'doubleSpend'],
-  nosend: ['queued', 'sent', 'seen', 'invalid', 'frozen'],
-  nonfinal: ['queued', 'sending', 'sent', 'invalid', 'frozen']
+  // `nosend -> sending`: operator (or processAction promotion) moves a
+  // never-broadcast tx into the active broadcast pipeline. `nosend ->
+  // doubleSpend`: an externally-broadcast nosend tx may be reported as a
+  // double-spend. Both per §4 legacy mapping.
+  nosend: ['queued', 'sending', 'sent', 'seen', 'invalid', 'doubleSpend', 'frozen'],
+  // `nonfinal -> doubleSpend`: a live-nLockTime tx may be replaced by a
+  // confirmed competing tx and reported as a double-spend.
+  nonfinal: ['queued', 'sending', 'sent', 'invalid', 'doubleSpend', 'frozen']
 }
 
 export interface FsmTransitionResult {

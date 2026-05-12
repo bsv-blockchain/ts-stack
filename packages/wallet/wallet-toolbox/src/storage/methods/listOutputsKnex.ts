@@ -8,6 +8,36 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import type { ProcessingStatus } from '../../sdk'
+
+/**
+ * Maps the legacy per-user `TransactionStatus` values that `listOutputs` treated
+ * as "eligible to appear" to their V7 `ProcessingStatus` equivalents.
+ *
+ * Legacy status → V7 ProcessingStatus[]
+ *   completed  → ['proven']
+ *   unproven   → ['sent', 'seen', 'seen_multi', 'unconfirmed']
+ *   nosend     → ['nosend']
+ *   sending    → ['sending']
+ *
+ * NOTE: V7 `queued` is intentionally excluded.  Legacy `sending` meant "is
+ * actively being broadcast" which maps to V7 `sending`.  V7 `queued` is
+ * broader ("just created, not yet dispatched") and its outputs have not been
+ * broadcast; they therefore fall outside the default spendable set.
+ *
+ * The union is the full set of processing states whose outputs are eligible to
+ * appear in a `listOutputs` response.
+ */
+const TX_PROCESSING_ALLOWED: ProcessingStatus[] = [
+  'proven',          // was: completed
+  'sent',            // was: unproven
+  'seen',            // was: unproven
+  'seen_multi',      // was: unproven
+  'unconfirmed',     // was: unproven
+  'nosend',          // was: nosend
+  'sending'          // was: sending  (queued excluded — see note above)
+]
+
 export async function listOutputs (
   dsk: StorageKnex,
   auth: AuthId,
@@ -125,13 +155,12 @@ export async function listOutputs (
   const noTags = tagIds.length === 0
   const includeSpent = specOp?.includeSpent ?? false
 
-  const txStatusAllowed = ['completed', 'unproven', 'nosend', 'sending']
   const outputColumns = columns.map(c => `o.${c} as ${c}`)
 
   const applyBaseFilters = (q: Knex.QueryBuilder) => {
     q.join('transactions as t', 't.transactionId', 'o.transactionId')
     q.where('o.userId', userId)
-    q.whereIn('t.status', txStatusAllowed)
+    q.whereIn('t.processing', TX_PROCESSING_ALLOWED)
     if (basketId) q.where('o.basketId', basketId)
     if (!includeSpent) q.where('o.spendable', true)
   }
@@ -250,12 +279,33 @@ export async function listOutputs (
   if (vargs.includeLabels) {
     const txIds = [...new Set(outputs.map(o => o.transactionId).filter((id): id is number => id !== undefined))]
     if (txIds.length > 0) {
+      /*
+       * Post-V7-cutover the `tx_labels_map.transactionId` column is an FK to
+       * `actions.actionId` — NOT to `transactions.transactionId`.  A direct
+       * `WHERE lm.transactionId IN (output.transactionId)` is therefore wrong
+       * because those two keyspaces no longer overlap.
+       *
+       * Correct hop:
+       *   outputs.transactionId (= transactions.transactionId)
+       *     → actions.transactionId  (same value, user-scoped)
+       *     → actions.actionId
+       *     → tx_labels_map.transactionId
+       *
+       * We join `actions a` on (a.userId, a.transactionId) to obtain
+       * a.actionId, then join `tx_labels_map lm` on lm.transactionId = a.actionId.
+       * The result is grouped back to outputs.transactionId so the caller's
+       * existing `labelsByTransactionId` lookup key is unchanged.
+       */
       const labels = await k('tx_labels as l')
         .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
-        .whereIn('lm.transactionId', txIds)
+        .join('actions as a', function () {
+          this.on('a.actionId', '=', 'lm.transactionId')
+            .andOn(k.raw('a.userId = ?', [userId]))
+        })
+        .whereIn('a.transactionId', txIds)
         .whereNot('lm.isDeleted', true)
         .whereNot('l.isDeleted', true)
-        .select('lm.transactionId', 'l.label')
+        .select('a.transactionId as transactionId', 'l.label')
 
       for (const row of labels) {
         const txid = Number(row.transactionId)

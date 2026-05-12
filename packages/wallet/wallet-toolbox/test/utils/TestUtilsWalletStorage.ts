@@ -58,6 +58,7 @@ import { TableMonitorEvent } from '../../src/storage/schema/tables/TableMonitorE
 import { TableCommission } from '../../src/storage/schema/tables/TableCommission'
 import { asArray } from '../../src/utility/utilityHelpers.noBuffer'
 import { ScriptTemplateBRC29 } from '../../src/utility/ScriptTemplateBRC29'
+import { runV7Cutover } from '../../src/storage/schema/v7Cutover'
 
 dotenv.config()
 
@@ -520,6 +521,11 @@ export abstract class TestUtilsWalletStorage {
     })
     if (args.dropAll) await activeStorage.dropAllData()
     await activeStorage.migrate(args.databaseName, randomBytesHex(33))
+    // Run the V7 cutover so that post-cutover storage helpers (listOutputsKnex,
+    // listActionsKnex, etc.) can reference the renamed `transactions` table and
+    // its V7 columns (e.g. `processing`, `userId`).  The cutover is idempotent
+    // on empty databases and is safe to run before any seed data is inserted.
+    await runV7Cutover(args.knex)
     await activeStorage.makeAvailable()
     const setup = await args.insertSetup(activeStorage, wo.identityKey)
     await wo.storage.addWalletStorageProvider(activeStorage)
@@ -878,6 +884,11 @@ export abstract class TestUtilsWalletStorage {
     })
     if (useReader) await activeStorage.dropAllData()
     await activeStorage.migrate(databaseName, randomBytesHex(33))
+    // Run the V7 cutover after migrations so that listOutputsKnex and
+    // listActionsKnex (which query post-cutover schema columns such as
+    // `transactions.processing`) work correctly in feature tests that use
+    // the legacy wallet fixture as their seed database.
+    await runV7Cutover(walletKnex)
     await activeStorage.makeAvailable()
     const storage = new WalletStorageManager(identityKey, activeStorage)
     await storage.makeAvailable()
@@ -1049,6 +1060,11 @@ export abstract class TestUtilsWalletStorage {
 
     await activeStorage.dropAllData()
     await activeStorage.migrate(databaseName, randomBytesHex(33))
+    // Intentionally left pre-cutover: activeStorage is a StorageIdb (IndexedDB),
+    // not a Knex-backed store, so runV7Cutover (which operates on Knex) cannot be
+    // applied here.  The IDB storage path has its own V7 upgrade mechanism
+    // (v7CutoverIdb.ts).  Tests that use this fixture and call listOutputs/
+    // listActions will exercise the IDB code path, not the Knex path.
     await activeStorage.makeAvailable()
 
     const storage = new WalletStorageManager(identityKey, activeStorage)

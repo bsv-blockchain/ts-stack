@@ -145,7 +145,7 @@ export async function setChainTip (
   })
 }
 
-function mapTransactionRow (row: any): TableTransactionV7 {
+export function mapTransactionRow (row: any): TableTransactionV7 {
   return {
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
@@ -205,7 +205,7 @@ function unmapTransactionRow (
   }
 }
 
-function mapActionRow (row: any): TableAction {
+export function mapActionRow (row: any): TableAction {
   return {
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
