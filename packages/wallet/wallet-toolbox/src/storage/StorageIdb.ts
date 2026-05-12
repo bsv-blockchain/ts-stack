@@ -120,6 +120,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     this.dbName = `wallet-toolbox-${this.chain}net`
   }
 
+  // TODO(v7-idb): StorageIdb does not yet support the V7 schema.
+  // getV7Service() inherits the default `return undefined` from StorageProvider.
+  // A future implementation would wrap an IndexedDB-backed V7 service here.
+
   /**
    * This method must be called at least once before any other method accesses the database,
    * and each time the schema may have updated.

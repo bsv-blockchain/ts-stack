@@ -923,4 +923,62 @@ export class V7TransactionService {
 
     return { rows: mapped, total }
   }
+
+  /**
+   * Post-cutover helper: rewrite `tx_labels_map.transactionId` rows that were
+   * written with the legacy transactionId (before the real txid + actionId were
+   * known) so that they now point at the V7 `actions.actionId`.
+   *
+   * Call this once per new outgoing transaction immediately after
+   * `findOrCreateActionForTxid` resolves the actionId.
+   *
+   * This is a no-op when:
+   *  - `legacyTransactionId` has no rows in `tx_labels_map` (no labels on the tx)
+   *  - `legacyTransactionId === actionId` (should not happen in practice but
+   *    is safe to call anyway)
+   */
+  async repointLabelsToActionId (
+    legacyTransactionId: number,
+    actionId: number,
+    now?: Date
+  ): Promise<void> {
+    if (legacyTransactionId === actionId) return
+    const ts = now ?? new Date()
+    await this.knex('tx_labels_map')
+      .where({ transactionId: legacyTransactionId })
+      .update({ transactionId: actionId, updated_at: ts })
+  }
+
+  /**
+   * After `processAction` creates the V7 `transactions` row, remap
+   * `outputs.transactionId` and `outputs.spentBy` from the bridge-period
+   * `transactions_legacy.transactionId` to the real V7 `transactions.transactionId`.
+   *
+   * During `createAction`, new outputs are inserted with `transactionId =
+   * legacyTransactionId` (bypassing FK constraints). `listActionsKnex` queries
+   * outputs by V7 transactionId, so without this remap the outputs would be
+   * invisible to `listActions`.
+   *
+   * This is a no-op when `legacyTransactionId === v7TransactionId`.
+   */
+  async repointOutputsToV7TransactionId (
+    legacyTransactionId: number,
+    v7TransactionId: number,
+    now?: Date
+  ): Promise<void> {
+    if (legacyTransactionId === v7TransactionId) return
+    const ts = now ?? new Date()
+    // Remap outputs.transactionId (the V7 FK for "which tx created this output")
+    await this.knex('outputs')
+      .where({ transactionId: legacyTransactionId })
+      .update({ transactionId: v7TransactionId, updated_at: ts })
+    // Remap outputs.spentBy (the V7 FK for "which tx spent this output")
+    await this.knex('outputs')
+      .where({ spentBy: legacyTransactionId })
+      .update({ spentBy: v7TransactionId, updated_at: ts })
+    // Remap commissions.transactionId
+    await this.knex('commissions')
+      .where({ transactionId: legacyTransactionId })
+      .update({ transactionId: v7TransactionId, updated_at: ts })
+  }
 }

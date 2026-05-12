@@ -91,7 +91,9 @@ export async function runV7Backfill (driver: V7BackfillDriver, now: Date = new D
         const v7Row = buildTransactionV7RowFromLegacyTx(legacy, now)
         if (v7Row !== undefined) {
           v7Id = await driver.upsertTransactionV7(v7Row)
-          txidToV7Id.set(legacy.txid, v7Id)
+          // Use v7Row.txid (not legacy.txid) as the map key so that empty-string
+          // legacy txids each get a unique placeholder key and don't collide.
+          txidToV7Id.set(v7Row.txid, v7Id)
           stats.legacyTxOnlyBackfilled += 1
         }
       }

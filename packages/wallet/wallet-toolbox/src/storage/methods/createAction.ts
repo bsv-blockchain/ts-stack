@@ -139,7 +139,10 @@ export async function createAction (
   // The satoshis of the transaction is the satoshis we get back in change minus the satoshis we spend.
   const satoshis =
     changeOutputs.reduce((a, e) => a + e.satoshis, 0) - allocatedChange.reduce((a, e) => a + e.satoshis, 0)
-  await storage.updateTransaction(newTx.transactionId, { satoshis })
+  // V7 additive wiring: newTx lives in transactions_legacy post-cutover.
+  // updateLegacyTransaction routes to transactions_legacy when it exists,
+  // otherwise falls through to updateTransaction (pre-cutover behaviour).
+  await storage.updateLegacyTransaction(newTx.transactionId, { satoshis })
 
   const { outputs, changeVouts } = await createNewOutputs(storage, userId, vargs, ctx, changeOutputs)
   logger?.log('created new output records')
@@ -244,7 +247,10 @@ async function markKnownInputsSpent (
           `spendable output. output ${o.txid}:${o.vout} appears to have been spent (spendable=${o2.spendable}).`
         )
       }
-      await storage.updateOutput(verifyId(o.outputId), { spendable: false, spentBy: transactionId, spendingDescription: i.inputDescription }, trx)
+      // Post-V7-cutover: outputs.spentBy FK → V7 transactions. transactionId is
+      // from transactions_legacy (new unsigned tx). Use markOutputAsSpentBy to
+      // disable FK temporarily on SQLite. Mapping §2: bridge-period spentBy.
+      await storage.markOutputAsSpentBy(verifyId(o.outputId), { spendable: false, spentBy: transactionId, spendingDescription: i.inputDescription }, trx)
       o.spendable = false
       o.spentBy = transactionId
       o.spendingDescription = i.inputDescription
@@ -488,11 +494,20 @@ async function createNewTxRecord (
     txid: undefined,
     rawTx: undefined
   }
-  newTx.transactionId = await storage.insertTransaction(newTx)
+  // V7 additive wiring: use insertLegacyTransaction so that post-cutover
+  // this row lands in `transactions_legacy` (not the V7 `transactions` table,
+  // which requires a non-null txid that is unknown until signing).
+  // Pre-cutover this falls through to the standard `transactions` table.
+  // See docs/V7_CREATEACTION_BLOCKERS.md §3 Option B (wiring session).
+  newTx.transactionId = await storage.insertLegacyTransaction(newTx)
 
   for (const label of vargs.labels) {
     const txLabel = await storage.findOrInsertTxLabel(userId, label)
-    await storage.findOrInsertTxLabelMap(verifyId(newTx.transactionId), verifyId(txLabel.txLabelId))
+    // V7 additive wiring: post-cutover the tx_labels_map.transactionId FK points
+    // to actions.actionId, but we only have the legacyTransactionId here. Use the
+    // legacy-safe shim which bypasses FK constraints temporarily. processAction
+    // rewrites these rows to the V7 actionId via repointLabelsToActionId.
+    await storage.findOrInsertLegacyTxLabelMap(verifyId(newTx.transactionId), verifyId(txLabel.txLabelId))
   }
 
   return newTx
@@ -816,7 +831,9 @@ async function fundNewTransactionSdk (
       const o = noSendChange.pop()!
       outputs[o.outputId] = o
       // allocate the output in storage, noSendChange is by definition spendable false and part of noSpend transaction batch.
-      await storage.updateOutput(o.outputId, {
+      // Post-V7-cutover: outputs.spentBy FK → V7 transactions; ctx.transactionId is from
+      // transactions_legacy. Use markOutputAsSpentBy for FK bypass. Mapping §2: bridge-period.
+      await storage.markOutputAsSpentBy(o.outputId, {
         spendable: false,
         spentBy: ctx.transactionId
       })

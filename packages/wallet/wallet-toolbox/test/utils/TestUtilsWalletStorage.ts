@@ -25,7 +25,7 @@ import {
   WalletInterface
 } from '@bsv/sdk'
 import { StorageIdb } from '../../src/storage/StorageIdb'
-import { Chain, TransactionStatus } from '../../src/sdk/types'
+import { Chain, TransactionStatus, transactionStatusToProcessing } from '../../src/sdk/types'
 import { Setup } from '../../src/Setup'
 import { StorageKnex } from '../../src/storage/StorageKnex'
 import { Services } from '../../src/services/Services'
@@ -59,6 +59,7 @@ import { TableCommission } from '../../src/storage/schema/tables/TableCommission
 import { asArray } from '../../src/utility/utilityHelpers.noBuffer'
 import { ScriptTemplateBRC29 } from '../../src/utility/ScriptTemplateBRC29'
 import { runV7Cutover } from '../../src/storage/schema/v7Cutover'
+import { V7TransactionService } from '../../src/storage/schema/v7Service'
 
 dotenv.config()
 
@@ -1243,6 +1244,21 @@ export abstract class TestUtilsWalletStorage {
     return e
   }
 
+  /**
+   * Insert a test transaction row.
+   *
+   * Post-V7-cutover (detected via `storage.getV7Service()`):
+   *   - Writes a V7 `transactions` row + an `actions` row via
+   *     `V7TransactionService.findOrCreateActionForTxid`.
+   *   - Returns `tx.transactionId` = V7 `transactions.transactionId` (the
+   *     per-txid key; FK target for `outputs` and `commissions`).
+   *   - Stashes `actionId` as `(tx as any).__v7ActionId` so that
+   *     `insertTestTxLabelMap` can write `tx_labels_map.transactionId =
+   *     actionId` (the FK target post-cutover).
+   *
+   * Pre-cutover / non-Knex storage:
+   *   - Falls through to the legacy `storage.insertTransaction(e)` path.
+   */
   static async insertTestTransaction(
     storage: StorageProvider,
     u?: TableUser,
@@ -1270,7 +1286,41 @@ export abstract class TestUtilsWalletStorage {
       rawTx: onlyRequired ? undefined : [1, 2, 3],
       ...(partial || {})
     }
-    await storage.insertTransaction(e)
+
+    const v7Service: V7TransactionService | undefined = storage.getV7Service?.()
+    // Only use the V7 path if the database has been through runV7Cutover
+    // (indicated by the presence of the `transactions_legacy` table).
+    const isPostCutover = v7Service != null &&
+      await (storage as StorageKnex).knex.schema.hasTable('transactions_legacy')
+    if (isPostCutover && v7Service != null) {
+      // Post-V7-cutover: write into V7 `transactions` + `actions`.
+      // txid must be non-null for the V7 NOT NULL UNIQUE constraint.
+      const txid = e.txid ?? ('pending:' + randomBytesHex(30))
+      const processing = transactionStatusToProcessing(e.status ?? 'nosend')
+      const { transaction, action } = await v7Service.findOrCreateActionForTxid({
+        userId: u.userId,
+        txid,
+        isOutgoing: e.isOutgoing ?? true,
+        description: e.description ?? '',
+        satoshisDelta: e.satoshis ?? 0,
+        reference: e.reference ?? randomBytesBase64(10),
+        rawTx: e.rawTx ?? undefined,
+        inputBeef: e.inputBEEF ?? undefined,
+        processing,
+        now: e.created_at instanceof Date ? e.created_at : now
+      })
+      // Patch the legacy-shaped `e` so callers get a consistent object:
+      // - transactionId = V7 transactions.transactionId (FK for outputs/commissions)
+      // - txid = the txid we used
+      e.transactionId = transaction.transactionId
+      e.txid = txid
+      // Store actionId for insertTestTxLabelMap (post-cutover tx_labels_map FK)
+      ;(e as any).__v7ActionId = action.actionId
+    } else {
+      // Pre-cutover / StorageIdb path.
+      await storage.insertTransaction(e)
+    }
+
     return { tx: e, user: u }
   }
 
@@ -1365,11 +1415,14 @@ export abstract class TestUtilsWalletStorage {
     partial?: Partial<TableTxLabelMap>
   ) {
     const now = new Date()
+    // Post-V7-cutover: tx_labels_map.transactionId FKs actions.actionId.
+    // insertTestTransaction stashes the actionId as __v7ActionId on the tx object.
+    const labelMapId: number = (tx as any).__v7ActionId ?? tx.transactionId
     const e: TableTxLabelMap = {
       created_at: now,
       updated_at: now,
       txLabelId: label.txLabelId,
-      transactionId: tx.transactionId,
+      transactionId: labelMapId,
       isDeleted: false,
       ...(partial || {})
     }

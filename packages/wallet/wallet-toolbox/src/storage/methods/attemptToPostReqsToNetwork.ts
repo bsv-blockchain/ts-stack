@@ -4,6 +4,53 @@ import { EntityProvenTxReq } from '../schema/entities'
 import * as sdk from '../../sdk'
 import { ReqHistoryNote } from '../../sdk'
 import { wait } from '../../utility/utilityHelpers'
+import { V7TransactionService } from '../schema/v7Service'
+
+// ---------------------------------------------------------------------------
+// V7 wiring helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the V7 `transactionId` for a given txid.
+ *
+ * Returns `undefined` when:
+ *  - `service` is undefined (pre-cutover / IDB path)
+ *  - The txid is not yet in the V7 `transactions` table (bridge period)
+ *  - Any unexpected error (we swallow and return undefined to avoid
+ *    disrupting the legacy broadcast path)
+ */
+async function resolveV7Id (
+  service: V7TransactionService | undefined,
+  txid: string
+): Promise<number | undefined> {
+  if (service == null) return undefined
+  try {
+    const row = await service.findByTxid(txid)
+    return row?.transactionId
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Map the aggregate broadcast outcome to the V7 `ProcessingStatus` to record.
+ *
+ * Mapping:
+ *  success   → 'sent'       (broadcast accepted; waiting for on-chain proof)
+ *  doubleSpend → 'doubleSpend' (terminal)
+ *  invalidTx → 'invalid'    (terminal)
+ *  serviceError → 'sending' (retry; attempts counter also incremented)
+ */
+function aggregateStatusToV7Processing (
+  status: AggregateStatus
+): sdk.ProcessingStatus {
+  switch (status) {
+    case 'success': return 'sent'
+    case 'doubleSpend': return 'doubleSpend'
+    case 'invalidTx': return 'invalid'
+    case 'serviceError': return 'sending'
+  }
+}
 
 /**
  * Attempt to post one or more `ProvenTxReq` with status 'unsent'
@@ -52,32 +99,66 @@ async function validateReqsAndMergeBeefs (
 
   const vreqs: PostReqsToNetworkDetails[] = []
 
+  // V7 service — undefined on pre-cutover / IDB paths; all V7 calls are gated.
+  const v7svc = storage.getV7Service()
+
   for (const req of reqs) {
+    // Resolve the V7 transactionId for this req (by txid). Cached per req so
+    // subsequent V7 calls within the same loop body reuse it.
+    const v7TxId = await resolveV7Id(v7svc, req.txid)
+
     try {
       const noRawTx = !req.rawTx
       const noTxIds = (req.notify.transactionIds == null) || req.notify.transactionIds.length < 1
       const noInputBEEF = req.inputBEEF == null
       if (noRawTx || noTxIds || noInputBEEF) {
         // This should have happened earlier...
-        req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqFailed', noRawTx, noTxIds, noInputBEEF })
+        const note = { when: new Date().toISOString(), what: 'validateReqFailed', noRawTx, noTxIds, noInputBEEF }
+        req.addHistoryNote(note)
         req.status = 'invalid'
         await req.updateStorageDynamicProperties(storage, trx)
         r.details.push({ txid: req.txid, req, status: 'invalid' })
+
+        // V7 additive: record history note + transition to invalid
+        if (v7TxId != null) {
+          await v7svc!.recordHistoryNote(v7TxId, note)
+          await v7svc!.recordBroadcastResult({
+            transactionId: v7TxId,
+            txid: req.txid,
+            status: 'invalid',
+            provider: 'validateReqsAndMergeBeefs',
+            details: { reason: 'validateReqFailed' }
+          })
+        }
       } else {
         const vreq: PostReqsToNetworkDetails = { txid: req.txid, req, status: 'unknown' }
         await storage.mergeReqToBeefToShareExternally(req.api, r.beef, [], trx)
+
+        // V7 additive: also merge raw tx / proof bytes from V7 table into the
+        // shared beef so post-cutover callers get the same merged payload.
+        if (v7TxId != null) {
+          await v7svc!.mergeBeefForTxids(r.beef, [req.txid])
+        }
+
         vreqs.push(vreq)
         r.details.push(vreq)
       }
     } catch (error_: unknown) {
       const { code, message } = sdk.WalletError.fromUnknown(error_)
-      req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqError', txid: req.txid, code, message })
+      const errNote = { when: new Date().toISOString(), what: 'validateReqError', txid: req.txid, code, message }
+      req.addHistoryNote(errNote)
       req.attempts++
       if (req.attempts > 6 || message.startsWith('The txid parameter must be known to storage')) {
         req.status = 'invalid'
         r.details.push({ txid: req.txid, req, status: 'invalid' })
       }
       await req.updateStorageDynamicProperties(storage, trx)
+
+      // V7 additive: record history note + increment attempts
+      if (v7TxId != null) {
+        await v7svc!.recordHistoryNote(v7TxId, errNote)
+        await v7svc!.incrementAttempts(v7TxId)
+      }
     }
   }
   return { r, vreqs, txids: vreqs.map(r => r.txid) }
@@ -90,9 +171,16 @@ async function transferNotesToReqHistories (
   storage: StorageProvider,
   trx?: sdk.TrxToken
 ): Promise<void> {
+  // V7 service — gated; undefined means legacy-only path.
+  const v7svc = storage.getV7Service()
+
   for (const txid of txids) {
     const vreq = vreqs.find(r => r.txid === txid)
     if (vreq == null) throw new sdk.WERR_INTERNAL()
+
+    // Resolve V7 transactionId once per txid (cheap SELECT by txid).
+    const v7TxId = await resolveV7Id(v7svc, txid)
+
     const notes: sdk.ReqHistoryNote[] = []
     for (const pbr of pbrs) {
       notes.push(...(pbr.notes || []))
@@ -101,6 +189,11 @@ async function transferNotesToReqHistories (
     }
     for (const n of notes) {
       vreq.req.addHistoryNote(n)
+
+      // V7 additive: mirror each provider note into tx_audit.
+      if (v7TxId != null) {
+        await v7svc!.recordHistoryNote(v7TxId, n as { what: string, [k: string]: unknown })
+      }
     }
     await vreq.req.updateStorageDynamicProperties(storage, trx)
   }
@@ -206,10 +299,17 @@ export async function updateReqsFromAggregateResults (
   logger?: WalletLoggerInterface
 ): Promise<void> {
   logger?.group('update storage from aggregate results')
+
+  // V7 service — undefined on pre-cutover / IDB paths; all V7 calls are gated.
+  const v7svc = storage.getV7Service()
+
   for (const txid of txids) {
     const ar = apbrs[txid]
     const req = ar.vreq.req
     await req.refreshFromStorage(storage, trx)
+
+    // Resolve V7 transactionId once per txid for this iteration.
+    const v7TxId = await resolveV7Id(v7svc, txid)
 
     const { successCount, doubleSpendCount, statusErrorCount, serviceErrorCount } = ar
     const note: ReqHistoryNote = {
@@ -265,6 +365,34 @@ export async function updateReqsFromAggregateResults (
     req.addHistoryNote(note)
     await req.updateStorageDynamicProperties(storage, trx)
 
+    // V7 additive: record aggregateResults history note, then record the
+    // broadcast outcome (transitions processing state + sets wasBroadcast).
+    if (v7TxId != null) {
+      await v7svc!.recordHistoryNote(v7TxId, note as { what: string, [k: string]: unknown })
+
+      const v7Status = aggregateStatusToV7Processing(ar.status)
+      if (ar.status === 'serviceError') {
+        // serviceError: increment attempts in V7 and leave processing in 'sending'.
+        await v7svc!.incrementAttempts(v7TxId)
+      } else {
+        // success / doubleSpend / invalidTx: record broadcast result with final status.
+        await v7svc!.recordBroadcastResult({
+          transactionId: v7TxId,
+          txid,
+          status: v7Status,
+          provider: 'aggregatePostBeef',
+          wasBroadcast: ar.status === 'success',
+          details: {
+            aggStatus: ar.status,
+            successCount,
+            doubleSpendCount,
+            statusErrorCount,
+            serviceErrorCount
+          }
+        })
+      }
+    }
+
     if (newTxStatus) {
       const ids = req.notify.transactionIds
       if (ids != null) {
@@ -301,7 +429,7 @@ export async function updateReqsFromAggregateResults (
     ) {
       const stale = await markStaleInputsAsSpent(ar, storage, services, trx, logger)
       if (stale.checked > 0) {
-        req.addHistoryNote({
+        const staleNote = {
           when: new Date().toISOString(),
           what: 'markStaleInputsAsSpent',
           aggStatus: ar.status,
@@ -310,8 +438,14 @@ export async function updateReqsFromAggregateResults (
           ...(stale.staleOutpoints.length > 0
             ? { outpoints: stale.staleOutpoints.join(',') }
             : {})
-        })
+        }
+        req.addHistoryNote(staleNote)
         await req.updateStorageDynamicProperties(storage, trx)
+
+        // V7 additive: mirror stale-inputs note into tx_audit.
+        if (v7TxId != null) {
+          await v7svc!.recordHistoryNote(v7TxId, staleNote)
+        }
       }
     }
 

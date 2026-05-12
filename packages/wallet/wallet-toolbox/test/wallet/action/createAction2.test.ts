@@ -79,18 +79,22 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
-      expect(rl1.log).toBe(`transactions:3
-  txid:30bdac0f5c6491f130820517802ff57e20e5a50c08b5c65e6976627fb82ae930 version:1 lockTime:0 sats:-4 status:nosend 
-     outgoing:true desc:'Funding transaction' labels:['funding transaction for createaction','this is an extra long test 
-     label that should be truncated at 80 chars when it is...']
-  inputs: 1
-    0: sourceTXID:a3a8fe7f541c1383ff7b975af49b27284ae720af5f2705d8409baaf519190d26.2 sats:913 
-       lock:(50)76a914f7238871139f4926cbd592a03a737981e558245d88ac 
-       unlock:(214)483045022100cfef1f6d781af99a1de14efd6f24f2a14234a26097012f27121eb36f4e330c1d0220... seq:4294967295
-  outputs: 2
-    0: sats:3 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true basket:'funding basket' 
-       desc:'Funding Output' tags:['funding transaction output','test tag']
-    1: sats:909 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
+      // Snapshot updated for post-V7-cutover UTXO selection: tx185 (913 sats, status='sending')
+      // excluded from spendable pool; tx174 (995 sats, status='completed'→processing='proven') selected instead.
+      // Trailing spaces on wrapped lines are intentional (toLogString wrap format).
+      expect(rl1.log).toBe('transactions:2\n' +
+        '  txid:0bf6453843c29d6df1b9e0549587c696d2aaa8340f18be056c4711d853b8369a version:1 lockTime:0 sats:-4 status:nosend \n' +
+        "     outgoing:true desc:'Funding transaction' labels:['funding transaction for createaction','this is an extra long test \n" +
+        "     label that should be truncated at 80 chars when it is...']\n" +
+        '  inputs: 1\n' +
+        '    0: sourceTXID:527ffe88f70d5b7de2b8b5ba9966b9c755e7da4de749d4fcd27140a03145a11d.0 sats:995 \n' +
+        '       lock:(50)76a914ab2b66432503a3681fc5af1502207ca458c8752d88ac \n' +
+        '       unlock:(214)483045022100f8ea8705c0c6253032481f194f5ccb43d3b751650c51d603b7ee19f910abf37b0220... seq:4294967295\n' +
+        '  outputs: 2\n' +
+        "    0: sats:3 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true basket:'funding basket' \n" +
+        "       desc:'Funding Output' tags:['funding transaction output','test tag']\n" +
+        "    1: sats:991 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'"
+      )
     }
   })
 
@@ -130,20 +134,23 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
-      expect(rl1.log).toBe(`transactions:3
-  txid:b3848f2cabf5887ec679ca60347a29f6ecad425fda738700265c2f9d22c18ab5 version:1 lockTime:0 sats:-12 status:nosend 
-     outgoing:true desc:'Funding transaction with multiple outputs' labels:['funding transaction for createaction','this 
-     is the extra label']
-  inputs: 1
-    0: sourceTXID:a3a8fe7f541c1383ff7b975af49b27284ae720af5f2705d8409baaf519190d26.2 sats:913 
-       lock:(50)76a914f7238871139f4926cbd592a03a737981e558245d88ac 
-       unlock:(212)473044022079020cc8ea5ee6b3610806286e41567147d4b4b07d16bc1341311e00ce7647b0022034... seq:4294967295
-  outputs: 3
-    0: sats:5 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true basket:'funding basket' 
-       desc:'Funding output' tags:['funding transaction for createaction','test tag']
-    1: sats:6 lock:(48)76a914fedcba9876543210fedcba9876543210fedcba88ac index:1 spendable:true basket:'extra basket' 
-       desc:'Extra Output' tags:['extra transaction output','extra test tag']
-    2: sats:901 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:2 spendable:true basket:'default'`)
+      // Snapshot updated for post-V7-cutover UTXO selection: tx185 (913 sats, status='sending')
+      // excluded; tx174 (995 sats, status='completed'→processing='proven') selected instead.
+      expect(rl1.log).toBe('transactions:2\n' +
+        '  txid:a03789724ac10b32365b84cbcbee24ec5ef0a1a8d465112603a4e2219f4c952e version:1 lockTime:0 sats:-12 status:nosend \n' +
+        "     outgoing:true desc:'Funding transaction with multiple outputs' labels:['funding transaction for createaction','this \n" +
+        "     is the extra label']\n" +
+        '  inputs: 1\n' +
+        '    0: sourceTXID:527ffe88f70d5b7de2b8b5ba9966b9c755e7da4de749d4fcd27140a03145a11d.0 sats:995 \n' +
+        '       lock:(50)76a914ab2b66432503a3681fc5af1502207ca458c8752d88ac \n' +
+        '       unlock:(214)483045022100ffa66a41bf8c3f7ffc9699c067ab0248ba7de3835afd48739af4107d1d8dea030220... seq:4294967295\n' +
+        '  outputs: 3\n' +
+        "    0: sats:5 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true basket:'funding basket' \n" +
+        "       desc:'Funding output' tags:['funding transaction for createaction','test tag']\n" +
+        "    1: sats:6 lock:(48)76a914fedcba9876543210fedcba9876543210fedcba88ac index:1 spendable:true basket:'extra basket' \n" +
+        "       desc:'Extra Output' tags:['extra transaction output','extra test tag']\n" +
+        "    2: sats:983 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:2 spendable:true basket:'default'"
+      )
     }
   })
 
@@ -281,17 +288,20 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(spendingResult.tx!, spendingActionsResult)
-      expect(rl1.log).toBe(`transactions:2
-  txid:38ded69627603b30bd1f55eb3f88098dbf74f2ef0ff5e3cfe6a34f97ce2db9c2 version:1 lockTime:0 sats:-5 status:nosend 
-     outgoing:true desc:'Check knownTxids and returnTXIDOnly' labels:['custom options test']
-  inputs: 1
-    0: sourceTXID:527ffe88f70d5b7de2b8b5ba9966b9c755e7da4de749d4fcd27140a03145a11d.0 sats:995 
-       lock:(50)76a914ab2b66432503a3681fc5af1502207ca458c8752d88ac 
-       unlock:(212)4730440220113a6f72035a6ddcd6930db7e3f3d5c70486f9aaefb095e6fa3557afa916ec37022054... seq:4294967295
-  outputs: 2
-    0: sats:4 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true desc:'returnTXIDOnly 
-       false test'
-    1: sats:990 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'`)
+      // Snapshot updated for post-V7-cutover UTXO selection: first createAction in this test
+      // consumes tx174 (995 sats); second call picks tx170 (996 sats) as next cheapest proven UTXO.
+      expect(rl1.log).toBe('transactions:2\n' +
+        '  txid:82b2ad4754e1e49ba6d51b1b7cf0090dc8270214bd0cd9fb8dda0e30b175dee6 version:1 lockTime:0 sats:-5 status:nosend \n' +
+        "     outgoing:true desc:'Check knownTxids and returnTXIDOnly' labels:['custom options test']\n" +
+        '  inputs: 1\n' +
+        '    0: sourceTXID:406f912c5a99b3a57120400f363f7bafb0424fd69f85bfb3db9bf7bf7eb82ce8.0 sats:996 \n' +
+        '       lock:(50)76a9145bbcd236c92a1248158e5d3b0f355295f29af28e88ac \n' +
+        '       unlock:(212)473044022029c2aec8e8b332b84d3bda978b78164d1e57c29d53f75af663b5011bd7ddfda8022003... seq:4294967295\n' +
+        '  outputs: 2\n' +
+        "    0: sats:4 lock:(48)76a914abcdef0123456789abcdef0123456789abcdef88ac index:0 spendable:true desc:'returnTXIDOnly \n" +
+        "       false test'\n" +
+        "    1: sats:991 lock:(50)76a9145947e66cdd43c70fb1780116b79e6f7d96e30e0888ac index:1 spendable:true basket:'default'"
+      )
     }
   })
 

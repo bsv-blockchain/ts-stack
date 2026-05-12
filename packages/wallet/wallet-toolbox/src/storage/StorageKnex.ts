@@ -58,7 +58,8 @@ import {
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
 import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 
-import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
+import { EntityTimeStamp, ProcessingStatus, TransactionStatus, transactionStatusToProcessing } from '../sdk/types'
+import { V7TransactionService } from './schema/v7Service'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -69,11 +70,127 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
+  private _postCutoverCache: boolean | undefined = undefined
 
   constructor (options: StorageKnexOptions) {
     super(options)
     if (!options.knex) throw new WERR_INVALID_PARAMETER('options.knex', 'valid')
     this.knex = options.knex
+  }
+
+  override getV7Service (): V7TransactionService {
+    return new V7TransactionService(this.knex)
+  }
+
+  /**
+   * Returns true when the database has been through `runV7Cutover` (i.e.
+   * `transactions_legacy` exists). Result is cached for the lifetime of this
+   * StorageKnex instance.
+   */
+  private async isPostCutover (): Promise<boolean> {
+    if (this._postCutoverCache === undefined) {
+      this._postCutoverCache = await this.knex.schema.hasTable('transactions_legacy')
+    }
+    return this._postCutoverCache
+  }
+
+  /**
+   * Maps legacy TransactionStatus values to their V7 ProcessingStatus equivalents
+   * for use in `outputs JOIN transactions` WHERE clauses post-V7-cutover.
+   */
+  private legacyStatiToV7Processing (stati: TransactionStatus[]): ProcessingStatus[] {
+    const result = new Set<ProcessingStatus>()
+    for (const s of stati) {
+      result.add(transactionStatusToProcessing(s))
+      if (s === 'unproven') {
+        // V7 'sent','seen','seen_multi','unconfirmed' all correspond to legacy 'unproven'
+        result.add('sent')
+        result.add('seen')
+        result.add('seen_multi')
+        result.add('unconfirmed')
+      }
+    }
+    return [...result]
+  }
+
+  /**
+   * Returns the canonical name of the `proven_txs` table — `proven_txs_legacy`
+   * post-V7-cutover, `proven_txs` otherwise.
+   */
+  private async provenTxsTableName (): Promise<string> {
+    return (await this.isPostCutover()) ? 'proven_txs_legacy' : 'proven_txs'
+  }
+
+  /**
+   * Insert a legacy-shaped transaction row into the correct table:
+   * - Post-V7-cutover: `transactions_legacy` (the renamed legacy schema table)
+   * - Pre-cutover:     `transactions` (the standard table, same behaviour as `insertTransaction`)
+   *
+   * This allows `createAction` to store unsigned rows (txid unknown) without
+   * conflicting with the V7 `transactions` table's NOT NULL txid constraint.
+   * A V7 `transactions` row + `actions` row are created later by `processAction`
+   * once the real txid is known.
+   *
+   * On SQLite, foreign key enforcement is temporarily disabled while inserting
+   * into `transactions_legacy` because the referenced `proven_txs` table was
+   * renamed to `proven_txs_legacy` during the V7 cutover. Since `provenTxId`
+   * is always NULL for new unsigned transactions this is semantically safe.
+   */
+  override async insertLegacyTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
+    const e = await this.validateEntityForInsert(tx, trx)
+    if (e.transactionId === 0) delete e.transactionId
+    const hasLegacyTable = await this.knex.schema.hasTable('transactions_legacy')
+    const tableName = hasLegacyTable ? 'transactions_legacy' : 'transactions'
+    const isSqlite = this.dbtype === 'SQLite'
+    // On SQLite post-cutover the `transactions_legacy` FK to `proven_txs` is dangling
+    // (proven_txs was renamed to proven_txs_legacy). Temporarily disable FK checks for
+    // this insert since provenTxId is always NULL for a brand-new unsigned transaction.
+    if (isSqlite && hasLegacyTable) await this.knex.raw('PRAGMA foreign_keys = OFF')
+    try {
+      const [id] = await this.toDb(trx)<TableTransaction>(tableName).insert(e)
+      tx.transactionId = id
+      return tx.transactionId
+    } finally {
+      if (isSqlite && hasLegacyTable) await this.knex.raw('PRAGMA foreign_keys = ON')
+    }
+  }
+
+  /**
+   * Insert a `tx_labels_map` row for a legacy transaction that does not yet
+   * have a V7 `actions.actionId`. On post-cutover SQLite, temporarily disables
+   * FK checks so that the legacy transactionId (which is not yet an actionId)
+   * can be written. processAction will repoint it via repointLabelsToActionId.
+   *
+   * Note: bypasses `validateEntityForInsert` (and therefore `verifyReadyForDatabaseAccess`
+   * which would re-enable FK checks) to ensure the PRAGMA=OFF persists across
+   * the insert statement.
+   */
+  override async insertLegacyTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
+    const isSqlite = this.dbtype === 'SQLite'
+    const hasLegacyTable = isSqlite ? await this.knex.schema.hasTable('transactions_legacy') : false
+    if (!isSqlite || !hasLegacyTable) {
+      // Pre-cutover or non-SQLite: standard insert is safe (no dangling FK issue).
+      await this.insertTxLabelMap(labelMap, trx)
+      return
+    }
+    // Post-cutover SQLite: tx_labels_map.transactionId FK now points to actions.actionId.
+    // We are writing a legacyTransactionId (no corresponding actions row yet).
+    // Temporarily disable FK checks for this single insert.
+    const now = new Date()
+    const e = {
+      created_at: now,
+      updated_at: now,
+      txLabelId: labelMap.txLabelId,
+      transactionId: labelMap.transactionId,
+      isDeleted: labelMap.isDeleted ? 1 : 0
+    }
+    // Use the raw knex handle (not toDb(trx)) to send the PRAGMA on the same connection.
+    await this.knex.raw('PRAGMA foreign_keys = OFF')
+    try {
+      await this.knex('tx_labels_map').insert(e)
+    } finally {
+      await this.knex.raw('PRAGMA foreign_keys = ON')
+    }
   }
 
   async readSettings (): Promise<TableSettings> {
@@ -90,8 +207,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
     r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid } }))
     if (r.proven == null) {
+      const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
       const reqRawTx = verifyOneOrNone(
-        await k('proven_tx_reqs')
+        await k(reqTable)
           .where('txid', txid)
           .whereIn('status', ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'])
           .select('rawTx', 'inputBEEF')
@@ -116,11 +234,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   private async getRawTxSlice (txid: string, offset: number, length: number, trx?: TrxToken): Promise<number[] | undefined> {
     const sub = this.dbTypeSubstring('rawTx', offset + 1, length)
-    let rs = await this.toDb(trx).raw(`select ${sub} as rawTx from proven_txs where txid = '${txid}'`)
+    const provenTable = await this.provenTxsTableName()
+    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    let rs = await this.toDb(trx).raw(`select ${sub} as rawTx from ${provenTable} where txid = '${txid}'`)
     const proven = verifyOneOrNone(this.normaliseKnexRawResult(rs))
     if (proven?.rawTx != null) return Array.from(proven.rawTx)
     rs = await this.toDb(trx).raw(
-      `select ${sub} as rawTx from proven_tx_reqs where txid = '${txid}' and status in ('unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail')`
+      `select ${sub} as rawTx from ${reqTable} where txid = '${txid}' and status in ('unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail')`
     )
     const req = verifyOneOrNone(this.normaliseKnexRawResult(rs))
     return req?.rawTx != null ? Array.from(req.rawTx) : undefined
@@ -160,6 +280,26 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async getProvenTxsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTx[]> {
+    const postCutover = await this.isPostCutover()
+    if (postCutover) {
+      // Post-cutover: proven_txs → proven_txs_legacy; transactions → transactions_legacy
+      const k = this.toDb(args.trx)
+      let q = k('proven_txs_legacy').where(function () {
+        this.whereExists(
+          k
+            .select('*')
+            .from('transactions_legacy')
+            .whereRaw(`proven_txs_legacy.provenTxId = transactions_legacy.provenTxId and transactions_legacy.userId = ${args.userId}`)
+        )
+      })
+      if (args.paged != null) {
+        q = q.limit(args.paged.limit)
+        q = q.offset(args.paged.offset || 0)
+      }
+      if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
+      const rs = await q
+      return this.validateEntities(rs)
+    }
     const q = this.getProvenTxsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs)
@@ -184,6 +324,26 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async getProvenTxReqsForUser (args: FindForUserSincePagedArgs): Promise<TableProvenTxReq[]> {
+    const postCutover = await this.isPostCutover()
+    if (postCutover) {
+      // Post-cutover: proven_tx_reqs → proven_tx_reqs_legacy; transactions → transactions_legacy
+      const k = this.toDb(args.trx)
+      let q = k('proven_tx_reqs_legacy').where(function () {
+        this.whereExists(
+          k
+            .select('*')
+            .from('transactions_legacy')
+            .whereRaw(`proven_tx_reqs_legacy.txid = transactions_legacy.txid and transactions_legacy.userId = ${args.userId}`)
+        )
+      })
+      if (args.paged != null) {
+        q = q.limit(args.paged.limit)
+        q = q.offset(args.paged.offset || 0)
+      }
+      if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
+      const rs = await q
+      return this.validateEntities(rs, undefined, ['notified'])
+    }
     const q = this.getProvenTxReqsForUserQuery(args)
     const rs = await q
     return this.validateEntities(rs, undefined, ['notified'])
@@ -246,7 +406,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTx (tx: TableProvenTx, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxId === 0) delete e.provenTxId
-    const [id] = await this.toDb(trx)<TableProvenTx>('proven_txs').insert(e)
+    const tableName = await this.provenTxsTableName()
+    const [id] = await this.toDb(trx)<TableProvenTx>(tableName).insert(e)
     tx.provenTxId = id
     return tx.provenTxId
   }
@@ -254,7 +415,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
-    const [id] = await this.toDb(trx)<TableProvenTxReq>('proven_tx_reqs').insert(e)
+    const postCutover = await this.isPostCutover()
+    // Post-V7-cutover: route to proven_tx_reqs_legacy.
+    // FK bypass is handled by the caller (disableForeignKeys before any transaction).
+    const reqTable = postCutover ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const [id] = await this.toDb(trx)<TableProvenTxReq>(reqTable).insert(e)
     tx.provenTxReqId = id
     return tx.provenTxReqId
   }
@@ -320,20 +485,36 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertCommission (commission: TableCommission, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(commission, trx)
     if (e.commissionId === 0) delete e.commissionId
-    const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
-    commission.commissionId = id
-    return commission.commissionId
+    // Post-V7-cutover bridge-period: commissions.transactionId FKs V7 transactions.
+    // During createAction the transactionId references transactions_legacy, so bypass FK.
+    const isSqlite = this.dbtype === 'SQLite'
+    const postCutover = isSqlite ? await this.isPostCutover() : false
+    if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
+    try {
+      const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
+      commission.commissionId = id
+      return commission.commissionId
+    } finally {
+      if (postCutover) await this.knex.raw('PRAGMA foreign_keys = ON')
+    }
   }
 
   override async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
+    const e = await this.validateEntityForInsert(output, trx)
+    if (e.outputId === 0) delete e.outputId
+    // Post-V7-cutover bridge-period: outputs.transactionId FKs V7 transactions,
+    // but new unsigned outputs reference transactions_legacy (bridge-period rows).
+    // Temporarily disable FK checks on SQLite. Safe because once processAction
+    // runs, spentBy and transactionId are remapped to real V7 IDs.
+    const isSqlite = this.dbtype === 'SQLite'
+    const postCutover = isSqlite ? await this.isPostCutover() : false
+    if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
     try {
-      const e = await this.validateEntityForInsert(output, trx)
-      if (e.outputId === 0) delete e.outputId
       const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
       output.outputId = id
       return output.outputId
-    } catch (e) {
-      throw e
+    } finally {
+      if (postCutover) await this.knex.raw('PRAGMA foreign_keys = ON')
     }
   }
 
@@ -444,13 +625,14 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     trx?: TrxToken
   ): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
+    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
     let r: number
     if (Array.isArray(id)) {
-      r = await this.toDb(trx)<TableProvenTxReq>('proven_tx_reqs')
+      r = await this.toDb(trx)<TableProvenTxReq>(reqTable)
         .whereIn('provenTxReqId', id)
         .update(this.validatePartialForUpdate(update))
     } else if (Number.isInteger(id)) {
-      r = await this.toDb(trx)<TableProvenTxReq>('proven_tx_reqs')
+      r = await this.toDb(trx)<TableProvenTxReq>(reqTable)
         .where({ provenTxReqId: id })
         .update(this.validatePartialForUpdate(update))
     } else {
@@ -461,7 +643,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async updateProvenTx (id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
-    return await this.toDb(trx)<TableProvenTx>('proven_txs')
+    const tableName = await this.provenTxsTableName()
+    return await this.toDb(trx)<TableProvenTx>(tableName)
       .where({ provenTxId: id })
       .update(this.validatePartialForUpdate(update))
   }
@@ -548,9 +731,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           sortColumn = 'outputTagId'
           break
         case 'proven_tx_reqs':
+        case 'proven_tx_reqs_legacy':
           sortColumn = 'provenTxReqId'
           break
         case 'proven_txs':
+        case 'proven_txs_legacy':
           sortColumn = 'provenTxId'
           break
         case 'sync_states':
@@ -637,7 +822,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.setupQuery('output_tags', args)
   }
 
-  findProvenTxReqsQuery (args: FindProvenTxReqsArgs): Knex.QueryBuilder {
+  findProvenTxReqsQuery (args: FindProvenTxReqsArgs, tableName = 'proven_tx_reqs'): Knex.QueryBuilder {
     if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxReqs may not be found by rawTx value.') }
     if (args.partial.inputBEEF != null) {
       throw new WERR_INVALID_PARAMETER(
@@ -645,7 +830,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         'undefined. ProvenTxReqs may not be found by inputBEEF value.'
       )
     }
-    const q = this.setupQuery('proven_tx_reqs', args)
+    const q = this.setupQuery(tableName, args)
     if ((args.status != null) && args.status.length > 0) q.whereIn('status', args.status)
     if (args.txids != null) {
       const txids = args.txids.filter(txid => txid !== undefined)
@@ -654,7 +839,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
-  findProvenTxsQuery (args: FindProvenTxsArgs): Knex.QueryBuilder {
+  findProvenTxsQuery (args: FindProvenTxsArgs, tableName = 'proven_txs'): Knex.QueryBuilder {
     if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxs may not be found by rawTx value.') }
     if (args.partial.merklePath != null) {
       throw new WERR_INVALID_PARAMETER(
@@ -662,11 +847,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         'undefined. ProvenTxs may not be found by merklePath value.'
       )
     }
-    return this.setupQuery('proven_txs', args)
+    return this.setupQuery(tableName, args)
   }
 
-  findStaleMerkleRootsQuery (args: FindStaleMerkleRootsArgs): Knex.QueryBuilder {
-    const q = this.toDb(args.trx)('proven_txs')
+  findStaleMerkleRootsQuery (args: FindStaleMerkleRootsArgs, tableName = 'proven_txs'): Knex.QueryBuilder {
+    const q = this.toDb(args.trx)(tableName)
     q.where('height', '=', args.height)
     q.where('merkleRoot', '!=', args.merkleRoot)
     q.select('merkleRoot')
@@ -790,19 +975,22 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
-    const q = this.findProvenTxReqsQuery(args)
+    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    const q = this.findProvenTxReqsQuery(args, reqTable)
     const r = await q
     return this.validateEntities(r, undefined, ['notified', 'wasBroadcast'])
   }
 
   override async findProvenTxs (args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
-    const q = this.findProvenTxsQuery(args)
+    const tableName = await this.provenTxsTableName()
+    const q = this.findProvenTxsQuery(args, tableName)
     const r = await q
     return this.validateEntities(r)
   }
 
   override async findStaleMerkleRoots (args: FindStaleMerkleRootsArgs): Promise<string[]> {
-    const q = this.findStaleMerkleRootsQuery(args)
+    const tableName = await this.provenTxsTableName()
+    const q = this.findStaleMerkleRootsQuery(args, tableName)
     const r = await q
     return r.map((row: { merkleRoot: string }) => row.merkleRoot)
   }
@@ -822,6 +1010,171 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       }
     }
     return this.validateEntities(r, undefined, ['isOutgoing'])
+  }
+
+  /**
+   * Post-V7-cutover: queries `transactions_legacy` for unsigned/pending rows
+   * created by `createAction` (which have no real txid yet and therefore have no
+   * V7 counterpart).  Falls back to the standard `findTransactions` pre-cutover.
+   *
+   * Used by `processAction.validateCommitNewTxToStorageArgs` to locate the
+   * unsigned transaction row by `{userId, reference}`.
+   *
+   * Mapping §2: legacy `unsigned` / `unprocessed` → these rows only exist in
+   * `transactions_legacy` post-cutover; V7 `transactions` has `processing` not
+   * `status` and no unsigned-state rows.
+   */
+  override async findLegacyTransactions (args: FindTransactionsArgs): Promise<TableTransaction[]> {
+    const postCutover = await this.isPostCutover()
+    if (!postCutover) {
+      // Pre-cutover: standard transactions table
+      return this.findTransactions(args)
+    }
+    // Post-cutover: unsigned/unprocessed rows live in transactions_legacy
+    const q = this.setupQuery('transactions_legacy', args)
+    if ((args.status != null) && args.status.length > 0) q.whereIn('status', args.status)
+    if (args.from != null) q.where('created_at', '>=', this.validateDateForWhere(args.from))
+    if (args.to != null) q.where('created_at', '<', this.validateDateForWhere(args.to))
+    if (args.noRawTx) {
+      const columns = transactionColumnsWithoutRawTx.map(c => `transactions_legacy.${c}`)
+      q.select(columns)
+    }
+    const r = await q
+    if (!args.noRawTx) {
+      for (const t of r) {
+        await this.validateRawTransaction(t, args.trx)
+      }
+    }
+    return this.validateEntities(r, undefined, ['isOutgoing'])
+  }
+
+  /**
+   * Post-V7-cutover: updates `transactions_legacy` (where unsigned rows live).
+   * Pre-cutover: delegates to `updateTransaction`.
+   *
+   * Used by `processAction.commitNewTxToStorage` to write back the real txid
+   * and status to the legacy row that was created by `createAction`.
+   *
+   * Mapping §2: legacy `unsigned` → `unprocessed` transition and txid write-back
+   * must go to `transactions_legacy` post-cutover, not V7 `transactions`.
+   */
+  override async updateLegacyTransaction (id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> {
+    const postCutover = await this.isPostCutover()
+    if (!postCutover) {
+      return this.updateTransaction(id, update, trx)
+    }
+    // Post-cutover: unsigned rows are in transactions_legacy
+    await this.verifyReadyForDatabaseAccess(trx)
+    let r: number
+    if (Array.isArray(id)) {
+      r = await this.toDb(trx)<TableTransaction>('transactions_legacy')
+        .whereIn('transactionId', id)
+        .update(this.validatePartialForUpdate(update))
+    } else if (Number.isInteger(id)) {
+      r = await this.toDb(trx)<TableTransaction>('transactions_legacy')
+        .where({ transactionId: id })
+        .update(this.validatePartialForUpdate(update))
+    } else {
+      throw new WERR_INVALID_PARAMETER('id', 'transactionId or array of transactionId')
+    }
+    return r
+  }
+
+  /**
+   * Post-V7-cutover SQLite: temporarily disable FK enforcement around the
+   * `outputs.spentBy = legacyTransactionId` UPDATE. The `outputs.spentBy` FK
+   * references V7 `transactions.transactionId` after cutover, but unsigned
+   * transactions from `createAction` live in `transactions_legacy` (their V7
+   * counterpart is created later by `processAction`).
+   *
+   * IMPORTANT: We bypass `updateOutput` (and therefore `verifyReadyForDatabaseAccess`)
+   * because `verifyReadyForDatabaseAccess` always re-enables FK with
+   * `PRAGMA foreign_keys = ON`, which would undo our bypass. Instead we
+   * directly run the UPDATE via the raw knex handle.
+   *
+   * Pre-cutover or MySQL: delegates to `updateOutput` unchanged.
+   *
+   * Mapping §2: bridge-period spentBy references transactions_legacy during
+   * createAction; FK bypass covers this until processAction wires V7.
+   */
+  override async markOutputAsSpentBy (
+    outputId: number,
+    update: Partial<TableOutput>,
+    trx?: TrxToken
+  ): Promise<void> {
+    const postCutover = await this.isPostCutover()
+    const isSqlite = this.dbtype === 'SQLite'
+    if (postCutover && isSqlite) {
+      // Build the UPDATE payload the same way validatePartialForUpdate does,
+      // but WITHOUT calling verifyReadyForDatabaseAccess (which always issues
+      // PRAGMA foreign_keys = ON, undoing our bypass).
+      const now = new Date().toISOString()
+      const payload: Record<string, unknown> = { updated_at: now }
+      for (const [k, v] of Object.entries(update)) {
+        if (v === undefined) {
+          payload[k] = null
+        } else if (Array.isArray(v) && (v.length === 0 || typeof v[0] === 'number')) {
+          payload[k] = Buffer.from(v as number[])
+        } else {
+          payload[k] = v
+        }
+      }
+      // Strategy: FK is a connection-level setting in SQLite. PRAGMA changes
+      // inside a Knex transaction are no-ops (SQLite restriction), but PRAGMA
+      // changes OUTSIDE a transaction persist.
+      //
+      // When called with trx (inside a transaction): the caller is expected to have
+      // already disabled FK before opening the transaction. We run the UPDATE via
+      // the transaction handle (no PRAGMA calls needed here — they'd be no-ops or
+      // pool-exhausting anyway).
+      //
+      // When called without trx (outside a transaction): disable FK, run UPDATE,
+      // re-enable FK.
+      if (trx != null) {
+        // Inside caller's transaction — FK was disabled before the transaction.
+        // Just run the UPDATE; do NOT try to PRAGMA here (no-op or timeout).
+        this.whenLastAccess = new Date()
+        await (this.toDb(trx))<TableOutput>('outputs')
+          .where({ outputId })
+          .update(payload)
+      } else {
+        // Outside any transaction — we can safely toggle FK on the bare connection.
+        await this.knex.raw('PRAGMA foreign_keys = OFF')
+        try {
+          this.whenLastAccess = new Date()
+          await this.knex('outputs').where({ outputId }).update(payload)
+        } finally {
+          await this.knex.raw('PRAGMA foreign_keys = ON')
+        }
+      }
+    } else {
+      await this.updateOutput(outputId, update, trx)
+    }
+  }
+
+  /**
+   * Post-V7-cutover SQLite: disable FK on the bare connection BEFORE opening a
+   * transaction. PRAGMA foreign_keys changes inside SQLite transactions are no-ops,
+   * so this MUST be called before `this.knex.transaction()`.
+   *
+   * Only acts when post-cutover AND SQLite. Pre-cutover or MySQL: no-op.
+   */
+  override async disableForeignKeys (): Promise<void> {
+    const postCutover = await this.isPostCutover()
+    if (postCutover && this.dbtype === 'SQLite') {
+      await this.knex.raw('PRAGMA foreign_keys = OFF')
+    }
+  }
+
+  /**
+   * Re-enable FK after the transaction opened via `disableForeignKeys()` completes.
+   * Only acts when post-cutover AND SQLite.
+   */
+  override async enableForeignKeys (): Promise<void> {
+    const postCutover = await this.isPostCutover()
+    if (postCutover && this.dbtype === 'SQLite') {
+      await this.knex.raw('PRAGMA foreign_keys = ON')
+    }
   }
 
   override async findTxLabelMaps (args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> {
@@ -900,11 +1253,13 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   override async countProvenTxReqs (args: FindProvenTxReqsArgs): Promise<number> {
-    return await this.getCount(this.findProvenTxReqsQuery(args))
+    const reqTable = (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
+    return await this.getCount(this.findProvenTxReqsQuery(args, reqTable))
   }
 
   override async countProvenTxs (args: FindProvenTxsArgs): Promise<number> {
-    return await this.getCount(this.findProvenTxsQuery(args))
+    const tableName = await this.provenTxsTableName()
+    return await this.getCount(this.findProvenTxsQuery(args, tableName))
   }
 
   override async countSyncStates (args: FindSyncStatesArgs): Promise<number> {
@@ -1179,12 +1534,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * - sending (if excludeSending is false)
    */
   async countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number> {
-    const status: TransactionStatus[] = ['completed', 'unproven']
-    if (!excludeSending) status.push('sending')
+    const legacyStatus: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) legacyStatus.push('sending')
+    const postCutover = await this.isPostCutover()
     const q = this.knex<TableOutput>('outputs as o')
       .join('transactions as t', 'o.transactionId', 't.transactionId')
       .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
-      .whereIn('t.status', status)
+    if (postCutover) {
+      q.whereIn('t.processing', this.legacyStatiToV7Processing(legacyStatus))
+    } else {
+      q.whereIn('t.status', legacyStatus)
+    }
     const count = await this.getCount(q)
     return count
   }
@@ -1278,14 +1638,18 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     excludeSending: boolean,
     trx?: TrxToken
   ): Promise<number> {
-    const status: TransactionStatus[] = ['completed', 'unproven']
-    if (!excludeSending) status.push('sending')
-    const row = await this.toDb(trx)<TableOutput>('outputs as o')
+    const legacyStatus: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) legacyStatus.push('sending')
+    const postCutover = await this.isPostCutover()
+    const q = this.toDb(trx)<TableOutput>('outputs as o')
       .join('transactions as t', 'o.transactionId', 't.transactionId')
       .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
-      .whereIn('t.status', status)
-      .sum({ totalSatoshis: 'o.satoshis' })
-      .first()
+    if (postCutover) {
+      q.whereIn('t.processing', this.legacyStatiToV7Processing(legacyStatus))
+    } else {
+      q.whereIn('t.status', legacyStatus)
+    }
+    const row = await q.sum({ totalSatoshis: 'o.satoshis' }).first()
     return Number(((row != null) && (row as Record<string, unknown>).totalSatoshis) || 0)
   }
 
@@ -1302,56 +1666,88 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     excludeSending: boolean,
     transactionId: number
   ): Promise<TableOutput | undefined> {
-    const status: TransactionStatus[] = ['completed', 'unproven']
-    if (!excludeSending) status.push('sending')
+    const legacyStatus: TransactionStatus[] = ['completed', 'unproven']
+    if (!excludeSending) legacyStatus.push('sending')
+    const postCutover = await this.isPostCutover()
+    const processingFilter = postCutover ? this.legacyStatiToV7Processing(legacyStatus) : undefined
 
-    const r: TableOutput | undefined = await this.knex.transaction(async trx => {
-      const baseQuery = () =>
-        trx<TableOutput>('outputs as o')
-          .join('transactions as t', 'o.transactionId', 't.transactionId')
-          .where('o.userId', userId)
-          .where('o.spendable', true)
-          .where('o.basketId', basketId)
-          .whereIn('t.status', status)
-          .select('o.*')
+    // Post-V7-cutover bridge-period: `transactionId` here is a legacy row in
+    // `transactions_legacy` (new unsigned tx created by createAction). The
+    // `outputs.spentBy` FK now references V7 `transactions.transactionId`, so
+    // setting spentBy to a transactions_legacy ID would violate the constraint.
+    // PRAGMA foreign_keys is silently ignored inside SQLite transactions, so
+    // we toggle FK enforcement on the bare connection BEFORE opening the
+    // transaction. processAction will remap spentBy to the real V7 transactionId
+    // once the txid is known and the V7 row is created.
+    const isSqlite = this.dbtype === 'SQLite'
+    if (postCutover && isSqlite) {
+      await this.knex.raw('PRAGMA foreign_keys = OFF')
+    }
 
-      let output: TableOutput | undefined
+    let r: TableOutput | undefined
+    try {
+      r = await this.knex.transaction(async trx => {
+        const baseQuery = () => {
+          const q = trx<TableOutput>('outputs as o')
+            .join('transactions as t', 'o.transactionId', 't.transactionId')
+            .where('o.userId', userId)
+            .where('o.spendable', true)
+            .where('o.basketId', basketId)
+            .select('o.*')
+          if (processingFilter != null) {
+            q.whereIn('t.processing', processingFilter)
+          } else {
+            q.whereIn('t.status', legacyStatus)
+          }
+          return q
+        }
 
-      if (exactSatoshis !== undefined) {
-        output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
+        let output: TableOutput | undefined
+
+        if (exactSatoshis !== undefined) {
+          output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
+        }
+
+        output ??= await baseQuery()
+          .where('o.satoshis', '>=', targetSatoshis)
+          .orderBy('o.satoshis', 'asc')
+          .orderBy('o.outputId', 'asc')
+          .first()
+
+        output ??= await baseQuery()
+          .where('o.satoshis', '<', targetSatoshis)
+          .orderBy('o.satoshis', 'desc')
+          .orderBy('o.outputId', 'desc')
+          .first()
+
+        if (output == null) return undefined
+
+        // Post-V7-cutover: transactionId is in transactions_legacy; FK would fail.
+        // markOutputAsSpentBy disables FK via raw knex handle, bypassing
+        // verifyReadyForDatabaseAccess that would re-enable it.
+        // Mapping §2: bridge-period spentBy → transactions_legacy during createAction.
+        await this.markOutputAsSpentBy(
+          output.outputId,
+          {
+            spendable: false,
+            spentBy: transactionId
+          },
+          trx
+        )
+
+        // Keep behavior identical to the pre-optimization path: ensure lockingScript
+        // is present even when it was offloaded from outputs into rawTx storage.
+        await this.validateOutputScript(output, trx)
+
+        output.spendable = false
+        output.spentBy = transactionId
+        return output
+      })
+    } finally {
+      if (postCutover && isSqlite) {
+        await this.knex.raw('PRAGMA foreign_keys = ON')
       }
-
-      output ??= await baseQuery()
-        .where('o.satoshis', '>=', targetSatoshis)
-        .orderBy('o.satoshis', 'asc')
-        .orderBy('o.outputId', 'asc')
-        .first()
-
-      output ??= await baseQuery()
-        .where('o.satoshis', '<', targetSatoshis)
-        .orderBy('o.satoshis', 'desc')
-        .orderBy('o.outputId', 'desc')
-        .first()
-
-      if (output == null) return undefined
-
-      await this.updateOutput(
-        output.outputId,
-        {
-          spendable: false,
-          spentBy: transactionId
-        },
-        trx
-      )
-
-      // Keep behavior identical to the pre-optimization path: ensure lockingScript
-      // is present even when it was offloaded from outputs into rawTx storage.
-      await this.validateOutputScript(output, trx)
-
-      output.spendable = false
-      output.spentBy = transactionId
-      return output
-    })
+    }
 
     return r
   }

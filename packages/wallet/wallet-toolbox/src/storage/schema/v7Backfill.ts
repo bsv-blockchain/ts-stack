@@ -71,10 +71,13 @@ export function buildTransactionV7RowFromLegacyTx (
   now: Date = new Date()
 ): Omit<TableTransactionV7, 'transactionId'> | undefined {
   if (tx.txid == null) return undefined
+  // Unsigned/unprocessed transactions may have an empty-string txid.
+  // Give them a stable placeholder so each gets its own V7 row and actions entry.
+  const txid = tx.txid === '' ? `pending:legacy:${tx.transactionId}` : tx.txid
   return {
     created_at: tx.created_at,
     updated_at: now,
-    txid: tx.txid,
+    txid,
     processing: sdk.transactionStatusToProcessing(tx.status),
     processingChangedAt: tx.updated_at ?? now,
     nextActionAt: undefined,
