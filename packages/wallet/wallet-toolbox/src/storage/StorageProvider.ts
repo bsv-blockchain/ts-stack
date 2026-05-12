@@ -327,10 +327,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
             })
             await req.updateStorageDynamicProperties(this, trx)
           }
-          throw new WERR_INVALID_PARAMETER(
-            'reference',
-            `transaction is already on chain (status='${chainStatus}'); call internalizeAction instead of abortAction.`
-          )
+          // Surface the refusal via a sentinel so the surrounding
+          // transaction commits the history note BEFORE we throw.
+          // Throwing here would roll the transaction back and discard
+          // the forensic note we just wrote — defeats the audit trail
+          // a future operator greps for these refusals.
+          return { __abortAction: 'skipped-onchain' as const, chainStatus }
         }
       }
       await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
@@ -347,6 +349,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       }
       return r
     })
+    if ('__abortAction' in r) {
+      throw new WERR_INVALID_PARAMETER(
+        'reference',
+        `transaction is already on chain (status='${r.chainStatus}'); call internalizeAction instead of abortAction.`
+      )
+    }
     return r
   }
 
