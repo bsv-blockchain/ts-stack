@@ -201,6 +201,46 @@ describe('V7 §5 conformance suite (Knex / SQLite)', () => {
     }
   })
 
+  test('coinbase maturity gates spendability against chain tip height', async () => {
+    const knex = await setupCutDb('v7conf-coinbase.sqlite')
+    try {
+      const svc = new V7TransactionService(knex)
+      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'proven', isCoinbase: true })
+
+      const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default' })
+      await knex('outputs').insert({
+        userId: 1,
+        transactionId: tx.transactionId,
+        basketId,
+        spendable: true,
+        change: false,
+        vout: 0,
+        satoshis: 5000_000_000,
+        providedBy: 'storage',
+        purpose: 'coinbase',
+        type: 'P2PKH',
+        outputDescription: 'reward',
+        txid: 'a'.repeat(64),
+        lockingScript: Buffer.from([0x76]),
+        matures_at_height: 1000
+      })
+
+      // Tip below maturity: refresh must flip spendable to false.
+      await svc.setChainTip({ height: 999, blockHash: 'h'.repeat(64) })
+      const stats1 = await refreshOutputsSpendable(knex, { userId: 1 })
+      expect(stats1.flipped).toBe(1)
+      expect(await countCachedSpendable(knex, { userId: 1, basketId })).toBe(0)
+
+      // Tip at maturity: refresh must flip spendable back to true.
+      await svc.setChainTip({ height: 1000, blockHash: 'i'.repeat(64) })
+      const stats2 = await refreshOutputsSpendable(knex, { userId: 1 })
+      expect(stats2.flipped).toBe(1)
+      expect(await countCachedSpendable(knex, { userId: 1, basketId })).toBe(1)
+    } finally {
+      await knex.destroy()
+    }
+  })
+
   test('spendability refresh flips cached column to match V7 rule', async () => {
     const knex = await setupCutDb('v7conf-spendable.sqlite')
     try {

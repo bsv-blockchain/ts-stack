@@ -75,6 +75,21 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
+    migrations['2026-05-13-001 add outputs.matures_at_height for coinbase maturity'] = {
+      async up (knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.integer('matures_at_height').unsigned().nullable()
+          table.index(['matures_at_height'], 'idx_outputs_matures_at_height')
+        })
+      },
+      async down (knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.dropIndex(['matures_at_height'], 'idx_outputs_matures_at_height')
+          table.dropColumn('matures_at_height')
+        })
+      }
+    }
+
     migrations['2026-05-11-001 V7 additive schema (actions, transactions_v7, chain_tip, tx_audit, monitor_lease)'] = {
       async up (knex) {
         const dbtype = await determineDBType(knex)

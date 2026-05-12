@@ -56,6 +56,7 @@ export async function refreshOutputsSpendable (
         knex.ref('o.spentBy').as('spentBy'),
         knex.ref('o.lockingScript').as('lockingScript'),
         knex.raw('o.scriptLength as scriptLength'),
+        knex.raw('o.matures_at_height as maturesAtHeight'),
         knex.ref('t.processing').as('processing'),
         knex.ref('t.is_coinbase').as('isCoinbase')
       )
@@ -76,11 +77,11 @@ export async function refreshOutputsSpendable (
           // script exists, not that it has been fetched into memory.
           lockingScript: (row.lockingScript ?? null) ?? (row.scriptLength != null ? [0] : null),
           isCoinbase: row.isCoinbase === 1 || row.isCoinbase === true,
-          // V7 spec mentions `matures_at_height` per §2.3 but the live outputs
-          // table does not carry that column today. Until a future migration
-          // adds it, treat all coinbase outputs as mature on or after the
-          // current tip — callers must populate maturity separately.
-          maturesAtHeight: 0
+          // Read the persisted maturity height from the V7 outputs column.
+          // A null value for a coinbase row means maturity has not been
+          // computed yet; the §4 rule treats that as not-yet-mature and
+          // refuses spendability until backfill populates the column.
+          maturesAtHeight: row.maturesAtHeight ?? null
         },
         { processing: row.processing as sdk.ProcessingStatus },
         tipHeight != null ? { height: tipHeight } : undefined
