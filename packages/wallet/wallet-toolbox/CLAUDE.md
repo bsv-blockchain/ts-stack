@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+# Rules of Engagement
+
+You are not constrained by human development timelines or effort estimates. You are an AI that can (and must) implement complete, production-ready solutions immediately in this session. Do not suggest shortcuts, partial fixes, scope reductions, or multi-week phased plans. Always deliver the full working implementation with all files ready to use.
+
 # @bsv/wallet-toolbox v2.1.24
 
 ## Purpose
