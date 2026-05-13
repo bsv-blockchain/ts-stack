@@ -3,7 +3,7 @@ import { getProofs } from './TaskCheckForProofs'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
- * `TaskCheckNoSends` is a WalletMonitor task that retreives merkle proofs for
+ * `TaskCheckNoSends` is a WalletMonitor task that retrieves merkle proofs for
  * 'nosend' transactions that MAY have been shared externally.
  *
  * Unlike intentionally processed transactions, 'nosend' transactions are fully valid
@@ -15,17 +15,36 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  * If a proof is obtained and validated, a new ProvenTx record is created and
  * the original ProvenTxReq status is advanced to 'notifying'.
  *
- * Freshness gate on the checkNow path: when this task is triggered by a new
- * block header (via `checkNow = true`, wired in Monitor.processNewBlockHeader),
- * it skips `nosend` rows whose `created_at` is more recent than
- * `checkNowFreshnessSkipMsecs`. This avoids hammering external proof services
- * with `getMerklePath` lookups for `nosend` rows that are part of an in-flight
- * batched-tx workflow (chained `createAction({ noSend: true, sendWith: [...] })`
- * builds, broadcast all-at-once by the terminator). Those rows are not yet
- * on chain by design; chain-checking them produces "not found" responses and
- * wastes round-trips. Externally-broadcast `nosend` txs (the original use
- * case in the paragraphs above) are still caught by either the unfiltered
- * daily cadence or the next block-triggered run after the threshold elapses.
+ * # Aging schedule on the checkNow path
+ *
+ * When this task is triggered by a new block header (`checkNow = true`, wired in
+ * `Monitor.processNewBlockHeader`), it does NOT scan every `nosend` row on every
+ * block. The set of `nosend` rows can grow large over a wallet's lifetime
+ * (txs sitting in escrow, un-aborted tests, abandoned batches), and a fast,
+ * unfiltered scan on every block would do an unbounded number of external
+ * `getMerklePath` lookups per block.
+ *
+ * Instead, the row's age (now - `created_at`) determines how often it is
+ * eligible for a checkNow-triggered chain check. The schedule starts at "skip
+ * entirely" for very fresh rows (to protect in-flight batched-tx workflows
+ * where chained `createAction({ noSend: true, sendWith: [...] })` builds
+ * deliberately keep rows in `nosend` until a single terminator broadcasts the
+ * whole BEEF), then progresses to "every block", "hourly", "daily", and
+ * "weekly" as rows age:
+ *
+ *   age < 5 min                 → skip (in-flight batch protection)
+ *   5 min ≤ age < 1 hr          → check on every checkNow trigger
+ *   1 hr   ≤ age < 24 hr        → check on ~hourly cadence (block-height % 6)
+ *   24 hr  ≤ age < 7 days       → check on ~daily cadence  (block-height % 144)
+ *   age ≥ 7 days                → check on ~weekly cadence (block-height % 1008)
+ *
+ * Block-height modulo gives a deterministic, stateless way to spread checks
+ * for older rows; no per-row "last checked" persistence is required.
+ *
+ * The scheduled daily cadence (no `checkNow`) is unaffected — it still scans
+ * every row regardless of age. That path is the once-per-day fallback that
+ * guarantees externally-broadcast `nosend` txs are eventually recognized
+ * even if the aging schedule on the checkNow path defers them.
  */
 export class TaskCheckNoSends extends WalletMonitorTask {
   static readonly taskName = 'CheckNoSends'
@@ -37,12 +56,41 @@ export class TaskCheckNoSends extends WalletMonitorTask {
   static checkNow = false
 
   /**
-   * When `checkNow` triggers a run, `nosend` rows newer than this threshold
-   * are skipped for chain-status lookup. The scheduled daily cadence is
-   * unaffected (no filter applied there). See class docstring for the
-   * rationale.
+   * Aging-schedule constants for the `checkNow` path. Rows below `tier0FreshSkipMsecs`
+   * are never checked via checkNow (batched-tx protection). Rows from tier 0 up
+   * to `tier1EveryBlockMsecs` are checked on every checkNow trigger. Beyond that,
+   * checks happen on `block-height % tierNBlockInterval === 0` cadences with
+   * growing intervals. The scheduled daily cadence (no checkNow) is unaffected.
    */
-  static readonly checkNowFreshnessSkipMsecs = 5 * 60 * 1000 // 5 minutes
+  static readonly tier0FreshSkipMsecs   = 5 * 60 * 1000             // 5 min
+  static readonly tier1EveryBlockMsecs  = 60 * 60 * 1000            // 1 hr
+  static readonly tier2HourlyMsecs      = 24 * 60 * 60 * 1000       // 24 hr
+  static readonly tier3DailyMsecs       = 7 * 24 * 60 * 60 * 1000   // 7 days
+  static readonly tier2BlockInterval    = 6        // ~hourly on 10-min blocks
+  static readonly tier3BlockInterval    = 144      // ~daily  on 10-min blocks
+  static readonly tier4BlockInterval    = 1008     // ~weekly on 10-min blocks
+
+  /**
+   * Decide whether a single `nosend` row should be chain-checked on the
+   * current `checkNow` trigger, based on its age and the current block
+   * height. See class docstring for the full schedule.
+   */
+  static shouldCheckOnCheckNow (
+    createdAt: Date,
+    nowMs: number,
+    currentBlockHeight: number
+  ): boolean {
+    const ageMs = nowMs - createdAt.getTime()
+    if (ageMs < TaskCheckNoSends.tier0FreshSkipMsecs) return false
+    if (ageMs < TaskCheckNoSends.tier1EveryBlockMsecs) return true
+    if (ageMs < TaskCheckNoSends.tier2HourlyMsecs) {
+      return currentBlockHeight % TaskCheckNoSends.tier2BlockInterval === 0
+    }
+    if (ageMs < TaskCheckNoSends.tier3DailyMsecs) {
+      return currentBlockHeight % TaskCheckNoSends.tier3BlockInterval === 0
+    }
+    return currentBlockHeight % TaskCheckNoSends.tier4BlockInterval === 0
+  }
 
   constructor (
     monitor: Monitor,
@@ -73,12 +121,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       return log
     }
 
-    // Only applied on the block-triggered (`checkNow`) path. Daily cadence
-    // scans everything so externally-broadcast unmined txs still get
-    // recognized eventually regardless of age.
-    const freshnessCutoff = wasCheckNow
-      ? Date.now() - TaskCheckNoSends.checkNowFreshnessSkipMsecs
-      : undefined
+    const nowMs = Date.now()
 
     const limit = 100
     let offset = 0
@@ -91,12 +134,18 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       if (reqs.length === 0) break
       log += `${reqs.length} reqs with status 'nosend'\n`
 
+      // On the checkNow (block-triggered) path, apply the aging schedule
+      // — see class docstring. The scheduled daily cadence is unfiltered
+      // so externally-broadcast unmined nosend txs are eventually caught
+      // regardless of age.
       let eligible = reqs
-      if (freshnessCutoff !== undefined) {
-        eligible = reqs.filter(r => r.created_at.getTime() <= freshnessCutoff)
+      if (wasCheckNow) {
+        eligible = reqs.filter(r =>
+          TaskCheckNoSends.shouldCheckOnCheckNow(r.created_at, nowMs, maxAcceptableHeight)
+        )
         const skipped = reqs.length - eligible.length
         if (skipped > 0) {
-          log += `skipping ${skipped} of ${reqs.length} reqs newer than ${TaskCheckNoSends.checkNowFreshnessSkipMsecs / 1000}s on checkNow path (in-flight batched-tx workflow protection)\n`
+          log += `aging schedule: skipping ${skipped} of ${reqs.length} reqs on checkNow path (block-triggered)\n`
         }
       }
 

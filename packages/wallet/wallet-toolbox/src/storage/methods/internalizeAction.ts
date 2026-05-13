@@ -34,11 +34,17 @@ import { TableProvenTx } from '../schema/tables/TableProvenTx'
  * Processing starts with simple validation and then checks for a pre-existing transaction.
  * If the transaction is already known to the user, then the outputs are reviewed against the existing outputs treatment,
  * and merge rules are added to the arguments passed to the storage layer.
- * The existing transaction must be in the 'unproven', 'completed', or 'nosend' status. Any other status is an error.
  *
- * When merging into a 'nosend' tx, the merge path also advances the lifecycle: transactions.status is promoted
- * to 'completed' (if a BUMP is included in the BEEF) or 'unproven' (otherwise), and the proven_tx_req is moved
- * out of 'nosend' so Monitor's standard proof-fetching flow can finalize it.
+ * The existing transaction's `status` determines what the merge path does next:
+ *  - `'unproven'` or `'completed'`: outputs are merged into the existing record. The transaction status is left as-is.
+ *  - `'nosend'`: an ambiguous case. The transaction was created with `noSend: true` and may have been externally
+ *    broadcast, may be sitting in a sendWith chain, or may be stuck mid-flight. The merge path treats the
+ *    `internalizeAction` call as explicit authorization to advance the lifecycle. Specifically: `transactions.status`
+ *    is promoted to `'completed'` (when a BUMP is included in the BEEF) or `'unproven'` (otherwise), and the
+ *    `proven_tx_req` is moved out of `'nosend'` so Monitor's standard proof-fetching flow can finalize it.
+ *    This makes the `internalizeAction` semantics consistent regardless of whether the originator shares the
+ *    same storage as the internalizer or not.
+ *  - Any other status: an error.
  *
  * When the transaction already exists, the description is updated. The isOutgoing sense is not changed.
  *

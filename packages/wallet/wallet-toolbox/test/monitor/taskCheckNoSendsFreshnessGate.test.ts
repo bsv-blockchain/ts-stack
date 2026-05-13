@@ -5,37 +5,40 @@ import { doubleSha256BE } from '../../src/utility/utilityHelpers'
 import { asString } from '../../src/utility/utilityHelpers.noBuffer'
 
 /**
- * Regression coverage for the freshness gate on the `checkNow` path of
- * `TaskCheckNoSends`.
+ * Regression coverage for the aging-schedule gate on the `checkNow`
+ * path of `TaskCheckNoSends` (PR #122 follow-up addressing tonesnotes's
+ * review comments on Fix 2).
  *
  * Background. PR #122's WT-4 fix wires `TaskCheckNoSends.checkNow = true`
  * into `Monitor.processNewBlockHeader`, so the task fires on every new
- * block header instead of only on its scheduled daily cadence. That is
- * exactly what's wanted for externally-broadcast `nosend` txs (the
- * task's original docstring use case). But it also means `nosend` rows
- * that are part of an in-flight batched-tx workflow — chained
- * `createAction({ noSend: true, sendWith: [...] })` builds, broadcast
- * all-at-once by the terminator — get chain-checked on every block
- * while the batch is being built. Each row triggers a remote
- * `getMerklePath` call that returns "not found" (because the row isn't
- * on chain yet by design); wasted round-trips.
+ * block header instead of only on its scheduled daily cadence. Tone
+ * flagged two concerns that this naive wire-up created:
+ *   (a) batched-tx workflows (chained `createAction({ noSend: true,
+ *       sendWith: [...] })`) get every participating row chain-checked
+ *       on every block while the batch is being built.
+ *   (b) long-running wallets accumulate large sets of `nosend` rows
+ *       (escrow, abandoned tests, etc.) — unfiltered every-block scans
+ *       create unbounded external-service cost.
  *
- * Mitigation. When `TaskCheckNoSends.runTask` is triggered by the
- * `checkNow` path, skip rows whose `created_at` is newer than
- * `TaskCheckNoSends.checkNowFreshnessSkipMsecs`. The scheduled daily
- * cadence is unaffected so externally-broadcast unmined txs are still
- * eventually caught.
+ * Mitigation: on the checkNow path, decide per-row whether to chain-check
+ * based on a tiered aging schedule:
  *
- * Tests below seed `nosend` rows with explicit `created_at` values
- * (fresh = now, old = 1 hour ago) and verify the gate via a mocked
- * `monitor.services.getMerklePath` call counter:
- *  - Fresh row + checkNow → getMerklePath NOT called for it
- *  - Old row + checkNow → getMerklePath IS called for it
- *  - Mixed + checkNow → getMerklePath called only for old
- *  - Fresh row + daily cadence (no checkNow) → getMerklePath IS called
- *    (filter only applies to block-triggered path)
+ *   age < 5 min                 → SKIP (addresses (a))
+ *   5 min ≤ age < 1 hr          → every checkNow trigger
+ *   1 hr   ≤ age < 24 hr        → ~hourly (block_height % 6 === 0)
+ *   24 hr  ≤ age < 7 days       → ~daily  (block_height % 144 === 0)
+ *   age ≥ 7 days                → ~weekly (block_height % 1008 === 0)
+ *
+ * The scheduled daily cadence (no checkNow) is unaffected — it scans
+ * every row regardless of age (addresses (b)'s edge case where the
+ * aging schedule defers a row indefinitely; the daily fallback
+ * guarantees eventual recognition).
+ *
+ * Tests below verify the gate via a mocked `monitor.services.getMerklePath`
+ * call counter against rows seeded with explicit `created_at` and explicit
+ * block-height in `monitor.lastNewHeader`.
  */
-describe('TaskCheckNoSends freshness gate (PR #122 follow-up to tonesnotes comment)', () => {
+describe('TaskCheckNoSends aging schedule (PR #122 follow-up to tonesnotes comments)', () => {
   jest.setTimeout(60000)
 
   let ctx: TestSetup1Wallet
@@ -50,8 +53,14 @@ describe('TaskCheckNoSends freshness gate (PR #122 follow-up to tonesnotes comme
       rootKeyHex: '5'.repeat(64)
     })
     task = new TaskCheckNoSends(ctx.wallet.monitor!)
-    // Inject a `lastNewHeader` so `runTask` doesn't bail before the
-    // findProvenTxReqs loop.
+  })
+
+  /**
+   * Set the current block-height that the task observes. Tests use this
+   * to control the aging-schedule modulo (tier 2+ checks depend on
+   * `block_height % N === 0`).
+   */
+  function setBlockHeight (height: number) {
     ;(ctx.wallet.monitor as any).lastNewHeader = {
       version: 1,
       previousHash: 'a'.repeat(64),
@@ -59,10 +68,10 @@ describe('TaskCheckNoSends freshness gate (PR #122 follow-up to tonesnotes comme
       time: Math.floor(Date.now() / 1000),
       bits: 0x1d00ffff,
       nonce: 0,
-      height: 800000,
+      height,
       hash: 'c'.repeat(64)
     }
-  })
+  }
 
   afterAll(async () => {
     if (originalGetMerklePath !== undefined) {
@@ -136,8 +145,11 @@ describe('TaskCheckNoSends freshness gate (PR #122 follow-up to tonesnotes comme
     return { provenTxReqId, txid }
   }
 
-  test('checkNow path: fresh nosend row is SKIPPED (no getMerklePath call)', async () => {
-    const { txid } = await seedNoSendReqWithAge([0xaa, 0xaa, 0xaa, 0xaa], new Date())
+  // ── Tier 0 (< 5 min): SKIP on checkNow ─────────────────────────────
+
+  test('tier 0 (< 5 min): fresh row SKIPPED on checkNow', async () => {
+    setBlockHeight(800000)
+    const { txid } = await seedNoSendReqWithAge([0xaa, 0x00, 0x00, 0x00], new Date())
     TaskCheckNoSends.checkNow = true
 
     await task.runTask()
@@ -145,9 +157,12 @@ describe('TaskCheckNoSends freshness gate (PR #122 follow-up to tonesnotes comme
     expect(getMerklePathSpy).not.toHaveBeenCalledWith(txid)
   })
 
-  test('checkNow path: old nosend row IS chain-checked (getMerklePath called)', async () => {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-    const { txid } = await seedNoSendReqWithAge([0xbb, 0xbb, 0xbb, 0xbb], oneHourAgo)
+  // ── Tier 1 (5 min – 1 hr): every checkNow ───────────────────────────
+
+  test('tier 1 (5min - 1hr): row CHECKED on every checkNow trigger regardless of block height', async () => {
+    setBlockHeight(800001) // arbitrary; tier 1 doesn't gate on modulo
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xbb, 0x00, 0x00, 0x00], thirtyMinAgo)
     TaskCheckNoSends.checkNow = true
 
     await task.runTask()
@@ -155,38 +170,134 @@ describe('TaskCheckNoSends freshness gate (PR #122 follow-up to tonesnotes comme
     expect(getMerklePathSpy).toHaveBeenCalledWith(txid)
   })
 
-  test('checkNow path: mixed ages → getMerklePath called for old txids only', async () => {
-    const { txid: freshTxid } = await seedNoSendReqWithAge([0xcc, 0xcc, 0xcc, 0xcc], new Date())
-    const { txid: oldTxid } = await seedNoSendReqWithAge(
-      [0xdd, 0xdd, 0xdd, 0xdd],
-      new Date(Date.now() - 60 * 60 * 1000)
+  // ── Tier 2 (1hr – 24hr): hourly cadence (block % 6 === 0) ──────────
+
+  test('tier 2 (1hr - 24hr): row CHECKED when block_height % 6 === 0', async () => {
+    setBlockHeight(800004) // 800004 % 6 === 0
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xcc, 0x00, 0x00, 0x00], twoHoursAgo)
+    TaskCheckNoSends.checkNow = true
+
+    await task.runTask()
+
+    expect(getMerklePathSpy).toHaveBeenCalledWith(txid)
+  })
+
+  test('tier 2 (1hr - 24hr): row SKIPPED when block_height % 6 !== 0', async () => {
+    setBlockHeight(800003) // 800003 % 6 === 5
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xcc, 0x11, 0x00, 0x00], twoHoursAgo)
+    TaskCheckNoSends.checkNow = true
+
+    await task.runTask()
+
+    expect(getMerklePathSpy).not.toHaveBeenCalledWith(txid)
+  })
+
+  // ── Tier 3 (24hr – 7d): daily cadence (block % 144 === 0) ──────────
+
+  test('tier 3 (24hr - 7d): row CHECKED when block_height % 144 === 0', async () => {
+    setBlockHeight(800352) // 800352 % 144 === 0
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xdd, 0x00, 0x00, 0x00], threeDaysAgo)
+    TaskCheckNoSends.checkNow = true
+
+    await task.runTask()
+
+    expect(getMerklePathSpy).toHaveBeenCalledWith(txid)
+  })
+
+  test('tier 3 (24hr - 7d): row SKIPPED when block_height % 144 !== 0', async () => {
+    setBlockHeight(800353) // 800353 % 144 === 1
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xdd, 0x11, 0x00, 0x00], threeDaysAgo)
+    TaskCheckNoSends.checkNow = true
+
+    await task.runTask()
+
+    expect(getMerklePathSpy).not.toHaveBeenCalledWith(txid)
+  })
+
+  // ── Tier 4 (≥ 7d): weekly cadence (block % 1008 === 0) ─────────────
+
+  test('tier 4 (≥ 7d): row CHECKED when block_height % 1008 === 0', async () => {
+    setBlockHeight(800352) // 800352 % 1008 === ?  let's compute: 1008 * 794 = 800352
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xee, 0x00, 0x00, 0x00], tenDaysAgo)
+    TaskCheckNoSends.checkNow = true
+
+    await task.runTask()
+
+    expect(getMerklePathSpy).toHaveBeenCalledWith(txid)
+  })
+
+  test('tier 4 (≥ 7d): row SKIPPED when block_height % 1008 !== 0', async () => {
+    setBlockHeight(800353) // 800353 % 1008 === 1
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+    const { txid } = await seedNoSendReqWithAge([0xee, 0x11, 0x00, 0x00], tenDaysAgo)
+    TaskCheckNoSends.checkNow = true
+
+    await task.runTask()
+
+    expect(getMerklePathSpy).not.toHaveBeenCalledWith(txid)
+  })
+
+  // ── Mixed tiers on a single block ──────────────────────────────────
+
+  test('mixed tiers on a single block: only the tier-eligible rows are checked', async () => {
+    setBlockHeight(800003) // % 6 === 5, % 144 === 83, % 1008 === 659 — none are 0
+    const { txid: tier0 } = await seedNoSendReqWithAge([0xa0, 0x00, 0x00, 0x00], new Date())
+    const { txid: tier1 } = await seedNoSendReqWithAge(
+      [0xa1, 0x00, 0x00, 0x00],
+      new Date(Date.now() - 30 * 60 * 1000)
+    )
+    const { txid: tier2 } = await seedNoSendReqWithAge(
+      [0xa2, 0x00, 0x00, 0x00],
+      new Date(Date.now() - 2 * 60 * 60 * 1000)
+    )
+    const { txid: tier3 } = await seedNoSendReqWithAge(
+      [0xa3, 0x00, 0x00, 0x00],
+      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
     )
     TaskCheckNoSends.checkNow = true
 
     await task.runTask()
 
-    expect(getMerklePathSpy).toHaveBeenCalledWith(oldTxid)
-    expect(getMerklePathSpy).not.toHaveBeenCalledWith(freshTxid)
+    // Tier 0 always skipped on checkNow. Tier 1 always checked.
+    // Tier 2 skipped because 800003 % 6 !== 0.
+    // Tier 3 skipped because 800003 % 144 !== 0.
+    expect(getMerklePathSpy).not.toHaveBeenCalledWith(tier0)
+    expect(getMerklePathSpy).toHaveBeenCalledWith(tier1)
+    expect(getMerklePathSpy).not.toHaveBeenCalledWith(tier2)
+    expect(getMerklePathSpy).not.toHaveBeenCalledWith(tier3)
   })
 
-  test('daily cadence (no checkNow): fresh nosend row IS chain-checked (filter only applies to checkNow)', async () => {
-    const { txid } = await seedNoSendReqWithAge([0xee, 0xee, 0xee, 0xee], new Date())
+  // ── Daily cadence (no checkNow) — unaffected by aging schedule ─────
+
+  test('daily cadence (no checkNow): all rows CHECKED regardless of tier or block_height', async () => {
+    setBlockHeight(800003) // any height — daily path doesn't gate on it
+    const { txid: tier0 } = await seedNoSendReqWithAge([0xb0, 0x00, 0x00, 0x00], new Date())
+    const { txid: tier4 } = await seedNoSendReqWithAge(
+      [0xb4, 0x00, 0x00, 0x00],
+      new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    )
     // NOTE: TaskCheckNoSends.checkNow stays false — simulates scheduled
-    // daily cadence trigger rather than block-header trigger.
+    // daily cadence trigger.
 
     await task.runTask()
 
-    expect(getMerklePathSpy).toHaveBeenCalledWith(txid)
+    expect(getMerklePathSpy).toHaveBeenCalledWith(tier0)
+    expect(getMerklePathSpy).toHaveBeenCalledWith(tier4)
   })
 
-  test('checkNow path: row at the boundary is NOT skipped (filter uses <= cutoff)', async () => {
-    // Row created at exactly `now - checkNowFreshnessSkipMsecs - 1ms`
-    // should be eligible — filter is `r.created_at.getTime() <=
-    // freshnessCutoff` where `freshnessCutoff = Date.now() - skipMsecs`.
-    const exactlyAtBoundary = new Date(
-      Date.now() - TaskCheckNoSends.checkNowFreshnessSkipMsecs - 1
+  // ── Tier-boundary sanity ───────────────────────────────────────────
+
+  test('tier-boundary: row at exactly tier0FreshSkipMsecs is in tier 1 (CHECKED)', async () => {
+    setBlockHeight(800001)
+    const atBoundary = new Date(
+      Date.now() - TaskCheckNoSends.tier0FreshSkipMsecs - 1
     )
-    const { txid } = await seedNoSendReqWithAge([0xff, 0xff, 0xff, 0xff], exactlyAtBoundary)
+    const { txid } = await seedNoSendReqWithAge([0xc0, 0x00, 0x00, 0x00], atBoundary)
     TaskCheckNoSends.checkNow = true
 
     await task.runTask()
