@@ -1,0 +1,114 @@
+[
+  {
+    "label": "single_user_baseline",
+    "N_TX": 5000,
+    "M_USERS": 1,
+    "OUT_PER_TX": 2,
+    "ITERS": 5000,
+    "populate_ms": {
+      "v2": "253.10",
+      "v3": "165.55"
+    },
+    "db_size_bytes": {
+      "v2": 54194176,
+      "v3": 28340224,
+      "reduction_pct": "47.7"
+    },
+    "spendable_outputs_query_us_per_call": {
+      "v2": "649.55",
+      "v3": "654.23"
+    },
+    "list_actions_query_us_per_call": {
+      "v2": "6865.47",
+      "v3": "452.21"
+    },
+    "find_by_user_txid_us_per_call": {
+      "v2": "3.86",
+      "v3": "3.19"
+    }
+  },
+  {
+    "label": "two_users_shared",
+    "N_TX": 5000,
+    "M_USERS": 2,
+    "OUT_PER_TX": 2,
+    "ITERS": 5000,
+    "populate_ms": {
+      "v2": "386.49",
+      "v3": "196.38"
+    },
+    "db_size_bytes": {
+      "v2": 79888384,
+      "v3": 30941184,
+      "reduction_pct": "61.3"
+    },
+    "spendable_outputs_query_us_per_call": {
+      "v2": "1148.88",
+      "v3": "1101.26"
+    },
+    "list_actions_query_us_per_call": {
+      "v2": "8335.20",
+      "v3": "802.72"
+    },
+    "find_by_user_txid_us_per_call": {
+      "v2": "3.82",
+      "v3": "3.11"
+    }
+  },
+  {
+    "label": "five_users_shared",
+    "N_TX": 2000,
+    "M_USERS": 5,
+    "OUT_PER_TX": 2,
+    "ITERS": 5000,
+    "populate_ms": {
+      "v2": "272.25",
+      "v3": "115.62"
+    },
+    "db_size_bytes": {
+      "v2": 62824448,
+      "v3": 15609856,
+      "reduction_pct": "75.2"
+    },
+    "spendable_outputs_query_us_per_call": {
+      "v2": "489.98",
+      "v3": "503.05"
+    },
+    "list_actions_query_us_per_call": {
+      "v2": "434.40",
+      "v3": "332.86"
+    },
+    "find_by_user_txid_us_per_call": {
+      "v2": "3.86",
+      "v3": "3.01"
+    }
+  },
+  {
+    "label": "ten_users_shared",
+    "N_TX": 1000,
+    "M_USERS": 10,
+    "OUT_PER_TX": 2,
+    "ITERS": 5000,
+    "populate_ms": {
+      "v2": "256.72",
+      "v3": "96.50"
+    },
+    "db_size_bytes": {
+      "v2": 57139200,
+      "v3": 10461184,
+      "reduction_pct": "81.7"
+    },
+    "spendable_outputs_query_us_per_call": {
+      "v2": "308.05",
+      "v3": "300.62"
+    },
+    "list_actions_query_us_per_call": {
+      "v2": "226.08",
+      "v3": "175.96"
+    },
+    "find_by_user_txid_us_per_call": {
+      "v2": "3.76",
+      "v3": "2.96"
+    }
+  }
+]

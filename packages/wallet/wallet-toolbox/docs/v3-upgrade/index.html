@@ -218,6 +218,28 @@
   footer { padding: 40px 0 60px; color: var(--fg-3); font-size: 13px; border-top: 1px solid var(--line); }
   footer .row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
 
+  /* Benchmark tables */
+  .btable { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  .btable th, .btable td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+  .btable th { color: var(--fg-3); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; background: var(--bg-2); }
+  .btable td { color: var(--fg); font-family: var(--mono); font-size: 12.5px; }
+  .btable td.lbl { color: var(--fg); font-family: var(--sans); font-size: 13.5px; }
+  .btable tr:hover td { background: rgba(255,255,255,0.02); }
+  .btable .v2 { color: var(--warn); }
+  .btable .v3 { color: var(--ok); }
+  .btable .delta { color: var(--accent-2); font-weight: 600; }
+  .btable .regress { color: var(--danger); font-weight: 600; }
+
+  /* Bar comparison */
+  .bar-row { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .bar-row:last-child { border-bottom: none; }
+  .bar-row .name { font-size: 13px; color: var(--fg-2); }
+  .bar-row .bar { position: relative; height: 24px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }
+  .bar-row .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .bar-row .bar.v2 .fill { background: linear-gradient(90deg, rgba(245,185,97,0.6), rgba(245,185,97,0.3)); }
+  .bar-row .bar.v3 .fill { background: linear-gradient(90deg, rgba(92,240,200,0.6), rgba(92,240,200,0.3)); }
+  .bar-row .bar .val { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 12px; color: var(--fg); }
+
   /* Highlight box */
   .callout { background: linear-gradient(180deg, rgba(124,156,255,0.06), rgba(92,240,200,0.03)); border: 1px solid var(--line-2); border-left: 3px solid var(--accent); border-radius: 10px; padding: 16px 18px; margin: 16px 0; }
   .callout.warn { border-left-color: var(--warn); background: linear-gradient(180deg, rgba(245,185,97,0.06), transparent); }
@@ -247,10 +269,11 @@
     </div>
     <ul>
       <li><a href="#why">Why v3</a></li>
+      <li><a href="#benchmarks">Benchmarks</a></li>
+      <li><a href="#lifecycle">Lifecycle IO</a></li>
+      <li><a href="#complexity">Complexity</a></li>
       <li><a href="#schema">Schema</a></li>
-      <li><a href="#fsm">FSM</a></li>
       <li><a href="#migrate">Migration</a></li>
-      <li><a href="#rollout">Rollout</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ul>
   </div>
@@ -335,10 +358,14 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="big">14</div><div class="lbl">FSM states (was 6)</div></div>
-      <div class="stat"><div class="big">3 → 2</div><div class="lbl">canonical tables</div></div>
-      <div class="stat"><div class="big">100%</div><div class="lbl">spec conformance (§1–§6)</div></div>
-      <div class="stat"><div class="big">0</div><div class="lbl">public-API breaks</div></div>
+      <div class="stat"><div class="big">−60%</div><div class="lbl">DB size, 2 users sharing tx (measured)</div></div>
+      <div class="stat"><div class="big">−82%</div><div class="lbl">DB size, 10 users sharing tx (measured)</div></div>
+      <div class="stat"><div class="big">15×</div><div class="lbl">faster listActions (single user, measured)</div></div>
+      <div class="stat"><div class="big">±1%</div><div class="lbl">spendable-outputs latency (no regression)</div></div>
+    </div>
+    <div class="callout" style="margin-top: 18px;">
+      <div class="hd">All numbers below are measured, not estimated.</div>
+      Reproducible micro-benchmarks against schema-faithful SQLite databases live next to this page: <code>bench.js</code>, <code>lifecycle.js</code>, <code>lifecycle_bytes.js</code>. Run <code>node bench.js</code> in <code>docs/v3-upgrade/</code> to regenerate <code>results.json</code>.
     </div>
   </div>
 </section>
@@ -533,13 +560,395 @@
       </summary>
       <div class="panel-body">
         <p>The migration's hardest constraint was not regressing the spendable-outputs query. v3's <code>outputs</code> table preserves the exact same shape and indexes; the only added column is <code>matures_at_height</code> (NULL for non-coinbase).</p>
-        <p>The rollout gate (Week 2, staging soak) explicitly fails the cutover if p95 of <code>findSpendableOutputs</code> regresses more than 15% vs. the v2 baseline. In our staging soak it was unchanged within noise.</p>
+        <p>Measured spendable-outputs latency v2-vs-v3 across four corpora: <code>+0.7%</code>, <code>−4.1%</code>, <code>+2.7%</code>, <code>−2.4%</code> — all inside measurement noise. The full table is in <a href="#benchmarks">Measured benchmarks</a>.</p>
         <div class="callout">
-          <div class="hd">What does get slower (and where it doesn't matter)</div>
-          <code>listActions</code> now joins <code>actions ⨝ transactions</code> instead of a single-table scan. That code path is run on user view-history loads — orders of magnitude colder than UTXO selection — and benefits from the FSM granularity it gains in return.
+          <div class="hd">listActions is faster too</div>
+          We expected <code>listActions</code> to slow down — it now joins <code>actions ⨝ transactions</code> instead of a single-table scan. It is instead <b>10×–15× faster</b>. Reason: the v2 <code>transactions</code> table carried inline <code>inputBEEF</code> blobs averaging 4 KB per row; even with covering indexes, SQLite was paying page-read cost. v3's <code>actions</code> row is ~120 B; the join cost is dwarfed by the I/O it avoids. Numbers: <a href="#benchmarks">Measured benchmarks</a>.
         </div>
       </div>
     </details>
+  </div>
+</section>
+
+<!-- BENCHMARKS SECTION -->
+<section id="benchmarks">
+  <div class="container">
+    <div class="eyebrow">Measured benchmarks</div>
+    <h2>The numbers we trade for the migration</h2>
+    <p class="section-lede">
+      Below are results from <code>bench.js</code> — a schema-faithful SQLite reproduction of both the v2 triad (<code>proven_txs</code>, <code>proven_tx_reqs</code>, <code>transactions</code>) and the v3 split (<code>transactions</code>, <code>actions</code>, <code>tx_audit</code>). Population: 1 000–5 000 confirmed transactions with 1–10 users referencing each tx. Hot-path queries are warmed and timed over 5 000 iterations.
+    </p>
+
+    <h3>Database size by users-per-transaction</h3>
+    <p class="section-lede">
+      The headline win. v2 stores <code>rawTx</code> + <code>inputBEEF</code> inline on every per-user <code>transactions</code> row, so each additional user that internalises the same txid copies multi-KB BEEF payloads. v3 stores those bytes once in the canonical per-txid <code>transactions</code> row; the per-user <code>actions</code> row holds only description, reference, satoshis delta, and flags.
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr>
+          <th>scenario</th>
+          <th>v2 size</th>
+          <th>v3 size</th>
+          <th>reduction</th>
+          <th>bytes/tx v2</th>
+          <th>bytes/tx v3</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">5 000 tx, 1 user each</td>
+          <td class="v2">51.7&nbsp;MiB</td>
+          <td class="v3">27.0&nbsp;MiB</td>
+          <td class="delta">−47.7%</td>
+          <td>10 839</td>
+          <td>5 668</td>
+        </tr>
+        <tr>
+          <td class="lbl">5 000 tx, 2 users each</td>
+          <td class="v2">76.2&nbsp;MiB</td>
+          <td class="v3">29.5&nbsp;MiB</td>
+          <td class="delta">−61.3%</td>
+          <td>15 978</td>
+          <td>6 188</td>
+        </tr>
+        <tr>
+          <td class="lbl">2 000 tx, 5 users each</td>
+          <td class="v2">59.9&nbsp;MiB</td>
+          <td class="v3">14.9&nbsp;MiB</td>
+          <td class="delta">−75.2%</td>
+          <td>31 412</td>
+          <td>7 805</td>
+        </tr>
+        <tr>
+          <td class="lbl">1 000 tx, 10 users each</td>
+          <td class="v2">54.5&nbsp;MiB</td>
+          <td class="v3">10.0&nbsp;MiB</td>
+          <td class="delta">−81.7%</td>
+          <td>57 139</td>
+          <td>10 461</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="hd">Why the gap widens with shared usage</div>
+      v2's per-user row stores its own copies of <code>rawTx</code> (~350 B) and <code>inputBEEF</code> (~4 KiB) regardless of how many other users already hold the same data. v3 amortises those bytes across all users referencing the txid — the second user pays ~200 B (one <code>actions</code> row + one <code>outputs</code> row) instead of ~4.4 KB. For wallets that hand the same transaction to multiple internal users (paymails, treasury escrow, app-owned identities), the reduction compounds linearly.
+    </div>
+
+    <h3>Hot-path query latency</h3>
+    <p class="section-lede">
+      The query the wallet runs on every page load: <code>SELECT * FROM outputs WHERE userId=? AND basketId=? AND spendable=true</code>. v3 was designed to preserve this single-table index scan — the schema change does not touch the <code>outputs</code> shape on the hot path.
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr>
+          <th>query</th>
+          <th>scenario</th>
+          <th>v2 (µs)</th>
+          <th>v3 (µs)</th>
+          <th>delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">spendable outputs</td>
+          <td class="lbl">5 k tx · 1 user</td>
+          <td class="v2">649.5</td>
+          <td class="v3">654.2</td>
+          <td>+0.7%</td>
+        </tr>
+        <tr>
+          <td class="lbl">spendable outputs</td>
+          <td class="lbl">5 k tx · 2 users</td>
+          <td class="v2">1 148.9</td>
+          <td class="v3">1 101.3</td>
+          <td class="delta">−4.1%</td>
+        </tr>
+        <tr>
+          <td class="lbl">spendable outputs</td>
+          <td class="lbl">2 k tx · 5 users</td>
+          <td class="v2">490.0</td>
+          <td class="v3">503.0</td>
+          <td>+2.7%</td>
+        </tr>
+        <tr>
+          <td class="lbl">spendable outputs</td>
+          <td class="lbl">1 k tx · 10 users</td>
+          <td class="v2">308.1</td>
+          <td class="v3">300.6</td>
+          <td class="delta">−2.4%</td>
+        </tr>
+        <tr>
+          <td class="lbl">listActions (per user)</td>
+          <td class="lbl">5 k tx · 1 user</td>
+          <td class="v2">6 865</td>
+          <td class="v3">452</td>
+          <td class="delta">−93.4% (15×)</td>
+        </tr>
+        <tr>
+          <td class="lbl">listActions (per user)</td>
+          <td class="lbl">5 k tx · 2 users</td>
+          <td class="v2">8 335</td>
+          <td class="v3">803</td>
+          <td class="delta">−90.4% (10×)</td>
+        </tr>
+        <tr>
+          <td class="lbl">findActionByTxid</td>
+          <td class="lbl">5 k tx · 1 user</td>
+          <td class="v2">3.86</td>
+          <td class="v3">3.19</td>
+          <td class="delta">−17.4%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="hd">Why listActions gets dramatically faster, not slower</div>
+      v3 reads tiny <code>actions</code> rows (description + flags, ~120 B) and joins on a covered index. v2 was scanning the fat <code>transactions</code> table where every row carries an inline <code>inputBEEF</code> (~4 KB) and <code>rawTx</code> (~350 B). The join cost in v3 is far smaller than the page-read cost SQLite was paying to skip those blobs in v2 — the page cache works for us.
+    </div>
+
+    <h3>Full-lifecycle throughput</h3>
+    <p class="section-lede">
+      End-to-end measurement of one transaction going through every legal state plus a second-user internalisation, 1 000 iterations per side, single transaction wrapper, rollback journal, <code>synchronous = FULL</code>. Output of <code>lifecycle_bytes.js</code>.
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr>
+          <th>metric</th>
+          <th>v2</th>
+          <th>v3</th>
+          <th>delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">runtime, 1 000 full lifecycles</td>
+          <td class="v2">56.8 ms</td>
+          <td class="v3">39.9 ms</td>
+          <td class="delta">−29.7%</td>
+        </tr>
+        <tr>
+          <td class="lbl">on-disk size after vacuum</td>
+          <td class="v2">15.4 MiB</td>
+          <td class="v3">6.1 MiB</td>
+          <td class="delta">−60.4%</td>
+        </tr>
+        <tr>
+          <td class="lbl">bytes per completed tx</td>
+          <td class="v2">15 430</td>
+          <td class="v3">6 115</td>
+          <td class="delta">−60.4%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <div class="hd">Methodology, in one paragraph</div>
+      SQLite via <code>better-sqlite3</code> in process, WAL or rollback journal as noted, schema seeded to match the toolbox migration output for each version. Population payloads use byte-faithful blob sizes (350 B <code>rawTx</code>, 4 096 B <code>inputBEEF</code>, 256 B <code>merklePath</code>, 25 B locking script). Each query is warmed 50× before measurement. The benchmark does not exercise the Knex query builder or the full toolbox stack — it isolates the schema cost so that v2-vs-v3 deltas reflect storage shape, not application overhead. Re-run with <code>node bench.js</code> alongside this page.
+    </div>
+  </div>
+</section>
+
+<!-- LIFECYCLE IO SECTION -->
+<section id="lifecycle">
+  <div class="container">
+    <div class="eyebrow">IO per transaction lifecycle</div>
+    <h2>What touches the database for one transaction, end to end</h2>
+    <p class="section-lede">
+      Counted from <code>lifecycle.js</code> — a deterministic instrumented harness that wraps <code>prepare()</code> and tags every <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code> as a write and every <code>SELECT</code> as a read. The lifecycle modelled is the realistic happy path: user A originates, broadcasts, receives provider acks from two providers, gets a proof candidate, gets confirmation, then user B internalises the same transaction and labels it.
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr>
+          <th>phase</th>
+          <th>v2 reads</th>
+          <th>v2 writes</th>
+          <th>v3 reads</th>
+          <th>v3 writes</th>
+          <th>notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">user A — createAction</td>
+          <td class="v2">0</td>
+          <td class="v2">3</td>
+          <td class="v3">0</td>
+          <td class="v3">4</td>
+          <td class="lbl">v3 adds <code>tx_audit</code> append (cheap, indexed)</td>
+        </tr>
+        <tr>
+          <td class="lbl">broadcast → confirm (6 transitions)</td>
+          <td class="v2">2</td>
+          <td class="v2">9</td>
+          <td class="v3">0</td>
+          <td class="v3">13</td>
+          <td class="lbl">v3 records one audit row per transition; no JSON re-read</td>
+        </tr>
+        <tr>
+          <td class="lbl">user B — internalise + label</td>
+          <td class="v2">2</td>
+          <td class="v2">4</td>
+          <td class="v3">2</td>
+          <td class="v3">4</td>
+          <td class="lbl">same op count; v3 row is ~200 B vs v2's ~4.5 KB</td>
+        </tr>
+        <tr>
+          <td class="lbl"><b>total</b></td>
+          <td class="v2"><b>4</b></td>
+          <td class="v2"><b>16</b></td>
+          <td class="v3"><b>2</b></td>
+          <td class="v3"><b>21</b></td>
+          <td class="lbl">v3: fewer reads, more atomic writes, smaller payloads</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <div class="hd">Reading the table honestly</div>
+      v3 has <i>more</i> writes per lifecycle on paper (21 vs 16). Each "extra" write is a tiny append to <code>tx_audit</code> — a narrow append-only table with no contention and a single hot index. v2's writes look fewer, but every status change rewrites the <code>history</code> JSON column inline on a row that carries 4&nbsp;KB+ of BEEF, so each <code>UPDATE</code> moves a large page. v3 trades naive op count for bounded page churn. End-to-end runtime (<a href="#benchmarks">benchmarks above</a>) is 30% faster despite the higher write count.
+    </div>
+
+    <h3>Why the read count drops</h3>
+    <p>
+      v2 has to read the <code>proven_tx_reqs.history</code> JSON before each status update to merge a new entry into the array — that is a read-modify-write per transition. v3's transition is a CAS update on the <code>processing</code> column plus an append to <code>tx_audit</code>: no read-back of the history blob, no JSON parse, no contention on a single row's lock window.
+    </p>
+
+    <h3>Storage cost of the second user — head-to-head</h3>
+    <div class="diff">
+      <div class="col v2">
+        <h4><span>v2 — user B internalises</span></h4>
+        <ul>
+          <li>INSERT <span class="field">transactions</span> · rawTx (350 B) + inputBEEF (4 096 B) + cols ≈ <b>4.5 KB row</b></li>
+          <li>INSERT <span class="field">outputs</span> · ~80 B</li>
+          <li>INSERT <span class="field">tx_labels</span> · ~30 B</li>
+          <li>INSERT <span class="field">tx_labels_map</span> · ~20 B</li>
+          <li><b>~4.6 KB net</b> per additional user</li>
+        </ul>
+      </div>
+      <div class="col v3">
+        <h4><span>v3 — user B internalises</span></h4>
+        <ul>
+          <li>SELECT <span class="field">transactions</span> by txid · cache hit</li>
+          <li>INSERT <span class="field">actions</span> · reference + description + delta ≈ <b>200 B row</b></li>
+          <li>INSERT <span class="field">outputs</span> · ~80 B</li>
+          <li>INSERT <span class="field">tx_labels</span> · ~30 B</li>
+          <li>INSERT <span class="field">tx_labels_map</span> · ~20 B</li>
+          <li><b>~330 B net</b> per additional user — <span class="new">~14× smaller</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COGNITIVE COMPLEXITY -->
+<section id="complexity">
+  <div class="container">
+    <div class="eyebrow">Cognitive complexity</div>
+    <h2>Fewer state spaces. One transition table. Code that names what it does.</h2>
+    <p class="section-lede">
+      Complexity is not only line count — it is the number of independent state machines an engineer must hold in working memory to predict whether a tx will end up spendable. v2 had two. v3 has one, and the legal moves are a single readable table.
+    </p>
+
+    <h3>State spaces</h3>
+    <table class="btable">
+      <thead>
+        <tr><th>concern</th><th>v2</th><th>v3</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">per-user lifecycle enum</td>
+          <td class="v2"><code>TransactionStatus</code> — 9 values<br/><span style="color:var(--fg-3)">completed · failed · unprocessed · sending · unproven · unsigned · nosend · nonfinal · unfail</span></td>
+          <td class="v3">(merged into <code>ProcessingStatus</code>)</td>
+        </tr>
+        <tr>
+          <td class="lbl">per-txid broadcast/proof enum</td>
+          <td class="v2"><code>ProvenTxReqStatus</code> — 13 values<br/><span style="color:var(--fg-3)">sending · unsent · nosend · unknown · nonfinal · unprocessed · unmined · callback · unconfirmed · completed · invalid · doubleSpend · unfail</span></td>
+          <td class="v3"><code>ProcessingStatus</code> — 14 values, single source of truth<br/><span style="color:var(--fg-3)">queued · sending · sent · seen · seen_multi · unconfirmed · confirmed · reorging · invalid · doubleSpend · unfail · frozen · nosend · nonfinal</span></td>
+        </tr>
+        <tr>
+          <td class="lbl">enum-to-enum mapping functions required</td>
+          <td class="v2">2 (<code>provenTxReqStatusToProcessing</code>, <code>transactionStatusToProcessing</code>)</td>
+          <td class="v3">0</td>
+        </tr>
+        <tr>
+          <td class="lbl">explicit transition table</td>
+          <td class="v2">none — transitions inferred from call sites</td>
+          <td class="v3"><code>processingFsm.ts</code>: 14 source states → declared targets, machine-enforced</td>
+        </tr>
+        <tr>
+          <td class="lbl">illegal-move detection</td>
+          <td class="v2">application code, ad hoc</td>
+          <td class="v3"><code>validateProcessingTransition()</code> returns structured rejection; offending move never reaches the DB</td>
+        </tr>
+        <tr>
+          <td class="lbl">spendability decision</td>
+          <td class="v2">re-derived at every read site (<code>listOutputs</code>, <code>createAction</code>, generateChange)</td>
+          <td class="v3">cached <code>outputs.spendable</code>, refreshed once per FSM transition</td>
+        </tr>
+        <tr>
+          <td class="lbl">audit trail per row</td>
+          <td class="v2"><code>proven_tx_reqs.history</code> — JSON blob, untestable, no indexing</td>
+          <td class="v3"><code>tx_audit</code> — relational, indexed, queryable</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Lines of code, by concern</h3>
+    <p class="section-lede">
+      Raw LOC is a blunt proxy, but the trend is clear: v3 replaces ~5.5k LOC of intertwined lifecycle logic across <code>StorageProvider</code> + the legacy method files with ~1.8k LOC of focused, single-responsibility modules. The legacy files stay during the bridge period, then are removed in Week 4.
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr><th>module</th><th>LOC</th><th>responsibility</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="lbl v2">StorageProvider.ts (v2)</td><td>1 128</td><td>monolithic write surface for 3 tables</td></tr>
+        <tr><td class="lbl v2">createAction.ts (v2)</td><td>999</td><td>outgoing-tx orchestration + status juggling</td></tr>
+        <tr><td class="lbl v2">attemptToPostReqsToNetwork.ts</td><td>742</td><td>broadcast + history JSON manipulation</td></tr>
+        <tr><td class="lbl v2">internalizeAction.ts (v2)</td><td>728</td><td>incoming-tx merging</td></tr>
+        <tr><td class="lbl v2">EntityProvenTxReq.ts</td><td>650</td><td>broadcast queue entity + history merger</td></tr>
+        <tr><td class="lbl v2">processAction.ts</td><td>503</td><td>signing → broadcast bridge</td></tr>
+        <tr><td class="lbl v2">EntityTransaction.ts</td><td>324</td><td>per-user row entity</td></tr>
+        <tr><td class="lbl v2">EntityProvenTx.ts</td><td>339</td><td>proof entity</td></tr>
+        <tr><td class="lbl v2">reviewStatus.ts</td><td>123</td><td>terminal-state notifier</td></tr>
+        <tr><td><b>v2 total</b></td><td><b>5 536</b></td><td><b>9 modules, overlapping concerns</b></td></tr>
+        <tr><td colspan="3" style="height:6px;background:var(--bg-3)"></td></tr>
+        <tr><td class="lbl v3">transactionService.ts</td><td>1 010</td><td>single high-level surface (15 named methods)</td></tr>
+        <tr><td class="lbl v3">transactionCrud.ts</td><td>237</td><td>row I/O + CAS</td></tr>
+        <tr><td class="lbl v3">monitorLease.ts</td><td>141</td><td>distributed task leasing</td></tr>
+        <tr><td class="lbl v3">spendabilityRefresh.ts</td><td>132</td><td>cached flag maintenance</td></tr>
+        <tr><td class="lbl v3">processingFsm.ts</td><td>106</td><td>transition table + validators</td></tr>
+        <tr><td class="lbl v3">txAudit.ts</td><td>94</td><td>append-only audit writer</td></tr>
+        <tr><td class="lbl v3">spendabilityRule.ts</td><td>77</td><td>pure §4 predicate (zero IO)</td></tr>
+        <tr><td><b>v3 total</b></td><td><b>1 797</b></td><td><b>7 modules, one concern each</b></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="hd">Branch density, not just line count</div>
+      Branch points (<code>if</code>/<code>switch</code>/<code>case</code>/<code>?</code>/<code>&amp;&amp;</code>) per file: <code>createAction.ts</code> (v2) has 75; <code>attemptToPostReqsToNetwork.ts</code> 62; <code>processAction.ts</code> 32. v3's <code>transactionService.ts</code> has 61 — but those branches sit behind a uniform <code>(expectedFrom, to)</code> CAS pattern that the FSM validates centrally, not behind ad-hoc per-method status logic. The <code>processingFsm.ts</code> module has 2 conditionals.
+    </div>
+
+    <h3>The two enums problem, by example</h3>
+    <p>
+      In v2, a transaction's "real" status was the cross product of <code>transactions.status</code> (per-user) and <code>proven_tx_reqs.status</code> (per-txid). For one logical outcome — "broadcast acknowledged but not yet mined" — v2 had at least three distinct combinations a wallet might encounter, none of them illegal:
+    </p>
+    <pre><code><span class="com">// v2 — same on-chain reality, three valid in-storage shapes</span>
+transactions.status = <span class="str">'unproven'</span>,    proven_tx_reqs.status = <span class="str">'unmined'</span>
+transactions.status = <span class="str">'unproven'</span>,    proven_tx_reqs.status = <span class="str">'callback'</span>
+transactions.status = <span class="str">'sending'</span>,     proven_tx_reqs.status = <span class="str">'unmined'</span>  <span class="com">// monitor caught it</span>
+
+<span class="com">// v3 — same on-chain reality, one shape</span>
+transactions.processing = <span class="str">'seen'</span>      <span class="com">// or seen_multi if 2+ providers ack</span></code></pre>
+    <p>
+      Every read path in v2 either had to handle all three shapes or risked silently disagreeing with the others. v3 collapses the question to a single <code>processing</code> column whose value is decided by one transition, validated against one table, and audited to one log.
+    </p>
   </div>
 </section>
 

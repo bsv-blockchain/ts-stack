@@ -1,0 +1,10 @@
+{
+  "N": 1000,
+  "v2_runtime_ms": 56.826541,
+  "v3_runtime_ms": 39.949959,
+  "v2_db_size_bytes": 15429632,
+  "v3_db_size_bytes": 6115328,
+  "bytes_per_tx_v2": 15430,
+  "bytes_per_tx_v3": 6115,
+  "storage_reduction_pct": "60.4"
+}

@@ -1,0 +1,38 @@
+{
+  "v2": {
+    "createAction": {
+      "reads": 0,
+      "writes": 3
+    },
+    "broadcast_and_confirm": {
+      "reads": 2,
+      "writes": 9
+    },
+    "second_user_internalize": {
+      "reads": 2,
+      "writes": 4
+    },
+    "total": {
+      "reads": 4,
+      "writes": 16
+    }
+  },
+  "v3": {
+    "createAction": {
+      "reads": 0,
+      "writes": 4
+    },
+    "broadcast_and_confirm": {
+      "reads": 0,
+      "writes": 13
+    },
+    "second_user_internalize": {
+      "reads": 2,
+      "writes": 4
+    },
+    "total": {
+      "reads": 2,
+      "writes": 21
+    }
+  }
+}
