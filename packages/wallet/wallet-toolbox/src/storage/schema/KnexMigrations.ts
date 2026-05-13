@@ -93,6 +93,7 @@ export class KnexMigrations implements MigrationSource<string> {
     migrations['2026-05-11-001 add refactor schema (actions, transactions_new, chain_tip, tx_audit, monitor_lease)'] = {
       async up (knex) {
         const dbtype = await determineDBType(knex)
+        const nowFn = dbtype === 'MySQL' ? knex.fn.now(3) : knex.fn.now()
 
         // Per-txid canonical record. Source of truth for broadcast + proof state.
         await knex.schema.createTable('transactions_new', table => {
@@ -100,7 +101,7 @@ export class KnexMigrations implements MigrationSource<string> {
           table.increments('transactionId')
           table.string('txid', 64).notNullable().unique()
           table.string('processing', 16).notNullable().defaultTo('queued')
-          table.timestamp('processing_changed_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+          table.timestamp('processing_changed_at', { precision: 3 }).defaultTo(nowFn).notNullable()
           table.timestamp('next_action_at', { precision: 3 }).nullable()
           table.integer('attempts').unsigned().notNullable().defaultTo(0)
           table.integer('rebroadcast_cycles').unsigned().notNullable().defaultTo(0)
@@ -156,7 +157,7 @@ export class KnexMigrations implements MigrationSource<string> {
           table.integer('height').unsigned().notNullable()
           table.string('block_hash', 64).notNullable()
           table.string('merkle_root', 64).nullable()
-          table.timestamp('observed_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
+          table.timestamp('observed_at', { precision: 3 }).defaultTo(nowFn).notNullable()
         })
 
         // Append-only audit log keyed by transactionId and/or actionId.
