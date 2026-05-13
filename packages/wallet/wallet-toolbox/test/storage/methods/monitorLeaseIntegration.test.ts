@@ -9,7 +9,7 @@
  *            same lease. Only one wins; the loser observes `ran: false`.
  *
  *  Test 2 — recordProof flow: the winning owner calls `recordProof`, which
- *            writes a `proven` transition into `tx_audit`. The loser does not.
+ *            writes a `confirmed` transition into `tx_audit`. The loser does not.
  *
  *  Test 3 — Release and retry: after the winner releases the lease the loser
  *            can claim it on the next attempt and observes `ran: true`.
@@ -23,7 +23,7 @@
  */
 
 import { Knex } from 'knex'
-import { _tu } from '../../utils/TestUtilsWalletStorage'
+import { _tu, makeTestBump } from '../../utils/TestUtilsWalletStorage'
 import { KnexMigrations } from '../../../src/index.all'
 import { runSchemaCutover } from '../../../src/storage/schema/schemaCutover'
 import { TransactionService } from '../../../src/storage/schema/transactionService'
@@ -99,7 +99,7 @@ describe('monitor_lease integration (LeasedMonitorTask + recordProof)', () => {
   // -------------------------------------------------------------------------
   // Test 2 — recordProof flow: winner calls recordProof; tx_audit reflects it.
   // -------------------------------------------------------------------------
-  test('2: winner calls recordProof and tx_audit has processing.changed entry for proven; loser writes nothing', async () => {
+  test('2: winner calls recordProof and tx_audit has processing.changed entry for confirmed; loser writes nothing', async () => {
     const knex = await setupCutDb('v7lease-int-02.sqlite')
     try {
       const svcA = new TransactionService(knex)
@@ -108,7 +108,7 @@ describe('monitor_lease integration (LeasedMonitorTask + recordProof)', () => {
       const helperB = new LeasedMonitorTask(svcB)
 
       // Seed a new transaction in 'sent' state (eligible for proof recording).
-      // FSM allows: sent -> proven
+      // FSM allows: sent -> confirmed
       const txid = 'b'.repeat(64)
       const newTx = await svcA.create({ txid, processing: 'sent' })
 
@@ -119,8 +119,7 @@ describe('monitor_lease integration (LeasedMonitorTask + recordProof)', () => {
       const fakeProof = {
         transactionId: newTx.transactionId,
         height: 800_001,
-        merkleIndex: 3,
-        merklePath: [0x01, 0x02, 0x03],
+        merklePath: makeTestBump(txid, 3, 800_001),
         merkleRoot: 'd'.repeat(64),
         blockHash: 'e'.repeat(64),
         expectedFrom: 'sent' as const
@@ -145,11 +144,11 @@ describe('monitor_lease integration (LeasedMonitorTask + recordProof)', () => {
         expect(winnerProofRecorded).toBe(true)
         expect(loserProofRecorded).toBe(false)
 
-        // Verify tx_audit has a 'processing.changed' entry with to_state='proven'.
+        // Verify tx_audit has a 'processing.changed' entry with to_state='confirmed'.
         const auditRows = await knex('tx_audit')
           .where({ transactionId: newTx.transactionId, event: 'processing.changed' })
           .select('to_state')
-        const provenRow = auditRows.find((r: any) => r.to_state === 'proven')
+        const provenRow = auditRows.find((r: any) => r.to_state === 'confirmed')
         expect(provenRow).toBeDefined()
       } else {
         // B won — B's body ran (loserProofRecorded=true); A did not record.
@@ -237,7 +236,7 @@ describe('monitor_lease integration (LeasedMonitorTask + recordProof)', () => {
   // -------------------------------------------------------------------------
   // Test 5 — recordProof transaction-service hook: correct tx_audit entry written end-to-end.
   //
-  // FSM allows: sent -> proven (see processingFsm.ts line 22).
+  // FSM allows: sent -> confirmed (see processingFsm.ts line 22).
   // -------------------------------------------------------------------------
   test('5: recordProof via svc writes proof columns and tx_audit row', async () => {
     const knex = await setupCutDb('v7lease-int-05.sqlite')
@@ -245,33 +244,32 @@ describe('monitor_lease integration (LeasedMonitorTask + recordProof)', () => {
       const svc = new TransactionService(knex)
 
       const txid = 'f'.repeat(64)
-      // Create a transaction in 'sent' state — FSM allows sent -> proven.
+      // Create a transaction in 'sent' state — FSM allows sent -> confirmed.
       const newTx = await svc.create({ txid, processing: 'sent' })
 
       const result = await svc.recordProof({
         transactionId: newTx.transactionId,
         height: 850_000,
-        merkleIndex: 7,
-        merklePath: [0xaa, 0xbb, 0xcc],
+        merklePath: makeTestBump(txid, 7, 850_000),
         merkleRoot: '1'.repeat(64),
         blockHash: '2'.repeat(64),
         expectedFrom: 'sent'
       })
 
-      // recordProof should return the updated row in 'proven' state.
+      // recordProof should return the updated row in 'confirmed' state.
       expect(result).toBeDefined()
-      expect(result?.processing).toBe('proven')
+      expect(result?.processing).toBe('confirmed')
       expect(result?.height).toBe(850_000)
       expect(result?.merkleIndex).toBe(7)
       expect(result?.merkleRoot).toBe('1'.repeat(64))
       expect(result?.blockHash).toBe('2'.repeat(64))
 
-      // Verify tx_audit: should have a 'processing.changed' entry with to_state='proven'.
+      // Verify tx_audit: should have a 'processing.changed' entry with to_state='confirmed'.
       // tx_audit uses camelCase `transactionId` and column `to_state`.
       const auditRows = await knex('tx_audit')
         .where({ transactionId: newTx.transactionId, event: 'processing.changed' })
         .select('to_state')
-      const provenEntry = auditRows.find((r: any) => r.to_state === 'proven')
+      const provenEntry = auditRows.find((r: any) => r.to_state === 'confirmed')
       expect(provenEntry).toBeDefined()
     } finally {
       await knex.destroy()

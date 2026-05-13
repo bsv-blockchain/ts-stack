@@ -4,7 +4,7 @@
  *
  * Verifies:
  *  1. Basic list — action with proven state is returned as `status:'completed'`
- *  2. Status filter — `status:'completed'` maps to `processing:'proven'`
+ *  2. Status filter — `status:'completed'` maps to `processing:'confirmed'`
  *  3. Label enrichment — label mapped via tx_labels_map.transactionId = actionId
  *  4. version / lockTime are undefined for all new schema rows
  *  5. Pagination (limit / offset)
@@ -90,7 +90,7 @@ describe('listActionsKnex — post-cutover', () => {
     const { knex, storage } = await setupCutoverDb('la-v7-01.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'confirmed' })
       await svc.createAction({
         userId: 1,
         transactionId: tx.transactionId,
@@ -123,7 +123,7 @@ describe('listActionsKnex — post-cutover', () => {
     const { knex, storage } = await setupCutoverDb('la-v7-02.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: 'b'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: 'b'.repeat(64), processing: 'confirmed' })
       await svc.createAction({
         userId: 1,
         transactionId: tx.transactionId,
@@ -151,7 +151,7 @@ describe('listActionsKnex — post-cutover', () => {
     const { knex, storage } = await setupCutoverDb('la-v7-03.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: 'c'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: 'c'.repeat(64), processing: 'confirmed' })
       const actionId = await svc.createAction({
         userId: 1,
         transactionId: tx.transactionId,
@@ -190,18 +190,18 @@ describe('listActionsKnex — post-cutover', () => {
   // -------------------------------------------------------------------------
   // Test 4: status filter 'completed' returns only proven actions
   // -------------------------------------------------------------------------
-  test("status filter maps 'completed' to proven; excludes queued actions", async () => {
+  test("status filter maps 'completed' to confirmed; excludes queued actions", async () => {
     const { knex, storage } = await setupCutoverDb('la-v7-04.sqlite')
     try {
       const svc = new TransactionService(knex)
 
       // Proven transaction (maps to 'completed' in legacy API)
-      const txProven = await svc.create({ txid: 'd'.repeat(64), processing: 'proven' })
+      const txProven = await svc.create({ txid: 'd'.repeat(64), processing: 'confirmed' })
       await svc.createAction({
         userId: 1,
         transactionId: txProven.transactionId,
         reference: 'ref-proven',
-        description: 'proven',
+        description: 'confirmed',
         isOutgoing: true,
         satoshisDelta: 100
       })
@@ -246,7 +246,7 @@ describe('listActionsKnex — post-cutover', () => {
     try {
       const svc = new TransactionService(knex)
 
-      const tx1 = await svc.create({ txid: 'f'.repeat(64), processing: 'proven' })
+      const tx1 = await svc.create({ txid: 'f'.repeat(64), processing: 'confirmed' })
       const aId1 = await svc.createAction({
         userId: 1,
         transactionId: tx1.transactionId,
@@ -256,7 +256,7 @@ describe('listActionsKnex — post-cutover', () => {
         satoshisDelta: 500
       })
 
-      const tx2 = await svc.create({ txid: '0'.repeat(64), processing: 'proven' })
+      const tx2 = await svc.create({ txid: '0'.repeat(64), processing: 'confirmed' })
       await svc.createAction({
         userId: 1,
         transactionId: tx2.transactionId,
@@ -306,7 +306,7 @@ describe('listActionsKnex — post-cutover', () => {
 
       for (let i = 0; i < 5; i++) {
         const txid = i.toString().padStart(64, '0')
-        const tx = await svc.create({ txid, processing: 'proven' })
+        const tx = await svc.create({ txid, processing: 'confirmed' })
         await svc.createAction({
           userId: 1,
           transactionId: tx.transactionId,
@@ -342,7 +342,7 @@ describe('listActionsKnex — post-cutover', () => {
     const { knex, storage } = await setupCutoverDb('la-v7-07.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: '9'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: '9'.repeat(64), processing: 'confirmed' })
       await svc.createAction({
         userId: 1,
         transactionId: tx.transactionId,
@@ -394,7 +394,7 @@ describe('listActionsKnex — post-cutover', () => {
     const { knex, storage } = await setupCutoverDb('la-v7-09.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: '7'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: '7'.repeat(64), processing: 'confirmed' })
       const actionId = await svc.createAction({
         userId: 1,
         transactionId: tx.transactionId,

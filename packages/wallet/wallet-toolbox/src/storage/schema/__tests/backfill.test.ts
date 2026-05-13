@@ -69,7 +69,7 @@ describe('Backfill', () => {
 
   test('buildTransactionNewRow merges proven_txs fields when present', () => {
     const row = buildTransactionNewRow(legacyReq({ status: 'completed' }), legacyProven(), now)
-    expect(row.processing).toBe('proven')
+    expect(row.processing).toBe('confirmed')
     expect(row.height).toBe(800000)
     expect(row.merkleIndex).toBe(7)
     expect(row.blockHash).toBe('b'.repeat(64))
@@ -85,9 +85,9 @@ describe('Backfill', () => {
     expect(row).toBeUndefined()
   })
 
-  test('buildTransactionNewRowFromLegacyTx maps completed -> proven', () => {
+  test('buildTransactionNewRowFromLegacyTx maps completed -> confirmed', () => {
     const row = buildTransactionNewRowFromLegacyTx(legacyTx(), now)
-    expect(row?.processing).toBe('proven')
+    expect(row?.processing).toBe('confirmed')
     expect(row?.txid).toBe('a'.repeat(64))
   })
 

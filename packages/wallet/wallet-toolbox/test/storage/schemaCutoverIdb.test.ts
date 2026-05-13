@@ -90,7 +90,7 @@ function makeNewTx (transactionId: number, txid: string) {
   return {
     transactionId,
     txid,
-    processing: 'proven' as const,
+    processing: 'confirmed' as const,
     processingChangedAt: now,
     attempts: 0,
     rebroadcastCycles: 0,

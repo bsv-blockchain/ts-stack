@@ -298,7 +298,7 @@
         <div class="num">02 / FSM</div>
         <div class="title">14-state processing state machine, fully audited</div>
         <div class="blurb">Every transition is validated against an explicit table and persisted to <code>tx_audit</code>. No more silent status drift — every state change has a row with who, when, and why.</div>
-        <div class="pillrow"><span>queued</span><span>sent</span><span>seen_multi</span><span>proven</span><span>reorging</span><span>+9 more</span></div>
+        <div class="pillrow"><span>queued</span><span>sent</span><span>seen_multi</span><span>confirmed</span><span>reorging</span><span>+9 more</span></div>
       </div>
 
       <div class="tile" onclick="document.getElementById('p-spend').open=true;document.getElementById('p-spend').scrollIntoView({behavior:'smooth'})">
@@ -366,7 +366,7 @@
             <ul>
               <li><span class="field">transactions</span> · userId, status, satoshis, description, reference, isOutgoing, version, lockTime, inputBEEF, ...</li>
               <li><span class="field">proven_tx_reqs</span> · txid, status, attempts, wasBroadcast, rawTx, inputBEEF, history (JSON), ...</li>
-              <li><span class="field">proven_txs</span> · txid, height, index, merklePath, merkleRoot, blockHash, rawTx</li>
+              <li><span class="field">proven_txs</span> · txid, height, merklePath, merkleRoot, blockHash, rawTx</li>
               <li><span class="field">tx_labels_map</span> · transactionId → transactions.transactionId</li>
             </ul>
           </div>
@@ -415,6 +415,7 @@
         <h3>Why this matters</h3>
         <ul>
           <li><b>seen vs. seen_multi.</b> Provider acknowledgment is recorded at the granularity your monitoring needs. Multi-provider confirmation no longer collapses into the same bucket as a single 200 OK.</li>
+          <li><b>unconfirmed vs. confirmed.</b> A merkle path that has not yet been validated against the chain tip is a different operational state than one that has. v3 keeps them apart so monitoring and replay logic don't have to.</li>
           <li><b>frozen.</b> Operator pause without losing position. Useful for compliance holds.</li>
           <li><b>nonfinal.</b> Live <code>nLockTime</code> transactions sit in their own state until eligibility, never poisoning the broadcast queue.</li>
           <li><b>unfail.</b> Admin retry override that wipes the rejection cause without losing audit history.</li>
@@ -432,7 +433,7 @@
         <p>v2 had spendability logic distributed across <code>listOutputs</code>, <code>createAction</code>, and the broadcast pipeline — every caller re-computed it. v3 derives it once, atomically, from the FSM state plus the chain tip:</p>
         <pre><code><span class="com">// spendabilityRule.ts</span>
 <span class="kw">const</span> spendable =
-  <span class="fn">ProcessingSpendableStatus</span>.<span class="fn">includes</span>(tx.processing) <span class="com">// sent, seen, seen_multi, unconfirmed, proven</span>
+  <span class="fn">ProcessingSpendableStatus</span>.<span class="fn">includes</span>(tx.processing) <span class="com">// sent, seen, seen_multi, unconfirmed, confirmed</span>
   &amp;&amp; output.spentBy === <span class="kw">null</span>
   &amp;&amp; output.lockingScript !== <span class="kw">null</span>
   &amp;&amp; (!output.isCoinbase || output.maturesAtHeight &lt;= chainTip.height);</code></pre>
@@ -442,7 +443,7 @@
 
     <details class="panel" id="p-reorg">
       <summary>
-        <span class="sm-title">04 — Reorg-safe: confirmed stays confirmed (until proven otherwise)</span>
+        <span class="sm-title">04 — Reorg-safe: confirmed stays confirmed</span>
         <span class="sm-blurb">The <code>reorging</code> state is a holding pen, not a verdict.</span>
         <span class="chev">›</span>
       </summary>
@@ -450,9 +451,9 @@
         <p><b>Spec §5:</b> "A reorg SHALL never cause a transaction to be marked Invalid or DoubleSpend."</p>
         <p>v2's status machine allowed <code>completed → invalid</code> when chaintracks signaled a different best chain — a silent retroactive flip of UTXO state. v3's FSM rejects that move. When a reorg is detected:</p>
         <ol>
-          <li><code>proven → reorging</code> (preserves current spendability).</li>
+          <li><code>confirmed → reorging</code> (preserves current spendability).</li>
           <li>Monitor's reorg task re-queries chaintracks for the new merkle path.</li>
-          <li>Outcome routes back to <code>seen</code>, <code>unconfirmed</code>, or <code>proven</code>. To land on <code>invalid</code> or <code>doubleSpend</code>, the row must first leave <code>reorging</code> — so the audit row attributes the rejection to a non-reorg cause.</li>
+          <li>Outcome routes back to <code>seen</code>, <code>unconfirmed</code>, or <code>confirmed</code>. To land on <code>invalid</code> or <code>doubleSpend</code>, the row must first leave <code>reorging</code> — so the audit row attributes the rejection to a non-reorg cause.</li>
         </ol>
         <div class="callout">
           <div class="hd">User-visible effect</div>
@@ -550,11 +551,11 @@
     <pre><code><span class="com">// v2</span>
 transactions.{userId, status, satoshis, description, reference, isOutgoing, version, lockTime, inputBEEF}
 proven_tx_reqs.{txid, status, attempts, wasBroadcast, rawTx, inputBEEF, history}
-proven_txs.{txid, height, merkleIndex, merklePath, merkleRoot, blockHash, rawTx}
+proven_txs.{txid, height, merklePath, merkleRoot, blockHash, rawTx}
 
 <span class="com">// v3</span>
 transactions.{txid, processing, processingChangedAt, attempts, wasBroadcast,
-              rawTx, inputBeef, height, merkleIndex, merklePath, merkleRoot, blockHash,
+              rawTx, inputBeef, height, merklePath, merkleRoot, blockHash,
               isCoinbase, lastProvider, frozenReason, rowVersion}
 actions.{userId, transactionId, reference, description, isOutgoing, satoshisDelta,
          userNosend, hidden, userAborted, notifyJson}
@@ -568,7 +569,7 @@ sending                 →  sending
 unmined                 →  sent
 callback                →  seen
 unconfirmed             →  unconfirmed
-completed               →  proven
+completed               →  confirmed
 invalid                 →  invalid
 doubleSpend             →  doubleSpend
 unfail                  →  unfail
@@ -636,7 +637,7 @@ unfail                  →  unfail
         <h4><span class="strike">v2</span></h4>
         <pre><code><span class="com">// scattered across 3 tables, no audit</span>
 <span class="kw">await</span> storage.<span class="fn">findOrInsertProvenTx</span>({
-  txid, height, index, merklePath, merkleRoot, blockHash, rawTx
+  txid, height, merklePath, merkleRoot, blockHash, rawTx
 });
 <span class="kw">await</span> storage.<span class="fn">updateProvenTxReq</span>(reqId, {
   status: <span class="str">'completed'</span>, provenTxId
@@ -650,9 +651,9 @@ unfail                  →  unfail
         <h4><span>v3</span></h4>
         <pre><code><span class="com">// one call, FSM-validated, audited</span>
 <span class="kw">await</span> txService.<span class="fn">recordProof</span>(transactionId, {
-  height, merkleIndex, merklePath, merkleRoot, blockHash
+  height, merklePath, merkleRoot, blockHash
 });
-<span class="com">// internally: transition unconfirmed→proven,</span>
+<span class="com">// internally: transition unconfirmed→confirmed,</span>
 <span class="com">// write proof fields, append tx_audit row,</span>
 <span class="com">// refresh outputs.spendable.</span></code></pre>
       </div>
@@ -836,21 +837,21 @@ unfail                  →  unfail
   const FSM = {
     queued:      { kind: 'transient', spendable: false, to: ['sending','sent','nosend','frozen','nonfinal','invalid','doubleSpend'] },
     sending:     { kind: 'transient', spendable: false, to: ['sent','seen','seen_multi','invalid','doubleSpend','frozen','queued'] },
-    sent:        { kind: 'normal',    spendable: true,  to: ['seen','seen_multi','unconfirmed','proven','invalid','doubleSpend','frozen','sending'] },
-    seen:        { kind: 'normal',    spendable: true,  to: ['seen_multi','unconfirmed','proven','invalid','doubleSpend','reorging','frozen','sending'] },
-    seen_multi:  { kind: 'normal',    spendable: true,  to: ['unconfirmed','proven','invalid','doubleSpend','reorging','frozen','sending'] },
-    unconfirmed: { kind: 'normal',    spendable: true,  to: ['proven','invalid','reorging','frozen','seen','seen_multi','doubleSpend','sending'] },
-    proven:      { kind: 'terminal-ok', spendable: true, to: ['reorging'] },
-    reorging:    { kind: 'transient', spendable: false, to: ['proven','seen','seen_multi','unconfirmed','frozen'] },
+    sent:        { kind: 'normal',    spendable: true,  to: ['seen','seen_multi','unconfirmed','confirmed','invalid','doubleSpend','frozen','sending'] },
+    seen:        { kind: 'normal',    spendable: true,  to: ['seen_multi','unconfirmed','confirmed','invalid','doubleSpend','reorging','frozen','sending'] },
+    seen_multi:  { kind: 'normal',    spendable: true,  to: ['unconfirmed','confirmed','invalid','doubleSpend','reorging','frozen','sending'] },
+    unconfirmed: { kind: 'normal',    spendable: true,  to: ['confirmed','invalid','reorging','frozen','seen','seen_multi','doubleSpend','sending'] },
+    confirmed:   { kind: 'terminal-ok', spendable: true, to: ['reorging'] },
+    reorging:    { kind: 'transient', spendable: false, to: ['confirmed','seen','seen_multi','unconfirmed','frozen'] },
     invalid:     { kind: 'terminal-bad', spendable: false, to: ['unfail'] },
     doubleSpend: { kind: 'terminal-bad', spendable: false, to: ['unfail'] },
-    unfail:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','seen_multi','unconfirmed','proven','invalid','doubleSpend'] },
+    unfail:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','seen_multi','unconfirmed','confirmed','invalid','doubleSpend'] },
     frozen:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','seen_multi','unconfirmed','invalid','doubleSpend'] },
     nosend:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','invalid','doubleSpend','frozen'] },
     nonfinal:    { kind: 'transient', spendable: false, to: ['queued','sending','sent','invalid','doubleSpend','frozen'] }
   };
 
-  const ORDER = ['queued','sending','sent','seen','seen_multi','unconfirmed','proven','reorging','invalid','doubleSpend','unfail','frozen','nosend','nonfinal'];
+  const ORDER = ['queued','sending','sent','seen','seen_multi','unconfirmed','confirmed','reorging','invalid','doubleSpend','unfail','frozen','nosend','nonfinal'];
 
   function renderStates(active) {
     const host = document.getElementById('fsm-states');

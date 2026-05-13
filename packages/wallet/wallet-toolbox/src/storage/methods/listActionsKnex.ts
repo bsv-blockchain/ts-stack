@@ -112,7 +112,7 @@ interface NewActionRow {
  */
 function processingToTransactionStatus (p: ProcessingStatus): TransactionStatus {
   switch (p) {
-    case 'proven': return 'completed'
+    case 'confirmed': return 'completed'
     case 'invalid': return 'failed'
     case 'doubleSpend': return 'failed'
     case 'queued': return 'unprocessed'
@@ -133,7 +133,7 @@ function processingToTransactionStatus (p: ProcessingStatus): TransactionStatus 
  * Maps the legacy `TransactionStatus[]` filter (as produced by
  * `ListActionsSpecOp.setStatusFilter`) to `ProcessingStatus[]`.
  *
- * The legacy "completed" → "proven"; "unproven" → several processing states.
+ * The legacy "completed" → "confirmed"; "unproven" → several processing states.
  * We expand each legacy status into the full set of processing states it covers so
  * that the query returns the same semantic set as the legacy query would have.
  */
@@ -155,7 +155,7 @@ function legacyStatiToProcessing (stati: string[]): ProcessingStatus[] {
       result.add('queued')
       result.add('nonfinal')
     }
-    // `completed` → proven only
+    // `completed` → confirmed only
     // `sending` → sending only
     // `nosend` → nosend only
     // `nonfinal` → nonfinal only

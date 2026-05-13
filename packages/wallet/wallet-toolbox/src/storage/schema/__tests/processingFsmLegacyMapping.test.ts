@@ -94,14 +94,14 @@ const legacyMappingCases: LegacyMappingCase[] = [
   { legacy: 'attemptToPost serviceError retry (from nosend)', from: 'nosend', to: 'sending' },
   { legacy: 'attemptToPost serviceError retry (from nonfinal)', from: 'nonfinal', to: 'sending' },
 
-  // §4 trigger: Monitor proof → "* → proven". new-schema: only states that have
-  // observed the tx on-chain may transition to proven directly (terminal
+  // §4 trigger: Monitor proof → "* → confirmed". new-schema: only states that have
+  // observed the tx on-chain may transition to confirmed directly (terminal
   // proof). Pre-observation states must pass through `seen`/`unconfirmed`
   // first — enforced by the FSM, not asserted here.
-  { legacy: 'Monitor proof (from seen)', from: 'seen', to: 'proven' },
-  { legacy: 'Monitor proof (from seen_multi)', from: 'seen_multi', to: 'proven' },
-  { legacy: 'Monitor proof (from unconfirmed)', from: 'unconfirmed', to: 'proven' },
-  { legacy: 'Monitor proof (from reorging)', from: 'reorging', to: 'proven' }
+  { legacy: 'Monitor proof (from seen)', from: 'seen', to: 'confirmed' },
+  { legacy: 'Monitor proof (from seen_multi)', from: 'seen_multi', to: 'confirmed' },
+  { legacy: 'Monitor proof (from unconfirmed)', from: 'unconfirmed', to: 'confirmed' },
+  { legacy: 'Monitor proof (from reorging)', from: 'reorging', to: 'confirmed' }
 ]
 
 describe('Processing FSM legacy mapping coverage (STORAGE_METHOD_WIRING §4)', () => {

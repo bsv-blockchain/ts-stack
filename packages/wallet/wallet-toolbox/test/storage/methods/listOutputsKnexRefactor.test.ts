@@ -119,7 +119,7 @@ describe('listOutputsKnex (new-schema) — status filter + label join', () => {
       const storage = await makeStorage(knex)
 
       // Create a new transaction in `proven` state.
-      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'confirmed' })
 
       // Create the `actions` row (needed for the label join hop).
       const actionId = await svc.createAction({
@@ -213,7 +213,7 @@ describe('listOutputsKnex (new-schema) — status filter + label join', () => {
 
       // Seed one transaction per interesting processing state.
       const states: Array<{ processing: string, txid: string, shouldAppear: boolean }> = [
-        { processing: 'proven',      txid: '1'.repeat(64), shouldAppear: true },
+        { processing: 'confirmed',      txid: '1'.repeat(64), shouldAppear: true },
         { processing: 'sent',        txid: '2'.repeat(64), shouldAppear: true },
         { processing: 'seen',        txid: '3'.repeat(64), shouldAppear: true },
         { processing: 'seen_multi',  txid: '4'.repeat(64), shouldAppear: true },
@@ -275,7 +275,7 @@ describe('listOutputsKnex (new-schema) — status filter + label join', () => {
       const storage = await makeStorage(knex)
 
       const txid = 'c'.repeat(64)
-      const tx = await svc.create({ txid, processing: 'proven' })
+      const tx = await svc.create({ txid, processing: 'confirmed' })
 
       // User 1 and user 2 both have an action on the same transaction.
       const actionId1 = await svc.createAction({

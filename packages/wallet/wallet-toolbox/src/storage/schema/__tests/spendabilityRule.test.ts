@@ -14,13 +14,13 @@ describe('Spendability rules', () => {
 
   test('spent output rejects', () => {
     expect(
-      isOutputSpendable({ spentBy: 7, lockingScript: [0x76] }, { processing: 'proven' }, tip)
+      isOutputSpendable({ spentBy: 7, lockingScript: [0x76] }, { processing: 'confirmed' }, tip)
     ).toBe(false)
   })
 
   test('missing locking script rejects', () => {
     expect(
-      isOutputSpendable({ spentBy: null, lockingScript: null }, { processing: 'proven' }, tip)
+      isOutputSpendable({ spentBy: null, lockingScript: null }, { processing: 'confirmed' }, tip)
     ).toBe(false)
   })
 
@@ -28,7 +28,7 @@ describe('Spendability rules', () => {
     expect(
       isOutputSpendable(
         { spentBy: null, lockingScript: [0x76], isCoinbase: true, maturesAtHeight: 1001 },
-        { processing: 'proven' },
+        { processing: 'confirmed' },
         tip
       )
     ).toBe(false)
@@ -38,7 +38,7 @@ describe('Spendability rules', () => {
     expect(
       isOutputSpendable(
         { spentBy: null, lockingScript: [0x76], isCoinbase: true, maturesAtHeight: 1000 },
-        { processing: 'proven' },
+        { processing: 'confirmed' },
         tip
       )
     ).toBe(true)
@@ -58,7 +58,7 @@ describe('Spendability rules', () => {
     expect(
       isOutputSpendable(
         { spentBy: null, lockingScript: [0x76], isCoinbase: true, maturesAtHeight: 100 },
-        { processing: 'proven' },
+        { processing: 'confirmed' },
         undefined
       )
     ).toBe(false)

@@ -37,7 +37,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     try {
       const svc = new TransactionService(knex)
       const txidA = 'a'.repeat(64)
-      const tx = await svc.create({ txid: txidA, processing: 'proven' })
+      const tx = await svc.create({ txid: txidA, processing: 'confirmed' })
 
       // Seed a basket plus a handful of spendable outputs for user 1.
       const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default' })
@@ -79,7 +79,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     try {
       const svc = new TransactionService(knex)
       const txid = 'a'.repeat(64)
-      const tx = await svc.create({ txid, processing: 'proven' })
+      const tx = await svc.create({ txid, processing: 'confirmed' })
 
       const aId1 = await svc.createAction({
         userId: 1,
@@ -116,7 +116,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     try {
       const svc = new TransactionService(knex)
       const txid = 'a'.repeat(64)
-      const tx = await svc.create({ txid, processing: 'proven' })
+      const tx = await svc.create({ txid, processing: 'confirmed' })
 
       for (const userId of [1, 2]) {
         await knex('outputs').insert({
@@ -151,11 +151,11 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     try {
       const svc = new TransactionService(knex)
       const txid = 'a'.repeat(64)
-      const tx = await svc.create({ txid, processing: 'proven' })
+      const tx = await svc.create({ txid, processing: 'confirmed' })
 
       const r1 = await svc.transition({
         transactionId: tx.transactionId,
-        expectedFrom: 'proven',
+        expectedFrom: 'confirmed',
         to: 'reorging',
         details: { trigger: 'block invalidated' }
       })
@@ -172,7 +172,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
       const audit = await knex('tx_audit').where({ transactionId: tx.transactionId }).orderBy('auditId')
       const events = audit.map(a => `${a.from_state ?? ''}->${a.to_state ?? ''}`)
       // First row from `create`, then the two real transitions.
-      expect(events).toEqual(['proven->proven', 'proven->reorging', 'reorging->seen'])
+      expect(events).toEqual(['confirmed->confirmed', 'confirmed->reorging', 'reorging->seen'])
     } finally {
       await knex.destroy()
     }
@@ -187,7 +187,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
       const bad = await svc.transition({
         transactionId: tx.transactionId,
         expectedFrom: 'queued',
-        to: 'proven'
+        to: 'confirmed'
       })
       expect(bad).toBeUndefined()
 
@@ -205,7 +205,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     const knex = await setupCutDb('conf-reorg-preserve.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'proven' })
+      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'confirmed' })
       const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default' })
       await knex('outputs').insert({
         userId: 1,
@@ -225,7 +225,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
       // Cached spendable was true while proven. Transition to reorging.
       await svc.transition({
         transactionId: tx.transactionId,
-        expectedFrom: 'proven',
+        expectedFrom: 'confirmed',
         to: 'reorging'
       })
       // Spec §6: "Reorg: preserve the current spendable value of outputs."
@@ -250,8 +250,8 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     const knex = await setupCutDb('conf-reorg-fsm.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'proven' })
-      await svc.transition({ transactionId: tx.transactionId, expectedFrom: 'proven', to: 'reorging' })
+      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'confirmed' })
+      await svc.transition({ transactionId: tx.transactionId, expectedFrom: 'confirmed', to: 'reorging' })
       const toInvalid = await svc.transition({
         transactionId: tx.transactionId,
         expectedFrom: 'reorging',
@@ -308,7 +308,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
     const knex = await setupCutDb('conf-coinbase.sqlite')
     try {
       const svc = new TransactionService(knex)
-      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'proven', isCoinbase: true })
+      const tx = await svc.create({ txid: 'a'.repeat(64), processing: 'confirmed', isCoinbase: true })
 
       const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default' })
       await knex('outputs').insert({
@@ -389,7 +389,7 @@ describe('Schema conformance suite (Knex / SQLite)', () => {
       await svc.transition({
         transactionId: tx.transactionId,
         expectedFrom: 'unconfirmed',
-        to: 'proven'
+        to: 'confirmed'
       })
       const stats2 = await refreshOutputsSpendable(knex, { userId: 1 })
       expect(stats2.flipped).toBe(0)

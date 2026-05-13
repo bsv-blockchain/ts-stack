@@ -281,7 +281,6 @@ export async function getProofs (
             await txSvc.recordProof({
               transactionId: newTx.transactionId,
               height,
-              merkleIndex: index,
               merklePath,
               merkleRoot,
               blockHash,

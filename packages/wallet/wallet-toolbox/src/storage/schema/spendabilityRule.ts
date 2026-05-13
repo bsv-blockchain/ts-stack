@@ -28,7 +28,7 @@ export interface SpendabilityTipInput {
  * Pure implementation of the §4 spendability rule:
  *
  * ```
- * spendable = (transactions.processing IN ('sent','seen','seen_multi','unconfirmed','proven'))
+ * spendable = (transactions.processing IN ('sent','seen','seen_multi','unconfirmed','confirmed'))
  *           AND outputs.spent_by IS NULL
  *           AND outputs.locking_script IS NOT NULL
  *           AND (NOT outputs.is_coinbase OR outputs.matures_at_height <= chain_tip.height)

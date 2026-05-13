@@ -52,7 +52,7 @@ Implication: any method still reading legacy fields (`status, satoshis, isOutgoi
 |---|---|---|---|
 | `findTransactions({userId, txid})` | SELECT | join required | **Gap: `findActionByUserTxid(userId, txid)`** |
 | `findOrInsertTransaction(newTx)` | INSERT/UPSERT legacy | columns gone | **Gap: `findOrCreateActionForTxid(args)`** — upsert on transactions by txid + upsert on actions by (userId, transactionId). |
-| `updateTransaction(id, {satoshis, provenTxId, status})` | columns gone | split needed | **Gap: `updateActionSatoshisDelta`** + use `recordProof` for proven case. |
+| `updateTransaction(id, {satoshis, provenTxId, status})` | columns gone | split needed | **Gap: `updateActionSatoshisDelta`** + use `recordProof` for confirmed case. |
 | `findOrInsertProvenTx({height, index, merklePath, ...})` | INSERT `proven_txs` | `_legacy` | `recordProof({transactionId, height, ...})`. **Gap: row may not exist yet** — need `createWithProof(args)` shortcut. |
 | `getProvenOrReq(txid, ...)` | reads `proven_txs` + `proven_tx_reqs` | `_legacy` | **Gap: `findOrCreateForBroadcast({txid, rawTx, inputBeef})`** returning `{isNew, transaction}`. |
 | tx_labels / output writes | unchanged | unchanged | Label map: pass `actionId`. |
@@ -124,14 +124,14 @@ Shims (in StorageKnex compat layer or service surface):
 | processAction / `!isNoSend && isDelayed` | `unsent → unprocessed` | `queued → queued` (collapses; disambiguate via `nextActionAt`) |
 | processAction / `!isNoSend && !isDelayed` (pre) | `unprocessed → unprocessed` | `queued → broadcasting` |
 | processAction / `!isNoSend && !isDelayed` (post) | `unmined → unproven` | `broadcasting → broadcasted` |
-| internalizeAction / bump present | `(none) → completed` | `(new) → proven` via `recordProof`/`createWithProof` |
+| internalizeAction / bump present | `(none) → completed` | `(new) → confirmed` via `recordProof`/`createWithProof` |
 | internalizeAction / bump absent | `unsent → unproven` | `queued → broadcasted` |
 | attemptToPostReqsToNetwork / `invalid` | `* → invalid` | `* → invalid` |
 | attemptToPostReqsToNetwork / `success` | `* → unmined`, tx `* → unproven`, `wasBroadcast=true` | `* → broadcasted` with `wasBroadcast=true` |
 | attemptToPostReqsToNetwork / `doubleSpend` | `* → doubleSpend`, tx `* → failed` | `* → doubleSpend` (terminal) |
 | attemptToPostReqsToNetwork / `invalidTx` | `* → invalid`, tx `* → failed` | `* → invalid` |
 | attemptToPostReqsToNetwork / `serviceError` | `* → sending` + attempts++ | `* → sending` + `incrementAttempts` |
-| Monitor proof | `* → completed`, proven | `* → proven` (covered by `recordProof`) |
+| Monitor proof | `* → completed`, proven | `* → confirmed` (covered by `recordProof`) |
 
 Audit: FSM table in `processingFsm` must accept `queued → nosend`, `queued → broadcasting`, `broadcasting → broadcasted`, `broadcasting → doubleSpend`, `broadcasting → invalid`, `sending → broadcasting` (retry). Verify before wiring proceeds. ~1 day to extend FSM + add audit tests.
 
@@ -168,7 +168,7 @@ Pilot: wire `listOutputsKnex.ts` first (1 day) — pure read-side, exercises Pro
 | Wire `createAction.ts` + reference/txid resolution + tests | 2 |
 | Wire `processAction.ts` + FSM-rich path + tests | 3 |
 | Wire `attemptToPostReqsToNetwork.ts` + EntityProvenTxReq decomposition + tests | 3 |
-| Wire `internalizeAction.ts` (merge/new, proven/unproven) + tests | 2.5 |
+| Wire `internalizeAction.ts` (merge/new, confirmed/unproven) + tests | 2.5 |
 | Integration & end-to-end test pass post-cutover, fix fall-out | 2 |
 | Buffer for FSM edge cases / unforeseen schema gaps | 2 |
 | **Total** | **~26 engineering-days (≈5–6 weeks calendar, single senior)** |

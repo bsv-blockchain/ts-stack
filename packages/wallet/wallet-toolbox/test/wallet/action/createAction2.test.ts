@@ -80,7 +80,7 @@ describe('createAction2 nosend transactions', () => {
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
       // Snapshot updated for post-cutover UTXO selection: tx185 (913 sats, status='sending')
-      // excluded from spendable pool; tx174 (995 sats, status='completed'→processing='proven') selected instead.
+      // excluded from spendable pool; tx174 (995 sats, status='completed'→processing='confirmed') selected instead.
       // Trailing spaces on wrapped lines are intentional (toLogString wrap format).
       expect(rl1.log).toBe('transactions:2\n' +
         '  txid:0bf6453843c29d6df1b9e0549587c696d2aaa8340f18be056c4711d853b8369a version:1 lockTime:0 sats:-4 status:nosend \n' +
@@ -135,7 +135,7 @@ describe('createAction2 nosend transactions', () => {
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
       // Snapshot updated for post-cutover UTXO selection: tx185 (913 sats, status='sending')
-      // excluded; tx174 (995 sats, status='completed'→processing='proven') selected instead.
+      // excluded; tx174 (995 sats, status='completed'→processing='confirmed') selected instead.
       expect(rl1.log).toBe('transactions:2\n' +
         '  txid:a03789724ac10b32365b84cbcbee24ec5ef0a1a8d465112603a4e2219f4c952e version:1 lockTime:0 sats:-12 status:nosend \n' +
         "     outgoing:true desc:'Funding transaction with multiple outputs' labels:['funding transaction for createaction','this \n" +

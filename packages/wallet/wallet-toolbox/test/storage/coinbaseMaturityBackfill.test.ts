@@ -35,7 +35,7 @@ describe('backfillCoinbaseMaturity', () => {
       const coinbaseTxid = 'a'.repeat(64)
       const coinbase = await svc.create({
         txid: coinbaseTxid,
-        processing: 'proven',
+        processing: 'confirmed',
         isCoinbase: true
       })
       await knex('transactions')
@@ -47,7 +47,7 @@ describe('backfillCoinbaseMaturity', () => {
       const normalTxid = 'b'.repeat(64)
       const normal = await svc.create({
         txid: normalTxid,
-        processing: 'proven',
+        processing: 'confirmed',
         isCoinbase: false
       })
       await knex('transactions')
@@ -179,7 +179,7 @@ describe('backfillCoinbaseMaturity', () => {
     try {
       const svc = new TransactionService(knex)
       const txid = 'd'.repeat(64)
-      const tx = await svc.create({ txid, processing: 'proven', isCoinbase: true })
+      const tx = await svc.create({ txid, processing: 'confirmed', isCoinbase: true })
       await knex('transactions')
         .where({ transactionId: tx.transactionId })
         .update({ height: 700000 })

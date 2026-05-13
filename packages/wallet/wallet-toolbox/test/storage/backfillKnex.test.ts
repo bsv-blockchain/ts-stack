@@ -93,7 +93,7 @@ describe('the backfill (Knex / SQLite)', () => {
     const newRows = await knex('transactions_new').select('*')
     expect(newRows).toHaveLength(2)
     const byTxid = Object.fromEntries(newRows.map(r => [r.txid, r]))
-    expect(byTxid[txidA].processing).toBe('proven')
+    expect(byTxid[txidA].processing).toBe('confirmed')
     expect(byTxid[txidA].height).toBe(800001)
     expect(byTxid[txidB].processing).toBe('sending')
     expect(byTxid[txidB].height).toBeNull()

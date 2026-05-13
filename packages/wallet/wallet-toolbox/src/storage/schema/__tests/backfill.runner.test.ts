@@ -120,7 +120,7 @@ describe('runBackfill orchestrator', () => {
     expect(stats.labelMapsRepointed).toBe(2)
 
     const provenRow = driver.newRows.find(r => r.txid === txidA)!
-    expect(provenRow.processing).toBe('proven')
+    expect(provenRow.processing).toBe('confirmed')
     expect(provenRow.height).toBe(800001)
 
     const localRow = driver.newRows.find(r => r.txid === txidB)!

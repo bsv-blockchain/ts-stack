@@ -16,35 +16,35 @@ describe('Processing FSM', () => {
   })
 
   test('queued cannot jump straight to proven', () => {
-    expect(isValidProcessingTransition('queued', 'proven')).toBe(false)
-    const r = validateProcessingTransition('queued', 'proven')
+    expect(isValidProcessingTransition('queued', 'confirmed')).toBe(false)
+    const r = validateProcessingTransition('queued', 'confirmed')
     expect(r.ok).toBe(false)
     expect(r.reason).toMatch(/illegal transition/)
   })
 
-  test('canonical happy path: queued -> sending -> sent -> seen -> proven', () => {
+  test('canonical happy path: queued -> sending -> sent -> seen -> confirmed', () => {
     expect(isValidProcessingTransition('queued', 'sending')).toBe(true)
     expect(isValidProcessingTransition('sending', 'sent')).toBe(true)
     expect(isValidProcessingTransition('sent', 'seen')).toBe(true)
-    expect(isValidProcessingTransition('seen', 'proven')).toBe(true)
+    expect(isValidProcessingTransition('seen', 'confirmed')).toBe(true)
   })
 
   test('terminal states block direct re-entry except via unfail', () => {
     expect(isValidProcessingTransition('invalid', 'queued')).toBe(false)
     expect(isValidProcessingTransition('invalid', 'unfail')).toBe(true)
     expect(isValidProcessingTransition('doubleSpend', 'unfail')).toBe(true)
-    expect(isValidProcessingTransition('proven', 'reorging')).toBe(true)
+    expect(isValidProcessingTransition('confirmed', 'reorging')).toBe(true)
   })
 
   test('isProcessingSpendable matches sdk constant', () => {
     expect(isProcessingSpendable('sent')).toBe(true)
-    expect(isProcessingSpendable('proven')).toBe(true)
+    expect(isProcessingSpendable('confirmed')).toBe(true)
     expect(isProcessingSpendable('queued')).toBe(false)
     expect(isProcessingSpendable('invalid')).toBe(false)
   })
 
   test('isProcessingTerminal matches sdk constant', () => {
-    expect(isProcessingTerminal('proven')).toBe(true)
+    expect(isProcessingTerminal('confirmed')).toBe(true)
     expect(isProcessingTerminal('invalid')).toBe(true)
     expect(isProcessingTerminal('doubleSpend')).toBe(true)
     expect(isProcessingTerminal('queued')).toBe(false)

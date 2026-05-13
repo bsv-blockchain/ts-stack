@@ -35,6 +35,22 @@ import {
  * Construction takes a Knex handle; instances are stateless and cheap to
  * create — typically one per request or per Monitor task tick.
  */
+/**
+ * Extract the merkle leaf index for `txid` from a BUMP-encoded merkle path.
+ *
+ * The BUMP format encodes level 0 leaves with `txid: true` and an `offset`
+ * equal to the position of the transaction in its block. For a single-tx
+ * proof exactly one leaf is flagged; for trimmed compound proofs the leaf
+ * matching `txid` is selected.
+ */
+export function indexFromMerklePath (merklePath: number[], txid: string): number {
+  const mp = MerklePath.fromBinary(merklePath)
+  const level0 = mp.path[0] ?? []
+  const leaf = level0.find(l => l.txid === true && l.hash === txid)
+  if (leaf == null) throw new Error(`txid ${txid} not present in merklePath`)
+  return leaf.offset
+}
+
 export class TransactionService {
   constructor (private readonly knex: Knex) {}
 
@@ -122,13 +138,15 @@ export class TransactionService {
   /**
    * Record acquisition of a Merkle proof for a transaction. Atomically:
    *  - Updates proof columns (height, index, merkle_path, merkle_root, block_hash)
-   *  - Transitions processing to `proven` from any spendable-class state.
+   *  - Transitions processing to `confirmed` from any spendable-class state.
    *  - Writes a `proof.acquired` audit row.
+   *
+   * The merkle leaf index is derived from `merklePath` (BUMP) using the row's
+   * `txid`; callers do not pass it.
    */
   async recordProof (args: {
     transactionId: number
     height: number
-    merkleIndex: number
     merklePath: number[]
     merkleRoot: string
     blockHash: string
@@ -136,17 +154,20 @@ export class TransactionService {
     now?: Date
   }): Promise<TableTransactionNew | undefined> {
     const now = args.now ?? new Date()
+    const existing = await this.findById(args.transactionId)
+    if (existing == null) return undefined
+    const merkleIndex = indexFromMerklePath(args.merklePath, existing.txid)
     const next = await this.transition({
       transactionId: args.transactionId,
       expectedFrom: args.expectedFrom,
-      to: 'proven',
+      to: 'confirmed',
       details: { source: 'recordProof', height: args.height },
       now
     })
     if (next == null) return undefined
     await this.knex('transactions').where({ transactionId: args.transactionId }).update({
       height: args.height,
-      merkle_index: args.merkleIndex,
+      merkle_index: merkleIndex,
       merkle_path: Buffer.from(args.merklePath),
       merkle_root: args.merkleRoot,
       block_hash: args.blockHash,
@@ -346,7 +367,7 @@ export class TransactionService {
   }
 
   /**
-   * #5 — Create a new transaction row already in `proven` state with all proof
+   * #5 — Create a new transaction row already in `confirmed` state with all proof
    * columns populated. Useful for internalised transactions that arrive with a
    * Merkle proof (bump) already attached.
    */
@@ -355,7 +376,6 @@ export class TransactionService {
     rawTx?: number[]
     inputBeef?: number[]
     height: number
-    merkleIndex: number
     merklePath: number[]
     merkleRoot: string
     blockHash: string
@@ -363,9 +383,10 @@ export class TransactionService {
     now?: Date
   }): Promise<TableTransactionNew> {
     const now = args.now ?? new Date()
+    const merkleIndex = indexFromMerklePath(args.merklePath, args.txid)
     const row: Omit<TableTransactionNew, 'transactionId' | 'created_at' | 'updated_at'> = {
       txid: args.txid,
-      processing: 'proven',
+      processing: 'confirmed',
       processingChangedAt: now,
       nextActionAt: undefined,
       attempts: 0,
@@ -376,7 +397,7 @@ export class TransactionService {
       rawTx: args.rawTx,
       inputBeef: args.inputBeef,
       height: args.height,
-      merkleIndex: args.merkleIndex,
+      merkleIndex,
       merklePath: args.merklePath,
       merkleRoot: args.merkleRoot,
       blockHash: args.blockHash,
@@ -387,7 +408,7 @@ export class TransactionService {
       rowVersion: 0
     }
     const id = await insertTransactionNew(this.knex, row, now)
-    await auditProcessingTransition(this.knex, id, 'proven', 'proven', { reason: 'createWithProof' }, now)
+    await auditProcessingTransition(this.knex, id, 'confirmed', 'confirmed', { reason: 'createWithProof' }, now)
     const stored = await this.findById(id)
     if (stored == null) throw new Error(`new transaction ${id} disappeared after createWithProof insert`)
     return stored
@@ -599,7 +620,7 @@ export class TransactionService {
    * #13 — Collect broadcast-readiness info and a populated Beef for a list of
    * txids. Each entry is classified as:
    *  - `readyToSend`  — queued/sending → still needs broadcast
-   *  - `alreadySent`  — sent/seen/seen_multi/unconfirmed/proven → already on network
+   *  - `alreadySent`  — sent/seen/seen_multi/unconfirmed/confirmed → already on network
    *  - `error`        — invalid/doubleSpend → terminal failure
    *  - `unknown`      — not found in new-schema
    */
@@ -642,7 +663,7 @@ export class TransactionService {
 
         if (p === 'queued' || p === 'sending' || p === 'nonfinal') {
           status = 'readyToSend'
-        } else if (p === 'sent' || p === 'seen' || p === 'seen_multi' || p === 'unconfirmed' || p === 'proven') {
+        } else if (p === 'sent' || p === 'seen' || p === 'seen_multi' || p === 'unconfirmed' || p === 'confirmed') {
           status = 'alreadySent'
         } else if (p === 'invalid' || p === 'doubleSpend') {
           status = 'error'

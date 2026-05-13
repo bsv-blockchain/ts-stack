@@ -11,7 +11,7 @@ Source: `/Users/personal/Downloads/bsv_wallet_transaction_requirements (1).md`
 
 | Principle | Status | Evidence |
 |---|---|---|
-| Confirmed = valid Merkle path AND ≥1 block on top | ✅ | `ProcessingStatus.unconfirmed` (mined into tip block) and `proven` (≥1 block deep) distinguished. `processingFsm.ts` `unconfirmed → proven` edge. |
+| Confirmed = valid Merkle path AND ≥1 block on top | ✅ | `ProcessingStatus.unconfirmed` (mined into tip block) and `confirmed` (≥1 block deep) distinguished. `processingFsm.ts` `unconfirmed → confirmed` edge. |
 | Outputs table = single source of truth for spendability; status changes drive updates | ✅ | `refreshOutputsSpendable` (`spendabilityRefresh.ts`) derives `outputs.spendable` from `transactions.processing` per §4 rule. |
 | Invalid/doubleSpend outputs toxic, never selected for inputs | ✅ | `isOutputSpendable` returns `false` when processing ∈ `{invalid, doubleSpend}`. `outputs.spendable` flips false during refresh. |
 | Robust for self-created, strict for third-party | ✅ | Routed via legacy `attemptToPostReqsToNetwork` (sequential fallback) for self-created vs `internalizeAction` discard semantics for third-party. |
@@ -30,7 +30,7 @@ Spec status ↔ `ProcessingStatus` mapping:
 | Unmined | `sent` | true | ✅ semantics match (broadcast accepted, not yet mined) |
 | Callback | `seen` | true | ✅ semantics match (first confirmation observation) |
 | Unconfirmed | `unconfirmed` | true (coinbase=false) | ✅ |
-| Completed | `proven` | true (coinbase=false) | ✅ |
+| Completed | `confirmed` | true (coinbase=false) | ✅ |
 | Invalid | `invalid` | false | ✅ |
 | DoubleSpend | `doubleSpend` | false | ✅ |
 | Unfail | `unfail` | unchanged | ✅ |
@@ -50,7 +50,7 @@ Coinbase 100-block maturity: ✅ `outputs.matures_at_height` column added by mig
 | Unmined — service accepted | `sending → sent` | ✅ |
 | Callback — awaiting SSE | `sent → seen` | ✅ |
 | Unconfirmed — Merkle path received | `seen → unconfirmed` | ✅ |
-| Completed — 1 block on top | `unconfirmed → proven` | ✅ |
+| Completed — 1 block on top | `unconfirmed → confirmed` | ✅ |
 
 Broadcast robustness (sequential fallback ARC → WhatsOnChain → BitTails): preserved in legacy `attemptToPostReqsToNetwork.ts`. New-schema wiring is additive — does not alter fallback ordering.
 
@@ -64,8 +64,8 @@ Mixed-results handling (positive preferred, discrepancy logged): preserved. New-
 
 | Spec rule | Implementation | Status |
 |---|---|---|
-| §4.1 Merkle valid, block below tip → Completed + spendable | `createWithProof({...})` writes new-schema row with `processing: 'proven'`, proof fields populated | ✅ |
-| §4.1 Merkle valid, block is tip → Unconfirmed + spendable | Caller can use `transition(..., to: 'unconfirmed')` after `findOrCreateForBroadcast` | ⚠️ Service supports it but no dedicated method enforces tip-vs-deep at callsite. Caller responsible for choosing `proven` vs `unconfirmed` based on chain tip comparison. |
+| §4.1 Merkle valid, block below tip → Completed + spendable | `createWithProof({...})` writes new-schema row with `processing: 'confirmed'`, proof fields populated | ✅ |
+| §4.1 Merkle valid, block is tip → Unconfirmed + spendable | Caller can use `transition(..., to: 'unconfirmed')` after `findOrCreateForBroadcast` | ⚠️ Service supports it but no dedicated method enforces tip-vs-deep at callsite. Caller responsible for choosing `confirmed` vs `unconfirmed` based on chain tip comparison. |
 | §4.1 Merkle invalid → discard | `recordProof` accepts but does not validate path against chaintracks. Caller responsible. | ⚠️ Validation lives at internalizeAction call layer; the transaction service is permissive by design. |
 | §4.2 Unconfirmed third-party: start at Sending, broadcast self | `findOrCreateForBroadcast` → caller transitions to `sending` | ✅ |
 | §4.2 Broadcast fails → discard, no DB record | Caller responsibility; `internalizeAction` legacy logic preserved | ✅ |
@@ -81,7 +81,7 @@ Mixed-results handling (positive preferred, discrepancy logged): preserved. New-
 | Rejected by all services | `* → invalid` | Discard | spendable=false | ✅ |
 | Stuck in mempool | Stay Unmined; manual Unfail | Discard | unchanged or false | ✅ FSM permits `unfail → *` |
 | Double-spend (conflicting mined) | `* → doubleSpend` | `* → doubleSpend` if stored | toxic | ✅ |
-| Reorg (block orphaned) | `proven → reorging → unconfirmed` | same | preserve current spendable | ⚠️ **GAP 2** — current `refreshOutputsSpendable` flips spendable to false during `reorging` because that state is not in `ProcessingSpendableStatus`. Spec requires preservation. See §Fixes. |
+| Reorg (block orphaned) | `confirmed → reorging → unconfirmed` | same | preserve current spendable | ⚠️ **GAP 2** — current `refreshOutputsSpendable` flips spendable to false during `reorging` because that state is not in `ProcessingSpendableStatus`. Spec requires preservation. See §Fixes. |
 | Coinbase offset=0 | 100-block maturity | 100-block maturity | spendable=false until ≥100 deep | ✅ `outputs.matures_at_height` |
 
 **Critical reorg rule:** "Reorg SHALL never cause Invalid/DoubleSpend" — currently FSM permits direct `reorging → invalid` and `reorging → doubleSpend` edges. See **GAP 1**.
@@ -92,7 +92,7 @@ Mixed-results handling (positive preferred, discrepancy logged): preserved. New-
 
 | Rule | Implementation | Status |
 |---|---|---|
-| Spendable status set → outputs.spendable = true | `ProcessingSpendableStatus = ['sent','seen','seen_multi','unconfirmed','proven']`; `refreshOutputsSpendable` derives | ✅ |
+| Spendable status set → outputs.spendable = true | `ProcessingSpendableStatus = ['sent','seen','seen_multi','unconfirmed','confirmed']`; `refreshOutputsSpendable` derives | ✅ |
 | Invalid / DoubleSpend → outputs.spendable = false on ALL outputs | `isOutputSpendable` returns false; refresh flips | ✅ |
 | Unfail → no output change | `unfail` is not in spendable set; refresh would change outputs. **Risk**: existing tests may not exercise this. | ⚠️ Verify Unfail does not trigger refresh. |
 | Reorg → preserve current spendable | Refresh currently overrides. See **GAP 2**. | ⚠️ |
@@ -152,6 +152,6 @@ Mixed-results handling (positive preferred, discrepancy logged): preserved. New-
 
 - Test A: third-party confirmed at chain tip → unconfirmed.
 - Test B: third-party unconfirmed broadcast failure → discard (no DB row).
-- Test C: reorg of proven → reorging → unconfirmed; verify outputs.spendable preserved.
+- Test C: reorg of confirmed → reorging → unconfirmed; verify outputs.spendable preserved.
 - Test D: unfail transition; verify outputs unchanged.
 - Test E: mixed broadcast results; verify positive accepted + discrepancy in tx_audit.

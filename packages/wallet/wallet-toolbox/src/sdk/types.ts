@@ -100,8 +100,8 @@ export type TransactionStatus =
  * - seen: first observation that the network has accepted the txid
  * - seen_multi: same as `seen`, confirmed by N>=2 independent providers
  * - unconfirmed: provider returned a proof candidate not yet validated by chaintracks
- * - proven: validated merkle proof acquired
- * - reorging: a previously proven txid lost confirmations and is being re-evaluated
+ * - confirmed: validated merkle proof acquired
+ * - reorging: a previously confirmed txid lost confirmations and is being re-evaluated
  * - invalid: rawTx is structurally invalid or was rejected; will not retry
  * - doubleSpend: confirmed to spend the same input as another tx
  * - unfail: operator-forced re-review of an `invalid` row
@@ -116,7 +116,7 @@ export type ProcessingStatus =
   | 'seen'
   | 'seen_multi'
   | 'unconfirmed'
-  | 'proven'
+  | 'confirmed'
   | 'reorging'
   | 'invalid'
   | 'doubleSpend'
@@ -125,14 +125,14 @@ export type ProcessingStatus =
   | 'nosend'
   | 'nonfinal'
 
-export const ProcessingTerminalStatus: ProcessingStatus[] = ['proven', 'invalid', 'doubleSpend']
+export const ProcessingTerminalStatus: ProcessingStatus[] = ['confirmed', 'invalid', 'doubleSpend']
 
 export const ProcessingSpendableStatus: ProcessingStatus[] = [
   'sent',
   'seen',
   'seen_multi',
   'unconfirmed',
-  'proven'
+  'confirmed'
 ]
 
 /**
@@ -141,7 +141,7 @@ export const ProcessingSpendableStatus: ProcessingStatus[] = [
  */
 export function provenTxReqStatusToProcessing (s: ProvenTxReqStatus): ProcessingStatus {
   switch (s) {
-    case 'completed': return 'proven'
+    case 'completed': return 'confirmed'
     case 'unmined': return 'sent'
     case 'callback': return 'sent'
     case 'unconfirmed': return 'unconfirmed'
@@ -164,7 +164,7 @@ export function provenTxReqStatusToProcessing (s: ProvenTxReqStatus): Processing
  */
 export function transactionStatusToProcessing (s: TransactionStatus): ProcessingStatus {
   switch (s) {
-    case 'completed': return 'proven'
+    case 'completed': return 'confirmed'
     case 'failed': return 'invalid'
     case 'unprocessed': return 'queued'
     case 'sending': return 'sending'

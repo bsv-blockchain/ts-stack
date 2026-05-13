@@ -238,7 +238,7 @@ class InternalizeActionContext {
           // can check isMerge without touching the (absent) legacy columns.
           // status is mapped from processing so the status guard below works.
           const legacyStatus: TransactionStatus =
-            found.transaction.processing === 'proven' ? 'completed'
+            found.transaction.processing === 'confirmed' ? 'completed'
             : found.transaction.processing === 'nosend' ? 'nosend'
             : 'unproven'
           this.etx = {
@@ -391,7 +391,7 @@ class InternalizeActionContext {
     const txSvc = this.storage.getTransactionService()
     if (txSvc != null) {
       try {
-        const processing = (provenTx != null) ? 'proven' as const : 'queued' as const
+        const processing = (provenTx != null) ? 'confirmed' as const : 'queued' as const
         const { action, isNew: isNewTx } = await txSvc.findOrCreateActionForTxid({
           userId: this.userId,
           txid: this.txid,
@@ -495,18 +495,16 @@ class InternalizeActionContext {
               rawTx: Array.from(btx.rawTx!),
               inputBeef: Array.from(this.ab.toBinary()),
               height: bump.blockHeight,
-              merkleIndex: index,
               merklePath: bump.toBinary(),
               merkleRoot,
               blockHash: hash,
               now
             })
           } else {
-            // new schema row exists — record the proof (transitions to proven if not already).
+            // new schema row exists — record the proof (transitions to confirmed if not already).
             await txSvcBump.recordProof({
               transactionId: existingNewTx.transactionId,
               height: bump.blockHeight,
-              merkleIndex: index,
               merklePath: bump.toBinary(),
               merkleRoot,
               blockHash: hash,

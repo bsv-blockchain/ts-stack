@@ -15,7 +15,7 @@ import type { ProcessingStatus } from '../../sdk'
  * as "eligible to appear" to their `ProcessingStatus` equivalents.
  *
  * Legacy status → ProcessingStatus[]
- *   completed  → ['proven']
+ *   completed  → ['confirmed']
  *   unproven   → ['sent', 'seen', 'seen_multi', 'unconfirmed']
  *   nosend     → ['nosend']
  *   sending    → ['sending']
@@ -29,7 +29,7 @@ import type { ProcessingStatus } from '../../sdk'
  * appear in a `listOutputs` response.
  */
 const TX_PROCESSING_ALLOWED: ProcessingStatus[] = [
-  'proven',          // was: completed
+  'confirmed',       // was: completed
   'sent',            // was: unproven
   'seen',            // was: unproven
   'seen_multi',      // was: unproven

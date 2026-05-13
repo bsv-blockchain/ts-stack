@@ -274,7 +274,7 @@ When making further changes:
 - **The transaction service is the only sanctioned mutation path for `transactions`/`actions` post-cutover.** Direct `knex('transactions').insert(...)` writes break the FSM + audit contract. Use `TransactionService.create` / `transition` / `findOrCreate*`.
 - **Every state change writes a `tx_audit` row** via `auditProcessingTransition` (called inside `transitionProcessing`). Don't bypass.
 - **`runSchemaCutover` is one-way in production.** Keep `transactions_legacy` and friends for 30 days per runbook §5.
-- **Reorg branch must never write `invalid` or `doubleSpend` directly.** FSM enforces this. Monitor's reorg handler should follow `proven → reorging → unconfirmed`, then handle invalidation via the standard path if independently detected.
+- **Reorg branch must never write `invalid` or `doubleSpend` directly.** FSM enforces this. Monitor's reorg handler should follow `confirmed → reorging → unconfirmed`, then handle invalidation via the standard path if independently detected.
 - **`outputs.spendable` is a cached derivative.** Source of truth is the §4 rule. Always refresh after transition.
 - **Coinbase outputs need both `is_coinbase = true` on the new-schema transaction AND `matures_at_height` populated on the output row.** Maturity maturity backfill is a one-off post-cutover operation.
 

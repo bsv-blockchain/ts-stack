@@ -10,6 +10,7 @@ import {
   CreateActionResult,
   HexString,
   KeyDeriverApi,
+  MerklePath,
   P2PKH,
   PrivateKey,
   PublicKey,
@@ -1643,7 +1644,7 @@ export abstract class TestUtilsWalletStorage {
             if (!existing) {
               const newTx = await txSvc.create({
                 txid: origSourceTxid + ':src',
-                processing: 'proven',
+                processing: 'confirmed',
                 rawTx: [4, 3, 2, 1],
                 now
               })
@@ -1984,6 +1985,32 @@ export abstract class TestUtilsWalletStorage {
 }
 
 export abstract class _tu extends TestUtilsWalletStorage {}
+
+/**
+ * Build a valid BUMP-encoded merkle path that places `txid` at `offset` in a
+ * minimal tree of the required depth. Sibling hashes are deterministic dummies;
+ * the produced bump round-trips through MerklePath.fromBinary() and exposes the
+ * txid leaf with `txid: true` at the requested offset — sufficient for tests
+ * that only need the index extraction logic to function.
+ */
+export function makeTestBump (txid: string, offset: number, blockHeight: number): number[] {
+  const fakeHash = (n: number): string => Buffer.alloc(32, (n & 0xff)).toString('hex')
+  const depth = offset === 0 ? 1 : Math.floor(Math.log2(offset)) + 1
+  const path: Array<Array<{ offset: number, hash?: string, txid?: boolean, duplicate?: boolean }>> = []
+  if (depth === 1) {
+    path.push([{ offset, txid: true, hash: txid }])
+  } else {
+    path.push([
+      { offset, txid: true, hash: txid },
+      { offset: offset ^ 1, hash: fakeHash(0xa0) }
+    ])
+    for (let h = 1; h < depth; h++) {
+      const legal = (offset >> h) ^ 1
+      path.push([{ offset: legal, hash: fakeHash(0xa0 + h) }])
+    }
+  }
+  return new MerklePath(blockHeight, path).toBinary()
+}
 
 export interface TestSetup1 {
   u1: TableUser

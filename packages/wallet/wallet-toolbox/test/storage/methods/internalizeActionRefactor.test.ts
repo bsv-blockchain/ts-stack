@@ -24,7 +24,7 @@
  */
 
 import { Knex } from 'knex'
-import { _tu } from '../../utils/TestUtilsWalletStorage'
+import { _tu, makeTestBump } from '../../utils/TestUtilsWalletStorage'
 import { KnexMigrations, StorageKnex } from '../../../src/index.all'
 import { runSchemaCutover } from '../../../src/storage/schema/schemaCutover'
 import { TransactionService } from '../../../src/storage/schema/transactionService'
@@ -83,21 +83,20 @@ describe('internalizeAction wiring', () => {
       const svc = new TransactionService(knex)
       const txid = 'a'.repeat(64)
       const rawTx = [0x01, 0x02, 0x03]
-      const merklePath = [0x04, 0x05]
+      const merklePath = makeTestBump(txid, 5, 800000)
 
       // Call site 3 — createWithProof
       const provenTx = await svc.createWithProof({
         txid,
         rawTx,
         height: 800000,
-        merkleIndex: 5,
         merklePath,
         merkleRoot: 'r'.repeat(64),
         blockHash: 'h'.repeat(64)
       })
 
       expect(provenTx.txid).toBe(txid)
-      expect(provenTx.processing).toBe('proven')
+      expect(provenTx.processing).toBe('confirmed')
       expect(provenTx.height).toBe(800000)
       expect(provenTx.merkleIndex).toBe(5)
 
@@ -109,12 +108,12 @@ describe('internalizeAction wiring', () => {
         description: 'internalized payment',
         satoshisDelta: 5000,
         reference: 'ref-iaw-01',
-        processing: 'proven' // should be ignored because tx already exists
+        processing: 'confirmed' // should be ignored because tx already exists
       })
 
       expect(isNew).toBe(true) // action is new even though tx already existed
       expect(transaction.transactionId).toBe(provenTx.transactionId)
-      expect(transaction.processing).toBe('proven') // tx state unchanged
+      expect(transaction.processing).toBe('confirmed') // tx state unchanged
       expect(action.userId).toBe(1)
       expect(action.satoshisDelta).toBe(5000)
       expect(action.isOutgoing).toBe(false)

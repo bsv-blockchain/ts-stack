@@ -122,7 +122,7 @@ describe('the schema cutover (Knex / SQLite)', () => {
       const rows = await knex('transactions').select('txid', 'processing').orderBy('txid')
       expect(rows.map(r => r.txid)).toEqual(['a'.repeat(64), 'b'.repeat(64)])
       const byTxid = Object.fromEntries(rows.map(r => [r.txid, r]))
-      expect(byTxid['a'.repeat(64)].processing).toBe('proven')
+      expect(byTxid['a'.repeat(64)].processing).toBe('confirmed')
       expect(byTxid['b'.repeat(64)].processing).toBe('sending')
 
       const outs = await knex('outputs').select('vout', 'userId', 'transactionId', 'spentBy', 'txid').orderBy('vout')

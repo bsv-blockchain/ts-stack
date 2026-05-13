@@ -8,7 +8,7 @@
 
 import { Beef } from '@bsv/sdk'
 import { Knex } from 'knex'
-import { _tu } from '../utils/TestUtilsWalletStorage'
+import { _tu, makeTestBump } from '../utils/TestUtilsWalletStorage'
 import { KnexMigrations } from '../../src/index.all'
 import { runSchemaCutover } from '../../src/storage/schema/schemaCutover'
 import { TransactionService } from '../../src/storage/schema/transactionService'
@@ -207,23 +207,23 @@ describe('TransactionService — 15 net-new methods', () => {
   // #5 createWithProof
   // -----------------------------------------------------------------------
   describe('#5 createWithProof', () => {
-    test('creates a row directly in proven state with proof fields', async () => {
+    test('creates a row directly in confirmed state with proof fields', async () => {
       const knex = await setupCutDb('svcexp-05a.sqlite')
       try {
         const svc = new TransactionService(knex)
+        const txid = 'fe'.repeat(32)
         const tx = await svc.createWithProof({
-          txid: 'h'.repeat(64),
+          txid,
           rawTx: [1, 2, 3],
           height: 800_000,
-          merkleIndex: 5,
-          merklePath: [0, 1, 2],
-          merkleRoot: 'm'.repeat(64),
-          blockHash: 'b'.repeat(64)
+          merklePath: makeTestBump(txid, 5, 800_000),
+          merkleRoot: 'ab'.repeat(32),
+          blockHash: 'bc'.repeat(32)
         })
-        expect(tx.processing).toBe('proven')
+        expect(tx.processing).toBe('confirmed')
         expect(tx.height).toBe(800_000)
         expect(tx.merkleIndex).toBe(5)
-        expect(tx.merkleRoot).toBe('m'.repeat(64))
+        expect(tx.merkleRoot).toBe('ab'.repeat(32))
         expect(tx.wasBroadcast).toBe(true)
       } finally { await knex.destroy() }
     })
@@ -494,7 +494,7 @@ describe('TransactionService — 15 net-new methods', () => {
       try {
         const svc = new TransactionService(knex)
         const txid = 'y'.repeat(64)
-        await svc.create({ txid, processing: 'proven' })
+        await svc.create({ txid, processing: 'confirmed' })
 
         const { details } = await svc.collectReqsAndBeef([txid])
         expect(details[0].status).toBe('alreadySent')
@@ -563,7 +563,7 @@ describe('TransactionService — 15 net-new methods', () => {
       try {
         const svc = new TransactionService(knex)
         const txQueued = await svc.create({ txid: '4'.repeat(64), processing: 'queued' })
-        const txProven = await svc.create({ txid: '5'.repeat(64), processing: 'proven' })
+        const txProven = await svc.create({ txid: '5'.repeat(64), processing: 'confirmed' })
 
         await svc.createAction({
           userId: 1, transactionId: txQueued.transactionId,
@@ -575,9 +575,9 @@ describe('TransactionService — 15 net-new methods', () => {
         })
 
         const { rows } = await svc.listActionsForUser({
-          userId: 1, statusFilter: ['proven'], limit: 10, offset: 0
+          userId: 1, statusFilter: ['confirmed'], limit: 10, offset: 0
         })
-        expect(rows.every(r => r.processing === 'proven')).toBe(true)
+        expect(rows.every(r => r.processing === 'confirmed')).toBe(true)
         expect(rows.find(r => r.reference === 'ref-p')).toBeDefined()
         expect(rows.find(r => r.reference === 'ref-q')).toBeUndefined()
       } finally { await knex.destroy() }
@@ -686,8 +686,8 @@ describe('TransactionService — 15 net-new methods', () => {
       const knex = await setupCutDb('svcexp-15c.sqlite')
       try {
         const svc = new TransactionService(knex)
-        const tx = await svc.create({ txid: 'b'.repeat(64), processing: 'proven' })
-        const txSpending = await svc.create({ txid: 'c'.repeat(64), processing: 'proven' })
+        const tx = await svc.create({ txid: 'b'.repeat(64), processing: 'confirmed' })
+        const txSpending = await svc.create({ txid: 'c'.repeat(64), processing: 'confirmed' })
         const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default', created_at: new Date(), updated_at: new Date() })
 
         // Insert spent output
@@ -703,7 +703,7 @@ describe('TransactionService — 15 net-new methods', () => {
 
         const { rows } = await svc.listOutputsForUser({
           userId: 1,
-          processingFilter: ['proven'],
+          processingFilter: ['confirmed'],
           includeSpent: false,
           limit: 10,
           offset: 0
@@ -716,7 +716,7 @@ describe('TransactionService — 15 net-new methods', () => {
       const knex = await setupCutDb('svcexp-15d.sqlite')
       try {
         const svc = new TransactionService(knex)
-        const tx = await svc.create({ txid: 'd'.repeat(64), processing: 'proven' })
+        const tx = await svc.create({ txid: 'd'.repeat(64), processing: 'confirmed' })
         const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default', created_at: new Date(), updated_at: new Date() })
 
         const [o1] = await knex('outputs').insert(outputRow({ userId: 1, transactionId: tx.transactionId, basketId, txid: 'd'.repeat(64), vout: 0 }))
@@ -727,7 +727,7 @@ describe('TransactionService — 15 net-new methods', () => {
 
         const { rows } = await svc.listOutputsForUser({
           userId: 1,
-          processingFilter: ['proven'],
+          processingFilter: ['confirmed'],
           tagIds: [tagId],
           tagQueryMode: 'any',
           includeSpent: false,
@@ -743,13 +743,13 @@ describe('TransactionService — 15 net-new methods', () => {
       const knex = await setupCutDb('svcexp-15e.sqlite')
       try {
         const svc = new TransactionService(knex)
-        const tx = await svc.create({ txid: 'e'.repeat(64), processing: 'proven' })
+        const tx = await svc.create({ txid: 'e'.repeat(64), processing: 'confirmed' })
         const [basketId] = await knex('output_baskets').insert({ userId: 1, name: 'default', created_at: new Date(), updated_at: new Date() })
         await knex('outputs').insert(outputRow({ userId: 1, transactionId: tx.transactionId, basketId, txid: 'e'.repeat(64), lockingScript: Buffer.from([0x76, 0xa9]) }))
 
         const { rows } = await svc.listOutputsForUser({
           userId: 1,
-          processingFilter: ['proven'],
+          processingFilter: ['confirmed'],
           includeSpent: false,
           limit: 10,
           offset: 0,

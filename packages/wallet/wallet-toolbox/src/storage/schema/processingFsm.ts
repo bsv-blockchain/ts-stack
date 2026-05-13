@@ -4,11 +4,11 @@ import * as sdk from '../../sdk'
  * processing-state machine.
  *
  * Maps each `ProcessingStatus` to the set of states it may legally transition
- * to. Terminal states (`proven`, `invalid`, `doubleSpend`) have no outgoing
+ * to. Terminal states (`confirmed`, `invalid`, `doubleSpend`) have no outgoing
  * transitions except via the `unfail` operator override.
  *
  * The transition table is intentionally permissive — the goal is to *reject
- * impossible* moves (e.g. `queued -> proven` without ever broadcasting) rather
+ * impossible* moves (e.g. `queued -> confirmed` without ever broadcasting) rather
  * than to enumerate the happy path. Stateful preconditions (proof present,
  * provider acknowledged) are enforced at the call site.
  */
@@ -19,17 +19,17 @@ const TRANSITIONS: Record<sdk.ProcessingStatus, sdk.ProcessingStatus[]> = {
   // legacy mapping `* -> doubleSpend (rejection)`.
   queued: ['sending', 'sent', 'nosend', 'frozen', 'nonfinal', 'invalid', 'doubleSpend'],
   sending: ['sent', 'seen', 'seen_multi', 'invalid', 'doubleSpend', 'frozen', 'queued'],
-  sent: ['seen', 'seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend', 'frozen', 'sending'],
+  sent: ['seen', 'seen_multi', 'unconfirmed', 'confirmed', 'invalid', 'doubleSpend', 'frozen', 'sending'],
   // `seen -> sending`: provider re-acknowledgment lost; legacy mapping
   // `* -> sending (serviceError retry)` from STORAGE_METHOD_WIRING §4.
-  seen: ['seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend', 'reorging', 'frozen', 'sending'],
+  seen: ['seen_multi', 'unconfirmed', 'confirmed', 'invalid', 'doubleSpend', 'reorging', 'frozen', 'sending'],
   // `seen_multi -> sending`: same retry semantics as `seen -> sending`.
-  seen_multi: ['unconfirmed', 'proven', 'invalid', 'doubleSpend', 'reorging', 'frozen', 'sending'],
+  seen_multi: ['unconfirmed', 'confirmed', 'invalid', 'doubleSpend', 'reorging', 'frozen', 'sending'],
   // `unconfirmed -> doubleSpend`: a provider's proof candidate may be retracted
   // when a competing tx is mined. `unconfirmed -> sending`: candidate failed
   // chaintracks validation, restart broadcast attempts. Both per §4.
-  unconfirmed: ['proven', 'invalid', 'reorging', 'frozen', 'seen', 'seen_multi', 'doubleSpend', 'sending'],
-  proven: ['reorging'],
+  unconfirmed: ['confirmed', 'invalid', 'reorging', 'frozen', 'seen', 'seen_multi', 'doubleSpend', 'sending'],
+  confirmed: ['reorging'],
   // Reorg rule (bsv_wallet_transaction_requirements v1.0 §5):
   // "A reorg SHALL never cause a transaction to be marked Invalid or
   // DoubleSpend." The reorging state is therefore restricted to recovery
@@ -38,10 +38,10 @@ const TRANSITIONS: Record<sdk.ProcessingStatus, sdk.ProcessingStatus[]> = {
   // invalid or a doubleSpend must first transition through `unconfirmed`
   // (where the standard FSM edges to `invalid`/`doubleSpend` apply) so the
   // rejection is recorded against a non-reorg cause in `tx_audit`.
-  reorging: ['proven', 'seen', 'seen_multi', 'unconfirmed', 'frozen'],
+  reorging: ['confirmed', 'seen', 'seen_multi', 'unconfirmed', 'frozen'],
   invalid: ['unfail'],
   doubleSpend: ['unfail'],
-  unfail: ['queued', 'sending', 'sent', 'seen', 'seen_multi', 'unconfirmed', 'proven', 'invalid', 'doubleSpend'],
+  unfail: ['queued', 'sending', 'sent', 'seen', 'seen_multi', 'unconfirmed', 'confirmed', 'invalid', 'doubleSpend'],
   frozen: ['queued', 'sending', 'sent', 'seen', 'seen_multi', 'unconfirmed', 'invalid', 'doubleSpend'],
   // `nosend -> sending`: operator (or processAction promotion) moves a
   // never-broadcast tx into the active broadcast pipeline. `nosend ->
