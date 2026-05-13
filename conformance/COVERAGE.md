@@ -1,13 +1,13 @@
 # BSV Conformance Suite — Coverage Matrix
 
-**Wave 4 Final Verification** | Generated: 2026-05-07
+**Wave 4 Final Verification** | Generated: 2026-05-13
 
 ## Full-Suite Summary
 
 | Metric | Count |
 |--------|-------|
-| Total vectors | 6 601 |
-| **Passed** | **6 414** |
+| Total vectors | 6 626 |
+| **Passed** | **6 439** |
 | **Failed** | **0** |
 | **Skipped** | **187** |
 | Test files | 71 |
@@ -31,16 +31,16 @@ Skip breakdown: 180 `parity_class: intended` + 7 `skip: true`. Zero `best-effort
 | sdk | 5 339 | 5 301 | 0 | 38 | Implemented — crypto/keys/scripts/transactions with real assertions | 35 intended (tx_invalid edge cases) + 3 skip:true |
 | storage | 15 | 15 | 0 | 0 | Implemented — UHRP-HTTP structural validation | All 15 required; file-level parity = required |
 | sync | 20 | 20 | 0 | 0 | Implemented — GASP protocol shape validation | |
-| wallet | 995 | 856 | 0 | 139 | Implemented — real ProtoWallet + wallet-toolbox harness | 139 intended (funded wallet / live overlay / state) |
+| wallet | 1 020 | 881 | 0 | 139 | Implemented — real ProtoWallet + wallet-toolbox harness | 139 intended (funded wallet / live overlay / state) |
 
-**Total active vectors: 6 414 (all passing). Total skipped: 187.**
+**Total active vectors: 6 439 (all passing). Total skipped: 187.**
 
 ### Wallet sub-domain detail
 
 | File | Total | Active | Intended-skip | Notes |
 |------|-------|--------|---------------|-------|
 | payment-derivation | 27 | 27 | 0 | Real BRC-42/BRC-29 derivation, exact-match |
-| adapter-conformance | 18 | 18 | 0 | Storage HTTP shape validation |
+| adapter-conformance | 43 | 43 | 0 | Storage HTTP shape validation — full WalletStorage interface (lifecycle, identity, find/list, actions, certificates, sync, error paths) |
 | getpublickey | 201 | 201 | 0 | Real ProtoWallet, exact-match |
 | createhmac | 36 | 36 | 0 | Real ProtoWallet, exact-match |
 | verifyhmac | 70 | 70 | 0 | Real ProtoWallet (throws on invalid) |

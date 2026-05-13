@@ -554,6 +554,910 @@
         }
       },
       "tags": ["wallet", "storage", "error-case", "outputs", "relinquish", "invalid-format"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.19",
+      "description": "GET /isStorageProvider — returns true for full StorageKnex/StorageIdb, false for the remoting client",
+      "input": {
+        "method": "GET",
+        "path": "/storage/v1/isStorageProvider",
+        "headers": {
+          "Authorization": "Bearer brc103-session-token-abc123"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "isStorageProvider": true
+        },
+        "schema_note": "boolean. Hosts that wrap remoting/HTTP clients MUST return false."
+      },
+      "tags": ["wallet", "storage", "happy-path", "lifecycle", "isStorageProvider"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.20",
+      "description": "GET /available — returns true once makeAvailable has cached settings",
+      "input": {
+        "method": "GET",
+        "path": "/storage/v1/available",
+        "headers": {
+          "Authorization": "Bearer brc103-session-token-abc123"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "isAvailable": true
+        },
+        "schema_note": "boolean. Must be false before the first successful makeAvailable() call."
+      },
+      "tags": ["wallet", "storage", "happy-path", "lifecycle", "isAvailable"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.21",
+      "description": "POST /makeAvailable — loads the singleton settings row and caches it for subsequent reads",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/makeAvailable",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {}
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "storageIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "storageName": "my-wallet-storage",
+          "chain": "main",
+          "dbtype": "SQLite",
+          "maxOutputScript": 10000,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "updated_at": "2026-05-01T12:00:00.000Z"
+        },
+        "schema_note": "TableSettings (same shape as GET /settings). Subsequent isAvailable() must return true."
+      },
+      "tags": ["wallet", "storage", "happy-path", "lifecycle", "makeAvailable"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.22",
+      "description": "POST /makeAvailable against an un-migrated database — returns 409 Conflict with a structured error",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/makeAvailable",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {}
+      },
+      "expected": {
+        "status": 409,
+        "body": {
+          "error": "storage not migrated",
+          "code": "WERR_INVALID_OPERATION",
+          "messageMatch": "settings"
+        },
+        "schema_note": "Implementations MUST refuse to fabricate a settings row; callers must invoke /migrate first."
+      },
+      "tags": ["wallet", "storage", "error-case", "lifecycle", "makeAvailable", "not-migrated"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.23",
+      "description": "GET /services — returns the configured WalletServices identity (chain + provider names)",
+      "input": {
+        "method": "GET",
+        "path": "/storage/v1/services",
+        "headers": {
+          "Authorization": "Bearer brc103-session-token-abc123"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "chain": "main",
+          "broadcaster": "arc",
+          "chainTracker": "chaintracks",
+          "merkleVerifier": "spv",
+          "lookupService": "overlay"
+        },
+        "schema_note": "WalletServicesInfo: { chain, broadcaster, chainTracker, merkleVerifier, lookupService }. Implementations that disable a service MUST return null for that key (not omit)."
+      },
+      "tags": ["wallet", "storage", "happy-path", "lifecycle", "services"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.24",
+      "description": "POST /auth — getAuth returns the resolved AuthId derived from the bearer token",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/auth",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {}
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "userId": 1,
+          "isActive": true
+        },
+        "schema_note": "AuthId: { identityKey, userId?, isActive? }. isActive=false means the user exists on this storage but a peer holds the active copy."
+      },
+      "tags": ["wallet", "storage", "happy-path", "auth", "getAuth"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.25",
+      "description": "POST /users — findOrInsertUser inserts a new user and the default change basket on first call",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/users",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "user": {
+            "userId": 1,
+            "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "activeStorage": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "1971-01-01T00:00:00.000Z"
+          },
+          "isNew": true
+        },
+        "schema_note": "FindOrInsertUserResult: { user: TableUser, isNew: boolean }. New users MUST receive a 'default' OutputBasket with numberOfDesiredUTXOs=144 and minimumDesiredUTXOValue=32. The default-constructed user.updated_at is the sync sentinel 1971-01-01T00:00:00.000Z so peers will overwrite it on first sync."
+      },
+      "tags": ["wallet", "storage", "happy-path", "users", "find-or-insert"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.26",
+      "description": "POST /users — second call for the same identity returns the existing user with isNew=false",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/users",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "user": {
+            "userId": 1,
+            "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "activeStorage": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-01-01T00:00:00.000Z"
+          },
+          "isNew": false
+        }
+      },
+      "tags": ["wallet", "storage", "idempotent", "users", "find-or-insert"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.27",
+      "description": "POST /destroy — releases the underlying connection pool and resets isAvailable to false",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/destroy",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {}
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "ok": true
+        },
+        "schema_note": "After destroy, subsequent GET /available MUST return false. Calling destroy twice MUST be a no-op (still returns ok:true)."
+      },
+      "tags": ["wallet", "storage", "happy-path", "lifecycle", "destroy"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.28",
+      "description": "GET /stores — returns the active + backup storage providers known to the manager",
+      "input": {
+        "method": "GET",
+        "path": "/storage/v1/stores",
+        "headers": {
+          "Authorization": "Bearer brc103-session-token-abc123"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "stores": [
+            {
+              "isActive": true,
+              "isEnabled": true,
+              "isBackup": false,
+              "isConflicting": false,
+              "userId": 1,
+              "storageIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+              "storageName": "my-wallet-storage",
+              "storageClass": "StorageKnex"
+            },
+            {
+              "isActive": false,
+              "isEnabled": true,
+              "isBackup": true,
+              "isConflicting": false,
+              "userId": 1,
+              "storageIdentityKey": "03b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+              "storageName": "remote-wallet-storage",
+              "storageClass": "StorageClient",
+              "endpointURL": "https://wallet.example.com"
+            }
+          ]
+        },
+        "schema_note": "WalletStorageInfo[]: { isActive, isEnabled, isBackup, isConflicting, userId, storageIdentityKey, storageName, storageClass, endpointURL? }. Exactly one entry MUST have isActive=true."
+      },
+      "tags": ["wallet", "storage", "happy-path", "stores"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.29",
+      "description": "POST /find/certificates — partial match by certifier returns certificate rows with embedded fields",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/find/certificates",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "partial": {},
+          "certifiers": [
+            "02certifierkey1234567890abcdef1234567890abcdef1234567890abcdef1234"
+          ],
+          "types": ["identity"],
+          "includeFields": true,
+          "paged": {
+            "limit": 50,
+            "offset": 0
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "certificates": [
+            {
+              "certificateId": 42,
+              "userId": 1,
+              "type": "identity",
+              "serialNumber": "SN-00001-2026",
+              "certifier": "02certifierkey1234567890abcdef1234567890abcdef1234567890abcdef1234",
+              "subject": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+              "revocationOutpoint": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2.0",
+              "signature": "30440220...",
+              "isDeleted": false,
+              "created_at": "2026-01-01T00:00:00.000Z",
+              "updated_at": "2026-01-01T00:00:00.000Z",
+              "fields": [
+                {
+                  "fieldName": "email",
+                  "fieldValue": "alice@example.com",
+                  "masterKey": "00000000000000000000000000000000"
+                }
+              ]
+            }
+          ]
+        },
+        "schema_note": "TableCertificateX[]: TableCertificate + optional fields[]. includeFields=true forces fields population; includeFields=false MUST omit the property."
+      },
+      "tags": ["wallet", "storage", "happy-path", "find-certificates", "include-fields"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.30",
+      "description": "POST /find/output-baskets — partial match by userId returns the default basket + any named baskets",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/find/output-baskets",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "partial": {
+            "userId": 1
+          },
+          "paged": {
+            "limit": 50,
+            "offset": 0
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "baskets": [
+            {
+              "basketId": 1,
+              "userId": 1,
+              "name": "default",
+              "numberOfDesiredUTXOs": 144,
+              "minimumDesiredUTXOValue": 32,
+              "isDeleted": false,
+              "created_at": "2026-01-01T00:00:00.000Z",
+              "updated_at": "1971-01-01T00:00:00.000Z"
+            },
+            {
+              "basketId": 2,
+              "userId": 1,
+              "name": "payments",
+              "numberOfDesiredUTXOs": 0,
+              "minimumDesiredUTXOValue": 0,
+              "isDeleted": false,
+              "created_at": "2026-01-02T00:00:00.000Z",
+              "updated_at": "2026-01-02T00:00:00.000Z"
+            }
+          ]
+        },
+        "schema_note": "TableOutputBasket[]: ordered by basketId ascending. Soft-deleted baskets (isDeleted=true) MUST be included unless the partial filters them out."
+      },
+      "tags": ["wallet", "storage", "happy-path", "find-output-baskets"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.31",
+      "description": "POST /find/outputs — partial match by userId+spendable=true with noScript=true",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/find/outputs",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "partial": {
+            "userId": 1,
+            "spendable": true
+          },
+          "noScript": true,
+          "txStatus": ["completed", "unproven"],
+          "paged": {
+            "limit": 50,
+            "offset": 0
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "outputs": [
+            {
+              "outputId": 7,
+              "userId": 1,
+              "transactionId": 3,
+              "basketId": 1,
+              "spendable": true,
+              "change": true,
+              "vout": 1,
+              "satoshis": 99750,
+              "providedBy": "storage",
+              "purpose": "change",
+              "type": "P2PKH",
+              "outputDescription": "change",
+              "txid": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+              "created_at": "2026-05-01T12:00:00.000Z",
+              "updated_at": "2026-05-01T12:00:00.000Z"
+            }
+          ]
+        },
+        "schema_note": "TableOutput[] (lockingScript MUST be omitted when noScript=true). When txStatus is provided, the underlying transaction's status MUST be in the supplied set."
+      },
+      "tags": ["wallet", "storage", "happy-path", "find-outputs", "no-script"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.32",
+      "description": "POST /find/proven-tx-reqs — filter by an explicit status array and explicit txids",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/find/proven-tx-reqs",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "partial": {},
+          "status": ["unmined", "callback"],
+          "txids": [
+            "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3"
+          ],
+          "paged": {
+            "limit": 50,
+            "offset": 0
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "reqs": [
+            {
+              "provenTxReqId": 11,
+              "txid": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+              "status": "unmined",
+              "attempts": 1,
+              "notified": false,
+              "history": "{}",
+              "notify": "{\"transactionIds\":[3]}",
+              "rawTx": [1, 0, 0, 0, 1],
+              "inputBEEF": null,
+              "created_at": "2026-05-01T12:00:00.000Z",
+              "updated_at": "2026-05-01T12:00:30.000Z"
+            }
+          ]
+        },
+        "schema_note": "TableProvenTxReq[]. status array is OR-matched, txids array is AND-matched against the partial filter."
+      },
+      "tags": ["wallet", "storage", "happy-path", "find-proven-tx-reqs"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.33",
+      "description": "POST /list/certificates — auth-gated list returning embedded fields and total count",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/list/certificates",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "partial": {},
+          "certifiers": [
+            "02certifierkey1234567890abcdef1234567890abcdef1234567890abcdef1234"
+          ],
+          "types": ["identity"],
+          "limit": 10,
+          "offset": 0,
+          "privileged": false
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "totalCertificates": 1,
+          "certificates": [
+            {
+              "type": "identity",
+              "subject": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+              "serialNumber": "SN-00001-2026",
+              "certifier": "02certifierkey1234567890abcdef1234567890abcdef1234567890abcdef1234",
+              "revocationOutpoint": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2.0",
+              "signature": "30440220...",
+              "fields": {
+                "email": "alice@example.com"
+              }
+            }
+          ]
+        },
+        "schema_note": "ListCertificatesResult: { totalCertificates, certificates: WalletCertificate[] }. fields is a flat map (BRC-100 shape), not an array — distinct from find/certificates which returns TableCertificateX rows."
+      },
+      "tags": ["wallet", "storage", "happy-path", "list-certificates"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.34",
+      "description": "POST /sync/chunk/process — apply a peer-supplied SyncChunk to the local store",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/sync/chunk/process",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "args": {
+            "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "fromStorageIdentityKey": "03b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+            "toStorageIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "maxRoughSize": 1000000,
+            "maxItems": 100,
+            "offsets": [
+              { "name": "ProvenTxs", "offset": 0 },
+              { "name": "ProvenTxReqs", "offset": 0 },
+              { "name": "OutputBaskets", "offset": 0 },
+              { "name": "TxLabels", "offset": 0 },
+              { "name": "OutputTags", "offset": 0 },
+              { "name": "Transactions", "offset": 0 },
+              { "name": "TxLabelMaps", "offset": 0 },
+              { "name": "Commissions", "offset": 0 },
+              { "name": "Outputs", "offset": 0 },
+              { "name": "OutputTagMaps", "offset": 0 },
+              { "name": "Certificates", "offset": 0 },
+              { "name": "CertificateFields", "offset": 0 }
+            ]
+          },
+          "chunk": {
+            "fromStorageIdentityKey": "03b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+            "toStorageIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "userIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "user": {
+              "userId": 1,
+              "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+              "activeStorage": "03b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+              "created_at": "2026-01-01T00:00:00.000Z",
+              "updated_at": "2026-05-01T12:00:00.000Z"
+            },
+            "outputBaskets": [
+              {
+                "basketId": 1,
+                "userId": 1,
+                "name": "default",
+                "numberOfDesiredUTXOs": 144,
+                "minimumDesiredUTXOValue": 32,
+                "isDeleted": false,
+                "created_at": "2026-01-01T00:00:00.000Z",
+                "updated_at": "2026-01-01T00:00:00.000Z"
+              }
+            ]
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "done": true,
+          "maxUpdated_at": "2026-05-01T12:00:00.000Z",
+          "updates": 1,
+          "inserts": 1
+        },
+        "schema_note": "ProcessSyncChunkResult: { done, maxUpdated_at, updates, inserts, error? }. done=true means the receiver has consumed every supplied row; the caller advances offsets and stops when both done=true and inserts+updates=0 from the next chunk."
+      },
+      "tags": ["wallet", "storage", "happy-path", "sync", "process-chunk"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.35",
+      "description": "POST /sync/chunk — non-empty chunk export contains outputs and transactions ordered by updated_at",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/sync/chunk",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "fromStorageIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "toStorageIdentityKey": "03b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+          "since": "2026-04-30T00:00:00.000Z",
+          "maxRoughSize": 1000000,
+          "maxItems": 100,
+          "offsets": [
+            { "name": "ProvenTxs", "offset": 0 },
+            { "name": "ProvenTxReqs", "offset": 0 },
+            { "name": "OutputBaskets", "offset": 0 },
+            { "name": "TxLabels", "offset": 0 },
+            { "name": "OutputTags", "offset": 0 },
+            { "name": "Transactions", "offset": 0 },
+            { "name": "TxLabelMaps", "offset": 0 },
+            { "name": "Commissions", "offset": 0 },
+            { "name": "Outputs", "offset": 0 },
+            { "name": "OutputTagMaps", "offset": 0 },
+            { "name": "Certificates", "offset": 0 },
+            { "name": "CertificateFields", "offset": 0 }
+          ]
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "fromStorageIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "toStorageIdentityKey": "03b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+          "userIdentityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "user": {
+            "userId": 1,
+            "identityKey": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "activeStorage": "02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "updated_at": "2026-05-01T12:00:00.000Z"
+          },
+          "transactions": [
+            {
+              "transactionId": 3,
+              "userId": 1,
+              "status": "completed",
+              "reference": "dGVzdHJlZmVyZW5jZQ==",
+              "isOutgoing": true,
+              "satoshis": -100250,
+              "description": "Send payment to alice",
+              "txid": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+              "created_at": "2026-05-01T12:00:00.000Z",
+              "updated_at": "2026-05-01T12:00:00.000Z"
+            }
+          ],
+          "outputs": [
+            {
+              "outputId": 7,
+              "userId": 1,
+              "transactionId": 3,
+              "basketId": 1,
+              "spendable": true,
+              "change": true,
+              "vout": 1,
+              "satoshis": 99750,
+              "providedBy": "storage",
+              "purpose": "change",
+              "type": "P2PKH",
+              "outputDescription": "change",
+              "txid": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+              "created_at": "2026-05-01T12:00:00.000Z",
+              "updated_at": "2026-05-01T12:00:00.000Z"
+            }
+          ]
+        },
+        "schema_note": "SyncChunk: empty arrays MAY be omitted entirely. Rows MUST be returned in dependency order (offsets array) and within each entity sorted by updated_at ascending so the recipient can resume from a fixed cursor."
+      },
+      "tags": ["wallet", "storage", "happy-path", "sync", "chunk", "non-empty"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.36",
+      "description": "POST /list/actions with a label filter returns only matching actions and respects total count",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/list/actions",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "labels": ["payment"],
+          "labelQueryMode": "any",
+          "limit": 5,
+          "offset": 0,
+          "includeLabels": true,
+          "includeOutputs": false,
+          "includeInputs": false
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "totalActions": 1,
+          "actions": [
+            {
+              "txid": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+              "satoshis": -100250,
+              "status": "completed",
+              "description": "Send payment to alice",
+              "isOutgoing": true,
+              "version": 1,
+              "lockTime": 0,
+              "labels": ["payment"]
+            }
+          ]
+        },
+        "schema_note": "labelQueryMode='any' OR-matches labels; 'all' AND-matches. Implementations MUST default to 'any' when omitted."
+      },
+      "tags": ["wallet", "storage", "happy-path", "list-actions", "label-filter"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.37",
+      "description": "POST /list/outputs against an unknown basket — returns an empty list with totalOutputs=0",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/list/outputs",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "basket": "does-not-exist",
+          "limit": 10,
+          "offset": 0,
+          "spendable": true
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "totalOutputs": 0,
+          "outputs": []
+        },
+        "schema_note": "An unknown basket name is NOT an error — implementations MUST return an empty list. Throwing here is a conformance failure."
+      },
+      "tags": ["wallet", "storage", "edge-case", "list-outputs", "unknown-basket"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.38",
+      "description": "POST /actions — createAction with insufficient funds returns 422 with structured error",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/actions",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "args": {
+            "description": "Spend more than available",
+            "outputs": [
+              {
+                "lockingScript": "76a914f54a5851e9372b87810a8e60cdd2e7cfd80b6e5388ac",
+                "satoshis": 999999999,
+                "outputDescription": "too big"
+              }
+            ],
+            "options": {
+              "signAndProcess": false
+            }
+          }
+        }
+      },
+      "expected": {
+        "status": 422,
+        "body": {
+          "error": "insufficient funds",
+          "code": "WERR_INSUFFICIENT_FUNDS",
+          "totalSatoshis": 99750,
+          "requiredSatoshis": 999999999
+        },
+        "schema_note": "Implementations MUST surface totalSatoshis (the wallet's spendable balance considered) and requiredSatoshis. Currency-unit confusion is the most common cross-language regression here."
+      },
+      "tags": ["wallet", "storage", "error-case", "create-action", "insufficient-funds"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.39",
+      "description": "POST /actions/process — processAction with txid that does not match rawTx returns 400",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/actions/process",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "isNewTx": true,
+          "isSendWith": false,
+          "isNoSend": false,
+          "isDelayed": false,
+          "reference": "dGVzdHJlZmVyZW5jZQ==",
+          "txid": "0000000000000000000000000000000000000000000000000000000000000000",
+          "rawTx": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "sendWith": []
+        }
+      },
+      "expected": {
+        "status": 400,
+        "body": {
+          "error": "txid does not match rawTx hash",
+          "code": "WERR_INVALID_PARAMETER",
+          "messageMatch": "txid"
+        }
+      },
+      "tags": ["wallet", "storage", "error-case", "process-action", "txid-mismatch"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.40",
+      "description": "POST /actions/abort — aborting an unknown reference returns 404",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/actions/abort",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "reference": "ZG9lc25vdGV4aXN0"
+        }
+      },
+      "expected": {
+        "status": 404,
+        "body": {
+          "error": "action reference not found",
+          "code": "WERR_NOT_FOUND"
+        }
+      },
+      "tags": ["wallet", "storage", "error-case", "abort-action", "unknown-reference"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.41",
+      "description": "POST /actions/internalize — basket-insertion protocol stores the output under a named basket",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/actions/internalize",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "tx": [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "outputs": [
+            {
+              "outputIndex": 0,
+              "protocol": "basket insertion",
+              "insertionRemittance": {
+                "basket": "btms-tokens",
+                "customInstructions": "{\"protocolID\":\"btms\"}",
+                "tags": ["btms", "received"]
+              }
+            }
+          ],
+          "description": "Receive a BTMS token under the btms-tokens basket"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "accepted": true,
+          "isMerge": false,
+          "txid": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+          "satoshis": 1
+        },
+        "schema_note": "InternalizeAction with protocol='basket insertion' MUST honour basket/tags/customInstructions on the resulting outputs row and MUST NOT consume change from the user's default basket."
+      },
+      "tags": ["wallet", "storage", "happy-path", "internalize-action", "basket-insertion", "brc-100"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.42",
+      "description": "POST /certificates — insert with a malformed revocationOutpoint returns 400",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/certificates",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-abc123"
+        },
+        "body": {
+          "userId": 1,
+          "certifier": "02certifierkey1234567890abcdef1234567890abcdef1234567890abcdef1234",
+          "serialNumber": "SN-00002-2026",
+          "type": "identity",
+          "revocationOutpoint": "not-an-outpoint",
+          "signature": "30440220...",
+          "isDeleted": false,
+          "fields": []
+        }
+      },
+      "expected": {
+        "status": 400,
+        "body": {
+          "error": "invalid revocationOutpoint",
+          "code": "WERR_INVALID_PARAMETER",
+          "messageMatch": "revocationOutpoint"
+        }
+      },
+      "tags": ["wallet", "storage", "error-case", "certificates", "insert", "invalid-outpoint"]
+    },
+    {
+      "id": "wallet.storage.adapterconformance.43",
+      "description": "Any write endpoint with a bearer token that resolves to no AuthId returns 403 Forbidden",
+      "input": {
+        "method": "POST",
+        "path": "/storage/v1/outputs/relinquish",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer brc103-session-token-revoked"
+        },
+        "body": {
+          "output": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2.0"
+        }
+      },
+      "expected": {
+        "status": 403,
+        "body": {
+          "error": "forbidden",
+          "code": "WERR_UNAUTHORIZED",
+          "messageMatch": "identity"
+        },
+        "schema_note": "401 means 'no credentials supplied'; 403 means 'credentials present but resolve to an unknown / inactive user'. Implementations MUST distinguish the two."
+      },
+      "tags": ["wallet", "storage", "error-case", "auth", "forbidden"]
     }
   ]
 }

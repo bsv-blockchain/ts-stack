@@ -77,6 +77,12 @@ From `storage/` — pluggable backends:
 - **`StorageProvider`** — Factory pattern for storage selection
 - All implement: `WalletStorage` interface with methods for actions, outputs, certificates, permissions
 
+#### v3 schema cutover
+- **`runSchemaCutover(knex)`** / **`rollbackSchemaCutover(knex)`** — exported from the package root. Performs the one-way migration from the legacy single-table `transactions` schema to the v3 per-txid + per-user `transactions` + `actions` split. Renames legacy tables to `*_legacy`, swaps `transactions_new` in as canonical, remaps FK values, rebuilds `tx_labels_map.transactionId` to reference `actions.actionId`, and drops orphan FK rows pointing at legacy `transactions` rows that have no `txid` (no canonical counterpart in `transactions_new`).
+- **`StorageKnex._postCutoverCache`** — boolean cache set once at `makeAvailable()` via `hasTable('transactions_legacy')`. All read/write routing keys off it. Not refreshed after construction, so consumers running a standalone cutover must restart the process afterwards.
+- **Bridge-period FK behaviour**: SQLite uses `PRAGMA legacy_alter_table = ON` during the `transactions` rename to preserve string-based FK resolution, then `PRAGMA foreign_keys` toggles bypass FK enforcement during legacy-shape inserts. MySQL `RENAME TABLE` rewrites FK metadata automatically, so most bridge inserts work without toggle — except `tx_labels_map` which is explicitly DROP + ADD CONSTRAINT'd to reference `actions(actionId)`, requiring `SET FOREIGN_KEY_CHECKS=0/1` around bridge inserts (same pattern as SQLite).
+- See `docs/CUTOVER_RUNBOOK.md` for the production operator runbook.
+
 ### Services Layer
 From `services/` — network integration:
 - **`Services`** — Aggregated network services container; includes:

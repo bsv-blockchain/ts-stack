@@ -98,8 +98,23 @@
   },
   "stats": {
     "total_files": 71,
-    "total_vectors": 6601,
-    "last_updated": "2026-05-07"
+    "total_vectors": 6626,
+    "last_updated": "2026-05-13"
+  },
+  "subsuites": {
+    "wallet.storage.adapterconformance": {
+      "file": "vectors/wallet/storage/adapter-conformance.json",
+      "vector_count": 43,
+      "covers": [
+        "lifecycle: settings, migrate, makeAvailable, isAvailable, destroy, services, isStorageProvider",
+        "identity: getAuth, findOrInsertUser, setActive, getStores",
+        "writes: createAction, processAction, internalizeAction (+replay +basket-insertion), abortAction",
+        "writes: insertCertificate, relinquishCertificate, relinquishOutput",
+        "reads: findCertificates, findOutputBaskets, findOutputs, findProvenTxReqs, listActions, listCertificates, listOutputs",
+        "sync: findOrInsertSyncStateAuth, getSyncChunk (empty + non-empty), processSyncChunk",
+        "error paths: missing args 400, invalid outpoint 400, txid mismatch 400, unknown reference 404, insufficient funds 422, not migrated 409, 401 vs 403 auth split"
+      ]
+    }
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

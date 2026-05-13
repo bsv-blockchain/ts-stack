@@ -36,7 +36,11 @@ Environment variables (from `.env.example`):
 - **COMMISSION_FEE** – Optional commission fee in satoshis per request (default: 0)
 - **COMMISSION_PUBLIC_KEY** – Public key to receive commission payments (if COMMISSION_FEE > 0)
 - **FEE_MODEL** – Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`)
-- **TAAL_API_KEY** – API key for Taal blockchain data service (optional)
+- **TAAL_API_KEY** – API key for Taal blockchain data service (optional; populates `arcConfig.apiKey` + `taalApiKey`)
+- **ARC_URL** – ARC endpoint base URL (e.g. `https://arcade-v2-us-1.bsvblockchain.tech`). Applies only when chain ≠ `mock`.
+- **ARC_API_KEY** – API key for ARC. Overrides `TAAL_API_KEY` in `arcConfig.apiKey` if both are set.
+- **ARC_CALLBACK_TOKEN** – Enables `TaskArcSSE` proof-callback subscription. Without it, log shows `[TaskArcadeSSE] no callbackToken configured — SSE disabled`.
+- **LEGACY_UPGRADE** – Set to `"true"` ONLY when upgrading an existing v2 database with real legacy `transactions` rows. v3 is the default canonical schema: fresh installs (empty `transactions` table) auto-initialize into the v3 layout at boot without any flag. If the server detects legacy v2 rows but no `transactions_legacy` marker and this flag is unset, it refuses to boot — operator must back up, then either set `LEGACY_UPGRADE=true` or run `npm run cutover` standalone (with server restart afterwards because `StorageKnex._postCutoverCache` is initialised once at `makeAvailable()` and never refreshed).
 
 ## Dependencies
 - **Database** – MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted)
@@ -55,6 +59,7 @@ Environment variables (from `.env.example`):
 - **Build** – `npm run build` compiles TypeScript to `out/`
 - **Production** – Docker container or direct `node out/src/index.js` with MySQL connection
 - **Migrations** – Auto-run on startup; Knex manages schema versioning
+- **v3 schema** – v3 is the canonical target schema. Fresh installs auto-initialize into v3 at boot (no flag). Upgrading an existing v2 DB with legacy `transactions` rows requires `LEGACY_UPGRADE=true` or a standalone `npm run cutover` + restart. Server refuses to boot on legacy-populated data without explicit authorization. See `@bsv/wallet-toolbox` docs/CUTOVER_RUNBOOK.md for details.
 - **Scaling** – Stateless design; multiple instances can share same MySQL database with connection pooling
 - **Database** – MySQL 8.0 required; ensure adequate indexing on identity_key, output_hash, and blockchain_height
 - **Authentication** – BRC-103 mutual auth on all JSON-RPC calls; enforces identity-based access control
@@ -77,13 +82,15 @@ Environment variables (from `.env.example`):
 
 ## File map
 - **src/**
-  - `index.ts` – Entry point: initializes Knex, wallet-toolbox, StorageServer, starts HTTP server
+  - `index.ts` – Entry point: initializes Knex, wallet-toolbox, StorageServer, starts HTTP server. Optionally calls `runSchemaCutover` when `AUTO_CUTOVER=true`.
+  - `cutover.ts` – Standalone runner for `runSchemaCutover`. Invoked via `npm run cutover` for operator-controlled cutover timing on production.
   - **No app.ts** – Configuration is inline in index.ts via wallet-toolbox classes
 - **out/** – Compiled TypeScript output (created by `npm run build`)
-- **Dockerfile** – Alpine-based Node 22 with nginx optional support
+- **Dockerfile** – Alpine-based Node 22 with nginx optional support; copies `vendor-wallet-toolbox.tgz` for local wallet-toolbox builds when not consuming the published npm version
+- **vendor-wallet-toolbox.tgz** – Optional local tarball produced via `npm pack` in `packages/wallet/wallet-toolbox`. When present, `package.json` dep is `file:./vendor-wallet-toolbox.tgz`. Allows iterating on wallet-toolbox without publishing to npm.
 - **docker-compose.yml** – App + MySQL 8.0
 - **nginx.conf** – Reverse proxy config (used if ENABLE_NGINX=true)
 - **.env.example** – Template with all required/optional variables
 - **tsconfig.json** – TypeScript configuration
-- **package.json** – Scripts: `build`, `start`, `dev`
+- **package.json** – Scripts: `build`, `start`, `cutover`
 - **guides/** – Deployment guides (local_development.md, gcloud_deployment.md for Cloud Run)

@@ -1,6 +1,8 @@
 # Schema Cutover Runbook
 
-Operator guide for running `runSchemaCutover` (Knex) and `runIdbSchemaCutover` (IndexedDB) against a populated production database. Read top to bottom before starting.
+Operator guide for running `runSchemaCutover` (Knex) and `runIdbSchemaCutover` (IndexedDB) against a **populated** production database that's being upgraded from v2. Read top to bottom before starting.
+
+> **Fresh installs do not need this runbook.** Consumer apps (e.g. wallet-infra) auto-detect an empty `transactions` table at boot and silently initialize the v3 layout via the same `runSchemaCutover` call — no operator intervention required. This runbook is for the upgrade path: existing v2 data that must be migrated forward.
 
 ---
 
@@ -12,8 +14,13 @@ The schema cutover is a one-way destructive migration that:
 - Swaps the `transactions_new` table in as the new canonical `transactions`.
 - Remaps every FK value in `outputs`, `commissions`, and `tx_labels_map` so that downstream rows continue to reference consistent records.
 - Rebuilds `tx_labels_map.transactionId` so its FK points at `actions(actionId)` instead of the renamed legacy table.
+- Drops orphan FK rows that reference legacy `transactions` entries lacking a canonical mapping (typically `txid IS NULL` in-flight / aborted rows that have no `transactions_new` counterpart). Outputs pointing at orphan ids are deleted; `outputs.spentBy` pointing at orphans is nulled; `commissions` + `tx_labels_map` orphans are deleted. The legacy `transactions` rows themselves survive (renamed into `transactions_legacy`) for audit. Count is logged: `[schemaCutover] dropping FK rows for N unmapped legacy transactions (no txid)`.
 
 Application code is expected to be running the new-schema storage path (TransactionService + post-cutover table names) BEFORE the cutover starts. Code that still queries `proven_txs` or `proven_tx_reqs` will break the moment the rename completes.
+
+### Cache invalidation: restart the server after a standalone cutover
+
+`StorageKnex` reads `hasTable('transactions_legacy')` once during `makeAvailable()` and caches the result on `_postCutoverCache`. All routing (`findTransactions`, `insertTransaction`, `updateTransaction`, `insertTxLabelMap`, etc.) keys off this cache. **The cache is never refreshed.** A running server that booted pre-cutover will keep routing reads/writes at the new-schema `transactions` table (no `userId`/`description` columns) and fail every legacy-shape query. If you run the cutover via a standalone script (not at boot), **restart the server process afterwards** so `makeAvailable()` re-evaluates the cache.
 
 ---
 
@@ -90,6 +97,6 @@ Otherwise: restore from backup, then redeploy the pre-cutover application code.
 
 ## 6. Known limitations
 
-- `runSchemaCutover` is not wrapped in a single SQL transaction: SQLite requires toggling the `legacy_alter_table` pragma between RENAME statements, which is incompatible with a deferred-commit transaction. The function relies on idempotency + the `transactions_legacy` presence guard to recover from partial failure.
+- `runSchemaCutover` is not wrapped in a single SQL transaction: SQLite requires toggling the `legacy_alter_table` pragma between RENAME statements, which is incompatible with a deferred-commit transaction. The function relies on idempotency + the `transactions_legacy` presence guard to recover from partial failure. **Caveat**: if the function throws mid-remap, the idempotency guard will short-circuit subsequent invocations because `transactions_legacy` may already exist from the partial run. Recovery requires manually inspecting state (or restoring from backup at step 1.1).
 - `outputs.maturesAtHeight` is populated only for newly inserted coinbase outputs. Legacy coinbase outputs need a one-off backfill before the §4 rule will allow them to be spendable.
-- MySQL is supported but not yet covered by automated integration tests in this repository. Run a staging dry-run before production.
+- MySQL is supported but not yet covered by automated integration tests in this repository. Run a staging dry-run before production. MySQL-specific behaviour to keep in mind: (1) `RENAME TABLE` rewrites FK metadata on referencing tables, so `outputs`/`commissions` FKs to `transactions` follow the rename to `transactions_legacy` and stay there — bridge-period inserts using legacy `transactionId` values still satisfy those FKs without needing `SET FOREIGN_KEY_CHECKS=0`. (2) `tx_labels_map.transactionId` FK is explicitly dropped + re-added to reference `actions.actionId` during cutover, so bridge-period sync inserts DO need `SET FOREIGN_KEY_CHECKS=0` (handled inside `insertTxLabelMap`).

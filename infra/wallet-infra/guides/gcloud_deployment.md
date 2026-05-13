@@ -189,11 +189,25 @@ Before deploying, create an env.yaml file in your local directory to store envir
 
 ```yaml
 NODE_ENV: "production"
-BSV_NETWORK: "main" # main | test
+BSV_NETWORK: "main" # main | test | teratest | mock
 ENABLE_NGINX: "true"
 HTTP_PORT: "8080"
 SERVER_PRIVATE_KEY: "<PRIVATE_KEY_HEX_STRING>"
 KNEX_DB_CONNECTION: '{"host": "<HOST>", "user": "wallet_admin", "password": "<ANOTHER_SECURE_PASS>", "database": "wallet_storage", "port": 3306}'
+
+# v3 is the default canonical schema. Fresh Cloud SQL instances initialize into v3
+# automatically at first boot (no flag required).
+# Set LEGACY_UPGRADE: "true" ONLY when migrating an existing v2 Cloud SQL database
+# AFTER a full backup and reading @bsv/wallet-toolbox docs/CUTOVER_RUNBOOK.md.
+# Server refuses to boot on a legacy-populated DB without this flag.
+# Alternative for production: run `npm run cutover` standalone during a maintenance
+# window with the revision scaled to zero, then redeploy the revision.
+# LEGACY_UPGRADE: "true"
+
+# Optional — ARC broadcaster + SSE proof callbacks (non-mock chains)
+# ARC_URL: "https://arcade-v2-us-1.bsvblockchain.tech"
+# ARC_API_KEY: "<arc-api-key>"
+# ARC_CALLBACK_TOKEN: "<sse-callback-token>"
 ```
 Update the example environment values as needed. 
 
