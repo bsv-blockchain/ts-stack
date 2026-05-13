@@ -616,7 +616,7 @@ DEV_KEYS = '{
         const services = new Services(serviceOptions);
         const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
         const monitor = new Monitor(monopts);
-        const privilegedKeyManager = args.privilegedKeyGetter
+        const privilegedKeyManager = (args.privilegedKeyGetter != null)
             ? new PrivilegedKeyManager(args.privilegedKeyGetter)
             : undefined;
         const wallet = new Wallet({
@@ -676,13 +676,13 @@ DEV_KEYS = '{
         const unlock = p2pkh.unlock(priv, "all", false, satoshis, lock);
         return unlock;
     }
-    static createP2PKHOutputs(outputs: {
+    static createP2PKHOutputs(outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[]): CreateActionOutput[] {
+    }>): CreateActionOutput[] {
         const os: CreateActionOutput[] = [];
         const count = outputs.length;
         for (let i = 0; i < count; i++) {
@@ -697,19 +697,19 @@ DEV_KEYS = '{
         }
         return os;
     }
-    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: {
+    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[], options?: CreateActionOptions): Promise<{
+    }>, options?: CreateActionOptions): Promise<{
         cr: CreateActionResult;
         outpoints: string[] | undefined;
     }> {
         const os = Setup.createP2PKHOutputs(outputs);
         const createArgs: CreateActionArgs = {
-            description: `createP2PKHOutputs`,
+            description: "createP2PKHOutputs",
             outputs: os,
             options: {
                 ...options,
@@ -723,19 +723,19 @@ DEV_KEYS = '{
         }
         return { cr, outpoints };
     }
-    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<{
+    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<Array<{
         outpoint: string;
         txid?: string;
         success: boolean;
         error?: string;
-    }[]> {
-        return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup), inputBEEF);
+    }>> {
+        return await _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup), inputBEEF);
     }
     static async createWalletKnex(args: SetupWalletKnexArgs): Promise<SetupWalletKnex> {
         const wo = await Setup.createWallet(args);
         const activeStorage = await Setup.createStorageKnex(args);
         await wo.storage.addWalletStorageProvider(activeStorage);
-        const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+        const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
         const userId = user.userId;
         const r: SetupWalletKnex = {
             ...wo,
@@ -818,7 +818,7 @@ static async createWallet(args: SetupWalletArgs): Promise<SetupWallet> {
     const services = new Services(serviceOptions);
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
     const monitor = new Monitor(monopts);
-    const privilegedKeyManager = args.privilegedKeyGetter
+    const privilegedKeyManager = (args.privilegedKeyGetter != null)
         ? new PrivilegedKeyManager(args.privilegedKeyGetter)
         : undefined;
     const wallet = new Wallet({
@@ -878,7 +878,7 @@ static async createWalletKnex(args: SetupWalletKnexArgs): Promise<SetupWalletKne
     const wo = await Setup.createWallet(args);
     const activeStorage = await Setup.createStorageKnex(args);
     await wo.storage.addWalletStorageProvider(activeStorage);
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+    const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
     const userId = user.userId;
     const r: SetupWalletKnex = {
         ...wo,
@@ -1018,7 +1018,7 @@ export abstract class SetupClient {
         const services = new Services(serviceOptions);
         const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
         const monitor = new Monitor(monopts);
-        const privilegedKeyManager = args.privilegedKeyGetter
+        const privilegedKeyManager = (args.privilegedKeyGetter != null)
             ? new PrivilegedKeyManager(args.privilegedKeyGetter)
             : undefined;
         const wallet = new Wallet({
@@ -1078,13 +1078,13 @@ export abstract class SetupClient {
         const unlock = p2pkh.unlock(priv, "all", false, satoshis, lock);
         return unlock;
     }
-    static createP2PKHOutputs(outputs: {
+    static createP2PKHOutputs(outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[]): CreateActionOutput[] {
+    }>): CreateActionOutput[] {
         const os: CreateActionOutput[] = [];
         const count = outputs.length;
         for (let i = 0; i < count; i++) {
@@ -1099,19 +1099,19 @@ export abstract class SetupClient {
         }
         return os;
     }
-    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: {
+    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[], options?: CreateActionOptions): Promise<{
+    }>, options?: CreateActionOptions): Promise<{
         cr: CreateActionResult;
         outpoints: string[] | undefined;
     }> {
         const os = SetupClient.createP2PKHOutputs(outputs);
         const createArgs: CreateActionArgs = {
-            description: `createP2PKHOutputs`,
+            description: "createP2PKHOutputs",
             outputs: os,
             options: {
                 ...options,
@@ -1125,19 +1125,19 @@ export abstract class SetupClient {
         }
         return { cr, outpoints };
     }
-    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<{
+    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<Array<{
         outpoint: string;
         txid?: string;
         success: boolean;
         error?: string;
-    }[]> {
-        return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, SetupClient.getUnlockP2PKH.bind(SetupClient), inputBEEF);
+    }>> {
+        return await _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, SetupClient.getUnlockP2PKH.bind(SetupClient), inputBEEF);
     }
     static async createWalletIdb(args: SetupWalletIdbArgs): Promise<SetupWalletIdb> {
         const wo = await SetupClient.createWallet(args);
         const activeStorage = await SetupClient.createStorageIdb(args);
         await wo.storage.addWalletStorageProvider(activeStorage);
-        const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+        const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
         const userId = user.userId;
         const r: SetupWalletIdb = {
             ...wo,
@@ -1184,7 +1184,7 @@ static async createWallet(args: SetupClientWalletArgs): Promise<SetupWallet> {
     const services = new Services(serviceOptions);
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
     const monitor = new Monitor(monopts);
-    const privilegedKeyManager = args.privilegedKeyGetter
+    const privilegedKeyManager = (args.privilegedKeyGetter != null)
         ? new PrivilegedKeyManager(args.privilegedKeyGetter)
         : undefined;
     const wallet = new Wallet({
@@ -1244,7 +1244,7 @@ static async createWalletIdb(args: SetupWalletIdbArgs): Promise<SetupWalletIdb> 
     const wo = await SetupClient.createWallet(args);
     const activeStorage = await SetupClient.createStorageIdb(args);
     await wo.storage.addWalletStorageProvider(activeStorage);
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+    const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
     const userId = user.userId;
     const r: SetupWalletIdb = {
         ...wo,

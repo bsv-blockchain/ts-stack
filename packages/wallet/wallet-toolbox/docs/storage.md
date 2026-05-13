@@ -22,25 +22,29 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [AdminStatsResult](#interface-adminstatsresult) | [ProvenTxFromTxidResult](#interface-proventxfromtxidresult) | [TableOutputBasket](#interface-tableoutputbasket) |
-| [CommitNewTxResults](#interface-commitnewtxresults) | [ProvenTxReqHistory](#interface-proventxreqhistory) | [TableOutputTag](#interface-tableoutputtag) |
-| [EntitySyncMap](#interface-entitysyncmap) | [ProvenTxReqHistorySummaryApi](#interface-proventxreqhistorysummaryapi) | [TableOutputTagMap](#interface-tableoutputtagmap) |
-| [GenerateChangeSdkChangeInput](#interface-generatechangesdkchangeinput) | [ProvenTxReqNotify](#interface-proventxreqnotify) | [TableOutputX](#interface-tableoutputx) |
-| [GenerateChangeSdkChangeOutput](#interface-generatechangesdkchangeoutput) | [StorageAdminStats](#interface-storageadminstats) | [TableProvenTx](#interface-tableproventx) |
-| [GenerateChangeSdkInput](#interface-generatechangesdkinput) | [StorageIdbOptions](#interface-storageidboptions) | [TableProvenTxReq](#interface-tableproventxreq) |
-| [GenerateChangeSdkOutput](#interface-generatechangesdkoutput) | [StorageIdbSchema](#interface-storageidbschema) | [TableProvenTxReqDynamics](#interface-tableproventxreqdynamics) |
-| [GenerateChangeSdkParams](#interface-generatechangesdkparams) | [StorageKnexOptions](#interface-storageknexoptions) | [TableSettings](#interface-tablesettings) |
-| [GenerateChangeSdkResult](#interface-generatechangesdkresult) | [StorageProviderOptions](#interface-storageprovideroptions) | [TableSyncState](#interface-tablesyncstate) |
-| [GenerateChangeSdkStorageChange](#interface-generatechangesdkstoragechange) | [StorageReaderOptions](#interface-storagereaderoptions) | [TableTransaction](#interface-tabletransaction) |
-| [GetReqsAndBeefDetail](#interface-getreqsandbeefdetail) | [StorageReaderWriterOptions](#interface-storagereaderwriteroptions) | [TableTxLabel](#interface-tabletxlabel) |
-| [GetReqsAndBeefResult](#interface-getreqsandbeefresult) | [SyncError](#interface-syncerror) | [TableTxLabelMap](#interface-tabletxlabelmap) |
-| [ListActionsSpecOp](#interface-listactionsspecop) | [SyncMap](#interface-syncmap) | [TableUser](#interface-tableuser) |
-| [ListOutputsSpecOp](#interface-listoutputsspecop) | [TableCertificate](#interface-tablecertificate) | [ValidateGenerateChangeSdkParamsResult](#interface-validategeneratechangesdkparamsresult) |
-| [MonitorAdminContext](#interface-monitoradmincontext) | [TableCertificateField](#interface-tablecertificatefield) | [VerifyAndRepairBeefResult](#interface-verifyandrepairbeefresult) |
-| [MonitorAdminContextConfig](#interface-monitoradmincontextconfig) | [TableCertificateX](#interface-tablecertificatex) | [WalletStorageServerOptions](#interface-walletstorageserveroptions) |
-| [PostBeefResultForTxidApi](#interface-postbeefresultfortxidapi) | [TableCommission](#interface-tablecommission) | [XValidCreateActionOutput](#interface-xvalidcreateactionoutput) |
-| [PostReqsToNetworkDetails](#interface-postreqstonetworkdetails) | [TableMonitorEvent](#interface-tablemonitorevent) |  |
-| [PostReqsToNetworkResult](#interface-postreqstonetworkresult) | [TableOutput](#interface-tableoutput) |  |
+| [AdminStatsResult](#interface-adminstatsresult) | [PostBeefResultForTxidApi](#interface-postbeefresultfortxidapi) | [TableMonitorLease](#interface-tablemonitorlease) |
+| [AggregatePostBeefTxResult](#interface-aggregatepostbeeftxresult) | [PostReqsToNetworkDetails](#interface-postreqstonetworkdetails) | [TableOutput](#interface-tableoutput) |
+| [AuditEvent](#interface-auditevent) | [PostReqsToNetworkResult](#interface-postreqstonetworkresult) | [TableOutputBasket](#interface-tableoutputbasket) |
+| [CommitNewTxResults](#interface-commitnewtxresults) | [ProvenTxFromTxidResult](#interface-proventxfromtxidresult) | [TableOutputTag](#interface-tableoutputtag) |
+| [EntitySyncMap](#interface-entitysyncmap) | [ProvenTxReqHistory](#interface-proventxreqhistory) | [TableOutputTagMap](#interface-tableoutputtagmap) |
+| [FsmTransitionResult](#interface-fsmtransitionresult) | [ProvenTxReqHistorySummaryApi](#interface-proventxreqhistorysummaryapi) | [TableOutputX](#interface-tableoutputx) |
+| [GenerateChangeSdkChangeInput](#interface-generatechangesdkchangeinput) | [ProvenTxReqNotify](#interface-proventxreqnotify) | [TableProvenTx](#interface-tableproventx) |
+| [GenerateChangeSdkChangeOutput](#interface-generatechangesdkchangeoutput) | [StorageAdminStats](#interface-storageadminstats) | [TableProvenTxReq](#interface-tableproventxreq) |
+| [GenerateChangeSdkInput](#interface-generatechangesdkinput) | [StorageIdbOptions](#interface-storageidboptions) | [TableProvenTxReqDynamics](#interface-tableproventxreqdynamics) |
+| [GenerateChangeSdkOutput](#interface-generatechangesdkoutput) | [StorageIdbSchema](#interface-storageidbschema) | [TableSettings](#interface-tablesettings) |
+| [GenerateChangeSdkParams](#interface-generatechangesdkparams) | [StorageKnexOptions](#interface-storageknexoptions) | [TableSyncState](#interface-tablesyncstate) |
+| [GenerateChangeSdkResult](#interface-generatechangesdkresult) | [StorageProviderOptions](#interface-storageprovideroptions) | [TableTransaction](#interface-tabletransaction) |
+| [GenerateChangeSdkStorageChange](#interface-generatechangesdkstoragechange) | [StorageReaderOptions](#interface-storagereaderoptions) | [TableTransactionNew](#interface-tabletransactionnew) |
+| [GetReqsAndBeefDetail](#interface-getreqsandbeefdetail) | [StorageReaderWriterOptions](#interface-storagereaderwriteroptions) | [TableTxAudit](#interface-tabletxaudit) |
+| [GetReqsAndBeefResult](#interface-getreqsandbeefresult) | [SyncError](#interface-syncerror) | [TableTxLabel](#interface-tabletxlabel) |
+| [ListActionsSpecOp](#interface-listactionsspecop) | [SyncMap](#interface-syncmap) | [TableTxLabelMap](#interface-tabletxlabelmap) |
+| [ListOutputsSpecOp](#interface-listoutputsspecop) | [TableAction](#interface-tableaction) | [TableUser](#interface-tableuser) |
+| [MonitorAdminContext](#interface-monitoradmincontext) | [TableCertificate](#interface-tablecertificate) | [ValidateGenerateChangeSdkParamsResult](#interface-validategeneratechangesdkparamsresult) |
+| [MonitorAdminContextConfig](#interface-monitoradmincontextconfig) | [TableCertificateField](#interface-tablecertificatefield) | [VerifyAndRepairBeefResult](#interface-verifyandrepairbeefresult) |
+| [MonitorLeaseClaim](#interface-monitorleaseclaim) | [TableCertificateX](#interface-tablecertificatex) | [WalletStorageServerOptions](#interface-walletstorageserveroptions) |
+| [MonitorLeaseRelease](#interface-monitorleaserelease) | [TableChainTip](#interface-tablechaintip) | [XValidCreateActionOutput](#interface-xvalidcreateactionoutput) |
+| [MonitorLeaseRenew](#interface-monitorleaserenew) | [TableCommission](#interface-tablecommission) |  |
+| [MonitorLeaseResult](#interface-monitorleaseresult) | [TableMonitorEvent](#interface-tablemonitorevent) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -55,7 +59,61 @@ export interface AdminStatsResult extends StorageAdminStats {
 }
 ```
 
-See also: [ServicesCallHistory](./client.md#type-servicescallhistory), [StorageAdminStats](./storage.md#interface-storageadminstats)
+See also: [ServicesCallHistory](./client.md#interface-servicescallhistory), [StorageAdminStats](./storage.md#interface-storageadminstats)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: AggregatePostBeefTxResult
+
+```ts
+export interface AggregatePostBeefTxResult {
+    txid: string;
+    txidResults: sdk.PostTxResultForTxid[];
+    status: AggregateStatus;
+    vreq: PostReqsToNetworkDetails;
+    successCount: number;
+    doubleSpendCount: number;
+    statusErrorCount: number;
+    serviceErrorCount: number;
+    competingTxs: string[];
+}
+```
+
+See also: [PostReqsToNetworkDetails](./storage.md#interface-postreqstonetworkdetails), [PostTxResultForTxid](./client.md#interface-posttxresultfortxid)
+
+###### Property competingTxs
+
+Any competing double spend txids reported for this txid
+
+```ts
+competingTxs: string[]
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: AuditEvent
+
+append-only audit log writer.
+
+Each call inserts one `tx_audit` row. Events should be small, stable
+identifiers (e.g. `processing.changed`, `proof.acquired`, `lease.claimed`).
+Payload is stored as a JSON-encoded string so downstream consumers may add
+shape over time without a migration.
+
+```ts
+export interface AuditEvent {
+    transactionId?: number;
+    actionId?: number;
+    event: string;
+    fromState?: sdk.ProcessingStatus;
+    toState?: sdk.ProcessingStatus;
+    details?: Record<string, unknown>;
+}
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -112,6 +170,18 @@ during this udpate cycle.
 
 ```ts
 maxUpdated_at?: Date
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: FsmTransitionResult
+
+```ts
+export interface FsmTransitionResult {
+    ok: boolean;
+    reason?: string;
+}
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -321,7 +391,7 @@ export interface ListActionsSpecOp {
     name: string;
     labelsToIntercept?: string[];
     setStatusFilter?: () => TransactionStatus[];
-    postProcess?: (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListActionsArgs, specOpLabels: string[], txs: Partial<TableTransaction>[]) => Promise<void>;
+    postProcess?: (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListActionsArgs, specOpLabels: string[], txs: Array<Partial<TableTransaction>>) => Promise<void>;
 }
 ```
 
@@ -416,6 +486,72 @@ export interface MonitorAdminContextConfig {
 ```
 
 See also: [Chain](./client.md#type-chain)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseClaim
+
+monitor lease primitive.
+
+A `monitor_lease` row records the owner that may currently execute a named
+task. Acquisition is opportunistic: a Monitor calls `tryClaimLease()` to
+insert or take over a stale row; if it succeeds it owns the task until
+`expiresAt`. While running it calls `renewLease()` to extend the deadline.
+On clean shutdown it calls `releaseLease()`.
+
+The Knex driver expresses claim + takeover as a single conditional UPDATE
+so that two contending Monitors cannot both believe they own the task — at
+most one row write will succeed per (task, expiry) pair.
+
+```ts
+export interface MonitorLeaseClaim {
+    taskName: string;
+    ownerId: string;
+    ttlMs: number;
+    note?: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseRelease
+
+```ts
+export interface MonitorLeaseRelease {
+    taskName: string;
+    ownerId: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseRenew
+
+```ts
+export interface MonitorLeaseRenew {
+    taskName: string;
+    ownerId: string;
+    ttlMs: number;
+    note?: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseResult
+
+```ts
+export interface MonitorLeaseResult {
+    acquired: boolean;
+    lease?: TableMonitorLease;
+}
+```
+
+See also: [TableMonitorLease](./storage.md#interface-tablemonitorlease)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -518,7 +654,7 @@ export interface ProvenTxReqHistory {
 }
 ```
 
-See also: [ReqHistoryNote](./client.md#type-reqhistorynote)
+See also: [ReqHistoryNote](./client.md#interface-reqhistorynote)
 
 ###### Property notes
 
@@ -528,7 +664,7 @@ Values are a description of what happened.
 ```ts
 notes?: ReqHistoryNote[]
 ```
-See also: [ReqHistoryNote](./client.md#type-reqhistorynote)
+See also: [ReqHistoryNote](./client.md#interface-reqhistorynote)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -801,10 +937,57 @@ export interface StorageIdbSchema {
             identityKey: string;
         };
     };
+    transactionsNew: {
+        key: number;
+        value: TableTransactionNew;
+        indexes: {
+            txid: HexString;
+            processing: ProcessingStatus;
+            batch: string;
+            idempotencyKey: string;
+        };
+    };
+    actions: {
+        key: number;
+        value: TableAction;
+        indexes: {
+            userId: number;
+            transactionId: number;
+            userId_transactionId: [
+                number,
+                number
+            ];
+            userId_reference: [
+                number,
+                string
+            ];
+        };
+    };
+    chainTip: {
+        key: number;
+        value: TableChainTip;
+        indexes: Record<string, never>;
+    };
+    txAudit: {
+        key: number;
+        value: TableTxAudit;
+        indexes: {
+            transactionId: number;
+            actionId: number;
+            event: string;
+        };
+    };
+    monitorLease: {
+        key: string;
+        value: TableMonitorLease;
+        indexes: {
+            expiresAt: Date;
+        };
+    };
 }
 ```
 
-See also: [ProvenTxReqStatus](./client.md#type-proventxreqstatus), [SyncStatus](./client.md#type-syncstatus), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TransactionStatus](./client.md#type-transactionstatus)
+See also: [ProcessingStatus](./client.md#type-processingstatus), [ProvenTxReqStatus](./client.md#type-proventxreqstatus), [SyncStatus](./client.md#type-syncstatus), [TableAction](./storage.md#interface-tableaction), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableChainTip](./storage.md#interface-tablechaintip), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableMonitorLease](./storage.md#interface-tablemonitorlease), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTransactionNew](./storage.md#interface-tabletransactionnew), [TableTxAudit](./storage.md#interface-tabletxaudit), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TransactionStatus](./client.md#type-transactionstatus)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -927,6 +1110,121 @@ See also: [EntitySyncMap](./storage.md#interface-entitysyncmap)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: TableAction
+
+per-user view of a transaction.
+
+Migrated from the legacy `transactions` table. Holds everything that is truly
+per-user (description, labels via tx_labels_map -> actionId, soft-delete flags,
+notification subscribers). All on-chain status lives in the new `transactions`
+table addressed by `transactionId`.
+
+UNIQUE(userId, transactionId).
+
+```ts
+export interface TableAction extends sdk.EntityTimeStamp {
+    created_at: Date;
+    updated_at: Date;
+    actionId: number;
+    userId: number;
+    transactionId: number;
+    reference: string;
+    description: string;
+    isOutgoing: boolean;
+    satoshisDelta: number;
+    userNosend: boolean;
+    hidden: boolean;
+    userAborted: boolean;
+    notifyJson?: string;
+    rowVersion: number;
+}
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp)
+
+###### Property actionId
+
+PK
+
+```ts
+actionId: number
+```
+
+###### Property hidden
+
+Soft-delete flag — hide from default queries
+
+```ts
+hidden: boolean
+```
+
+###### Property isOutgoing
+
+true if originated in this wallet (change returns to it)
+
+```ts
+isOutgoing: boolean
+```
+
+###### Property notifyJson
+
+JSON string of per-user notification subscribers (mirrors legacy notify)
+
+```ts
+notifyJson?: string
+```
+
+###### Property reference
+
+Application reference, hex/Base64, max 64 chars
+
+```ts
+reference: string
+```
+
+###### Property rowVersion
+
+Optimistic concurrency token
+
+```ts
+rowVersion: number
+```
+
+###### Property satoshisDelta
+
+Signed net change to this user's balance from this action
+
+```ts
+satoshisDelta: number
+```
+
+###### Property transactionId
+
+FK -> new transactions.transactionId (per-txid record)
+
+```ts
+transactionId: number
+```
+
+###### Property userAborted
+
+Per-user abort flag
+
+```ts
+userAborted: boolean
+```
+
+###### Property userNosend
+
+Per-user nosend override
+
+```ts
+userNosend: boolean
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: TableCertificate
 
 ```ts
@@ -983,6 +1281,44 @@ See also: [TableCertificate](./storage.md#interface-tablecertificate), [TableCer
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: TableChainTip
+
+singleton row tracking the most recently observed chain tip.
+Used by spendability checks and coinbase maturity calculations.
+
+```ts
+export interface TableChainTip extends sdk.EntityTimeStamp {
+    created_at: Date;
+    updated_at: Date;
+    id: number;
+    height: number;
+    blockHash: string;
+    merkleRoot?: string;
+    observedAt: Date;
+}
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp), [blockHash](./services.md#function-blockhash)
+
+###### Property id
+
+Always 1 — singleton enforced by storage layer
+
+```ts
+id: number
+```
+
+###### Property observedAt
+
+Wall-clock of the observation
+
+```ts
+observedAt: Date
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: TableCommission
 
 ```ts
@@ -1021,6 +1357,71 @@ See also: [EntityTimeStamp](./client.md#interface-entitytimestamp)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: TableMonitorLease
+
+monitor_lease record so at most one Monitor daemon owns a given task at a time.
+
+The Monitor acquires a lease by upserting `(taskName, ownerId, expiresAt)`
+and renews periodically. Stale leases (`expiresAt < now`) may be claimed by
+another instance.
+
+```ts
+export interface TableMonitorLease extends sdk.EntityTimeStamp {
+    created_at: Date;
+    updated_at: Date;
+    taskName: string;
+    ownerId: string;
+    expiresAt: Date;
+    renewCount: number;
+    note?: string;
+}
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp)
+
+###### Property expiresAt
+
+Lease expiry — claimants treat any row with expiresAt <= now() as free
+
+```ts
+expiresAt: Date
+```
+
+###### Property note
+
+Optional free-text description of current activity
+
+```ts
+note?: string
+```
+
+###### Property ownerId
+
+Stable identifier for the owning Monitor instance
+
+```ts
+ownerId: string
+```
+
+###### Property renewCount
+
+Monotonic counter incremented on each successful renew
+
+```ts
+renewCount: number
+```
+
+###### Property taskName
+
+Logical task name, e.g. 'proof-acquisition'
+
+```ts
+taskName: string
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: TableOutput
 
 ```ts
@@ -1050,10 +1451,22 @@ export interface TableOutput extends sdk.EntityTimeStamp {
     scriptLength?: number;
     scriptOffset?: number;
     lockingScript?: number[];
+    maturesAtHeight?: number;
 }
 ```
 
 See also: [EntityTimeStamp](./client.md#interface-entitytimestamp), [StorageProvidedBy](./client.md#type-storageprovidedby)
+
+###### Property maturesAtHeight
+
+new-schema: minimum block height at which a coinbase output becomes spendable.
+NULL for non-coinbase outputs and for pre-new schema rows that have not yet been
+backfilled. The §4 spendability rule treats a non-coinbase output as
+mature regardless of this column.
+
+```ts
+maturesAtHeight?: number
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -1166,6 +1579,8 @@ export interface TableProvenTxReq extends TableProvenTxReqDynamics {
     notify: string;
     rawTx: number[];
     inputBEEF?: number[];
+    wasBroadcast?: boolean;
+    rebroadcastAttempts?: number;
 }
 ```
 
@@ -1213,6 +1628,27 @@ Parses to `ProvenTxReqNotifyApi`.
 notify: string
 ```
 
+###### Property rebroadcastAttempts
+
+Count of how many times this req has been reset to 'unsent' for rebroadcast
+after proof check timeout. Used by the circuit-breaker (maxRebroadcastAttempts).
+Defaults to 0 (added by migration 2026-04-30-001).
+
+```ts
+rebroadcastAttempts?: number
+```
+
+###### Property wasBroadcast
+
+Set to true the first time this req transitions to 'unmined' or 'callback' status,
+indicating the transaction was successfully broadcast to the network.
+Used to distinguish rebroadcast candidates from transactions that were never sent.
+Defaults to false (added by migration 2026-04-30-001).
+
+```ts
+wasBroadcast?: boolean
+```
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
@@ -1230,6 +1666,8 @@ export interface TableProvenTxReqDynamics extends sdk.EntityTimeStamp {
     batch?: string;
     history: string;
     notify: string;
+    wasBroadcast?: boolean;
+    rebroadcastAttempts?: number;
 }
 ```
 
@@ -1275,6 +1713,24 @@ Parses to `ProvenTxReqNotifyApi`.
 
 ```ts
 notify: string
+```
+
+###### Property rebroadcastAttempts
+
+Count of rebroadcast cycles for this req. Used by the circuit-breaker.
+Defaults to 0 (added by migration 2026-04-30-001).
+
+```ts
+rebroadcastAttempts?: number
+```
+
+###### Property wasBroadcast
+
+Set to true the first time this req transitions to 'unmined' or 'callback' status.
+Defaults to false (added by migration 2026-04-30-001).
+
+```ts
+wasBroadcast?: boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1399,6 +1855,237 @@ If not undefined, must match value in associated rawTransaction.
 
 ```ts
 version?: number
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: TableTransactionNew
+
+new canonical per-txid table.
+
+Single source of truth for everything about a transaction on the network.
+Merges the legacy `proven_tx_reqs` (broadcast queue + processing state) and
+`proven_txs` (final Merkle proof) tables into one row per txid.
+
+Per-user metadata (description, labels, hidden, etc.) lives in `actions`.
+
+```ts
+export interface TableTransactionNew extends sdk.EntityTimeStamp {
+    created_at: Date;
+    updated_at: Date;
+    transactionId: number;
+    txid: string;
+    processing: sdk.ProcessingStatus;
+    processingChangedAt: Date;
+    nextActionAt?: Date;
+    attempts: number;
+    rebroadcastCycles: number;
+    wasBroadcast: boolean;
+    idempotencyKey?: string;
+    batch?: string;
+    rawTx?: number[];
+    inputBeef?: number[];
+    height?: number;
+    merkleIndex?: number;
+    merklePath?: number[];
+    merkleRoot?: string;
+    blockHash?: string;
+    isCoinbase: boolean;
+    lastProvider?: string;
+    lastProviderStatus?: string;
+    frozenReason?: string;
+    rowVersion: number;
+}
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp), [ProcessingStatus](./client.md#type-processingstatus), [blockHash](./services.md#function-blockhash)
+
+###### Property attempts
+
+Cumulative network-service attempt count
+
+```ts
+attempts: number
+```
+
+###### Property batch
+
+Optional batch tag for grouped broadcast
+
+```ts
+batch?: string
+```
+
+###### Property frozenReason
+
+Reason a row is in `frozen` state, free text
+
+```ts
+frozenReason?: string
+```
+
+###### Property height
+
+Merkle proof fields — populated on transition to `proven`
+
+```ts
+height?: number
+```
+
+###### Property idempotencyKey
+
+Application-supplied idempotency key (unique when present)
+
+```ts
+idempotencyKey?: string
+```
+
+###### Property nextActionAt
+
+Wall-clock at which the next monitor pass should consider this row
+
+```ts
+nextActionAt?: Date
+```
+
+###### Property processing
+
+Granular FSM state (see ProcessingStatus)
+
+```ts
+processing: sdk.ProcessingStatus
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus)
+
+###### Property processingChangedAt
+
+Wall-clock of the most recent processing transition
+
+```ts
+processingChangedAt: Date
+```
+
+###### Property rebroadcastCycles
+
+Count of times this row has been reset for rebroadcast (circuit-breaker)
+
+```ts
+rebroadcastCycles: number
+```
+
+###### Property rowVersion
+
+Optimistic concurrency token
+
+```ts
+rowVersion: number
+```
+
+###### Property transactionId
+
+PK
+
+```ts
+transactionId: number
+```
+
+###### Property txid
+
+UNIQUE — Bitcoin txid, hex
+
+```ts
+txid: string
+```
+
+###### Property wasBroadcast
+
+true once the row has reached a state implying successful broadcast
+
+```ts
+wasBroadcast: boolean
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: TableTxAudit
+
+per-event audit log for transactions and actions.
+
+Each row records a single observable event scoped to either a transaction
+(per-txid) or an action (per-user) or both. Append-only.
+
+```ts
+export interface TableTxAudit extends sdk.EntityTimeStamp {
+    created_at: Date;
+    updated_at: Date;
+    auditId: number;
+    transactionId?: number;
+    actionId?: number;
+    event: string;
+    fromState?: string;
+    toState?: string;
+    detailsJson?: string;
+}
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp)
+
+###### Property actionId
+
+FK -> actions.actionId, optional for tx-only events
+
+```ts
+actionId?: number
+```
+
+###### Property auditId
+
+PK
+
+```ts
+auditId: number
+```
+
+###### Property detailsJson
+
+JSON-encoded event payload
+
+```ts
+detailsJson?: string
+```
+
+###### Property event
+
+Stable event identifier, e.g. 'processing.changed', 'proof.acquired'
+
+```ts
+event: string
+```
+
+###### Property fromState
+
+Optional FSM source state for transitions
+
+```ts
+fromState?: string
+```
+
+###### Property toState
+
+Optional FSM target state for transitions
+
+```ts
+toState?: string
+```
+
+###### Property transactionId
+
+FK -> transactions.transactionId, optional for action-only events
+
+```ts
+transactionId?: number
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -1542,15 +2229,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [AdminServer](#class-adminserver) | [EntityProvenTx](#class-entityproventx) | [StorageClient](#class-storageclient) |
-| [EntityBase](#class-entitybase) | [EntityProvenTxReq](#class-entityproventxreq) | [StorageIdb](#class-storageidb) |
-| [EntityCertificate](#class-entitycertificate) | [EntitySyncState](#class-entitysyncstate) | [StorageKnex](#class-storageknex) |
-| [EntityCertificateField](#class-entitycertificatefield) | [EntityTransaction](#class-entitytransaction) | [StorageProvider](#class-storageprovider) |
-| [EntityCommission](#class-entitycommission) | [EntityTxLabel](#class-entitytxlabel) | [StorageReader](#class-storagereader) |
-| [EntityOutput](#class-entityoutput) | [EntityTxLabelMap](#class-entitytxlabelmap) | [StorageReaderWriter](#class-storagereaderwriter) |
-| [EntityOutputBasket](#class-entityoutputbasket) | [EntityUser](#class-entityuser) | [StorageServer](#class-storageserver) |
-| [EntityOutputTag](#class-entityoutputtag) | [KnexMigrations](#class-knexmigrations) | [StorageSyncReader](#class-storagesyncreader) |
-| [EntityOutputTagMap](#class-entityoutputtagmap) | [MergeEntity](#class-mergeentity) | [WalletStorageManager](#class-walletstoragemanager) |
+| [AdminServer](#class-adminserver) | [EntityProvenTxReq](#class-entityproventxreq) | [StorageIdb](#class-storageidb) |
+| [EntityBase](#class-entitybase) | [EntitySyncState](#class-entitysyncstate) | [StorageKnex](#class-storageknex) |
+| [EntityCertificate](#class-entitycertificate) | [EntityTransaction](#class-entitytransaction) | [StorageProvider](#class-storageprovider) |
+| [EntityCertificateField](#class-entitycertificatefield) | [EntityTxLabel](#class-entitytxlabel) | [StorageReader](#class-storagereader) |
+| [EntityCommission](#class-entitycommission) | [EntityTxLabelMap](#class-entitytxlabelmap) | [StorageReaderWriter](#class-storagereaderwriter) |
+| [EntityOutput](#class-entityoutput) | [EntityUser](#class-entityuser) | [StorageServer](#class-storageserver) |
+| [EntityOutputBasket](#class-entityoutputbasket) | [KnexMigrations](#class-knexmigrations) | [StorageSyncReader](#class-storagesyncreader) |
+| [EntityOutputTag](#class-entityoutputtag) | [MergeEntity](#class-mergeentity) | [TransactionService](#class-transactionservice) |
+| [EntityOutputTagMap](#class-entityoutputtagmap) | [StorageClient](#class-storageclient) | [WalletStorageManager](#class-walletstoragemanager) |
+| [EntityProvenTx](#class-entityproventx) | [StorageClientBase](#class-storageclientbase) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -2026,9 +2714,9 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     }> 
     override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> 
     override async mergeExisting(storage: EntityStorage, since: Date | undefined, ei: TableProvenTx, syncMap: SyncMap, trx?: TrxToken): Promise<boolean> 
-    static getProofAttemptsLimit = 8;
-    static getProofMinutes = 60;
-    static async fromReq(req: EntityProvenTxReq, gmpResult: GetMerklePathResult, countsAsAttempt: boolean): Promise<EntityProvenTx | undefined> 
+    static readonly getProofAttemptsLimit = 8;
+    static readonly getProofMinutes = 60;
+    static async fromReq(req: EntityProvenTxReq, gmpResult: GetMerklePathResult, countsAsAttempt: boolean, maxRebroadcastAttempts = 0): Promise<EntityProvenTx | undefined> 
 }
 ```
 
@@ -2039,7 +2727,7 @@ See also: [EntityBase](./storage.md#class-entitybase), [EntityProvenTxReq](./sto
 How high attempts can go before status is forced to invalid
 
 ```ts
-static getProofAttemptsLimit = 8
+static readonly getProofAttemptsLimit = 8
 ```
 
 ###### Property getProofMinutes
@@ -2047,7 +2735,7 @@ static getProofAttemptsLimit = 8
 How many hours we have to try for a poof
 
 ```ts
-static getProofMinutes = 60
+static readonly getProofMinutes = 60
 ```
 
 ###### Method fromReq
@@ -2057,7 +2745,7 @@ Try to create a new ProvenTx from a ProvenTxReq and GetMerkleProofResultApi
 Otherwise it returns undefined and updates req.status to either 'unknown', 'invalid', or 'unconfirmed'
 
 ```ts
-static async fromReq(req: EntityProvenTxReq, gmpResult: GetMerklePathResult, countsAsAttempt: boolean): Promise<EntityProvenTx | undefined> 
+static async fromReq(req: EntityProvenTxReq, gmpResult: GetMerklePathResult, countsAsAttempt: boolean, maxRebroadcastAttempts = 0): Promise<EntityProvenTx | undefined> 
 ```
 See also: [EntityProvenTx](./storage.md#class-entityproventx), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [GetMerklePathResult](./client.md#interface-getmerklepathresult)
 
@@ -2095,6 +2783,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
+    static readonly wasBroadcastStatuses: ProvenTxReqStatus[] = ["unmined", "callback", "unconfirmed", "completed"];
     static async fromStorageTxid(storage: EntityStorage, txid: string, trx?: TrxToken): Promise<EntityProvenTxReq | undefined> 
     static async fromStorageId(storage: EntityStorage, id: number, trx?: TrxToken): Promise<EntityProvenTxReq> 
     static fromTxid(txid: string, rawTx: number[], inputBEEF?: number[]): EntityProvenTxReq 
@@ -2144,6 +2833,14 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     set notified(v: boolean) 
     get batch() 
     set batch(v: string | undefined) 
+    get wasBroadcast(): boolean 
+    set wasBroadcast(v: boolean) 
+    get rebroadcastAttempts(): number 
+    set rebroadcastAttempts(v: number) 
+    applyProofTimeout(maxRebroadcastAttempts = 0): {
+        action: "invalid" | "rebroadcast";
+        rebroadcastAttempts: number;
+    } 
     override get id() 
     override set id(v: number) 
     override get entityName(): string 
@@ -2163,7 +2860,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
 }
 ```
 
-See also: [EntityBase](./storage.md#class-entitybase), [EntityStorage](./storage.md#type-entitystorage), [ProvenTxReqHistory](./storage.md#interface-proventxreqhistory), [ProvenTxReqHistorySummaryApi](./storage.md#interface-proventxreqhistorysummaryapi), [ProvenTxReqNotify](./storage.md#interface-proventxreqnotify), [ProvenTxReqStatus](./client.md#type-proventxreqstatus), [ReqHistoryNote](./client.md#type-reqhistorynote), [StorageProvider](./storage.md#class-storageprovider), [SyncMap](./storage.md#interface-syncmap), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TrxToken](./client.md#interface-trxtoken), [WalletStorageManager](./storage.md#class-walletstoragemanager)
+See also: [EntityBase](./storage.md#class-entitybase), [EntityStorage](./storage.md#type-entitystorage), [ProvenTxReqHistory](./storage.md#interface-proventxreqhistory), [ProvenTxReqHistorySummaryApi](./storage.md#interface-proventxreqhistorysummaryapi), [ProvenTxReqNotify](./storage.md#interface-proventxreqnotify), [ProvenTxReqStatus](./client.md#type-proventxreqstatus), [ReqHistoryNote](./client.md#interface-reqhistorynote), [StorageProvider](./storage.md#class-storageprovider), [SyncMap](./storage.md#interface-syncmap), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TrxToken](./client.md#interface-trxtoken), [WalletStorageManager](./storage.md#class-walletstoragemanager)
 
 ###### Method addHistoryNote
 
@@ -2173,7 +2870,7 @@ Notes with identical property values to an existing note are ignored.
 ```ts
 addHistoryNote(note: ReqHistoryNote, noDupes?: boolean) 
 ```
-See also: [ReqHistoryNote](./client.md#type-reqhistorynote)
+See also: [ReqHistoryNote](./client.md#interface-reqhistorynote)
 
 Argument Details
 
@@ -2299,28 +2996,28 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
   to storage: ${c.toStorageIdentityKey}
   for user: ${c.userIdentityKey}
 `;
-        if (c.user)
+        if (c.user != null)
             log += `  USER activeStorage ${c.user.activeStorage}\n`;
-        if (!!c.provenTxs) {
-            log += `  PROVEN_TXS\n`;
+        if (c.provenTxs != null) {
+            log += "  PROVEN_TXS\n";
             for (const r of c.provenTxs) {
                 log += `    ${r.provenTxId} ${r.txid}\n`;
             }
         }
-        if (!!c.provenTxReqs) {
-            log += `  PROVEN_TX_REQS\n`;
+        if (c.provenTxReqs != null) {
+            log += "  PROVEN_TX_REQS\n";
             for (const r of c.provenTxReqs) {
                 log += `    ${r.provenTxReqId} ${r.txid} ${r.status} ${r.provenTxId || ""}\n`;
             }
         }
-        if (!!c.transactions) {
-            log += `  TRANSACTIONS\n`;
+        if (c.transactions != null) {
+            log += "  TRANSACTIONS\n";
             for (const r of c.transactions) {
                 log += `    ${r.transactionId} ${r.txid} ${r.status} ${r.provenTxId || ""} sats:${r.satoshis}\n`;
             }
         }
-        if (!!c.outputs) {
-            log += `  OUTPUTS\n`;
+        if (c.outputs != null) {
+            log += "  OUTPUTS\n";
             for (const r of c.outputs) {
                 log += `    ${r.outputId} ${r.txid}.${r.vout} ${r.transactionId} ${r.spendable ? "spendable" : ""} sats:${r.satoshis}\n`;
             }
@@ -2642,11 +3339,49 @@ the party making requests of the remote service.
 For details of the API implemented, follow the "See also" link for the `WalletStorageProvider` interface.
 
 ```ts
-export class StorageClient implements WalletStorageProvider {
+export class StorageClient extends StorageClientBase {
+    constructor(wallet: WalletInterface, endpointUrl: string) 
+    protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> 
+}
+```
+
+See also: [StorageClientBase](./storage.md#class-storageclientbase)
+
+###### Method rpcCall
+
+Make a JSON-RPC call to the remote server.
+
+```ts
+protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> 
+```
+
+Argument Details
+
++ **method**
+  + The WalletStorage method name to call.
++ **params**
+  + The array of parameters to pass to the method in order.
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: StorageClientBase
+
+Abstract base class shared by `StorageClient` and `StorageMobile`.
+
+Contains all `WalletStorageProvider` method implementations and entity-validation
+helpers. Subclasses only need to provide `rpcCall`, which differs between
+the full (logger-aware) and mobile (lightweight) variants.
+
+```ts
+export abstract class StorageClientBase implements WalletStorageProvider {
     readonly endpointUrl: string;
+    protected readonly authClient: AuthFetch;
+    protected nextId = 1;
     public settings?: TableSettings;
     constructor(wallet: WalletInterface, endpointUrl: string) 
     isStorageProvider(): boolean 
+    protected abstract rpcCall<T>(method: string, params: unknown[]): Promise<T>;
     isAvailable(): boolean 
     getSettings(): TableSettings 
     async makeAvailable(): Promise<TableSettings> 
@@ -2686,7 +3421,7 @@ export class StorageClient implements WalletStorageProvider {
 }
 ```
 
-See also: [AuthId](./client.md#interface-authid), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableUser](./storage.md#interface-tableuser), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [createAction](./storage.md#function-createaction), [getSyncChunk](./storage.md#function-getsyncchunk), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [processAction](./storage.md#function-processaction)
+See also: [AuthId](./client.md#interface-authid), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableUser](./storage.md#interface-tableuser), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [createAction](./storage.md#function-createaction), [getSyncChunk](./storage.md#function-getsyncchunk), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [processAction](./storage.md#function-processaction), [validateDate](./storage.md#function-validatedate), [validateEntities](./storage.md#function-validateentities), [validateEntity](./storage.md#function-validateentity)
 
 ###### Method abortAction
 
@@ -3176,6 +3911,22 @@ This must match the `AuthFetch` identity securing the remote conneciton.
 + **args**
   + original wallet `relinquishOutput` args.
 
+###### Method rpcCall
+
+Make a JSON-RPC call to the remote server.
+Implemented differently by each subclass (with or without logger support).
+
+```ts
+protected abstract rpcCall<T>(method: string, params: unknown[]): Promise<T>
+```
+
+Argument Details
+
++ **method**
+  + The WalletStorage method name to call.
++ **params**
+  + The array of parameters to pass to the method in order.
+
 ###### Method setActive
 
 Ensures up-to-date wallet data replication to all configured backup storage providers,
@@ -3316,7 +4067,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     async insertTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> 
     async insertUser(user: TableUser, trx?: TrxToken): Promise<number> 
     async updateIdb<T>(id: number | number[], update: Partial<T>, keyProp: string, storeName: string, trx?: TrxToken): Promise<number> 
-    async updateIdbKey<T>(key: (number | string)[], update: Partial<T>, keyProps: string[], storeName: string, trx?: TrxToken): Promise<number> 
+    async updateIdbKey<T>(key: Array<number | string>, update: Partial<T>, keyProps: string[], storeName: string, trx?: TrxToken): Promise<number> 
     async updateCertificate(id: number, update: Partial<TableCertificate>, trx?: TrxToken): Promise<number> 
     async updateCertificateField(certificateId: number, fieldName: string, update: Partial<TableCertificateField>, trx?: TrxToken): Promise<number> 
     async updateCommission(id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> 
@@ -3398,7 +4149,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 }
 ```
 
-See also: [AuthId](./client.md#interface-authid), [DBType](./storage.md#type-dbtype), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [StorageAdminStats](./storage.md#interface-storageadminstats), [StorageIdbOptions](./storage.md#interface-storageidboptions), [StorageIdbSchema](./storage.md#interface-storageidbschema), [StorageProvider](./storage.md#class-storageprovider), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [listActions](./storage.md#function-listactions), [listOutputs](./storage.md#function-listoutputs), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
+See also: [AuthId](./client.md#interface-authid), [DBType](./storage.md#type-dbtype), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [StorageAdminStats](./storage.md#interface-storageadminstats), [StorageIdbOptions](./storage.md#interface-storageidboptions), [StorageIdbSchema](./storage.md#interface-storageidbschema), [StorageProvider](./storage.md#class-storageprovider), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [listActions](./storage.md#function-listactions), [listOutputs](./storage.md#function-listoutputs), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus), [validateEntities](./storage.md#function-validateentities), [validateEntity](./storage.md#function-validateentity)
 
 ###### Method allocateChangeInput
 
@@ -3521,6 +4272,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
     knex: Knex;
     constructor(options: StorageKnexOptions) 
+    override getTransactionService(): TransactionService | undefined 
+    override async makeAvailable(): Promise<TableSettings> 
+    async provenTxsTableName(): Promise<string> 
+    async provenTxReqsTableName(): Promise<string> 
+    override async insertLegacyTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> 
+    override async insertLegacyTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> 
     async readSettings(): Promise<TableSettings> 
     override async getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> 
     dbTypeSubstring(source: string, fromOffset: number, forLength?: number) 
@@ -3574,9 +4331,9 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     findOutputsQuery(args: FindOutputsArgs, count?: boolean): Knex.QueryBuilder 
     findOutputTagMapsQuery(args: FindOutputTagMapsArgs): Knex.QueryBuilder 
     findOutputTagsQuery(args: FindOutputTagsArgs): Knex.QueryBuilder 
-    findProvenTxReqsQuery(args: FindProvenTxReqsArgs): Knex.QueryBuilder 
-    findProvenTxsQuery(args: FindProvenTxsArgs): Knex.QueryBuilder 
-    findStaleMerkleRootsQuery(args: FindStaleMerkleRootsArgs): Knex.QueryBuilder 
+    findProvenTxReqsQuery(args: FindProvenTxReqsArgs, tableName = "proven_tx_reqs"): Knex.QueryBuilder 
+    findProvenTxsQuery(args: FindProvenTxsArgs, tableName = "proven_txs"): Knex.QueryBuilder 
+    findStaleMerkleRootsQuery(args: FindStaleMerkleRootsArgs, tableName = "proven_txs"): Knex.QueryBuilder 
     findSyncStatesQuery(args: FindSyncStatesArgs): Knex.QueryBuilder 
     findTransactionsQuery(args: FindTransactionsArgs, count?: boolean): Knex.QueryBuilder 
     findTxLabelMapsQuery(args: FindTxLabelMapsArgs): Knex.QueryBuilder 
@@ -3598,6 +4355,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     override async findStaleMerkleRoots(args: FindStaleMerkleRootsArgs): Promise<string[]> 
     override async findSyncStates(args: FindSyncStatesArgs): Promise<TableSyncState[]> 
     override async findTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> 
+    override async findLegacyTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> 
+    override async updateLegacyTransaction(id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> 
+    override async markOutputAsSpentBy(outputId: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<void> 
+    override async disableForeignKeys(): Promise<void> 
+    override async enableForeignKeys(): Promise<void> 
     override async findTxLabelMaps(args: FindTxLabelMapsArgs): Promise<TableTxLabelMap[]> 
     override async findTxLabels(args: FindTxLabelsArgs): Promise<TableTxLabel[]> 
     override async findUsers(args: FindUsersArgs): Promise<TableUser[]> 
@@ -3625,7 +4387,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     override async transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> 
     toDb(trx?: TrxToken) 
     async validateRawTransaction(t: TableTransaction, trx?: TrxToken): Promise<void> 
-    _verifiedReadyForDatabaseAccess: boolean = false;
+    _verifiedReadyForDatabaseAccess = false;
     async verifyReadyForDatabaseAccess(trx?: TrxToken): Promise<DBType> 
     validatePartialForUpdate<T extends EntityTimeStamp>(update: Partial<T>, dateFields?: string[], booleanFields?: string[]): Partial<T> 
     async validateEntityForInsert<T extends EntityTimeStamp>(entity: T, trx?: TrxToken, dateFields?: string[], booleanFields?: string[]): Promise<any> 
@@ -3658,7 +4420,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
             orderDescending: true,
             paged: { limit: 1 }
         }));
-        const monitorStats: ServicesCallHistory | undefined = monitorEvent ? JSON.parse(monitorEvent.details!) : undefined;
+        const monitorStats: ServicesCallHistory | undefined = (monitorEvent != null) ? JSON.parse(monitorEvent.details!) : undefined;
         const servicesStats = this.getServices().getServicesCallHistory(true);
         const one_day_ago = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
         const one_week_ago = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -3713,14 +4475,14 @@ select
     (select count(*) from transactions where status = 'unfail' and created_at > '${one_week_ago}') as txUnfailWeek,
     (select count(*) from transactions where status = 'unfail' and created_at > '${one_month_ago}') as txUnfailMonth,
 	  (select count(*) from transactions where status = 'unfail') as txUnfailTotal,
-    (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 1 and created_at > '${one_day_ago}') as satoshisDefaultDay,
-    (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 1 and created_at > '${one_week_ago}') as satoshisDefaultWeek,
-    (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 1 and created_at > '${one_month_ago}') as satoshisDefaultMonth,
-	  (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 1) as satoshisDefaultTotal,
-    (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 0 and not basketId is null and created_at > '${one_day_ago}') as satoshisOtherDay,
-    (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 0 and not basketId is null and created_at > '${one_week_ago}') as satoshisOtherWeek,
-    (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 0 and not basketId is null and created_at > '${one_month_ago}') as satoshisOtherMonth,
-	  (select sum(satoshis) from outputs where spendable = 1 and \`change\` = 0 and not basketId is null) as satoshisOtherTotal,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1 and o.created_at > '${one_day_ago}') as satoshisDefaultDay,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1 and o.created_at > '${one_week_ago}') as satoshisDefaultWeek,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1 and o.created_at > '${one_month_ago}') as satoshisDefaultMonth,
+	  (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 1) as satoshisDefaultTotal,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null and o.created_at > '${one_day_ago}') as satoshisOtherDay,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null and o.created_at > '${one_week_ago}') as satoshisOtherWeek,
+    (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null and o.created_at > '${one_month_ago}') as satoshisOtherMonth,
+	  (select sum(o.satoshis) from outputs o, transactions t where o.transactionId = t.transactionId and t.status = 'completed' and o.spendable = 1 and o.change = 0 and not o.basketId is null) as satoshisOtherTotal,
     (select count(*) from output_baskets where created_at > '${one_day_ago}') as basketsDay,
     (select count(*) from output_baskets where created_at > '${one_week_ago}') as basketsWeek,
     (select count(*) from output_baskets where created_at > '${one_month_ago}') as basketsMonth,
@@ -3813,7 +4575,7 @@ select
 }
 ```
 
-See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [DBType](./storage.md#type-dbtype), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindPartialSincePagedArgs](./client.md#interface-findpartialsincepagedargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [ServicesCallHistory](./client.md#type-servicescallhistory), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken), [WERR_NOT_IMPLEMENTED](./client.md#class-werr_not_implemented), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [listActions](./storage.md#function-listactions), [listOutputs](./storage.md#function-listoutputs), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus), [verifyOneOrNone](./client.md#function-verifyoneornone)
+See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [DBType](./storage.md#type-dbtype), [EntityTimeStamp](./client.md#interface-entitytimestamp), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagMapsArgs](./client.md#interface-findoutputtagmapsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindPartialSincePagedArgs](./client.md#interface-findpartialsincepagedargs), [FindProvenTxReqsArgs](./client.md#interface-findproventxreqsargs), [FindProvenTxsArgs](./client.md#interface-findproventxsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelMapsArgs](./client.md#interface-findtxlabelmapsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [ServicesCallHistory](./client.md#interface-servicescallhistory), [StorageKnexOptions](./storage.md#interface-storageknexoptions), [StorageProvider](./storage.md#class-storageprovider), [TableCertificate](./storage.md#interface-tablecertificate), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TransactionService](./storage.md#class-transactionservice), [TrxToken](./client.md#interface-trxtoken), [WERR_NOT_IMPLEMENTED](./client.md#class-werr_not_implemented), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [listActions](./storage.md#function-listactions), [listOutputs](./storage.md#function-listoutputs), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus), [validateEntities](./storage.md#function-validateentities), [validateEntity](./storage.md#function-validateentity), [verifyOneOrNone](./client.md#function-verifyoneornone)
 
 ###### Method allocateChangeInput
 
@@ -3838,6 +4600,141 @@ AND whose transaction status is one of:
 async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> 
 ```
 
+###### Method disableForeignKeys
+
+Post-cutover SQLite: disable FK on the bare connection BEFORE opening a
+transaction. PRAGMA foreign_keys changes inside SQLite transactions are no-ops,
+so this MUST be called before `this.knex.transaction()`.
+
+Only acts when post-cutover AND SQLite. Pre-cutover or MySQL: no-op.
+
+```ts
+override async disableForeignKeys(): Promise<void> 
+```
+
+###### Method enableForeignKeys
+
+Re-enable FK after the transaction opened via `disableForeignKeys()` completes.
+Only acts when post-cutover AND SQLite.
+
+```ts
+override async enableForeignKeys(): Promise<void> 
+```
+
+###### Method findLegacyTransactions
+
+Post-cutover: queries `transactions_legacy` for unsigned/pending rows
+created by `createAction` (which have no real txid yet and therefore have no
+new-schema counterpart).  Falls back to the standard `findTransactions` pre-cutover.
+
+Used by `processAction.validateCommitNewTxToStorageArgs` to locate the
+unsigned transaction row by `{userId, reference}`.
+
+Mapping §2: legacy `unsigned` / `unprocessed` → these rows only exist in
+`transactions_legacy` post-cutover; new `transactions` has `processing` not
+`status` and no unsigned-state rows.
+
+```ts
+override async findLegacyTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> 
+```
+See also: [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [TableTransaction](./storage.md#interface-tabletransaction)
+
+###### Method insertLegacyTransaction
+
+Insert a legacy-shaped transaction row into the correct table:
+- Post-cutover: `transactions_legacy` (the renamed legacy schema table)
+- Pre-cutover:     `transactions` (the standard table, same behaviour as `insertTransaction`)
+
+This allows `createAction` to store unsigned rows (txid unknown) without
+conflicting with the new `transactions` table's NOT NULL txid constraint.
+A new `transactions` row + `actions` row are created later by `processAction`
+once the real txid is known.
+
+On SQLite, foreign key enforcement is temporarily disabled while inserting
+into `transactions_legacy` because the referenced `proven_txs` table was
+renamed to `proven_txs_legacy` during the the schema cutover. Since `provenTxId`
+is always NULL for new unsigned transactions this is semantically safe.
+
+```ts
+override async insertLegacyTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> 
+```
+See also: [TableTransaction](./storage.md#interface-tabletransaction), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method insertLegacyTxLabelMap
+
+Insert a `tx_labels_map` row for a legacy transaction that does not yet
+have a `actions.actionId`. On post-cutover SQLite, temporarily disables
+FK checks so that the legacy transactionId (which is not yet an actionId)
+can be written. processAction will repoint it via repointLabelsToActionId.
+
+Note: bypasses `validateEntityForInsert` (and therefore `verifyReadyForDatabaseAccess`
+which would re-enable FK checks) to ensure the PRAGMA=OFF persists across
+the insert statement.
+
+```ts
+override async insertLegacyTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> 
+```
+See also: [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method makeAvailable
+
+Eagerly warm the `_postCutoverCache` so sync query builders such as
+`findOutputsQuery` can branch on cutover state without an extra await.
+Callers that have invoked `makeAvailable` are guaranteed the cache has
+been populated.
+
+```ts
+override async makeAvailable(): Promise<TableSettings> 
+```
+See also: [TableSettings](./storage.md#interface-tablesettings)
+
+###### Method markOutputAsSpentBy
+
+Post-cutover SQLite: temporarily disable FK enforcement around the
+`outputs.spentBy = legacyTransactionId` UPDATE. The `outputs.spentBy` FK
+references `transactions.transactionId` after cutover, but unsigned
+transactions from `createAction` live in `transactions_legacy` (their new-schema
+counterpart is created later by `processAction`).
+
+IMPORTANT: We bypass `updateOutput` (and therefore `verifyReadyForDatabaseAccess`)
+because `verifyReadyForDatabaseAccess` always re-enables FK with
+`PRAGMA foreign_keys = ON`, which would undo our bypass. Instead we
+directly run the UPDATE via the raw knex handle.
+
+Pre-cutover or MySQL: delegates to `updateOutput` unchanged.
+
+Mapping §2: bridge-period spentBy references transactions_legacy during
+createAction; FK bypass covers this until processAction wires the new-schema.
+
+```ts
+override async markOutputAsSpentBy(outputId: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<void> 
+```
+See also: [TableOutput](./storage.md#interface-tableoutput), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method provenTxReqsTableName
+
+Returns the canonical name of the `proven_tx_reqs` table —
+`proven_tx_reqs_legacy` post-cutover, `proven_tx_reqs` otherwise.
+
+Public so that helper modules (reviewStatus, purgeData) can resolve the
+correct table name without duplicating the post-cutover detection logic.
+
+```ts
+async provenTxReqsTableName(): Promise<string> 
+```
+
+###### Method provenTxsTableName
+
+Returns the canonical name of the `proven_txs` table — `proven_txs_legacy`
+post-cutover, `proven_txs` otherwise.
+
+Public so that helper modules (reviewStatus, purgeData) can resolve the
+correct table name without duplicating the post-cutover detection logic.
+
+```ts
+async provenTxsTableName(): Promise<string> 
+```
+
 ###### Method toDb
 
 Convert the standard optional `TrxToken` parameter into either a direct knex database instance,
@@ -3847,6 +4744,22 @@ or a Knex.Transaction as appropriate.
 toDb(trx?: TrxToken) 
 ```
 See also: [TrxToken](./client.md#interface-trxtoken)
+
+###### Method updateLegacyTransaction
+
+Post-cutover: updates `transactions_legacy` (where unsigned rows live).
+Pre-cutover: delegates to `updateTransaction`.
+
+Used by `processAction.commitNewTxToStorage` to write back the real txid
+and status to the legacy row that was created by `createAction`.
+
+Mapping §2: legacy `unsigned` → `unprocessed` transition and txid write-back
+must go to `transactions_legacy` post-cutover, not new `transactions`.
+
+```ts
+override async updateLegacyTransaction(id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> 
+```
+See also: [TableTransaction](./storage.md#interface-tabletransaction), [TrxToken](./client.md#interface-trxtoken)
 
 ###### Method validateEntities
 
@@ -3953,6 +4866,15 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     override isStorageProvider(): boolean 
     setServices(v: WalletServices) 
     getServices(): WalletServices 
+    getTransactionService(): TransactionService | undefined 
+    async insertLegacyTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> 
+    async insertLegacyTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> 
+    async findOrInsertLegacyTxLabelMap(transactionId: number, txLabelId: number, trx?: TrxToken): Promise<TableTxLabelMap> 
+    async findLegacyTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> 
+    async updateLegacyTransaction(id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> 
+    async markOutputAsSpentBy(outputId: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<void> 
+    async disableForeignKeys(): Promise<void> 
+    async enableForeignKeys(): Promise<void> 
     async abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> 
     async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> 
     async getReqsAndBeefToShareWithWorld(txids: string[], knownTxids: string[], trx?: TrxToken): Promise<GetReqsAndBeefResult> 
@@ -3982,7 +4904,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 }
 ```
 
-See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [Chain](./client.md#type-chain), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageFeeModel](./client.md#interface-storagefeemodel), [StorageGetBeefOptions](./client.md#interface-storagegetbeefoptions), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [StorageProviderOptions](./storage.md#interface-storageprovideroptions), [StorageReaderWriter](./storage.md#class-storagereaderwriter), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputX](./storage.md#interface-tableoutputx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableProvenTxReqDynamics](./storage.md#interface-tableproventxreqdynamics), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableUser](./storage.md#interface-tableuser), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [attemptToPostReqsToNetwork](./storage.md#function-attempttopostreqstonetwork), [createAction](./storage.md#function-createaction), [getBeefForTransaction](./storage.md#function-getbeeffortransaction), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [logger](./client.md#variable-logger), [processAction](./storage.md#function-processaction), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
+See also: [AdminStatsResult](./storage.md#interface-adminstatsresult), [AuthId](./client.md#interface-authid), [Chain](./client.md#type-chain), [EntityProvenTxReq](./storage.md#class-entityproventxreq), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindStaleMerkleRootsArgs](./client.md#interface-findstalemerklerootsargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [ProcessSyncChunkResult](./client.md#interface-processsyncchunkresult), [ProvenOrRawTx](./client.md#interface-provenorrawtx), [PurgeParams](./client.md#interface-purgeparams), [PurgeResults](./client.md#interface-purgeresults), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageCreateActionResult](./client.md#interface-storagecreateactionresult), [StorageFeeModel](./client.md#interface-storagefeemodel), [StorageGetBeefOptions](./client.md#interface-storagegetbeefoptions), [StorageInternalizeActionResult](./client.md#interface-storageinternalizeactionresult), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [StorageProviderOptions](./storage.md#interface-storageprovideroptions), [StorageReaderWriter](./storage.md#class-storagereaderwriter), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputX](./storage.md#interface-tableoutputx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableProvenTxReqDynamics](./storage.md#interface-tableproventxreqdynamics), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TransactionService](./storage.md#class-transactionservice), [TransactionStatus](./client.md#type-transactionstatus), [TrxToken](./client.md#interface-trxtoken), [UpdateProvenTxReqWithNewProvenTxArgs](./client.md#interface-updateproventxreqwithnewproventxargs), [UpdateProvenTxReqWithNewProvenTxResult](./client.md#interface-updateproventxreqwithnewproventxresult), [WalletServices](./client.md#interface-walletservices), [WalletStorageProvider](./client.md#interface-walletstorageprovider), [attemptToPostReqsToNetwork](./storage.md#function-attempttopostreqstonetwork), [createAction](./storage.md#function-createaction), [getBeefForTransaction](./storage.md#function-getbeeffortransaction), [internalizeAction](./storage.md#function-internalizeaction), [listActions](./storage.md#function-listactions), [listCertificates](./storage.md#function-listcertificates), [listOutputs](./storage.md#function-listoutputs), [logger](./client.md#variable-logger), [processAction](./storage.md#function-processaction), [purgeData](./storage.md#function-purgedata), [reviewStatus](./storage.md#function-reviewstatus)
 
 ###### Method confirmSpendableOutputs
 
@@ -4001,20 +4923,62 @@ Returns
 
 object with invalidSpendableOutputs array. A good result is an empty array.
 
-###### Method getProvenOrReq
+###### Method disableForeignKeys
 
-Checks if txid is a known valid ProvenTx and returns it if found.
-Next checks if txid is a current ProvenTxReq and returns that if found.
-If `newReq` is provided and an existing ProvenTxReq isn't found,
-use `newReq` to create a new ProvenTxReq.
+Disable FK enforcement on the underlying database connection.
 
-This is safe "findOrInsert" operation using retry if unique index constraint
-is violated by a race condition insert.
+No-op on non-SQLite or pre-cutover databases. On post-cutover SQLite,
+`StorageKnex` overrides this to run `PRAGMA foreign_keys = OFF` on the
+bare knex connection BEFORE a transaction is opened (since PRAGMA changes
+inside SQLite transactions are silently ignored).
+
+Must be paired with a `enableForeignKeys()` call in a finally block.
 
 ```ts
-async getProvenOrReq(txid: string, newReq?: TableProvenTxReq, trx?: TrxToken): Promise<StorageProvenOrReq> 
+async disableForeignKeys(): Promise<void> 
 ```
-See also: [StorageProvenOrReq](./client.md#interface-storageprovenorreq), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method enableForeignKeys
+
+Re-enable FK enforcement on the underlying database connection.
+Counterpart to `disableForeignKeys()`.
+
+```ts
+async enableForeignKeys(): Promise<void> 
+```
+
+###### Method findLegacyTransactions
+
+Find legacy-shaped transaction rows from the appropriate table.
+
+Post-cutover: queries `transactions_legacy` (the renamed legacy schema
+table that holds unsigned/unprocessed rows without a real txid).
+Pre-cutover (or on providers that do not support the the new schema): falls back
+to the standard `findTransactions` which targets the `transactions` table.
+
+Used by `processAction.validateCommitNewTxToStorageArgs` to locate the
+unsigned transaction row created by `createAction` via `insertLegacyTransaction`.
+
+StorageKnex overrides this to route to `transactions_legacy` when the
+table exists (post-cutover), otherwise falls through to `findTransactions`.
+
+```ts
+async findLegacyTransactions(args: FindTransactionsArgs): Promise<TableTransaction[]> 
+```
+See also: [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [TableTransaction](./storage.md#interface-tabletransaction)
+
+###### Method findOrInsertLegacyTxLabelMap
+
+Find-or-insert a `tx_labels_map` row using `insertLegacyTxLabelMap` so
+that post-cutover FK constraints are bypassed for new unsigned transactions.
+
+Mirrors the logic of `findOrInsertTxLabelMap` (StorageReaderWriter) but
+delegates the insert step to `insertLegacyTxLabelMap`.
+
+```ts
+async findOrInsertLegacyTxLabelMap(transactionId: number, txLabelId: number, trx?: TrxToken): Promise<TableTxLabelMap> 
+```
+See also: [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TrxToken](./client.md#interface-trxtoken)
 
 ###### Method getReqsAndBeefToShareWithWorld
 
@@ -4027,6 +4991,19 @@ async getReqsAndBeefToShareWithWorld(txids: string[], knownTxids: string[], trx?
 ```
 See also: [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [TrxToken](./client.md#interface-trxtoken)
 
+###### Method getTransactionService
+
+Returns a TransactionService instance if this storage provider supports
+the the new schema (i.e. has a Knex handle). Returns undefined for providers
+that do not support the new schema layer (e.g. StorageIdb).
+
+StorageKnex overrides this to return `new TransactionService(this.knex)`.
+
+```ts
+getTransactionService(): TransactionService | undefined 
+```
+See also: [TransactionService](./storage.md#class-transactionservice)
+
 ###### Method getValidBeefForKnownTxid
 
 Pulls data from storage to build a valid beef for a txid.
@@ -4038,6 +5015,89 @@ Optionally requires a minimum number of proof levels.
 async getValidBeefForKnownTxid(txid: string, mergeToBeef?: Beef, trustSelf?: TrustSelf, knownTxids?: string[], trx?: TrxToken, requiredLevels?: number): Promise<Beef> 
 ```
 See also: [TrxToken](./client.md#interface-trxtoken)
+
+###### Method insertLegacyTransaction
+
+Insert a legacy-shaped transaction row.
+
+Post-cutover: writes into `transactions_legacy` (the renamed legacy table)
+so that `createAction` can still store unsigned rows before the real txid is
+known, without touching the new `transactions` table (which requires a non-null txid).
+
+Pre-cutover (or on providers that do not support the the new schema): falls back
+to the standard `insertTransaction` which targets the `transactions` table.
+
+StorageKnex overrides this to route to `transactions_legacy` when the table
+exists, otherwise falls through to the standard `transactions` insert.
+
+```ts
+async insertLegacyTransaction(tx: TableTransaction, trx?: TrxToken): Promise<number> 
+```
+See also: [TableTransaction](./storage.md#interface-tabletransaction), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method insertLegacyTxLabelMap
+
+Insert a `tx_labels_map` row for a legacy transaction that does not yet
+have a `actions.actionId`.
+
+Post-cutover the `tx_labels_map.transactionId` column has a FK to
+`actions.actionId`. When `createAction` writes labels against a legacy
+transactionId (before processAction creates the actions row), the FK
+cannot be satisfied. This shim bypasses that constraint temporarily.
+`processAction` later rewrites the rows to the real actionId via
+`TransactionService.repointLabelsToActionId`.
+
+Pre-cutover: delegates to `insertTxLabelMap` with no FK bypass needed.
+
+StorageKnex overrides this to temporarily disable FK checks on SQLite
+when `transactions_legacy` is present (indicating post-cutover).
+
+```ts
+async insertLegacyTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> 
+```
+See also: [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method markOutputAsSpentBy
+
+Mark an output as spent by a (potentially legacy) transaction.
+
+Post-cutover on SQLite: setting `outputs.spentBy = legacyTransactionId`
+violates the FK `outputs.spentBy → transactions.transactionId` because
+unsigned transactions created by `createAction` live in `transactions_legacy`.
+This method disables the FK constraint for the duration of the update.
+The constraint will be satisfied once `processAction` creates the new schema row and
+the bridge-period is complete.
+
+Pre-cutover: delegates to `updateOutput` with no FK bypass.
+
+StorageKnex overrides this to toggle `PRAGMA foreign_keys` around the UPDATE
+when `isPostCutover()` and the dbtype is `SQLite`.
+
+Mapping §2: bridge-period `outputs.spentBy` temporarily references
+`transactions_legacy.transactionId` during `createAction`; new-schema FK is bypassed.
+
+```ts
+async markOutputAsSpentBy(outputId: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<void> 
+```
+See also: [TableOutput](./storage.md#interface-tableoutput), [TrxToken](./client.md#interface-trxtoken)
+
+###### Method updateLegacyTransaction
+
+Update a legacy-shaped transaction row in the appropriate table.
+
+Post-cutover: updates `transactions_legacy` (where unsigned rows live).
+Pre-cutover: delegates to the standard `updateTransaction`.
+
+Used by `processAction.commitNewTxToStorage` to write back the final txid
+and status to the legacy row that was created by `createAction`.
+
+StorageKnex overrides this to route to `transactions_legacy` when the
+table exists (post-cutover), otherwise falls through to `updateTransaction`.
+
+```ts
+async updateLegacyTransaction(id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> 
+```
+See also: [TableTransaction](./storage.md#interface-tabletransaction), [TrxToken](./client.md#interface-trxtoken)
 
 ###### Method updateProvenTxReqWithNewProvenTx
 
@@ -4135,7 +5195,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
 }
 ```
 
-See also: [Chain](./client.md#type-chain), [DBType](./storage.md#type-dbtype), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageReaderOptions](./storage.md#interface-storagereaderoptions), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken), [WalletStorageSyncReader](./client.md#interface-walletstoragesyncreader), [getSyncChunk](./storage.md#function-getsyncchunk)
+See also: [Chain](./client.md#type-chain), [DBType](./storage.md#type-dbtype), [FindCertificateFieldsArgs](./client.md#interface-findcertificatefieldsargs), [FindCertificatesArgs](./client.md#interface-findcertificatesargs), [FindCommissionsArgs](./client.md#interface-findcommissionsargs), [FindForUserSincePagedArgs](./client.md#interface-findforusersincepagedargs), [FindMonitorEventsArgs](./client.md#interface-findmonitoreventsargs), [FindOutputBasketsArgs](./client.md#interface-findoutputbasketsargs), [FindOutputTagsArgs](./client.md#interface-findoutputtagsargs), [FindOutputsArgs](./client.md#interface-findoutputsargs), [FindSyncStatesArgs](./client.md#interface-findsyncstatesargs), [FindTransactionsArgs](./client.md#interface-findtransactionsargs), [FindTxLabelsArgs](./client.md#interface-findtxlabelsargs), [FindUsersArgs](./client.md#interface-findusersargs), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageReaderOptions](./storage.md#interface-storagereaderoptions), [SyncChunk](./client.md#interface-syncchunk), [TableCertificateField](./storage.md#interface-tablecertificatefield), [TableCertificateX](./storage.md#interface-tablecertificatex), [TableCommission](./storage.md#interface-tablecommission), [TableMonitorEvent](./storage.md#interface-tablemonitorevent), [TableOutput](./storage.md#interface-tableoutput), [TableOutputBasket](./storage.md#interface-tableoutputbasket), [TableOutputTag](./storage.md#interface-tableoutputtag), [TableOutputTagMap](./storage.md#interface-tableoutputtagmap), [TableProvenTx](./storage.md#interface-tableproventx), [TableProvenTxReq](./storage.md#interface-tableproventxreq), [TableSettings](./storage.md#interface-tablesettings), [TableSyncState](./storage.md#interface-tablesyncstate), [TableTransaction](./storage.md#interface-tabletransaction), [TableTxLabel](./storage.md#interface-tabletxlabel), [TableTxLabelMap](./storage.md#interface-tabletxlabelmap), [TableUser](./storage.md#interface-tableuser), [TrxToken](./client.md#interface-trxtoken), [WalletStorageSyncReader](./client.md#interface-walletstoragesyncreader), [getSyncChunk](./storage.md#function-getsyncchunk), [validateDate](./storage.md#function-validatedate)
 
 ###### Method validateEntityDate
 
@@ -4266,7 +5326,7 @@ export class StorageServer {
 }
 ```
 
-See also: [EntityTimeStamp](./client.md#interface-entitytimestamp), [StorageProvider](./storage.md#class-storageprovider), [WalletStorageServerOptions](./storage.md#interface-walletstorageserveroptions)
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp), [StorageProvider](./storage.md#class-storageprovider), [WalletStorageServerOptions](./storage.md#interface-walletstorageserveroptions), [validateDate](./storage.md#function-validatedate), [validateEntities](./storage.md#function-validateentities), [validateEntity](./storage.md#function-validateentity)
 
 ###### Method validateEntities
 
@@ -4306,12 +5366,549 @@ and the `StorageBaseReader` to be protected.
 export class StorageSyncReader implements sdk.WalletStorageSyncReader {
     constructor(public auth: sdk.AuthId, public storage: StorageReader) 
     async makeAvailable(): Promise<TableSettings> 
-    destroy(): Promise<void> 
+    async destroy(): Promise<void> 
     async getSyncChunk(args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> 
 }
 ```
 
 See also: [AuthId](./client.md#interface-authid), [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageReader](./storage.md#class-storagereader), [SyncChunk](./client.md#interface-syncchunk), [TableSettings](./storage.md#interface-tablesettings), [WalletStorageSyncReader](./client.md#interface-walletstoragesyncreader), [getSyncChunk](./storage.md#function-getsyncchunk)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Class: TransactionService
+
+```ts
+export class TransactionService {
+    constructor(private readonly knex: Knex) 
+    async findByTxid(txid: string): Promise<TableTransactionNew | undefined> 
+    async findById(transactionId: number): Promise<TableTransactionNew | undefined> 
+    async create(args: {
+        txid: string;
+        processing?: sdk.ProcessingStatus;
+        rawTx?: number[];
+        inputBeef?: number[];
+        batch?: string;
+        idempotencyKey?: string;
+        isCoinbase?: boolean;
+        now?: Date;
+    }): Promise<TableTransactionNew> 
+    async transition(args: {
+        transactionId: number;
+        expectedFrom: sdk.ProcessingStatus;
+        to: sdk.ProcessingStatus;
+        provider?: string;
+        providerStatus?: string;
+        details?: Record<string, unknown>;
+        now?: Date;
+    }): Promise<TableTransactionNew | undefined> 
+    async recordProof(args: {
+        transactionId: number;
+        height: number;
+        merklePath: number[];
+        merkleRoot: string;
+        blockHash: string;
+        expectedFrom: sdk.ProcessingStatus;
+        now?: Date;
+    }): Promise<TableTransactionNew | undefined> 
+    async findActionForUser(userId: number, transactionId: number): Promise<TableAction | undefined> 
+    async createAction(args: {
+        userId: number;
+        transactionId: number;
+        reference: string;
+        description: string;
+        isOutgoing: boolean;
+        satoshisDelta: number;
+        userNosend?: boolean;
+        notifyJson?: string;
+        now?: Date;
+    }): Promise<number> 
+    async getChainTip(): Promise<{
+        height: number;
+        blockHash: string;
+    } | undefined> 
+    async setChainTip(args: {
+        height: number;
+        blockHash: string;
+        merkleRoot?: string;
+        now?: Date;
+    }): Promise<void> 
+    async tryClaimLease(claim: MonitorLeaseClaim, now?: Date): Promise<MonitorLeaseResult> 
+    async renewLease(renew: MonitorLeaseRenew, now?: Date): Promise<MonitorLeaseResult> 
+    async releaseLease(release: MonitorLeaseRelease): Promise<boolean> 
+    async findActionByReference(userId: number, reference: string): Promise<{
+        action: TableAction;
+        transaction: TableTransactionNew;
+    } | undefined> 
+    async findActionByUserTxid(userId: number, txid: string): Promise<{
+        action: TableAction;
+        transaction: TableTransactionNew;
+    } | undefined> 
+    async findOrCreateActionForTxid(args: {
+        userId: number;
+        txid: string;
+        isOutgoing: boolean;
+        description: string;
+        satoshisDelta: number;
+        reference: string;
+        rawTx?: number[];
+        inputBeef?: number[];
+        processing?: sdk.ProcessingStatus;
+        now?: Date;
+    }): Promise<{
+        action: TableAction;
+        transaction: TableTransactionNew;
+        isNew: boolean;
+    }> 
+    async updateActionSatoshisDelta(actionId: number, delta: number, now?: Date): Promise<void> 
+    async createWithProof(args: {
+        txid: string;
+        rawTx?: number[];
+        inputBeef?: number[];
+        height: number;
+        merklePath: number[];
+        merkleRoot: string;
+        blockHash: string;
+        isCoinbase?: boolean;
+        now?: Date;
+    }): Promise<TableTransactionNew> 
+    async findOrCreateForBroadcast(args: {
+        txid: string;
+        rawTx: number[];
+        inputBeef?: number[];
+        batch?: string;
+        processing?: sdk.ProcessingStatus;
+        now?: Date;
+    }): Promise<{
+        transaction: TableTransactionNew;
+        isNew: boolean;
+    }> 
+    async transitionMany(args: {
+        transactionIds: number[];
+        expectedFrom?: sdk.ProcessingStatus;
+        to: sdk.ProcessingStatus;
+        provider?: string;
+        providerStatus?: string;
+        details?: Record<string, unknown>;
+        now?: Date;
+    }): Promise<{
+        updated: number[];
+        skipped: number[];
+    }> 
+    async setBatch(transactionIds: number[], batch: string | undefined, now?: Date): Promise<void> 
+    async incrementAttempts(transactionId: number, now?: Date): Promise<TableTransactionNew | undefined> 
+    async recordBroadcastResult(args: {
+        transactionId: number;
+        txid: string;
+        status: sdk.ProcessingStatus;
+        provider: string;
+        providerStatus?: string;
+        wasBroadcast?: boolean;
+        details?: Record<string, unknown>;
+        now?: Date;
+    }): Promise<TableTransactionNew | undefined> 
+    async recordHistoryNote(transactionId: number, note: {
+        what: string;
+        [k: string]: unknown;
+    }, now?: Date): Promise<void> 
+    async mergeBeefForTxids(beef: Beef, txids: string[]): Promise<void> 
+    async collectReqsAndBeef(txids: string[], extraTxids?: string[]): Promise<{
+        beef: Beef;
+        details: Array<{
+            txid: string;
+            status: "readyToSend" | "alreadySent" | "error" | "unknown";
+            reason?: string;
+        }>;
+    }> 
+    async listActionsForUser(args: {
+        userId: number;
+        statusFilter?: sdk.ProcessingStatus[];
+        labelIds?: number[];
+        labelQueryMode?: "all" | "any";
+        createdAtFrom?: Date;
+        createdAtTo?: Date;
+        limit: number;
+        offset: number;
+    }): Promise<{
+        rows: Array<TableAction & {
+            txid: string;
+            processing: sdk.ProcessingStatus;
+            height?: number;
+        }>;
+        total?: number;
+    }> 
+    async listOutputsForUser(args: {
+        userId: number;
+        basketId?: number;
+        tagIds?: number[];
+        tagQueryMode?: "all" | "any";
+        processingFilter: sdk.ProcessingStatus[];
+        includeSpent: boolean;
+        limit: number;
+        offset: number;
+        includeLockingScripts?: boolean;
+    }): Promise<{
+        rows: Array<TableOutput & {
+            processing: sdk.ProcessingStatus;
+        }>;
+        total?: number;
+    }> 
+    async repointLabelsToActionId(legacyTransactionId: number, actionId: number, now?: Date): Promise<void> 
+    async repointOutputsToNewTransactionId(legacyTransactionId: number, newTransactionId: number, now?: Date): Promise<void> 
+}
+```
+
+See also: [MonitorLeaseClaim](./monitor.md#interface-monitorleaseclaim), [MonitorLeaseRelease](./monitor.md#interface-monitorleaserelease), [MonitorLeaseRenew](./monitor.md#interface-monitorleaserenew), [MonitorLeaseResult](./monitor.md#interface-monitorleaseresult), [ProcessingStatus](./client.md#type-processingstatus), [TableAction](./storage.md#interface-tableaction), [TableOutput](./storage.md#interface-tableoutput), [TableTransactionNew](./storage.md#interface-tabletransactionnew), [blockHash](./services.md#function-blockhash), [createAction](./storage.md#function-createaction), [getChainTip](./storage.md#function-getchaintip), [releaseLease](./monitor.md#function-releaselease), [renewLease](./monitor.md#function-renewlease), [setChainTip](./storage.md#function-setchaintip), [tryClaimLease](./monitor.md#function-tryclaimlease)
+
+###### Method collectReqsAndBeef
+
+#13 — Collect broadcast-readiness info and a populated Beef for a list of
+txids. Each entry is classified as:
+ - `readyToSend`  — queued/sending → still needs broadcast
+ - `alreadySent`  — sent/seen/seen_multi/unconfirmed/confirmed → already on network
+ - `error`        — invalid/doubleSpend → terminal failure
+ - `unknown`      — not found in new-schema
+
+```ts
+async collectReqsAndBeef(txids: string[], extraTxids?: string[]): Promise<{
+    beef: Beef;
+    details: Array<{
+        txid: string;
+        status: "readyToSend" | "alreadySent" | "error" | "unknown";
+        reason?: string;
+    }>;
+}> 
+```
+
+###### Method create
+
+Insert a new new transaction row. The row is created in `queued` state
+unless the caller overrides `processing`.
+
+```ts
+async create(args: {
+    txid: string;
+    processing?: sdk.ProcessingStatus;
+    rawTx?: number[];
+    inputBeef?: number[];
+    batch?: string;
+    idempotencyKey?: string;
+    isCoinbase?: boolean;
+    now?: Date;
+}): Promise<TableTransactionNew> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method createWithProof
+
+#5 — Create a new transaction row already in `confirmed` state with all proof
+columns populated. Useful for internalised transactions that arrive with a
+Merkle proof (bump) already attached.
+
+```ts
+async createWithProof(args: {
+    txid: string;
+    rawTx?: number[];
+    inputBeef?: number[];
+    height: number;
+    merklePath: number[];
+    merkleRoot: string;
+    blockHash: string;
+    isCoinbase?: boolean;
+    now?: Date;
+}): Promise<TableTransactionNew> 
+```
+See also: [TableTransactionNew](./storage.md#interface-tabletransactionnew), [blockHash](./services.md#function-blockhash)
+
+###### Method findActionByReference
+
+#1 — Look up an action + its backing transaction by (userId, reference).
+
+```ts
+async findActionByReference(userId: number, reference: string): Promise<{
+    action: TableAction;
+    transaction: TableTransactionNew;
+} | undefined> 
+```
+See also: [TableAction](./storage.md#interface-tableaction), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method findActionByUserTxid
+
+#2 — Look up an action + its backing transaction by (userId, txid).
+
+```ts
+async findActionByUserTxid(userId: number, txid: string): Promise<{
+    action: TableAction;
+    transaction: TableTransactionNew;
+} | undefined> 
+```
+See also: [TableAction](./storage.md#interface-tableaction), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method findOrCreateActionForTxid
+
+#3 — Upsert: find existing action for (userId, txid) or create both the new
+transaction row and the action row.
+
+```ts
+async findOrCreateActionForTxid(args: {
+    userId: number;
+    txid: string;
+    isOutgoing: boolean;
+    description: string;
+    satoshisDelta: number;
+    reference: string;
+    rawTx?: number[];
+    inputBeef?: number[];
+    processing?: sdk.ProcessingStatus;
+    now?: Date;
+}): Promise<{
+    action: TableAction;
+    transaction: TableTransactionNew;
+    isNew: boolean;
+}> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableAction](./storage.md#interface-tableaction), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method findOrCreateForBroadcast
+
+#6 — Find an existing new transaction row for the given txid (suitable for
+the broadcast queue) or create a new one in `queued` state.
+
+```ts
+async findOrCreateForBroadcast(args: {
+    txid: string;
+    rawTx: number[];
+    inputBeef?: number[];
+    batch?: string;
+    processing?: sdk.ProcessingStatus;
+    now?: Date;
+}): Promise<{
+    transaction: TableTransactionNew;
+    isNew: boolean;
+}> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method incrementAttempts
+
+#9 — Atomically increment the `attempts` counter for one transaction and
+write an `attempts.incremented` audit entry.
+
+```ts
+async incrementAttempts(transactionId: number, now?: Date): Promise<TableTransactionNew | undefined> 
+```
+See also: [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method listActionsForUser
+
+#14 — Paginated list of actions (per-user transaction views) with optional
+status and label filters.
+
+After the the schema cutover `tx_labels_map.transactionId` references `actions.actionId`
+(not `transactions.transactionId`).
+
+```ts
+async listActionsForUser(args: {
+    userId: number;
+    statusFilter?: sdk.ProcessingStatus[];
+    labelIds?: number[];
+    labelQueryMode?: "all" | "any";
+    createdAtFrom?: Date;
+    createdAtTo?: Date;
+    limit: number;
+    offset: number;
+}): Promise<{
+    rows: Array<TableAction & {
+        txid: string;
+        processing: sdk.ProcessingStatus;
+        height?: number;
+    }>;
+    total?: number;
+}> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableAction](./storage.md#interface-tableaction)
+
+###### Method listOutputsForUser
+
+#15 — Paginated list of outputs with their backing transaction processing
+state. Optional filters: basket, tag set, processing state, spent flag.
+
+```ts
+async listOutputsForUser(args: {
+    userId: number;
+    basketId?: number;
+    tagIds?: number[];
+    tagQueryMode?: "all" | "any";
+    processingFilter: sdk.ProcessingStatus[];
+    includeSpent: boolean;
+    limit: number;
+    offset: number;
+    includeLockingScripts?: boolean;
+}): Promise<{
+    rows: Array<TableOutput & {
+        processing: sdk.ProcessingStatus;
+    }>;
+    total?: number;
+}> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableOutput](./storage.md#interface-tableoutput)
+
+###### Method mergeBeefForTxids
+
+#12 — For each txid that exists in the new transactions table, merge the
+raw transaction bytes and (where available) the Merkle path into `beef`.
+Txids not present in new-schema are silently skipped.
+
+```ts
+async mergeBeefForTxids(beef: Beef, txids: string[]): Promise<void> 
+```
+
+###### Method recordBroadcastResult
+
+#10 — Record the outcome of a broadcast attempt. Transitions processing
+state, updates `wasBroadcast` and `lastProvider*` columns, and writes an
+audit row.
+
+```ts
+async recordBroadcastResult(args: {
+    transactionId: number;
+    txid: string;
+    status: sdk.ProcessingStatus;
+    provider: string;
+    providerStatus?: string;
+    wasBroadcast?: boolean;
+    details?: Record<string, unknown>;
+    now?: Date;
+}): Promise<TableTransactionNew | undefined> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method recordHistoryNote
+
+#11 — Append a free-form history note to the audit log for a transaction.
+
+```ts
+async recordHistoryNote(transactionId: number, note: {
+    what: string;
+    [k: string]: unknown;
+}, now?: Date): Promise<void> 
+```
+
+###### Method recordProof
+
+Record acquisition of a Merkle proof for a transaction. Atomically:
+ - Updates proof columns (height, index, merkle_path, merkle_root, block_hash)
+ - Transitions processing to `confirmed` from any spendable-class state.
+ - Writes a `proof.acquired` audit row.
+
+The merkle leaf index is derived from `merklePath` (BUMP) using the row's
+`txid`; callers do not pass it.
+
+```ts
+async recordProof(args: {
+    transactionId: number;
+    height: number;
+    merklePath: number[];
+    merkleRoot: string;
+    blockHash: string;
+    expectedFrom: sdk.ProcessingStatus;
+    now?: Date;
+}): Promise<TableTransactionNew | undefined> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableTransactionNew](./storage.md#interface-tabletransactionnew), [blockHash](./services.md#function-blockhash)
+
+###### Method repointLabelsToActionId
+
+Post-cutover helper: rewrite `tx_labels_map.transactionId` rows that were
+written with the legacy transactionId (before the real txid + actionId were
+known) so that they now point at the new-schema `actions.actionId`.
+
+Call this once per new outgoing transaction immediately after
+`findOrCreateActionForTxid` resolves the actionId.
+
+This is a no-op when:
+ - `legacyTransactionId` has no rows in `tx_labels_map` (no labels on the tx)
+ - `legacyTransactionId === actionId` (should not happen in practice but
+   is safe to call anyway)
+
+```ts
+async repointLabelsToActionId(legacyTransactionId: number, actionId: number, now?: Date): Promise<void> 
+```
+
+###### Method repointOutputsToNewTransactionId
+
+After `processAction` creates the new `transactions` row, remap
+`outputs.transactionId` and `outputs.spentBy` from the bridge-period
+`transactions_legacy.transactionId` to the real `transactions.transactionId`.
+
+During `createAction`, new outputs are inserted with `transactionId =
+legacyTransactionId` (bypassing FK constraints). `listActionsKnex` queries
+outputs by new transactionId, so without this remap the outputs would be
+invisible to `listActions`.
+
+This is a no-op when `legacyTransactionId === newTransactionId`.
+
+```ts
+async repointOutputsToNewTransactionId(legacyTransactionId: number, newTransactionId: number, now?: Date): Promise<void> 
+```
+
+###### Method setBatch
+
+#8 — Bulk-set the `batch` column for a list of transaction ids.
+Pass `undefined` to clear the batch tag.
+
+```ts
+async setBatch(transactionIds: number[], batch: string | undefined, now?: Date): Promise<void> 
+```
+
+###### Method transition
+
+Transition processing state with optimistic concurrency. Returns
+`undefined` when the FSM rejects the move OR the row's current state no
+longer matches `expectedFrom`.
+
+```ts
+async transition(args: {
+    transactionId: number;
+    expectedFrom: sdk.ProcessingStatus;
+    to: sdk.ProcessingStatus;
+    provider?: string;
+    providerStatus?: string;
+    details?: Record<string, unknown>;
+    now?: Date;
+}): Promise<TableTransactionNew | undefined> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+###### Method transitionMany
+
+#7 — Bulk transition: attempt `transition` for each id; collect results.
+When `expectedFrom` is omitted the current state of each row is used as
+the expected source (lenient mode — only the FSM is checked).
+
+```ts
+async transitionMany(args: {
+    transactionIds: number[];
+    expectedFrom?: sdk.ProcessingStatus;
+    to: sdk.ProcessingStatus;
+    provider?: string;
+    providerStatus?: string;
+    details?: Record<string, unknown>;
+    now?: Date;
+}): Promise<{
+    updated: number[];
+    skipped: number[];
+}> 
+```
+See also: [ProcessingStatus](./client.md#type-processingstatus)
+
+###### Method updateActionSatoshisDelta
+
+#4 — Atomically update the satoshisDelta column on an action row.
+
+```ts
+async updateActionSatoshisDelta(actionId: number, delta: number, now?: Date): Promise<void> 
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4335,7 +5932,7 @@ for these services.
 ```ts
 export class WalletStorageManager implements sdk.WalletStorage {
     _stores: ManagedStorage[] = [];
-    _isAvailable: boolean = false;
+    _isAvailable = false;
     _active?: ManagedStorage;
     _backups?: ManagedStorage[];
     _conflictingActives?: ManagedStorage[];
@@ -4389,12 +5986,12 @@ export class WalletStorageManager implements sdk.WalletStorage {
     async reproveHeader(deactivatedHash: string): Promise<sdk.ReproveHeaderResult> 
     async reproveHeightMerkleRoot(height: number, staleMerkleRoot: string): Promise<sdk.ReproveHeaderResult> 
     async reproveProven(ptx: TableProvenTx, noUpdate?: boolean): Promise<sdk.ReproveProvenResult> 
-    async syncFromReader(identityKey: string, reader: sdk.WalletStorageSyncReader, activeSync?: sdk.WalletStorageSync, log: string = ""): Promise<{
+    async syncFromReader(identityKey: string, reader: sdk.WalletStorageSyncReader, activeSync?: sdk.WalletStorageSync, log = ""): Promise<{
         inserts: number;
         updates: number;
         log: string;
     }> 
-    async syncToWriter(auth: sdk.AuthId, writer: sdk.WalletStorageProvider, activeSync?: sdk.WalletStorageSync, log: string = "", progLog?: (s: string) => string): Promise<{
+    async syncToWriter(auth: sdk.AuthId, writer: sdk.WalletStorageProvider, activeSync?: sdk.WalletStorageSync, log = "", progLog?: (s: string) => string): Promise<{
         inserts: number;
         updates: number;
         log: string;
@@ -4464,7 +6061,7 @@ _conflictingActives?: ManagedStorage[]
 True if makeAvailable has been run and access to managed stores (active) is allowed
 
 ```ts
-_isAvailable: boolean = false
+_isAvailable = false
 ```
 
 ###### Property _services
@@ -4504,26 +6101,6 @@ Returns
 
 true if the active `WalletStorageProvider` also implements `StorageProvider`
 
-###### Method makeAvailable
-
-This async function must be called after construction and before
-any other async function can proceed.
-
-Runs through `_stores` validating all properties and partitioning across `_active`, `_backups`, `_conflictingActives`.
-
-```ts
-async makeAvailable(): Promise<TableSettings> 
-```
-See also: [TableSettings](./storage.md#interface-tablesettings)
-
-Returns
-
-from the active storage.
-
-Throws
-
-WERR_INVALID_PARAMETER if canMakeAvailable returns false.
-
 ###### Method reproveHeader
 
 For each proven_txs record currently sourcing its transaction merkle proof from the given deactivated header,
@@ -4551,23 +6128,6 @@ This is intended for backup auditing of recent heights after the primary reorg e
 async reproveHeightMerkleRoot(height: number, staleMerkleRoot: string): Promise<sdk.ReproveHeaderResult> 
 ```
 See also: [ReproveHeaderResult](./client.md#interface-reproveheaderresult)
-
-###### Method reproveProven
-
-Attempt to reprove the transaction against the current chain,
-If a new valid proof is found and noUpdate is not true,
-update the proven_txs record with new block and merkle proof data.
-If noUpdate is true, the update to be applied is available in the returned result.
-
-```ts
-async reproveProven(ptx: TableProvenTx, noUpdate?: boolean): Promise<sdk.ReproveProvenResult> 
-```
-See also: [ReproveProvenResult](./client.md#interface-reproveprovenresult), [TableProvenTx](./storage.md#interface-tableproventx)
-
-Argument Details
-
-+ **ptx**
-  + proven_txs record to reprove
 
 ###### Method runAsSync
 
@@ -4605,23 +6165,57 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [listActions](#function-listactions) | [renderAdminPage](#function-renderadminpage) |
-| [createAction](#function-createaction) | [listActionsIdb](#function-listactionsidb) | [reviewStatus](#function-reviewstatus) |
-| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [listCertificates](#function-listcertificates) | [reviewStatusIdb](#function-reviewstatusidb) |
-| [createSyncMap](#function-createsyncmap) | [listOutputs](#function-listoutputs) | [setDisableDoubleSpendCheckForTest](#function-setdisabledoublespendcheckfortest) |
-| [determineDBType](#function-determinedbtype) | [listOutputsIdb](#function-listoutputsidb) | [shareReqsWithWorld](#function-sharereqswithworld) |
-| [generateChangeSdk](#function-generatechangesdk) | [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [transactionInputSize](#function-transactioninputsize) |
-| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [offsetPrivKey](#function-offsetprivkey) | [transactionOutputSize](#function-transactionoutputsize) |
-| [getBeefForTransaction](#function-getbeeffortransaction) | [offsetPubKey](#function-offsetpubkey) | [transactionSize](#function-transactionsize) |
-| [getListOutputsSpecOp](#function-getlistoutputsspecop) | [processAction](#function-processaction) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
-| [getSyncChunk](#function-getsyncchunk) | [purgeData](#function-purgedata) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
-| [internalizeAction](#function-internalizeaction) | [purgeDataIdb](#function-purgedataidb) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
-| [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [redeemServiceCharges](#function-redeemservicecharges) | [varUintSize](#function-varuintsize) |
+| [appendTxAudit](#function-appendtxaudit) | [markStaleInputsAsSpent](#function-markstaleinputsasspent) | [transactionOutputSize](#function-transactionoutputsize) |
+| [attemptToPostReqsToNetwork](#function-attempttopostreqstonetwork) | [matchesCertificateFieldPartial](#function-matchescertificatefieldpartial) | [transactionSize](#function-transactionsize) |
+| [auditProcessingTransition](#function-auditprocessingtransition) | [matchesCertificatePartial](#function-matchescertificatepartial) | [transitionProcessing](#function-transitionprocessing) |
+| [classifyReqStatus](#function-classifyreqstatus) | [matchesCommissionPartial](#function-matchescommissionpartial) | [tryClaimLease](#function-tryclaimlease) |
+| [createAction](#function-createaction) | [matchesMonitorEventPartial](#function-matchesmonitoreventpartial) | [updateReqsFromAggregateResults](#function-updatereqsfromaggregateresults) |
+| [createStorageServiceChargeScript](#function-createstorageservicechargescript) | [matchesOutputBasketPartial](#function-matchesoutputbasketpartial) | [upgradeActions](#function-upgradeactions) |
+| [createSyncMap](#function-createsyncmap) | [matchesOutputPartial](#function-matchesoutputpartial) | [upgradeAllStoresV1](#function-upgradeallstoresv1) |
+| [dateMatches](#function-datematches) | [matchesOutputTagMapPartial](#function-matchesoutputtagmappartial) | [upgradeCertificateFields](#function-upgradecertificatefields) |
+| [determineDBType](#function-determinedbtype) | [matchesOutputTagPartial](#function-matchesoutputtagpartial) | [upgradeCertificates](#function-upgradecertificates) |
+| [findAction](#function-findaction) | [matchesProvenTxPartial](#function-matchesproventxpartial) | [upgradeChainTip](#function-upgradechaintip) |
+| [findTransactionNew](#function-findtransactionnew) | [matchesProvenTxReqPartial](#function-matchesproventxreqpartial) | [upgradeCommissions](#function-upgradecommissions) |
+| [findTransactionNewByTxid](#function-findtransactionnewbytxid) | [matchesSyncStatePartial](#function-matchessyncstatepartial) | [upgradeMonitorEvents](#function-upgrademonitorevents) |
+| [generateChangeSdk](#function-generatechangesdk) | [matchesTransactionPartial](#function-matchestransactionpartial) | [upgradeMonitorLease](#function-upgrademonitorlease) |
+| [generateChangeSdkMakeStorage](#function-generatechangesdkmakestorage) | [matchesTxLabelMapPartial](#function-matchestxlabelmappartial) | [upgradeOutputBaskets](#function-upgradeoutputbaskets) |
+| [getBeefForTransaction](#function-getbeeffortransaction) | [matchesTxLabelPartial](#function-matchestxlabelpartial) | [upgradeOutputTags](#function-upgradeoutputtags) |
+| [getChainTip](#function-getchaintip) | [mergeInputBeefs](#function-mergeinputbeefs) | [upgradeOutputTagsMap](#function-upgradeoutputtagsmap) |
+| [getListOutputsSpecOp](#function-getlistoutputsspecop) | [mergeInputsIntoBeef](#function-mergeinputsintobeef) | [upgradeOutputs](#function-upgradeoutputs) |
+| [getSyncChunk](#function-getsyncchunk) | [notifyTransactionsOfProof](#function-notifytransactionsofproof) | [upgradeProvenTxReqs](#function-upgradeproventxreqs) |
+| [indexFromMerklePath](#function-indexfrommerklepath) | [offsetPrivKey](#function-offsetprivkey) | [upgradeProvenTxs](#function-upgradeproventxs) |
+| [insertAction](#function-insertaction) | [offsetPubKey](#function-offsetpubkey) | [upgradeSyncStates](#function-upgradesyncstates) |
+| [insertTransactionNew](#function-inserttransactionnew) | [partitionActionLabels](#function-partitionactionlabels) | [upgradeTransactions](#function-upgradetransactions) |
+| [internalizeAction](#function-internalizeaction) | [processAction](#function-processaction) | [upgradeTransactionsNew](#function-upgradetransactionsnew) |
+| [isProcessingSpendable](#function-isprocessingspendable) | [processingTransitionMap](#function-processingtransitionmap) | [upgradeTxAudit](#function-upgradetxaudit) |
+| [isProcessingTerminal](#function-isprocessingterminal) | [purgeData](#function-purgedata) | [upgradeTxLabels](#function-upgradetxlabels) |
+| [isValidProcessingTransition](#function-isvalidprocessingtransition) | [purgeDataIdb](#function-purgedataidb) | [upgradeTxLabelsMap](#function-upgradetxlabelsmap) |
+| [keyOffsetToHashedSecret](#function-keyoffsettohashedsecret) | [redeemServiceCharges](#function-redeemservicecharges) | [upgradeUsers](#function-upgradeusers) |
+| [listActions](#function-listactions) | [releaseLease](#function-releaselease) | [validateDate](#function-validatedate) |
+| [listActionsIdb](#function-listactionsidb) | [renderAdminPage](#function-renderadminpage) | [validateEntities](#function-validateentities) |
+| [listAuditForTransaction](#function-listauditfortransaction) | [renewLease](#function-renewlease) | [validateEntity](#function-validateentity) |
+| [listCertificates](#function-listcertificates) | [reviewStatus](#function-reviewstatus) | [validateGenerateChangeSdkParams](#function-validategeneratechangesdkparams) |
+| [listOutputs](#function-listoutputs) | [reviewStatusIdb](#function-reviewstatusidb) | [validateGenerateChangeSdkResult](#function-validategeneratechangesdkresult) |
+| [listOutputsIdb](#function-listoutputsidb) | [setChainTip](#function-setchaintip) | [validateProcessingTransition](#function-validateprocessingtransition) |
+| [lockScriptWithKeyOffsetFromPubKey](#function-lockscriptwithkeyoffsetfrompubkey) | [setDisableDoubleSpendCheckForTest](#function-setdisabledoublespendcheckfortest) | [validateStorageFeeModel](#function-validatestoragefeemodel) |
+| [mapActionRow](#function-mapactionrow) | [shareReqsWithWorld](#function-sharereqswithworld) | [validateSyncChunkEntities](#function-validatesyncchunkentities) |
+| [mapTransactionRow](#function-maptransactionrow) | [transactionInputSize](#function-transactioninputsize) | [varUintSize](#function-varuintsize) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
+##### Function: appendTxAudit
+
+```ts
+export async function appendTxAudit(knex: Knex, ev: AuditEvent, now: Date = new Date()): Promise<number> 
+```
+
+See also: [AuditEvent](./storage.md#interface-auditevent)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: attemptToPostReqsToNetwork
 
 Attempt to post one or more `ProvenTxReq` with status 'unsent'
@@ -4632,6 +6226,39 @@ export async function attemptToPostReqsToNetwork(storage: StorageProvider, reqs:
 ```
 
 See also: [EntityProvenTxReq](./storage.md#class-entityproventxreq), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [StorageProvider](./storage.md#class-storageprovider), [TrxToken](./client.md#interface-trxtoken), [logger](./client.md#variable-logger)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: auditProcessingTransition
+
+Convenience helper for processing transitions. Validates the move first;
+on rejection it still records the attempt with `event = 'processing.rejected'`
+so the audit trail captures impossible transitions for later diagnosis.
+
+Returns `true` when the transition is legal (audit row written with
+`processing.changed`) and `false` when rejected (audit row written with
+`processing.rejected`).
+
+```ts
+export async function auditProcessingTransition(knex: Knex, transactionId: number, from: sdk.ProcessingStatus, to: sdk.ProcessingStatus, details?: Record<string, unknown>, now: Date = new Date()): Promise<boolean> 
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: classifyReqStatus
+
+Classify a ProvenTxReq status into beef-sharing lifecycle status.
+Mutates `d` in place.
+
+```ts
+export function classifyReqStatus(d: GetReqsAndBeefDetail, req: TableProvenTxReq): void 
+```
+
+See also: [GetReqsAndBeefDetail](./storage.md#interface-getreqsandbeefdetail), [TableProvenTxReq](./storage.md#interface-tableproventxreq)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4670,6 +6297,15 @@ See also: [SyncMap](./storage.md#interface-syncmap)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: dateMatches
+
+```ts
+export function dateMatches(a: Date | undefined, b: Date | undefined): boolean 
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: determineDBType
 
 ```ts
@@ -4681,6 +6317,45 @@ See also: [DBType](./storage.md#type-dbtype)
 Returns
 
 connected database engine variant
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: findAction
+
+Find an action row by `(userId, transactionId)`.
+
+```ts
+export async function findAction(knex: Knex, userId: number, transactionId: number): Promise<TableAction | undefined> 
+```
+
+See also: [TableAction](./storage.md#interface-tableaction)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: findTransactionNew
+
+Read a single `transactions` (new canonical) row by PK.
+
+```ts
+export async function findTransactionNew(knex: Knex, transactionId: number): Promise<TableTransactionNew | undefined> 
+```
+
+See also: [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: findTransactionNewByTxid
+
+Read a single `transactions` (new canonical) row by txid, returning `undefined` if absent.
+
+```ts
+export async function findTransactionNewByTxid(knex: Knex, txid: string): Promise<TableTransactionNew | undefined> 
+```
+
+See also: [TableTransactionNew](./storage.md#interface-tabletransactionnew)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4748,6 +6423,19 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: getChainTip
+
+Get the singleton chain tip row (`id = 1`).
+
+```ts
+export async function getChainTip(knex: Knex): Promise<TableChainTip | undefined> 
+```
+
+See also: [TableChainTip](./storage.md#interface-tablechaintip)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: getListOutputsSpecOp
 
 Check basket and tags arguments passed to listOutputs to determine if they trigger a special operation execution mode.
@@ -4774,6 +6462,57 @@ export async function getSyncChunk(storage: StorageReader, args: RequestSyncChun
 ```
 
 See also: [RequestSyncChunkArgs](./client.md#interface-requestsyncchunkargs), [StorageReader](./storage.md#class-storagereader), [SyncChunk](./client.md#interface-syncchunk)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: indexFromMerklePath
+
+High-level service over the new-schema storage primitives.
+
+Storage methods and the Monitor call into this surface rather than the
+lower-level CRUD/FSM/audit/lease modules so that:
+ - Every processing transition is audited.
+ - Optimistic concurrency is uniformly enforced.
+ - Chain tip + monitor lease access have one canonical entry point.
+
+Construction takes a Knex handle; instances are stateless and cheap to
+create — typically one per request or per Monitor task tick.
+
+Extract the merkle leaf index for `txid` from a BUMP-encoded merkle path.
+
+The BUMP format encodes level 0 leaves with `txid: true` and an `offset`
+equal to the position of the transaction in its block. For a single-tx
+proof exactly one leaf is flagged; for trimmed compound proofs the leaf
+matching `txid` is selected.
+
+```ts
+export function indexFromMerklePath(merklePath: number[], txid: string): number 
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: insertAction
+
+```ts
+export async function insertAction(knex: Knex, row: Omit<TableAction, "actionId" | "created_at" | "updated_at">, now: Date = new Date()): Promise<number> 
+```
+
+See also: [TableAction](./storage.md#interface-tableaction)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: insertTransactionNew
+
+Insert a new `transactions` (new canonical) row. Caller supplies the full body.
+
+```ts
+export async function insertTransactionNew(knex: Knex, row: Omit<TableTransactionNew, "transactionId" | "created_at" | "updated_at">, now: Date = new Date()): Promise<number> 
+```
+
+See also: [TableTransactionNew](./storage.md#interface-tabletransactionnew)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4814,6 +6553,49 @@ See also: [AuthId](./client.md#interface-authid), [StorageInternalizeActionResul
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: isProcessingSpendable
+
+True when the given state implies the transaction has been seen / accepted
+by at least one network provider — the precondition for output spendability
+in §4.
+
+```ts
+export function isProcessingSpendable(s: sdk.ProcessingStatus): boolean 
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: isProcessingTerminal
+
+True when the state is terminal (no further automatic transitions).
+
+```ts
+export function isProcessingTerminal(s: sdk.ProcessingStatus): boolean 
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: isValidProcessingTransition
+
+Returns true when `from -> to` is a permitted processing transition.
+Identity transitions (`from === to`) are always allowed — they represent a
+status refresh without state change.
+
+```ts
+export function isValidProcessingTransition(from: sdk.ProcessingStatus, to: sdk.ProcessingStatus): boolean 
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: keyOffsetToHashedSecret
 
 ```ts
@@ -4844,6 +6626,19 @@ export async function listActionsIdb(storage: StorageIdb, auth: AuthId, vargs: V
 ```
 
 See also: [AuthId](./client.md#interface-authid), [StorageIdb](./storage.md#class-storageidb)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: listAuditForTransaction
+
+Read all audit rows for a transaction, oldest first. Useful for tests.
+
+```ts
+export async function listAuditForTransaction(knex: Knex, transactionId: number): Promise<TableTxAudit[]> 
+```
+
+See also: [TableTxAudit](./storage.md#interface-tabletxaudit)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4893,6 +6688,286 @@ export function lockScriptWithKeyOffsetFromPubKey(pubKey: string, keyOffset?: st
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: mapActionRow
+
+```ts
+export function mapActionRow(row: any): TableAction 
+```
+
+See also: [TableAction](./storage.md#interface-tableaction)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: mapTransactionRow
+
+```ts
+export function mapTransactionRow(row: any): TableTransactionNew 
+```
+
+See also: [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: markStaleInputsAsSpent
+
+After any failed broadcast (doubleSpend, invalidTx, etc.), query each
+consumed-input outpoint of the failed transaction against on-chain
+UTXO state. For inputs the chain authoritatively confirms are spent
+(i.e. NOT a UTXO), update the corresponding wallet basket entry to
+spendable=false.
+
+Background: `updateTransactionStatus(failed)` optimistically restores
+all consumed-input outputs to spendable=true so the user can retry
+with the same inputs. For some failures (genuine doubleSpend, or any
+'missing-inputs' outcome where the input has been spent on chain by
+a different transaction), restoration is incorrect — the input is
+gone and restoring it produces an infinite missing-inputs loop on
+the next createAction → broadcast cycle. Apps cannot evict from the
+default basket on app-isolated wallets (admin-only policy), so this
+self-heal must run inside the wallet.
+
+Different broadcasters classify the same on-chain reality differently
+(ARC → doubleSpend, WhatsOnChain/Bitails → invalidTx via
+'missing-inputs'); this helper is broadcaster-agnostic because its
+decision is based on services.isUtxo, not the aggregate failure
+classification.
+
+Pre-broadcast races where concurrent createActions reach the same
+UTXO across separate app processes are out of scope; see PR
+description.
+
+Conservatively scoped:
+  - Only inputs found in the failing user's basket are touched.
+  - Inputs whose on-chain UTXO status cannot be determined (service
+    error / inconclusive) are left spendable=true. Eviction is opt-in
+    based on positive evidence of stale state.
+  - Inputs the chain confirms are still UTXOs (e.g. a competing tx
+    itself failed, or a malformed/fee failure where inputs are intact)
+    are left spendable=true — preserving the existing transient-retry
+    semantics callers depend on.
+
+Returns counts for instrumentation and the set of stale outpoints
+that were actually evicted (added to history note for diagnostics).
+
+```ts
+export async function markStaleInputsAsSpent(ar: AggregatePostBeefTxResult, storage: StorageProvider, services: sdk.WalletServices, trx?: sdk.TrxToken, logger?: WalletLoggerInterface): Promise<{
+    checked: number;
+    staleConfirmed: number;
+    staleOutpoints: string[];
+}> 
+```
+
+See also: [AggregatePostBeefTxResult](./storage.md#interface-aggregatepostbeeftxresult), [StorageProvider](./storage.md#class-storageprovider), [TrxToken](./client.md#interface-trxtoken), [WalletServices](./client.md#interface-walletservices), [logger](./client.md#variable-logger)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesCertificateFieldPartial
+
+```ts
+export function matchesCertificateFieldPartial(r: TableCertificateField, partial: Partial<TableCertificateField>): boolean 
+```
+
+See also: [TableCertificateField](./storage.md#interface-tablecertificatefield)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesCertificatePartial
+
+```ts
+export function matchesCertificatePartial(r: TableCertificate, partial: Partial<TableCertificate>): boolean 
+```
+
+See also: [TableCertificate](./storage.md#interface-tablecertificate)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesCommissionPartial
+
+```ts
+export function matchesCommissionPartial(r: TableCommission, partial: Partial<TableCommission>): boolean 
+```
+
+See also: [TableCommission](./storage.md#interface-tablecommission)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesMonitorEventPartial
+
+```ts
+export function matchesMonitorEventPartial(r: TableMonitorEvent, partial: Partial<TableMonitorEvent>): boolean 
+```
+
+See also: [TableMonitorEvent](./storage.md#interface-tablemonitorevent)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesOutputBasketPartial
+
+```ts
+export function matchesOutputBasketPartial(r: TableOutputBasket, partial: Partial<TableOutputBasket>): boolean 
+```
+
+See also: [TableOutputBasket](./storage.md#interface-tableoutputbasket)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesOutputPartial
+
+```ts
+export function matchesOutputPartial(r: TableOutput, partial: Partial<TableOutput>): boolean 
+```
+
+See also: [TableOutput](./storage.md#interface-tableoutput)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesOutputTagMapPartial
+
+```ts
+export function matchesOutputTagMapPartial(r: TableOutputTagMap, partial: Partial<TableOutputTagMap>): boolean 
+```
+
+See also: [TableOutputTagMap](./storage.md#interface-tableoutputtagmap)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesOutputTagPartial
+
+```ts
+export function matchesOutputTagPartial(r: TableOutputTag, partial: Partial<TableOutputTag>): boolean 
+```
+
+See also: [TableOutputTag](./storage.md#interface-tableoutputtag)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesProvenTxPartial
+
+```ts
+export function matchesProvenTxPartial(r: TableProvenTx, partial: Partial<TableProvenTx>): boolean 
+```
+
+See also: [TableProvenTx](./storage.md#interface-tableproventx)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesProvenTxReqPartial
+
+```ts
+export function matchesProvenTxReqPartial(r: TableProvenTxReq, partial: Partial<TableProvenTxReq>): boolean 
+```
+
+See also: [TableProvenTxReq](./storage.md#interface-tableproventxreq)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesSyncStatePartial
+
+```ts
+export function matchesSyncStatePartial(r: TableSyncState, partial: Partial<TableSyncState>): boolean 
+```
+
+See also: [TableSyncState](./storage.md#interface-tablesyncstate)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesTransactionPartial
+
+```ts
+export function matchesTransactionPartial(r: TableTransaction, partial: Partial<TableTransaction>): boolean 
+```
+
+See also: [TableTransaction](./storage.md#interface-tabletransaction)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesTxLabelMapPartial
+
+```ts
+export function matchesTxLabelMapPartial(r: TableTxLabelMap, partial: Partial<TableTxLabelMap>): boolean 
+```
+
+See also: [TableTxLabelMap](./storage.md#interface-tabletxlabelmap)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: matchesTxLabelPartial
+
+```ts
+export function matchesTxLabelPartial(r: TableTxLabel, partial: Partial<TableTxLabel>): boolean 
+```
+
+See also: [TableTxLabel](./storage.md#interface-tabletxlabel)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: mergeInputBeefs
+
+For each input of `rawTx`, ensure the source txid is represented in `beef`.
+
+When `requiredLevels` is undefined/0 and `knownTxids` contains the source txid,
+a txid-only stub is merged rather than recursing into storage.
+
+```ts
+export async function mergeInputBeefs(rawTx: number[], beef: Beef, trustSelf: "known" | undefined, knownTxids: string[] | undefined, trx: TrxToken | undefined, requiredLevels: number | undefined, getValidBeef: (txid: string, beef: Beef, trustSelf: "known" | undefined, knownTxids: string[] | undefined, trx: TrxToken | undefined, requiredLevels: number | undefined) => Promise<unknown>): Promise<void> 
+```
+
+See also: [TrxToken](./client.md#interface-trxtoken)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: mergeInputsIntoBeef
+
+Convenience wrapper for the external-sharing path where `trustSelf` and
+`requiredLevels` are always absent.
+
+```ts
+export async function mergeInputsIntoBeef(rawTx: number[], beef: Beef, knownTxids: string[], trx: TrxToken | undefined, getValidBeef: (txid: string, beef: Beef, trustSelf: undefined, knownTxids: string[], trx: TrxToken | undefined) => Promise<unknown>): Promise<void> 
+```
+
+See also: [TrxToken](./client.md#interface-trxtoken)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: notifyTransactionsOfProof
+
+Notify each transaction that a proof has been found.
+Mutates `req` history notes in place.
+
+The `addNote` and `flushNotes` callbacks avoid coupling this helper to a
+specific entity type.
+
+```ts
+export async function notifyTransactionsOfProof(ids: number[], provenTxId: number, addNote: (note: ReqHistoryNote) => void, flushNotes: () => Promise<void>, updateTransaction: (id: number, update: {
+    provenTxId: number;
+    status: "completed";
+}) => Promise<unknown>): Promise<void> 
+```
+
+See also: [ReqHistoryNote](./client.md#interface-reqhistorynote)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: offsetPrivKey
 
 ```ts
@@ -4917,6 +6992,21 @@ export function offsetPubKey(pubKey: string, keyOffset?: string): {
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: partitionActionLabels
+
+```ts
+export function partitionActionLabels(ordinaryLabels: string[]): {
+    specOp: ListActionsSpecOp | undefined;
+    specOpLabels: string[];
+    labels: string[];
+} 
+```
+
+See also: [ListActionsSpecOp](./storage.md#interface-listactionsspecop)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: processAction
 
 ```ts
@@ -4924,6 +7014,19 @@ export async function processAction(storage: StorageProvider, auth: AuthId, args
 ```
 
 See also: [AuthId](./client.md#interface-authid), [StorageProcessActionArgs](./client.md#interface-storageprocessactionargs), [StorageProcessActionResults](./client.md#interface-storageprocessactionresults), [StorageProvider](./storage.md#class-storageprovider)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: processingTransitionMap
+
+Snapshot of the transition table for documentation + tests.
+
+```ts
+export function processingTransitionMap(): Readonly<Record<sdk.ProcessingStatus, readonly sdk.ProcessingStatus[]>> 
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4953,10 +7056,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: redeemServiceCharges
 
 ```ts
-export function redeemServiceCharges(privateKeyWif: string, charges: TableCommission[]): {}[] 
+export function redeemServiceCharges(privateKeyWif: string, charges: TableCommission[]): Array<{}> 
 ```
 
 See also: [TableCommission](./storage.md#interface-tablecommission)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: releaseLease
+
+Release the lease (no-op when not owned by the caller).
+The row is deleted so subsequent claimants do not see an inherited
+`renew_count`.
+
+```ts
+export async function releaseLease(knex: Knex, release: MonitorLeaseRelease): Promise<boolean> 
+```
+
+See also: [MonitorLeaseRelease](./monitor.md#interface-monitorleaserelease)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4966,6 +7084,20 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export function renderAdminPage(): string 
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: renewLease
+
+Extend the current owner's lease. Fails (returns `acquired: false`) when the
+row does not exist, is owned by someone else, or has already expired.
+
+```ts
+export async function renewLease(knex: Knex, renew: MonitorLeaseRenew, now: Date = new Date()): Promise<MonitorLeaseResult> 
+```
+
+See also: [MonitorLeaseRenew](./monitor.md#interface-monitorleaserenew), [MonitorLeaseResult](./monitor.md#interface-monitorleaseresult)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5014,6 +7146,23 @@ See also: [StorageIdb](./storage.md#class-storageidb), [TrxToken](./client.md#in
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: setChainTip
+
+Upsert the singleton chain tip. Always uses `id = 1`.
+
+```ts
+export async function setChainTip(knex: Knex, args: {
+    height: number;
+    blockHash: string;
+    merkleRoot?: string;
+}, now: Date = new Date()): Promise<void> 
+```
+
+See also: [blockHash](./services.md#function-blockhash)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: setDisableDoubleSpendCheckForTest
 
 ```ts
@@ -5025,10 +7174,6 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ##### Function: shareReqsWithWorld
 
-Verifies that all the txids are known reqs with ready-to-share status.
-Assigns a batch identifier and updates all the provenTxReqs.
-If not isDelayed, triggers an initial attempt to broadcast the batch and returns the results.
-
 ```ts
 export async function shareReqsWithWorld(storage: StorageProvider, userId: number, txids: string[], isDelayed: boolean, r?: GetReqsAndBeefResult, logger?: WalletLoggerInterface): Promise<{
     swr: SendWithResult[];
@@ -5037,11 +7182,6 @@ export async function shareReqsWithWorld(storage: StorageProvider, userId: numbe
 ```
 
 See also: [GetReqsAndBeefResult](./storage.md#interface-getreqsandbeefresult), [ReviewActionResult](./client.md#interface-reviewactionresult), [StorageProvider](./storage.md#class-storageprovider), [logger](./client.md#variable-logger)
-
-Argument Details
-
-+ **r**
-  + Optional. Ignores txids and allows ProvenTxReqs and merged beef to be passed in.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5106,6 +7246,364 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: transitionProcessing
+
+Transition the processing column atomically and append a `tx_audit` row.
+Returns the new `TableTransactionNew` on success and `undefined` when the
+source state did not match the row (CAS failed) or the transition was
+rejected by the FSM.
+
+Optimistic concurrency: the caller passes the `expectedFromState` they
+read in the same logical operation; the update only fires when the row's
+current `processing` still equals that value.
+
+```ts
+export async function transitionProcessing(knex: Knex, args: {
+    transactionId: number;
+    expectedFromState: sdk.ProcessingStatus;
+    toState: sdk.ProcessingStatus;
+    details?: Record<string, unknown>;
+    provider?: string;
+    providerStatus?: string;
+}, now: Date = new Date()): Promise<TableTransactionNew | undefined> 
+```
+
+See also: [ProcessingStatus](./client.md#type-processingstatus), [TableTransactionNew](./storage.md#interface-tabletransactionnew)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: tryClaimLease
+
+Try to claim a lease on `taskName`. Succeeds iff:
+  - no row exists for the task, OR
+  - the existing row has `expiresAt <= now`, OR
+  - the existing row's `ownerId` already equals the requested owner.
+
+On success the row is upserted with `expiresAt = now + ttlMs` and
+`renewCount = renewCount + 1` (0 for fresh rows).
+
+```ts
+export async function tryClaimLease(knex: Knex, claim: MonitorLeaseClaim, now: Date = new Date()): Promise<MonitorLeaseResult> 
+```
+
+See also: [MonitorLeaseClaim](./monitor.md#interface-monitorleaseclaim), [MonitorLeaseResult](./monitor.md#interface-monitorleaseresult)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: updateReqsFromAggregateResults
+
+For each txid in submitted `txids`:
+
+  Based on its aggregate status, and whether broadcast happening in background (isDelayed) or immediately (!isDelayed),
+  and iff current req.status is not 'unproven' or 'completed':
+
+    'success':
+      req.status => 'unmined', tx.status => 'unproven'
+    'doubleSpend':
+      req.status => 'doubleSpend', tx.status => 'failed'
+    'invalidTx':
+      req.status => 'invalid', tx.status => 'failed'
+    'serviceError':
+      increment req.attempts
+
+```ts
+export async function updateReqsFromAggregateResults(txids: string[], r: PostReqsToNetworkResult, apbrs: Record<string, AggregatePostBeefTxResult>, storage: StorageProvider, services?: sdk.WalletServices, trx?: sdk.TrxToken, logger?: WalletLoggerInterface): Promise<void> 
+```
+
+See also: [AggregatePostBeefTxResult](./storage.md#interface-aggregatepostbeeftxresult), [PostReqsToNetworkResult](./storage.md#interface-postreqstonetworkresult), [StorageProvider](./storage.md#class-storageprovider), [TrxToken](./client.md#interface-trxtoken), [WalletServices](./client.md#interface-walletservices), [logger](./client.md#variable-logger)
+
+Argument Details
+
++ **services**
+  + if valid, doubleSpend results will be verified (but only if not within a trx. e.g. trx must be undefined)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeActions
+
+```ts
+export function upgradeActions(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeAllStoresV1
+
+Upgrade handler for every store that existed at schema version 1.
+
+```ts
+export function upgradeAllStoresV1(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeCertificateFields
+
+```ts
+export function upgradeCertificateFields(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeCertificates
+
+```ts
+export function upgradeCertificates(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeChainTip
+
+```ts
+export function upgradeChainTip(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeCommissions
+
+```ts
+export function upgradeCommissions(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeMonitorEvents
+
+```ts
+export function upgradeMonitorEvents(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeMonitorLease
+
+```ts
+export function upgradeMonitorLease(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeOutputBaskets
+
+```ts
+export function upgradeOutputBaskets(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeOutputTags
+
+```ts
+export function upgradeOutputTags(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeOutputTagsMap
+
+```ts
+export function upgradeOutputTagsMap(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeOutputs
+
+```ts
+export function upgradeOutputs(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeProvenTxReqs
+
+```ts
+export function upgradeProvenTxReqs(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeProvenTxs
+
+```ts
+export function upgradeProvenTxs(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeSyncStates
+
+```ts
+export function upgradeSyncStates(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeTransactions
+
+```ts
+export function upgradeTransactions(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeTransactionsNew
+
+```ts
+export function upgradeTransactionsNew(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeTxAudit
+
+```ts
+export function upgradeTxAudit(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeTxLabels
+
+```ts
+export function upgradeTxLabels(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeTxLabelsMap
+
+```ts
+export function upgradeTxLabelsMap(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: upgradeUsers
+
+```ts
+export function upgradeUsers(db: IDBPDatabase<StorageIdbSchema>): void 
+```
+
+See also: [StorageIdbSchema](./storage.md#interface-storageidbschema)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: validateDate
+
+Shared entity-validation helpers used by both client-side storage remoting
+(StorageClientBase / StorageMobile) and the server-side StorageServer.
+
+These helpers normalise records returned from remote calls or database queries:
+  - Coerce date strings / timestamps to `Date` objects.
+  - Replace `null` values with `undefined`.
+  - Replace `Uint8Array` / `Buffer` values with plain `number[]` arrays.
+
+```ts
+export function validateDate(date: Date | string | number): Date 
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: validateEntities
+
+Force uniform behaviour across database engines.
+Use to process all arrays of records with timestamps retrieved from database.
+
+```ts
+export function validateEntities<T extends EntityTimeStamp>(entities: T[], dateFields?: string[]): T[] 
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp)
+
+Returns
+
+input `entities` array with contained values validated.
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: validateEntity
+
+Force uniform behaviour across database engines.
+Use to process all individual records with timestamps retrieved from database.
+
+```ts
+export function validateEntity<T extends EntityTimeStamp>(entity: T, dateFields?: string[]): T 
+```
+
+See also: [EntityTimeStamp](./client.md#interface-entitytimestamp)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: validateGenerateChangeSdkParams
 
 ```ts
@@ -5131,6 +7629,20 @@ See also: [GenerateChangeSdkParams](./storage.md#interface-generatechangesdkpara
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: validateProcessingTransition
+
+As `isValidProcessingTransition` but returns a structured result with a
+human-readable reason for any rejection. Useful for `tx_audit` payloads.
+
+```ts
+export function validateProcessingTransition(from: sdk.ProcessingStatus, to: sdk.ProcessingStatus): FsmTransitionResult 
+```
+
+See also: [FsmTransitionResult](./storage.md#interface-fsmtransitionresult), [ProcessingStatus](./client.md#type-processingstatus)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: validateStorageFeeModel
 
 ```ts
@@ -5138,6 +7650,20 @@ export function validateStorageFeeModel(v?: StorageFeeModel): StorageFeeModel
 ```
 
 See also: [StorageFeeModel](./client.md#interface-storagefeemodel)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: validateSyncChunkEntities
+
+Validate all entity arrays within a `SyncChunk` received from a remote storage call.
+Normalises timestamps, nulls, and binary fields in-place.
+
+```ts
+export function validateSyncChunkEntities(r: SyncChunk): SyncChunk 
+```
+
+See also: [SyncChunk](./client.md#interface-syncchunk)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -5150,7 +7676,13 @@ Returns the byte size required to encode number as Bitcoin VarUint
 export function varUintSize(val: number): 1 | 3 | 5 | 9 {
     if (val < 0)
         throw new WERR_INVALID_PARAMETER("varUint", "non-negative");
-    return val <= 252 ? 1 : val <= 65535 ? 3 : val <= 4294967295 ? 5 : 9;
+    if (val <= 252)
+        return 1;
+    if (val <= 65535)
+        return 3;
+    if (val <= 4294967295)
+        return 5;
+    return 9;
 }
 ```
 
@@ -5234,8 +7766,8 @@ getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
             name: "noSendActions",
             labelsToIntercept: ["abort"],
             setStatusFilter: () => ["nosend"],
-            postProcess: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListActionsArgs, specOpLabels: string[], txs: Partial<TableTransaction>[]): Promise<void> => {
-                if (specOpLabels.indexOf("abort") >= 0) {
+            postProcess: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListActionsArgs, specOpLabels: string[], txs: Array<Partial<TableTransaction>>): Promise<void> => {
+                if (specOpLabels.includes("abort")) {
                     for (const tx of txs) {
                         if (tx.status === "nosend") {
                             await s.abortAction(auth, { reference: tx.reference! });
@@ -5249,8 +7781,8 @@ getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
             name: "failedActions",
             labelsToIntercept: ["unfail"],
             setStatusFilter: () => ["failed"],
-            postProcess: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListActionsArgs, specOpLabels: string[], txs: Partial<TableTransaction>[]): Promise<void> => {
-                if (specOpLabels.indexOf("unfail") >= 0) {
+            postProcess: async (s: StorageProvider, auth: AuthId, vargs: Validation.ValidListActionsArgs, specOpLabels: string[], txs: Array<Partial<TableTransaction>>): Promise<void> => {
+                if (specOpLabels.includes("unfail")) {
                     for (const tx of txs) {
                         if (tx.status === "failed") {
                             await s.updateTransaction(tx.transactionId!, { status: "unfail" });

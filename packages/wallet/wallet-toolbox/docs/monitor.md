@@ -23,6 +23,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | --- |
 | [DeactivedHeader](#interface-deactivedheader) |
 | [MonitorDaemonSetup](#interface-monitordaemonsetup) |
+| [MonitorLeaseClaim](#interface-monitorleaseclaim) |
+| [MonitorLeaseRelease](#interface-monitorleaserelease) |
+| [MonitorLeaseRenew](#interface-monitorleaserenew) |
+| [MonitorLeaseResult](#interface-monitorleaseresult) |
 | [MonitorOptions](#interface-monitoroptions) |
 | [ReviewHeightRangeResult](#interface-reviewheightrangeresult) |
 | [TaskPurgeParams](#interface-taskpurgeparams) |
@@ -97,6 +101,72 @@ See also: [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-cha
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Interface: MonitorLeaseClaim
+
+monitor lease primitive.
+
+A `monitor_lease` row records the owner that may currently execute a named
+task. Acquisition is opportunistic: a Monitor calls `tryClaimLease()` to
+insert or take over a stale row; if it succeeds it owns the task until
+`expiresAt`. While running it calls `renewLease()` to extend the deadline.
+On clean shutdown it calls `releaseLease()`.
+
+The Knex driver expresses claim + takeover as a single conditional UPDATE
+so that two contending Monitors cannot both believe they own the task — at
+most one row write will succeed per (task, expiry) pair.
+
+```ts
+export interface MonitorLeaseClaim {
+    taskName: string;
+    ownerId: string;
+    ttlMs: number;
+    note?: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseRelease
+
+```ts
+export interface MonitorLeaseRelease {
+    taskName: string;
+    ownerId: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseRenew
+
+```ts
+export interface MonitorLeaseRenew {
+    taskName: string;
+    ownerId: string;
+    ttlMs: number;
+    note?: string;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: MonitorLeaseResult
+
+```ts
+export interface MonitorLeaseResult {
+    acquired: boolean;
+    lease?: TableMonitorLease;
+}
+```
+
+See also: [TableMonitorLease](./storage.md#interface-tablemonitorlease)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Interface: MonitorOptions
 
 ```ts
@@ -112,6 +182,7 @@ export interface MonitorOptions {
     abandonedMsecs: number;
     unprovenAttemptsLimitTest: number;
     unprovenAttemptsLimitMain: number;
+    maxRebroadcastAttempts: number;
     callbackToken?: string;
     loadLastSSEEventId?: () => Promise<string | undefined>;
     saveLastSSEEventId?: (lastEventId: string) => Promise<void>;
@@ -149,6 +220,19 @@ Load persisted SSE lastEventId (e.g. from SQLite) for catchup on startup
 
 ```ts
 loadLastSSEEventId?: () => Promise<string | undefined>
+```
+
+###### Property maxRebroadcastAttempts
+
+Maximum number of times a broadcast transaction may be reset to 'unsent' for
+rebroadcast after proof check timeout (circuit breaker).
+
+Default 0 means unlimited — the tx is rebroadcast indefinitely until a proof
+is found. Set to a positive integer to cap rebroadcast cycles; once the limit
+is reached the req is marked 'invalid'.
+
+```ts
+maxRebroadcastAttempts: number
 ```
 
 ###### Property msecsWaitPerMerkleProofServiceReq
@@ -234,21 +318,86 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | |
 | --- | --- |
-| [Monitor](#class-monitor) | [TaskPurge](#class-taskpurge) |
-| [MonitorDaemon](#class-monitordaemon) | [TaskReorg](#class-taskreorg) |
-| [TaskArcadeSSE](#class-taskarcadesse) | [TaskReviewDoubleSpends](#class-taskreviewdoublespends) |
-| [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReviewProvenTxs](#class-taskreviewproventxs) |
-| [TaskCheckNoSends](#class-taskchecknosends) | [TaskReviewStatus](#class-taskreviewstatus) |
-| [TaskClock](#class-taskclock) | [TaskReviewUtxos](#class-taskreviewutxos) |
-| [TaskFailAbandoned](#class-taskfailabandoned) | [TaskSendWaiting](#class-tasksendwaiting) |
-| [TaskMineBlock](#class-taskmineblock) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
-| [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [TaskUnFail](#class-taskunfail) |
-| [TaskNewHeader](#class-tasknewheader) | [WalletMonitorTask](#class-walletmonitortask) |
+| [LeasedMonitorTask](#class-leasedmonitortask) | [TaskPurge](#class-taskpurge) |
+| [Monitor](#class-monitor) | [TaskReorg](#class-taskreorg) |
+| [MonitorDaemon](#class-monitordaemon) | [TaskReviewDoubleSpends](#class-taskreviewdoublespends) |
+| [TaskArcadeSSE](#class-taskarcadesse) | [TaskReviewProvenTxs](#class-taskreviewproventxs) |
+| [TaskCheckForProofs](#class-taskcheckforproofs) | [TaskReviewStatus](#class-taskreviewstatus) |
+| [TaskCheckNoSends](#class-taskchecknosends) | [TaskReviewUtxos](#class-taskreviewutxos) |
+| [TaskClock](#class-taskclock) | [TaskSendWaiting](#class-tasksendwaiting) |
+| [TaskFailAbandoned](#class-taskfailabandoned) | [TaskSyncWhenIdle](#class-tasksyncwhenidle) |
+| [TaskMineBlock](#class-taskmineblock) | [TaskUnFail](#class-taskunfail) |
+| [TaskMonitorCallHistory](#class-taskmonitorcallhistory) | [WalletMonitorTask](#class-walletmonitortask) |
+| [TaskNewHeader](#class-tasknewheader) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
+##### Class: LeasedMonitorTask
+
+Helper that wraps a long-running monitor task body in `monitor_lease`
+acquire / renew / release semantics.
+
+Usage:
+```typescript
+const helper = new LeasedMonitorTask(txSvc)
+const { ran } = await helper.run('proof-acquisition', ownerId, 30_000, async () => {
+  // task body runs only when lease is acquired
+})
+if (!ran) {
+  console.log('lease held by another instance – skipping')
+}
+```
+
+Lease renewal is driven by a `setInterval` firing at `ttlMs * 0.4` so the
+lease is always refreshed well before it would expire (40 % window). The
+interval is cleared in the `finally` block before `releaseLease` is called.
+
+Logging writes to `console.log` so that lease activity is visible in the
+same stream as other Monitor diagnostics.
+
+```ts
+export class LeasedMonitorTask {
+    constructor(private readonly svc: TransactionService) 
+    async run(taskName: string, ownerId: string, ttlMs: number, body: () => Promise<void>): Promise<{
+        ran: boolean;
+    }> 
+}
+```
+
+See also: [TransactionService](./storage.md#class-transactionservice)
+
+###### Method run
+
+Attempt to claim the named lease and, if successful, execute `body`.
+
+```ts
+async run(taskName: string, ownerId: string, ttlMs: number, body: () => Promise<void>): Promise<{
+    ran: boolean;
+}> 
+```
+
+Returns
+
+`{ ran: true }` when the lease was acquired and `body` completed
+(even if `body` threw — the error is re-thrown after cleanup).
+`{ ran: false }` when another owner holds a live lease.
+
+Argument Details
+
++ **taskName**
+  + Logical task identifier stored in `monitor_lease.task_name`.
++ **ownerId**
+  + Stable identifier for this Monitor instance.
++ **ttlMs**
+  + Lease TTL in milliseconds.  Renewal fires at `ttlMs * 0.4`.
++ **body**
+  + Async work to perform while holding the lease.
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Class: Monitor
 
 Background task to make sure transactions are processed, transaction proofs are received and propagated,
@@ -257,6 +406,7 @@ and potentially that reorgs update proofs that were already received.
 ```ts
 export class Monitor {
     static createDefaultWalletMonitorOptions(chain: Chain, storage: MonitorStorage, services?: Services, chaintracks?: Chaintracks, startupTaskMode: MonitorStartupTaskMode = "none"): MonitorOptions 
+    instanceId: string = randomBytesHex(8);
     options: MonitorOptions;
     services: Services | WalletServices;
     chain: Chain;
@@ -268,6 +418,7 @@ export class Monitor {
     onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>;
     onTransactionProven?: (txStatus: ProvenTransactionStatus) => Promise<void>;
     onTransactionStatusChanged?: (txid: string, newStatus: string) => Promise<void>;
+    get ready(): Promise<void> 
     constructor(options: MonitorOptions) 
     async destroy(): Promise<void> 
     static readonly oneSecond = 1000;
@@ -293,7 +444,7 @@ export class Monitor {
     removeTask(name: string): void 
     async runTask(name: string): Promise<string> 
     async runOnce(): Promise<void> 
-    _runAsyncSetup: boolean = true;
+    _runAsyncSetup = true;
     _tasksRunningPromise?: PromiseLike<void>;
     resolveCompletion: ((value: void | PromiseLike<void>) => void) | undefined = undefined;
     async startTasks(): Promise<void> 
@@ -312,7 +463,7 @@ export class Monitor {
 }
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [DeactivedHeader](./monitor.md#interface-deactivedheader), [MonitorOptions](./monitor.md#interface-monitoroptions), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [TaskPurgeParams](./monitor.md#interface-taskpurgeparams), [WalletMonitorTask](./monitor.md#class-walletmonitortask), [WalletServices](./client.md#interface-walletservices)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain), [Chaintracks](./services.md#class-chaintracks), [ChaintracksClientApi](./services.md#interface-chaintracksclientapi), [DeactivedHeader](./monitor.md#interface-deactivedheader), [MonitorOptions](./monitor.md#interface-monitoroptions), [MonitorStartupTaskMode](./monitor.md#type-monitorstartuptaskmode), [MonitorStorage](./monitor.md#type-monitorstorage), [ProvenTransactionStatus](./client.md#interface-proventransactionstatus), [ReviewActionResult](./client.md#interface-reviewactionresult), [Services](./services.md#class-services), [TaskPurgeParams](./monitor.md#interface-taskpurgeparams), [WalletMonitorTask](./monitor.md#class-walletmonitortask), [WalletServices](./client.md#interface-walletservices), [randomBytesHex](./client.md#function-randombyteshex)
 
 ###### Property _otherTasks
 
@@ -331,6 +482,18 @@ _tasks are typically run by the scheduler but may also be run by runTask.
 _tasks: WalletMonitorTask[] = []
 ```
 See also: [WalletMonitorTask](./monitor.md#class-walletmonitortask)
+
+###### Property instanceId
+
+Stable identifier for this Monitor instance, used as the `ownerId` when
+acquiring monitor_lease rows. Generated once at construction time via
+8 cryptographically random bytes (16 hex chars). Callers may override this
+after construction if a deterministic / persisted id is preferred.
+
+```ts
+instanceId: string = randomBytesHex(8)
+```
+See also: [randomBytesHex](./client.md#function-randombyteshex)
 
 ###### Method addDefaultTasks
 
@@ -436,7 +599,7 @@ export class MonitorDaemon {
     setup?: MonitorDaemonSetup;
     doneListening?: Promise<void>;
     doneTasks?: Promise<void>;
-    stopDaemon: boolean = false;
+    stopDaemon = false;
     constructor(public args: MonitorDaemonSetup, public noRunTasks?: boolean) 
     async createSetup(): Promise<void> 
     async start(): Promise<void> 
@@ -459,7 +622,7 @@ when transactions are MINED.
 
 ```ts
 export class TaskArcadeSSE extends WalletMonitorTask {
-    static taskName = "ArcadeSSE";
+    static readonly taskName = "ArcadeSSE";
     sseClient: ArcSSEClient | null = null;
     constructor(monitor: Monitor) 
     override async asyncSetup(): Promise<void> 
@@ -491,7 +654,7 @@ the original ProvenTxReq status is advanced to 'notifying'.
 
 ```ts
 export class TaskCheckForProofs extends WalletMonitorTask {
-    static taskName = "CheckForProofs";
+    static readonly taskName = "CheckForProofs";
     static checkNow = false;
     constructor(monitor: Monitor, public triggerMsecs = 0) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -541,7 +704,7 @@ the original ProvenTxReq status is advanced to 'notifying'.
 
 ```ts
 export class TaskCheckNoSends extends WalletMonitorTask {
-    static taskName = "CheckNoSends";
+    static readonly taskName = "CheckNoSends";
     static checkNow = false;
     constructor(monitor: Monitor, public triggerMsecs = Monitor.oneDay * 1) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -579,7 +742,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class TaskClock extends WalletMonitorTask {
-    static taskName = "Clock";
+    static readonly taskName = "Clock";
     nextMinute: number;
     constructor(monitor: Monitor, public triggerMsecs = 1 * Monitor.oneSecond) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -606,7 +769,7 @@ outputs are not spendable.
 
 ```ts
 export class TaskFailAbandoned extends WalletMonitorTask {
-    static taskName = "FailAbandoned";
+    static readonly taskName = "FailAbandoned";
     constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 5) 
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
@@ -624,7 +787,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class TaskMineBlock extends WalletMonitorTask {
-    static taskName = "MineBlock";
+    static readonly taskName = "MineBlock";
     static mineNow = false;
     constructor(monitor: Monitor, public triggerMsecs = 10 * Monitor.oneMinute) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -643,7 +806,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class TaskMonitorCallHistory extends WalletMonitorTask {
-    static taskName = "MonitorCallHistory";
+    static readonly taskName = "MonitorCallHistory";
     constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12) 
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
@@ -672,7 +835,7 @@ with that header height as the limit for which proofs are accepted.
 
 ```ts
 export class TaskNewHeader extends WalletMonitorTask {
-    static taskName = "NewHeader";
+    static readonly taskName = "NewHeader";
     header?: BlockHeader;
     queuedHeader?: BlockHeader;
     queuedHeaderWhen?: Date;
@@ -709,7 +872,7 @@ See also: [BlockHeader](./client.md#interface-blockheader)
 
 ###### Method asyncSetup
 
-TODO: This is a temporary incomplete solution for which a full chaintracker
+This is a temporary incomplete solution for which a full chaintracker
 with new header and reorg event notification is required.
 
 New header events drive retrieving merklePaths for newly mined transactions.
@@ -732,7 +895,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class TaskPurge extends WalletMonitorTask {
-    static taskName = "Purge";
+    static readonly taskName = "Purge";
     static checkNow = false;
     constructor(monitor: Monitor, public params: TaskPurgeParams, public triggerMsecs = 0) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -782,7 +945,7 @@ createAction fails to verify a generated beef against the chaintracker.
 
 ```ts
 export class TaskReorg extends WalletMonitorTask {
-    static taskName = "Reorg";
+    static readonly taskName = "Reorg";
     process: DeactivedHeader[] = [];
     constructor(monitor: Monitor, public agedMsecs = Monitor.oneMinute * 10, public maxRetries = 3) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -823,7 +986,7 @@ back to 'unfail' so existing recovery handling can re-process them.
 
 ```ts
 export class TaskReviewDoubleSpends extends WalletMonitorTask {
-    static taskName = "ReviewDoubleSpends";
+    static readonly taskName = "ReviewDoubleSpends";
     static checkNow = false;
     triggerNextMsecs: number;
     constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 12, public reviewLimit = 100, public minAgeMinutes = 60, public triggerQuickMsecs = Monitor.oneMinute * 1) 
@@ -853,7 +1016,7 @@ the currently canonical merkleRoot at a height no longer matches stored proven_t
 
 ```ts
 export class TaskReviewProvenTxs extends WalletMonitorTask {
-    static taskName = "ReviewProvenTxs";
+    static readonly taskName = "ReviewProvenTxs";
     static checkNow = false;
     triggerNextMsecs: number;
     constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10, public maxHeightsPerRun = 100, public minBlockAge = 100, public triggerQuickMsecs = Monitor.oneMinute * 1) 
@@ -883,7 +1046,7 @@ Looks for reqs with 'invalid' status that have corresonding transactions with st
 
 ```ts
 export class TaskReviewStatus extends WalletMonitorTask {
-    static taskName = "ReviewStatus";
+    static readonly taskName = "ReviewStatus";
     static checkNow = false;
     constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 15, public agedMsecs = 1000 * 60 * 5) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -914,7 +1077,7 @@ The task itself is disabled and will not run on a schedule; review must be trigg
 
 ```ts
 export class TaskReviewUtxos extends WalletMonitorTask {
-    static taskName = "ReviewUtxos";
+    static readonly taskName = "ReviewUtxos";
     static checkNow = false;
     constructor(monitor: Monitor, public triggerMsecs = 0, public userLimit = 10, public userOffset = 0, public tags: string[] = ["release", "all"]) 
     trigger(_nowMsecsSinceEpoch: number): {
@@ -934,9 +1097,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class TaskSendWaiting extends WalletMonitorTask {
-    static taskName = "SendWaiting";
+    static readonly taskName = "SendWaiting";
     lastSendingRunMsecsSinceEpoch: number | undefined;
-    includeSending: boolean = true;
+    includeSending = true;
     triggerNextMsecs: number;
     constructor(monitor: Monitor, public triggerMsecs = Monitor.oneSecond * 8, public agedMsecs = Monitor.oneSecond * 7, public sendingMsecs = Monitor.oneMinute * 5, public triggerQuickMsecs = Monitor.oneSecond * 1, public chunkLimit = 100) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -999,7 +1162,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export class TaskSyncWhenIdle extends WalletMonitorTask {
-    static taskName = "SyncWhenIdle";
+    static readonly taskName = "SyncWhenIdle";
     constructor(monitor: Monitor, public triggerMsecs = 1000 * 60 * 1) 
     trigger(nowMsecsSinceEpoch: number): {
         run: boolean;
@@ -1026,7 +1189,7 @@ If it fails (to find a merklePath), returns the req status to 'invalid'.
 
 ```ts
 export class TaskUnFail extends WalletMonitorTask {
-    static taskName = "UnFail";
+    static readonly taskName = "UnFail";
     static checkNow = false;
     constructor(monitor: Monitor, public triggerMsecs = Monitor.oneMinute * 10) 
     trigger(nowMsecsSinceEpoch: number): {
@@ -1128,6 +1291,17 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 #### Functions
 
+| |
+| --- |
+| [getProofs](#function-getproofs) |
+| [releaseLease](#function-releaselease) |
+| [renewLease](#function-renewlease) |
+| [tryClaimLease](#function-tryclaimlease) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+
 ##### Function: getProofs
 
 Process an array of table.ProvenTxReq (typically with status 'unmined' or 'unknown')
@@ -1142,7 +1316,7 @@ depending on chaintracks succeeding on proof verification.
 Increments attempts if proofs where requested.
 
 ```ts
-export async function getProofs(task: WalletMonitorTask, reqs: TableProvenTxReq[], indent = 0, countsAsAttempt = false, ignoreStatus = false, maxAcceptableHeight: number): Promise<{
+export async function getProofs(task: WalletMonitorTask, reqs: TableProvenTxReq[], maxAcceptableHeight: number, indent = 0, countsAsAttempt = false, ignoreStatus = false): Promise<{
     proven: TableProvenTxReq[];
     invalid: TableProvenTxReq[];
     log: string;
@@ -1154,6 +1328,54 @@ See also: [TableProvenTxReq](./storage.md#interface-tableproventxreq), [WalletMo
 Returns
 
 reqs partitioned by status
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: releaseLease
+
+Release the lease (no-op when not owned by the caller).
+The row is deleted so subsequent claimants do not see an inherited
+`renew_count`.
+
+```ts
+export async function releaseLease(knex: Knex, release: MonitorLeaseRelease): Promise<boolean> 
+```
+
+See also: [MonitorLeaseRelease](./monitor.md#interface-monitorleaserelease)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: renewLease
+
+Extend the current owner's lease. Fails (returns `acquired: false`) when the
+row does not exist, is owned by someone else, or has already expired.
+
+```ts
+export async function renewLease(knex: Knex, renew: MonitorLeaseRenew, now: Date = new Date()): Promise<MonitorLeaseResult> 
+```
+
+See also: [MonitorLeaseRenew](./monitor.md#interface-monitorleaserenew), [MonitorLeaseResult](./monitor.md#interface-monitorleaseresult)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: tryClaimLease
+
+Try to claim a lease on `taskName`. Succeeds iff:
+  - no row exists for the task, OR
+  - the existing row has `expiresAt <= now`, OR
+  - the existing row's `ownerId` already equals the requested owner.
+
+On success the row is upserted with `expiresAt = now + ttlMs` and
+`renewCount = renewCount + 1` (0 for fresh rows).
+
+```ts
+export async function tryClaimLease(knex: Knex, claim: MonitorLeaseClaim, now: Date = new Date()): Promise<MonitorLeaseResult> 
+```
+
+See also: [MonitorLeaseClaim](./monitor.md#interface-monitorleaseclaim), [MonitorLeaseResult](./monitor.md#interface-monitorleaseresult)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

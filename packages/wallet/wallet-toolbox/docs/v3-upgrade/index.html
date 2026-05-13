@@ -325,7 +325,7 @@
       <div class="tile" onclick="document.getElementById('p-audit').open=true;document.getElementById('p-audit').scrollIntoView({behavior:'smooth'})">
         <div class="num">07 / AUDIT</div>
         <div class="title">Full forensic history</div>
-        <div class="blurb"><code>tx_audit</code> records every processing transition with timestamp, provider, and free-form note. Post-incident reconstruction without grep.</div>
+        <div class="blurb"><code>tx_audit</code> records every processing transition with timestamps and a JSON details payload (provider, status, source). Post-incident reconstruction without grep.</div>
       </div>
       <div class="tile" onclick="document.getElementById('p-perf').open=true;document.getElementById('p-perf').scrollIntoView({behavior:'smooth'})">
         <div class="num">08 / PERF</div>
@@ -491,9 +491,11 @@
         <p>v3 introduces a <code>monitor_lease</code> table. Tasks like <code>TaskCheckForProofs</code>, <code>TaskRebroadcast</code>, and reorg detection each acquire a row-scoped lease before mutating <code>transactions</code>. Leases carry a TTL; abandoned leases are reclaimed on next pass.</p>
         <pre><code><span class="com">// LeasedMonitorTask base class</span>
 <span class="kw">async</span> <span class="fn">runOnce</span>() {
-  <span class="kw">const</span> lease = <span class="kw">await</span> <span class="fn">tryAcquireLease</span>(<span class="str">'task:proofs'</span>, this.instanceId, ttlMs);
-  <span class="kw">if</span> (!lease) <span class="kw">return</span>; <span class="com">// another instance holds it; back off</span>
-  <span class="kw">try</span> { <span class="kw">await</span> <span class="fn">doWork</span>(); } <span class="kw">finally</span> { <span class="kw">await</span> <span class="fn">releaseLease</span>(lease); }
+  <span class="kw">const</span> claim = { taskName: <span class="str">'proof-acquisition'</span>, ownerId: this.instanceId, ttlMs };
+  <span class="kw">const</span> res = <span class="kw">await</span> txService.<span class="fn">tryClaimLease</span>(claim);
+  <span class="kw">if</span> (!res.ok) <span class="kw">return</span>; <span class="com">// another instance holds it; back off</span>
+  <span class="kw">try</span> { <span class="kw">await</span> <span class="fn">doWork</span>(); }
+  <span class="kw">finally</span> { <span class="kw">await</span> txService.<span class="fn">releaseLease</span>({ taskName: claim.taskName, ownerId: claim.ownerId }); }
 }</code></pre>
         <p>Outcome: HA deployments without a coordinated leader; rolling restarts with zero risk of split-brain writes.</p>
       </div>
@@ -508,17 +510,18 @@
       <div class="panel-body">
         <p>v2's <code>proven_tx_reqs.history</code> was a JSON blob — append-only inside the row, opaque to indexing, untestable. v3 replaces it with a real table:</p>
         <pre><code><span class="kw">CREATE TABLE</span> tx_audit (
-  audit_id     <span class="kw">INTEGER PRIMARY KEY</span>,
-  transactionId <span class="kw">INTEGER NOT NULL REFERENCES</span> transactions(transactionId),
+  auditId       <span class="kw">INTEGER PRIMARY KEY</span>,
+  transactionId <span class="kw">INTEGER NULL REFERENCES</span> transactions(transactionId),
   actionId      <span class="kw">INTEGER NULL REFERENCES</span> actions(actionId),
-  event         <span class="kw">VARCHAR</span>,         <span class="com">-- 'transition', 'provider_response', 'proof_recorded'</span>
-  from_state    <span class="kw">VARCHAR NULL</span>,
-  to_state      <span class="kw">VARCHAR NULL</span>,
-  provider      <span class="kw">VARCHAR NULL</span>,
-  note          <span class="kw">TEXT NULL</span>,
-  created_at    <span class="kw">DATETIME</span>
-);</code></pre>
-        <p>Useful queries become trivial: "show every state this txid was in", "which provider returned the rejection that turned this row invalid", "rate of <code>* → doubleSpend</code> in the last hour".</p>
+  event         <span class="kw">VARCHAR</span>(<span class="num">64</span>) <span class="kw">NOT NULL</span>,  <span class="com">-- 'processing.changed', 'proof.acquired', 'history.note', ...</span>
+  from_state    <span class="kw">VARCHAR</span>(<span class="num">16</span>) <span class="kw">NULL</span>,       <span class="com">-- FSM source for transitions</span>
+  to_state      <span class="kw">VARCHAR</span>(<span class="num">16</span>) <span class="kw">NULL</span>,       <span class="com">-- FSM target for transitions</span>
+  details_json  <span class="kw">TEXT NULL</span>,             <span class="com">-- JSON payload (provider, status, free-text 'what', etc.)</span>
+  created_at    <span class="kw">DATETIME</span>,
+  updated_at    <span class="kw">DATETIME</span>
+);
+<span class="com">-- Indexes: event, transactionId, actionId</span></code></pre>
+        <p>Useful queries become trivial: "show every state this txid was in", "which provider response is logged for this rejection" (<code>details_json</code>), "rate of <code>* → doubleSpend</code> in the last hour" (<code>event = 'processing.changed' AND to_state = 'doubleSpend'</code>).</p>
       </div>
     </details>
 
@@ -559,7 +562,7 @@ transactions.{txid, processing, processingChangedAt, attempts, wasBroadcast,
               isCoinbase, lastProvider, frozenReason, rowVersion}
 actions.{userId, transactionId, reference, description, isOutgoing, satoshisDelta,
          userNosend, hidden, userAborted, notifyJson}
-tx_audit.{transactionId, actionId, event, from_state, to_state, provider, note, created_at}</code></pre>
+tx_audit.{auditId, transactionId, actionId, event, from_state, to_state, details_json, created_at}</code></pre>
 
     <h3>Status mapping (auto-applied during backfill)</h3>
     <pre><code>v2 TransactionStatus       v3 ProcessingStatus
@@ -604,17 +607,24 @@ unfail                  →  unfail
     <div class="codeblock good">
       <pre><span class="lbl">v3 storage API additions</span><code><span class="com">// FSM-aware writes (all go through TransactionService)</span>
 <span class="kw">await</span> txService.<span class="fn">create</span>({ txid, processing: <span class="str">'queued'</span>, rawTx, inputBeef });
-<span class="kw">await</span> txService.<span class="fn">transition</span>(transactionId, { to: <span class="str">'sending'</span>, provider: <span class="str">'arc'</span> });
-<span class="kw">await</span> txService.<span class="fn">recordProof</span>(transactionId, { height, merklePath, blockHash });
-<span class="kw">await</span> txService.<span class="fn">transitionMany</span>(ids, { to: <span class="str">'invalid'</span>, note: <span class="str">'all providers rejected'</span> });
+<span class="kw">await</span> txService.<span class="fn">transition</span>({ transactionId, expectedFrom: <span class="str">'queued'</span>, to: <span class="str">'sending'</span>, provider: <span class="str">'arc'</span> });
+<span class="kw">await</span> txService.<span class="fn">recordProof</span>({ transactionId, expectedFrom: <span class="str">'unconfirmed'</span>, height, merklePath, merkleRoot, blockHash });
+<span class="kw">await</span> txService.<span class="fn">transitionMany</span>({ transactionIds: ids, to: <span class="str">'invalid'</span>, details: { reason: <span class="str">'all providers rejected'</span> } });
 
 <span class="com">// per-user reads</span>
 <span class="kw">await</span> txService.<span class="fn">findActionByReference</span>(userId, reference);
-<span class="kw">await</span> txService.<span class="fn">listActionsForUser</span>({ userId, statusFilter, labelIds, limit });
+<span class="kw">await</span> txService.<span class="fn">findActionByUserTxid</span>(userId, txid);
+<span class="kw">await</span> txService.<span class="fn">listActionsForUser</span>({ userId, statusFilter, labelIds, labelQueryMode: <span class="str">'all'</span>, limit, offset });
+<span class="kw">await</span> txService.<span class="fn">listOutputsForUser</span>({ userId, basket, limit, offset });
+
+<span class="com">// monitor leases (lease-based Monitor)</span>
+<span class="kw">await</span> txService.<span class="fn">tryClaimLease</span>({ taskName: <span class="str">'proof-acquisition'</span>, ownerId, ttlMs });
+<span class="kw">await</span> txService.<span class="fn">renewLease</span>({ taskName, ownerId, ttlMs });
+<span class="kw">await</span> txService.<span class="fn">releaseLease</span>({ taskName, ownerId });
 
 <span class="com">// audit + spendability</span>
 <span class="kw">await</span> <span class="fn">refreshOutputsSpendable</span>(knex, { transactionId });
-<span class="kw">await</span> <span class="fn">recordHistoryNote</span>({ transactionId, event: <span class="str">'provider_response'</span>, note });</code></pre>
+<span class="kw">await</span> txService.<span class="fn">recordHistoryNote</span>(transactionId, { what: <span class="str">'provider_response'</span>, provider: <span class="str">'arc'</span>, status: <span class="str">'200'</span> });</code></pre>
     </div>
 
     <h3>What breaks if you ignore the migration</h3>
@@ -650,7 +660,9 @@ unfail                  →  unfail
       <div class="col">
         <h4><span>v3</span></h4>
         <pre><code><span class="com">// one call, FSM-validated, audited</span>
-<span class="kw">await</span> txService.<span class="fn">recordProof</span>(transactionId, {
+<span class="kw">await</span> txService.<span class="fn">recordProof</span>({
+  transactionId,
+  expectedFrom: <span class="str">'unconfirmed'</span>,
   height, merklePath, merkleRoot, blockHash
 });
 <span class="com">// internally: transition unconfirmed→confirmed,</span>
