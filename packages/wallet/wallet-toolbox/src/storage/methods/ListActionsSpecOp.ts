@@ -61,11 +61,9 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
         if (!specOpLabels.includes('abort')) return
 
         // Pre-filter: which rows have txids the network already knows
-        // about? Don't call abortAction for those — the abortAction
-        // chain-check (in StorageProvider) will throw for chain-known
-        // nosend rows, which would propagate out of the await below
-        // and bail the entire bulk call halfway, leaving genuinely
-        // off-chain nosend rows in the same page un-aborted.
+        // about? Skip those in this bulk path — confirmed-on-chain
+        // rows still cause `abortAction` to refuse, but doing the
+        // batched chain check up-front saves N individual queries.
         //
         // The pre-filter does one batched getStatusForTxids call for
         // the whole page, builds a protectedTxids set, then in the
@@ -73,33 +71,41 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
         // 'nosend' so the caller sees clearly that those rows were
         // NOT aborted) and proceeds normally for off-chain rows.
         //
-        // Service-unreachable handling is conservative-refuse: both
-        // the thrown-error path AND the graceful r.status==='error'
-        // return (with typically empty results[]) protect ALL
-        // candidate rows. Better to leave nosend rows alone than risk
-        // orphaning outputs of txs that may be on chain.
+        // Service-unreachable handling: proceed with per-row aborts.
+        // Refusal is reserved for positive on-chain confirmation. If
+        // the batched chain check is unavailable, fall through with
+        // an empty protectedTxids set; the individual `abortAction`
+        // calls below will each treat service-unreachable the same
+        // way and proceed with the abort (with an offline-fallback
+        // audit note on each row). Per BRC-100 contract (Tone Engel
+        // review, PR #122 comment 4444566147 item 4), abort must
+        // remain possible when network confirmation is impossible.
+        //
+        // Race window: a row that was off-chain at pre-filter time
+        // may become chain-known by the time `s.abortAction` is
+        // called. In that case the inner call returns aborted:false
+        // and we leave the row's status as 'nosend' rather than
+        // stamping it 'failed'.
         const candidates = txs.filter(tx => tx.status === 'nosend' && !!tx.txid)
         const candidateTxids = candidates.map(tx => tx.txid as string)
         const protectedTxids = new Set<string>()
         if (candidateTxids.length > 0) {
           const services = s.getServices()
-          let serviceFailed = false
           try {
             const r = await services.getStatusForTxids(candidateTxids)
-            if (r.status !== 'success') {
-              serviceFailed = true
-            } else {
+            if (r.status === 'success') {
               for (const result of r.results) {
                 if (result.status === 'mined' || result.status === 'known') {
                   protectedTxids.add(result.txid)
                 }
               }
             }
+            // On graceful r.status !== 'success' we leave protectedTxids
+            // empty and let individual abortAction calls decide.
           } catch {
-            serviceFailed = true
-          }
-          if (serviceFailed) {
-            for (const txid of candidateTxids) protectedTxids.add(txid)
+            // Same: service threw — leave protectedTxids empty and let
+            // individual abortAction calls handle service-unreachable
+            // per their own offline-fallback policy.
           }
         }
 
@@ -113,8 +119,14 @@ export const getLabelToSpecOp: () => Record<string, ListActionsSpecOp> = () => {
             // (per the processNewBlockHeader nudge added in this PR).
             continue
           }
-          await s.abortAction(auth, { reference: tx.reference! })
-          tx.status = 'failed'
+          const result = await s.abortAction(auth, { reference: tx.reference! })
+          if (result.aborted) {
+            tx.status = 'failed'
+          }
+          // result.aborted === false: race window between pre-filter
+          // and per-row call observed positive on-chain confirmation.
+          // Leave tx.status as 'nosend' — same outcome as if it had
+          // been caught by the pre-filter.
         }
       }
     },

@@ -297,25 +297,30 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       // and propagating in mempool returns 'known' (depth===0) and
       // protecting it avoids orphaning during the propagation window.
       //
-      // Service-unreachable handling is conservative-refuse: both the
-      // thrown-error path AND the graceful r.status==='error' return
-      // (with typically empty results[]) treat the chainStatus as
-      // 'known'. Reading r.results.find(...) directly without the
-      // r.status check would silently fall through with chainStatus
-      // undefined on graceful service errors, proceeding-with-abort
-      // and re-introducing the bug.
+      // Service-unreachable handling: proceed with abort. Refusal is
+      // reserved for positive on-chain confirmation. When the network
+      // confirmation pathway is itself unavailable (services throw or
+      // gracefully return r.status !== 'success'), confirmation is not
+      // possible — and per the BRC-100 contract callers retain the
+      // ability to abort offline. The fallback writes a forensic
+      // history note ('abortAction-offline-fallback') so an operator
+      // can grep for aborts that proceeded under uncertainty. This
+      // hole can never be 100% closed against externally-broadcast
+      // chain-confirmed txs while offline; the audit trail makes it
+      // recoverable.
+      let serviceUnreachable = false
       if (tx.txid && tx.status === 'nosend') {
         const services = this.getServices()
         let chainStatus: 'mined' | 'known' | 'unknown' | undefined
         try {
           const r = await services.getStatusForTxids([tx.txid])
           if (r.status !== 'success') {
-            chainStatus = 'known'
+            serviceUnreachable = true
           } else {
             chainStatus = r.results.find(x => x.txid === tx.txid)?.status
           }
         } catch {
-          chainStatus = 'known'
+          serviceUnreachable = true
         }
         if (chainStatus === 'mined' || chainStatus === 'known') {
           const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
@@ -328,10 +333,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
             await req.updateStorageDynamicProperties(this, trx)
           }
           // Surface the refusal via a sentinel so the surrounding
-          // transaction commits the history note BEFORE we throw.
-          // Throwing here would roll the transaction back and discard
-          // the forensic note we just wrote — defeats the audit trail
-          // a future operator greps for these refusals.
+          // transaction commits the history note BEFORE returning
+          // the aborted:false result. Returning directly from inside
+          // the transaction would still work, but the sentinel keeps
+          // the audit-write / result-shape decision on the same
+          // commit-then-return path that existed when this surface
+          // threw, minimizing diff churn.
           return { __abortAction: 'skipped-onchain' as const, chainStatus }
         }
       }
@@ -339,7 +346,11 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       if (tx.txid) {
         const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
         if (req != null) {
-          req.addHistoryNote({ what: 'abortAction', reference: args.reference })
+          req.addHistoryNote(
+            serviceUnreachable
+              ? { what: 'abortAction-offline-fallback', reference: args.reference }
+              : { what: 'abortAction', reference: args.reference }
+          )
           req.status = 'invalid'
           await req.updateStorageDynamicProperties(this, trx)
         }
@@ -350,10 +361,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       return r
     })
     if ('__abortAction' in r) {
-      throw new WERR_INVALID_PARAMETER(
-        'reference',
-        `transaction is already on chain (status='${r.chainStatus}'); call internalizeAction instead of abortAction.`
-      )
+      // Tone Engel review feedback (PR #122 comment 4444566147 item 3):
+      // do not throw on chain-confirmed refusal — surface it via the
+      // return value so callers can branch on it. Refusal is positive
+      // chain confirmation only; service-unreachable proceeds with
+      // abort and returns aborted:true with an audit-trail note.
+      return { aborted: false }
     }
     return r
   }

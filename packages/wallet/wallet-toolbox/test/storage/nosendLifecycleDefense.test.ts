@@ -40,11 +40,20 @@ setLogging(false)
  *
  * This file covers three of the four fixes in this PR:
  *   - Fix 1: `mergedInternalize` retires the nosend lifecycle.
- *   - Fix 3: `abortAction` chain-status check refuses to invalidate
- *     a nosend tx that the network already knows about.
+ *   - Fix 3: `abortAction` chain-status check returns `aborted: false`
+ *     when the network reports a `nosend` tx as already on chain, and
+ *     proceeds with the abort (returning `aborted: true` plus an
+ *     `abortAction-offline-fallback` audit note) when network
+ *     confirmation is impossible. Per BRC-100 and Tone Engel's PR #122
+ *     review (comment 4444566147 item 3), refusal must come via the
+ *     return value (not a thrown error), and abort must remain possible
+ *     when offline.
  *   - Fix 4: `specOpNoSendActions.postProcess` pre-filters chain-known
- *     rows so the bulk path doesn't bail mid-page on Fix 3's throw and
- *     returned row statuses reflect actual per-row outcomes.
+ *     rows so the bulk path doesn't waste per-row queries, and honors
+ *     the per-row `aborted: false` return for race-window rows that
+ *     became chain-known between pre-filter and the per-row call.
+ *     Service-unreachable in the pre-filter falls through to per-row
+ *     calls (which apply their own offline-fallback policy).
  *
  * (Fix 2, the `Monitor.processNewBlockHeader` nudge, has its own test
  * file at `test/monitor/processNewBlockHeader.test.ts`.)
@@ -82,17 +91,24 @@ describe('nosend orphan-output failure mode', () => {
   // ─── helpers ─────────────────────────────────────────────────────────
 
   /**
-   * Seed a `nosend` transaction + matching `proven_tx_req` for a fresh
-   * user. The tx carries a fabricated txid so we can observe per-row
-   * chain-check behavior without depending on real BEEF/signing.
+   * Seed a `nosend` transaction + matching `proven_tx_req`. If `existingUser`
+   * is omitted, a fresh user is created (handy for single-row tests). To
+   * seed multiple rows in the same `listActions` page (bulk-path tests),
+   * thread the same `existingUser` through every call so they share a user.
+   * The tx carries a fabricated txid so we can observe per-row chain-check
+   * behavior without depending on real BEEF/signing.
    */
-  async function seedNoSendTx (storage: StorageProvider, txid: string): Promise<{
+  async function seedNoSendTx (
+    storage: StorageProvider,
+    txid: string,
+    existingUser?: { userId?: number; identityKey: string }
+  ): Promise<{
     auth: { userId: number; identityKey: string }
     transactionId: number
     provenTxReqId: number
     reference: string
   }> {
-    const { tx, user } = await _tu.insertTestTransaction(storage, undefined, false, {
+    const { tx, user } = await _tu.insertTestTransaction(storage, existingUser as never, false, {
       status: 'nosend',
       txid
     })
@@ -141,15 +157,14 @@ describe('nosend orphan-output failure mode', () => {
   // ─── Fix 3 — abortAction chain-status check ────────────────────────
 
   describe('Fix 3 — StorageProvider.abortAction chain-status check', () => {
-    test('REFUSES to invalidate a nosend tx whose txid the chain says is mined', async () => {
+    test('returns aborted:false for a nosend tx whose txid the chain says is mined; storage state preserved', async () => {
       for (const storage of storages) {
         const txid = '11'.repeat(32)
         const seed = await seedNoSendTx(storage, txid)
         storage.setServices(mockServices((txids) => successResult(txids, ['mined'])))
 
-        await expect(
-          storage.abortAction(seed.auth, { reference: seed.reference })
-        ).rejects.toThrow(/already on chain/)
+        const result = await storage.abortAction(seed.auth, { reference: seed.reference })
+        expect(result.aborted).toBe(false)
 
         const tx = (await storage.findTransactions({ partial: { transactionId: seed.transactionId } }))[0]
         expect(tx.status).toBe('nosend')
@@ -158,7 +173,7 @@ describe('nosend orphan-output failure mode', () => {
       }
     })
 
-    test('REFUSES to invalidate a nosend tx whose txid is in mempool ("known")', async () => {
+    test('returns aborted:false for a nosend tx whose txid is in mempool ("known")', async () => {
       // Critical: the propagation window between broadcast and first
       // confirmation. Guarding only 'mined' would still allow the bug
       // to fire here for several minutes per tx.
@@ -167,9 +182,8 @@ describe('nosend orphan-output failure mode', () => {
         const seed = await seedNoSendTx(storage, txid)
         storage.setServices(mockServices((txids) => successResult(txids, ['known'])))
 
-        await expect(
-          storage.abortAction(seed.auth, { reference: seed.reference })
-        ).rejects.toThrow(/already on chain/)
+        const result = await storage.abortAction(seed.auth, { reference: seed.reference })
+        expect(result.aborted).toBe(false)
 
         const tx = (await storage.findTransactions({ partial: { transactionId: seed.transactionId } }))[0]
         expect(tx.status).toBe('nosend')
@@ -195,7 +209,13 @@ describe('nosend orphan-output failure mode', () => {
       }
     })
 
-    test('CONSERVATIVELY REFUSES when getStatusForTxids throws (indexer unreachable)', async () => {
+    test('PROCEEDS WITH ABORT when getStatusForTxids throws (offline fallback)', async () => {
+      // Tone Engel review (PR #122 comment 4444566147 item 3): the
+      // wallet must remain able to abort transactions when network
+      // confirmation is impossible. Refusal is reserved for positive
+      // on-chain confirmation; an unreachable indexer is uncertainty,
+      // not confirmation. The forensic audit note documents the
+      // proceed-under-uncertainty decision.
       for (const storage of storages) {
         const txid = '44'.repeat(32)
         const seed = await seedNoSendTx(storage, txid)
@@ -205,21 +225,26 @@ describe('nosend orphan-output failure mode', () => {
           })
         )
 
-        await expect(
-          storage.abortAction(seed.auth, { reference: seed.reference })
-        ).rejects.toThrow(/already on chain/)
+        const result = await storage.abortAction(seed.auth, { reference: seed.reference })
+        expect(result.aborted).toBe(true)
 
         const tx = (await storage.findTransactions({ partial: { transactionId: seed.transactionId } }))[0]
-        expect(tx.status).toBe('nosend')
+        expect(tx.status).toBe('failed')
+        const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId: seed.provenTxReqId } }))[0]
+        expect(req.status).toBe('invalid')
+
+        const history = JSON.parse(req.history)
+        const fallbackNotes = (history.notes || []).filter(
+          (n: { what?: string }) => n.what === 'abortAction-offline-fallback'
+        )
+        expect(fallbackNotes.length).toBe(1)
       }
     })
 
-    test('CONSERVATIVELY REFUSES on graceful service error (status="error", results=[])', async () => {
-      // The silent fall-through path: previous draft caught only the
-      // throw path and let `r.results.find(...)?.status` evaluate to
-      // undefined for an empty results array, then proceeded with
-      // abort. Fix 3 explicitly branches on `r.status !== 'success'`
-      // before reading results.
+    test('PROCEEDS WITH ABORT on graceful service error (status="error", results=[])', async () => {
+      // Same offline-fallback semantics as the throw path: the
+      // storage code branches on `r.status !== 'success'` before
+      // reading results, treating it as service-unreachable.
       for (const storage of storages) {
         const txid = '55'.repeat(32)
         const seed = await seedNoSendTx(storage, txid)
@@ -231,12 +256,19 @@ describe('nosend orphan-output failure mode', () => {
           }))
         )
 
-        await expect(
-          storage.abortAction(seed.auth, { reference: seed.reference })
-        ).rejects.toThrow(/already on chain/)
+        const result = await storage.abortAction(seed.auth, { reference: seed.reference })
+        expect(result.aborted).toBe(true)
 
         const tx = (await storage.findTransactions({ partial: { transactionId: seed.transactionId } }))[0]
-        expect(tx.status).toBe('nosend')
+        expect(tx.status).toBe('failed')
+        const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId: seed.provenTxReqId } }))[0]
+        expect(req.status).toBe('invalid')
+
+        const history = JSON.parse(req.history)
+        const fallbackNotes = (history.notes || []).filter(
+          (n: { what?: string }) => n.what === 'abortAction-offline-fallback'
+        )
+        expect(fallbackNotes.length).toBe(1)
       }
     })
 
@@ -246,9 +278,8 @@ describe('nosend orphan-output failure mode', () => {
         const seed = await seedNoSendTx(storage, txid)
         storage.setServices(mockServices((txids) => successResult(txids, ['mined'])))
 
-        await expect(
-          storage.abortAction(seed.auth, { reference: seed.reference })
-        ).rejects.toThrow()
+        const result = await storage.abortAction(seed.auth, { reference: seed.reference })
+        expect(result.aborted).toBe(false)
 
         const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId: seed.provenTxReqId } }))[0]
         const history = JSON.parse(req.history)
@@ -320,8 +351,9 @@ describe('nosend orphan-output failure mode', () => {
       for (const storage of storages) {
         const offChainTxid = 'aa'.repeat(32)
         const onChainTxid = 'bb'.repeat(32)
-        const offChain = await seedNoSendTx(storage, offChainTxid)
-        const onChain = await seedNoSendTx(storage, onChainTxid)
+        const sharedUser = await _tu.insertTestUser(storage)
+        const offChain = await seedNoSendTx(storage, offChainTxid, sharedUser)
+        const onChain = await seedNoSendTx(storage, onChainTxid, sharedUser)
         storage.setServices(
           mockServices((txids) =>
             successResult(
@@ -349,12 +381,18 @@ describe('nosend orphan-output failure mode', () => {
       }
     })
 
-    test('protects ALL candidate rows when getStatusForTxids throws', async () => {
+    test('proceeds with per-row aborts when batched getStatusForTxids throws', async () => {
+      // Tone Engel review (PR #122 comment 4444566147 item 4): the
+      // bulk path mirrors abortAction's offline-fallback semantics.
+      // When the batched chain check is unavailable, fall through to
+      // per-row aborts; each row's own offline-fallback policy then
+      // applies and the rows transition to 'failed' with audit notes.
       for (const storage of storages) {
         const txidA = 'cc'.repeat(32)
         const txidB = 'dd'.repeat(32)
-        const seedA = await seedNoSendTx(storage, txidA)
-        const seedB = await seedNoSendTx(storage, txidB)
+        const sharedUser = await _tu.insertTestUser(storage)
+        const seedA = await seedNoSendTx(storage, txidA, sharedUser)
+        const seedB = await seedNoSendTx(storage, txidB, sharedUser)
         storage.setServices(
           mockServices(() => {
             throw new Error('indexer down')
@@ -370,15 +408,15 @@ describe('nosend orphan-output failure mode', () => {
           } as never
         )
 
-        // Both rows protected — neither aborted.
+        // Both rows transitioned: bulk path no longer blanket-protects.
         const txA = (await storage.findTransactions({ partial: { transactionId: seedA.transactionId } }))[0]
         const txB = (await storage.findTransactions({ partial: { transactionId: seedB.transactionId } }))[0]
-        expect(txA.status).toBe('nosend')
-        expect(txB.status).toBe('nosend')
+        expect(txA.status).toBe('failed')
+        expect(txB.status).toBe('failed')
       }
     })
 
-    test('protects ALL candidate rows on graceful service error (status="error")', async () => {
+    test('proceeds with per-row aborts on graceful batched service error (status="error")', async () => {
       for (const storage of storages) {
         const txid = 'ee'.repeat(32)
         const seed = await seedNoSendTx(storage, txid)
@@ -400,7 +438,56 @@ describe('nosend orphan-output failure mode', () => {
         )
 
         const tx = (await storage.findTransactions({ partial: { transactionId: seed.transactionId } }))[0]
+        expect(tx.status).toBe('failed')
+      }
+    })
+
+    test('mid-page race: row chain-known by per-row call leaves status as nosend', async () => {
+      // Race window: batched pre-filter sees 'unknown' for txid X but
+      // by the time the per-row `s.abortAction` runs, the network has
+      // observed X as 'known' (e.g. propagation completed mid-page).
+      // The per-row abortAction returns `aborted: false` and the loop
+      // honors it by leaving tx.status as 'nosend' rather than
+      // blanket-setting 'failed'. This is the regression Tone's
+      // Comment 4 implicitly guards against by requiring return-value
+      // semantics rather than blind status transitions.
+      for (const storage of storages) {
+        const txid = 'ab'.repeat(32)
+        const seed = await seedNoSendTx(storage, txid)
+
+        let call = 0
+        storage.setServices(
+          mockServices((txids) => {
+            call += 1
+            // Call 1: bulk pre-filter — say 'unknown'.
+            // Call 2+: per-row check inside abortAction — say 'mined'.
+            const status: StatusForTxidResult['status'] = call === 1 ? 'unknown' : 'mined'
+            return successResult(txids, txids.map(() => status))
+          })
+        )
+
+        await storage.listActions(
+          seed.auth,
+          {
+            labels: ['ac6b20a3bb320adafecd637b25c84b792ad828d3aa510d05dc841481f664277d', 'abort'],
+            labelQueryMode: 'all',
+            limit: 1000
+          } as never
+        )
+
+        // Storage state preserved by the per-row aborted:false return.
+        const tx = (await storage.findTransactions({ partial: { transactionId: seed.transactionId } }))[0]
         expect(tx.status).toBe('nosend')
+        const req = (await storage.findProvenTxReqs({ partial: { provenTxReqId: seed.provenTxReqId } }))[0]
+        expect(req.status).toBe('nosend')
+
+        // The skipped-onchain audit note was written by the per-row
+        // abortAction's positive-confirmation branch.
+        const history = JSON.parse(req.history)
+        const skippedNotes = (history.notes || []).filter(
+          (n: { what?: string }) => n.what === 'abortAction-skipped-onchain'
+        )
+        expect(skippedNotes.length).toBe(1)
       }
     })
   })
