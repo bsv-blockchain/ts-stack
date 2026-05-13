@@ -30,6 +30,7 @@
   ],
   "scripts": {
     "start": "node out/src/index.js",
+    "cutover": "node out/src/cutover.js",
     "lint": "prettier --write 'src/**/*.ts' --log-level silent",
     "build": "tsc --build",
     "prepublish": "npm run lint"
@@ -43,7 +44,7 @@
   "dependencies": {
     "@bsv/payment-express-middleware": "^2.0.2",
     "@bsv/sdk": "^2.0.14",
-    "@bsv/wallet-toolbox": "^3.0.0-alpha.0",
+    "@bsv/wallet-toolbox": "file:./vendor-wallet-toolbox.tgz",
     "body-parser": "^1.20.2",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",

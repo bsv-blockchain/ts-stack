@@ -10,6 +10,7 @@ COPY ./nginx.conf /etc/nginx/nginx.conf
 EXPOSE 8080
 WORKDIR /app
 COPY package.json .
+COPY vendor-wallet-toolbox.tgz .
 COPY src/ src/
 RUN npm i
 COPY tsconfig.json .

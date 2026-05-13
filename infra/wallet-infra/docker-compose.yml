@@ -14,13 +14,16 @@ services:
       # e.g. add a named volume for node_modules or rely on "npm install" inside container.
     environment:
       NODE_ENV: development
-      BSV_NETWORK: "mock"
+      BSV_NETWORK: "main"
       FEE_MODEL: "{\"model\":\"sat/kb\",\"value\":100}"
       COMMISSION_FEE: 0
       HTTP_PORT: "8080"
+      AUTO_CUTOVER: "true"
       SERVER_PRIVATE_KEY: "bffe0d7a3f7effce2b3511323c6cca1df1649e41a336a8b603194d53287ad285" # This is a throwaway test key
       # Fill in the DB credentials as a JSON object or direct URL
       KNEX_DB_CONNECTION: '{"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage","port":3306}'
+      ARC_URL: "https://arcade-v2-us-1.bsvblockchain.tech"
+      ARC_CALLBACK_TOKEN: "splendid-waterfowl"
 
     depends_on:
       - mysql   # ensures MySQL starts before the Node service tries to connect

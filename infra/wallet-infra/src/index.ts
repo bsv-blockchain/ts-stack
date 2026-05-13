@@ -8,7 +8,8 @@ import {
   WalletStorageServerOptions,
   StorageServer,
   Wallet,
-  Monitor
+  Monitor,
+  runSchemaCutover
 } from '@bsv/wallet-toolbox'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
@@ -27,9 +28,13 @@ const {
   SERVER_PRIVATE_KEY,
   KNEX_DB_CONNECTION,
   TAAL_API_KEY,
+  ARC_URL,
+  ARC_API_KEY,
+  ARC_CALLBACK_TOKEN,
   COMMISSION_FEE = 0,
   COMMISSION_PUBLIC_KEY,
-  FEE_MODEL = '{"model":"sat/kb","value":1}'
+  FEE_MODEL = '{"model":"sat/kb","value":1}',
+  AUTO_CUTOVER = 'false'
 } = process.env
 
 async function setupWalletStorageAndMonitor(): Promise<{
@@ -111,6 +116,13 @@ async function setupWalletStorageAndMonitor(): Promise<{
     })
 
     await activeStorage.migrate(databaseName, storageIdentityKey)
+
+    if (AUTO_CUTOVER === 'true') {
+      console.log('AUTO_CUTOVER=true → running schema cutover…')
+      await runSchemaCutover(knex)
+      console.log('Schema cutover complete.')
+    }
+
     const settings = await activeStorage.makeAvailable()
 
     const storage = new WalletStorageManager(
@@ -142,12 +154,21 @@ async function setupWalletStorageAndMonitor(): Promise<{
         servOpts.arcConfig.apiKey = TAAL_API_KEY
         servOpts.taalApiKey = TAAL_API_KEY
       }
+      if (ARC_URL) {
+        servOpts.arcUrl = ARC_URL
+      }
+      if (ARC_API_KEY) {
+        servOpts.arcConfig.apiKey = ARC_API_KEY
+      }
       services = new Services(servOpts)
       monopts = Monitor.createDefaultWalletMonitorOptions(
         chain,
         storage,
         services
       )
+      if (ARC_CALLBACK_TOKEN) {
+        monopts.callbackToken = ARC_CALLBACK_TOKEN
+      }
     }
     const keyDeriver = new KeyDeriver(rootKey)
 

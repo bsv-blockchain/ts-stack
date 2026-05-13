@@ -63,6 +63,28 @@ export async function runSchemaCutover (knex: Knex): Promise<void> {
 
   await disableFks(knex, isSqlite)
   try {
+    // Drop FK rows that point at legacy transactionIds without a canonical
+    // mapping (typically NULL-txid in-flight rows that never got a txid and
+    // therefore have no `transactions_new` counterpart). Without this, the
+    // remap would re-collide on (transactionId, vout, userId) when shifted
+    // rows are brought back down onto the orphan keyspace.
+    const allLegacyIds: number[] = hasLegacyData
+      ? (await knex('transactions').select<{ transactionId: number }[]>('transactionId')).map(r => r.transactionId)
+      : []
+    const orphansForTxFk = allLegacyIds.filter(id => !legacyToNew.has(id))
+    const orphansForActionFk = allLegacyIds.filter(id => !legacyToAction.has(id))
+    if (orphansForTxFk.length > 0 || orphansForActionFk.length > 0) {
+      console.log(`[schemaCutover] dropping FK rows for ${orphansForTxFk.length} unmapped legacy transactions (no txid)`)
+      if (orphansForTxFk.length > 0) {
+        await knex('outputs').whereIn('transactionId', orphansForTxFk).del()
+        await knex('outputs').whereIn('spentBy', orphansForTxFk).update({ spentBy: null })
+        await knex('commissions').whereIn('transactionId', orphansForTxFk).del()
+      }
+      if (orphansForActionFk.length > 0) {
+        await knex('tx_labels_map').whereIn('transactionId', orphansForActionFk).del()
+      }
+    }
+
     // Remap downstream FK values with a temporary offset to dodge collisions
     // with the existing legacy keyspace during partial updates.
     const OFFSET = 1_000_000_000
@@ -152,8 +174,11 @@ async function determineDBType (knex: Knex): Promise<DBType> {
   // Avoid pulling KnexMigrations' determineDBType to keep this module
   // free of cyclic imports.
   try {
-    const r: any = await knex.raw("SELECT 'MySQL' AS database_type FROM dual")
-    const dbtype = (Array.isArray(r) ? r[0] : r.rows?.[0] ?? r[0])?.database_type
+    let r: any = await knex.raw("SELECT 'MySQL' AS database_type FROM dual")
+    // mysql2 returns [rows, fields]; pg returns { rows }; better-sqlite3 returns rows directly.
+    if (!r[0]?.database_type) r = r[0]
+    if (r?.rows) r = r.rows
+    const dbtype = r?.[0]?.database_type
     if (dbtype === 'MySQL') return 'MySQL'
   } catch (e) {
     // fallthrough — SQLite has no `dual` table

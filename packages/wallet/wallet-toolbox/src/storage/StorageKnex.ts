@@ -591,8 +591,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // bypassed because the renamed legacy table still references the renamed
     // `proven_txs_legacy` via its original `proven_txs` FK column name.
     const isSqlite = this.dbtype === 'SQLite'
-    const postCutover = isSqlite ? await this.isPostCutover() : false
+    const postCutover = await this.isPostCutover()
     if (postCutover) {
+      // SQLite needs FK_OFF because `legacy_alter_table = ON` left the
+      // renamed legacy FK references pointing at the bare string "proven_txs"
+      // which now resolves to nothing. MySQL preserves FK constraints by
+      // name across RENAME TABLE so no FK toggle is required.
       if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
       try {
         const [id] = await this.toDb(trx)<TableTransaction>('transactions_legacy').insert(e)
@@ -666,18 +670,20 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
-    // Post-cutover SQLite: tx_labels_map.transactionId references actions.actionId
+    // Post-cutover: tx_labels_map.transactionId references actions.actionId
     // (rebuilt during schema cutover). Sync paths that import legacy rows still
     // carry the legacy transactionId until repointLabelsToActionId remaps them.
     // Temporarily disable FK checks so the import does not fail.
     const isSqlite = this.dbtype === 'SQLite'
-    const postCutover = isSqlite ? await this.isPostCutover() : false
+    const postCutover = await this.isPostCutover()
     if (postCutover) {
-      await this.knex.raw('PRAGMA foreign_keys = OFF')
+      if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
+      else await this.knex.raw('SET FOREIGN_KEY_CHECKS=0')
       try {
         await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
       } finally {
-        await this.knex.raw('PRAGMA foreign_keys = ON')
+        if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = ON')
+        else await this.knex.raw('SET FOREIGN_KEY_CHECKS=1')
       }
       return
     }
@@ -817,7 +823,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // Legacy-shaped updates belong in `transactions_legacy`, matching the
     // routing performed by `insertTransaction`.
     const isSqlite = this.dbtype === 'SQLite'
-    const postCutover = isSqlite ? await this.isPostCutover() : false
+    const postCutover = await this.isPostCutover()
     const tableName = postCutover ? 'transactions_legacy' : 'transactions'
     if (postCutover && isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
     try {
