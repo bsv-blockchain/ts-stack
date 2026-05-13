@@ -21,8 +21,6 @@ import { buildPairingUri } from '../shared/pairingUri.js'
 import { encryptEnvelope, decryptEnvelope } from '../shared/crypto.js'
 import { bytesToBase64url } from '../shared/encoding.js'
 import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
-import { PROTOCOL_ID } from '../types.js'
-import type { WireEnvelope, RpcResponse } from '../types.js'
 
 export interface WalletRelayServiceOptions {
   /**
