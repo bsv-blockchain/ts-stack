@@ -38,8 +38,13 @@ import { WalletMonitorTask } from './WalletMonitorTask'
  *   24 hr  ≤ age < 7 days       → check on ~daily cadence  (block-height % 144)
  *   age ≥ 7 days                → check on ~weekly cadence (block-height % 1008)
  *
- * Block-height modulo gives a deterministic, stateless way to spread checks
- * for older rows; no per-row "last checked" persistence is required.
+ * Block-height modulo gives a deterministic, stateless way to schedule
+ * checks for older rows; no per-row "last checked" persistence is required.
+ * Each row's modulo offset is keyed by its `provenTxReqId` so that rows in
+ * the same age tier are staggered across the modulo cycle rather than all
+ * firing on the same block — `(blockHeight + provenTxReqId) % tierInterval`.
+ * For a wallet with N rows in tier T and tier interval K, this gives
+ * roughly N/K rows fired per block instead of N rows fired every K blocks.
  *
  * The scheduled daily cadence (no `checkNow`) is unaffected — it still scans
  * every row regardless of age. That path is the once-per-day fallback that
@@ -72,24 +77,29 @@ export class TaskCheckNoSends extends WalletMonitorTask {
 
   /**
    * Decide whether a single `nosend` row should be chain-checked on the
-   * current `checkNow` trigger, based on its age and the current block
-   * height. See class docstring for the full schedule.
+   * current `checkNow` trigger, based on its age, the current block
+   * height, and its `provenTxReqId` (used to stagger same-tier rows
+   * across the modulo cycle). See class docstring for the full schedule
+   * and staggering rationale.
    */
   static shouldCheckOnCheckNow (
     createdAt: Date,
     nowMs: number,
-    currentBlockHeight: number
+    currentBlockHeight: number,
+    provenTxReqId: number
   ): boolean {
     const ageMs = nowMs - createdAt.getTime()
     if (ageMs < TaskCheckNoSends.tier0FreshSkipMsecs) return false
     if (ageMs < TaskCheckNoSends.tier1EveryBlockMsecs) return true
+    // Stagger same-tier rows by `provenTxReqId` so they fire on different
+    // blocks within the modulo cycle, not all on the same block.
     if (ageMs < TaskCheckNoSends.tier2HourlyMsecs) {
-      return currentBlockHeight % TaskCheckNoSends.tier2BlockInterval === 0
+      return (currentBlockHeight + provenTxReqId) % TaskCheckNoSends.tier2BlockInterval === 0
     }
     if (ageMs < TaskCheckNoSends.tier3DailyMsecs) {
-      return currentBlockHeight % TaskCheckNoSends.tier3BlockInterval === 0
+      return (currentBlockHeight + provenTxReqId) % TaskCheckNoSends.tier3BlockInterval === 0
     }
-    return currentBlockHeight % TaskCheckNoSends.tier4BlockInterval === 0
+    return (currentBlockHeight + provenTxReqId) % TaskCheckNoSends.tier4BlockInterval === 0
   }
 
   constructor (
@@ -141,7 +151,12 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       let eligible = reqs
       if (wasCheckNow) {
         eligible = reqs.filter(r =>
-          TaskCheckNoSends.shouldCheckOnCheckNow(r.created_at, nowMs, maxAcceptableHeight)
+          TaskCheckNoSends.shouldCheckOnCheckNow(
+            r.created_at,
+            nowMs,
+            maxAcceptableHeight,
+            r.provenTxReqId
+          )
         )
         const skipped = reqs.length - eligible.length
         if (skipped > 0) {
