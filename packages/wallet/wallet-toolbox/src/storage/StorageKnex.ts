@@ -15,7 +15,7 @@ import {
   TableSettings,
   TableSyncState,
   TableTransaction,
-  TableTransactionV7,
+  TableTransactionNew,
   TableTxLabel,
   TableTxLabelMap,
   TableUser,
@@ -60,7 +60,7 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUT
 import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 
 import { EntityTimeStamp, ProcessingStatus, TransactionStatus, transactionStatusToProcessing } from '../sdk/types'
-import { V7TransactionService } from './schema/v7Service'
+import { TransactionService } from './schema/transactionService'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -79,12 +79,32 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     this.knex = options.knex
   }
 
-  override getV7Service (): V7TransactionService {
-    return new V7TransactionService(this.knex)
+  override getTransactionService (): TransactionService | undefined {
+    // The new-schema transaction service is only valid post-cutover. Pre-cutover,
+    // the `transactions` table is the legacy schema and queries via this service
+    // would return legacy ids that don't satisfy the `tx_audit.transactionId`
+    // FK (which targets `transactions_new`). Callers gate on `undefined` and
+    // fall back to the legacy storage path.
+    if (this._postCutoverCache !== true) return undefined
+    return new TransactionService(this.knex)
   }
 
   /**
-   * Returns true when the database has been through `runV7Cutover` (i.e.
+   * Eagerly warm the `_postCutoverCache` so sync query builders such as
+   * `findOutputsQuery` can branch on cutover state without an extra await.
+   * Callers that have invoked `makeAvailable` are guaranteed the cache has
+   * been populated.
+   */
+  override async makeAvailable (): Promise<TableSettings> {
+    const settings = await super.makeAvailable()
+    if (this._postCutoverCache === undefined) {
+      this._postCutoverCache = await this.knex.schema.hasTable('transactions_legacy')
+    }
+    return settings
+  }
+
+  /**
+   * Returns true when the database has been through `runSchemaCutover` (i.e.
    * `transactions_legacy` exists). Result is cached for the lifetime of this
    * StorageKnex instance.
    */
@@ -96,15 +116,15 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Maps legacy TransactionStatus values to their V7 ProcessingStatus equivalents
-   * for use in `outputs JOIN transactions` WHERE clauses post-V7-cutover.
+   * Maps legacy TransactionStatus values to their ProcessingStatus equivalents
+   * for use in `outputs JOIN transactions` WHERE clauses post-cutover.
    */
-  private legacyStatiToV7Processing (stati: TransactionStatus[]): ProcessingStatus[] {
+  private legacyStatiToProcessing (stati: TransactionStatus[]): ProcessingStatus[] {
     const result = new Set<ProcessingStatus>()
     for (const s of stati) {
       result.add(transactionStatusToProcessing(s))
       if (s === 'unproven') {
-        // V7 'sent','seen','seen_multi','unconfirmed' all correspond to legacy 'unproven'
+        // 'sent','seen','seen_multi','unconfirmed' all map to legacy 'unproven'
         result.add('sent')
         result.add('seen')
         result.add('seen_multi')
@@ -116,7 +136,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /**
    * Returns the canonical name of the `proven_txs` table — `proven_txs_legacy`
-   * post-V7-cutover, `proven_txs` otherwise.
+   * post-cutover, `proven_txs` otherwise.
    *
    * Public so that helper modules (reviewStatus, purgeData) can resolve the
    * correct table name without duplicating the post-cutover detection logic.
@@ -127,7 +147,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /**
    * Returns the canonical name of the `proven_tx_reqs` table —
-   * `proven_tx_reqs_legacy` post-V7-cutover, `proven_tx_reqs` otherwise.
+   * `proven_tx_reqs_legacy` post-cutover, `proven_tx_reqs` otherwise.
    *
    * Public so that helper modules (reviewStatus, purgeData) can resolve the
    * correct table name without duplicating the post-cutover detection logic.
@@ -138,17 +158,17 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /**
    * Insert a legacy-shaped transaction row into the correct table:
-   * - Post-V7-cutover: `transactions_legacy` (the renamed legacy schema table)
+   * - Post-cutover: `transactions_legacy` (the renamed legacy schema table)
    * - Pre-cutover:     `transactions` (the standard table, same behaviour as `insertTransaction`)
    *
    * This allows `createAction` to store unsigned rows (txid unknown) without
-   * conflicting with the V7 `transactions` table's NOT NULL txid constraint.
-   * A V7 `transactions` row + `actions` row are created later by `processAction`
+   * conflicting with the new `transactions` table's NOT NULL txid constraint.
+   * A new `transactions` row + `actions` row are created later by `processAction`
    * once the real txid is known.
    *
    * On SQLite, foreign key enforcement is temporarily disabled while inserting
    * into `transactions_legacy` because the referenced `proven_txs` table was
-   * renamed to `proven_txs_legacy` during the V7 cutover. Since `provenTxId`
+   * renamed to `proven_txs_legacy` during the the schema cutover. Since `provenTxId`
    * is always NULL for new unsigned transactions this is semantically safe.
    */
   override async insertLegacyTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
@@ -172,7 +192,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   /**
    * Insert a `tx_labels_map` row for a legacy transaction that does not yet
-   * have a V7 `actions.actionId`. On post-cutover SQLite, temporarily disables
+   * have a `actions.actionId`. On post-cutover SQLite, temporarily disables
    * FK checks so that the legacy transactionId (which is not yet an actionId)
    * can be written. processAction will repoint it via repointLabelsToActionId.
    *
@@ -213,39 +233,39 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Synthesise a `ProvenOrRawTx` from a V7 `TableTransactionV7` row.
+   * Synthesise a `ProvenOrRawTx` from a `TableTransactionNew` row.
    *
-   * - If the V7 row carries a `merklePath` (i.e. processing is `proven`), build
+   * - If the new schema row carries a `merklePath` (i.e. processing is `proven`), build
    *   a `TableProvenTx`-shaped object so the BEEF assembly code can extract the
    *   merkle path and merge it into the Beef without hitting the legacy tables.
-   * - If the V7 row only has `rawTx` (broadcast/queued state), return it as the
+   * - If the new schema row only has `rawTx` (broadcast/queued state), return it as the
    *   raw-tx path.
-   * - Returns `null` when the V7 row has neither rawTx nor merklePath.
+   * - Returns `null` when the new schema row has neither rawTx nor merklePath.
    */
-  private v7TxToProvenOrRawTx (v7: TableTransactionV7, txid: string): ProvenOrRawTx | null {
-    // Only use V7 as the primary source when the row carries a *non-empty* merklePath
-    // and a rawTx — both are required for `handleProvenTxBranch` to assemble a valid
-    // BEEF.  An empty merklePath (e.g. a backfill race or a req whose proof was never
-    // stored) must fall through to the legacy `proven_txs_legacy` path.
-    // Rawt-only V7 rows (no merklePath) are likewise forwarded to the legacy path so
+  private newTxToProvenOrRawTx (row: TableTransactionNew, txid: string): ProvenOrRawTx | null {
+    // Only use the new-schema row as the primary source when it carries a *non-empty*
+    // merklePath and a rawTx — both are required for `handleProvenTxBranch` to assemble
+    // a valid BEEF.  An empty merklePath (e.g. a backfill race or a req whose proof was
+    // never stored) must fall through to the legacy `proven_txs_legacy` path.
+    // Raw-tx-only rows (no merklePath) are likewise forwarded to the legacy path so
     // that the legacy `inputBEEF` column is available for recursive BEEF assembly.
-    if (v7.merklePath != null && v7.merklePath.length > 0 && v7.rawTx != null && v7.rawTx.length > 0) {
+    if (row.merklePath != null && row.merklePath.length > 0 && row.rawTx != null && row.rawTx.length > 0) {
       // Full proof available — synthesise TableProvenTx shape
       const proven: TableProvenTx = {
-        created_at: v7.created_at,
-        updated_at: v7.updated_at,
-        provenTxId: v7.transactionId,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        provenTxId: row.transactionId,
         txid,
-        height: v7.height ?? 0,
-        index: v7.merkleIndex ?? 0,
-        merklePath: v7.merklePath,
-        rawTx: v7.rawTx,
-        blockHash: v7.blockHash ?? '',
-        merkleRoot: v7.merkleRoot ?? ''
+        height: row.height ?? 0,
+        index: row.merkleIndex ?? 0,
+        merklePath: row.merklePath,
+        rawTx: row.rawTx,
+        blockHash: row.blockHash ?? '',
+        merkleRoot: row.merkleRoot ?? ''
       }
       return { proven, rawTx: undefined, inputBEEF: undefined }
     }
-    // No complete proof in V7 — let the caller fall through to legacy tables.
+    // No complete proof in new-schema row — let the caller fall through to legacy tables.
     return null
   }
 
@@ -257,21 +277,21 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       inputBEEF: undefined
     }
 
-    // Post-cutover: try V7 `transactions` table first. The V7 row is the single
+    // Post-cutover: try new `transactions` table first. The new schema row is the single
     // source of truth for rawTx and merklePath; legacy tables are read-only
     // archives after cutover.
     if (await this.isPostCutover()) {
       try {
-        const v7svc = this.getV7Service()
-        if (v7svc != null) {
-          const v7tx = await v7svc.findByTxid(txid)
-          if (v7tx != null) {
-            const v7result = this.v7TxToProvenOrRawTx(v7tx, txid)
-            if (v7result != null) return v7result
+        const txSvc = this.getTransactionService()
+        if (txSvc != null) {
+          const newTx = await txSvc.findByTxid(txid)
+          if (newTx != null) {
+            const newTxResult = this.newTxToProvenOrRawTx(newTx, txid)
+            if (newTxResult != null) return newTxResult
           }
         }
       } catch {
-        // V7 lookup failed (e.g. table not yet available) — fall through to legacy
+        // new table lookup failed (e.g. table not yet available) — fall through to legacy
       }
     }
 
@@ -303,20 +323,20 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   private async getRawTxSlice (txid: string, offset: number, length: number, trx?: TrxToken): Promise<number[] | undefined> {
-    // Post-cutover: try V7 transactions table first — V7 is the canonical store
+    // Post-cutover: try new transactions table first — the new table is the canonical store
     // for rawTx after the cutover. Apply the slice in JS to avoid raw SQL
     // column naming differences between the two schemas.
     if (await this.isPostCutover()) {
       try {
-        const v7svc = this.getV7Service()
-        if (v7svc != null) {
-          const v7tx = await v7svc.findByTxid(txid)
-          if (v7tx?.rawTx != null) {
-            return v7tx.rawTx.slice(offset, offset + length)
+        const txSvc = this.getTransactionService()
+        if (txSvc != null) {
+          const newTx = await txSvc.findByTxid(txid)
+          if (newTx?.rawTx != null) {
+            return newTx.rawTx.slice(offset, offset + length)
           }
         }
       } catch {
-        // V7 lookup failed — fall through to legacy tables
+        // new table lookup failed — fall through to legacy tables
       }
     }
 
@@ -342,7 +362,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (!txid) return undefined
     if (!this.isAvailable()) await this.makeAvailable()
     if (Number.isInteger(offset) && Number.isInteger(length)) {
-      return this.getRawTxSlice(txid, offset!, length!, trx)
+      return await this.getRawTxSlice(txid, offset!, length!, trx)
     }
     const r = await this.getProvenOrRawTx(txid, trx)
     return r.proven != null ? r.proven.rawTx : r.rawTx
@@ -502,7 +522,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.provenTxReqId === 0) delete e.provenTxReqId
-    // Post-V7-cutover: route to proven_tx_reqs_legacy.
+    // Post-cutover: route to proven_tx_reqs_legacy.
     // FK bypass is handled by the caller (disableForeignKeys before any transaction).
     const reqTable = await this.provenTxReqsTableName()
     const [id] = await this.toDb(trx)<TableProvenTxReq>(reqTable).insert(e)
@@ -563,6 +583,25 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(tx, trx)
     if (e.transactionId === 0) delete e.transactionId
+    // Post-cutover the canonical `transactions` table is the new schema which
+    // does not carry legacy columns (description, status, satoshis, version...).
+    // Legacy-shaped insertions belong in `transactions_legacy`. We route there
+    // automatically so existing callers that still speak the legacy shape keep
+    // working without a code change at every call site. FK enforcement is
+    // bypassed because the renamed legacy table still references the renamed
+    // `proven_txs_legacy` via its original `proven_txs` FK column name.
+    const isSqlite = this.dbtype === 'SQLite'
+    const postCutover = isSqlite ? await this.isPostCutover() : false
+    if (postCutover) {
+      if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
+      try {
+        const [id] = await this.toDb(trx)<TableTransaction>('transactions_legacy').insert(e)
+        tx.transactionId = id
+        return tx.transactionId
+      } finally {
+        if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = ON')
+      }
+    }
     const [id] = await this.toDb(trx)<TableTransaction>('transactions').insert(e)
     tx.transactionId = id
     return tx.transactionId
@@ -571,7 +610,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertCommission (commission: TableCommission, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(commission, trx)
     if (e.commissionId === 0) delete e.commissionId
-    // Post-V7-cutover bridge-period: commissions.transactionId FKs V7 transactions.
+    // Post-cutover bridge-period: commissions.transactionId FKs new transactions.
     // During createAction the transactionId references transactions_legacy, so bypass FK.
     const isSqlite = this.dbtype === 'SQLite'
     const postCutover = isSqlite ? await this.isPostCutover() : false
@@ -588,10 +627,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(output, trx)
     if (e.outputId === 0) delete e.outputId
-    // Post-V7-cutover bridge-period: outputs.transactionId FKs V7 transactions,
+    // Post-cutover bridge-period: outputs.transactionId FKs new transactions,
     // but new unsigned outputs reference transactions_legacy (bridge-period rows).
     // Temporarily disable FK checks on SQLite. Safe because once processAction
-    // runs, spentBy and transactionId are remapped to real V7 IDs.
+    // runs, spentBy and transactionId are remapped to real new-schema IDs.
     const isSqlite = this.dbtype === 'SQLite'
     const postCutover = isSqlite ? await this.isPostCutover() : false
     if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
@@ -627,6 +666,21 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
+    // Post-cutover SQLite: tx_labels_map.transactionId references actions.actionId
+    // (rebuilt during schema cutover). Sync paths that import legacy rows still
+    // carry the legacy transactionId until repointLabelsToActionId remaps them.
+    // Temporarily disable FK checks so the import does not fail.
+    const isSqlite = this.dbtype === 'SQLite'
+    const postCutover = isSqlite ? await this.isPostCutover() : false
+    if (postCutover) {
+      await this.knex.raw('PRAGMA foreign_keys = OFF')
+      try {
+        await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
+      } finally {
+        await this.knex.raw('PRAGMA foreign_keys = ON')
+      }
+      return
+    }
     await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
   }
 
@@ -667,9 +721,19 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async updateCommission (id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
-    return await this.toDb(trx)<TableCommission>('commissions')
-      .where({ commissionId: id })
-      .update(this.validatePartialForUpdate(update))
+    // Post-cutover SQLite: commissions.transactionId FK references the new
+    // schema `transactions` table. Legacy callers carry transactionId values
+    // that still point at transactions_legacy. Bypass FK so the update lands.
+    const isSqlite = this.dbtype === 'SQLite'
+    const postCutover = isSqlite ? await this.isPostCutover() : false
+    if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
+    try {
+      return await this.toDb(trx)<TableCommission>('commissions')
+        .where({ commissionId: id })
+        .update(this.validatePartialForUpdate(update))
+    } finally {
+      if (postCutover) await this.knex.raw('PRAGMA foreign_keys = ON')
+    }
   }
 
   override async updateOutputBasket (id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
@@ -748,19 +812,31 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     trx?: TrxToken
   ): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
-    let r: number
-    if (Array.isArray(id)) {
-      r = await this.toDb(trx)<TableTransaction>('transactions')
-        .whereIn('transactionId', id)
-        .update(this.validatePartialForUpdate(update))
-    } else if (Number.isInteger(id)) {
-      r = await this.toDb(trx)<TableTransaction>('transactions')
-        .where({ transactionId: id })
-        .update(this.validatePartialForUpdate(update))
-    } else {
-      throw new WERR_INVALID_PARAMETER('id', 'transactionId or array of transactionId')
+    // Post-cutover the canonical `transactions` table is the new schema which
+    // lacks legacy columns (userId, status, description, satoshis, version, ...).
+    // Legacy-shaped updates belong in `transactions_legacy`, matching the
+    // routing performed by `insertTransaction`.
+    const isSqlite = this.dbtype === 'SQLite'
+    const postCutover = isSqlite ? await this.isPostCutover() : false
+    const tableName = postCutover ? 'transactions_legacy' : 'transactions'
+    if (postCutover && isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
+    try {
+      let r: number
+      if (Array.isArray(id)) {
+        r = await this.toDb(trx)<TableTransaction>(tableName)
+          .whereIn('transactionId', id)
+          .update(this.validatePartialForUpdate(update))
+      } else if (Number.isInteger(id)) {
+        r = await this.toDb(trx)<TableTransaction>(tableName)
+          .where({ transactionId: id })
+          .update(this.validatePartialForUpdate(update))
+      } else {
+        throw new WERR_INVALID_PARAMETER('id', 'transactionId or array of transactionId')
+      }
+      return r
+    } finally {
+      if (postCutover && isSqlite) await this.knex.raw('PRAGMA foreign_keys = ON')
     }
-    return r
   }
 
   override async updateTxLabelMap (
@@ -828,6 +904,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           sortColumn = 'syncStateId'
           break
         case 'transactions':
+        case 'transactions_legacy':
           sortColumn = 'transactionId'
           break
         case 'tx_labels':
@@ -887,9 +964,22 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     }
     const q = this.setupQuery('outputs', args)
     if ((args.txStatus != null) && args.txStatus.length > 0) {
-      q.whereRaw(
-        `(select status from transactions where transactions.transactionId = outputs.transactionId) in (${args.txStatus.map(s => "'" + s + "'").join(',')})`
-      )
+      // Post-cutover the `transactions` table carries `processing`
+      // (ProcessingStatus), not the legacy `status` column. We translate
+      // the requested legacy status set to its ProcessingStatus equivalents
+      // when the cutover has been applied; pre-cutover the original `status`
+      // column lookup remains correct.
+      if (this._postCutoverCache === true) {
+        const processingFilter = this.legacyStatiToProcessing(args.txStatus)
+        const filterList = processingFilter.map(s => "'" + s + "'").join(',')
+        q.whereRaw(
+          `(select processing from transactions where transactions.transactionId = outputs.transactionId) in (${filterList})`
+        )
+      } else {
+        q.whereRaw(
+          `(select status from transactions where transactions.transactionId = outputs.transactionId) in (${args.txStatus.map(s => "'" + s + "'").join(',')})`
+        )
+      }
     }
     if (args.noScript && !count) {
       const columns = outputColumnsWithoutLockingScript.map(c => `outputs.${c}`)
@@ -957,12 +1047,21 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         'undefined. Transactions may not be found by inputBEEF value.'
       )
     }
-    const q = this.setupQuery('transactions', args)
+    // Post-cutover the original per-user `transactions` table has been
+    // renamed to `transactions_legacy`. `findTransactions` returns the
+    // legacy shape (status / userId / satoshis / description / etc.) so it
+    // must route at the renamed table to preserve the legacy read surface
+    // through the bridge period. New-canonical per-txid reads go through
+    // TransactionService.
+    const tableName = this._postCutoverCache === true
+      ? 'transactions_legacy'
+      : 'transactions'
+    const q = this.setupQuery(tableName, args)
     if ((args.status != null) && args.status.length > 0) q.whereIn('status', args.status)
     if (args.from != null) q.where('created_at', '>=', this.validateDateForWhere(args.from))
     if (args.to != null) q.where('created_at', '<', this.validateDateForWhere(args.to))
     if (args.noRawTx && !count) {
-      const columns = transactionColumnsWithoutRawTx.map(c => `transactions.${c}`)
+      const columns = transactionColumnsWithoutRawTx.map(c => `${tableName}.${c}`)
       q.select(columns)
     }
     return q
@@ -1099,22 +1198,22 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Post-V7-cutover: queries `transactions_legacy` for unsigned/pending rows
+   * Post-cutover: queries `transactions_legacy` for unsigned/pending rows
    * created by `createAction` (which have no real txid yet and therefore have no
-   * V7 counterpart).  Falls back to the standard `findTransactions` pre-cutover.
+   * new-schema counterpart).  Falls back to the standard `findTransactions` pre-cutover.
    *
    * Used by `processAction.validateCommitNewTxToStorageArgs` to locate the
    * unsigned transaction row by `{userId, reference}`.
    *
    * Mapping §2: legacy `unsigned` / `unprocessed` → these rows only exist in
-   * `transactions_legacy` post-cutover; V7 `transactions` has `processing` not
+   * `transactions_legacy` post-cutover; new `transactions` has `processing` not
    * `status` and no unsigned-state rows.
    */
   override async findLegacyTransactions (args: FindTransactionsArgs): Promise<TableTransaction[]> {
     const postCutover = await this.isPostCutover()
     if (!postCutover) {
       // Pre-cutover: standard transactions table
-      return this.findTransactions(args)
+      return await this.findTransactions(args)
     }
     // Post-cutover: unsigned/unprocessed rows live in transactions_legacy
     const q = this.setupQuery('transactions_legacy', args)
@@ -1135,19 +1234,19 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Post-V7-cutover: updates `transactions_legacy` (where unsigned rows live).
+   * Post-cutover: updates `transactions_legacy` (where unsigned rows live).
    * Pre-cutover: delegates to `updateTransaction`.
    *
    * Used by `processAction.commitNewTxToStorage` to write back the real txid
    * and status to the legacy row that was created by `createAction`.
    *
    * Mapping §2: legacy `unsigned` → `unprocessed` transition and txid write-back
-   * must go to `transactions_legacy` post-cutover, not V7 `transactions`.
+   * must go to `transactions_legacy` post-cutover, not new `transactions`.
    */
   override async updateLegacyTransaction (id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> {
     const postCutover = await this.isPostCutover()
     if (!postCutover) {
-      return this.updateTransaction(id, update, trx)
+      return await this.updateTransaction(id, update, trx)
     }
     // Post-cutover: unsigned rows are in transactions_legacy
     await this.verifyReadyForDatabaseAccess(trx)
@@ -1167,10 +1266,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Post-V7-cutover SQLite: temporarily disable FK enforcement around the
+   * Post-cutover SQLite: temporarily disable FK enforcement around the
    * `outputs.spentBy = legacyTransactionId` UPDATE. The `outputs.spentBy` FK
-   * references V7 `transactions.transactionId` after cutover, but unsigned
-   * transactions from `createAction` live in `transactions_legacy` (their V7
+   * references `transactions.transactionId` after cutover, but unsigned
+   * transactions from `createAction` live in `transactions_legacy` (their new-schema
    * counterpart is created later by `processAction`).
    *
    * IMPORTANT: We bypass `updateOutput` (and therefore `verifyReadyForDatabaseAccess`)
@@ -1181,7 +1280,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
    * Pre-cutover or MySQL: delegates to `updateOutput` unchanged.
    *
    * Mapping §2: bridge-period spentBy references transactions_legacy during
-   * createAction; FK bypass covers this until processAction wires V7.
+   * createAction; FK bypass covers this until processAction wires the new-schema.
    */
   override async markOutputAsSpentBy (
     outputId: number,
@@ -1200,7 +1299,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         if (v === undefined) {
           payload[k] = null
         } else if (Array.isArray(v) && (v.length === 0 || typeof v[0] === 'number')) {
-          payload[k] = Buffer.from(v as number[])
+          payload[k] = Buffer.from(v)
         } else {
           payload[k] = v
         }
@@ -1239,7 +1338,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Post-V7-cutover SQLite: disable FK on the bare connection BEFORE opening a
+   * Post-cutover SQLite: disable FK on the bare connection BEFORE opening a
    * transaction. PRAGMA foreign_keys changes inside SQLite transactions are no-ops,
    * so this MUST be called before `this.knex.transaction()`.
    *
@@ -1480,7 +1579,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     t.rawTx = rawTx
   }
 
-  _verifiedReadyForDatabaseAccess: boolean = false
+  _verifiedReadyForDatabaseAccess = false
 
   /**
    * Make sure database is ready for access:
@@ -1627,7 +1726,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .join('transactions as t', 'o.transactionId', 't.transactionId')
       .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
     if (postCutover) {
-      q.whereIn('t.processing', this.legacyStatiToV7Processing(legacyStatus))
+      q.whereIn('t.processing', this.legacyStatiToProcessing(legacyStatus))
     } else {
       q.whereIn('t.status', legacyStatus)
     }
@@ -1731,7 +1830,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       .join('transactions as t', 'o.transactionId', 't.transactionId')
       .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
     if (postCutover) {
-      q.whereIn('t.processing', this.legacyStatiToV7Processing(legacyStatus))
+      q.whereIn('t.processing', this.legacyStatiToProcessing(legacyStatus))
     } else {
       q.whereIn('t.status', legacyStatus)
     }
@@ -1755,16 +1854,16 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const legacyStatus: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) legacyStatus.push('sending')
     const postCutover = await this.isPostCutover()
-    const processingFilter = postCutover ? this.legacyStatiToV7Processing(legacyStatus) : undefined
+    const processingFilter = postCutover ? this.legacyStatiToProcessing(legacyStatus) : undefined
 
-    // Post-V7-cutover bridge-period: `transactionId` here is a legacy row in
+    // Post-cutover bridge-period: `transactionId` here is a legacy row in
     // `transactions_legacy` (new unsigned tx created by createAction). The
-    // `outputs.spentBy` FK now references V7 `transactions.transactionId`, so
+    // `outputs.spentBy` FK now references `transactions.transactionId`, so
     // setting spentBy to a transactions_legacy ID would violate the constraint.
     // PRAGMA foreign_keys is silently ignored inside SQLite transactions, so
     // we toggle FK enforcement on the bare connection BEFORE opening the
-    // transaction. processAction will remap spentBy to the real V7 transactionId
-    // once the txid is known and the V7 row is created.
+    // transaction. processAction will remap spentBy to the real new transactionId
+    // once the txid is known and the new schema row is created.
     const isSqlite = this.dbtype === 'SQLite'
     if (postCutover && isSqlite) {
       await this.knex.raw('PRAGMA foreign_keys = OFF')
@@ -1808,7 +1907,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
         if (output == null) return undefined
 
-        // Post-V7-cutover: transactionId is in transactions_legacy; FK would fail.
+        // Post-cutover: transactionId is in transactions_legacy; FK would fail.
         // markOutputAsSpentBy disables FK via raw knex handle, bypassing
         // verifyReadyForDatabaseAccess that would re-enable it.
         // Mapping §2: bridge-period spentBy → transactions_legacy during createAction.

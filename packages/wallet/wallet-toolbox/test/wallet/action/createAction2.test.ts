@@ -79,7 +79,7 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
-      // Snapshot updated for post-V7-cutover UTXO selection: tx185 (913 sats, status='sending')
+      // Snapshot updated for post-cutover UTXO selection: tx185 (913 sats, status='sending')
       // excluded from spendable pool; tx174 (995 sats, status='completed'→processing='proven') selected instead.
       // Trailing spaces on wrapped lines are intentional (toLogString wrap format).
       expect(rl1.log).toBe('transactions:2\n' +
@@ -134,7 +134,7 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(fundingResult.tx!, actionsResult)
-      // Snapshot updated for post-V7-cutover UTXO selection: tx185 (913 sats, status='sending')
+      // Snapshot updated for post-cutover UTXO selection: tx185 (913 sats, status='sending')
       // excluded; tx174 (995 sats, status='completed'→processing='proven') selected instead.
       expect(rl1.log).toBe('transactions:2\n' +
         '  txid:a03789724ac10b32365b84cbcbee24ec5ef0a1a8d465112603a4e2219f4c952e version:1 lockTime:0 sats:-12 status:nosend \n' +
@@ -288,7 +288,7 @@ describe('createAction2 nosend transactions', () => {
         includeLabels: true
       })
       const rl1 = toLogString(spendingResult.tx!, spendingActionsResult)
-      // Snapshot updated for post-V7-cutover UTXO selection: first createAction in this test
+      // Snapshot updated for post-cutover UTXO selection: first createAction in this test
       // consumes tx174 (995 sats); second call picks tx170 (996 sats) as next cheapest proven UTXO.
       expect(rl1.log).toBe('transactions:2\n' +
         '  txid:82b2ad4754e1e49ba6d51b1b7cf0090dc8270214bd0cd9fb8dda0e30b175dee6 version:1 lockTime:0 sats:-5 status:nosend \n' +

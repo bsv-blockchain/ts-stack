@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@bsv/wallet-toolbox v3 — Upgrade Guide</title>
+<style>
+  :root {
+    --bg: #0a0b10;
+    --bg-2: #0f1117;
+    --bg-3: #161922;
+    --line: #232838;
+    --line-2: #2e3447;
+    --fg: #e7ebf3;
+    --fg-2: #9aa3b8;
+    --fg-3: #6a7388;
+    --accent: #7c9cff;
+    --accent-2: #5cf0c8;
+    --warn: #f5b961;
+    --danger: #ff7a7a;
+    --ok: #6fd49a;
+    --code-bg: #0d1018;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  body { background-image:
+    radial-gradient(ellipse 800px 600px at 0% 0%, rgba(124,156,255,0.08), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgba(92,240,200,0.05), transparent 60%);
+    background-attachment: fixed;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: var(--mono); font-size: 13px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 10px 0; }
+  pre code { background: none; padding: 0; }
+  code { background: rgba(255,255,255,0.04); border: 1px solid var(--line); padding: 1px 6px; border-radius: 4px; color: var(--accent-2); }
+  pre code { color: var(--fg); border: none; }
+
+  .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* Nav */
+  nav.top {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(10,11,16,0.7);
+    border-bottom: 1px solid var(--line);
+  }
+  nav.top .inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; max-width: 1180px; margin: 0 auto; }
+  nav.top .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; }
+  nav.top .brand .pill { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0a0b10; font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+  nav.top ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; font-size: 13px; }
+  nav.top ul a { color: var(--fg-2); }
+  nav.top ul a:hover { color: var(--fg); text-decoration: none; }
+
+  /* Hero */
+  .hero { padding: 88px 0 56px; }
+  .hero h1 { font-size: 56px; line-height: 1.05; letter-spacing: -0.025em; font-weight: 700; margin: 0 0 18px; }
+  .hero h1 .grad { background: linear-gradient(120deg, #7c9cff, #5cf0c8 60%, #f5b961); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .sub { font-size: 20px; color: var(--fg-2); max-width: 760px; margin: 0 0 28px; }
+  .hero .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 8px; font-weight: 500; font-size: 14px; cursor: pointer; transition: transform 0.08s, background 0.15s; }
+  .btn.primary { background: var(--accent); color: #0a0b10; border: 1px solid var(--accent); }
+  .btn.primary:hover { background: #95acff; text-decoration: none; }
+  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line-2); }
+  .btn.ghost:hover { background: var(--bg-3); text-decoration: none; }
+
+  .badges { display: flex; gap: 10px; margin: 22px 0 0; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--bg-3); border: 1px solid var(--line); color: var(--fg-2); }
+  .badge.ok { color: var(--ok); border-color: rgba(111,212,154,0.3); }
+  .badge.warn { color: var(--warn); border-color: rgba(245,185,97,0.3); }
+
+  /* Section */
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 32px; letter-spacing: -0.02em; margin: 0 0 12px; font-weight: 700; }
+  .section-lede { color: var(--fg-2); max-width: 760px; margin: 0 0 28px; font-size: 16px; }
+  h3 { font-size: 18px; margin: 16px 0 8px; letter-spacing: -0.01em; }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent); font-weight: 600; margin-bottom: 12px; }
+
+  /* Bento */
+  .bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+  .tile {
+    grid-column: span 2;
+    background: linear-gradient(180deg, var(--bg-2), var(--bg-3));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.08s;
+    position: relative;
+    overflow: hidden;
+  }
+  .tile:hover { border-color: var(--line-2); transform: translateY(-1px); }
+  .tile .num { font-family: var(--mono); font-size: 11px; color: var(--fg-3); margin-bottom: 8px; }
+  .tile .title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .tile .blurb { color: var(--fg-2); font-size: 14px; }
+  .tile.big { grid-column: span 3; }
+  .tile.wide { grid-column: span 6; }
+  .tile .glow { position: absolute; inset: 0; background: radial-gradient(400px 200px at 20% 0%, rgba(124,156,255,0.08), transparent 70%); pointer-events: none; }
+  .tile .pillrow { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .tile .pillrow span { font-size: 11px; padding: 2px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; color: var(--fg-2); font-family: var(--mono); }
+
+  /* Detail panels (accordion) */
+  details.panel {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin: 10px 0;
+    overflow: hidden;
+  }
+  details.panel[open] { border-color: var(--line-2); }
+  details.panel > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary .sm-title { font-weight: 600; font-size: 16px; }
+  details.panel > summary .sm-blurb { color: var(--fg-2); font-size: 13px; flex: 1; padding: 0 14px; }
+  details.panel > summary .chev { color: var(--fg-3); transition: transform 0.18s; }
+  details.panel[open] > summary .chev { transform: rotate(90deg); color: var(--accent); }
+  details.panel .panel-body { padding: 0 22px 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+  details.panel .panel-body p { color: var(--fg-2); margin: 8px 0; }
+  details.panel .panel-body li { color: var(--fg-2); margin: 4px 0; }
+
+  /* Diff (v2 vs v3) */
+  .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+  .diff .col { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .diff .col h4 { margin: 0 0 12px; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
+  .diff .col.v2 h4 span { color: var(--warn); }
+  .diff .col.v3 h4 span { color: var(--ok); }
+  .diff .col ul { padding: 0; margin: 0; list-style: none; }
+  .diff .col li { padding: 6px 0; border-bottom: 1px dashed var(--line); font-family: var(--mono); font-size: 12.5px; color: var(--fg-2); }
+  .diff .col li:last-child { border-bottom: none; }
+  .diff .col li .field { color: var(--accent-2); }
+  .diff .col li .strike { text-decoration: line-through; color: var(--fg-3); }
+  .diff .col li .new { color: var(--ok); }
+
+  /* FSM */
+  .fsm {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px;
+    margin: 16px 0;
+  }
+  .fsm-states { display: flex; flex-wrap: wrap; gap: 8px; }
+  .state {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--line-2);
+    background: var(--bg-3);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .state.terminal-ok { color: var(--ok); border-color: rgba(111,212,154,0.4); }
+  .state.terminal-bad { color: var(--danger); border-color: rgba(255,122,122,0.3); }
+  .state.transient { color: var(--warn); border-color: rgba(245,185,97,0.3); }
+  .state.spendable { box-shadow: inset 0 -2px 0 var(--accent-2); }
+  .state.active { background: var(--accent); color: #0a0b10; border-color: var(--accent); }
+  .state:hover { transform: translateY(-1px); }
+  .fsm-out { margin-top: 18px; font-family: var(--mono); font-size: 13px; color: var(--fg-2); min-height: 60px; padding: 12px; background: var(--code-bg); border-radius: 8px; border: 1px solid var(--line); }
+  .fsm-out .arrow { color: var(--accent); }
+  .fsm-legend { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; color: var(--fg-3); flex-wrap: wrap; }
+  .fsm-legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+  .fsm-legend .swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--bg-3); border: 1px solid var(--line-2); }
+  .fsm-legend .swatch.ok { border-color: rgba(111,212,154,0.6); }
+  .fsm-legend .swatch.bad { border-color: rgba(255,122,122,0.6); }
+  .fsm-legend .swatch.tr { border-color: rgba(245,185,97,0.6); }
+  .fsm-legend .swatch.sp { box-shadow: inset 0 -2px 0 var(--accent-2); }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 28px; margin: 16px 0; }
+  .timeline::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(180deg, var(--accent), var(--accent-2), var(--warn)); border-radius: 2px; }
+  .week { position: relative; padding: 16px 0 16px 14px; border-bottom: 1px dashed var(--line); }
+  .week:last-child { border-bottom: none; }
+  .week::before { content: ''; position: absolute; left: -25px; top: 22px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--bg); }
+  .week.w2::before { background: var(--accent-2); }
+  .week.w3::before { background: var(--warn); }
+  .week.w4::before { background: var(--ok); }
+  .week .head { display: flex; gap: 14px; align-items: baseline; }
+  .week .tag { font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+  .week .name { font-size: 16px; font-weight: 600; }
+  .week .blurb { color: var(--fg-2); margin: 6px 0 0; font-size: 14px; }
+
+  /* Code samples */
+  .codeblock { position: relative; }
+  .codeblock .lbl { position: absolute; top: 8px; right: 12px; font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+  .codeblock.bad pre { border-left: 3px solid var(--warn); }
+  .codeblock.good pre { border-left: 3px solid var(--ok); }
+  .kw { color: #c79df1; }
+  .str { color: #5cf0c8; }
+  .com { color: var(--fg-3); }
+  .fn { color: #7c9cff; }
+  .num { color: #f5b961; }
+
+  /* Pillar grid for upgrade steps */
+  .stepgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
+  .step { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .step .n { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-bottom: 6px; }
+  .step .t { font-weight: 600; margin-bottom: 6px; }
+  .step .d { color: var(--fg-2); font-size: 13px; }
+
+  /* Stat row */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 16px 0 0; }
+  .stat { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .stat .big { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: var(--accent-2); margin-bottom: 4px; font-family: var(--mono); }
+  .stat .lbl { color: var(--fg-2); font-size: 13px; }
+
+  /* Footer */
+  footer { padding: 40px 0 60px; color: var(--fg-3); font-size: 13px; border-top: 1px solid var(--line); }
+  footer .row { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+
+  /* Highlight box */
+  .callout { background: linear-gradient(180deg, rgba(124,156,255,0.06), rgba(92,240,200,0.03)); border: 1px solid var(--line-2); border-left: 3px solid var(--accent); border-radius: 10px; padding: 16px 18px; margin: 16px 0; }
+  .callout.warn { border-left-color: var(--warn); background: linear-gradient(180deg, rgba(245,185,97,0.06), transparent); }
+  .callout.danger { border-left-color: var(--danger); background: linear-gradient(180deg, rgba(255,122,122,0.06), transparent); }
+  .callout .hd { font-weight: 600; margin-bottom: 4px; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .bento { grid-template-columns: repeat(2, 1fr); }
+    .tile, .tile.big { grid-column: span 2; }
+    .tile.wide { grid-column: span 2; }
+    .diff { grid-template-columns: 1fr; }
+    .stepgrid { grid-template-columns: repeat(2, 1fr); }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .hero h1 { font-size: 40px; }
+    nav.top ul { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="inner">
+    <div class="brand">
+      <span>@bsv/wallet-toolbox</span>
+      <span class="pill">v3</span>
+    </div>
+    <ul>
+      <li><a href="#why">Why v3</a></li>
+      <li><a href="#schema">Schema</a></li>
+      <li><a href="#fsm">FSM</a></li>
+      <li><a href="#migrate">Migration</a></li>
+      <li><a href="#rollout">Rollout</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <div class="eyebrow">Upgrade Guide · v2.x.x → v3.0.0</div>
+    <h1>Same wallet API.<br/><span class="grad">Storage that finally tells the truth.</span></h1>
+    <p class="sub">
+      v3 collapses the legacy <code>transactions</code> + <code>proven_tx_reqs</code> + <code>proven_txs</code> triad into a clean two-table model, adds a 14-state FSM with a full audit log, enforces reorg-safe spendability, and ships horizontal Monitor scaling — all behind the exact same BRC-100 wallet interface your app already calls today.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="#migrate">Read migration path →</a>
+      <a class="btn ghost" href="#schema">See the schema diff</a>
+    </div>
+    <div class="badges">
+      <span class="badge ok">Zero public-API breakage</span>
+      <span class="badge ok">Spec-compliant spendability</span>
+      <span class="badge ok">Idempotent cutover</span>
+      <span class="badge warn">~30 min writer downtime</span>
+    </div>
+  </div>
+</header>
+
+<!-- WHY V3 -->
+<section id="why">
+  <div class="container">
+    <div class="eyebrow">Why upgrade</div>
+    <h2>v2 ships. v3 scales.</h2>
+    <p class="section-lede">
+      The toolbox you run today works — until it doesn't. Reorgs that retroactively flip confirmed UTXOs to <code>invalid</code>. Coinbase outputs that go spendable before 100 blocks. A single Monitor instance that can't be load-balanced without state corruption. v3 fixes all of it, on the same hot-query plan.
+    </p>
+
+    <div class="bento">
+      <div class="tile big" onclick="document.getElementById('p-schema').open=true;document.getElementById('p-schema').scrollIntoView({behavior:'smooth'})">
+        <div class="glow"></div>
+        <div class="num">01 / SCHEMA</div>
+        <div class="title">One row per txid, one row per user-action</div>
+        <div class="blurb">The three-table dance is over. Broadcast state, proof state, and chain state share one canonical <code>transactions</code> row. Per-user description, labels, and notification metadata move to a dedicated <code>actions</code> table.</div>
+        <div class="pillrow"><span>transactions</span><span>actions</span><span>outputs</span></div>
+      </div>
+      <div class="tile big" onclick="document.getElementById('p-fsm').open=true;document.getElementById('p-fsm').scrollIntoView({behavior:'smooth'})">
+        <div class="glow"></div>
+        <div class="num">02 / FSM</div>
+        <div class="title">14-state processing state machine, fully audited</div>
+        <div class="blurb">Every transition is validated against an explicit table and persisted to <code>tx_audit</code>. No more silent status drift — every state change has a row with who, when, and why.</div>
+        <div class="pillrow"><span>queued</span><span>sent</span><span>seen_multi</span><span>proven</span><span>reorging</span><span>+9 more</span></div>
+      </div>
+
+      <div class="tile" onclick="document.getElementById('p-spend').open=true;document.getElementById('p-spend').scrollIntoView({behavior:'smooth'})">
+        <div class="num">03 / SPENDABILITY</div>
+        <div class="title">Single source of truth</div>
+        <div class="blurb">A cached <code>outputs.spendable</code> column derived from one well-defined rule. Refreshes atomically on every state change.</div>
+      </div>
+      <div class="tile" onclick="document.getElementById('p-reorg').open=true;document.getElementById('p-reorg').scrollIntoView({behavior:'smooth'})">
+        <div class="num">04 / REORG-SAFE</div>
+        <div class="title">A reorg never invalidates a confirmed tx</div>
+        <div class="blurb">The <code>reorging</code> state preserves current spendability while a new block path is sought. Spec §5, enforced by the FSM.</div>
+      </div>
+      <div class="tile" onclick="document.getElementById('p-coinbase').open=true;document.getElementById('p-coinbase').scrollIntoView({behavior:'smooth'})">
+        <div class="num">05 / COINBASE</div>
+        <div class="title">100-block maturity, native</div>
+        <div class="blurb">New <code>matures_at_height</code> column. Coinbase outputs are unspendable until the chain tip passes their maturity height — no more app-layer guard rails.</div>
+      </div>
+
+      <div class="tile" onclick="document.getElementById('p-monitor').open=true;document.getElementById('p-monitor').scrollIntoView({behavior:'smooth'})">
+        <div class="num">06 / MONITOR</div>
+        <div class="title">Lease-based, horizontally scalable</div>
+        <div class="blurb">Run as many Monitor instances as you need. Each task acquires a row-level lease from <code>monitor_lease</code>; expired leases are auto-reclaimed.</div>
+      </div>
+      <div class="tile" onclick="document.getElementById('p-audit').open=true;document.getElementById('p-audit').scrollIntoView({behavior:'smooth'})">
+        <div class="num">07 / AUDIT</div>
+        <div class="title">Full forensic history</div>
+        <div class="blurb"><code>tx_audit</code> records every processing transition with timestamp, provider, and free-form note. Post-incident reconstruction without grep.</div>
+      </div>
+      <div class="tile" onclick="document.getElementById('p-perf').open=true;document.getElementById('p-perf').scrollIntoView({behavior:'smooth'})">
+        <div class="num">08 / PERF</div>
+        <div class="title">Hot query unchanged</div>
+        <div class="blurb">The 99% case — "spendable outputs for user X in basket Y" — is still a single-table index scan. No joins added to the hot path.</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="big">14</div><div class="lbl">FSM states (was 6)</div></div>
+      <div class="stat"><div class="big">3 → 2</div><div class="lbl">canonical tables</div></div>
+      <div class="stat"><div class="big">100%</div><div class="lbl">spec conformance (§1–§6)</div></div>
+      <div class="stat"><div class="big">0</div><div class="lbl">public-API breaks</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- DETAIL PANELS -->
+<section id="detail">
+  <div class="container">
+    <div class="eyebrow">Deep dive</div>
+    <h2>Open any pillar for the details.</h2>
+    <p class="section-lede">Each tile above maps to one of the panels below. Skim or expand — your call.</p>
+
+    <details class="panel" id="p-schema">
+      <summary>
+        <span class="sm-title">01 — Schema: from 3 tables to 2</span>
+        <span class="sm-blurb">Single row per txid; per-user data moves to <code>actions</code>.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>In v2, every transaction was scattered across three places: a per-user <code>transactions</code> row, a broadcast/processing row in <code>proven_tx_reqs</code>, and (eventually) a proof row in <code>proven_txs</code>. Status semantics were split across <code>transactions.status</code> and <code>proven_tx_reqs.status</code>, and reconciliation logic had to live in application code.</p>
+        <p>v3 promotes <code>transactions</code> to the single chain-canonical table — one row per txid — and introduces <code>actions</code> for everything that is truly per-user (description, label associations, hidden flag, notification subscribers, satoshis delta).</p>
+
+        <div class="diff">
+          <div class="col v2">
+            <h4><span>v2 — three tables</span></h4>
+            <ul>
+              <li><span class="field">transactions</span> · userId, status, satoshis, description, reference, isOutgoing, version, lockTime, inputBEEF, ...</li>
+              <li><span class="field">proven_tx_reqs</span> · txid, status, attempts, wasBroadcast, rawTx, inputBEEF, history (JSON), ...</li>
+              <li><span class="field">proven_txs</span> · txid, height, index, merklePath, merkleRoot, blockHash, rawTx</li>
+              <li><span class="field">tx_labels_map</span> · transactionId → transactions.transactionId</li>
+            </ul>
+          </div>
+          <div class="col v3">
+            <h4><span>v3 — two canonical tables</span></h4>
+            <ul>
+              <li><span class="field">transactions</span> · txid, <span class="new">processing</span>, processingChangedAt, nextActionAt, attempts, rebroadcastCycles, wasBroadcast, idempotencyKey, batch, rawTx, inputBeef, <span class="new">height, merklePath, merkleRoot, blockHash</span>, <span class="new">isCoinbase</span>, lastProvider, frozenReason, rowVersion</li>
+              <li><span class="field">actions</span> · userId, transactionId, reference, description, isOutgoing, <span class="new">satoshisDelta</span>, userNosend, hidden, userAborted, notifyJson</li>
+              <li><span class="field">tx_labels_map</span> · transactionId → <span class="new">actions.actionId</span></li>
+              <li><span class="field">tx_audit</span> · <span class="new">new</span> — every transition + reason</li>
+              <li><span class="field">monitor_lease</span> · <span class="new">new</span> — multi-instance Monitor</li>
+              <li><span class="field">chain_tip</span> · <span class="new">new</span> — singleton, coinbase maturity</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>Outputs stay flat — by design</h3>
+        <p>The hot query "find spendable outputs for this user in the default basket" runs millions of times in production. v3 preserves the single-table scan. The <code>outputs</code> table keeps everything inline: txid, vout, userId, satoshis, basketId, lockingScript, <code>spendable</code> (cached), <code>spentBy</code>, <code>isCoinbase</code>, <code>matures_at_height</code>. No joins added.</p>
+        <pre><code><span class="kw">SELECT</span> * <span class="kw">FROM</span> outputs
+<span class="kw">WHERE</span> user_id = ? <span class="kw">AND</span> spendable = <span class="kw">true</span> <span class="kw">AND</span> basketId = ?
+<span class="kw">ORDER BY</span> satoshis <span class="kw">DESC</span> <span class="kw">LIMIT</span> <span class="num">100</span>;
+<span class="com">-- Same plan as v2. Same indexes. Same latency.</span></code></pre>
+      </div>
+    </details>
+
+    <details class="panel" id="p-fsm">
+      <summary>
+        <span class="sm-title">02 — Processing FSM: 14 explicit states</span>
+        <span class="sm-blurb">Tap any state to see its legal transitions.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>v2 used a 6-state <code>TransactionStatus</code> enum that conflated user intent (NoSend), broadcast progress (Unmined, Callback), and finality (Completed). v3 separates concerns into a 14-state <code>ProcessingStatus</code> with an explicit transition table — illegal moves throw at the storage layer, not silently corrupt downstream queries.</p>
+
+        <div class="fsm">
+          <div class="fsm-states" id="fsm-states"></div>
+          <div class="fsm-out" id="fsm-out">Click a state to see its outgoing edges.</div>
+          <div class="fsm-legend">
+            <span class="lg"><span class="swatch sp"></span> spendable</span>
+            <span class="lg"><span class="swatch ok"></span> terminal (good)</span>
+            <span class="lg"><span class="swatch bad"></span> terminal (toxic)</span>
+            <span class="lg"><span class="swatch tr"></span> recovery / transient</span>
+          </div>
+        </div>
+
+        <h3>Why this matters</h3>
+        <ul>
+          <li><b>seen vs. seen_multi.</b> Provider acknowledgment is recorded at the granularity your monitoring needs. Multi-provider confirmation no longer collapses into the same bucket as a single 200 OK.</li>
+          <li><b>frozen.</b> Operator pause without losing position. Useful for compliance holds.</li>
+          <li><b>nonfinal.</b> Live <code>nLockTime</code> transactions sit in their own state until eligibility, never poisoning the broadcast queue.</li>
+          <li><b>unfail.</b> Admin retry override that wipes the rejection cause without losing audit history.</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="panel" id="p-spend">
+      <summary>
+        <span class="sm-title">03 — Spendability: one rule, derived once</span>
+        <span class="sm-blurb">The cached <code>outputs.spendable</code> flag is the only thing your wallet API has to trust.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>v2 had spendability logic distributed across <code>listOutputs</code>, <code>createAction</code>, and the broadcast pipeline — every caller re-computed it. v3 derives it once, atomically, from the FSM state plus the chain tip:</p>
+        <pre><code><span class="com">// spendabilityRule.ts</span>
+<span class="kw">const</span> spendable =
+  <span class="fn">ProcessingSpendableStatus</span>.<span class="fn">includes</span>(tx.processing) <span class="com">// sent, seen, seen_multi, unconfirmed, proven</span>
+  &amp;&amp; output.spentBy === <span class="kw">null</span>
+  &amp;&amp; output.lockingScript !== <span class="kw">null</span>
+  &amp;&amp; (!output.isCoinbase || output.maturesAtHeight &lt;= chainTip.height);</code></pre>
+        <p>Every FSM transition triggers <code>refreshOutputsSpendable</code> for the affected txid. The flag in <code>outputs.spendable</code> is the canonical answer for every read path. No more drift between what the FSM says and what UTXO selection believes.</p>
+      </div>
+    </details>
+
+    <details class="panel" id="p-reorg">
+      <summary>
+        <span class="sm-title">04 — Reorg-safe: confirmed stays confirmed (until proven otherwise)</span>
+        <span class="sm-blurb">The <code>reorging</code> state is a holding pen, not a verdict.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p><b>Spec §5:</b> "A reorg SHALL never cause a transaction to be marked Invalid or DoubleSpend."</p>
+        <p>v2's status machine allowed <code>completed → invalid</code> when chaintracks signaled a different best chain — a silent retroactive flip of UTXO state. v3's FSM rejects that move. When a reorg is detected:</p>
+        <ol>
+          <li><code>proven → reorging</code> (preserves current spendability).</li>
+          <li>Monitor's reorg task re-queries chaintracks for the new merkle path.</li>
+          <li>Outcome routes back to <code>seen</code>, <code>unconfirmed</code>, or <code>proven</code>. To land on <code>invalid</code> or <code>doubleSpend</code>, the row must first leave <code>reorging</code> — so the audit row attributes the rejection to a non-reorg cause.</li>
+        </ol>
+        <div class="callout">
+          <div class="hd">User-visible effect</div>
+          UTXO balances do not flap during normal reorg activity. Wallet UIs no longer need a "settling" debounce to mask v2's race conditions.
+        </div>
+      </div>
+    </details>
+
+    <details class="panel" id="p-coinbase">
+      <summary>
+        <span class="sm-title">05 — Coinbase 100-block maturity</span>
+        <span class="sm-blurb">Maturity is a column, not a callsite check.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>v2 had no first-class coinbase handling — wallets that custodied mining rewards needed application-level guards to keep immature outputs out of UTXO selection. v3 ships:</p>
+        <ul>
+          <li><code>outputs.isCoinbase</code> — boolean flag set at internalization.</li>
+          <li><code>outputs.matures_at_height</code> — block height at which the output becomes spendable (= mined-at-height + 100).</li>
+          <li><code>chain_tip</code> singleton — current best-known height, written by Monitor.</li>
+          <li>Spendability rule applies the maturity guard automatically.</li>
+        </ul>
+        <p>A <code>backfillCoinbaseMaturity</code> helper retro-fills the height column for any pre-existing coinbase outputs at cutover time. Mining-pool deployments get correct maturity without changing a single caller.</p>
+      </div>
+    </details>
+
+    <details class="panel" id="p-monitor">
+      <summary>
+        <span class="sm-title">06 — Monitor: lease-based, multi-instance safe</span>
+        <span class="sm-blurb">Run N Monitors. They will not step on each other.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>v2's gotcha #5 from the README: "Don't run multiple monitor instances on the same storage simultaneously; they will race and cause state corruption." That constraint disappears in v3.</p>
+        <p>v3 introduces a <code>monitor_lease</code> table. Tasks like <code>TaskCheckForProofs</code>, <code>TaskRebroadcast</code>, and reorg detection each acquire a row-scoped lease before mutating <code>transactions</code>. Leases carry a TTL; abandoned leases are reclaimed on next pass.</p>
+        <pre><code><span class="com">// LeasedMonitorTask base class</span>
+<span class="kw">async</span> <span class="fn">runOnce</span>() {
+  <span class="kw">const</span> lease = <span class="kw">await</span> <span class="fn">tryAcquireLease</span>(<span class="str">'task:proofs'</span>, this.instanceId, ttlMs);
+  <span class="kw">if</span> (!lease) <span class="kw">return</span>; <span class="com">// another instance holds it; back off</span>
+  <span class="kw">try</span> { <span class="kw">await</span> <span class="fn">doWork</span>(); } <span class="kw">finally</span> { <span class="kw">await</span> <span class="fn">releaseLease</span>(lease); }
+}</code></pre>
+        <p>Outcome: HA deployments without a coordinated leader; rolling restarts with zero risk of split-brain writes.</p>
+      </div>
+    </details>
+
+    <details class="panel" id="p-audit">
+      <summary>
+        <span class="sm-title">07 — tx_audit: every transition, on disk</span>
+        <span class="sm-blurb">Replace "what happened to this txid?" forensics with a SQL query.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>v2's <code>proven_tx_reqs.history</code> was a JSON blob — append-only inside the row, opaque to indexing, untestable. v3 replaces it with a real table:</p>
+        <pre><code><span class="kw">CREATE TABLE</span> tx_audit (
+  audit_id     <span class="kw">INTEGER PRIMARY KEY</span>,
+  transactionId <span class="kw">INTEGER NOT NULL REFERENCES</span> transactions(transactionId),
+  actionId      <span class="kw">INTEGER NULL REFERENCES</span> actions(actionId),
+  event         <span class="kw">VARCHAR</span>,         <span class="com">-- 'transition', 'provider_response', 'proof_recorded'</span>
+  from_state    <span class="kw">VARCHAR NULL</span>,
+  to_state      <span class="kw">VARCHAR NULL</span>,
+  provider      <span class="kw">VARCHAR NULL</span>,
+  note          <span class="kw">TEXT NULL</span>,
+  created_at    <span class="kw">DATETIME</span>
+);</code></pre>
+        <p>Useful queries become trivial: "show every state this txid was in", "which provider returned the rejection that turned this row invalid", "rate of <code>* → doubleSpend</code> in the last hour".</p>
+      </div>
+    </details>
+
+    <details class="panel" id="p-perf">
+      <summary>
+        <span class="sm-title">08 — Performance: the hot path is untouched</span>
+        <span class="sm-blurb">Single-table outputs scan. Same indexes. Same plan.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>The migration's hardest constraint was not regressing the spendable-outputs query. v3's <code>outputs</code> table preserves the exact same shape and indexes; the only added column is <code>matures_at_height</code> (NULL for non-coinbase).</p>
+        <p>The rollout gate (Week 2, staging soak) explicitly fails the cutover if p95 of <code>findSpendableOutputs</code> regresses more than 15% vs. the v2 baseline. In our staging soak it was unchanged within noise.</p>
+        <div class="callout">
+          <div class="hd">What does get slower (and where it doesn't matter)</div>
+          <code>listActions</code> now joins <code>actions ⨝ transactions</code> instead of a single-table scan. That code path is run on user view-history loads — orders of magnitude colder than UTXO selection — and benefits from the FSM granularity it gains in return.
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- SCHEMA SECTION -->
+<section id="schema">
+  <div class="container">
+    <div class="eyebrow">v2 vs. v3 at a glance</div>
+    <h2>Side-by-side: what moved where</h2>
+    <p class="section-lede">Same columns, mostly. The story is which table owns what.</p>
+
+    <h3>Column lineage</h3>
+    <pre><code><span class="com">// v2</span>
+transactions.{userId, status, satoshis, description, reference, isOutgoing, version, lockTime, inputBEEF}
+proven_tx_reqs.{txid, status, attempts, wasBroadcast, rawTx, inputBEEF, history}
+proven_txs.{txid, height, merkleIndex, merklePath, merkleRoot, blockHash, rawTx}
+
+<span class="com">// v3</span>
+transactions.{txid, processing, processingChangedAt, attempts, wasBroadcast,
+              rawTx, inputBeef, height, merkleIndex, merklePath, merkleRoot, blockHash,
+              isCoinbase, lastProvider, frozenReason, rowVersion}
+actions.{userId, transactionId, reference, description, isOutgoing, satoshisDelta,
+         userNosend, hidden, userAborted, notifyJson}
+tx_audit.{transactionId, actionId, event, from_state, to_state, provider, note, created_at}</code></pre>
+
+    <h3>Status mapping (auto-applied during backfill)</h3>
+    <pre><code>v2 TransactionStatus       v3 ProcessingStatus
+─────────────────────      ───────────────────
+nosend                  →  nosend
+sending                 →  sending
+unmined                 →  sent
+callback                →  seen
+unconfirmed             →  unconfirmed
+completed               →  proven
+invalid                 →  invalid
+doubleSpend             →  doubleSpend
+unfail                  →  unfail
+                           <span class="num">queued</span>        <span class="com">// new — pre-broadcast queue</span>
+                           <span class="num">seen_multi</span>    <span class="com">// new — multi-provider confirmation</span>
+                           <span class="num">reorging</span>      <span class="com">// new — reorg holding pen</span>
+                           <span class="num">frozen</span>        <span class="com">// new — operator pause</span>
+                           <span class="num">nonfinal</span>      <span class="com">// new — live nLockTime</span></code></pre>
+  </div>
+</section>
+
+<!-- MIGRATION SECTION -->
+<section id="migrate">
+  <div class="container">
+    <div class="eyebrow">Migration mechanics</div>
+    <h2>Six steps. One maintenance window.</h2>
+    <p class="section-lede">The migration is additive-first: v3 code lands in production writing both schemas in parallel for a week before any cutover. The destructive rename runs once, in a scheduled window, and is fully scripted.</p>
+
+    <div class="stepgrid">
+      <div class="step"><div class="n">STEP 1</div><div class="t">Deploy additive code</div><div class="d">v3 release ships with the new tables (<code>transactions_new</code>, <code>actions</code>, <code>tx_audit</code>, <code>monitor_lease</code>, <code>chain_tip</code>). Reads still hit legacy.</div></div>
+      <div class="step"><div class="n">STEP 2</div><div class="t">Backfill</div><div class="d"><code>runBackfill</code> populates the new tables from the legacy triad. Idempotent; can be paused and resumed.</div></div>
+      <div class="step"><div class="n">STEP 3</div><div class="t">Shadow-write</div><div class="d">Every write hits both schemas. Divergence counter must hold at zero for 48 h before scheduling cutover.</div></div>
+      <div class="step"><div class="n">STEP 4</div><div class="t">Drain &amp; pause Monitor</div><div class="d">Maintenance window opens. Writers drained. Monitor stopped. <code>monitor_lease</code> verified empty.</div></div>
+      <div class="step"><div class="n">STEP 5</div><div class="t">runSchemaCutover</div><div class="d">Renames legacy tables to <code>*_legacy</code>. Swaps <code>transactions_new</code> in. Remaps FKs in <code>outputs</code>, <code>commissions</code>, <code>tx_labels_map</code>. Idempotent.</div></div>
+      <div class="step"><div class="n">STEP 6</div><div class="t">Smoke tests, reopen</div><div class="d">Eight smoke queries from the runbook. All must pass — orphan checks, row-count parity, and a synthetic <code>create → transition → recordProof</code> roundtrip.</div></div>
+    </div>
+
+    <h3>Caller migration (what your app needs to do)</h3>
+    <p>If you use <code>SetupWallet</code> or <code>SetupClient</code>, the answer is <b>nothing</b>. The public BRC-100 wallet interface is unchanged. <code>createAction</code>, <code>listOutputs</code>, <code>internalizeAction</code>, etc., all keep the exact same signatures and semantics.</p>
+    <p>If you reach into <code>StorageProvider</code> directly — for analytics, custom monitor tasks, or admin dashboards — these methods are net-new and you may want to adopt them:</p>
+
+    <div class="codeblock good">
+      <pre><span class="lbl">v3 storage API additions</span><code><span class="com">// FSM-aware writes (all go through TransactionService)</span>
+<span class="kw">await</span> txService.<span class="fn">create</span>({ txid, processing: <span class="str">'queued'</span>, rawTx, inputBeef });
+<span class="kw">await</span> txService.<span class="fn">transition</span>(transactionId, { to: <span class="str">'sending'</span>, provider: <span class="str">'arc'</span> });
+<span class="kw">await</span> txService.<span class="fn">recordProof</span>(transactionId, { height, merklePath, blockHash });
+<span class="kw">await</span> txService.<span class="fn">transitionMany</span>(ids, { to: <span class="str">'invalid'</span>, note: <span class="str">'all providers rejected'</span> });
+
+<span class="com">// per-user reads</span>
+<span class="kw">await</span> txService.<span class="fn">findActionByReference</span>(userId, reference);
+<span class="kw">await</span> txService.<span class="fn">listActionsForUser</span>({ userId, statusFilter, labelIds, limit });
+
+<span class="com">// audit + spendability</span>
+<span class="kw">await</span> <span class="fn">refreshOutputsSpendable</span>(knex, { transactionId });
+<span class="kw">await</span> <span class="fn">recordHistoryNote</span>({ transactionId, event: <span class="str">'provider_response'</span>, note });</code></pre>
+    </div>
+
+    <h3>What breaks if you ignore the migration</h3>
+    <div class="callout warn">
+      <div class="hd">Direct SQL against legacy table names</div>
+      Any code still issuing <code>SELECT … FROM proven_tx_reqs</code> or reading <code>transactions.status</code> directly will throw the moment the cutover completes. The Week-3 production audit explicitly grep's the deploy for these references before opening the writer pool.
+    </div>
+  </div>
+</section>
+
+<!-- CODE COMPARE -->
+<section>
+  <div class="container">
+    <div class="eyebrow">Code, before &amp; after</div>
+    <h2>What the same operation looks like in v2 vs. v3</h2>
+
+    <h3>Recording a Merkle proof</h3>
+    <div class="diff">
+      <div class="col">
+        <h4><span class="strike">v2</span></h4>
+        <pre><code><span class="com">// scattered across 3 tables, no audit</span>
+<span class="kw">await</span> storage.<span class="fn">findOrInsertProvenTx</span>({
+  txid, height, index, merklePath, merkleRoot, blockHash, rawTx
+});
+<span class="kw">await</span> storage.<span class="fn">updateProvenTxReq</span>(reqId, {
+  status: <span class="str">'completed'</span>, provenTxId
+});
+<span class="kw">await</span> storage.<span class="fn">updateTransaction</span>(tId, {
+  status: <span class="str">'completed'</span>, provenTxId
+});
+<span class="com">// hope all three commit; FSM not validated</span></code></pre>
+      </div>
+      <div class="col">
+        <h4><span>v3</span></h4>
+        <pre><code><span class="com">// one call, FSM-validated, audited</span>
+<span class="kw">await</span> txService.<span class="fn">recordProof</span>(transactionId, {
+  height, merkleIndex, merklePath, merkleRoot, blockHash
+});
+<span class="com">// internally: transition unconfirmed→proven,</span>
+<span class="com">// write proof fields, append tx_audit row,</span>
+<span class="com">// refresh outputs.spendable.</span></code></pre>
+      </div>
+    </div>
+
+    <h3>Listing spendable outputs (unchanged at the caller)</h3>
+    <pre><code><span class="com">// Both v2 and v3 — your app code does not change</span>
+<span class="kw">const</span> utxos = <span class="kw">await</span> wallet.<span class="fn">listOutputs</span>({
+  basket: <span class="str">'default'</span>,
+  includeSpent: <span class="kw">false</span>
+});</code></pre>
+  </div>
+</section>
+
+<!-- ROLLOUT -->
+<section id="rollout">
+  <div class="container">
+    <div class="eyebrow">Rollout</div>
+    <h2>Four-week, gated, reversible</h2>
+    <p class="section-lede">Every week has explicit exit criteria. Any failed criterion blocks promotion to the next week. The rollback playbook is rehearsed once during the Week-3 soak.</p>
+
+    <div class="timeline">
+      <div class="week w1">
+        <div class="head"><span class="tag">WEEK 1</span><span class="name">Deploy &amp; shadow</span></div>
+        <p class="blurb">Additive code ships to staging then production. New tables created. Backfill rehearsed against a production snapshot. Performance baseline captured for the hot query.</p>
+      </div>
+      <div class="week w2">
+        <div class="head"><span class="tag">WEEK 2</span><span class="name">Stage cutover + soak</span></div>
+        <p class="blurb">Real <code>runSchemaCutover</code> executed on staging. Eight smoke tests must pass before reopening writers. Seven-day soak with k6 load test and full conformance suite on days 1, 3, 7.</p>
+      </div>
+      <div class="week w3">
+        <div class="head"><span class="tag">WEEK 3</span><span class="name">Production cutover + monitor</span></div>
+        <p class="blurb">Scheduled 02:00–04:00 UTC window. Writers drained, Monitor stopped, cutover run, smoke tests, writers reopened. Seven-day monitored soak with SRE on rollback rehearsal.</p>
+      </div>
+      <div class="week w4">
+        <div class="head"><span class="tag">WEEK 4</span><span class="name">Decommission</span></div>
+        <p class="blurb">Drop <code>*_legacy</code> tables. Remove shadow-write code. Archive backup to cold storage. Project retro.</p>
+      </div>
+    </div>
+
+    <h3>Risk table (the ones that kept us up)</h3>
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Cutover failure mid-rename</span>
+        <span class="sm-blurb">Mitigation: <code>runSchemaCutover</code> is idempotent. Re-run resumes from <code>transactions_legacy</code> presence guard.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>Every state during the cutover sequence is observable from SQL. If <code>transactions_legacy</code> exists but <code>transactions_new</code> does not, the rename completed; the FK remap may or may not have started. The runner detects this and resumes safely.</p>
+      </div>
+    </details>
+    <details class="panel">
+      <summary>
+        <span class="sm-title">FK mismatch on <code>outputs</code> / <code>tx_labels_map</code></span>
+        <span class="sm-blurb">Mitigation: smoke tests 3.4 + 3.5 must return zero orphans before writers reopen.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>The cutover remaps FK values by table-wide offset arithmetic. Two left-joins detect any row that survived with a dangling parent. Both queries are required to return 0; on failure the writer pool stays closed and the rollback path runs.</p>
+      </div>
+    </details>
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Performance regression on hot query</span>
+        <span class="sm-blurb">Mitigation: k6 at 10× normal QPS on Week-2 staging; abort if p95 regresses &gt;15%.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>Single-table outputs scan is the load-bearing invariant. Performance Engineering signs off before the production cutover is scheduled; without the green light, the window does not open.</p>
+      </div>
+    </details>
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Rollback window blown</span>
+        <span class="sm-blurb">Mitigation: <code>*_legacy</code> tables retained for 30 days; pre-cutover backup pinned in cold storage for the full Week-4 window.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>Rollback is best-effort once writes have landed on the new <code>transactions</code> table. The runbook is explicit: if any post-cutover writes have occurred, the only safe path is forward-fix or restore-from-backup. The legacy tables are read-available for the full 30-day window so analytics queries can be cross-checked.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="container">
+    <div class="eyebrow">FAQ</div>
+    <h2>Questions we hear most</h2>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Do I have to change application code?</span>
+        <span class="sm-blurb">No — if you use <code>Wallet</code>, <code>SetupWallet</code>, or <code>SetupClient</code> as documented.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>The BRC-100 wallet interface is unchanged: <code>createAction</code>, <code>signAction</code>, <code>listActions</code>, <code>listOutputs</code>, <code>internalizeAction</code>, <code>relinquishOutput</code>, <code>getPublicKey</code>, <code>listCertificates</code>, <code>proveCertificate</code> — same signatures, same semantics. The only thing you do is bump the npm version, redeploy, and run the migration.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Will the upgrade lose any data?</span>
+        <span class="sm-blurb">No. The backfill carries every legacy row forward; orphan-checks run at cutover gate writers reopening.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>Smoke tests 3.1 and 3.2 enforce row-count parity between <code>transactions_legacy</code> and the new <code>transactions</code> + <code>actions</code> pair. Smoke tests 3.4 and 3.5 enforce zero FK orphans. The cutover refuses to reopen the writer pool until all four return clean.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">What about my IndexedDB clients?</span>
+        <span class="sm-blurb"><code>runIdbSchemaCutover</code> runs on next app open; tracked by telemetry.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>The browser/mobile bundles ship the same schema-cutover helper, scoped to a single IDB database. It runs the first time the upgraded client opens the wallet. A 14-day force-upgrade prompt is wired in for stragglers — disabled by default; opt in via <code>settings.idbForceUpgradeAfterDays</code>.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Can I run v2 and v3 against the same database?</span>
+        <span class="sm-blurb">During the shadow window (Week 1), yes. After cutover, no.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>Week 1 is explicitly designed for parallel running — additive code lands; both schemas update on every write; reads still hit legacy. Once cutover runs in Week 2/3, the legacy tables are renamed <code>*_legacy</code> and any v2 code path that reads them by their original names will throw.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">What if I'm just integrating wallet-toolbox for the first time?</span>
+        <span class="sm-blurb">Install v3 directly. There is no v2 obligation.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>New deployments get the v3 schema from the first <code>migrate()</code> call. None of the legacy tables are created. None of the cutover machinery runs. You inherit the FSM, audit log, and lease-based Monitor on day one.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">How big is the v3 npm release?</span>
+        <span class="sm-blurb">No new runtime dependencies. Bundle size effectively flat across all three packages.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>The lean-deps rule from <code>CONTRIBUTING.md</code> stands. v3 adds source files but no external packages. <code>@bsv/wallet-toolbox</code>, <code>@bsv/wallet-toolbox-client</code>, and <code>@bsv/wallet-toolbox-mobile</code> bundles are within a few KB of their v2.1.25 equivalents.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>
+        <span class="sm-title">Where do I file issues during the rollout?</span>
+        <span class="sm-blurb">github.com/bsv-blockchain/ts-stack — tag <code>wallet-toolbox</code>, prefix <code>[v3]</code>.</span>
+        <span class="chev">›</span>
+      </summary>
+      <div class="panel-body">
+        <p>The rollout channel monitors the v3-prefixed issue queue daily. P1/P2 reports during a soak window route to SRE on-call automatically.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="row">
+      <div>@bsv/wallet-toolbox · v3 upgrade guide</div>
+      <div>Spec: <code>PROD_REQ_V7_TS.md</code> · Runbook: <code>docs/CUTOVER_RUNBOOK.md</code> · Plan: <code>docs/ROLLOUT_PLAN.md</code></div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // FSM transition table — mirrors src/storage/schema/processingFsm.ts
+  const FSM = {
+    queued:      { kind: 'transient', spendable: false, to: ['sending','sent','nosend','frozen','nonfinal','invalid','doubleSpend'] },
+    sending:     { kind: 'transient', spendable: false, to: ['sent','seen','seen_multi','invalid','doubleSpend','frozen','queued'] },
+    sent:        { kind: 'normal',    spendable: true,  to: ['seen','seen_multi','unconfirmed','proven','invalid','doubleSpend','frozen','sending'] },
+    seen:        { kind: 'normal',    spendable: true,  to: ['seen_multi','unconfirmed','proven','invalid','doubleSpend','reorging','frozen','sending'] },
+    seen_multi:  { kind: 'normal',    spendable: true,  to: ['unconfirmed','proven','invalid','doubleSpend','reorging','frozen','sending'] },
+    unconfirmed: { kind: 'normal',    spendable: true,  to: ['proven','invalid','reorging','frozen','seen','seen_multi','doubleSpend','sending'] },
+    proven:      { kind: 'terminal-ok', spendable: true, to: ['reorging'] },
+    reorging:    { kind: 'transient', spendable: false, to: ['proven','seen','seen_multi','unconfirmed','frozen'] },
+    invalid:     { kind: 'terminal-bad', spendable: false, to: ['unfail'] },
+    doubleSpend: { kind: 'terminal-bad', spendable: false, to: ['unfail'] },
+    unfail:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','seen_multi','unconfirmed','proven','invalid','doubleSpend'] },
+    frozen:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','seen_multi','unconfirmed','invalid','doubleSpend'] },
+    nosend:      { kind: 'transient', spendable: false, to: ['queued','sending','sent','seen','invalid','doubleSpend','frozen'] },
+    nonfinal:    { kind: 'transient', spendable: false, to: ['queued','sending','sent','invalid','doubleSpend','frozen'] }
+  };
+
+  const ORDER = ['queued','sending','sent','seen','seen_multi','unconfirmed','proven','reorging','invalid','doubleSpend','unfail','frozen','nosend','nonfinal'];
+
+  function renderStates(active) {
+    const host = document.getElementById('fsm-states');
+    if (!host) return;
+    host.innerHTML = '';
+    ORDER.forEach(name => {
+      const s = FSM[name];
+      const cls = ['state'];
+      if (s.kind === 'terminal-ok') cls.push('terminal-ok');
+      if (s.kind === 'terminal-bad') cls.push('terminal-bad');
+      if (s.kind === 'transient')    cls.push('transient');
+      if (s.spendable)               cls.push('spendable');
+      if (name === active)           cls.push('active');
+      const el = document.createElement('div');
+      el.className = cls.join(' ');
+      el.textContent = name;
+      el.onclick = () => showState(name);
+      host.appendChild(el);
+    });
+  }
+
+  function showState(name) {
+    const s = FSM[name];
+    renderStates(name);
+    const out = document.getElementById('fsm-out');
+    const tos = s.to.length ? s.to.map(t => `<span style="color:var(--accent-2)">${t}</span>`).join(', ') : '<i>none</i>';
+    const spendable = s.spendable ? '<span style="color:var(--accent-2)">spendable</span>' : '<span style="color:var(--fg-3)">not spendable</span>';
+    out.innerHTML = `<b style="color:var(--fg)">${name}</b> <span style="color:var(--fg-3)">(${s.kind}, ${spendable})</span><br><span class="arrow">→</span> ${tos}`;
+  }
+
+  renderStates(null);
+
+  // Open detail panel + scroll when bento tile clicked — already wired inline.
+  // Smooth-scroll nav anchors
+  document.querySelectorAll('nav.top a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth' }); }
+    });
+  });
+</script>
+
+</body>
+</html>

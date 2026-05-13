@@ -4,7 +4,7 @@ import { TableProvenTxReq } from '../../storage/schema/tables'
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { Monitor } from '../Monitor'
-import { V7LeasedTask } from '../V7LeasedTask'
+import { LeasedMonitorTask } from '../LeasedMonitorTask'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
@@ -56,15 +56,15 @@ export class TaskCheckForProofs extends WalletMonitorTask {
       return log
     }
 
-    // V7 lease: if a V7 service is available, claim a monitor_lease for this
+    // monitor_lease: if a the transaction service is available, claim a monitor_lease for this
     // task so that at most one Monitor instance runs the proof check at a time.
     // If the lease cannot be acquired the task is skipped for this tick; the
     // static `checkNow` flag is NOT cleared so that the next tick can retry.
-    const v7svc = await this.storage.runAsStorageProvider(async sp => sp.getV7Service())
-    if (v7svc != null) {
+    const txSvc = await this.storage.runAsStorageProvider(async sp => sp.getTransactionService())
+    if (txSvc != null) {
       const ownerId = this.monitor.instanceId
       const ttlMs = 60_000 // 60 s — generous enough for a full proof-check pass
-      const helper = new V7LeasedTask(v7svc)
+      const helper = new LeasedMonitorTask(txSvc)
       let innerLog = ''
       const { ran } = await helper.run(
         TaskCheckForProofs.taskName,
@@ -77,17 +77,17 @@ export class TaskCheckForProofs extends WalletMonitorTask {
       if (!ran) {
         // Re-arm checkNow so the next tick retries once the lease is free.
         TaskCheckForProofs.checkNow = true
-        return '[V7LeasedTask] proof check skipped — lease held by another instance\n'
+        return '[LeasedMonitorTask] proof check skipped — lease held by another instance\n'
       }
       return innerLog
     }
 
-    // No V7 service (pre-cutover / IDB) — run without lease guard.
+    // No the transaction service (pre-cutover / IDB) — run without lease guard.
     log = await this._runProofLoop(maxAcceptableHeight, countsAsAttempt)
     return log
   }
 
-  /** Inner loop extracted so it can be called with or without a V7 lease. */
+  /** Inner loop extracted so it can be called with or without a monitor_lease. */
   private async _runProofLoop (maxAcceptableHeight: number, countsAsAttempt: boolean): Promise<string> {
     let log = ''
     const limit = 100
@@ -268,30 +268,30 @@ export async function getProofs (
       req.provenTxId = r.provenTxId
       req.notified = true
 
-      // V7 hook: if a V7 service is available, record the proof in the V7
-      // transactions table. This is additive — the legacy proven_txs row
+      // transaction-service hook: if the transaction service is available, record the proof in the
+      // new transactions table. This is additive — the legacy proven_txs row
       // written by updateProvenTxReqWithNewProvenTx above is preserved.
-      // We gate on getV7Service() != null to skip pre-cutover / IDB storage.
+      // We gate on getTransactionService() != null to skip pre-cutover / IDB storage.
       await task.storage.runAsStorageProvider(async sp => {
-        const v7svc = sp.getV7Service()
-        if (v7svc == null) return
+        const txSvc = sp.getTransactionService()
+        if (txSvc == null) return
         try {
-          const v7tx = await v7svc.findByTxid(txid)
-          if (v7tx != null) {
-            await v7svc.recordProof({
-              transactionId: v7tx.transactionId,
+          const newTx = await txSvc.findByTxid(txid)
+          if (newTx != null) {
+            await txSvc.recordProof({
+              transactionId: newTx.transactionId,
               height,
               merkleIndex: index,
               merklePath,
               merkleRoot,
               blockHash,
-              expectedFrom: v7tx.processing
+              expectedFrom: newTx.processing
             })
           }
-        } catch (v7err: unknown) {
-          // V7 recordProof is additive — never disrupt the legacy proof path.
-          const msg = v7err instanceof Error ? v7err.message : String(v7err)
-          console.log(`[TaskCheckForProofs] V7 recordProof skipped for ${txid}: ${msg}`)
+        } catch (txErr: unknown) {
+          // transaction-service recordProof is additive — never disrupt the legacy proof path.
+          const msg = txErr instanceof Error ? txErr.message : String(txErr)
+          console.log(`[TaskCheckForProofs] transaction-service recordProof skipped for ${txid}: ${msg}`)
         }
       })
 

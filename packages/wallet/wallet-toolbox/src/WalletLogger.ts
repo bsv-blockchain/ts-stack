@@ -3,10 +3,10 @@ import { Beef, CreateActionArgs, WalletLoggerInterface, WalletLoggerLog } from '
 import { WalletError } from './sdk/WalletError'
 
 export class WalletLogger implements WalletLoggerInterface {
-  indent: number = 0
+  indent = 0
   logs: WalletLoggerLog[] = []
-  isOrigin: boolean = true
-  isError: boolean = false
+  isOrigin = true
+  isError = false
   level?: WalletLoggerLevel
   flushFormat?: 'json'
 

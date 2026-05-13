@@ -37,7 +37,7 @@ export class MonitorDaemon {
   setup?: MonitorDaemonSetup
   doneListening?: Promise<void>
   doneTasks?: Promise<void>
-  stopDaemon: boolean = false
+  stopDaemon = false
 
   constructor (
     public args: MonitorDaemonSetup,

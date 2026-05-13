@@ -37,8 +37,8 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
 
   knex: Knex
   _dbtype?: DBType
-  bulkFilesTableName: string = 'bulk_files'
-  headerTableName: string = 'live_headers'
+  bulkFilesTableName = 'bulk_files'
+  headerTableName = 'live_headers'
 
   constructor (options: ChaintracksStorageKnexOptions) {
     super(options)

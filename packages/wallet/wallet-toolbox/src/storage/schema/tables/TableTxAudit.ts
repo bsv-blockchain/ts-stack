@@ -1,7 +1,7 @@
 import * as sdk from '../../../sdk'
 
 /**
- * V7 per-event audit log for transactions and actions.
+ * per-event audit log for transactions and actions.
  *
  * Each row records a single observable event scoped to either a transaction
  * (per-txid) or an action (per-user) or both. Append-only.

@@ -1,12 +1,12 @@
 /**
- * listActionsKnex.ts — V7 post-cutover rewrite
+ * listActionsKnex.ts — post-cutover rewrite
  *
  * ## Post-cutover layout changes
  *
- * After `runV7Cutover`, the schema splits the old monolithic `transactions`
+ * After `runSchemaCutover`, the schema splits the old monolithic `transactions`
  * table into two tables:
  *
- *   - `transactions` (V7): per-txid on-chain state.
+ *   - `transactions` (new-schema): per-txid on-chain state.
  *     Columns: transactionId, txid, processing, processingChangedAt, rawTx, …
  *     Notable ABSENCES: userId, status, satoshis, description, isOutgoing,
  *                        version, lockTime, reference — all gone from this table.
@@ -15,15 +15,15 @@
  *     Columns: actionId, userId, transactionId (FK→transactions), reference,
  *              description, isOutgoing, satoshis_delta, …
  *
- * ## `version` and `lockTime` — V7 gap (option b: return undefined)
+ * ## `version` and `lockTime` — schema gap (option b: return undefined)
  *
  * The legacy `transactions` table stored `version` and `lockTime` as columns.
- * V7 does not persist them — they are derivable by parsing `transactions.rawTx`
+ * The new schema does not persist them — they are derivable by parsing `transactions.rawTx`
  * but we do NOT do that here to avoid unnecessary deserialization overhead on
  * every list call.
  *
- * Decision: return `version: undefined, lockTime: undefined` for all V7 rows.
- * Callers that need the exact values can fetch `rawTx` from the V7 transaction
+ * Decision: return `version: undefined, lockTime: undefined` for all new schema rows.
+ * Callers that need the exact values can fetch `rawTx` from the new transaction
  * and parse it with `BsvTransaction.fromBinary(rawTx)`.
  *
  * This can be backfilled later by adding `version` and `lockTime` as optional
@@ -35,17 +35,17 @@
  * (NOT `transactions.transactionId`). The label-enrichment helper
  * `storage.getLabelsForTransactionId(id)` queries
  * `tx_labels_map.transactionId = id`, so after cutover we must pass `actionId`
- * to it — NOT the V7 `transactions.transactionId`. The helper's name is
+ * to it — NOT the new-schema `transactions.transactionId`. The helper's name is
  * intentionally left unchanged (renaming blast radius too large); callers
  * must pass the correct keyspace value.
  *
  * ## `transactionId` field in the internal row shape
  *
  * The `enrichActionOutputs` and `enrichActionInputs` helpers query the
- * `outputs` table via `outputs.transactionId`, which is a FK to the V7
+ * `outputs` table via `outputs.transactionId`, which is a FK to the new
  * `transactions.transactionId` (not `actionId`). We therefore carry BOTH ids:
- *   - `v7ActionRow.transactionId` → V7 `transactions.transactionId` (for outputs/inputs)
- *   - `v7ActionRow.actionId`      → `actions.actionId` (for labels)
+ *   - `newActionRow.transactionId` → new `transactions.transactionId` (for outputs/inputs)
+ *   - `newActionRow.actionId`      → `actions.actionId` (for labels)
  */
 
 import {
@@ -65,18 +65,18 @@ import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 import { ProcessingStatus, TransactionStatus, transactionStatusToProcessing } from '../../sdk/types'
-import { V7TransactionService } from '../schema/v7Service'
+import { TransactionService } from '../schema/transactionService'
 
 /**
- * Internal row shape combining V7 `actions` + `transactions` data.
+ * Internal row shape combining new `actions` + `transactions` data.
  *
- * `transactionId` = V7 `transactions.transactionId` — used to locate outputs
+ * `transactionId` = `transactions.transactionId` — used to locate outputs
  *                   and inputs (both tables FK to this).
  * `actionId`      = `actions.actionId` — used to locate labels
  *                   (tx_labels_map.transactionId = actionId post-cutover).
  */
-interface V7ActionRow {
-  /** V7 transactions.transactionId — FK target for outputs/inputs */
+interface NewActionRow {
+  /** new transactions.transactionId — FK target for outputs/inputs */
   transactionId: number
   /** actions.actionId — FK target for tx_labels_map post-cutover */
   actionId: number
@@ -90,23 +90,23 @@ interface V7ActionRow {
   description: string
   created_at: Date
   /**
-   * V7 gap: version is not stored. Returns undefined.
+   * schema gap: version is not stored. Returns undefined.
    * Backfill by parsing transactions.rawTx if needed.
    */
   version: undefined
   /**
-   * V7 gap: lockTime is not stored. Returns undefined.
+   * schema gap: lockTime is not stored. Returns undefined.
    * Backfill by parsing transactions.rawTx if needed.
    */
   lockTime: undefined
 }
 
 /**
- * Maps a V7 `ProcessingStatus` back to the legacy `TransactionStatus` for
+ * Maps a `ProcessingStatus` back to the legacy `TransactionStatus` for
  * return-shape compatibility. This is the inverse of
  * `transactionStatusToProcessing`.
  *
- * The mapping is best-effort: V7 has more granular states than the legacy API
+ * The mapping is best-effort: the new schema has more granular states than the legacy API
  * exposes. States that have no direct legacy equivalent are mapped to the
  * nearest semantic equivalent.
  */
@@ -131,10 +131,10 @@ function processingToTransactionStatus (p: ProcessingStatus): TransactionStatus 
 
 /**
  * Maps the legacy `TransactionStatus[]` filter (as produced by
- * `ListActionsSpecOp.setStatusFilter`) to V7 `ProcessingStatus[]`.
+ * `ListActionsSpecOp.setStatusFilter`) to `ProcessingStatus[]`.
  *
- * The legacy "completed" → "proven"; "unproven" → several V7 states.
- * We expand each legacy status into the full set of V7 states it covers so
+ * The legacy "completed" → "proven"; "unproven" → several processing states.
+ * We expand each legacy status into the full set of processing states it covers so
  * that the query returns the same semantic set as the legacy query would have.
  */
 function legacyStatiToProcessing (stati: string[]): ProcessingStatus[] {
@@ -142,7 +142,7 @@ function legacyStatiToProcessing (stati: string[]): ProcessingStatus[] {
   for (const s of stati as TransactionStatus[]) {
     const p = transactionStatusToProcessing(s)
     result.add(p)
-    // `unproven` covered several V7 transitional states in the old model
+    // `unproven` covered several transitional states in the old model
     if (s === 'unproven') {
       result.add('sent')
       result.add('seen')
@@ -168,13 +168,13 @@ function legacyStatiToProcessing (stati: string[]): ProcessingStatus[] {
 
 async function enrichActionLabels (
   storage: StorageKnex,
-  row: V7ActionRow,
+  row: NewActionRow,
   action: WalletAction,
   timeFilterRequested: boolean
 ): Promise<void> {
   // Post-cutover: tx_labels_map.transactionId = actions.actionId.
   // We therefore pass row.actionId to getLabelsForTransactionId.
-  // The function name is misleading in V7 context — it actually looks up
+  // The function name is misleading in new-schema context — it actually looks up
   // by tx_labels_map.transactionId which is now the actionId keyspace.
   action.labels = (await storage.getLabelsForTransactionId(row.actionId)).map(l => l.label)
   if (timeFilterRequested) {
@@ -188,11 +188,11 @@ async function enrichActionLabels (
 
 async function enrichActionOutputs (
   storage: StorageKnex,
-  row: V7ActionRow,
+  row: NewActionRow,
   action: WalletAction,
   includeOutputLockingScripts: boolean
 ): Promise<void> {
-  // outputs.transactionId FKs transactions.transactionId (V7) — use row.transactionId
+  // outputs.transactionId FKs transactions.transactionId (new-schema) — use row.transactionId
   const outputs: TableOutputX[] = await storage.findOutputs({
     partial: { transactionId: row.transactionId },
     noScript: !includeOutputLockingScripts
@@ -215,12 +215,12 @@ async function enrichActionOutputs (
 
 async function enrichActionInputs (
   storage: StorageKnex,
-  row: V7ActionRow,
+  row: NewActionRow,
   action: WalletAction,
   includeSourceLockingScripts: boolean,
   includeUnlockingScripts: boolean
 ): Promise<void> {
-  // outputs.spentBy FKs transactions.transactionId (V7) — use row.transactionId
+  // outputs.spentBy FKs transactions.transactionId (new-schema) — use row.transactionId
   const inputs: TableOutputX[] = await storage.findOutputs({
     partial: { spentBy: row.transactionId },
     noScript: !includeSourceLockingScripts
@@ -254,7 +254,7 @@ export async function listActions (
   const offset = vargs.offset
 
   const k = storage.toDb(undefined)
-  // V7TransactionService takes a Knex instance (not a QueryBuilder).
+  // TransactionService takes a Knex instance (not a QueryBuilder).
   // StorageKnex.knex is the raw Knex handle; storage.toDb() returns a
   // QueryBuilder handle. We use storage.knex here.
   const svcKnex = storage.knex
@@ -304,11 +304,11 @@ export async function listActions (
     ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
     : specOp.setStatusFilter()
 
-  // Map legacy TransactionStatus → V7 ProcessingStatus for the WHERE clause
+  // Map legacy TransactionStatus → ProcessingStatus for the WHERE clause
   const processingFilter: ProcessingStatus[] = legacyStatiToProcessing(legacyStati)
 
-  // Use V7TransactionService to execute the actions query with post-cutover layout
-  const svc = new V7TransactionService(svcKnex)
+  // Use TransactionService to execute the actions query with post-cutover layout
+  const svc = new TransactionService(svcKnex)
   const { rows: svcRows, total: svcTotal } = await svc.listActionsForUser({
     userId: auth.userId!,
     statusFilter: processingFilter.length > 0 ? processingFilter : undefined,
@@ -320,22 +320,22 @@ export async function listActions (
     offset
   })
 
-  // Convert V7 service rows into the internal V7ActionRow shape.
-  // NOTE: In this shape `transactionId` = V7 transactions.transactionId (for
+  // Convert the transaction service rows into the internal NewActionRow shape.
+  // NOTE: In this shape `transactionId` = new transactions.transactionId (for
   // outputs/inputs), and `actionId` = actions.actionId (for labels).
-  const txs: V7ActionRow[] = svcRows.map(row => ({
+  const txs: NewActionRow[] = svcRows.map(row => ({
     transactionId: row.transactionId,
     actionId: row.actionId,
     txid: row.txid,
     reference: row.reference,
     // satoshis_delta from actions maps to legacy `satoshis`
     satoshis: row.satoshisDelta,
-    // Map V7 ProcessingStatus back to legacy ActionStatus for return compat
+    // Map ProcessingStatus back to legacy ActionStatus for return compat
     status: processingToTransactionStatus(row.processing),
     isOutgoing: row.isOutgoing,
     description: row.description,
     created_at: row.created_at,
-    // V7 gap: version and lockTime are not stored in V7.
+    // schema gap: version and lockTime are not stored in the new schema.
     // Return undefined. Backfill later by parsing transactions.rawTx if needed.
     version: undefined,
     lockTime: undefined
@@ -346,7 +346,7 @@ export async function listActions (
   // are populated correctly for the two existing specOps (noSendActions /
   // failedActions) which only read tx.status, tx.reference, tx.transactionId.
   if ((specOp?.postProcess) != null) {
-    // Cast: the specOp contract only accesses fields present on V7ActionRow
+    // Cast: the specOp contract only accesses fields present on NewActionRow
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs as any)
   }
 
@@ -364,7 +364,7 @@ export async function listActions (
       status: tx.status! as ActionStatus,
       isOutgoing: !!tx.isOutgoing,
       description: tx.description || '',
-      // V7 gap: version and lockTime are not stored. See file header comment.
+      // schema gap: version and lockTime are not stored. See file header comment.
       version: undefined as unknown as number,
       lockTime: undefined as unknown as number
     })

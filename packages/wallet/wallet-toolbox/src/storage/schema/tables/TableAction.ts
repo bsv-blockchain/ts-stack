@@ -1,11 +1,11 @@
 import * as sdk from '../../../sdk'
 
 /**
- * V7 per-user view of a transaction.
+ * per-user view of a transaction.
  *
  * Migrated from the legacy `transactions` table. Holds everything that is truly
  * per-user (description, labels via tx_labels_map -> actionId, soft-delete flags,
- * notification subscribers). All on-chain status lives in the V7 `transactions`
+ * notification subscribers). All on-chain status lives in the new `transactions`
  * table addressed by `transactionId`.
  *
  * UNIQUE(userId, transactionId).
@@ -16,7 +16,7 @@ export interface TableAction extends sdk.EntityTimeStamp {
   /** PK */
   actionId: number
   userId: number
-  /** FK -> V7 transactions.transactionId (per-txid record) */
+  /** FK -> new transactions.transactionId (per-txid record) */
   transactionId: number
   /** Application reference, hex/Base64, max 64 chars */
   reference: string

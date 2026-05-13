@@ -92,7 +92,7 @@ export type TransactionStatus =
   | 'unfail'
 
 /**
- * V7 granular FSM for the per-txid `transactions` table.
+ * new granular processing FSM for the per-txid `transactions` table.
  *
  * - queued: created locally, not yet attempted on the network
  * - sending: at least one broadcast attempt in flight
@@ -136,7 +136,7 @@ export const ProcessingSpendableStatus: ProcessingStatus[] = [
 ]
 
 /**
- * Maps a legacy `ProvenTxReqStatus` to the V7 `ProcessingStatus`.
+ * Maps a legacy `ProvenTxReqStatus` to the new-schema `ProcessingStatus`.
  * Used by the additive backfill — does not mutate the source row.
  */
 export function provenTxReqStatusToProcessing (s: ProvenTxReqStatus): ProcessingStatus {
@@ -158,7 +158,7 @@ export function provenTxReqStatusToProcessing (s: ProvenTxReqStatus): Processing
 }
 
 /**
- * Maps a legacy per-user `TransactionStatus` to the V7 `ProcessingStatus`.
+ * Maps a legacy per-user `TransactionStatus` to the new-schema `ProcessingStatus`.
  * Used when there is no `proven_tx_reqs` row to consult (locally-created actions
  * that never reached the broadcast queue).
  */

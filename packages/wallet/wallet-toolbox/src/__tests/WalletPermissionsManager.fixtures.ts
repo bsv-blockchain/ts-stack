@@ -29,7 +29,7 @@ if (!existingFetch || !(existingFetch)._isMockFunction) {
 export class MockTransaction {
   public inputs: any[] = [{}]
   public outputs: any[] = []
-  public fee: number = 0
+  public fee = 0
 
   static fromAtomicBEEF () {
     // Mocked below

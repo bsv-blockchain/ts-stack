@@ -41,7 +41,7 @@ export async function reviewStatus (
 
   const k = storage.toDb(args.trx)
 
-  // Post-V7-cutover: `proven_txs` → `proven_txs_legacy`, `proven_tx_reqs` →
+  // Post-cutover: `proven_txs` → `proven_txs_legacy`, `proven_tx_reqs` →
   // `proven_tx_reqs_legacy`, and `transactions` (legacy-shaped with `status`
   // column) → `transactions_legacy`.  Pre-cutover: the original table names.
   const txTable = await storage.provenTxsTableName()    // proven_txs or proven_txs_legacy

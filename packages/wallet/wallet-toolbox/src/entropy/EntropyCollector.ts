@@ -48,7 +48,7 @@ export class EntropyCollector {
     timingDeltas: []
   }
 
-  private lastSampleTime: number = 0
+  private lastSampleTime = 0
 
   constructor (config: EntropyCollectorConfig = {}) {
     this.config = {

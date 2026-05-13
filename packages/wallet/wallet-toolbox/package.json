@@ -28,8 +28,8 @@
     "test": "npm run build && jest --testPathIgnorePatterns=man.test.ts",
     "test:watch": "npm run build && jest --testPathIgnorePatterns=man.test.ts --watch",
     "test:coverage": "npm run build && jest --testPathIgnorePatterns=man.test.ts --coverage",
-    "lint": "ts-standard --fix src/**/*.ts",
-    "lint:ci": "ts-standard src/**/*.ts",
+    "lint": "eslint --fix 'src/**/*.ts'",
+    "lint:ci": "eslint 'src/**/*.ts'",
     "build": "tsc --build",
     "prepublish": "npm run lint && npm run build && npm run doc && npm run sync-versions",
     "doc": "ts2md",
@@ -70,6 +70,9 @@
     "ts-node": "^10.9.1",
     "ts-standard": "^12.0.0",
     "ts2md": "^0.2.8",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^5.62.0",
+    "@typescript-eslint/parser": "^5.62.0"
   }
 }

@@ -159,15 +159,15 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * including those that do not require signature and those that were also contained
    * in the inputBEEF.
    */
-  includeAllSourceTransactions: boolean = true
+  includeAllSourceTransactions = true
   /**
    * If true, txids that are known to the wallet's party beef do not need to be returned from storage.
    */
-  autoKnownTxids: boolean = false
+  autoKnownTxids = false
   /**
    * If true, beefs returned to the user may contain txidOnly transactions.
    */
-  returnTxidOnly: boolean = false
+  returnTxidOnly = false
   trustSelf?: TrustSelf
   userParty: string
   proto: ProtoWallet
@@ -1004,7 +1004,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * @param {string} basket - Optional. Defaults to 'default', the wallet change basket.
    * @returns {WalletBalance} total sum of output satoshis and utxo details (satoshis and outpoints)
    */
-  async balanceAndUtxos (basket: string = 'default'): Promise<WalletBalance> {
+  async balanceAndUtxos (basket = 'default'): Promise<WalletBalance> {
     const r: WalletBalance = { total: 0, utxos: [] }
     let offset = 0
     for (;;) {

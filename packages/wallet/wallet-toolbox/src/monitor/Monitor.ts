@@ -125,7 +125,7 @@ export class Monitor {
 
   /**
    * Stable identifier for this Monitor instance, used as the `ownerId` when
-   * acquiring V7 monitor_lease rows. Generated once at construction time via
+   * acquiring monitor_lease rows. Generated once at construction time via
    * 8 cryptographically random bytes (16 hex chars). Callers may override this
    * after construction if a deterministic / persisted id is preferred.
    */
@@ -382,7 +382,7 @@ export class Monitor {
     }
   }
 
-  _runAsyncSetup: boolean = true
+  _runAsyncSetup = true
   _tasksRunningPromise?: PromiseLike<void>
   resolveCompletion: ((value: void | PromiseLike<void>) => void) | undefined = undefined
 

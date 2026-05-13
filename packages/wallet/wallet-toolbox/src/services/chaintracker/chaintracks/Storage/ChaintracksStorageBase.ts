@@ -42,8 +42,8 @@ export abstract class ChaintracksStorageBase implements ChaintracksStorageQueryA
   bulkMigrationChunkSize: number
   batchInsertLimit: number
 
-  isAvailable: boolean = false
-  hasMigrated: boolean = false
+  isAvailable = false
+  hasMigrated = false
   bulkManager: BulkFileDataManager
 
   constructor (options: ChaintracksStorageBaseOptions) {

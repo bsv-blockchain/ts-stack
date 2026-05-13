@@ -13,7 +13,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
   static readonly taskName = 'SendWaiting'
 
   lastSendingRunMsecsSinceEpoch: number | undefined
-  includeSending: boolean = true
+  includeSending = true
   triggerNextMsecs: number
 
   /**

@@ -85,7 +85,7 @@ const mockUMPTokenInteractor: UMPTokenInteractor = {
 /**
  * A mock "recoveryKeySaver" that claims it always saved the key successfully.
  */
-const mockRecoveryKeySaver = jest.fn(async (key: number[]) => true as true)
+const mockRecoveryKeySaver = jest.fn(async (key: number[]) => true as const)
 
 /**
  * A mock "passwordRetriever" that we can customize to return a specific password

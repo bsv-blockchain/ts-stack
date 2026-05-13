@@ -3,8 +3,8 @@
  * Allows multiple readers or one writer at a time.
  */
 export class SingleWriterMultiReaderLock {
-  private readers: number = 0
-  private writerActive: boolean = false
+  private readers = 0
+  private writerActive = false
   private readonly readerQueue: Array<() => void> = []
   private readonly writerQueue: Array<() => void> = []
 

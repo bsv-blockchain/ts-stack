@@ -22,11 +22,11 @@ import { blockHash } from '../../services/chaintracker/chaintracks/util/blockHea
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 
 /**
- * Swallow a V7 wiring error that is due to the database not yet being on the
- * V7 schema (pre-cutover test databases, StorageIdb, etc.).
+ * Swallow a new-schema wiring error that is due to the database not yet being on the
+ * the new schema (pre-cutover test databases, StorageIdb, etc.).
  * Re-throws any other error so callers see real failures.
  */
-function isV7PreCutoverError (err: unknown): boolean {
+function isPreCutoverError (err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return (
     msg.includes('no such table') ||
@@ -119,13 +119,13 @@ class InternalizeActionContext {
   userId: number
   vargs: Validation.ValidInternalizeActionArgs
   /**
-   * V7 actionId set when the V7 `actions` row is found or created during
+   * new actionId set when the new-schema `actions` row is found or created during
    * `findOrInsertTargetTransaction`. Used afterwards to call
    * `updateActionSatoshisDelta` in the merge-update path.
    *
-   * Undefined when V7 service is unavailable (StorageIdb, pre-cutover DBs).
+   * Undefined when the transaction service is unavailable (StorageIdb, pre-cutover DBs).
    */
-  v7ActionId?: number
+  newActionId?: number
 
   constructor (
     public storage: StorageProvider,
@@ -222,21 +222,21 @@ class InternalizeActionContext {
     )
     this.baskets = {}
 
-    // V7 wiring — call site 1: findTransactions → findActionByUserTxid
-    // On post-cutover DBs `transactions` is the V7 table (no `status` column).
-    // Try the V7 service first; fall back to the legacy `findTransactions` path
+    // new-schema wiring — call site 1: findTransactions → findActionByUserTxid
+    // On post-cutover DBs `transactions` is the new transactions table (no `status` column).
+    // Try the the transaction service first; fall back to the legacy `findTransactions` path
     // when the service is unavailable or the DB is pre-cutover.
-    // TODO(V7-wiring): remove legacy fallback once all DBs are post-cutover.
-    const v7svcSetup = this.storage.getV7Service()
-    let v7ExistingAction: { actionId: number, satoshisDelta: number } | undefined
-    if (v7svcSetup != null) {
+    // TODO(post-cutover): remove legacy fallback once all DBs are post-cutover.
+    const txSvcSetup = this.storage.getTransactionService()
+    let existingNewAction: { actionId: number, satoshisDelta: number } | undefined
+    if (txSvcSetup != null) {
       try {
-        const found = await v7svcSetup.findActionByUserTxid(this.userId, this.txid)
+        const found = await txSvcSetup.findActionByUserTxid(this.userId, this.txid)
         if (found != null) {
-          v7ExistingAction = { actionId: found.action.actionId, satoshisDelta: found.action.satoshisDelta }
+          existingNewAction = { actionId: found.action.actionId, satoshisDelta: found.action.satoshisDelta }
           // Synthesise a minimal legacy TableTransaction so the rest of the context
           // can check isMerge without touching the (absent) legacy columns.
-          // status is mapped from V7 processing so the status guard below works.
+          // status is mapped from processing so the status guard below works.
           const legacyStatus: TransactionStatus =
             found.transaction.processing === 'proven' ? 'completed'
             : found.transaction.processing === 'nosend' ? 'nosend'
@@ -259,15 +259,15 @@ class InternalizeActionContext {
             updated_at: found.action.updated_at
           } as unknown as TableTransaction
         }
-      } catch (v7err) {
-        if (!isV7PreCutoverError(v7err)) throw v7err
+      } catch (txErr) {
+        if (!isPreCutoverError(txErr)) throw txErr
         // Pre-cutover: fall through to legacy findTransactions below
       }
     }
 
     if (this.etx == null) {
       // Legacy fallback — works on pre-cutover DBs and StorageIdb.
-      // TODO(V7-wiring): remove once all DBs are post-cutover.
+      // TODO(post-cutover): remove once all DBs are post-cutover.
       this.etx = verifyOneOrNone(
         await this.storage.findTransactions({
           partial: { userId: this.userId, txid: this.txid }
@@ -282,7 +282,7 @@ class InternalizeActionContext {
       )
     }
     this.isMerge = this.etx != null
-    if (v7ExistingAction != null) this.v7ActionId = v7ExistingAction.actionId
+    if (existingNewAction != null) this.newActionId = existingNewAction.actionId
 
     if (this.isMerge) {
       this.eos = await this.storage.findOutputs({
@@ -384,15 +384,15 @@ class InternalizeActionContext {
       rawTx: undefined
     }
 
-    // V7 wiring — call site 2a: findOrInsertTransaction → findOrCreateActionForTxid
-    // Do the V7 write FIRST (so V7 state is authoritative) then fall through to
+    // new-schema wiring — call site 2a: findOrInsertTransaction → findOrCreateActionForTxid
+    // Do the new-schema write FIRST (so processing state is authoritative) then fall through to
     // legacy write for backward compat with code paths still reading legacy tables.
-    // TODO(V7-wiring): remove legacy write once all read paths use V7 tables.
-    const v7svc = this.storage.getV7Service()
-    if (v7svc != null) {
+    // TODO(post-cutover): remove legacy write once all read paths use new transactions tables.
+    const txSvc = this.storage.getTransactionService()
+    if (txSvc != null) {
       try {
         const processing = (provenTx != null) ? 'proven' as const : 'queued' as const
-        const { action, isNew: v7IsNew } = await v7svc.findOrCreateActionForTxid({
+        const { action, isNew: isNewTx } = await txSvc.findOrCreateActionForTxid({
           userId: this.userId,
           txid: this.txid,
           isOutgoing: false,
@@ -402,22 +402,22 @@ class InternalizeActionContext {
           processing,
           now
         })
-        this.v7ActionId = action.actionId
+        this.newActionId = action.actionId
 
-        if (!v7IsNew) {
-          // Merge path: V7 row already exists — update satoshisDelta to reflect
+        if (!isNewTx) {
+          // Merge path: new schema row already exists — update satoshisDelta to reflect
           // the additional satoshis being added by this internalize call.
-          // V7 wiring — call site 2b: updateTransaction(satoshis) → updateActionSatoshisDelta
-          // TODO(V7-wiring): remove legacy updateTransaction once read paths use V7.
-          await v7svc.updateActionSatoshisDelta(action.actionId, action.satoshisDelta + satoshis, now)
+          // new-schema wiring — call site 2b: updateTransaction(satoshis) → updateActionSatoshisDelta
+          // TODO(post-cutover): remove legacy updateTransaction once read paths use new-schema.
+          await txSvc.updateActionSatoshisDelta(action.actionId, action.satoshisDelta + satoshis, now)
         }
-      } catch (v7err) {
-        if (!isV7PreCutoverError(v7err)) throw v7err
+      } catch (txErr) {
+        if (!isPreCutoverError(txErr)) throw txErr
         // Pre-cutover: continue with legacy path only
       }
     }
 
-    // Legacy write path — TODO(V7-wiring): remove once all read paths use V7 tables.
+    // Legacy write path — TODO(post-cutover): remove once all read paths use new transactions tables.
     const tr = await this.storage.findOrInsertTransaction(newTx)
     if (!tr.isNew) {
       if (!this.isMerge)
@@ -428,7 +428,7 @@ class InternalizeActionContext {
         update.provenTxId = provenTxId
         update.status = status
       }
-      // TODO(V7-wiring): updateTransaction targets legacy table post-cutover.
+      // TODO(post-cutover): updateTransaction targets legacy table post-cutover.
       await this.storage.updateTransaction(tr.tx.transactionId, update)
     }
     return tr.tx
@@ -480,17 +480,17 @@ class InternalizeActionContext {
       }
       const hash = blockHash(header)
 
-      // V7 wiring — call site 3: findOrInsertProvenTx (bump present) → createWithProof
-      // Creates the V7 transactions row directly in `proven` state with all proof
+      // new-schema wiring — call site 3: findOrInsertProvenTx (bump present) → createWithProof
+      // Creates the new transactions row directly in `proven` state with all proof
       // columns populated. If the row already exists (race / merge), use recordProof.
-      // Do V7 write FIRST; legacy write follows for backward compat.
-      // TODO(V7-wiring): remove legacy findOrInsertProvenTx once all read paths use V7.
-      const v7svcBump = this.storage.getV7Service()
-      if (v7svcBump != null) {
+      // Do new-schema write FIRST; legacy write follows for backward compat.
+      // TODO(post-cutover): remove legacy findOrInsertProvenTx once all read paths use new-schema.
+      const txSvcBump = this.storage.getTransactionService()
+      if (txSvcBump != null) {
         try {
-          const existingV7Tx = await v7svcBump.findByTxid(this.txid)
-          if (existingV7Tx == null) {
-            await v7svcBump.createWithProof({
+          const existingNewTx = await txSvcBump.findByTxid(this.txid)
+          if (existingNewTx == null) {
+            await txSvcBump.createWithProof({
               txid: this.txid,
               rawTx: Array.from(btx.rawTx!),
               inputBeef: Array.from(this.ab.toBinary()),
@@ -502,25 +502,25 @@ class InternalizeActionContext {
               now
             })
           } else {
-            // V7 row exists — record the proof (transitions to proven if not already).
-            await v7svcBump.recordProof({
-              transactionId: existingV7Tx.transactionId,
+            // new schema row exists — record the proof (transitions to proven if not already).
+            await txSvcBump.recordProof({
+              transactionId: existingNewTx.transactionId,
               height: bump.blockHeight,
               merkleIndex: index,
               merklePath: bump.toBinary(),
               merkleRoot,
               blockHash: hash,
-              expectedFrom: existingV7Tx.processing,
+              expectedFrom: existingNewTx.processing,
               now
             })
           }
-        } catch (v7err) {
-          if (!isV7PreCutoverError(v7err)) throw v7err
+        } catch (txErr) {
+          if (!isPreCutoverError(txErr)) throw txErr
           // Pre-cutover: continue with legacy path only
         }
       }
 
-      // Legacy write path — TODO(V7-wiring): remove once all read paths use V7 tables.
+      // Legacy write path — TODO(post-cutover): remove once all read paths use new transactions tables.
       const provenTxR = await this.storage.findOrInsertProvenTx({
         created_at: now,
         updated_at: now,
@@ -548,26 +548,26 @@ class InternalizeActionContext {
       // Attempt to create a provenTxReq record for the txid to obtain a proof,
       // while allowing for possible race conditions...
 
-      // V7 wiring — call site 4: getProvenOrReq (bump absent) → findOrCreateForBroadcast
-      // Ensures a V7 transactions row in `queued` state exists for the broadcast queue.
-      // Do V7 write FIRST; legacy getProvenOrReq follows for backward compat.
-      // TODO(V7-wiring): remove legacy getProvenOrReq once all read paths use V7 tables.
-      const v7svcReq = this.storage.getV7Service()
-      if (v7svcReq != null) {
+      // new-schema wiring — call site 4: getProvenOrReq (bump absent) → findOrCreateForBroadcast
+      // Ensures a new transactions row in `queued` state exists for the broadcast queue.
+      // Do new-schema write FIRST; legacy getProvenOrReq follows for backward compat.
+      // TODO(post-cutover): remove legacy getProvenOrReq once all read paths use new transactions tables.
+      const txSvcReq = this.storage.getTransactionService()
+      if (txSvcReq != null) {
         try {
-          await v7svcReq.findOrCreateForBroadcast({
+          await txSvcReq.findOrCreateForBroadcast({
             txid: this.txid,
             rawTx: Array.from(this.tx.toBinary()),
             inputBeef: Array.from(this.ab.toBinary()),
             processing: 'queued'
           })
-        } catch (v7err) {
-          if (!isV7PreCutoverError(v7err)) throw v7err
+        } catch (txErr) {
+          if (!isPreCutoverError(txErr)) throw txErr
           // Pre-cutover: continue with legacy path only
         }
       }
 
-      // Legacy write path — TODO(V7-wiring): remove once all read paths use V7 tables.
+      // Legacy write path — TODO(post-cutover): remove once all read paths use new transactions tables.
       const newReq = EntityProvenTxReq.fromTxid(this.txid, this.tx.toBinary(), Utils.toArray(this.args.tx))
       newReq.status = 'unsent'
       // this history and notify will be merged into an existing req if it exists.
@@ -610,11 +610,11 @@ class InternalizeActionContext {
   }
 
   async addLabels (transactionId: number) {
-    // V7 wiring — label map key: post-cutover `tx_labels_map.transactionId` = actions.actionId.
-    // Use v7ActionId if the V7 row was created (set by findOrInsertTargetTransaction or
+    // new-schema wiring — label map key: post-cutover `tx_labels_map.transactionId` = actions.actionId.
+    // Use newActionId if the new schema row was created (set by findOrInsertTargetTransaction or
     // asyncSetup).  Fall back to the legacy transactionId for pre-cutover / StorageIdb.
-    // TODO(V7-wiring): remove fallback once all DBs are post-cutover.
-    const labelTransactionId = this.v7ActionId ?? transactionId
+    // TODO(post-cutover): remove fallback once all DBs are post-cutover.
+    const labelTransactionId = this.newActionId ?? transactionId
     for (const label of this.vargs.labels) {
       const txLabel = await this.storage.findOrInsertTxLabel(this.userId, label)
       await this.storage.findOrInsertTxLabelMap(verifyId(labelTransactionId), verifyId(txLabel.txLabelId))

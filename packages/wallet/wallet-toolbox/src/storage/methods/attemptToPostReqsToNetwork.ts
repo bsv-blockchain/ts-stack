@@ -4,23 +4,23 @@ import { EntityProvenTxReq } from '../schema/entities'
 import * as sdk from '../../sdk'
 import { ReqHistoryNote } from '../../sdk'
 import { wait } from '../../utility/utilityHelpers'
-import { V7TransactionService } from '../schema/v7Service'
+import { TransactionService } from '../schema/transactionService'
 
 // ---------------------------------------------------------------------------
-// V7 wiring helpers
+// new-schema wiring helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the V7 `transactionId` for a given txid.
+ * Resolve the new-schema `transactionId` for a given txid.
  *
  * Returns `undefined` when:
  *  - `service` is undefined (pre-cutover / IDB path)
- *  - The txid is not yet in the V7 `transactions` table (bridge period)
+ *  - The txid is not yet in the new `transactions` table (bridge period)
  *  - Any unexpected error (we swallow and return undefined to avoid
  *    disrupting the legacy broadcast path)
  */
-async function resolveV7Id (
-  service: V7TransactionService | undefined,
+async function resolveTransactionId (
+  service: TransactionService | undefined,
   txid: string
 ): Promise<number | undefined> {
   if (service == null) return undefined
@@ -33,7 +33,7 @@ async function resolveV7Id (
 }
 
 /**
- * Map the aggregate broadcast outcome to the V7 `ProcessingStatus` to record.
+ * Map the aggregate broadcast outcome to the new-schema `ProcessingStatus` to record.
  *
  * Mapping:
  *  success   → 'sent'       (broadcast accepted; waiting for on-chain proof)
@@ -41,7 +41,7 @@ async function resolveV7Id (
  *  invalidTx → 'invalid'    (terminal)
  *  serviceError → 'sending' (retry; attempts counter also incremented)
  */
-function aggregateStatusToV7Processing (
+function aggregateStatusToProcessing (
   status: AggregateStatus
 ): sdk.ProcessingStatus {
   switch (status) {
@@ -99,13 +99,13 @@ async function validateReqsAndMergeBeefs (
 
   const vreqs: PostReqsToNetworkDetails[] = []
 
-  // V7 service — undefined on pre-cutover / IDB paths; all V7 calls are gated.
-  const v7svc = storage.getV7Service()
+  // the transaction service — undefined on pre-cutover / IDB paths; all transaction-service calls are gated.
+  const txSvc = storage.getTransactionService()
 
   for (const req of reqs) {
-    // Resolve the V7 transactionId for this req (by txid). Cached per req so
-    // subsequent V7 calls within the same loop body reuse it.
-    const v7TxId = await resolveV7Id(v7svc, req.txid)
+    // Resolve the new transactionId for this req (by txid). Cached per req so
+    // subsequent transaction-service calls within the same loop body reuse it.
+    const newTxId = await resolveTransactionId(txSvc, req.txid)
 
     try {
       const noRawTx = !req.rawTx
@@ -119,11 +119,11 @@ async function validateReqsAndMergeBeefs (
         await req.updateStorageDynamicProperties(storage, trx)
         r.details.push({ txid: req.txid, req, status: 'invalid' })
 
-        // V7 additive: record history note + transition to invalid
-        if (v7TxId != null) {
-          await v7svc!.recordHistoryNote(v7TxId, note)
-          await v7svc!.recordBroadcastResult({
-            transactionId: v7TxId,
+        // new-schema additive: record history note + transition to invalid
+        if (newTxId != null) {
+          await txSvc!.recordHistoryNote(newTxId, note)
+          await txSvc!.recordBroadcastResult({
+            transactionId: newTxId,
             txid: req.txid,
             status: 'invalid',
             provider: 'validateReqsAndMergeBeefs',
@@ -134,10 +134,10 @@ async function validateReqsAndMergeBeefs (
         const vreq: PostReqsToNetworkDetails = { txid: req.txid, req, status: 'unknown' }
         await storage.mergeReqToBeefToShareExternally(req.api, r.beef, [], trx)
 
-        // V7 additive: also merge raw tx / proof bytes from V7 table into the
+        // new-schema additive: also merge raw tx / proof bytes from new transactions table into the
         // shared beef so post-cutover callers get the same merged payload.
-        if (v7TxId != null) {
-          await v7svc!.mergeBeefForTxids(r.beef, [req.txid])
+        if (newTxId != null) {
+          await txSvc!.mergeBeefForTxids(r.beef, [req.txid])
         }
 
         vreqs.push(vreq)
@@ -154,10 +154,10 @@ async function validateReqsAndMergeBeefs (
       }
       await req.updateStorageDynamicProperties(storage, trx)
 
-      // V7 additive: record history note + increment attempts
-      if (v7TxId != null) {
-        await v7svc!.recordHistoryNote(v7TxId, errNote)
-        await v7svc!.incrementAttempts(v7TxId)
+      // new-schema additive: record history note + increment attempts
+      if (newTxId != null) {
+        await txSvc!.recordHistoryNote(newTxId, errNote)
+        await txSvc!.incrementAttempts(newTxId)
       }
     }
   }
@@ -171,15 +171,15 @@ async function transferNotesToReqHistories (
   storage: StorageProvider,
   trx?: sdk.TrxToken
 ): Promise<void> {
-  // V7 service — gated; undefined means legacy-only path.
-  const v7svc = storage.getV7Service()
+  // the transaction service — gated; undefined means legacy-only path.
+  const txSvc = storage.getTransactionService()
 
   for (const txid of txids) {
     const vreq = vreqs.find(r => r.txid === txid)
     if (vreq == null) throw new sdk.WERR_INTERNAL()
 
-    // Resolve V7 transactionId once per txid (cheap SELECT by txid).
-    const v7TxId = await resolveV7Id(v7svc, txid)
+    // Resolve new transactionId once per txid (cheap SELECT by txid).
+    const newTxId = await resolveTransactionId(txSvc, txid)
 
     const notes: sdk.ReqHistoryNote[] = []
     for (const pbr of pbrs) {
@@ -190,9 +190,9 @@ async function transferNotesToReqHistories (
     for (const n of notes) {
       vreq.req.addHistoryNote(n)
 
-      // V7 additive: mirror each provider note into tx_audit.
-      if (v7TxId != null) {
-        await v7svc!.recordHistoryNote(v7TxId, n as { what: string, [k: string]: unknown })
+      // new-schema additive: mirror each provider note into tx_audit.
+      if (newTxId != null) {
+        await txSvc!.recordHistoryNote(newTxId, n as { what: string, [k: string]: unknown })
       }
     }
     await vreq.req.updateStorageDynamicProperties(storage, trx)
@@ -300,16 +300,16 @@ export async function updateReqsFromAggregateResults (
 ): Promise<void> {
   logger?.group('update storage from aggregate results')
 
-  // V7 service — undefined on pre-cutover / IDB paths; all V7 calls are gated.
-  const v7svc = storage.getV7Service()
+  // the transaction service — undefined on pre-cutover / IDB paths; all transaction-service calls are gated.
+  const txSvc = storage.getTransactionService()
 
   for (const txid of txids) {
     const ar = apbrs[txid]
     const req = ar.vreq.req
     await req.refreshFromStorage(storage, trx)
 
-    // Resolve V7 transactionId once per txid for this iteration.
-    const v7TxId = await resolveV7Id(v7svc, txid)
+    // Resolve new transactionId once per txid for this iteration.
+    const newTxId = await resolveTransactionId(txSvc, txid)
 
     const { successCount, doubleSpendCount, statusErrorCount, serviceErrorCount } = ar
     const note: ReqHistoryNote = {
@@ -365,21 +365,21 @@ export async function updateReqsFromAggregateResults (
     req.addHistoryNote(note)
     await req.updateStorageDynamicProperties(storage, trx)
 
-    // V7 additive: record aggregateResults history note, then record the
+    // new-schema additive: record aggregateResults history note, then record the
     // broadcast outcome (transitions processing state + sets wasBroadcast).
-    if (v7TxId != null) {
-      await v7svc!.recordHistoryNote(v7TxId, note as { what: string, [k: string]: unknown })
+    if (newTxId != null) {
+      await txSvc!.recordHistoryNote(newTxId, note as { what: string, [k: string]: unknown })
 
-      const v7Status = aggregateStatusToV7Processing(ar.status)
+      const processingStatus = aggregateStatusToProcessing(ar.status)
       if (ar.status === 'serviceError') {
-        // serviceError: increment attempts in V7 and leave processing in 'sending'.
-        await v7svc!.incrementAttempts(v7TxId)
+        // serviceError: increment attempts in new-schema and leave processing in 'sending'.
+        await txSvc!.incrementAttempts(newTxId)
       } else {
         // success / doubleSpend / invalidTx: record broadcast result with final status.
-        await v7svc!.recordBroadcastResult({
-          transactionId: v7TxId,
+        await txSvc!.recordBroadcastResult({
+          transactionId: newTxId,
           txid,
-          status: v7Status,
+          status: processingStatus,
           provider: 'aggregatePostBeef',
           wasBroadcast: ar.status === 'success',
           details: {
@@ -442,9 +442,9 @@ export async function updateReqsFromAggregateResults (
         req.addHistoryNote(staleNote)
         await req.updateStorageDynamicProperties(storage, trx)
 
-        // V7 additive: mirror stale-inputs note into tx_audit.
-        if (v7TxId != null) {
-          await v7svc!.recordHistoryNote(v7TxId, staleNote)
+        // new-schema additive: mirror stale-inputs note into tx_audit.
+        if (newTxId != null) {
+          await txSvc!.recordHistoryNote(newTxId, staleNote)
         }
       }
     }

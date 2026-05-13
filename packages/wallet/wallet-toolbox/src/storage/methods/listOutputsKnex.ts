@@ -12,16 +12,16 @@ import type { ProcessingStatus } from '../../sdk'
 
 /**
  * Maps the legacy per-user `TransactionStatus` values that `listOutputs` treated
- * as "eligible to appear" to their V7 `ProcessingStatus` equivalents.
+ * as "eligible to appear" to their `ProcessingStatus` equivalents.
  *
- * Legacy status → V7 ProcessingStatus[]
+ * Legacy status → ProcessingStatus[]
  *   completed  → ['proven']
  *   unproven   → ['sent', 'seen', 'seen_multi', 'unconfirmed']
  *   nosend     → ['nosend']
  *   sending    → ['sending']
  *
- * NOTE: V7 `queued` is intentionally excluded.  Legacy `sending` meant "is
- * actively being broadcast" which maps to V7 `sending`.  V7 `queued` is
+ * NOTE: `queued` is intentionally excluded.  Legacy `sending` meant "is
+ * actively being broadcast" which maps to `sending`.  `queued` is
  * broader ("just created, not yet dispatched") and its outputs have not been
  * broadcast; they therefore fall outside the default spendable set.
  *
@@ -280,7 +280,7 @@ export async function listOutputs (
     const txIds = [...new Set(outputs.map(o => o.transactionId).filter((id): id is number => id !== undefined))]
     if (txIds.length > 0) {
       /*
-       * Post-V7-cutover the `tx_labels_map.transactionId` column is an FK to
+       * Post-cutover the `tx_labels_map.transactionId` column is an FK to
        * `actions.actionId` — NOT to `transactions.transactionId`.  A direct
        * `WHERE lm.transactionId IN (output.transactionId)` is therefore wrong
        * because those two keyspaces no longer overlap.

@@ -28,7 +28,7 @@ export async function purgeData (storage: StorageKnex, params: PurgeParams, trx?
     }
   }
 
-  // Post-V7-cutover: `proven_txs`, `proven_tx_reqs`, and the legacy-shaped
+  // Post-cutover: `proven_txs`, `proven_tx_reqs`, and the legacy-shaped
   // `transactions` table (with `status` column) are all renamed to `*_legacy`.
   // Resolve canonical table names once and reuse throughout.
   const txTable = await storage.provenTxsTableName()     // proven_txs or proven_txs_legacy

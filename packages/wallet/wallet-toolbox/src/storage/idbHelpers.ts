@@ -417,8 +417,8 @@ export function upgradeSyncStates (db: IDBPDatabase<StorageIdbSchema>): void {
   store.createIndex('status', 'status')
 }
 
-export function upgradeTransactionsV7 (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('transactions_v7', { keyPath: 'transactionId', autoIncrement: true })
+export function upgradeTransactionsNew (db: IDBPDatabase<StorageIdbSchema>): void {
+  const store = db.createObjectStore('transactions_new', { keyPath: 'transactionId', autoIncrement: true })
   store.createIndex('txid', 'txid', { unique: true })
   store.createIndex('processing', 'processing')
   store.createIndex('batch', 'batch')
@@ -469,7 +469,7 @@ export function upgradeAllStoresV1 (db: IDBPDatabase<StorageIdbSchema>): void {
   if (!names.contains('tx_labels_map')) upgradeTxLabelsMap(db)
   if (!names.contains('monitor_events')) upgradeMonitorEvents(db)
   if (!names.contains('sync_states')) upgradeSyncStates(db)
-  if (!names.contains('transactions_v7')) upgradeTransactionsV7(db)
+  if (!names.contains('transactions_new')) upgradeTransactionsNew(db)
   if (!names.contains('actions')) upgradeActions(db)
   if (!names.contains('chain_tip')) upgradeChainTip(db)
   if (!names.contains('tx_audit')) upgradeTxAudit(db)

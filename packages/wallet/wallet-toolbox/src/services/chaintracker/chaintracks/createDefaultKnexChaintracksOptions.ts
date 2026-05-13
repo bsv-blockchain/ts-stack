@@ -16,18 +16,18 @@ import { buildChaintracksOptionsWithIngestors } from './configureChaintracksInge
  */
 export function createDefaultKnexChaintracksOptions (
   chain: Chain,
-  rootFolder: string = './data/',
+  rootFolder = './data/',
   knexConfig?: Knex.Config,
-  whatsonchainApiKey: string = '',
-  maxPerFile: number = 100000,
-  maxRetained: number = 2,
+  whatsonchainApiKey = '',
+  maxPerFile = 100000,
+  maxRetained = 2,
   fetch?: ChaintracksFetchApi,
-  cdnUrl: string = 'https://cdn.projectbabbage.com/blockheaders/',
-  liveHeightThreshold: number = 2000,
-  reorgHeightThreshold: number = 400,
-  bulkMigrationChunkSize: number = 500,
-  batchInsertLimit: number = 400,
-  addLiveRecursionLimit: number = 36
+  cdnUrl = 'https://cdn.projectbabbage.com/blockheaders/',
+  liveHeightThreshold = 2000,
+  reorgHeightThreshold = 400,
+  bulkMigrationChunkSize = 500,
+  batchInsertLimit = 400,
+  addLiveRecursionLimit = 36
 ): ChaintracksOptions {
   fetch ??= new ChaintracksFetch()
 

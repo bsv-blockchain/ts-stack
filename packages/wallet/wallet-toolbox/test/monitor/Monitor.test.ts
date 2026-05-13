@@ -668,7 +668,13 @@ describe('Monitor tests', () => {
 
       const reqApi = verifyTruthy((await storage.findProvenTxReqs({ partial: { status: 'unmined' } }))[0])
       const req = new EntityProvenTxReq(reqApi)
-      const transactionId = verifyTruthy(req.notify.transactionIds?.[0])
+      const legacyTransactionId = verifyTruthy(req.notify.transactionIds?.[0])
+      // Post-cutover, outputs.spentBy was remapped from the legacy transactionId
+      // to the new schema transactionId during runSchemaCutover. Resolve the
+      // mapping via the shared txid so we look up the right spentBy value.
+      const knex = (storage as any).knex
+      const newTxRow = (await knex('transactions').where({ txid: reqApi.txid }).select('transactionId').first()) as { transactionId: number } | undefined
+      const transactionId = verifyTruthy(newTxRow?.transactionId)
       const inputsBefore = await storage.findOutputs({ partial: { spentBy: transactionId } })
 
       expect(inputsBefore.length).toBeGreaterThan(0)
@@ -677,7 +683,9 @@ describe('Monitor tests', () => {
       // Simulate a partially reconciled old state: transaction failed while the
       // ProvenTxReq is still live in the mempool.
       await storage.updateProvenTxReq(reqApi.provenTxReqId, { wasBroadcast: false })
-      await storage.updateTransaction(transactionId, { status: 'failed', provenTxId: undefined })
+      // updateTransaction routes to transactions_legacy post-cutover (the
+      // legacy schema still carries `status`).
+      await storage.updateTransaction(legacyTransactionId, { status: 'failed', provenTxId: undefined })
 
       const task = new TaskReviewStatus(monitor, 1, 1000 * 5)
       monitor._tasks.push(task)

@@ -120,9 +120,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     this.dbName = `wallet-toolbox-${this.chain}net`
   }
 
-  // TODO(v7-idb): StorageIdb does not yet support the V7 schema.
-  // getV7Service() inherits the default `return undefined` from StorageProvider.
-  // A future implementation would wrap an IndexedDB-backed V7 service here.
+  // TODO(new-schema-idb): StorageIdb does not yet support the the new schema.
+  // getTransactionService() inherits the default `return undefined` from StorageProvider.
+  // A future implementation would wrap an IndexedDB-backed the transaction service here.
 
   /**
    * This method must be called at least once before any other method accesses the database,
@@ -350,7 +350,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       : await this.getRawTxFull(txid, trx)
 
     if (rawTx != null && sliceRequested) {
-      return rawTx.slice(offset, (offset as number) + (length as number))
+      return rawTx.slice(offset, (offset) + (length))
     }
     return rawTx
   }
@@ -379,10 +379,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       // listActions response. Skip + log so persistent orphans still produce a signal.
       const label = verifyOneOrNone(await this.findTxLabels({ partial: { txLabelId, isDeleted: false }, trx }))
       if (label != null) labels.push(label)
-      else
+      else {
         console.debug(
           `[StorageIdb] orphan tx_labels_map row skipped: transactionId=${transactionId} txLabelId=${txLabelId}`
         )
+      }
     }
     return labels
   }
@@ -394,10 +395,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     for (const outputTagId of tagIds) {
       const tag = verifyOneOrNone(await this.findOutputTags({ partial: { outputTagId, isDeleted: false }, trx }))
       if (tag != null) tags.push(tag)
-      else
+      else {
         console.debug(
           `[StorageIdb] orphan output_tags_map row skipped: outputId=${outputId} outputTagId=${outputTagId}`
         )
+      }
     }
     return tags
   }
@@ -468,7 +470,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       if (partial[k] === undefined) {
         throw new WERR_INVALID_PARAMETER(
           `args.partial.${k}`,
-          `not undefined. Passing undefined as a filter value is not supported — omit the key to skip filtering. Matches Knex semantics.`
+          'not undefined. Passing undefined as a filter value is not supported — omit the key to skip filtering. Matches Knex semantics.'
         )
       }
     }
@@ -1850,7 +1852,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   private applyBooleanFields (entity: Record<string, unknown>, booleanFields?: string[]): void {
     if (booleanFields == null) return
     for (const df of booleanFields) {
-      if (entity[df] !== undefined) entity[df] = !!entity[df]
+      if (entity[df] !== undefined) entity[df] = Boolean(entity[df])
     }
   }
 

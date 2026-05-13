@@ -30,8 +30,8 @@ export interface TableOutput extends sdk.EntityTimeStamp {
   scriptOffset?: number
   lockingScript?: number[]
   /**
-   * V7: minimum block height at which a coinbase output becomes spendable.
-   * NULL for non-coinbase outputs and for pre-V7 rows that have not yet been
+   * new-schema: minimum block height at which a coinbase output becomes spendable.
+   * NULL for non-coinbase outputs and for pre-new schema rows that have not yet been
    * backfilled. The §4 spendability rule treats a non-coinbase output as
    * mature regardless of this column.
    */

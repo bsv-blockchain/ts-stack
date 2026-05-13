@@ -95,7 +95,7 @@ export async function mergeInputsIntoBeef (
     trx,
     undefined,
     async (txid, beef, _trustSelf, knownTxids, trx) =>
-      getValidBeef(txid, beef, undefined, knownTxids as string[], trx)
+      await getValidBeef(txid, beef, undefined, knownTxids as string[], trx)
   )
 }
 

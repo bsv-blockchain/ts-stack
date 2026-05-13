@@ -57,7 +57,7 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
 
   idleWait: number
   woc: WhatsOnChainServices
-  done: boolean = false
+  done = false
 
   constructor (options: LiveIngestorWhatsOnChainOptions) {
     super(options)

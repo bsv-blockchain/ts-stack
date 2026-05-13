@@ -53,8 +53,8 @@ export abstract class Format {
       let totalIn = 0
       let totalOut = 0
       for (let i = 0; i < Math.max(tx.inputs.length, tx.outputs.length); i++) {
-        let ilog: string = ''
-        let olog: string = ''
+        let ilog = ''
+        let olog = ''
         if (i < tx.inputs.length) {
           const input = tx.inputs[i]
           const satoshis = input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis || 0

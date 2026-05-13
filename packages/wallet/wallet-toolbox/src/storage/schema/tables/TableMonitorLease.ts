@@ -1,7 +1,7 @@
 import * as sdk from '../../../sdk'
 
 /**
- * V7 lease record so at most one Monitor daemon owns a given task at a time.
+ * monitor_lease record so at most one Monitor daemon owns a given task at a time.
  *
  * The Monitor acquires a lease by upserting `(taskName, ownerId, expiresAt)`
  * and renews periodically. Stale leases (`expiresAt < now`) may be claimed by

@@ -1,7 +1,7 @@
 import * as sdk from '../../../sdk'
 
 /**
- * V7 singleton row tracking the most recently observed chain tip.
+ * singleton row tracking the most recently observed chain tip.
  * Used by spendability checks and coinbase maturity calculations.
  */
 export interface TableChainTip extends sdk.EntityTimeStamp {

@@ -89,7 +89,7 @@ export class ChaintracksWritableFile implements ChaintracksWritableFileApi {
   path: string
   parsedPath: Path.ParsedPath
   f: fs.FileHandle
-  foldersEnsured: boolean = false
+  foldersEnsured = false
 
   private constructor (path: string, f: fs.FileHandle) {
     this.path = path
@@ -121,7 +121,7 @@ export class ChaintracksWritableFile implements ChaintracksWritableFileApi {
 }
 
 export class ChaintracksAppendableFile extends ChaintracksReadableFile implements ChaintracksAppendableFileApi {
-  foldersEnsured: boolean = false
+  foldersEnsured = false
 
   private constructor (path: string, f: fs.FileHandle) {
     super(path, f)

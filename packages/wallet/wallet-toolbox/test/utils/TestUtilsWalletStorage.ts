@@ -58,8 +58,8 @@ import { TableMonitorEvent } from '../../src/storage/schema/tables/TableMonitorE
 import { TableCommission } from '../../src/storage/schema/tables/TableCommission'
 import { asArray } from '../../src/utility/utilityHelpers.noBuffer'
 import { ScriptTemplateBRC29 } from '../../src/utility/ScriptTemplateBRC29'
-import { runV7Cutover } from '../../src/storage/schema/v7Cutover'
-import { V7TransactionService } from '../../src/storage/schema/v7Service'
+import { runSchemaCutover } from '../../src/storage/schema/schemaCutover'
+import { TransactionService } from '../../src/storage/schema/transactionService'
 
 dotenv.config()
 
@@ -522,11 +522,11 @@ export abstract class TestUtilsWalletStorage {
     })
     if (args.dropAll) await activeStorage.dropAllData()
     await activeStorage.migrate(args.databaseName, randomBytesHex(33))
-    // Run the V7 cutover so that post-cutover storage helpers (listOutputsKnex,
+    // Run the the schema cutover so that post-cutover storage helpers (listOutputsKnex,
     // listActionsKnex, etc.) can reference the renamed `transactions` table and
-    // its V7 columns (e.g. `processing`, `userId`).  The cutover is idempotent
+    // its new-schema columns (e.g. `processing`, `userId`).  The cutover is idempotent
     // on empty databases and is safe to run before any seed data is inserted.
-    await runV7Cutover(args.knex)
+    await runSchemaCutover(args.knex)
     await activeStorage.makeAvailable()
     const setup = await args.insertSetup(activeStorage, wo.identityKey)
     await wo.storage.addWalletStorageProvider(activeStorage)
@@ -885,11 +885,11 @@ export abstract class TestUtilsWalletStorage {
     })
     if (useReader) await activeStorage.dropAllData()
     await activeStorage.migrate(databaseName, randomBytesHex(33))
-    // Run the V7 cutover after migrations so that listOutputsKnex and
+    // Run the the schema cutover after migrations so that listOutputsKnex and
     // listActionsKnex (which query post-cutover schema columns such as
     // `transactions.processing`) work correctly in feature tests that use
     // the legacy wallet fixture as their seed database.
-    await runV7Cutover(walletKnex)
+    await runSchemaCutover(walletKnex)
     await activeStorage.makeAvailable()
     const storage = new WalletStorageManager(identityKey, activeStorage)
     await storage.makeAvailable()
@@ -1062,9 +1062,9 @@ export abstract class TestUtilsWalletStorage {
     await activeStorage.dropAllData()
     await activeStorage.migrate(databaseName, randomBytesHex(33))
     // Intentionally left pre-cutover: activeStorage is a StorageIdb (IndexedDB),
-    // not a Knex-backed store, so runV7Cutover (which operates on Knex) cannot be
-    // applied here.  The IDB storage path has its own V7 upgrade mechanism
-    // (v7CutoverIdb.ts).  Tests that use this fixture and call listOutputs/
+    // not a Knex-backed store, so runSchemaCutover (which operates on Knex) cannot be
+    // applied here.  The IDB storage path has its own upgrade mechanism
+    // (schemaCutoverIdb.ts).  Tests that use this fixture and call listOutputs/
     // listActions will exercise the IDB code path, not the Knex path.
     await activeStorage.makeAvailable()
 
@@ -1247,12 +1247,12 @@ export abstract class TestUtilsWalletStorage {
   /**
    * Insert a test transaction row.
    *
-   * Post-V7-cutover (detected via `storage.getV7Service()`):
-   *   - Writes a V7 `transactions` row + an `actions` row via
-   *     `V7TransactionService.findOrCreateActionForTxid`.
-   *   - Returns `tx.transactionId` = V7 `transactions.transactionId` (the
+   * Post-cutover (detected via `storage.getTransactionService()`):
+   *   - Writes a new `transactions` row + an `actions` row via
+   *     `TransactionService.findOrCreateActionForTxid`.
+   *   - Returns `tx.transactionId` = new `transactions.transactionId` (the
    *     per-txid key; FK target for `outputs` and `commissions`).
-   *   - Stashes `actionId` as `(tx as any).__v7ActionId` so that
+   *   - Stashes `actionId` as `(tx as any).__newActionId` so that
    *     `insertTestTxLabelMap` can write `tx_labels_map.transactionId =
    *     actionId` (the FK target post-cutover).
    *
@@ -1287,17 +1287,17 @@ export abstract class TestUtilsWalletStorage {
       ...(partial || {})
     }
 
-    const v7Service: V7TransactionService | undefined = storage.getV7Service?.()
-    // Only use the V7 path if the database has been through runV7Cutover
+    const txSvcSetup: TransactionService | undefined = storage.getTransactionService?.()
+    // Only use the the post-cutover path if the database has been through runSchemaCutover
     // (indicated by the presence of the `transactions_legacy` table).
-    const isPostCutover = v7Service != null &&
+    const isPostCutover = txSvcSetup != null &&
       await (storage as StorageKnex).knex.schema.hasTable('transactions_legacy')
-    if (isPostCutover && v7Service != null) {
-      // Post-V7-cutover: write into V7 `transactions` + `actions`.
-      // txid must be non-null for the V7 NOT NULL UNIQUE constraint.
+    if (isPostCutover && txSvcSetup != null) {
+      // Post-cutover: write into new `transactions` + `actions`.
+      // txid must be non-null for the new-schema NOT NULL UNIQUE constraint.
       const txid = e.txid ?? ('pending:' + randomBytesHex(30))
       const processing = transactionStatusToProcessing(e.status ?? 'nosend')
-      const { transaction, action } = await v7Service.findOrCreateActionForTxid({
+      const { transaction, action } = await txSvcSetup.findOrCreateActionForTxid({
         userId: u.userId,
         txid,
         isOutgoing: e.isOutgoing ?? true,
@@ -1310,12 +1310,47 @@ export abstract class TestUtilsWalletStorage {
         now: e.created_at instanceof Date ? e.created_at : now
       })
       // Patch the legacy-shaped `e` so callers get a consistent object:
-      // - transactionId = V7 transactions.transactionId (FK for outputs/commissions)
+      // - transactionId = new transactions.transactionId (FK for outputs/commissions)
       // - txid = the txid we used
       e.transactionId = transaction.transactionId
       e.txid = txid
-      // Store actionId for insertTestTxLabelMap (post-cutover tx_labels_map FK)
-      ;(e as any).__v7ActionId = action.actionId
+      // Mirror the row into `transactions_legacy` using the same transactionId
+      // so legacy read/update paths (findTransactions, updateTransaction, etc.)
+      // continue to see the row through the post-cutover bridge period. Entity
+      // tests that exercise the legacy schema's per-user view rely on this.
+      const knex = (storage as StorageKnex).knex
+      await knex.raw('PRAGMA foreign_keys = OFF')
+      try {
+        await knex('transactions_legacy').insert({
+          transactionId: transaction.transactionId,
+          userId: e.userId,
+          created_at: e.created_at,
+          updated_at: e.updated_at,
+          status: e.status,
+          reference: e.reference,
+          isOutgoing: e.isOutgoing,
+          satoshis: e.satoshis,
+          description: e.description,
+          version: e.version,
+          lockTime: e.lockTime,
+          txid: e.txid,
+          inputBEEF: e.inputBEEF == null ? null : Buffer.from(e.inputBEEF),
+          rawTx: e.rawTx == null ? null : Buffer.from(e.rawTx),
+          provenTxId: e.provenTxId
+        })
+      } finally {
+        await knex.raw('PRAGMA foreign_keys = ON')
+      }
+      // Store actionId for insertTestTxLabelMap (post-cutover tx_labels_map FK).
+      // The field is non-enumerable so it does not leak into `updateTransaction`
+      // calls that spread the table row (which would otherwise SQL-error on the
+      // missing `__newActionId` column).
+      Object.defineProperty(e, '__newActionId', {
+        value: action.actionId,
+        writable: false,
+        enumerable: false,
+        configurable: false
+      })
     } else {
       // Pre-cutover / StorageIdb path.
       await storage.insertTransaction(e)
@@ -1415,9 +1450,9 @@ export abstract class TestUtilsWalletStorage {
     partial?: Partial<TableTxLabelMap>
   ) {
     const now = new Date()
-    // Post-V7-cutover: tx_labels_map.transactionId FKs actions.actionId.
-    // insertTestTransaction stashes the actionId as __v7ActionId on the tx object.
-    const labelMapId: number = (tx as any).__v7ActionId ?? tx.transactionId
+    // Post-cutover: tx_labels_map.transactionId FKs actions.actionId.
+    // insertTestTransaction stashes the actionId as __newActionId on the tx object.
+    const labelMapId: number = (tx as any).__newActionId ?? tx.transactionId
     const e: TableTxLabelMap = {
       created_at: now,
       updated_at: now,
@@ -1573,13 +1608,13 @@ export abstract class TestUtilsWalletStorage {
     const now = new Date()
     const inputTxMap: Record<string, any> = {}
     const outputMap: Record<string, any> = {}
-    // Tracks source-only V7 transaction rows already created (keyed by original txid).
-    // Prevents duplicate V7 rows when multiple inputs share the same source txid.
+    // Tracks source-only new transaction rows already created (keyed by original txid).
+    // Prevents duplicate new schema rows when multiple inputs share the same source txid.
     const sourceTxByOrigTxid: Record<string, { transactionId: number }> = {}
 
-    // Determine V7 post-cutover once for this setup call.
-    const v7svc = (storage as StorageKnex).getV7Service?.()
-    const isPostCutover = v7svc != null &&
+    // Determine post-cutover status once for this setup call.
+    const txSvc = (storage as StorageKnex).getTransactionService?.()
+    const isPostCutover = txSvc != null &&
       !!(await (storage as StorageKnex).knex?.schema.hasTable('transactions_legacy'))
 
     // only one user
@@ -1595,24 +1630,24 @@ export abstract class TestUtilsWalletStorage {
 
           // Build a lightweight transaction-shaped object for insertTestOutput.
           // Post-cutover: source transactions must NOT have an `actions` row so they
-          // do NOT appear in listActions results. Use v7svc.create() directly to
-          // write only a `transactions_v7` row (no actions row). Give them a ':src'
-          // suffix so their V7 txid doesn't collide with action transactions that
+          // do NOT appear in listActions results. Use txSvc.create() directly to
+          // write only a `transactions_new` row (no actions row). Give them a ':src'
+          // suffix so their txid doesn't collide with action transactions that
           // share the same display txid (e.g. action 'tx1' vs source 'tx1:src').
           // The output's `txid` column is set to the ORIGINAL txid so listActions
           // reconstructs the correct `sourceOutpoint` (e.g. "tx1.1" not "tx1:src.1").
           let sourceTxRow: { transactionId: number; userId: number; txid?: string }
 
-          if (isPostCutover && v7svc != null) {
+          if (isPostCutover && txSvc != null) {
             let existing = sourceTxByOrigTxid[origSourceTxid]
             if (!existing) {
-              const v7tx = await v7svc.create({
+              const newTx = await txSvc.create({
                 txid: origSourceTxid + ':src',
                 processing: 'proven',
                 rawTx: [4, 3, 2, 1],
                 now
               })
-              existing = { transactionId: v7tx.transactionId }
+              existing = { transactionId: newTx.transactionId }
               sourceTxByOrigTxid[origSourceTxid] = existing
             }
             sourceTxRow = { transactionId: existing.transactionId, userId: user.userId, txid: origSourceTxid }

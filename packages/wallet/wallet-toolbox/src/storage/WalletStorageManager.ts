@@ -62,7 +62,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   /**
    * True if makeAvailable has been run and access to managed stores (active) is allowed
    */
-  _isAvailable: boolean = false
+  _isAvailable = false
   /**
    * The current active store which is only enabled if the store's user record activeStorage property matches its settings record storageIdentityKey property
    */
@@ -695,7 +695,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     identityKey: string,
     reader: sdk.WalletStorageSyncReader,
     activeSync?: sdk.WalletStorageSync,
-    log: string = ''
+    log = ''
   ): Promise<{ inserts: number, updates: number, log: string }> {
     const auth = await this.getAuth()
     if (identityKey !== auth.identityKey) throw new sdk.WERR_UNAUTHORIZED()
@@ -738,7 +738,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     auth: sdk.AuthId,
     writer: sdk.WalletStorageProvider,
     activeSync?: sdk.WalletStorageSync,
-    log: string = '',
+    log = '',
     progLog?: (s: string) => string
   ): Promise<{ inserts: number, updates: number, log: string }> {
     progLog ||= s => s

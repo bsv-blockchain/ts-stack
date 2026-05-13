@@ -17,7 +17,7 @@ import {
   TableSyncState,
   TableSettings,
   TableTransaction,
-  TableTransactionV7,
+  TableTransactionNew,
   TableTxAudit,
   TableTxLabel,
   TableTxLabelMap,
@@ -152,10 +152,10 @@ export interface StorageIdbSchema {
       identityKey: string
     }
   }
-  // V7 additive object stores. Existing stores remain unchanged for compatibility.
-  transactionsV7: {
+  // New additive object stores. Existing stores remain unchanged for compatibility.
+  transactionsNew: {
     key: number
-    value: TableTransactionV7
+    value: TableTransactionNew
     indexes: {
       txid: HexString
       processing: ProcessingStatus

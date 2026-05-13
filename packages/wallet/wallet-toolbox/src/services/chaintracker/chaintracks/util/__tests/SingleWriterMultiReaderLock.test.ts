@@ -2,7 +2,7 @@ import { SingleWriterMultiReaderLock } from '../SingleWriterMultiReaderLock'
 
 class TestLock {
   private readonly lock: SingleWriterMultiReaderLock = new SingleWriterMultiReaderLock()
-  private value: number = 0
+  private value = 0
 
   async readValue (): Promise<number> {
     return await this.lock.withReadLock(async () => {

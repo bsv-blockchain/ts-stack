@@ -294,7 +294,7 @@ export class BulkFilesReaderFs extends BulkFilesReader {
     fs: ChaintracksFsApi,
     rootFolder: string,
     jsonFilename: string,
-    failToEmptyRange: boolean = true
+    failToEmptyRange = true
   ): Promise<BulkHeaderFilesInfo> {
     const filePath = (file: string) => fs.pathJoin(rootFolder, file)
 

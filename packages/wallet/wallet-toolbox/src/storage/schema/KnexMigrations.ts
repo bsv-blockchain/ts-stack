@@ -90,12 +90,12 @@ export class KnexMigrations implements MigrationSource<string> {
       }
     }
 
-    migrations['2026-05-11-001 V7 additive schema (actions, transactions_v7, chain_tip, tx_audit, monitor_lease)'] = {
+    migrations['2026-05-11-001 add refactor schema (actions, transactions_new, chain_tip, tx_audit, monitor_lease)'] = {
       async up (knex) {
         const dbtype = await determineDBType(knex)
 
         // Per-txid canonical record. Source of truth for broadcast + proof state.
-        await knex.schema.createTable('transactions_v7', table => {
+        await knex.schema.createTable('transactions_new', table => {
           addTimeStamps(knex, table, dbtype)
           table.increments('transactionId')
           table.string('txid', 64).notNullable().unique()
@@ -121,10 +121,10 @@ export class KnexMigrations implements MigrationSource<string> {
           table.integer('row_version').unsigned().notNullable().defaultTo(0)
           table.index('processing')
           table.index('batch')
-          table.index(['processing', 'next_action_at'], 'idx_tx_v7_processing_next')
+          table.index(['processing', 'next_action_at'], 'idx_tx_new_processing_next')
         })
 
-        // Per-user view of a transactions_v7 row.
+        // Per-user view of a transactions_new row.
         await knex.schema.createTable('actions', table => {
           addTimeStamps(knex, table, dbtype)
           table.increments('actionId')
@@ -133,7 +133,7 @@ export class KnexMigrations implements MigrationSource<string> {
             .integer('transactionId')
             .unsigned()
             .references('transactionId')
-            .inTable('transactions_v7')
+            .inTable('transactions_new')
             .notNullable()
           table.string('reference', 64).notNullable()
           table.string('description', 2000).notNullable()
@@ -167,7 +167,7 @@ export class KnexMigrations implements MigrationSource<string> {
             .integer('transactionId')
             .unsigned()
             .references('transactionId')
-            .inTable('transactions_v7')
+            .inTable('transactions_new')
             .nullable()
           table
             .integer('actionId')
@@ -196,11 +196,11 @@ export class KnexMigrations implements MigrationSource<string> {
         })
 
         if (dbtype === 'MySQL') {
-          await knex.raw('ALTER TABLE transactions_v7 MODIFY COLUMN raw_tx LONGBLOB')
-          await knex.raw('ALTER TABLE transactions_v7 MODIFY COLUMN input_beef LONGBLOB')
-          await knex.raw('ALTER TABLE transactions_v7 MODIFY COLUMN merkle_path LONGBLOB')
+          await knex.raw('ALTER TABLE transactions_new MODIFY COLUMN raw_tx LONGBLOB')
+          await knex.raw('ALTER TABLE transactions_new MODIFY COLUMN input_beef LONGBLOB')
+          await knex.raw('ALTER TABLE transactions_new MODIFY COLUMN merkle_path LONGBLOB')
         } else {
-          await knex.schema.alterTable('transactions_v7', table => {
+          await knex.schema.alterTable('transactions_new', table => {
             table.binary('raw_tx', 10000000).alter()
             table.binary('input_beef', 10000000).alter()
             table.binary('merkle_path', 10000000).alter()
@@ -212,7 +212,7 @@ export class KnexMigrations implements MigrationSource<string> {
         await knex.schema.dropTableIfExists('tx_audit')
         await knex.schema.dropTableIfExists('chain_tip')
         await knex.schema.dropTableIfExists('actions')
-        await knex.schema.dropTableIfExists('transactions_v7')
+        await knex.schema.dropTableIfExists('transactions_new')
       }
     }
 

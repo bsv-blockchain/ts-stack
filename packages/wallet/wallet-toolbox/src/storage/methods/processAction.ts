@@ -57,17 +57,17 @@ export async function processAction (
     logger?.log('committed new tx updates to storage ')
     if (!req) throw new WERR_INTERNAL()
 
-    // V7 additive wiring — Option B (defer to processAction).
-    // Now that the real txid is known, create the V7 transactions row + actions
+    // new-schema additive wiring — Option B (defer to processAction).
+    // Now that the real txid is known, create the new transactions row + actions
     // row and repoint any tx_labels_map rows from the legacy transactionId to
-    // the new V7 actionId. Wrapped in try/catch so pre-cutover test databases
-    // (which lack the V7 tables) continue to pass without modification.
-    // See docs/V7_CREATEACTION_BLOCKERS.md §3 Option B.
-    const v7svc = storage.getV7Service()
-    if (v7svc != null) {
+    // the new new actionId. Wrapped in try/catch so pre-cutover test databases
+    // (which lack the new transactions tables) continue to pass without modification.
+    // See docs/CREATEACTION_BLOCKERS.md §3 Option B.
+    const txSvc = storage.getTransactionService()
+    if (txSvc != null) {
       try {
         const processing = vargs.isNoSend ? 'nosend' as const : 'queued' as const
-        const { action, transaction } = await v7svc.findOrCreateActionForTxid({
+        const { action, transaction } = await txSvc.findOrCreateActionForTxid({
           userId,
           txid: vargs.txid,
           isOutgoing: vargs.transaction.isOutgoing,
@@ -79,25 +79,25 @@ export async function processAction (
           processing
         })
         // Repoint tx_labels_map rows written by createAction (which used the
-        // legacy transactionId) to the V7 actions.actionId.
-        await v7svc.repointLabelsToActionId(vargs.transactionId, action.actionId)
-        logger?.log(`V7 action created: actionId=${action.actionId}`)
+        // legacy transactionId) to the new actions.actionId.
+        await txSvc.repointLabelsToActionId(vargs.transactionId, action.actionId)
+        logger?.log(`new action created: actionId=${action.actionId}`)
         // Repoint outputs/commissions written during bridge period (transactionId
-        // = legacyTransactionId) to the real V7 transactionId so that
+        // = legacyTransactionId) to the real new transactionId so that
         // listActionsKnex can find them.
-        await v7svc.repointOutputsToV7TransactionId(vargs.transactionId, transaction.transactionId)
-        logger?.log(`V7 outputs repointed: legacyId=${vargs.transactionId} → v7Id=${transaction.transactionId}`)
-      } catch (v7err: unknown) {
-        // Tolerate pre-cutover databases where the V7 tables may not yet exist.
-        const msg = v7err instanceof Error ? v7err.message : String(v7err)
+        await txSvc.repointOutputsToNewTransactionId(vargs.transactionId, transaction.transactionId)
+        logger?.log(`new outputs repointed: legacyId=${vargs.transactionId} → newId=${transaction.transactionId}`)
+      } catch (txErr: unknown) {
+        // Tolerate pre-cutover databases where the new transactions tables may not yet exist.
+        const msg = txErr instanceof Error ? txErr.message : String(txErr)
         if (
           msg.includes('no such table') ||
           msg.includes("Table") ||
           msg.includes('SQLITE_ERROR')
         ) {
-          logger?.log(`V7 wiring skipped (pre-cutover DB): ${msg}`)
+          logger?.log(`new-schema wiring skipped (pre-cutover DB): ${msg}`)
         } else {
-          throw v7err
+          throw txErr
         }
       }
     }
@@ -233,7 +233,7 @@ export async function shareReqsWithWorld (
     if (readyToSendReqIds.length > 0) {
       await storage.transaction(async trx => {
         await storage.updateProvenTxReq(readyToSendReqIds, { status: 'unsent', batch }, trx)
-        // Post-V7-cutover: notify.transactionIds are legacy IDs that live in
+        // Post-cutover: notify.transactionIds are legacy IDs that live in
         // transactions_legacy. Use updateLegacyTransaction to target correct table.
         // Mapping §2: legacy `unprocessed` → `sending` transition.
         await storage.updateLegacyTransaction(transactionIds, { status: 'sending' }, trx)
@@ -353,11 +353,11 @@ async function validateCommitNewTxToStorageArgs (
          which can be found at https://wiki.bitcoinsv.io/index.php/NLocktime_and_nSequence`)
   }
   const txScriptOffsets = parseTxScriptOffsets(params.rawTx)
-  // Post-V7-cutover: unsigned/unprocessed rows live in `transactions_legacy`, not
-  // in V7 `transactions` (which has `processing` not `status` and requires a real
+  // Post-cutover: unsigned/unprocessed rows live in `transactions_legacy`, not
+  // in new `transactions` (which has `processing` not `status` and requires a real
   // txid at insert time). Use findLegacyTransactions to target the correct table.
   // Pre-cutover: findLegacyTransactions falls back to findTransactions transparently.
-  // Mapping §2: legacy `unsigned` → no V7 equivalent; must query transactions_legacy.
+  // Mapping §2: legacy `unsigned` → no equivalent in new schema; must query transactions_legacy.
   const transaction = verifyOne(
     await storage.findLegacyTransactions({
       partial: { userId, reference: params.reference }
@@ -457,7 +457,7 @@ async function commitNewTxToStorage (
 
   let req: EntityProvenTxReq | undefined
 
-  // Post-V7-cutover SQLite: `proven_tx_reqs_legacy` has a FK to `proven_txs`
+  // Post-cutover SQLite: `proven_tx_reqs_legacy` has a FK to `proven_txs`
   // (renamed to `proven_txs_legacy` after cutover). PRAGMA changes inside SQLite
   // transactions are no-ops, so we must disable FK before opening the transaction.
   // Pre-cutover or non-SQLite: disableForeignKeys() is a no-op.
@@ -477,11 +477,11 @@ async function commitNewTxToStorage (
 
     log = stampLog(log, '... storage commitNewTxToStorage outputs updated')
 
-    // Post-V7-cutover: the unsigned transaction row lives in `transactions_legacy`.
+    // Post-cutover: the unsigned transaction row lives in `transactions_legacy`.
     // Use updateLegacyTransaction so the txid + status write-back goes to the
     // correct table. Pre-cutover: falls back to updateTransaction transparently.
     // Mapping §2: legacy `unsigned` → `unprocessed`/`nosend` write-back must
-    // target `transactions_legacy` post-cutover, not V7 `transactions`.
+    // target `transactions_legacy` post-cutover, not new `transactions`.
     await storage.updateLegacyTransaction(vargs.transactionId, vargs.transactionUpdate, trx)
 
     log = stampLog(log, '... storage commitNewTxToStorage storage transaction end')
