@@ -130,7 +130,7 @@ export default class WindowCWISubstrate implements WalletInterface {
   async abortAction(
     args: { reference: Base64String },
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<{ aborted: true }> {
+  ): Promise<{ aborted: boolean }> {
     return await this.CWI.abortAction(args, originator)
   }
 

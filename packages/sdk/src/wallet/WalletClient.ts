@@ -169,7 +169,7 @@ export default class WalletClient implements WalletInterface {
 
   async abortAction (args: {
     reference: Base64String
-  }): Promise<{ aborted: true }> {
+  }): Promise<{ aborted: boolean }> {
     validateAbortActionArgs(args)
     await this.connectToSubstrate()
     return await (this.substrate as WalletInterface).abortAction(

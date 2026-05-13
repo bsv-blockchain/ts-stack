@@ -412,8 +412,23 @@ export interface AbortActionArgs {
   reference: Base64String
 }
 
+/**
+ * Result of an `abortAction` call.
+ *
+ * `aborted` is informative: `true` indicates the wallet successfully invalidated
+ * the action (it will not be broadcast and its inputs are released), `false`
+ * indicates the wallet refused to abort because the underlying transaction was
+ * found to already be on chain (mined or known to mempool). On a refusal the
+ * caller should typically invoke `internalizeAction` instead, which will treat
+ * the call as explicit authorization to advance the nosend lifecycle.
+ *
+ * Note that confirming on-chain status requires network reachability. When
+ * confirmation is impossible (services unreachable or returning errors), the
+ * wallet proceeds with the abort and returns `aborted: true` rather than
+ * refusing — refusal is reserved for positive on-chain confirmation.
+ */
 export interface AbortActionResult {
-  aborted: true
+  aborted: boolean
 }
 
 export type AcquireCertificateResult = WalletCertificate
