@@ -5,12 +5,44 @@ import { Request, Response } from 'express';
 export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, a as buildPairingUri, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-B2hOFTFs.cjs';
 import '@bsv/sdk';
 
+/**
+ * Origin allowlist — flexible matcher used by both `WebSocketRelay`
+ * (browser WS upgrade validation) and `WalletRelayService` (per-session
+ * origin claim validation in `createSession`).
+ *
+ * Accepted shapes:
+ *   - `string`   — exact match
+ *   - `string[]` — match any in the list
+ *   - `RegExp`   — match by pattern (e.g. `/\.commonsource\.nl$/`)
+ *   - function   — custom predicate
+ */
+type AllowedOrigins = string | string[] | RegExp | ((origin: string) => boolean);
+/**
+ * Compile an `AllowedOrigins` declaration into a single predicate.
+ * Returns `null` when no allowlist is configured (caller treats this as "allow all").
+ */
+declare function compileOriginMatcher(allowed: AllowedOrigins | undefined | null): ((origin: string) => boolean) | null;
+
 type Role = 'desktop' | 'mobile';
 type MessageHandler = (topic: string, envelope: WireEnvelope, role: Role) => void;
 type TopicValidator = (topic: string) => boolean;
 type TokenValidator = (topic: string, token: string | null) => boolean;
 type ConnectHandler = (topic: string) => void;
 type DisconnectHandler = (topic: string, role: Role) => void;
+interface WebSocketRelayOptions {
+    /**
+     * Legacy single-string origin allowlist. Kept for backward compatibility —
+     * prefer `allowedOrigins` for richer matching (arrays, regex, predicates).
+     * If both are set, `allowedOrigins` takes precedence.
+     */
+    allowedOrigin?: string;
+    /**
+     * Origin allowlist used to gate browser WS upgrades (role=desktop). Accepts
+     * a single string, an array, a RegExp, or a custom predicate function.
+     * When unset and `allowedOrigin` is also unset, no origin validation runs.
+     */
+    allowedOrigins?: AllowedOrigins;
+}
 /**
  * Topic-keyed WebSocket relay. Mounts at /ws.
  *
@@ -20,7 +52,8 @@ type DisconnectHandler = (topic: string, role: Role) => void;
  * - Messages from desktop → forwarded to mobile  (or buffered)
  * - Buffered messages are flushed when the other side connects
  * - Heartbeat pings every 30 s; non-responsive sockets are terminated
- * - Origin header validated against allowedOrigin when present (browser clients only)
+ * - Origin header validated against allowedOrigins (or legacy allowedOrigin)
+ *   when present — browser clients only; native mobile clients are exempt
  * - role=desktop connections validated via onValidateDesktopToken callback when set
  */
 declare class WebSocketRelay {
@@ -31,11 +64,9 @@ declare class WebSocketRelay {
     private validateDesktopToken;
     private onDisconnectCb;
     private onMobileConnectCb;
-    private readonly allowedOrigin;
-    private readonly heartbeatTimer;
-    constructor(server: Server, options?: {
-        allowedOrigin?: string;
-    });
+    private isOriginAllowed;
+    private heartbeatTimer;
+    constructor(server: Server, options?: WebSocketRelayOptions);
     /** Register a callback for every inbound message from either side. */
     onIncoming(handler: MessageHandler): void;
     /** Register a validator called on each new connection to verify the topic exists. */
@@ -133,6 +164,7 @@ declare class WalletRequestHandler {
 type RouterLike = {
     get(path: string, handler: (req: Request, res: Response) => void): unknown;
     post(path: string, handler: (req: Request, res: Response) => void): unknown;
+    delete(path: string, handler: (req: Request, res: Response) => void): unknown;
 };
 
 interface WalletRelayServiceOptions {
@@ -161,10 +193,26 @@ interface WalletRelayServiceOptions {
      */
     relayUrl?: string;
     /**
-     * http(s):// URL of the desktop frontend — used for CORS and the pairing URI.
+     * Default http(s):// URL of the desktop frontend — embedded in the QR pairing
+     * URI when `createSession()` is called without a per-session origin override.
      * Defaults to the `ORIGIN` environment variable, then `http://localhost:5173`.
+     *
+     * For multi-app deployments (one relay shared by N webapps) leave this unset
+     * or set it to a sensible fallback, and pass `origin` per-call to
+     * `createSession({ origin })` instead. Use `allowedOrigins` to restrict which
+     * origins are accepted.
      */
     origin?: string;
+    /**
+     * Origin allowlist — controls (a) which origins may be claimed by callers of
+     * `createSession({ origin })`, and (b) which browser origins may open a
+     * desktop-role WebSocket connection.
+     *
+     * Accepts a string, string[], RegExp, or predicate function. When unset, the
+     * lib falls back to the single-value `origin` for backward compatibility with
+     * the original API.
+     */
+    allowedOrigins?: AllowedOrigins;
     /** Called when a mobile completes pairing and the session transitions to 'connected'. */
     onSessionConnected?: (sessionId: string) => void;
     /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
@@ -202,31 +250,46 @@ interface WalletRelayServiceOptions {
  * Next.js / custom framework (omit `app`, call methods from your route handlers):
  * ```ts
  * const relay = new WalletRelayService({ server, wallet, relayUrl, origin })
- * // In GET /api/session:        relay.createSession()
- * // In GET /api/session/:id:    relay.getSession(id)
- * // In POST /api/request/:id:   relay.sendRequest(id, method, params)
+ * // In GET    /api/session:        relay.createSession()
+ * // In GET    /api/session/:id:    relay.getSession(id)
+ * // In POST   /api/request/:id:   relay.sendRequest(id, method, params)
+ * // In DELETE /api/session/:id:   relay.deleteSession(id, desktopToken)
  * ```
  *
  * Express auto-registered routes:
- *   GET  /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET  /api/session/:id    — return { sessionId, status, relay }
- *   POST /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
+ *   GET    /api/session        — create session, return { sessionId, status, qrDataUrl }
+ *   GET    /api/session/:id    — return { sessionId, status, relay }
+ *   POST   /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
+ *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
 declare class WalletRelayService {
-    private readonly opts;
-    private readonly sessions;
-    private readonly relay;
-    private readonly handler;
-    private readonly pending;
-    private readonly mobileAuthTimers;
-    private readonly wallet;
-    private readonly relayUrl;
-    private readonly origin;
-    private readonly schema;
-    private readonly signQrCodes;
+    private opts;
+    private sessions;
+    private relay;
+    private handler;
+    private pending;
+    private mobileAuthTimers;
+    private wallet;
+    private relayUrl;
+    private origin;
+    private schema;
+    private signQrCodes;
+    /** Compiled allowlist used for both per-session origin claims and WS upgrades. */
+    private isOriginAllowed;
     constructor(opts: WalletRelayServiceOptions);
-    /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
-    createSession(): Promise<{
+    /**
+     * Create a session and return its QR data URL, pairing URI, and desktop token.
+     *
+     * Pass `options.origin` to embed a per-session origin in the QR (multi-app
+     * deployments where the caller's URL — not the relay's — is the trust anchor).
+     * When omitted, falls back to the constructor `origin`.
+     *
+     * If an allowlist is configured, the per-session origin must match — otherwise
+     * a malicious caller could mint QRs claiming to be any domain.
+     */
+    createSession(options?: {
+        origin?: string;
+    }): Promise<{
         sessionId: string;
         status: string;
         qrDataUrl: string;
@@ -244,6 +307,12 @@ declare class WalletRelayService {
      * Rejects if the session is not connected or if the mobile doesn't respond within 30 s.
      */
     sendRequest(sessionId: string, method: string, params: unknown, desktopToken?: string): Promise<RpcResponse>;
+    /**
+     * Terminate a session from the desktop side: closes the mobile's WebSocket,
+     * rejects in-flight requests, and marks the session expired.
+     * Throws if the session is not found or the token is invalid.
+     */
+    deleteSession(sessionId: string, desktopToken: string): void;
     /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
     stop(): void;
     /**
@@ -256,4 +325,4 @@ declare class WalletRelayService {
     private handlePairingApproved;
 }
 
-export { type ConnectHandler, type DisconnectHandler, type MessageHandler, QRSessionManager, type QRSessionManagerOptions, type Role, RpcRequest, RpcResponse, Session, SessionStatus, type TokenValidator, type TopicValidator, WalletLike, WalletRelayService, type WalletRelayServiceOptions, WalletRequestHandler, WebSocketRelay, WireEnvelope };
+export { type AllowedOrigins, type ConnectHandler, type DisconnectHandler, type MessageHandler, QRSessionManager, type QRSessionManagerOptions, type Role, RpcRequest, RpcResponse, Session, SessionStatus, type TokenValidator, type TopicValidator, WalletLike, WalletRelayService, type WalletRelayServiceOptions, WalletRequestHandler, WebSocketRelay, type WebSocketRelayOptions, WireEnvelope, compileOriginMatcher };
