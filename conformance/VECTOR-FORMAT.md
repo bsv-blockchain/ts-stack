@@ -171,6 +171,71 @@ Each vector file is a JSON object that conforms to `conformance/schema/vector.sc
 
 ---
 
+## Regression Vectors (Special Format)
+
+Regression vectors live under `conformance/vectors/regressions/` and have a **richer metadata envelope** than standard vectors. They are used to capture historical cross-SDK bugs so that new implementations (Go, Python, Rust, etc.) can prove they do not re-introduce the same mistakes.
+
+### Why a different format?
+
+Standard vectors are "happy path / edge case" fixtures for a stable specification. Regression vectors carry extra context:
+
+- The original GitHub issue that exposed the bug
+- The symptom and root cause
+- Which implementations were affected and when they were fixed
+- Per-vector `parity_class` (some regressions are "intended" for certain SDKs)
+
+### Example Regression File (abbreviated)
+
+```json
+{
+  "version": "1.0.1",
+  "domain": "sdk",
+  "category": "transactions",
+  "description": "ParseBeef on BEEF_V2 data must return a non-nil transaction...",
+  "regression": {
+    "issue": "go-sdk#306",
+    "fixed_in": { "go": "v1.2.21" },
+    "symptom": "go-sdk ParseBeef() returned nil transaction for BEEF_V2...",
+    "root_cause": "BEEF_V2 parse path did not assign the newest transaction..."
+  },
+  "vectors": [
+    {
+      "id": "regression.beef.v2-txid-panic.0001",
+      "description": "Minimal BEEF_V2 ...",
+      "parity_class": "required",
+      "input": { "beef_hex": "0200beef000000", "format": "BEEF_V2" },
+      "expected": { "parse_succeeds": true, "txid_non_null": false },
+      "notes": "0200beef = BEEF_V2 magic..."
+    }
+  ]
+}
+```
+
+### Schema
+
+Regression files are validated against:
+`conformance/schema/regression-vector.schema.json`
+
+The structural runner (`runner.js`) automatically selects the correct schema based on the file path.
+
+### Rules Specific to Regressions
+
+- `regression.issue` is **required** (e.g. `go-sdk#306`, `ts-sdk#31`).
+- `parity_class` and `skip_reason` live at the **vector** level (not file level).
+- The `vectors` array still requires `id`, `description`, `input`, `expected`.
+- `notes` is commonly used instead of (or in addition to) `skip_reason`.
+- These files are **not** required to have `$schema`, `id`, `name`, `brc`, `reference_impl`, or `parity_class` at the top level.
+
+### Adding a New Regression
+
+1. Create a new file under `conformance/vectors/regressions/`.
+2. Follow the structure above.
+3. Add an entry to the `regression_index` in `conformance/META.json`.
+4. Update `COVERAGE.md` with the justification for any `intended` classification.
+5. Run `pnpm conformance --validate-only` (now performs full schema validation).
+
+---
+
 ## Runner Contract
 
 The reference runner lives at `conformance/runner/src/runner.js` and is invoked by CI.

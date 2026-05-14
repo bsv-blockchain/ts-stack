@@ -1,5 +1,5 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.keys.privatekey",
   "name": "PrivateKey hex round-trips and WIF decoding",
   "brc": ["BRC-42"],

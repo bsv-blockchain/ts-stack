@@ -3,8 +3,8 @@ id: conformance-contributing
 title: "Contributing Vectors"
 kind: conformance
 version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-14"
+last_verified: "2026-05-14"
 review_cadence_days: 30
 status: stable
 tags: [conformance, contributing, vectors]
@@ -76,20 +76,29 @@ Vector IDs should be stable and unique within the file. Existing IDs should not 
 
 ## Directory Selection
 
-Use an existing directory where possible:
+Use an existing directory where possible. Current layout (as of 2026-05-14):
 
 ```text
 conformance/vectors/
-  messaging/brc31/
-  regressions/
-  sdk/compat/
-  sdk/crypto/
-  sdk/keys/
-  sdk/scripts/
-  sdk/transactions/
-  wallet/brc100/
+  auth/brc31-handshake.json
+  broadcast/*.json
+  messaging/{authsocket,brc31/,message-box-http}.json
+  overlay/{lookup,submit,topic-management}.json
+  payments/{brc121,brc29-payment-protocol}.json
+  regressions/ (12 files — special format with regression.issue metadata)
+  sdk/compat/bsm.json
+  sdk/crypto/ (8 files: aes, ecdsa, ecies, hash160, hmac, ripemd160, sha256, signature)
+  sdk/keys/ (3 files)
+  sdk/scripts/evaluation.json (5,116 vectors)
+  sdk/transactions/ (2 files)
+  storage/uhrp-http.json
+  sync/ (2 files)
+  wallet/brc100/ (27 files)
   wallet/brc29/
+  wallet/storage/
 ```
+
+**All new vectors must follow the modern format** defined in `VECTOR-FORMAT.md` (`$schema`, `brc` as array, `parity_class` one of `required`/`intended`/`best-effort`/`unsupported`). Legacy-format files were normalized in May 2026; new contributions should not reintroduce the old shape.
 
 Create a new directory only when the behavior does not fit an existing domain. If you add a new file, update `conformance/META.json` in the same PR.
 

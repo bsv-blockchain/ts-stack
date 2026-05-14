@@ -1,11 +1,11 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.keys.key-derivation",
   "name": "Private and public key derivation (BRC-42)",
-  "brc": "BRC-42",
-  "version": "1.1.0",
-  "reference_impl": "packages/sdk/ts-sdk/src/primitives/PrivateKey.ts",
-  "parity_class": "keys",
+  "brc": ["BRC-42"],
+  "version": "2.0.0",
+  "reference_impl": "@bsv/sdk@2.0.x (PrivateKey + BRC-42 derivation)",
+  "parity_class": "required",
   "vectors": [
     {
       "id": "key-001",

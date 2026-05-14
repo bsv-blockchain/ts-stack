@@ -2,7 +2,15 @@
  * BSV Conformance Runner
  *
  * Loads test vectors from conformance/vectors/**\/*.json,
- * validates their structure, and emits JUnit XML + JSON reports.
+ * validates them against the official JSON Schemas (vector.schema.json +
+ * regression-vector.schema.json) using ajv, and emits JUnit XML + JSON reports.
+ *
+ * This is the canonical structural validator used by all language implementations
+ * (TypeScript, Go, Rust, Python, ...) to ensure the shared conformance corpus
+ * is well-formed.
+ *
+ * Schema validation is a hard requirement — the runner will refuse to start if
+ * ajv or the schemas are missing.
  *
  * MBGA §8.5: per-language vector runner.
  *
@@ -12,12 +20,12 @@
  * Exit codes:
  *   0  all vector files parsed cleanly
  *   1  one or more parse / validation errors
+ *   2  schema or structural error
  */
 
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
@@ -27,6 +35,50 @@ const __dirname = dirname(__filename)
 
 const VECTORS_DIR = resolve(__dirname, '../../vectors')
 const REPORT_DIR = resolve(__dirname, '../reports')
+const SCHEMA_DIR = resolve(__dirname, '../../schema')
+const STANDARD_SCHEMA_PATH = join(SCHEMA_DIR, 'vector.schema.json')
+const REGRESSION_SCHEMA_PATH = join(SCHEMA_DIR, 'regression-vector.schema.json')
+
+// ---------------------------------------------------------------------------
+// Strict JSON Schema validation using ajv (hard dependency).
+// The runner will fail to start with a clear error if ajv or the schemas
+// cannot be loaded. There is no silent fallback to weak ad-hoc checks.
+// This is required for reliable cross-language conformance.
+// ---------------------------------------------------------------------------
+
+let validateStandard
+let validateRegression
+
+async function initSchemaValidation () {
+  let AjvMod
+  try {
+    AjvMod = await import('ajv')
+  } catch (err) {
+    throw new Error(
+      'ajv is a hard dependency of the BSV conformance structural runner.\n' +
+      'Please run `cd conformance/runner && pnpm install` (or equivalent) to install it.\n' +
+      `Import error: ${err.message}`
+    )
+  }
+
+  const Ajv = AjvMod.default
+  const ajv = new Ajv({ allErrors: true, strict: false })
+
+  let standardSchema, regressionSchema
+  try {
+    standardSchema = JSON.parse(await readFile(STANDARD_SCHEMA_PATH, 'utf8'))
+    regressionSchema = JSON.parse(await readFile(REGRESSION_SCHEMA_PATH, 'utf8'))
+  } catch (err) {
+    throw new Error(
+      `Failed to load conformance schemas from ${SCHEMA_DIR}.\n` +
+      `Make sure both vector.schema.json and regression-vector.schema.json exist.\n` +
+      `Original error: ${err.message}`
+    )
+  }
+
+  validateStandard = ajv.compile(standardSchema)
+  validateRegression = ajv.compile(regressionSchema)
+}
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -76,7 +128,10 @@ async function findJsonFiles (dir) {
 // ---------------------------------------------------------------------------
 
 const REQUIRED_TOP_LEVEL = ['vectors']
-const RECOMMENDED_TOP_LEVEL = ['$schema', 'id', 'name', 'brc', 'version', 'reference_impl', 'parity_class']
+
+// Regression vectors follow a different (intentionally richer) format for historical bug tracking.
+// We keep a small set of recommended fields for helpful warnings on regressions.
+const REGRESSION_RECOMMENDED_TOP_LEVEL = ['version', 'domain', 'category', 'description', 'regression']
 const REQUIRED_VECTOR_FIELDS = ['id', 'input', 'expected']
 
 function validateFile (path, data) {
@@ -92,17 +147,25 @@ function validateFile (path, data) {
     return { errors, vectors: [] }
   }
 
-  // Check required top-level fields
+  const isRegression = path.includes('/regressions/')
+
+  // Check required top-level fields (lightweight fast check before full schema validation)
   for (const field of REQUIRED_TOP_LEVEL) {
     if (!(field in data)) {
       errors.push(`ERROR: ${path} missing required top-level field "${field}"`)
     }
   }
 
-  // Warn on missing recommended fields
-  for (const field of RECOMMENDED_TOP_LEVEL) {
-    if (!(field in data)) {
-      errors.push(`WARN: ${path} missing recommended top-level field "${field}"`)
+  // For regressions we still do some lightweight metadata checks (the regression schema
+  // is intentionally more permissive at the top level than the standard one).
+  if (isRegression) {
+    for (const field of REGRESSION_RECOMMENDED_TOP_LEVEL) {
+      if (!(field in data)) {
+        errors.push(`WARN: ${path} missing recommended regression field "${field}"`)
+      }
+    }
+    if (!data.regression || typeof data.regression !== 'object' || !data.regression.issue) {
+      errors.push(`WARN: ${path} regression file is missing regression.issue metadata`)
     }
   }
 
@@ -111,6 +174,19 @@ function validateFile (path, data) {
   if (!Array.isArray(data.vectors)) {
     errors.push(`ERROR: ${path} "vectors" must be an array`)
     return { errors, vectors: [] }
+  }
+
+  // --- Strict JSON Schema validation (always enforced) ---
+  const validator = isRegression ? validateRegression : validateStandard
+  const schemaName = isRegression ? 'regression-vector.schema.json' : 'vector.schema.json'
+
+  if (validator && !validator(data)) {
+    const ajvErrors = (validator.errors || []).map(e => {
+      const instancePath = e.instancePath || '(root)'
+      return `SCHEMA: ${schemaName} ${instancePath} ${e.message}`
+    })
+    // Schema violations are fatal — this is the authoritative check for cross-language ports
+    ajvErrors.forEach(msg => errors.push(`ERROR: ${path} ${msg}`))
   }
 
   return { errors, vectors }
@@ -186,6 +262,9 @@ async function run () {
   if (opts.reportPath) console.log(`  Report path : ${opts.reportPath}`)
   console.log()
 
+  // Initialize strict JSON Schema validation (hard requirement)
+  await initSchemaValidation()
+
   // Discover all JSON files
   const jsonFiles = await findJsonFiles(vectorsDir)
 
@@ -257,7 +336,15 @@ async function run () {
     totalVectors += vectors.length
 
     const status = (fatalFileErrors.length === 0 && cases.every(c => c.pass)) ? 'OK' : 'FAIL'
-    const warnStr = warnFileErrors.length > 0 ? ` (${warnFileErrors.length} warn)` : ''
+    const isRegressionFile = relPath.includes('/regressions/')
+    let warnStr = ''
+    if (warnFileErrors.length > 0) {
+      if (isRegressionFile) {
+        warnStr = ` [regression format — ${warnFileErrors.length} metadata note(s)]`
+      } else {
+        warnStr = ` (${warnFileErrors.length} warn)`
+      }
+    }
     console.log(`  [${status}] ${relPath} — ${vectors.length} vector(s)${warnStr}`)
 
     for (const w of warnFileErrors) console.log(`       ${w}`)

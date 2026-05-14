@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "version": "1.0.1",
   "domain": "sdk",
   "category": "transactions",
   "description": "ParseBeef on BEEF_V2 data must return a non-nil transaction from which TxID() can be called without panicking. Go SDK prior to v1.2.21 returned nil for the transaction field when parsing BEEF_V2, causing a nil-pointer panic on TxID().",
@@ -9,7 +9,6 @@
     "symptom": "go-sdk ParseBeef() returned nil transaction for BEEF_V2 format, causing nil-pointer dereference when caller invoked TxID()",
     "root_cause": "BEEF_V2 parse path did not assign the newest transaction to the return value, unlike the ATOMIC_BEEF and BEEF_V1 paths"
   },
-  "version": "1.0.1",
   "vectors": [
     {
       "id": "regression.beef.v2-txid-panic.0001",

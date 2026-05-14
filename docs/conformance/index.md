@@ -3,8 +3,8 @@ id: conformance-overview
 title: "Conformance"
 kind: meta
 version: "n/a"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-14"
+last_verified: "2026-05-14"
 review_cadence_days: 30
 status: stable
 tags: [conformance, testing, cross-language, vectors]
@@ -14,7 +14,7 @@ tags: [conformance, testing, cross-language, vectors]
 
 The TypeScript stack is the reference source for portable BSV behavior. The conformance corpus turns that behavior into language-neutral JSON fixtures that SDKs, wallets, and infrastructure clients can reuse.
 
-Current corpus: **260 vectors across 33 JSON files**. `conformance/META.json` is the authoritative index.
+Current corpus: **6,625 vectors across 72 JSON files** (as of 2026-05-14). `conformance/META.json` is the authoritative index.
 
 ## How It Works
 
@@ -39,15 +39,15 @@ Reports from the structural runner land in `conformance/runner/reports/`.
 
 | Domain | BRCs Covered | Vector Path |
 |---|---|---|
-| SDK keys | BRC-42 | `conformance/vectors/sdk/keys/` |
-| SDK crypto | BRC-42-related crypto, signatures, hashes, AES/ECIES/HMAC | `conformance/vectors/sdk/crypto/` |
-| SDK transactions | BRC-74 MerklePath and transaction serialization | `conformance/vectors/sdk/transactions/` |
-| SDK scripts | Script engine behavior | `conformance/vectors/sdk/scripts/` |
-| SDK compat | BRC-77 BSM compatibility | `conformance/vectors/sdk/compat/` |
-| Wallet BRC-100 | `getPublicKey`, `createHmac`, `createSignature`, `encrypt` | `conformance/vectors/wallet/brc100/` |
-| Wallet BRC-29 | Payment key derivation | `conformance/vectors/wallet/brc29/` |
-| Messaging BRC-31 | Authrite signature format | `conformance/vectors/messaging/brc31/` |
-| Regressions | Historical TS/Go bug reproductions | `conformance/vectors/regressions/` |
+| SDK keys + crypto | BRC-42 + general primitives (AES, ECDSA, ECIES, hashes, HMAC, signatures) | `conformance/vectors/sdk/{keys,crypto}/` (8 files) |
+| SDK transactions | BRC-74 MerklePath + BRC-62 serialization / BEEF / EF | `conformance/vectors/sdk/transactions/` |
+| SDK scripts | BRC-14 Script parsing, encoding, sighash, evaluation (SV Node + Teranode fixtures) | `conformance/vectors/sdk/scripts/evaluation.json` (5,116 vectors) |
+| SDK compat | BRC-77 BSM compatibility | `conformance/vectors/sdk/compat/bsm.json` |
+| Wallet BRC-100 | Full `WalletInterface` (27 method files, ~950 vectors) | `conformance/vectors/wallet/brc100/` |
+| Wallet BRC-29 | Payment key derivation | `conformance/vectors/wallet/brc29/payment-derivation.json` |
+| Messaging BRC-31 | Authrite signature format + authsocket | `conformance/vectors/messaging/{brc31,authsocket}.json` |
+| Auth / Overlay / Broadcast / Payments / Storage / Sync | BRC-31 handshake, BRC-62/20/22, BRC-29/121, BRC-26 UHRP, GASP, etc. | Multiple files under each domain |
+| Regressions | 12 historical cross-SDK bug reproductions (go-sdk#306, ts-sdk#31, etc.) | `conformance/vectors/regressions/` (36 vectors) |
 
 ## Vector Format
 
@@ -89,8 +89,16 @@ For a non-TypeScript SDK or wallet:
 4. Compare your actual output to each vector's `expected` object.
 5. Track unsupported categories explicitly rather than silently ignoring them.
 
+## Recent Improvements (May 2026)
+
+- All legacy-format vector files were normalized to the modern schema-compliant shape (`brc` as array, correct `parity_class` enum, relative `$schema`).
+- The structural runner (`conformance/runner/src/runner.js`) was updated to cleanly support the special regression vector format with no warning spam.
+- The corpus is now in a robust state for cross-language ports (Go, Rust, Python).
+
 ## Next Steps
 
 - [Vector Catalog](./vectors.md) — Current vector files and method coverage
 - [TypeScript Runner](./runner-ts.md) — Runner commands and limitations
 - [Contributing Vectors](./contributing-vectors.md) — Add or refine fixtures
+- [Architecture View](../architecture/conformance.md) — High-level overview for port planning teams
+- **[Porting Guide](../conformance/PORTING_GUIDE.md)** — Practical guide for aligning Go, Rust, Python, or other language implementations (including known deviations and conformance tiers)
