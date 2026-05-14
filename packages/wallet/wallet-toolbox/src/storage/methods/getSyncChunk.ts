@@ -268,55 +268,10 @@ export async function getSyncChunk (storage: StorageReader, args: RequestSyncChu
     }
   }
 
-  /*
-   * Post-cutover remap: the `transactions` chunker reads `transactions_legacy`
-   * (legacy-shaped rows) while `outputs` / `commissions` carry canonical
-   * `transactions.transactionId` values post-bridge. Receivers (v2 wallets,
-   * or v3 receivers operating in legacy-shape mode) map syncMap.transaction
-   * by the LEGACY id; outputs whose transactionId is the canonical id would
-   * miss the syncMap lookup and produce "Undefined column transactionId"
-   * errors. Rewrite outputs / commissions in the chunk so transactionId and
-   * spentBy reference the LEGACY id, matching what the transactions chunker
-   * emitted.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const postCutover: boolean = typeof (storage as any).isPostCutover === 'function'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? await (storage as any).isPostCutover() === true
-    : false
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const knex = (storage as any).knex
-  if (postCutover && knex != null && ((r.outputs?.length ?? 0) > 0 || (r.commissions?.length ?? 0) > 0)) {
-    const canonicalIds = new Set<number>()
-    for (const o of r.outputs ?? []) {
-      if (o.transactionId != null) canonicalIds.add(o.transactionId)
-      if (o.spentBy != null) canonicalIds.add(o.spentBy)
-    }
-    for (const c of r.commissions ?? []) {
-      if (c.transactionId != null) canonicalIds.add(c.transactionId)
-    }
-    if (canonicalIds.size > 0) {
-      const mapRows: Array<{ canonicalId: number, legacyId: number }> = await knex('transactions_legacy as l')
-        .join('transactions as t', 't.txid', 'l.txid')
-        .whereIn('t.transactionId', [...canonicalIds])
-        .select(knex.ref('t.transactionId').as('canonicalId'), knex.ref('l.transactionId').as('legacyId'))
-      const canonicalToLegacy = new Map<number, number>()
-      for (const row of mapRows) canonicalToLegacy.set(Number(row.canonicalId), Number(row.legacyId))
-      for (const o of r.outputs ?? []) {
-        if (o.transactionId != null && canonicalToLegacy.has(o.transactionId)) {
-          o.transactionId = canonicalToLegacy.get(o.transactionId)!
-        }
-        if (o.spentBy != null && canonicalToLegacy.has(o.spentBy)) {
-          o.spentBy = canonicalToLegacy.get(o.spentBy)!
-        }
-      }
-      for (const c of r.commissions ?? []) {
-        if (c.transactionId != null && canonicalToLegacy.has(c.transactionId)) {
-          c.transactionId = canonicalToLegacy.get(c.transactionId)!
-        }
-      }
-    }
-  }
+  // v3: outputs / commissions carry `actionId` (back-compat aliased as
+  // `transactionId` on the TableOutput / TableCommission TS interfaces).
+  // Receivers map via syncMap.transaction.idMap, so no post-emit remap is
+  // required — there is no `transactions_legacy` to join against.
 
   return r
 }

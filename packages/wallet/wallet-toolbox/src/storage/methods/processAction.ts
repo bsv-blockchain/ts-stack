@@ -78,15 +78,12 @@ export async function processAction (
           inputBeef: asArray(vargs.beef.toBinary()),
           processing
         })
-        // Repoint tx_labels_map rows written by createAction (which used the
-        // legacy transactionId) to the new actions.actionId.
-        await txSvc.repointLabelsToActionId(vargs.transactionId, action.actionId)
-        logger?.log(`new action created: actionId=${action.actionId}`)
-        // Repoint outputs/commissions written during bridge period (transactionId
-        // = legacyTransactionId) to the real new transactionId so that
-        // listActionsKnex can find them.
-        await txSvc.repointOutputsToNewTransactionId(vargs.transactionId, transaction.transactionId)
-        logger?.log(`new outputs repointed: legacyId=${vargs.transactionId} → newId=${transaction.transactionId}`)
+        // v3: outputs are FK'd to actions.actionId directly at insert time;
+        // no repoint needed. The action row exists (createAction inserted it
+        // with txid=NULL); findOrCreateActionForTxid above UPSERTs the
+        // canonical transactions row and ensures the per-user action row
+        // points at the real txid.
+        logger?.log(`v3 action wired: actionId=${action.actionId} txid=${transaction.txid}`)
       } catch (txErr: unknown) {
         // Tolerate pre-cutover databases where the new transactions tables may not yet exist.
         const msg = txErr instanceof Error ? txErr.message : String(txErr)

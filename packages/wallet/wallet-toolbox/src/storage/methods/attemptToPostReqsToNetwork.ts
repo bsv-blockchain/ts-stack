@@ -11,24 +11,27 @@ import { TransactionService } from '../schema/transactionService'
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the new-schema `transactionId` for a given txid.
+ * Check whether a `txid` is present in the v3 `transactions` table.
  *
- * Returns `undefined` when:
- *  - `service` is undefined (pre-cutover / IDB path)
- *  - The txid is not yet in the new `transactions` table (bridge period)
- *  - Any unexpected error (we swallow and return undefined to avoid
- *    disrupting the legacy broadcast path)
+ * Returns `false` when:
+ *  - `service` is undefined (no v3 transaction service available — e.g. IDB)
+ *  - The txid is not in the canonical `transactions` table
+ *  - Any unexpected error (we swallow and return false to avoid disrupting
+ *    the broadcast path)
+ *
+ * v3 schema notes: `transactions.txid` is the PK; there is no integer
+ * `transactionId`. All TransactionService methods are keyed by txid.
  */
-async function resolveTransactionId (
+async function txidExistsInTransactions (
   service: TransactionService | undefined,
   txid: string
-): Promise<number | undefined> {
-  if (service == null) return undefined
+): Promise<boolean> {
+  if (service == null) return false
   try {
     const row = await service.findByTxid(txid)
-    return row?.transactionId
+    return row != null
   } catch {
-    return undefined
+    return false
   }
 }
 
@@ -103,9 +106,10 @@ async function validateReqsAndMergeBeefs (
   const txSvc = storage.getTransactionService()
 
   for (const req of reqs) {
-    // Resolve the new transactionId for this req (by txid). Cached per req so
-    // subsequent transaction-service calls within the same loop body reuse it.
-    const newTxId = await resolveTransactionId(txSvc, req.txid)
+    // Check whether this req's txid is present in the v3 transactions table.
+    // Gates the v3 mirror calls — when false, only the legacy
+    // EntityProvenTxReq state is updated.
+    const hasV3Row = await txidExistsInTransactions(txSvc, req.txid)
 
     try {
       const noRawTx = !req.rawTx
@@ -119,11 +123,10 @@ async function validateReqsAndMergeBeefs (
         await req.updateStorageDynamicProperties(storage, trx)
         r.details.push({ txid: req.txid, req, status: 'invalid' })
 
-        // new-schema additive: record history note + transition to invalid
-        if (newTxId != null) {
-          await txSvc!.recordHistoryNote(newTxId, note)
+        // v3 mirror: record history note + transition to invalid (keyed by txid).
+        if (hasV3Row) {
+          await txSvc!.recordHistoryNote(req.txid, note)
           await txSvc!.recordBroadcastResult({
-            transactionId: newTxId,
             txid: req.txid,
             status: 'invalid',
             provider: 'validateReqsAndMergeBeefs',
@@ -134,9 +137,9 @@ async function validateReqsAndMergeBeefs (
         const vreq: PostReqsToNetworkDetails = { txid: req.txid, req, status: 'unknown' }
         await storage.mergeReqToBeefToShareExternally(req.api, r.beef, [], trx)
 
-        // new-schema additive: also merge raw tx / proof bytes from new transactions table into the
-        // shared beef so post-cutover callers get the same merged payload.
-        if (newTxId != null) {
+        // v3 mirror: also merge raw tx / proof bytes from new transactions table into the
+        // shared beef so v3 callers get the same merged payload.
+        if (hasV3Row) {
           await txSvc!.mergeBeefForTxids(r.beef, [req.txid])
         }
 
@@ -154,10 +157,10 @@ async function validateReqsAndMergeBeefs (
       }
       await req.updateStorageDynamicProperties(storage, trx)
 
-      // new-schema additive: record history note + increment attempts
-      if (newTxId != null) {
-        await txSvc!.recordHistoryNote(newTxId, errNote)
-        await txSvc!.incrementAttempts(newTxId)
+      // v3 mirror: record history note + increment attempts (keyed by txid).
+      if (hasV3Row) {
+        await txSvc!.recordHistoryNote(req.txid, errNote)
+        await txSvc!.incrementAttempts(req.txid)
       }
     }
   }
@@ -178,8 +181,8 @@ async function transferNotesToReqHistories (
     const vreq = vreqs.find(r => r.txid === txid)
     if (vreq == null) throw new sdk.WERR_INTERNAL()
 
-    // Resolve new transactionId once per txid (cheap SELECT by txid).
-    const newTxId = await resolveTransactionId(txSvc, txid)
+    // Check v3 transactions table once per txid.
+    const hasV3Row = await txidExistsInTransactions(txSvc, txid)
 
     const notes: sdk.ReqHistoryNote[] = []
     for (const pbr of pbrs) {
@@ -190,9 +193,9 @@ async function transferNotesToReqHistories (
     for (const n of notes) {
       vreq.req.addHistoryNote(n)
 
-      // new-schema additive: mirror each provider note into tx_audit.
-      if (newTxId != null) {
-        await txSvc!.recordHistoryNote(newTxId, n as { what: string, [k: string]: unknown })
+      // v3 mirror: each provider note into tx_audit (keyed by txid).
+      if (hasV3Row) {
+        await txSvc!.recordHistoryNote(txid, n as { what: string, [k: string]: unknown })
       }
     }
     await vreq.req.updateStorageDynamicProperties(storage, trx)
@@ -308,8 +311,8 @@ export async function updateReqsFromAggregateResults (
     const req = ar.vreq.req
     await req.refreshFromStorage(storage, trx)
 
-    // Resolve new transactionId once per txid for this iteration.
-    const newTxId = await resolveTransactionId(txSvc, txid)
+    // Check v3 transactions presence once per txid for this iteration.
+    const hasV3Row = await txidExistsInTransactions(txSvc, txid)
 
     const { successCount, doubleSpendCount, statusErrorCount, serviceErrorCount } = ar
     const note: ReqHistoryNote = {
@@ -365,19 +368,18 @@ export async function updateReqsFromAggregateResults (
     req.addHistoryNote(note)
     await req.updateStorageDynamicProperties(storage, trx)
 
-    // new-schema additive: record aggregateResults history note, then record the
+    // v3 mirror: record aggregateResults history note, then record the
     // broadcast outcome (transitions processing state + sets wasBroadcast).
-    if (newTxId != null) {
-      await txSvc!.recordHistoryNote(newTxId, note as { what: string, [k: string]: unknown })
+    if (hasV3Row) {
+      await txSvc!.recordHistoryNote(txid, note as { what: string, [k: string]: unknown })
 
       const processingStatus = aggregateStatusToProcessing(ar.status)
       if (ar.status === 'serviceError') {
-        // serviceError: increment attempts in new-schema and leave processing in 'sending'.
-        await txSvc!.incrementAttempts(newTxId)
+        // serviceError: increment attempts in v3 and leave processing in 'sending'.
+        await txSvc!.incrementAttempts(txid)
       } else {
         // success / doubleSpend / invalidTx: record broadcast result with final status.
         await txSvc!.recordBroadcastResult({
-          transactionId: newTxId,
           txid,
           status: processingStatus,
           provider: 'aggregatePostBeef',
@@ -442,9 +444,9 @@ export async function updateReqsFromAggregateResults (
         req.addHistoryNote(staleNote)
         await req.updateStorageDynamicProperties(storage, trx)
 
-        // new-schema additive: mirror stale-inputs note into tx_audit.
-        if (newTxId != null) {
-          await txSvc!.recordHistoryNote(newTxId, staleNote)
+        // v3 mirror: stale-inputs note into tx_audit (keyed by txid).
+        if (hasV3Row) {
+          await txSvc!.recordHistoryNote(txid, staleNote)
         }
       }
     }

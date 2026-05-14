@@ -42,7 +42,7 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
-import { TableTransaction } from '../schema/tables/TableTransaction'
+import { TableAction } from '../schema/tables/TableAction'
 import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 import { throwDummyReviewActions } from '../../Wallet'
 import { createStorageServiceChargeScript } from './offsetKey'
@@ -139,10 +139,8 @@ export async function createAction (
   // The satoshis of the transaction is the satoshis we get back in change minus the satoshis we spend.
   const satoshis =
     changeOutputs.reduce((a, e) => a + e.satoshis, 0) - allocatedChange.reduce((a, e) => a + e.satoshis, 0)
-  // new-schema additive wiring: newTx lives in transactions_legacy post-cutover.
-  // updateLegacyTransaction routes to transactions_legacy when it exists,
-  // otherwise falls through to updateTransaction (pre-cutover behaviour).
-  await storage.updateLegacyTransaction(newTx.transactionId, { satoshis })
+  // v3 schema: persist the net satoshi delta directly on the action row.
+  await storage.updateActionSatoshisDelta(newTx.transactionId, satoshis)
 
   const { outputs, changeVouts } = await createNewOutputs(storage, userId, vargs, ctx, changeOutputs)
   logger?.log('created new output records')
@@ -193,6 +191,13 @@ export interface XValidCreateActionOutput extends Validation.ValidCreateActionOu
   keyOffset?: string
 }
 
+/**
+ * Build a default-shape `TableOutput` row for a new output of an action.
+ *
+ * @param transactionId — the owning action's `actionId`. v3 schema: outputs
+ *   FK directly to `actions.actionId`; the `TableOutput.transactionId` field
+ *   is retained as a back-compat alias and stores the actionId value.
+ */
 function makeDefaultOutput (userId: number, transactionId: number, satoshis: number, vout: number): TableOutput {
   const now = new Date()
   const output: TableOutput = {
@@ -238,8 +243,11 @@ async function markKnownInputsSpent (
       const o2 = knownOutputsById[verifyId(o.outputId)]
       if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
       if (o2.spentBy !== undefined) {
-        const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
-        if (spendingTx?.txid) { doubleSpendTxid = spendingTx.txid; return }
+        // v3 schema: outputs.spentBy stores the spending action's actionId.
+        // Resolve to a txid (if signed) via the action row.
+        const spendingAction = await storage
+          .getTransactionService()?.findActionById(verifyId(o2.spentBy))
+        if (spendingAction?.txid) { doubleSpendTxid = spendingAction.txid; return }
       }
       if (!o2.spendable) {
         throw new WERR_INVALID_PARAMETER(
@@ -247,10 +255,15 @@ async function markKnownInputsSpent (
           `spendable output. output ${o.txid}:${o.vout} appears to have been spent (spendable=${o2.spendable}).`
         )
       }
-      // Post-cutover: outputs.spentBy FK → new transactions. transactionId is
-      // from transactions_legacy (new unsigned tx). Use markOutputAsSpentBy to
-      // disable FK temporarily on SQLite. Mapping §2: bridge-period spentBy.
-      await storage.markOutputAsSpentBy(verifyId(o.outputId), { spendable: false, spentBy: transactionId, spendingDescription: i.inputDescription }, trx)
+      // v3 schema: outputs.spentByActionId FKs actions.actionId. `transactionId`
+      // here is the new unsigned action's actionId.
+      await storage.markOutputAsSpentBy(
+        verifyId(o.outputId),
+        // Use DB column name directly; the TableOutput interface still exposes
+        // this as `spentBy` for back-compat but the column is spentByActionId.
+        { spendable: false, spentByActionId: transactionId, spendingDescription: i.inputDescription } as Partial<TableOutput> & { spentByActionId: number },
+        trx
+      )
       o.spendable = false
       o.spentBy = transactionId
       o.spendingDescription = i.inputDescription
@@ -471,46 +484,67 @@ async function createNewOutputs (
   return { outputs, changeVouts }
 }
 
+/**
+ * Local return shape for the new unsigned-draft action row.
+ *
+ * v3 schema: `createAction` inserts a row into `actions` (PK `actionId`,
+ * `txid = NULL`); `processAction` later writes the canonical txid back to the
+ * same row after signing. The integer `transactionId` field here is the
+ * `actions.actionId` value and is used as the FK target for outputs,
+ * commissions, tx_labels_map, and `outputs.spentByActionId`.
+ */
+interface NewTxRecord {
+  transactionId: number
+  reference: string
+  version?: number
+  lockTime?: number
+}
+
 async function createNewTxRecord (
   storage: StorageProvider,
   userId: number,
   vargs: Validation.ValidCreateActionArgs,
   storageBeef: Beef
-): Promise<TableTransaction> {
+): Promise<NewTxRecord> {
   const now = new Date()
-  const newTx: TableTransaction = {
+  // v3 schema: insert the unsigned draft into `actions` directly with txid=NULL.
+  // processAction sets actions.txid once signing completes and the canonical
+  // `transactions` row exists. The inputBEEF is held on the action as
+  // `inputBeefDraft` until commit; rawTxDraft is unknown at this point.
+  const draft: TableAction = {
     created_at: now,
     updated_at: now,
-    transactionId: 0,
+    actionId: 0,
+    userId,
+    txid: undefined,
+    reference: randomBytesBase64(12),
+    description: vargs.description,
+    isOutgoing: true,
+    satoshisDelta: 0, // updated after fundNewTransactionSdk
     version: vargs.version,
     lockTime: vargs.lockTime,
-    status: 'unsigned',
-    reference: randomBytesBase64(12),
-    satoshis: 0, // updated after fundingTransaction
-    userId,
-    isOutgoing: true,
-    inputBEEF: storageBeef.toBinary(),
-    description: vargs.description,
-    txid: undefined,
-    rawTx: undefined
+    userNosend: vargs.options.noSend ?? false,
+    hidden: false,
+    userAborted: false,
+    rawTxDraft: undefined,
+    inputBeefDraft: storageBeef.toBinary(),
+    notifyJson: undefined,
+    rowVersion: 0
   }
-  // new-schema additive wiring: use insertLegacyTransaction so that post-cutover
-  // this row lands in `transactions_legacy` (not the new `transactions` table,
-  // which requires a non-null txid that is unknown until signing).
-  // Pre-cutover this falls through to the standard `transactions` table.
-  // See docs/CREATEACTION_BLOCKERS.md §3 Option B (wiring session).
-  newTx.transactionId = await storage.insertLegacyTransaction(newTx)
+  const actionId = await storage.insertAction(draft)
 
   for (const label of vargs.labels) {
     const txLabel = await storage.findOrInsertTxLabel(userId, label)
-    // new-schema additive wiring: post-cutover the tx_labels_map.transactionId FK points
-    // to actions.actionId, but we only have the legacyTransactionId here. Use the
-    // legacy-safe shim which bypasses FK constraints temporarily. processAction
-    // rewrites these rows to the new actionId via repointLabelsToActionId.
-    await storage.findOrInsertLegacyTxLabelMap(verifyId(newTx.transactionId), verifyId(txLabel.txLabelId))
+    // v3 schema: tx_labels_map FKs `actions.actionId` directly. No bridge.
+    await storage.findOrInsertTxLabelMap(actionId, verifyId(txLabel.txLabelId))
   }
 
-  return newTx
+  return {
+    transactionId: actionId,
+    reference: draft.reference,
+    version: draft.version,
+    lockTime: draft.lockTime
+  }
 }
 
 /**
@@ -830,13 +864,12 @@ async function fundNewTransactionSdk (
     if (noSendChange.length > 0) {
       const o = noSendChange.pop()!
       outputs[o.outputId] = o
-      // allocate the output in storage, noSendChange is by definition spendable false and part of noSpend transaction batch.
-      // Post-cutover: outputs.spentBy FK → new transactions; ctx.transactionId is from
-      // transactions_legacy. Use markOutputAsSpentBy for FK bypass. Mapping §2: bridge-period.
-      await storage.markOutputAsSpentBy(o.outputId, {
-        spendable: false,
-        spentBy: ctx.transactionId
-      })
+      // v3 schema: outputs.spentByActionId FKs actions.actionId.
+      // ctx.transactionId is the new unsigned action's actionId.
+      await storage.markOutputAsSpentBy(
+        o.outputId,
+        { spendable: false, spentByActionId: ctx.transactionId } as Partial<TableOutput> & { spentByActionId: number }
+      )
       o.spendable = false
       o.spentBy = ctx.transactionId
       const r: GenerateChangeSdkChangeInput = {
@@ -870,10 +903,12 @@ async function fundNewTransactionSdk (
       noSendChange.push(nsco)
       return
     }
+    // v3 schema: clear outputs.spentByActionId on release. The TableOutput
+    // interface still exposes this as `spentBy` for back-compat.
     await storage.updateOutput(outputId, {
       spendable: true,
-      spentBy: undefined
-    })
+      spentByActionId: undefined
+    } as Partial<TableOutput> & { spentByActionId: undefined })
   }
 
   const gcr = await generateChangeSdk(params, allocateChangeInput, releaseChangeInput, vargs.logger)

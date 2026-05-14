@@ -1,5 +1,5 @@
 import { Base64String, PubKeyHex, HexString } from '@bsv/sdk'
-import { ProcessingStatus, ProvenTxReqStatus, SyncStatus, TransactionStatus } from '../../sdk'
+import { ProcessingStatus, SyncStatus } from '../../sdk'
 import {
   TableAction,
   TableCertificate,
@@ -12,11 +12,8 @@ import {
   TableOutputBasket,
   TableOutputTag,
   TableOutputTagMap,
-  TableProvenTx,
-  TableProvenTxReq,
   TableSyncState,
   TableSettings,
-  TableTransaction,
   TableTransactionNew,
   TableTxAudit,
   TableTxLabel,
@@ -24,6 +21,15 @@ import {
   TableUser
 } from './tables'
 
+/**
+ * IndexedDB schema for the v3 greenfield wallet-toolbox storage layout.
+ *
+ * The IDB mirror mirrors the v3 SQL schema 1:1 — there is no bridge period and
+ * no `proven_txs` / `proven_tx_reqs` / `transactions_legacy` stores. Per-user
+ * intent lives in `actions`; canonical chain state in `transactions` (PK txid).
+ *
+ * See `KnexMigrations.ts` for the SQL counterpart.
+ */
 export interface StorageIdbSchema {
   certificates: {
     key: number
@@ -46,7 +52,7 @@ export interface StorageIdbSchema {
     value: TableCommission
     indexes: {
       userId: number
-      transactionId: number
+      actionId: number
     }
   }
   monitorEvents: {
@@ -57,11 +63,12 @@ export interface StorageIdbSchema {
     key: number
     value: TableOutput
     indexes: {
-      userId: number
-      transactionId: number
-      basketId: number
-      spentBy: string
-      transactionId_vout_userId: [number, number, number]
+      actionId_vout: [number, number]
+      userId_basketId_spendable_satoshis: [number, number, boolean, number]
+      userId_spendable_outputId: [number, boolean, number]
+      userId_txid: [number, HexString]
+      spentByActionId: number
+      matures_at_height: number
     }
   }
   outputBaskets: {
@@ -88,23 +95,6 @@ export interface StorageIdbSchema {
       outputId: number
     }
   }
-  provenTxs: {
-    key: number
-    value: TableProvenTx
-    indexes: {
-      txid: HexString
-    }
-  }
-  provenTxReqs: {
-    key: number
-    value: TableProvenTxReq
-    indexes: {
-      provenTxId: number
-      txid: HexString
-      status: ProvenTxReqStatus
-      batch: string
-    }
-  }
   syncStates: {
     key: number
     value: TableSyncState
@@ -119,14 +109,32 @@ export interface StorageIdbSchema {
     value: TableSettings
     indexes: Record<string, never>
   }
+  /**
+   * v3 canonical chain record. `txid` is the primary key — there is no
+   * integer `transactionId`. Per-user intent lives in `actions`.
+   */
   transactions: {
+    key: HexString
+    value: TableTransactionNew
+    indexes: {
+      processing: ProcessingStatus
+      batch: string
+      idempotencyKey: string
+    }
+  }
+  /**
+   * Per-user view of a (potential) transaction. PK `actionId`.
+   * FK `txid` is NULL while the action is an unsigned draft.
+   */
+  actions: {
     key: number
-    value: TableTransaction
+    value: TableAction
     indexes: {
       userId: number
-      provenTxId: number
-      reference: string
-      status: TransactionStatus
+      userId_txid: [number, HexString]
+      userId_reference: [number, string]
+      userId_hidden: [number, boolean]
+      txid: HexString
     }
   }
   txLabels: {
@@ -141,7 +149,7 @@ export interface StorageIdbSchema {
     key: number
     value: TableTxLabelMap
     indexes: {
-      transactionId: number
+      actionId: number
       txLabelId: number
     }
   }
@@ -150,27 +158,6 @@ export interface StorageIdbSchema {
     value: TableUser
     indexes: {
       identityKey: string
-    }
-  }
-  // New additive object stores. Existing stores remain unchanged for compatibility.
-  transactionsNew: {
-    key: number
-    value: TableTransactionNew
-    indexes: {
-      txid: HexString
-      processing: ProcessingStatus
-      batch: string
-      idempotencyKey: string
-    }
-  }
-  actions: {
-    key: number
-    value: TableAction
-    indexes: {
-      userId: number
-      transactionId: number
-      userId_transactionId: [number, number]
-      userId_reference: [number, string]
     }
   }
   chainTip: {
@@ -182,7 +169,7 @@ export interface StorageIdbSchema {
     key: number
     value: TableTxAudit
     indexes: {
-      transactionId: number
+      txid: HexString
       actionId: number
       event: string
     }

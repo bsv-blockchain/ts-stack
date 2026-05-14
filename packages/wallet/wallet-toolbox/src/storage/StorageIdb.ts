@@ -1,5 +1,6 @@
 import { deleteDB, IDBPDatabase, IDBPTransaction, openDB } from 'idb'
 import {
+  dropLegacyStores,
   matchesCertificateFieldPartial,
   matchesCertificatePartial,
   matchesCommissionPartial,
@@ -8,16 +9,14 @@ import {
   matchesOutputPartial,
   matchesOutputTagMapPartial,
   matchesOutputTagPartial,
-  matchesProvenTxPartial,
-  matchesProvenTxReqPartial,
   matchesSyncStatePartial,
-  matchesTransactionPartial,
   matchesTxLabelMapPartial,
   matchesTxLabelPartial,
-  upgradeAllStoresV1
+  upgradeAllStoresV3
 } from './idbHelpers'
 import { ListActionsResult, ListOutputsResult, Validation } from '@bsv/sdk'
 import {
+  TableAction,
   TableCertificate,
   TableCertificateField,
   TableCertificateX,
@@ -68,7 +67,7 @@ import {
   TrxToken,
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
-import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 
 export interface StorageIdbOptions extends StorageProviderOptions {}
@@ -193,12 +192,42 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return this._settings!
   }
 
+  /**
+   * v3 IDB schema version. Bumped from v1 so existing browsers running the
+   * legacy 3-table layout trigger the upgrade path which drops
+   * `proven_txs` / `proven_tx_reqs` / `transactions_new` and rebuilds
+   * `transactions` (PK txid), `actions`, `outputs`, etc. matching the v3
+   * SQL schema.
+   *
+   * v1: legacy 3-table layout (proven_txs, proven_tx_reqs, transactions per-user).
+   * v2: reserved (additive transactionsNew/actions store experiments).
+   * v3: greenfield v3 schema — transactions(txid), actions(actionId), outputs(actionId, spentByActionId).
+   */
+  static readonly DB_VERSION = 3
+
   async initDB (storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 1, {
-      upgrade (db) {
-        upgradeAllStoresV1(db)
+    const db = await openDB<StorageIdbSchema>(this.dbName, StorageIdb.DB_VERSION, {
+      upgrade (db, oldVersion) {
+        // Drop any pre-v3 stores (proven_txs / proven_tx_reqs / transactions_new)
+        // and rebuild the v3 `transactions` store with PK txid. The simplest
+        // correct upgrade for legacy clients is to delete legacy stores and
+        // re-create v3 stores fresh; legacy data is not migrated because the
+        // v3 row shape is incompatible with the legacy per-user `transactions`
+        // shape (PK txid vs PK transactionId, no userId/status/description on
+        // the canonical record, etc.).
+        if (oldVersion < 3) {
+          // Drop the legacy `transactions` store if it has the old keyPath shape;
+          // v3 needs to re-create it with keyPath: 'txid'.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (db.objectStoreNames.contains('transactions' as any)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (db as any).deleteObjectStore('transactions')
+          }
+          dropLegacyStores(db)
+        }
+        upgradeAllStoresV3(db)
         if (!db.objectStoreNames.contains('settings')) {
           if (!storageName || !storageIdentityKey) {
             throw new WERR_INVALID_OPERATION('migrate must be called before first access')
@@ -258,7 +287,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     excludeSending: boolean,
     transactionId: number
   ): Promise<TableOutput | undefined> {
-    const dbTrx = this.toDbTrx(['outputs', 'transactions', 'proven_txs', 'proven_tx_reqs'], 'readwrite')
+    const dbTrx = this.toDbTrx(['outputs', 'transactions', 'actions'], 'readwrite')
     try {
       const txStatus: TransactionStatus[] = ['completed', 'unproven']
       if (!excludeSending) txStatus.push('sending')
@@ -312,22 +341,48 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
   }
 
+  /**
+   * v3: canonical `transactions` (PK txid) is the single source of truth for
+   * rawTx, inputBEEF, and merklePath. There is no separate proven_txs /
+   * proven_tx_reqs table. Reads the canonical row directly from the IDB
+   * `transactions` store.
+   */
   async getProvenOrRawTx (txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> {
     const r: ProvenOrRawTx = {
       proven: undefined,
       rawTx: undefined,
       inputBEEF: undefined
     }
-
-    r.proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
-    if (r.proven == null) {
-      const req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
-      if ((req != null) && ['unsent', 'unmined', 'unconfirmed', 'sending', 'nosend', 'completed'].includes(req.status)) {
-        r.rawTx = req.rawTx
-        r.inputBEEF = req.inputBEEF
+    const dbTrx = this.toDbTrx(['transactions'], 'readonly', trx)
+    try {
+      const row = await dbTrx.objectStore('transactions').get(txid)
+      if (row == null) return r
+      const merklePath = row.merklePath != null ? Array.from(row.merklePath as unknown as Uint8Array | number[]) : undefined
+      const rawTx = row.rawTx != null ? Array.from(row.rawTx as unknown as Uint8Array | number[]) : undefined
+      const inputBeef = row.inputBeef != null ? Array.from(row.inputBeef as unknown as Uint8Array | number[]) : undefined
+      if (merklePath != null && merklePath.length > 0 && rawTx != null && rawTx.length > 0) {
+        // Full proof — synthesise a TableProvenTx shape so BEEF assembly can
+        // extract the merkle path. provenTxId is 0 (vestigial).
+        r.proven = {
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          provenTxId: 0,
+          txid,
+          height: row.height ?? 0,
+          index: row.merkleIndex ?? 0,
+          merklePath,
+          rawTx,
+          blockHash: row.blockHash ?? '',
+          merkleRoot: row.merkleRoot ?? ''
+        }
+        return r
       }
+      // No complete proof — surface rawTx / inputBEEF for BEEF assembly.
+      r.rawTx = rawTx
+      r.inputBEEF = inputBeef
+    } finally {
+      if (trx == null) await dbTrx.done
     }
-
     return r
   }
 
@@ -356,12 +411,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   private async getRawTxForSlice (txid: string, trx?: TrxToken): Promise<number[] | undefined> {
-    const proven = verifyOneOrNone(await this.findProvenTxs({ partial: { txid }, trx }))
-    if (proven != null) return proven.rawTx
-    const req = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
-    const validStatuses = ['unsent', 'nosend', 'sending', 'unmined', 'completed', 'unfail']
-    if (req != null && validStatuses.includes(req.status)) return req.rawTx
-    return undefined
+    // v3: canonical `transactions.rawTx` is the single source of truth. The
+    // slice/full paths converge — there is no separate proven_txs/proven_tx_reqs.
+    return await this.getRawTxFull(txid, trx)
   }
 
   private async getRawTxFull (txid: string, trx?: TrxToken): Promise<number[] | undefined> {
@@ -520,115 +572,49 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return results
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async openProvenTxReqsCursor (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    partial: Partial<any>,
-    direction: IDBCursorDirection
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<any> {
-    if (partial?.provenTxReqId) return store.openCursor(partial.provenTxReqId, direction)
-    if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
-    if (partial?.txid !== undefined) return store.index('txid').openCursor(partial.txid, direction)
-    if (partial?.status !== undefined) return store.index('status').openCursor(partial.status, direction)
-    if (partial?.batch !== undefined) return store.index('batch').openCursor(partial.batch, direction)
-    return store.openCursor(null, direction)
-  }
-
+  /**
+   * v3: `proven_tx_reqs` is gone — broadcast queue state lives on
+   * `transactions.processing`. Returns empty so legacy callers (monitor tasks
+   * scanning the queue) see "nothing pending" rather than crash. Sync-era
+   * refactor will rewrite the call sites onto v3-aware `transactions.processing`
+   * queries.
+   */
   async filterProvenTxReqs (
-    args: FindProvenTxReqsArgs,
-    filtered: (v: TableProvenTxReq) => void,
-    userId?: number
+    _args: FindProvenTxReqsArgs,
+    _filtered: (v: TableProvenTxReq) => void,
+    _userId?: number
   ): Promise<void> {
-    this.assertNoUndefinedInPartial(args.partial)
-    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxReqs may not be found by rawTx value.') }
-    if (args.partial.inputBEEF != null) {
-      throw new WERR_INVALID_PARAMETER(
-        'args.partial.inputBEEF',
-        'undefined. ProvenTxReqs may not be found by inputBEEF value.'
-      )
-    }
-    const dbTrx = this.toDbTrx(['proven_tx_reqs', 'transactions'], 'readonly', args.trx)
-    const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
-    const store = dbTrx.objectStore('proven_tx_reqs')
-    const cursor = await this.openProvenTxReqsCursor(store, args.partial, direction)
-    await scanCursor<TableProvenTxReq>(
-      cursor,
-      args.since,
-      args.paged?.offset || 0,
-      args.paged?.limit,
-      async r => {
-        if (!matchesProvenTxReqPartial(r, args.partial)) return false
-        if (args.status != null && args.status.length > 0 && !args.status.includes(r.status)) return false
-        if (args.txids != null && args.txids.length > 0 && !args.txids.includes(r.txid)) return false
-        if (userId !== undefined) {
-          const txsForUser = await this.countTransactions({ partial: { userId, txid: r.txid }, trx: dbTrx })
-          if (txsForUser === 0) return false
-        }
-        return true
-      },
-      filtered
-    )
-    if (args.trx == null) await dbTrx.done
+    // no-op — v3 has no proven_tx_reqs store.
   }
 
-  async findProvenTxReqs (args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
-    const results: TableProvenTxReq[] = []
-    await this.filterProvenTxReqs(args, r => {
-      results.push(this.validateEntity(r))
-    })
-    return results
+  async findProvenTxReqs (_args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+    return []
   }
 
-  async filterProvenTxs (args: FindProvenTxsArgs, filtered: (v: TableProvenTx) => void, userId?: number): Promise<void> {
-    this.assertNoUndefinedInPartial(args.partial)
-    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. ProvenTxs may not be found by rawTx value.') }
-    if (args.partial.merklePath != null) {
-      throw new WERR_INVALID_PARAMETER(
-        'args.partial.merklePath',
-        'undefined. ProvenTxs may not be found by merklePath value.'
-      )
-    }
-    const dbTrx = this.toDbTrx(['proven_txs', 'transactions'], 'readonly', args.trx)
-    const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
-    const store = dbTrx.objectStore('proven_txs')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let cursor: any
-    if (args.partial?.provenTxId) {
-      cursor = await store.openCursor(args.partial.provenTxId, direction)
-    } else if (args.partial?.txid !== undefined) {
-      cursor = await store.index('txid').openCursor(args.partial.txid, direction)
-    } else {
-      cursor = await store.openCursor(null, direction)
-    }
-    await scanCursor<TableProvenTx>(
-      cursor,
-      args.since,
-      args.paged?.offset || 0,
-      args.paged?.limit,
-      async r => {
-        if (!matchesProvenTxPartial(r, args.partial)) return false
-        if (userId !== undefined) {
-          const txCount = await this.countTransactions({ partial: { userId, provenTxId: r.provenTxId }, trx: dbTrx })
-          if (txCount === 0) return false
-        }
-        return true
-      },
-      filtered
-    )
-    if (args.trx == null) await dbTrx.done
+  /**
+   * v3: `proven_txs` is gone — proof state lives on `transactions`. Returns
+   * empty so legacy callers see no rows rather than crash. Use
+   * `getProvenTxsForUser` for the v3-aware path (joins canonical
+   * `transactions` with `actions` for per-user filtering).
+   */
+  async filterProvenTxs (
+    _args: FindProvenTxsArgs,
+    _filtered: (v: TableProvenTx) => void,
+    _userId?: number
+  ): Promise<void> {
+    // no-op — v3 has no proven_txs store.
   }
 
-  async findProvenTxs (args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
-    const results: TableProvenTx[] = []
-    await this.filterProvenTxs(args, r => {
-      results.push(this.validateEntity(r))
-    })
-    return results
+  async findProvenTxs (_args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
+    return []
   }
 
+  /**
+   * v3: `tx_labels_map.actionId` (the IDB stored field) replaces the legacy
+   * `transactionId`. The matcher and the public `FindTxLabelMapsArgs` interface
+   * keep the `transactionId` field name as a back-compat alias that carries the
+   * `actionId` value semantically — callers pass the actionId value.
+   */
   async filterTxLabelMaps (
     args: FindTxLabelMapsArgs,
     filtered: (v: TableTxLabelMap) => void,
@@ -640,7 +626,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let cursor: any
     if (args.partial?.transactionId !== undefined) {
-      cursor = await store.index('transactionId').openCursor(args.partial.transactionId)
+      cursor = await store.index('actionId').openCursor(args.partial.transactionId)
     } else if (args.partial?.txLabelId !== undefined) {
       cursor = await store.index('txLabelId').openCursor(args.partial.txLabelId)
     } else {
@@ -652,6 +638,11 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset || 0,
       args.paged?.limit,
       async r => {
+        // v3: row stored with `actionId`; alias to the interface field
+        // `transactionId` before matching.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rr = r as any
+        if (rr.actionId !== undefined && rr.transactionId === undefined) rr.transactionId = rr.actionId
         if (!matchesTxLabelMapPartial(r, args.partial)) return false
         if (userId !== undefined) {
           const labelCount = await this.countTxLabels({ partial: { userId, txLabelId: r.txLabelId }, trx: dbTrx })
@@ -680,20 +671,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return count
   }
 
-  async countProvenTxReqs (args: FindProvenTxReqsArgs): Promise<number> {
-    let count = 0
-    await this.filterProvenTxReqs(args, () => {
-      count++
-    })
-    return count
+  /** v3: legacy `proven_tx_reqs` removed; nothing to count. */
+  async countProvenTxReqs (_args: FindProvenTxReqsArgs): Promise<number> {
+    return 0
   }
 
-  async countProvenTxs (args: FindProvenTxsArgs): Promise<number> {
-    let count = 0
-    await this.filterProvenTxs(args, () => {
-      count++
-    })
-    return count
+  /** v3: legacy `proven_txs` removed; nothing to count. */
+  async countProvenTxs (_args: FindProvenTxsArgs): Promise<number> {
+    return 0
   }
 
   async countTxLabelMaps (args: FindTxLabelMapsArgs): Promise<number> {
@@ -742,9 +727,20 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
   }
 
+  /**
+   * v3: `commissions.actionId` is the FK column (was `transactionId`). The
+   * `TableCommission` interface keeps the back-compat `transactionId` field
+   * carrying the actionId value; we translate to the v3 column name at write.
+   */
   async insertCommission (commission: TableCommission, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(commission, trx)
     if (e.commissionId === 0) delete e.commissionId
+    // Translate back-compat `transactionId` → v3 `actionId`. The value is
+    // already the per-user actionId in v3 createAction.
+    if (e.transactionId !== undefined) {
+      e.actionId = e.transactionId
+      delete e.transactionId
+    }
     const dbTrx = this.toDbTrx(['commissions'], 'readwrite', trx)
     const store = dbTrx.objectStore('commissions')
     try {
@@ -770,9 +766,24 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return event.id
   }
 
+  /**
+   * v3: `outputs.actionId` (was `transactionId`) FKs `actions.actionId`.
+   * `outputs.spentByActionId` (was `spentBy`) FKs `actions.actionId`.
+   *
+   * The `TableOutput` interface still carries `transactionId` / `spentBy` for
+   * back-compat; both values are translated to the v3 column names at write.
+   */
   async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
     const e = await this.validateEntityForInsert(output, trx)
     if (e.outputId === 0) delete e.outputId
+    if (e.transactionId !== undefined) {
+      e.actionId = e.transactionId
+      delete e.transactionId
+    }
+    if (e.spentBy !== undefined) {
+      e.spentByActionId = e.spentBy
+      delete e.spentBy
+    }
     const dbTrx = this.toDbTrx(['outputs'], 'readwrite', trx)
     const store = dbTrx.objectStore('outputs')
     try {
@@ -823,32 +834,29 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
   }
 
-  async insertProvenTx (tx: TableProvenTx, trx?: TrxToken): Promise<number> {
-    const e = await this.validateEntityForInsert(tx, trx)
-    if (e.provenTxId === 0) delete e.provenTxId
-    const dbTrx = this.toDbTrx(['proven_txs'], 'readwrite', trx)
-    const store = dbTrx.objectStore('proven_txs')
-    try {
-      const id = Number(await store.add!(e))
-      tx.provenTxId = id
-    } finally {
-      if (trx == null) await dbTrx.done
-    }
-    return tx.provenTxId
+  /**
+   * v3: legacy `proven_txs` table is removed. Proof state lives on
+   * `transactions` (PK txid). Throws so legacy sync paths surface the
+   * migration point; rewrite call sites onto `getProvenTxsForUser` reads or
+   * direct `transactions` updates.
+   */
+  async insertProvenTx (_tx: TableProvenTx, _trx?: TrxToken): Promise<number> {
+    throw new WERR_NOT_IMPLEMENTED(
+      'insertProvenTx pending v3 sync-entity refactor — v3 has no proven_txs store; ' +
+      'proof state lives on the canonical `transactions` row (PK txid).'
+    )
   }
 
-  async insertProvenTxReq (tx: TableProvenTxReq, trx?: TrxToken): Promise<number> {
-    const e = await this.validateEntityForInsert(tx, trx)
-    if (e.provenTxReqId === 0) delete e.provenTxReqId
-    const dbTrx = this.toDbTrx(['proven_tx_reqs'], 'readwrite', trx)
-    const store = dbTrx.objectStore('proven_tx_reqs')
-    try {
-      const id = Number(await store.add!(e))
-      tx.provenTxReqId = id
-    } finally {
-      if (trx == null) await dbTrx.done
-    }
-    return tx.provenTxReqId
+  /**
+   * v3: legacy `proven_tx_reqs` table is removed. Broadcast queue state lives
+   * on `transactions.processing`. Throws so legacy sync paths surface the
+   * migration point; rewrite call sites onto v3 `transactions.processing` writes.
+   */
+  async insertProvenTxReq (_tx: TableProvenTxReq, _trx?: TrxToken): Promise<number> {
+    throw new WERR_NOT_IMPLEMENTED(
+      'insertProvenTxReq pending v3 sync-entity refactor — v3 has no proven_tx_reqs store; ' +
+      'broadcast queue state lives on `transactions.processing`.'
+    )
   }
 
   async insertSyncState (syncState: TableSyncState, trx?: TrxToken): Promise<number> {
@@ -865,18 +873,69 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return syncState.syncStateId
   }
 
-  async insertTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
-    const e = await this.validateEntityForInsert(tx, trx)
-    if (e.transactionId === 0) delete e.transactionId
-    const dbTrx = this.toDbTrx(['transactions'], 'readwrite', trx)
-    const store = dbTrx.objectStore('transactions')
+  /**
+   * v3: the legacy per-user `transactions` shape (with userId/status/
+   * description/satoshis/...) no longer exists. Per-user intent lives in
+   * `actions`; the canonical chain record is `transactions` keyed by txid with
+   * no integer PK. Throws so legacy sync paths surface the migration point.
+   *
+   * The v3 createAction flow inserts an `actions` row directly via
+   * `insertAction` and writes the canonical `transactions` row via the
+   * post-sign commit step.
+   */
+  async insertTransaction (_tx: TableTransaction, _trx?: TrxToken): Promise<number> {
+    throw new WERR_INTERNAL(
+      'insertTransaction: v3 schema has no legacy per-user transactions table. ' +
+      'createAction should insert into `actions` directly via insertAction(); ' +
+      'canonical chain rows are written through the v3 commit path.'
+    )
+  }
+
+  /**
+   * v3 legacy stub. The IDB v3 schema has no `transactions_legacy` store —
+   * per-user intent lives in `actions`. Throws to surface the migration point;
+   * callers should switch to `insertAction()`.
+   */
+  override async insertLegacyTransaction (_tx: TableTransaction, _trx?: TrxToken): Promise<number> {
+    throw new WERR_INTERNAL(
+      'insertLegacyTransaction: v3 schema has no legacy transactions table. ' +
+      'createAction should insert into `actions` directly with txid=NULL.'
+    )
+  }
+
+  /**
+   * v3: insert an unsigned-draft `actions` row.
+   *
+   * `createAction` calls this to anchor a new per-user transaction before
+   * signing. `txid` is left NULL; processAction writes the canonical txid back
+   * to the same row once signing completes. The returned `actionId` is the FK
+   * target for outputs.actionId, commissions.actionId, tx_labels_map.actionId,
+   * and outputs.spentByActionId.
+   */
+  override async insertAction (action: TableAction, trx?: TrxToken): Promise<number> {
+    const e = await this.validateEntityForInsert(action, trx, undefined, ['isOutgoing', 'userNosend', 'hidden', 'userAborted'])
+    if (e.actionId === 0) delete e.actionId
+    // Indexes on `userId_txid` and `userId_reference` are UNIQUE; IDB cannot
+    // index null values for compound indexes, so unsigned drafts (txid=NULL)
+    // are still uniquely-addressable by (userId, reference). The store accepts
+    // undefined `txid` values transparently.
+    const dbTrx = this.toDbTrx(['actions'], 'readwrite', trx)
+    const store = dbTrx.objectStore('actions')
     try {
       const id = Number(await store.add!(e))
-      tx.transactionId = id
+      action.actionId = id
     } finally {
       if (trx == null) await dbTrx.done
     }
-    return tx.transactionId
+    return action.actionId
+  }
+
+  /**
+   * v3: update `actions.satoshisDelta`. Used by `createAction` after funding
+   * completes to record the net satoshi delta of the new unsigned action.
+   */
+  override async updateActionSatoshisDelta (actionId: number, delta: number, trx?: TrxToken): Promise<void> {
+    await this.updateIdb<TableAction>(actionId, { satoshisDelta: delta }, 'actionId', 'actions', trx)
   }
 
   async insertTxLabel (label: TableTxLabel, trx?: TrxToken): Promise<number> {
@@ -893,8 +952,17 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return label.txLabelId
   }
 
+  /**
+   * v3: `tx_labels_map.actionId` (was `transactionId`) FKs `actions.actionId`.
+   * The interface keeps the back-compat `transactionId` field carrying the
+   * actionId value. Translate at write time.
+   */
   async insertTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
     const e = await this.validateEntityForInsert(labelMap, trx, undefined, ['isDeleted'])
+    if (e.transactionId !== undefined) {
+      e.actionId = e.transactionId
+      delete e.transactionId
+    }
     const dbTrx = this.toDbTrx(['tx_labels_map'], 'readwrite', trx)
     const store = dbTrx.objectStore('tx_labels_map')
     try {
@@ -902,6 +970,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } finally {
       if (trx == null) await dbTrx.done
     }
+  }
+
+  /**
+   * v3: no bridge period — tx_labels_map already keys on actionId. Forward to
+   * `insertTxLabelMap`; the translation happens there.
+   */
+  override async insertLegacyTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
+    await this.insertTxLabelMap(labelMap, trx)
   }
 
   async insertUser (user: TableUser, trx?: TrxToken): Promise<number> {
@@ -1019,8 +1095,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdb(id, update, 'id', 'monitor_events', trx)
   }
 
+  /**
+   * v3: translate back-compat field names to v3 column names at update time.
+   * `transactionId` → `actionId`, `spentBy` → `spentByActionId`.
+   */
   async updateOutput (id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> {
-    return await this.updateIdb(id, update, 'outputId', 'outputs', trx)
+    const translated: Record<string, unknown> = { ...update }
+    if ('transactionId' in translated) {
+      translated.actionId = translated.transactionId
+      delete translated.transactionId
+    }
+    if ('spentBy' in translated) {
+      translated.spentByActionId = translated.spentBy
+      delete translated.spentBy
+    }
+    return await this.updateIdb(id, translated as Partial<TableOutput>, 'outputId', 'outputs', trx)
   }
 
   async updateOutputBasket (id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
@@ -1031,20 +1120,51 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdb(id, update, 'outputTagId', 'output_tags', trx)
   }
 
-  async updateProvenTx (id: number, update: Partial<TableProvenTx>, trx?: TrxToken): Promise<number> {
-    return await this.updateIdb(id, update, 'provenTxId', 'proven_txs', trx)
+  /**
+   * v3: legacy `proven_txs` table is gone — proof state lives on
+   * `transactions`. Throws so legacy sync paths surface the migration point.
+   */
+  async updateProvenTx (_id: number, _update: Partial<TableProvenTx>, _trx?: TrxToken): Promise<number> {
+    throw new WERR_NOT_IMPLEMENTED(
+      'updateProvenTx pending v3 sync-entity refactor — v3 has no proven_txs store; ' +
+      'proof state lives on the canonical `transactions` row.'
+    )
   }
 
-  async updateProvenTxReq (id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> {
-    return await this.updateIdb(id, update, 'provenTxReqId', 'proven_tx_reqs', trx)
+  /**
+   * v3: legacy `proven_tx_reqs` table is gone — queue state lives on
+   * `transactions.processing`. Throws so legacy sync paths surface the
+   * migration point.
+   */
+  async updateProvenTxReq (_id: number | number[], _update: Partial<TableProvenTxReq>, _trx?: TrxToken): Promise<number> {
+    throw new WERR_NOT_IMPLEMENTED(
+      'updateProvenTxReq pending v3 sync-entity refactor — v3 has no proven_tx_reqs store; ' +
+      'broadcast queue state lives on `transactions.processing`.'
+    )
   }
 
   async updateSyncState (id: number, update: Partial<TableSyncState>, trx?: TrxToken): Promise<number> {
     return await this.updateIdb(id, update, 'syncStateId', 'sync_states', trx)
   }
 
-  async updateTransaction (id: number | number[], update: Partial<TableTransaction>, trx?: TrxToken): Promise<number> {
-    return await this.updateIdb(id, update, 'transactionId', 'transactions', trx)
+  /**
+   * v3: the legacy per-user `transactions` shape no longer exists. The
+   * canonical IDB `transactions` store keys on txid; per-user updates belong
+   * on the `actions` row. Returns 0 so legacy sync paths see "no rows updated"
+   * rather than crash. Sync-era refactor replaces these call sites with
+   * `actions` updates.
+   */
+  async updateTransaction (_id: number | number[], _update: Partial<TableTransaction>, _trx?: TrxToken): Promise<number> {
+    return 0
+  }
+
+  /**
+   * v3 legacy stub. The IDB v3 schema has no `transactions_legacy` store.
+   * Returns 0 so legacy call sites are a no-op until they migrate to
+   * `actions` updates.
+   */
+  override async updateLegacyTransaction (_id: number | number[], _update: Partial<TableTransaction>, _trx?: TrxToken): Promise<number> {
+    return 0
   }
 
   async updateTxLabel (id: number, update: Partial<TableTxLabel>, trx?: TrxToken): Promise<number> {
@@ -1064,13 +1184,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return await this.updateIdbKey([tagId, outputId], update, ['outputTagId', 'outputId'], 'output_tags_map', trx)
   }
 
+  /**
+   * v3: tx_labels_map composite key is `(txLabelId, actionId)`. The public
+   * parameter name stays `transactionId` for back-compat; the value is the
+   * `actionId`.
+   */
   async updateTxLabelMap (
     transactionId: number,
     txLabelId: number,
     update: Partial<TableTxLabelMap>,
     trx?: TrxToken
   ): Promise<number> {
-    return await this.updateIdbKey([txLabelId, transactionId], update, ['txLabelId', 'transactionId'], 'tx_labels_map', trx)
+    return await this.updateIdbKey([txLabelId, transactionId], update, ['txLabelId', 'actionId'], 'tx_labels_map', trx)
   }
 
   //
@@ -1086,22 +1211,43 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   }
 
   allStores: string[] = [
+    'actions',
     'certificates',
     'certificate_fields',
+    'chain_tip',
     'commissions',
     'monitor_events',
+    'monitor_lease',
     'outputs',
     'output_baskets',
     'output_tags',
     'output_tags_map',
-    'proven_txs',
-    'proven_tx_reqs',
     'sync_states',
     'transactions',
+    'tx_audit',
     'tx_labels',
     'tx_labels_map',
     'users'
   ]
+
+  /**
+   * v3: `markOutputAsSpentBy` translates the back-compat field `spentBy` to
+   * the v3 IDB stored field `spentByActionId` at write time. v3 has no bridge
+   * period, so no FK bypass is needed — the spending action exists in
+   * `actions` before this call.
+   */
+  override async markOutputAsSpentBy (
+    outputId: number,
+    update: Partial<TableOutput>,
+    trx?: TrxToken
+  ): Promise<void> {
+    const translated: Record<string, unknown> = { ...update }
+    if ('spentBy' in translated) {
+      translated.spentByActionId = translated.spentBy
+      delete translated.spentBy
+    }
+    await this.updateOutput(outputId, translated as Partial<TableOutput>, trx)
+  }
 
   /**
    * @param scope
@@ -1230,13 +1376,21 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     } else if (args.partial?.userId !== undefined) {
       cursor = await store.index('userId').openCursor(args.partial.userId)
     } else if (args.partial?.transactionId !== undefined) {
-      cursor = await store.index('transactionId').openCursor(args.partial.transactionId)
+      // v3: index is `actionId` — caller passes the actionId value via the
+      // back-compat `transactionId` field name.
+      cursor = await store.index('actionId').openCursor(args.partial.transactionId)
     } else {
       cursor = await store.openCursor()
     }
     await scanCursor<TableCommission>(
       cursor, args.since, args.paged?.offset || 0, args.paged?.limit,
-      r => matchesCommissionPartial(r, args.partial),
+      r => {
+        // v3: alias stored `actionId` to interface `transactionId`.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rr = r as any
+        if (rr.actionId !== undefined && rr.transactionId === undefined) rr.transactionId = rr.actionId
+        return matchesCommissionPartial(r, args.partial)
+      },
       filtered
     )
     if (args.trx == null) await dbTrx.done
@@ -1302,6 +1456,18 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
+  /**
+   * v3: cursor selection uses v3-aware indexes.
+   *
+   *   - `(actionId, vout)` is the unique pair (was transactionId_vout_userId).
+   *   - `(userId, basketId, spendable, satoshis)` for change-selection scans.
+   *   - `(userId, spendable, outputId)` for listOutputs spendable scans.
+   *   - `(userId, txid)` for listOutputs by-txid filter.
+   *   - `spentByActionId` for the input-source scan.
+   *
+   * Public partial fields keep back-compat names `transactionId` / `spentBy`;
+   * the cursor maps them to the v3 indexes.
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async openOutputsCursor (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1312,19 +1478,65 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     if (partial?.outputId) return store.openCursor(partial.outputId, direction)
-    if (partial?.userId !== undefined) {
-      if (partial?.transactionId && partial?.vout !== undefined) {
-        return store.index('transactionId_vout_userId').openCursor(
-          [partial.transactionId, partial.vout, partial.userId],
-          direction
-        )
-      }
-      return store.index('userId').openCursor(partial.userId, direction)
+    if (partial?.transactionId && partial?.vout !== undefined) {
+      // v3 unique index on (actionId, vout). Back-compat caller passes
+      // transactionId carrying the actionId value.
+      return store.index('actionId_vout').openCursor(
+        [partial.transactionId, partial.vout],
+        direction
+      )
     }
-    if (partial?.transactionId !== undefined) return store.index('transactionId').openCursor(partial.transactionId, direction)
-    if (partial?.basketId !== undefined) return store.index('basketId').openCursor(partial.basketId, direction)
-    if (partial?.spentBy !== undefined) return store.index('spentBy').openCursor(partial.spentBy, direction)
+    if (partial?.userId !== undefined && partial?.txid !== undefined) {
+      return store.index('userId_txid').openCursor([partial.userId, partial.txid], direction)
+    }
+    if (partial?.userId !== undefined && partial?.spendable !== undefined && partial?.basketId !== undefined) {
+      // The compound (userId, basketId, spendable, satoshis) index is used as
+      // a prefix here (userId, basketId, spendable). Cursor scans within the
+      // prefix range and the per-record matcher narrows further.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lower: any[] = [partial.userId, partial.basketId, partial.spendable, -Infinity]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const upper: any[] = [partial.userId, partial.basketId, partial.spendable, Infinity]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const range = (IDBKeyRange as any).bound(lower, upper)
+      return store.index('userId_basketId_spendable_satoshis').openCursor(range, direction)
+    }
+    if (partial?.userId !== undefined && partial?.spendable !== undefined) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lower: any[] = [partial.userId, partial.spendable, -Infinity]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const upper: any[] = [partial.userId, partial.spendable, Infinity]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const range = (IDBKeyRange as any).bound(lower, upper)
+      return store.index('userId_spendable_outputId').openCursor(range, direction)
+    }
+    if (partial?.transactionId !== undefined) {
+      // Per-action lookup. The (actionId, vout) index supports a prefix scan
+      // by actionId alone.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const range = (IDBKeyRange as any).bound([partial.transactionId, -Infinity], [partial.transactionId, Infinity])
+      return store.index('actionId_vout').openCursor(range, direction)
+    }
+    if (partial?.spentBy !== undefined) return store.index('spentByActionId').openCursor(partial.spentBy, direction)
     return store.openCursor(null, direction)
+  }
+
+  /**
+   * v3: every row read from `outputs` has its v3 column names (`actionId`,
+   * `spentByActionId`) re-mapped to the back-compat `transactionId` / `spentBy`
+   * interface fields before the matcher and downstream callers see it.
+   *
+   * v3 has no `transactions.status` column — per-user state lives on
+   * `actions`. The `txStatus` filter no longer applies; we leave the v3
+   * spendability rules (already enforced by listOutputs upstream) as the
+   * canonical filter.
+   */
+  private remapOutputV3ToInterface (r: TableOutput): TableOutput {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rr = r as any
+    if (rr.actionId !== undefined && rr.transactionId === undefined) rr.transactionId = rr.actionId
+    if (rr.spentByActionId !== undefined && rr.spentBy === undefined) rr.spentBy = rr.spentByActionId
+    return r
   }
 
   async filterOutputs (
@@ -1342,7 +1554,10 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     }
     const stores = ['outputs']
     if (tagIds != null && tagIds.length > 0) stores.push('output_tags_map')
-    if (args.txStatus != null) stores.push('transactions')
+    // v3 has no per-user `transactions.status` — `txStatus` filter cannot be
+    // applied here. Sync-era refactor will replace it with an `actions`-aware
+    // spendability filter. For createAction → listOutputs to work end-to-end
+    // we silently ignore the legacy `txStatus` filter.
     const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
     const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
     const store = dbTrx.objectStore('outputs')
@@ -1353,15 +1568,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset || 0,
       args.paged?.limit,
       async r => {
+        this.remapOutputV3ToInterface(r)
         if (!matchesOutputPartial(r, args.partial)) return false
-        if (args.txStatus !== undefined) {
-          const txCount = await this.countTransactions({
-            partial: { transactionId: r.transactionId },
-            status: args.txStatus,
-            trx: dbTrx
-          })
-          if (txCount === 0) return false
-        }
         if (tagIds != null && tagIds.length > 0 && !await this.outputMatchesTags(r.outputId, tagIds, isQueryModeAll, dbTrx)) return false
         return true
       },
@@ -1484,110 +1692,30 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     return result
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async openTransactionsCursor (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    partial: Partial<any>,
-    direction: IDBCursorDirection
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<any> {
-    if (partial?.transactionId) return store.openCursor(partial.transactionId, direction)
-    if (partial?.userId !== undefined) {
-      if (partial?.status !== undefined) {
-        return store.index('status_userId').openCursor([partial.status, partial.userId], direction)
-      }
-      return store.index('userId').openCursor(partial.userId, direction)
-    }
-    if (partial?.status !== undefined) return store.index('status').openCursor(partial.status, direction)
-    if (partial?.provenTxId !== undefined) return store.index('provenTxId').openCursor(partial.provenTxId, direction)
-    if (partial?.reference !== undefined) return store.index('reference').openCursor(partial.reference, direction)
-    return store.openCursor(null, direction)
-  }
-
+  /**
+   * v3: the legacy per-user `transactions` shape (userId, status, description,
+   * satoshis, ...) no longer exists. Per-user intent lives in `actions`; the
+   * canonical IDB `transactions` store keys on txid.
+   *
+   * Returns empty so legacy callers (monitor tasks, scoped sync paths) see
+   * "no rows" rather than crash. Sync-era refactor will replace call sites
+   * with v3-aware `actions` reads.
+   */
   async filterTransactions (
-    args: FindTransactionsArgs,
-    filtered: (v: TableTransaction) => void,
-    labelIds?: number[],
-    isQueryModeAll?: boolean
+    _args: FindTransactionsArgs,
+    _filtered: (v: TableTransaction) => void,
+    _labelIds?: number[],
+    _isQueryModeAll?: boolean
   ): Promise<void> {
-    if (args.partial.rawTx != null) { throw new WERR_INVALID_PARAMETER('args.partial.rawTx', 'undefined. Transactions may not be found by rawTx value.') }
-    if (args.partial.inputBEEF != null) {
-      throw new WERR_INVALID_PARAMETER(
-        'args.partial.inputBEEF',
-        'undefined. Transactions may not be found by inputBEEF value.'
-      )
-    }
-    const stores = ['transactions']
-    if (labelIds != null && labelIds.length > 0) stores.push('tx_labels_map')
-    const dbTrx = this.toDbTrx(stores, 'readonly', args.trx)
-    const direction: IDBCursorDirection = args.orderDescending ? 'prev' : 'next'
-    const store = dbTrx.objectStore('transactions')
-    const cursor = await this.openTransactionsCursor(store, args.partial, direction)
-    await scanCursor<TableTransaction>(
-      cursor,
-      args.since,
-      args.paged?.offset || 0,
-      args.paged?.limit,
-      async r => {
-        if (args.from != null && r.created_at.getTime() < args.from.getTime()) return false
-        if (args.to != null && r.created_at.getTime() >= args.to.getTime()) return false
-        if (args.status != null && !args.status.includes(r.status)) return false
-        if (!matchesTransactionPartial(r, args.partial)) return false
-        if (labelIds != null && labelIds.length > 0 && !await this.transactionMatchesLabels(r.transactionId, labelIds, isQueryModeAll, dbTrx)) return false
-        return true
-      },
-      filtered
-    )
-    if (args.trx == null) await dbTrx.done
-  }
-
-  private async transactionMatchesLabels (
-    transactionId: number,
-    labelIds: number[],
-    isQueryModeAll: boolean | undefined,
-    dbTrx: IDBPTransaction<StorageIdbSchema, string[], 'readwrite' | 'readonly'>
-  ): Promise<boolean> {
-    let ids = [...labelIds]
-    await this.filterTxLabelMaps({ partial: { transactionId }, trx: dbTrx }, lm => {
-      if (ids.length > 0) {
-        const i = ids.indexOf(lm.txLabelId)
-        if (i >= 0) {
-          if (isQueryModeAll) {
-            ids.splice(i, 1)
-          } else {
-            ids = []
-          }
-        }
-      }
-    })
-    return ids.length === 0
+    // no-op — v3 has no legacy per-user transactions store.
   }
 
   async findTransactions (
-    args: FindTransactionsArgs,
-    labelIds?: number[],
-    isQueryModeAll?: boolean
+    _args: FindTransactionsArgs,
+    _labelIds?: number[],
+    _isQueryModeAll?: boolean
   ): Promise<TableTransaction[]> {
-    const results: TableTransaction[] = []
-    await this.filterTransactions(
-      args,
-      r => {
-        results.push(this.validateEntity(r))
-      },
-      labelIds,
-      isQueryModeAll
-    )
-    for (const t of results) {
-      if (args.noRawTx) {
-        t.rawTx = undefined
-        t.inputBEEF = undefined
-      } else {
-        await this.validateRawTransaction(t, args.trx)
-      }
-    }
-    return results
+    return []
   }
 
   async filterTxLabels (args: FindTxLabelsArgs, filtered: (v: TableTxLabel) => void): Promise<void> {

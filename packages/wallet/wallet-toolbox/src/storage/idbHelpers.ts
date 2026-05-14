@@ -7,6 +7,7 @@
 
 import { IDBPDatabase } from 'idb'
 import {
+  TableAction,
   TableCertificate,
   TableCertificateField,
   TableCommission,
@@ -15,10 +16,9 @@ import {
   TableOutputBasket,
   TableOutputTag,
   TableOutputTagMap,
-  TableProvenTx,
-  TableProvenTxReq,
   TableSyncState,
-  TableTransaction,
+  TableTransactionNew,
+  TableTxAudit,
   TableTxLabel,
   TableTxLabelMap
 } from './schema/tables'
@@ -66,35 +66,11 @@ export function matchesOutputTagMapPartial (r: TableOutputTagMap, partial: Parti
   )
 }
 
-export function matchesProvenTxReqPartial (r: TableProvenTxReq, partial: Partial<TableProvenTxReq>): boolean {
-  return (
-    eq(partial.provenTxReqId, r.provenTxReqId) &&
-    eq(partial.provenTxId, r.provenTxId) &&
-    dateEq(partial.created_at, r.created_at) &&
-    dateEq(partial.updated_at, r.updated_at) &&
-    eq(partial.status, r.status) &&
-    eq(partial.attempts, r.attempts) &&
-    eq(partial.notified, r.notified) &&
-    eq(partial.txid, r.txid) &&
-    eq(partial.batch, r.batch) &&
-    eq(partial.history, r.history) &&
-    eq(partial.notify, r.notify)
-  )
-}
-
-export function matchesProvenTxPartial (r: TableProvenTx, partial: Partial<TableProvenTx>): boolean {
-  return (
-    eq(partial.provenTxId, r.provenTxId) &&
-    dateEq(partial.created_at, r.created_at) &&
-    dateEq(partial.updated_at, r.updated_at) &&
-    eq(partial.txid, r.txid) &&
-    eq(partial.height, r.height) &&
-    eq(partial.index, r.index) &&
-    eq(partial.blockHash, r.blockHash) &&
-    eq(partial.merkleRoot, r.merkleRoot)
-  )
-}
-
+/**
+ * v3: `tx_labels_map` keys on `actionId`, not `transactionId`. The interface
+ * still exposes a back-compat `transactionId` field that carries the
+ * `actionId` value — the matcher reads that field.
+ */
 export function matchesTxLabelMapPartial (r: TableTxLabelMap, partial: Partial<TableTxLabelMap>): boolean {
   return (
     eq(partial.txLabelId, r.txLabelId) &&
@@ -134,6 +110,10 @@ export function matchesCertificatePartial (r: TableCertificate, partial: Partial
   )
 }
 
+/**
+ * v3: `commissions.actionId` FKs `actions.actionId`. The interface keeps the
+ * back-compat `transactionId` field carrying the same value.
+ */
 export function matchesCommissionPartial (r: TableCommission, partial: Partial<TableCommission>): boolean {
   return (
     eq(partial.commissionId, r.commissionId) &&
@@ -273,39 +253,53 @@ function matchesSyncStatePartialStrings (r: TableSyncState, partial: Partial<Tab
   )
 }
 
-export function matchesTransactionPartial (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
+/**
+ * v3: per-user transaction intent lives in `actions`. The interface name is
+ * `TableAction` and uses `actionId`/`txid` directly.
+ */
+export function matchesActionPartial (r: TableAction, partial: Partial<TableAction>): boolean {
   return (
-    matchesTransactionPartialIds(r, partial) &&
-    matchesTransactionPartialScalars(r, partial) &&
-    matchesTransactionPartialStrings(r, partial)
+    eq(partial.actionId, r.actionId) &&
+    eq(partial.userId, r.userId) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at) &&
+    eqNullable(partial.txid, r.txid) &&
+    eq(partial.reference, r.reference) &&
+    eq(partial.description, r.description) &&
+    eq(partial.isOutgoing, r.isOutgoing) &&
+    eq(partial.satoshisDelta, r.satoshisDelta) &&
+    eq(partial.version, r.version) &&
+    eq(partial.lockTime, r.lockTime) &&
+    eq(partial.userNosend, r.userNosend) &&
+    eq(partial.hidden, r.hidden) &&
+    eq(partial.userAborted, r.userAborted) &&
+    eq(partial.rowVersion, r.rowVersion)
   )
 }
 
-function matchesTransactionPartialIds (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
+/**
+ * v3 canonical `transactions` (PK txid). Used only by the v3-aware reads;
+ * legacy `findTransactions` returns empty so its matcher is unused.
+ */
+export function matchesTransactionNewPartial (r: TableTransactionNew, partial: Partial<TableTransactionNew>): boolean {
   return (
-    eqNullable(partial.transactionId, r.transactionId) &&
-    eqNullable(partial.userId, r.userId) &&
+    eqNullable(partial.txid, r.txid) &&
     dateEqNullable(partial.created_at, r.created_at) &&
     dateEqNullable(partial.updated_at, r.updated_at) &&
-    eqNullable(partial.provenTxId, r.provenTxId)
+    eq(partial.processing, r.processing) &&
+    eq(partial.batch, r.batch) &&
+    eq(partial.idempotencyKey, r.idempotencyKey)
   )
 }
 
-function matchesTransactionPartialScalars (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
+export function matchesTxAuditPartial (r: TableTxAudit, partial: Partial<TableTxAudit>): boolean {
   return (
-    eq(partial.isOutgoing, r.isOutgoing) &&
-    eq(partial.satoshis, r.satoshis) &&
-    eq(partial.version, r.version) &&
-    eq(partial.lockTime, r.lockTime)
-  )
-}
-
-function matchesTransactionPartialStrings (r: TableTransaction, partial: Partial<TableTransaction>): boolean {
-  return (
-    eqNullable(partial.status, r.status) &&
-    eqNullable(partial.reference, r.reference) &&
-    eqNullable(partial.description, r.description) &&
-    eqNullable(partial.txid, r.txid)
+    eq(partial.auditId, r.auditId) &&
+    eqNullable(partial.txid, r.txid) &&
+    eqNullable(partial.actionId, r.actionId) &&
+    eq(partial.event, r.event) &&
+    dateEq(partial.created_at, r.created_at) &&
+    dateEq(partial.updated_at, r.updated_at)
   )
 }
 
@@ -321,19 +315,12 @@ export function matchesTxLabelPartial (r: TableTxLabel, partial: Partial<TableTx
 }
 
 // ─── IDB schema upgrade helpers ──────────────────────────────────────────────
-
-export function upgradeProvenTxs (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('proven_txs', { keyPath: 'provenTxId', autoIncrement: true })
-  store.createIndex('txid', 'txid', { unique: true })
-}
-
-export function upgradeProvenTxReqs (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('proven_tx_reqs', { keyPath: 'provenTxReqId', autoIncrement: true })
-  store.createIndex('provenTxId', 'provenTxId')
-  store.createIndex('txid', 'txid', { unique: true })
-  store.createIndex('status', 'status')
-  store.createIndex('batch', 'batch')
-}
+//
+// v3 layout: no `proven_txs` / `proven_tx_reqs` / `transactions_legacy` stores.
+// `transactions` is keyed by `txid` (canonical chain record).
+// `actions` carries per-user metadata and FKs `txid` NULL until signed.
+// `outputs` FK `actionId`, denormalised `txid`, spent via `spentByActionId`.
+// `tx_audit`, `chain_tip`, `monitor_lease` are part of the v3 schema.
 
 export function upgradeUsers (db: IDBPDatabase<StorageIdbSchema>): void {
   const store = db.createObjectStore('users', { keyPath: 'userId', autoIncrement: true })
@@ -358,28 +345,52 @@ export function upgradeOutputBaskets (db: IDBPDatabase<StorageIdbSchema>): void 
   store.createIndex('name_userId', ['name', 'userId'], { unique: true })
 }
 
+/**
+ * v3 canonical `transactions` store — primary key is `txid` (string).
+ * There is no integer `transactionId` column.
+ */
 export function upgradeTransactions (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('transactions', { keyPath: 'transactionId', autoIncrement: true })
-  store.createIndex('userId', 'userId')
-  store.createIndex('status', 'status')
-  store.createIndex('status_userId', ['status', 'userId'])
-  store.createIndex('provenTxId', 'provenTxId')
-  store.createIndex('reference', 'reference', { unique: true })
+  const store = db.createObjectStore('transactions', { keyPath: 'txid' })
+  store.createIndex('processing', 'processing')
+  store.createIndex('batch', 'batch')
+  store.createIndex('idempotencyKey', 'idempotencyKey', { unique: true })
 }
 
+/**
+ * v3 per-user `actions` store. PK `actionId`. `txid` is NULL until signing
+ * completes; the `(userId, txid)` and `(userId, reference)` pairs are unique.
+ */
+export function upgradeActions (db: IDBPDatabase<StorageIdbSchema>): void {
+  const store = db.createObjectStore('actions', { keyPath: 'actionId', autoIncrement: true })
+  store.createIndex('userId', 'userId')
+  store.createIndex('userId_txid', ['userId', 'txid'], { unique: true })
+  store.createIndex('userId_reference', ['userId', 'reference'], { unique: true })
+  store.createIndex('userId_hidden', ['userId', 'hidden'])
+  store.createIndex('txid', 'txid')
+}
+
+/**
+ * v3 `commissions` store. FKs `actionId` (not `transactionId`).
+ * Unique on `actionId`.
+ */
 export function upgradeCommissions (db: IDBPDatabase<StorageIdbSchema>): void {
   const store = db.createObjectStore('commissions', { keyPath: 'commissionId', autoIncrement: true })
   store.createIndex('userId', 'userId')
-  store.createIndex('transactionId', 'transactionId', { unique: true })
+  store.createIndex('actionId', 'actionId', { unique: true })
 }
 
+/**
+ * v3 `outputs` store. FKs `actionId`, denormalised `txid`, spent via
+ * `spentByActionId`. Unique on `(actionId, vout)`.
+ */
 export function upgradeOutputs (db: IDBPDatabase<StorageIdbSchema>): void {
   const store = db.createObjectStore('outputs', { keyPath: 'outputId', autoIncrement: true })
-  store.createIndex('userId', 'userId')
-  store.createIndex('transactionId', 'transactionId')
-  store.createIndex('basketId', 'basketId')
-  store.createIndex('spentBy', 'spentBy')
-  store.createIndex('transactionId_vout_userId', ['transactionId', 'vout', 'userId'], { unique: true })
+  store.createIndex('actionId_vout', ['actionId', 'vout'], { unique: true })
+  store.createIndex('userId_basketId_spendable_satoshis', ['userId', 'basketId', 'spendable', 'satoshis'])
+  store.createIndex('userId_spendable_outputId', ['userId', 'spendable', 'outputId'])
+  store.createIndex('userId_txid', ['userId', 'txid'])
+  store.createIndex('spentByActionId', 'spentByActionId')
+  store.createIndex('matures_at_height', 'matures_at_height')
 }
 
 export function upgradeOutputTags (db: IDBPDatabase<StorageIdbSchema>): void {
@@ -400,10 +411,13 @@ export function upgradeTxLabels (db: IDBPDatabase<StorageIdbSchema>): void {
   store.createIndex('label_userId', ['label', 'userId'], { unique: true })
 }
 
+/**
+ * v3 `tx_labels_map` — composite key on `(txLabelId, actionId)`.
+ */
 export function upgradeTxLabelsMap (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('tx_labels_map', { keyPath: ['txLabelId', 'transactionId'] })
+  const store = db.createObjectStore('tx_labels_map', { keyPath: ['txLabelId', 'actionId'] })
   store.createIndex('txLabelId', 'txLabelId')
-  store.createIndex('transactionId', 'transactionId')
+  store.createIndex('actionId', 'actionId')
 }
 
 export function upgradeMonitorEvents (db: IDBPDatabase<StorageIdbSchema>): void {
@@ -417,29 +431,17 @@ export function upgradeSyncStates (db: IDBPDatabase<StorageIdbSchema>): void {
   store.createIndex('status', 'status')
 }
 
-export function upgradeTransactionsNew (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('transactions_new', { keyPath: 'transactionId', autoIncrement: true })
-  store.createIndex('txid', 'txid', { unique: true })
-  store.createIndex('processing', 'processing')
-  store.createIndex('batch', 'batch')
-  store.createIndex('idempotencyKey', 'idempotencyKey', { unique: true })
-}
-
-export function upgradeActions (db: IDBPDatabase<StorageIdbSchema>): void {
-  const store = db.createObjectStore('actions', { keyPath: 'actionId', autoIncrement: true })
-  store.createIndex('userId', 'userId')
-  store.createIndex('transactionId', 'transactionId')
-  store.createIndex('userId_transactionId', ['userId', 'transactionId'], { unique: true })
-  store.createIndex('userId_reference', ['userId', 'reference'], { unique: true })
-}
-
 export function upgradeChainTip (db: IDBPDatabase<StorageIdbSchema>): void {
   db.createObjectStore('chain_tip', { keyPath: 'id' })
 }
 
+/**
+ * v3 `tx_audit` — appends event records keyed by `auditId` PK.
+ * Each row scopes to a `txid`, an `actionId`, or both.
+ */
 export function upgradeTxAudit (db: IDBPDatabase<StorageIdbSchema>): void {
   const store = db.createObjectStore('tx_audit', { keyPath: 'auditId', autoIncrement: true })
-  store.createIndex('transactionId', 'transactionId')
+  store.createIndex('txid', 'txid')
   store.createIndex('actionId', 'actionId')
   store.createIndex('event', 'event')
 }
@@ -449,18 +451,24 @@ export function upgradeMonitorLease (db: IDBPDatabase<StorageIdbSchema>): void {
   store.createIndex('expiresAt', 'expiresAt')
 }
 
-// ─── Bulk store initialisation (called by the version-1 upgrade) ─────────────
+// ─── Bulk store initialisation (called by the v3 upgrade) ────────────────────
 
-/** Upgrade handler for every store that existed at schema version 1. */
-export function upgradeAllStoresV1 (db: IDBPDatabase<StorageIdbSchema>): void {
+/**
+ * v3 store layout. Creates the full set of v3 IDB object stores on first
+ * open. Re-running this on a database that already has v2 stores is a no-op
+ * (each helper guards with `contains`).
+ *
+ * Legacy stores `proven_txs`, `proven_tx_reqs`, `transactions_new` are
+ * dropped by the `onupgradeneeded` step in `StorageIdb.initDB`.
+ */
+export function upgradeAllStoresV3 (db: IDBPDatabase<StorageIdbSchema>): void {
   const names = db.objectStoreNames
-  if (!names.contains('proven_txs')) upgradeProvenTxs(db)
-  if (!names.contains('proven_tx_reqs')) upgradeProvenTxReqs(db)
   if (!names.contains('users')) upgradeUsers(db)
   if (!names.contains('certificates')) upgradeCertificates(db)
   if (!names.contains('certificate_fields')) upgradeCertificateFields(db)
   if (!names.contains('output_baskets')) upgradeOutputBaskets(db)
   if (!names.contains('transactions')) upgradeTransactions(db)
+  if (!names.contains('actions')) upgradeActions(db)
   if (!names.contains('commissions')) upgradeCommissions(db)
   if (!names.contains('outputs')) upgradeOutputs(db)
   if (!names.contains('output_tags')) upgradeOutputTags(db)
@@ -469,9 +477,20 @@ export function upgradeAllStoresV1 (db: IDBPDatabase<StorageIdbSchema>): void {
   if (!names.contains('tx_labels_map')) upgradeTxLabelsMap(db)
   if (!names.contains('monitor_events')) upgradeMonitorEvents(db)
   if (!names.contains('sync_states')) upgradeSyncStates(db)
-  if (!names.contains('transactions_new')) upgradeTransactionsNew(db)
-  if (!names.contains('actions')) upgradeActions(db)
   if (!names.contains('chain_tip')) upgradeChainTip(db)
   if (!names.contains('tx_audit')) upgradeTxAudit(db)
   if (!names.contains('monitor_lease')) upgradeMonitorLease(db)
+}
+
+/**
+ * Drop legacy v1/v2 object stores that no longer exist in v3.
+ * Safe to call when the DB is being upgraded from any prior version.
+ */
+export function dropLegacyStores (db: IDBPDatabase<StorageIdbSchema>): void {
+  const names = db.objectStoreNames
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const drop = (n: string): void => { if (names.contains(n as any)) (db as any).deleteObjectStore(n) }
+  drop('proven_txs')
+  drop('proven_tx_reqs')
+  drop('transactions_new')
 }

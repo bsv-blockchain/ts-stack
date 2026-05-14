@@ -30,7 +30,6 @@
   ],
   "scripts": {
     "start": "node out/src/index.js",
-    "cutover": "node out/src/cutover.js",
     "lint": "prettier --write 'src/**/*.ts' --log-level silent",
     "build": "tsc --build",
     "prepublish": "npm run lint"

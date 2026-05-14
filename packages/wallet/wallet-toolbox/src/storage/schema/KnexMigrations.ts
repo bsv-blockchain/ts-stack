@@ -248,8 +248,9 @@ export class KnexMigrations implements MigrationSource<string> {
           addTimeStamps(knex, table, dbtype)
           table.string('task_name', 64).notNullable().primary()
           table.string('owner_id', 64).notNullable()
-          table.timestamp('acquired_at', { precision: 3 }).defaultTo(nowFn).notNullable()
           table.timestamp('expires_at', { precision: 3 }).notNullable()
+          table.integer('renew_count').unsigned().notNullable().defaultTo(0)
+          table.string('note', 255).nullable()
           table.index('expires_at')
         })
 

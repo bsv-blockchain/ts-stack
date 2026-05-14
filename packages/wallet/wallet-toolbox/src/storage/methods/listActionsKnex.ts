@@ -1,51 +1,31 @@
 /**
- * listActionsKnex.ts — post-cutover rewrite
+ * listActionsKnex.ts — v3 schema
  *
- * ## Post-cutover layout changes
+ * Schema layout:
  *
- * After `runSchemaCutover`, the schema splits the old monolithic `transactions`
- * table into two tables:
+ *   - `transactions` (PK `txid VARCHAR(64)`): per-txid on-chain state.
+ *     No integer `transactionId` column. Columns: `txid`, `processing`,
+ *     `processingChangedAt`, `rawTx`, `merklePath`, `merkleRoot`, `blockHash`,
+ *     `height`, …
  *
- *   - `transactions` (new-schema): per-txid on-chain state.
- *     Columns: transactionId, txid, processing, processingChangedAt, rawTx, …
- *     Notable ABSENCES: userId, status, satoshis, description, isOutgoing,
- *                        version, lockTime, reference — all gone from this table.
+ *   - `actions` (PK `actionId`): per-user view of a transaction.
+ *     `txid` is a NULLABLE FK to `transactions.txid` (NULL while the action is
+ *     still an unsigned draft).  Other columns: `userId`, `reference`,
+ *     `description`, `isOutgoing`, `satoshis_delta`, optional `version` and
+ *     `lockTime`, `userNosend`, `hidden`, `userAborted`, `notifyJson`,
+ *     `rowVersion`, `rawTxDraft`, `inputBeefDraft`.
  *
- *   - `actions`: per-user view of a transaction.
- *     Columns: actionId, userId, transactionId (FK→transactions), reference,
- *              description, isOutgoing, satoshis_delta, …
+ *   - `outputs.actionId` is the FK to the creating action (NOT
+ *     `transactionId`).  `outputs.txid` is a denormalised on-chain txid copy.
+ *     `outputs.spentByActionId` is the per-row spender pointer
+ *     (FK to `actions.actionId`).
  *
- * ## `version` and `lockTime` — schema gap (option b: return undefined)
+ *   - `tx_labels_map.actionId` references `actions.actionId`.
  *
- * The legacy `transactions` table stored `version` and `lockTime` as columns.
- * The new schema does not persist them — they are derivable by parsing `transactions.rawTx`
- * but we do NOT do that here to avoid unnecessary deserialization overhead on
- * every list call.
- *
- * Decision: return `version: undefined, lockTime: undefined` for all new schema rows.
- * Callers that need the exact values can fetch `rawTx` from the new transaction
- * and parse it with `BsvTransaction.fromBinary(rawTx)`.
- *
- * This can be backfilled later by adding `version` and `lockTime` as optional
- * columns to the `actions` table and populating them during cutover.
- *
- * ## Label join keyspace change
- *
- * Post-cutover `tx_labels_map.transactionId` is an FK to `actions.actionId`
- * (NOT `transactions.transactionId`). The label-enrichment helper
- * `storage.getLabelsForTransactionId(id)` queries
- * `tx_labels_map.transactionId = id`, so after cutover we must pass `actionId`
- * to it — NOT the new-schema `transactions.transactionId`. The helper's name is
- * intentionally left unchanged (renaming blast radius too large); callers
- * must pass the correct keyspace value.
- *
- * ## `transactionId` field in the internal row shape
- *
- * The `enrichActionOutputs` and `enrichActionInputs` helpers query the
- * `outputs` table via `outputs.transactionId`, which is a FK to the new
- * `transactions.transactionId` (not `actionId`). We therefore carry BOTH ids:
- *   - `newActionRow.transactionId` → new `transactions.transactionId` (for outputs/inputs)
- *   - `newActionRow.actionId`      → `actions.actionId` (for labels)
+ * `version` and `lockTime` may be present on `actions` (chosen at create time)
+ * but are also derivable from the rawTx.  We return whatever the actions row
+ * stores (often undefined) without parsing rawTx — callers that need exact
+ * values can fetch the rawTx and parse it themselves.
  */
 
 import {
@@ -68,19 +48,20 @@ import { ProcessingStatus, TransactionStatus, transactionStatusToProcessing } fr
 import { TransactionService } from '../schema/transactionService'
 
 /**
- * Internal row shape combining new `actions` + `transactions` data.
+ * Internal row shape carrying the v3 `actions` + `transactions` data needed
+ * to assemble a `WalletAction`.
  *
- * `transactionId` = `transactions.transactionId` — used to locate outputs
- *                   and inputs (both tables FK to this).
- * `actionId`      = `actions.actionId` — used to locate labels
- *                   (tx_labels_map.transactionId = actionId post-cutover).
+ *   - `actionId` — `actions.actionId` (the FK target for outputs/inputs via
+ *                 `outputs.actionId` / `outputs.spentByActionId`, and for
+ *                 labels via `tx_labels_map.actionId`).
+ *   - `txid`     — `actions.txid`, copied from `transactions.txid` once the
+ *                 action is signed.  Used to fetch rawTx for input enrichment.
  */
 interface NewActionRow {
-  /** new transactions.transactionId — FK target for outputs/inputs */
-  transactionId: number
-  /** actions.actionId — FK target for tx_labels_map post-cutover */
+  /** actions.actionId — FK target for outputs, inputs, and labels. */
   actionId: number
-  txid: string
+  /** Canonical on-chain txid; undefined while the action is still a draft. */
+  txid?: string
   reference: string
   /** actions.satoshis_delta mapped to satoshis for return-shape compat */
   satoshis: number
@@ -89,16 +70,10 @@ interface NewActionRow {
   isOutgoing: boolean
   description: string
   created_at: Date
-  /**
-   * schema gap: version is not stored. Returns undefined.
-   * Backfill by parsing transactions.rawTx if needed.
-   */
-  version: undefined
-  /**
-   * schema gap: lockTime is not stored. Returns undefined.
-   * Backfill by parsing transactions.rawTx if needed.
-   */
-  lockTime: undefined
+  /** `actions.version` if stored; otherwise undefined. */
+  version: number | undefined
+  /** `actions.lockTime` if stored; otherwise undefined. */
+  lockTime: number | undefined
 }
 
 /**
@@ -172,9 +147,9 @@ function legacyStatiToProcessing (stati: string[]): ProcessingStatus[] {
  *
  * For N action rows:
  *   labels  : 1 query  (was N)
- *   outputs : 1 query for both action outputs (transactionId IN) and inputs
- *             (spentBy IN), 1 query for baskets, 1 query for tag map+labels
- *             (was up to 3·N queries via findOutputs + extendOutput)
+ *   outputs : 1 query for both action outputs (actionId IN) and inputs
+ *             (spentByActionId IN), 1 query for baskets, 1 query for tag
+ *             map+labels (was up to 3·N queries via findOutputs + extendOutput)
  *   rawTx   : 1 union query for all distinct txids (was N)
  *
  * Total: ≤ 5 round-trips regardless of N.
@@ -199,40 +174,48 @@ async function bulkEnrich (
   const k = storage.toDb(undefined)
 
   const actionIds = txs.map(t => t.actionId)
-  const txIds = txs.map(t => t.transactionId)
 
-  // 1) Labels: tx_labels_map.transactionId is actionId post-cutover.
+  // 1) Labels: tx_labels_map.actionId references actions.actionId (v3 layout).
   const labelsQuery = (includeLabels && actionIds.length > 0)
     ? k('tx_labels as l')
       .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
-      .whereIn('lm.transactionId', actionIds)
+      .whereIn('lm.actionId', actionIds)
       .whereNot('lm.isDeleted', true)
       .whereNot('l.isDeleted', true)
-      .select('lm.transactionId as actionId', 'l.label')
+      .select('lm.actionId as actionId', 'l.label')
     : Promise.resolve([] as Array<{ actionId: number, label: string }>)
 
-  // 2) Action outputs: WHERE transactionId IN (txIds)
+  // 2) Action outputs: outputs.actionId FK to actions.actionId.
+  //    The TableOutput interface field `transactionId` carries the actionId
+  //    value post-v3 (interface left as-is for back-compat).
   const outScriptCol = includeOutScripts ? ['lockingScript'] : []
-  const outputsQuery = (includeOutputs && txIds.length > 0)
+  const outputsQuery = (includeOutputs && actionIds.length > 0)
     ? k('outputs')
-      .whereIn('transactionId', txIds)
+      .whereIn('actionId', actionIds)
       .select(
-        'outputId', 'userId', 'transactionId', 'basketId', 'spendable',
+        'outputId', 'userId',
+        'actionId as transactionId',
+        'basketId', 'spendable',
         'change', 'outputDescription', 'vout', 'satoshis', 'providedBy',
         'purpose', 'type', 'txid', 'scriptLength', 'scriptOffset',
         ...outScriptCol
       )
     : Promise.resolve([] as TableOutputX[])
 
-  // 3) Input outputs: WHERE spentBy IN (txIds)
+  // 3) Input outputs: rows spent BY this action — outputs.spentByActionId IN (actionIds).
+  //    The TableOutput interface field `spentBy` carries the spentByActionId
+  //    value post-v3 (interface left as-is for back-compat).
   const inScriptCol = includeInScripts ? ['lockingScript'] : []
-  const inputsQuery = (includeInputs && txIds.length > 0)
+  const inputsQuery = (includeInputs && actionIds.length > 0)
     ? k('outputs')
-      .whereIn('spentBy', txIds)
+      .whereIn('spentByActionId', actionIds)
       .select(
-        'outputId', 'userId', 'transactionId', 'basketId', 'spendable',
+        'outputId', 'userId',
+        'actionId as transactionId',
+        'basketId', 'spendable',
         'change', 'outputDescription', 'vout', 'satoshis', 'providedBy',
-        'purpose', 'type', 'txid', 'scriptLength', 'scriptOffset', 'spentBy',
+        'purpose', 'type', 'txid', 'scriptLength', 'scriptOffset',
+        'spentByActionId as spentBy',
         ...inScriptCol
       )
     : Promise.resolve([] as TableOutputX[])
@@ -264,7 +247,7 @@ async function bulkEnrich (
 
   // 6) rawTx for each distinct txid (only needed for inputs to recover sequence/unlocking script)
   const distinctTxids = includeInputs && inputRows.length > 0
-    ? [...new Set(txs.filter(t => t.txid).map(t => t.txid))]
+    ? [...new Set(txs.map(t => t.txid).filter((s): s is string => typeof s === 'string' && s.length > 0))]
     : []
   const rawTxQuery = distinctTxids.length > 0
     ? Promise.all(distinctTxids.map(async txid => ({ txid, rawTx: await storage.getRawTxOfKnownValidTransaction(txid) })))
@@ -322,19 +305,23 @@ async function bulkEnrich (
     labelsByActionId[id].push(String(r.label))
   }
 
-  const outputsByTxId = new Map<number, TableOutputX[]>()
+  // Outputs keyed by actionId. `o.transactionId` here is the renamed
+  // `outputs.actionId` column (see SELECT above).
+  const outputsByActionId = new Map<number, TableOutputX[]>()
   for (const o of outputRows) {
-    const list = outputsByTxId.get(o.transactionId) || []
+    const list = outputsByActionId.get(o.transactionId) || []
     list.push(o)
-    outputsByTxId.set(o.transactionId, list)
+    outputsByActionId.set(o.transactionId, list)
   }
 
-  const inputsByTxId = new Map<number, TableOutputX[]>()
+  // Inputs keyed by the spending action's actionId. `o.spentBy` carries the
+  // `outputs.spentByActionId` value (see SELECT above).
+  const inputsBySpenderActionId = new Map<number, TableOutputX[]>()
   for (const o of inputRows) {
     if (o.spentBy == null) continue
-    const list = inputsByTxId.get(o.spentBy) || []
+    const list = inputsBySpenderActionId.get(o.spentBy) || []
     list.push(o)
-    inputsByTxId.set(o.spentBy, list)
+    inputsBySpenderActionId.set(o.spentBy, list)
   }
 
   const rawTxByTxid: Record<string, number[] | undefined> = {}
@@ -358,7 +345,7 @@ async function bulkEnrich (
 
     if (includeOutputs) {
       action.outputs = []
-      const list = outputsByTxId.get(row.transactionId) || []
+      const list = outputsByActionId.get(row.actionId) || []
       for (const o of list) {
         const wo: WalletActionOutput = {
           satoshis: o.satoshis || 0,
@@ -375,9 +362,9 @@ async function bulkEnrich (
 
     if (includeInputs) {
       action.inputs = []
-      const list = inputsByTxId.get(row.transactionId) || []
+      const list = inputsBySpenderActionId.get(row.actionId) || []
       if (list.length === 0) continue
-      const rawTx = rawTxByTxid[row.txid]
+      const rawTx = row.txid != null ? rawTxByTxid[row.txid] : undefined
       let bsvTx: BsvTransaction | undefined
       if (rawTx != null) {
         try { bsvTx = BsvTransaction.fromBinary(rawTx) } catch { /* tolerate parse failure */ }
@@ -463,7 +450,7 @@ export async function listActions (
   // Map legacy TransactionStatus → ProcessingStatus for the WHERE clause
   const processingFilter: ProcessingStatus[] = legacyStatiToProcessing(legacyStati)
 
-  // Use TransactionService to execute the actions query with post-cutover layout
+  // Use TransactionService to execute the actions query against the v3 layout.
   const svc = new TransactionService(svcKnex)
   const { rows: svcRows, total: svcTotal } = await svc.listActionsForUser({
     userId: auth.userId!,
@@ -477,30 +464,25 @@ export async function listActions (
   })
 
   // Convert the transaction service rows into the internal NewActionRow shape.
-  // NOTE: In this shape `transactionId` = new transactions.transactionId (for
-  // outputs/inputs), and `actionId` = actions.actionId (for labels).
   const txs: NewActionRow[] = svcRows.map(row => ({
-    transactionId: row.transactionId,
     actionId: row.actionId,
     txid: row.txid,
     reference: row.reference,
     // satoshis_delta from actions maps to legacy `satoshis`
     satoshis: row.satoshisDelta,
-    // Map ProcessingStatus back to legacy ActionStatus for return compat
-    status: processingToTransactionStatus(row.processing),
+    // Map ProcessingStatus back to legacy ActionStatus for return compat.
+    // Drafts (txid is NULL) have no `processing`; treat as `unsigned`.
+    status: row.processing != null ? processingToTransactionStatus(row.processing) : 'unsigned',
     isOutgoing: row.isOutgoing,
     description: row.description,
     created_at: row.created_at,
-    // schema gap: version and lockTime are not stored in the new schema.
-    // Return undefined. Backfill later by parsing transactions.rawTx if needed.
-    version: undefined,
-    lockTime: undefined
+    version: row.version,
+    lockTime: row.lockTime
   }))
 
   // specOp postProcess receives txs shaped as Partial<TableTransaction>.
-  // We cast to satisfy the interface; note that status/transactionId/reference
-  // are populated correctly for the two existing specOps (noSendActions /
-  // failedActions) which only read tx.status, tx.reference, tx.transactionId.
+  // We cast to satisfy the interface; the existing specOps (noSendActions /
+  // failedActions) only read tx.status, tx.reference, and the action's id.
   if ((specOp?.postProcess) != null) {
     // Cast: the specOp contract only accesses fields present on NewActionRow
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs as any)
@@ -520,9 +502,8 @@ export async function listActions (
       status: tx.status! as ActionStatus,
       isOutgoing: !!tx.isOutgoing,
       description: tx.description || '',
-      // schema gap: version and lockTime are not stored. See file header comment.
-      version: undefined as unknown as number,
-      lockTime: undefined as unknown as number
+      version: tx.version as unknown as number,
+      lockTime: tx.lockTime as unknown as number
     })
   }
 

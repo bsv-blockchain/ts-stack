@@ -42,6 +42,13 @@ export async function getBeefForTransaction (
 
 /**
  * @returns rawTx if txid known to network, if merkle proof available then also proven result is valid.
+ *
+ * v3: there is no separate `proven_txs` table. When a proof is discovered via
+ * services we either ingest it into the canonical `transactions` row (via the
+ * `TransactionService` when available), or — if `ignoreStorage`/
+ * `ignoreNewProven` is set — return the synthesised proof shape without
+ * touching storage. Callers downstream only need the `ProvenOrRawTx` shape
+ * for BEEF assembly.
  */
 async function getProvenOrRawTxFromServices (
   storage: StorageProvider,
@@ -50,7 +57,40 @@ async function getProvenOrRawTxFromServices (
 ): Promise<ProvenOrRawTx> {
   const por = await EntityProvenTx.fromTxid(txid, storage.getServices())
   if ((por.proven != null) && !options.ignoreStorage && !options.ignoreNewProven) {
-    por.proven.provenTxId = await storage.insertProvenTx(por.proven.toApi())
+    // v3: persist the proof into the canonical `transactions` row via the
+    // transaction service. There is no longer an integer `provenTxId` PK; the
+    // value is left as zero on the synthetic return shape since callers only
+    // read merkle/raw fields below.
+    const txSvc = storage.getTransactionService()
+    if (txSvc != null) {
+      const api = por.proven.toApi()
+      try {
+        const existing = await txSvc.findByTxid(api.txid)
+        if (existing == null) {
+          await txSvc.createWithProof({
+            txid: api.txid,
+            rawTx: api.rawTx,
+            height: api.height,
+            merklePath: api.merklePath,
+            merkleRoot: api.merkleRoot,
+            blockHash: api.blockHash
+          })
+        } else if (existing.merklePath == null) {
+          await txSvc.recordProof({
+            txid: api.txid,
+            height: api.height,
+            merklePath: api.merklePath,
+            merkleRoot: api.merkleRoot,
+            blockHash: api.blockHash,
+            expectedFrom: existing.processing
+          })
+        }
+      } catch {
+        // Persisting the proof is best-effort here; if the canonical row
+        // can't be updated (e.g. FSM rejects the transition) we still return
+        // the in-memory proof so the BEEF can be assembled for the caller.
+      }
+    }
   }
   return { proven: por.proven?.toApi(), rawTx: por.rawTx }
 }

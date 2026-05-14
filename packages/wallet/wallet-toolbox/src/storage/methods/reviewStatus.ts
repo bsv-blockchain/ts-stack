@@ -2,18 +2,29 @@ import { Knex } from 'knex'
 import type { StorageKnex } from '../StorageKnex'
 import { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WalletError } from '../../sdk/WalletError'
-import type { ProvenTxReqStatus } from '../../sdk/types'
-import { TableTransaction } from '../schema/tables/TableTransaction'
-import { TableOutput } from '../schema/tables/TableOutput'
-
-const provenTxReqStatusesSafeForInputRestore: ProvenTxReqStatus[] = ['invalid', 'doubleSpend']
+import type { ProcessingStatus } from '../../sdk/types'
 
 /**
- * Looks for unpropagated state:
+ * `ProcessingStatus` values that are safe for restoring spentBy outputs back
+ * to spendable. These mirror the legacy `ProvenTxReqStatus` set ('invalid',
+ * 'doubleSpend') — anything else (queued/sending/sent/seen/...) might still
+ * confirm and so must keep the output marked spent.
+ */
+const processingStatusesSafeForInputRestore: ProcessingStatus[] = ['invalid', 'doubleSpend']
+
+/**
+ * Looks for unpropagated state in the v3 canonical `transactions` table:
  *
- * 1. set transactions to 'failed' if not already failed and provenTxReq with matching txid has status of 'invalid'.
- * 2. sets outputs to spendable true, spentBy undefined if spentBy is a transaction with status 'failed'.
- * 3. sets transactions to 'completed' if provenTx with matching txid exists and current provenTxId is null.
+ * 1. Marks outputs spendable again where `spentByActionId` references an
+ *    action whose underlying transaction has terminally failed (`invalid` or
+ *    `doubleSpend`) — i.e. the would-be spending transaction will never make
+ *    it onto chain.
+ *
+ * In v3 there is no longer a separate `proven_tx_reqs.status` column to
+ * synchronise against per-user `transactions.status`; broadcast/proof state
+ * lives directly on `transactions.processing`. Steps (1) and (3) from the
+ * legacy implementation collapsed into the canonical row already, so this
+ * routine reduces to a single output-restoration sweep.
  *
  * @param storage
  * @param args
@@ -41,75 +52,29 @@ export async function reviewStatus (
 
   const k = storage.toDb(args.trx)
 
-  // Post-cutover: `proven_txs` → `proven_txs_legacy`, `proven_tx_reqs` →
-  // `proven_tx_reqs_legacy`, and `transactions` (legacy-shaped with `status`
-  // column) → `transactions_legacy`.  Pre-cutover: the original table names.
-  const txTable = await storage.provenTxsTableName()    // proven_txs or proven_txs_legacy
-  const reqTable = await storage.provenTxReqsTableName() // proven_tx_reqs or proven_tx_reqs_legacy
-  // The legacy-shaped `transactions` table (with status, satoshis, etc. columns).
-  // Post-cutover that table is renamed to `transactions_legacy`; the new
-  // `transactions` table has `processing` instead of `status`.
-  const txnsTable = txTable === 'proven_txs_legacy' ? 'transactions_legacy' : 'transactions'
-
   const qs: ReviewStatusQuery[] = []
 
-  qs.push(
-    {
-      log: 'transactions updated to status of \'failed\' where provenTxReq with matching txid is \'invalid\'',
-      /*
-          UPDATE transactions SET status = 'failed'
-          WHERE exists(select 1 from proven_tx_reqs as r where transactions.txid = r.txid and r.status = 'invalid')
-          */
-      q: k<TableTransaction>(txnsTable)
-        .update({ status: 'failed' })
-        .whereNot({ status: 'failed' })
-        .whereExists(function () {
-          this.select(k.raw(1))
-            .from(`${reqTable} as r`)
-            .whereRaw(`${txnsTable}.txid = r.txid and r.status = 'invalid'`)
-        })
-    },
-    {
-      log: 'outputs updated to spendable where spentBy is a failed transaction with no blocking ProvenTxReq',
-      /*
-          UPDATE outputs SET spentBy = null, spendable = 1
-          where exists(select 1 from transactions as t where outputs.spentBy = t.transactionId and t.status = 'failed')
-          and not exists(select 1 from proven_tx_reqs as r where r.txid = t.txid and r.status not in ('invalid', 'doubleSpend'))
-          */
-      q: k<TableOutput>('outputs')
-        .update({ spentBy: null as unknown as undefined, spendable: true })
-        .whereExists(function () {
-          this.select(k.raw(1))
-            .from(`${txnsTable} as t`)
-            .whereRaw(`outputs.spentBy = t.transactionId and t.status = 'failed'`)
-            .whereNotExists(function () {
-              // A failed transaction can still be reconciled from active or valid reqs.
-              // Only terminal failure reqs are safe for input restoration.
-              this.select(k.raw(1))
-                .from(`${reqTable} as r`)
-                .whereRaw('r.txid = t.txid')
-                .whereNotIn('r.status', provenTxReqStatusesSafeForInputRestore)
-            })
-        })
-    },
-    {
-      log: 'transactions updated with provenTxId and status of \'completed\' where provenTx with matching txid exists',
-      /*
-          UPDATE transactions SET status = 'completed', provenTxId = p.provenTxId
-          FROM proven_txs p
-          WHERE transactions.txid = p.txid AND transactions.provenTxId IS NULL
-          */
-      q: k<TableTransaction>(txnsTable)
-        .update({
-          status: 'completed',
-          provenTxId: k.raw(`(SELECT provenTxId FROM ${txTable} AS p WHERE ${txnsTable}.txid = p.txid)`)
-        })
-        .whereNull('provenTxId')
-        .whereExists(function () {
-          this.select(k.raw(1)).from(`${txTable} as p`).whereRaw(`${txnsTable}.txid = p.txid`)
-        })
-    }
-  )
+  qs.push({
+    log: 'outputs updated to spendable where the spending action references a transaction in a terminal failure state',
+    /*
+        UPDATE outputs SET spentByActionId = null, spendable = 1
+        WHERE EXISTS (
+          SELECT 1 FROM actions a
+          JOIN transactions t ON t.txid = a.txid
+          WHERE a.actionId = outputs.spentByActionId
+            AND t.processing IN ('invalid', 'doubleSpend')
+        )
+    */
+    q: k('outputs')
+      .update({ spentByActionId: null, spendable: true })
+      .whereExists(function () {
+        this.select(k.raw(1))
+          .from('actions as a')
+          .join('transactions as t', 't.txid', 'a.txid')
+          .whereRaw('a.actionId = outputs.spentByActionId')
+          .whereIn('t.processing', processingStatusesSafeForInputRestore)
+      })
+  })
 
   for (const q of qs) await runReviewStatusQuery(q)
 

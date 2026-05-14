@@ -53,6 +53,7 @@ import { Chain, TransactionStatus } from '../sdk/types'
 import { TableProvenTxReq, TableProvenTxReqDynamics } from '../../src/storage/schema/tables/TableProvenTxReq'
 import { TableOutputBasket } from '../../src/storage/schema/tables/TableOutputBasket'
 import { TableTransaction } from '../../src/storage/schema/tables/TableTransaction'
+import { TableAction } from '../../src/storage/schema/tables/TableAction'
 import { TableOutput, TableOutputX } from '../../src/storage/schema/tables/TableOutput'
 import { TableOutputTag } from '../../src/storage/schema/tables/TableOutputTag'
 import { TableTxLabel } from '../../src/storage/schema/tables/TableTxLabel'
@@ -272,6 +273,39 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    */
   async insertLegacyTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
     return await this.insertTransaction(tx, trx)
+  }
+
+  /**
+   * v3 schema: insert an unsigned-draft `actions` row.
+   *
+   * `createAction` calls this to create the per-user action row that anchors
+   * a new transaction during construction. `txid` is left NULL until
+   * `processAction` signs and writes back the canonical txid.
+   *
+   * The returned `actionId` is the PK of the new `actions` row and is used as
+   * the FK for outputs, commissions, tx_labels_map, and as the value of
+   * `outputs.spentByActionId` when later spent.
+   *
+   * Default implementation throws — concrete storage providers must override.
+   * `StorageKnex` overrides this to call the v3 `transactionCrud.insertAction`
+   * helper. `StorageIdb` may override if/when it gains v3 actions-store
+   * support; until then it inherits this throw.
+   */
+  async insertAction (action: TableAction, trx?: TrxToken): Promise<number> {
+    throw new WERR_INVALID_OPERATION('insertAction not supported by this storage provider.')
+  }
+
+  /**
+   * v3 schema: update an action row's `satoshis_delta` column.
+   *
+   * `createAction` calls this after funding to record the net satoshi delta of
+   * the new (unsigned) action.
+   *
+   * Default implementation throws — concrete storage providers must override.
+   * `StorageKnex` overrides this to use the underlying `TransactionService`.
+   */
+  async updateActionSatoshisDelta (actionId: number, delta: number, trx?: TrxToken): Promise<void> {
+    throw new WERR_INVALID_OPERATION('updateActionSatoshisDelta not supported by this storage provider.')
   }
 
   /**

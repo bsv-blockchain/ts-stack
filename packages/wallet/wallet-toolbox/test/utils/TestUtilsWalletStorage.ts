@@ -1312,11 +1312,14 @@ export abstract class TestUtilsWalletStorage {
         now: e.created_at instanceof Date ? e.created_at : now
       })
       // Patch the legacy-shaped `e` so callers get a consistent object:
-      // - transactionId = new transactions.transactionId (FK for outputs/commissions)
+      // - transactionId = action.actionId (v3 per-user PK; FK for outputs/commissions)
       // - txid = the txid we used
-      e.transactionId = transaction.transactionId
+      // TODO(v3): TableTransactionNew no longer has an integer transactionId;
+      // the v3 outputs/commissions FK is `actionId`. Tests that rely on the
+      // legacy `transactionId` numeric should be migrated.
+      e.transactionId = action.actionId
       e.txid = txid
-      // Mirror the row into `transactions_legacy` using the same transactionId
+      // Mirror the row into `transactions_legacy` using the same id
       // so legacy read/update paths (findTransactions, updateTransaction, etc.)
       // continue to see the row through the post-cutover bridge period. Entity
       // tests that exercise the legacy schema's per-user view rely on this.
@@ -1324,7 +1327,7 @@ export abstract class TestUtilsWalletStorage {
       await knex.raw('PRAGMA foreign_keys = OFF')
       try {
         await knex('transactions_legacy').insert({
-          transactionId: transaction.transactionId,
+          transactionId: action.actionId,
           userId: e.userId,
           created_at: e.created_at,
           updated_at: e.updated_at,
@@ -1643,13 +1646,17 @@ export abstract class TestUtilsWalletStorage {
           if (isPostCutover && txSvc != null) {
             let existing = sourceTxByOrigTxid[origSourceTxid]
             if (!existing) {
-              const newTx = await txSvc.create({
+              await txSvc.create({
                 txid: origSourceTxid + ':src',
                 processing: 'confirmed',
                 rawTx: [4, 3, 2, 1],
                 now
               })
-              existing = { transactionId: newTx.transactionId }
+              // TODO(v3): TableTransactionNew has no integer transactionId.
+              // This bridge-period branch is dead in a clean v3 schema
+              // (hasTable('transactions_legacy') is false). Tests that need
+              // a numeric FK should be migrated to use actionId.
+              existing = { transactionId: 0 }
               sourceTxByOrigTxid[origSourceTxid] = existing
             }
             sourceTxRow = { transactionId: existing.transactionId, userId: user.userId, txid: origSourceTxid }

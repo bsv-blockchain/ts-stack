@@ -279,7 +279,7 @@ export async function getProofs (
           const newTx = await txSvc.findByTxid(txid)
           if (newTx != null) {
             await txSvc.recordProof({
-              transactionId: newTx.transactionId,
+              txid: newTx.txid,
               height,
               merklePath,
               merkleRoot,

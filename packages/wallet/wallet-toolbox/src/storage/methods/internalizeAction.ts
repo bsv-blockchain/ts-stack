@@ -222,7 +222,7 @@ class InternalizeActionContext {
     )
     this.baskets = {}
 
-    // new-schema wiring — call site 1: findTransactions → findActionByUserTxid
+    // new-schema wiring — call site 1: findTransactions → findAction
     // On post-cutover DBs `transactions` is the new transactions table (no `status` column).
     // Try the the transaction service first; fall back to the legacy `findTransactions` path
     // when the service is unavailable or the DB is pre-cutover.
@@ -231,32 +231,33 @@ class InternalizeActionContext {
     let existingNewAction: { actionId: number, satoshisDelta: number } | undefined
     if (txSvcSetup != null) {
       try {
-        const found = await txSvcSetup.findActionByUserTxid(this.userId, this.txid)
-        if (found != null) {
-          existingNewAction = { actionId: found.action.actionId, satoshisDelta: found.action.satoshisDelta }
+        const foundAction = await txSvcSetup.findAction(this.userId, this.txid)
+        if (foundAction != null) {
+          const foundTx = await txSvcSetup.findByTxid(this.txid)
+          existingNewAction = { actionId: foundAction.actionId, satoshisDelta: foundAction.satoshisDelta }
           // Synthesise a minimal legacy TableTransaction so the rest of the context
           // can check isMerge without touching the (absent) legacy columns.
           // status is mapped from processing so the status guard below works.
           const legacyStatus: TransactionStatus =
-            found.transaction.processing === 'confirmed' ? 'completed'
-            : found.transaction.processing === 'nosend' ? 'nosend'
+            foundTx?.processing === 'confirmed' ? 'completed'
+            : foundTx?.processing === 'nosend' ? 'nosend'
             : 'unproven'
           this.etx = {
-            transactionId: found.action.actionId,
+            transactionId: foundAction.actionId,
             userId: this.userId,
             txid: this.txid,
             status: legacyStatus,
-            isOutgoing: found.action.isOutgoing,
-            satoshis: found.action.satoshisDelta,
-            description: found.action.description,
-            reference: found.action.reference,
+            isOutgoing: foundAction.isOutgoing,
+            satoshis: foundAction.satoshisDelta,
+            description: foundAction.description,
+            reference: foundAction.reference,
             inputBEEF: undefined,
             rawTx: undefined,
             version: undefined,
             lockTime: undefined,
             provenTxId: undefined,
-            created_at: found.action.created_at,
-            updated_at: found.action.updated_at
+            created_at: foundAction.created_at,
+            updated_at: foundAction.updated_at
           } as unknown as TableTransaction
         }
       } catch (txErr) {
@@ -503,7 +504,7 @@ class InternalizeActionContext {
           } else {
             // new schema row exists — record the proof (transitions to confirmed if not already).
             await txSvcBump.recordProof({
-              transactionId: existingNewTx.transactionId,
+              txid: existingNewTx.txid,
               height: bump.blockHeight,
               merklePath: bump.toBinary(),
               merkleRoot,

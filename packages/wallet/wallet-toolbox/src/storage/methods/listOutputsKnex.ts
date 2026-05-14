@@ -138,30 +138,45 @@ export async function listOutputs (
   // any and only non-existing tags, impossible to satisfy.
   { return r }
 
-  let columns: string[] = [
-    'outputId',
-    'transactionId',
-    'basketId',
-    'spendable',
-    'txid',
-    'vout',
-    'satoshis',
-    'customInstructions',
-    'outputDescription',
-    'spendingDescription'
+  // Column list. The DB column `outputs.actionId` is the FK to actions; the
+  // public TableOutput interface keeps the legacy field name `transactionId`
+  // for back-compat — it carries the actionId value in v3.
+  let columns: Array<{ db: string, alias: string }> = [
+    { db: 'outputId', alias: 'outputId' },
+    { db: 'actionId', alias: 'transactionId' },
+    { db: 'basketId', alias: 'basketId' },
+    { db: 'spendable', alias: 'spendable' },
+    { db: 'txid', alias: 'txid' },
+    { db: 'vout', alias: 'vout' },
+    { db: 'satoshis', alias: 'satoshis' },
+    { db: 'customInstructions', alias: 'customInstructions' },
+    { db: 'outputDescription', alias: 'outputDescription' },
+    { db: 'spendingDescription', alias: 'spendingDescription' }
   ]
-  if (vargs.includeLockingScripts || specOp?.includeOutputScripts) { columns = [...columns, 'lockingScript', 'scriptLength', 'scriptOffset'] }
+  if (vargs.includeLockingScripts || specOp?.includeOutputScripts) {
+    columns = [
+      ...columns,
+      { db: 'lockingScript', alias: 'lockingScript' },
+      { db: 'scriptLength', alias: 'scriptLength' },
+      { db: 'scriptOffset', alias: 'scriptOffset' }
+    ]
+  }
 
   const noTags = tagIds.length === 0
   const includeSpent = specOp?.includeSpent ?? false
 
-  const outputColumns = columns.map(c => `o.${c} as ${c}`)
+  const outputColumns = columns.map(c => `o.${c.db} as ${c.alias}`)
 
+  // v3 JOIN chain: outputs (FK actionId) → actions → transactions (PK txid).
+  // LEFT JOIN on transactions because unsigned drafts have actions.txid IS NULL
+  // and therefore no matching transactions row. Filters are applied here.
   const applyBaseFilters = (q: Knex.QueryBuilder) => {
-    q.join('transactions as t', 't.transactionId', 'o.transactionId')
+    q.join('actions as a', 'a.actionId', 'o.actionId')
+    q.leftJoin('transactions as t', 't.txid', 'a.txid')
     q.where('o.userId', userId)
     q.whereIn('t.processing', TX_PROCESSING_ALLOWED)
     if (basketId) q.where('o.basketId', basketId)
+    // Spent filter: outputs.spentByActionId IS NULL when not includeSpent.
     if (!includeSpent) q.where('o.spendable', true)
   }
 
@@ -273,35 +288,33 @@ export async function listOutputs (
         }
     */
 
-  const labelsByTransactionId: Record<number, string[]> = {}
+  const labelsByActionId: Record<number, string[]> = {}
   const tagsByOutputId: Record<number, string[]> = {}
 
   /*
    * Labels and tags are independent enrichment queries. Run them in parallel.
-   * Label keyspace note (post-cutover): tx_labels_map.transactionId FKs
-   * actions.actionId — NOT transactions.transactionId. Join via actions and
-   * regroup by a.transactionId so the caller's lookup key (output.transactionId)
-   * remains unchanged.
+   *
+   * v3 layout: tx_labels_map.actionId references actions.actionId directly,
+   * so we no longer need to hop through actions — just join tx_labels_map
+   * on the set of actionIds.  The output rows' `transactionId` field carries
+   * the actionId value (the SELECT renamed o.actionId → transactionId for
+   * back-compat with the TableOutput interface).
    */
-  const txIds = vargs.includeLabels
+  const actionIds = vargs.includeLabels
     ? [...new Set(outputs.map(o => o.transactionId).filter((id): id is number => id !== undefined))]
     : []
   const outputIds = vargs.includeTags
     ? [...new Set(outputs.map(o => o.outputId).filter((id): id is number => id !== undefined))]
     : []
 
-  const labelsQuery = (vargs.includeLabels && txIds.length > 0)
+  const labelsQuery = (vargs.includeLabels && actionIds.length > 0)
     ? k('tx_labels as l')
       .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
-      .join('actions as a', function () {
-        this.on('a.actionId', '=', 'lm.transactionId')
-          .andOn(k.raw('a.userId = ?', [userId]))
-      })
-      .whereIn('a.transactionId', txIds)
+      .whereIn('lm.actionId', actionIds)
       .whereNot('lm.isDeleted', true)
       .whereNot('l.isDeleted', true)
-      .select('a.transactionId as transactionId', 'l.label')
-    : Promise.resolve([] as Array<{ transactionId: number, label: string }>)
+      .select('lm.actionId as actionId', 'l.label')
+    : Promise.resolve([] as Array<{ actionId: number, label: string }>)
 
   const tagsQuery = (vargs.includeTags && outputIds.length > 0)
     ? k('output_tags as ot')
@@ -315,9 +328,9 @@ export async function listOutputs (
   const [labelRows, tagRows] = await Promise.all([labelsQuery, tagsQuery])
 
   for (const row of labelRows) {
-    const txid = Number(row.transactionId)
-    if (!labelsByTransactionId[txid]) labelsByTransactionId[txid] = []
-    labelsByTransactionId[txid].push(String(row.label))
+    const actionId = Number(row.actionId)
+    if (!labelsByActionId[actionId]) labelsByActionId[actionId] = []
+    labelsByActionId[actionId].push(String(row.label))
   }
   for (const row of tagRows) {
     const outputId = Number(row.outputId)
@@ -335,7 +348,8 @@ export async function listOutputs (
     }
     r.outputs.push(wo)
     if (vargs.includeCustomInstructions && o.customInstructions) wo.customInstructions = o.customInstructions
-    if (vargs.includeLabels && o.transactionId !== undefined) wo.labels = labelsByTransactionId[o.transactionId] || []
+    // o.transactionId carries the action's actionId post-v3 (see column alias above).
+    if (vargs.includeLabels && o.transactionId !== undefined) wo.labels = labelsByActionId[o.transactionId] || []
     if (vargs.includeTags && o.outputId !== undefined) wo.tags = tagsByOutputId[o.outputId] || []
     if (vargs.includeLockingScripts) {
       await dsk.validateOutputScript(o, trx)
