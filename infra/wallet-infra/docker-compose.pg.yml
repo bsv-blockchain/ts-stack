@@ -1,0 +1,48 @@
+services:
+  utxo-management-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: utxo-management-server-pg
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
+      BSV_NETWORK: "main"
+      FEE_MODEL: "{\"model\":\"sat/kb\",\"value\":100}"
+      COMMISSION_FEE: 0
+      HTTP_PORT: "8080"
+      SERVER_PRIVATE_KEY: "bffe0d7a3f7effce2b3511323c6cca1df1649e41a336a8b603194d53287ad285"
+      # Select the Postgres driver. Connection JSON points at the `postgres`
+      # service defined below; host is the docker network alias.
+      KNEX_DB_CLIENT: "pg"
+      KNEX_DB_CONNECTION: '{"host":"postgres","user":"wallet_admin","password":"walletPass","database":"wallet_storage","port":5432}'
+      KNEX_POOL_MAX: "32"
+      KNEX_POOL_MIN: "2"
+      ARC_URL: "https://arcade-v2-us-1.bsvblockchain.tech"
+      ARC_CALLBACK_TOKEN: "splendid-waterfowl"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: wallet_storage
+      POSTGRES_USER: wallet_admin
+      POSTGRES_PASSWORD: walletPass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wallet_admin -d wallet_storage"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pg_data:

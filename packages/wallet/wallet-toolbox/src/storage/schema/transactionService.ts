@@ -765,10 +765,8 @@ export class TransactionService {
       }
     }
 
-    const countRow = await q.clone().count<{ c: number }>({ c: 'a.actionId' }).first()
-    const total = countRow != null ? Number(countRow.c) : undefined
-
-    const rows = await q
+    const countQuery = q.clone().count<{ c: number }>({ c: 'a.actionId' }).first()
+    const rowsQuery = q
       .orderBy('a.created_at', 'desc')
       .orderBy('a.actionId', 'asc')
       .limit(args.limit)
@@ -792,6 +790,8 @@ export class TransactionService {
         't.processing',
         't.height'
       )
+    const [countRow, rows] = await Promise.all([countQuery, rowsQuery])
+    const total = countRow != null ? Number(countRow.c) : undefined
 
     const mapped = rows.map((row: any) => ({
       actionId: row.actionId,
@@ -873,9 +873,6 @@ export class TransactionService {
       }
     }
 
-    const countRow = await q.clone().count<{ c: number }>({ c: 'o.outputId' }).first()
-    const total = countRow != null ? Number(countRow.c) : undefined
-
     const columns = [
       'o.outputId',
       'o.userId',
@@ -907,11 +904,14 @@ export class TransactionService {
       columns.push('o.lockingScript')
     }
 
-    const rows = await q
+    const countQuery = q.clone().count<{ c: number }>({ c: 'o.outputId' }).first()
+    const rowsQuery = q
       .orderBy('o.outputId', 'asc')
       .limit(args.limit)
       .offset(args.offset)
       .select(columns)
+    const [countRow, rows] = await Promise.all([countQuery, rowsQuery])
+    const total = countRow != null ? Number(countRow.c) : undefined
 
     const mapped = rows.map((row: any) => {
       const out: TableOutput & { processing: sdk.ProcessingStatus } = {

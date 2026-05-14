@@ -619,22 +619,9 @@ export class KnexMigrations implements MigrationSource<string> {
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN rawTx LONGBLOB')
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN inputBEEF LONGBLOB')
           await knex.raw('ALTER TABLE outputs MODIFY COLUMN lockingScript LONGBLOB')
-        } else {
-          await knex.schema.alterTable('proven_tx_reqs', table => {
-            table.binary('rawTx', 10000000).alter()
-            table.binary('beef', 10000000).alter()
-          })
-          await knex.schema.alterTable('outputs', table => {
-            table.binary('lockingScript', 10000000).alter()
-          })
-          await knex.schema.alterTable('proven_txs', table => {
-            table.binary('rawTx', 10000000).alter()
-          })
-          await knex.schema.alterTable('transactions', table => {
-            table.binary('rawTx', 10000000).alter()
-            table.binary('beef', 10000000).alter()
-          })
         }
+        // Postgres + SQLite: no size-class alter needed. Pg `bytea` and SQLite
+        // `BLOB` accept arbitrary-length payloads without an upgrade step.
 
         await knex('settings').insert({
           storageIdentityKey,
@@ -672,9 +659,22 @@ export class KnexMigrations implements MigrationSource<string> {
  * @returns {DBType} connected database engine variant
  */
 export async function determineDBType (knex: Knex<any, any[]>): Promise<DBType> {
+  /*
+   * Prefer the knex client identifier (set at construction, no probe query
+   * required) before falling back to engine-specific SQL.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: string | undefined = (knex as any).client?.config?.client ??
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (knex as any).client?.dialect
+  if (client === 'mysql' || client === 'mysql2') return 'MySQL'
+  if (client === 'pg' || client === 'postgres' || client === 'postgresql' ||
+      client === 'pg-native' || client === 'pgnative') return 'Postgres'
+  if (client === 'better-sqlite3' || client === 'sqlite3') return 'SQLite'
+
   try {
-    const q = `SELECT 
-  CASE 
+    const q = `SELECT
+  CASE
       WHEN (SELECT VERSION() LIKE '%MariaDB%') = 1 THEN 'Unknown'
       WHEN (SELECT VERSION()) IS NOT NULL THEN 'MySQL'
       ELSE 'Unknown'

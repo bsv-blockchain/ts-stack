@@ -471,8 +471,17 @@ async function commitNewTxToStorage (
 
     log = stampLog(log, '... storage commitNewTxToStorage req inserted')
 
-    for (const ou of vargs.outputUpdates) {
-      await storage.updateOutput(ou.id, ou.update, trx)
+    // Batch the N output updates into a single CASE-WHEN UPDATE when the
+    // underlying storage exposes bulkUpdateOutputs (StorageKnex). Fall back to
+    // per-row updates otherwise.
+    type MaybeBulk = { bulkUpdateOutputs?: (us: Array<{ id: number, update: Partial<TableOutput> }>, trx?: unknown) => Promise<number> }
+    const bulk = (storage as unknown as MaybeBulk).bulkUpdateOutputs
+    if (typeof bulk === 'function') {
+      await bulk.call(storage, vargs.outputUpdates, trx)
+    } else {
+      for (const ou of vargs.outputUpdates) {
+        await storage.updateOutput(ou.id, ou.update, trx)
+      }
     }
 
     log = stampLog(log, '... storage commitNewTxToStorage outputs updated')

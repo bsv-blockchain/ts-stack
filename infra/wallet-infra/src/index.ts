@@ -71,21 +71,70 @@ async function setupWalletStorageAndMonitor(): Promise<{
     const connection = JSON.parse(KNEX_DB_CONNECTION)
     const databaseName = connection['database']
 
-    // You can also use an imported knex configuration file.
+    /*
+     * Knex client selection. Defaults to mysql2 to preserve existing
+     * deployments. Operators can pick Postgres at deploy time by setting
+     * `KNEX_DB_CLIENT=pg`, or by including `"client": "pg"` inside the
+     * `KNEX_DB_CONNECTION` JSON. Aliases ('mysql', 'mysql2', 'postgres',
+     * 'postgresql') are normalised to the canonical Knex client name.
+     */
+    const rawClient: string = String(
+      process.env.KNEX_DB_CLIENT ?? connection.client ?? 'mysql2'
+    ).toLowerCase()
+    delete connection.client
+    let client: 'mysql2' | 'pg'
+    if (rawClient === 'pg' || rawClient === 'postgres' || rawClient === 'postgresql') {
+      client = 'pg'
+    } else if (rawClient === 'mysql' || rawClient === 'mysql2') {
+      client = 'mysql2'
+    } else {
+      throw new Error(
+        `Unsupported KNEX_DB_CLIENT '${rawClient}'. Use 'mysql2' or 'pg'.`
+      )
+    }
+
+    // Pool sizing: defaults sized for a single Cloud Run revision with 1–2
+    // vCPU and bursty traffic. `KNEX_POOL_MAX` / `KNEX_POOL_MIN` allow
+    // operators to tune at deploy time without rebuilding. `acquireTimeoutMs`
+    // intentionally short to fail-fast on pool exhaustion so callers can
+    // back off rather than queue indefinitely.
+    const poolMax = Number(process.env.KNEX_POOL_MAX ?? 32)
+    const poolMin = Number(process.env.KNEX_POOL_MIN ?? 2)
+
+    // Client-specific connection options. Pg defaults are minimal — the node-
+    // postgres driver does most of the right things out of the box (Buffer ↔
+    // bytea, dates parsed into Date). mysql2 needs explicit number / date /
+    // statement-cache tuning to match.
+    const connectionOptions = client === 'mysql2'
+      ? {
+          ...connection,
+          decimalNumbers: true,
+          dateStrings: false,
+          supportBigNumbers: true,
+          bigNumberStrings: false,
+          // Per-connection prepared-statement cache. Cap at 256 (~4× the
+          // wallet's hot query set).
+          maxPreparedStatements: 256
+        }
+      : { ...connection }
+
     const knexConfig: Knex.Config = {
-      client: 'mysql2',
-      connection,
+      client,
+      connection: connectionOptions,
       useNullAsDefault: true,
       pool: {
-        min: 2,
-        max: 10,
+        min: poolMin,
+        max: poolMax,
         createTimeoutMillis: 10000,
-        acquireTimeoutMillis: 30000,
-        idleTimeoutMillis: 600000,
-        reapIntervalMillis: 60000,
+        acquireTimeoutMillis: 5000,
+        idleTimeoutMillis: 30000,
+        reapIntervalMillis: 1000,
         createRetryIntervalMillis: 200,
         propagateCreateError: false
-      }
+      },
+      // Knex acquireConnectionTimeout governs pool waits separately from
+      // tarn's acquireTimeoutMillis. Keep them aligned.
+      acquireConnectionTimeout: 5000
     }
     const knex = makeKnex(knexConfig)
 

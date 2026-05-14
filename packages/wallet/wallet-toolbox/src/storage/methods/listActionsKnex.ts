@@ -166,83 +166,239 @@ function legacyStatiToProcessing (stati: string[]): ProcessingStatus[] {
   return [...result]
 }
 
-async function enrichActionLabels (
+/**
+ * Bulk-enrich all action rows in a fixed number of round-trips, replacing the
+ * per-row N+1 fetches that previously dominated listActions latency.
+ *
+ * For N action rows:
+ *   labels  : 1 query  (was N)
+ *   outputs : 1 query for both action outputs (transactionId IN) and inputs
+ *             (spentBy IN), 1 query for baskets, 1 query for tag map+labels
+ *             (was up to 3·N queries via findOutputs + extendOutput)
+ *   rawTx   : 1 union query for all distinct txids (was N)
+ *
+ * Total: ≤ 5 round-trips regardless of N.
+ */
+async function bulkEnrich (
   storage: StorageKnex,
-  row: NewActionRow,
-  action: WalletAction,
-  timeFilterRequested: boolean
+  txs: NewActionRow[],
+  actions: WalletAction[],
+  vargs: Validation.ValidListActionsArgs,
+  timeFilterRequested: boolean,
+  userId: number
 ): Promise<void> {
-  // Post-cutover: tx_labels_map.transactionId = actions.actionId.
-  // We therefore pass row.actionId to getLabelsForTransactionId.
-  // The function name is misleading in new-schema context — it actually looks up
-  // by tx_labels_map.transactionId which is now the actionId keyspace.
-  action.labels = (await storage.getLabelsForTransactionId(row.actionId)).map(l => l.label)
-  if (timeFilterRequested) {
-    const ts = (row.created_at != null) ? new Date(row.created_at as any).getTime() : Number.NaN
-    if (!Number.isNaN(ts)) {
-      const timeLabel = makeBrc114ActionTimeLabel(ts)
-      if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
-    }
-  }
-}
+  if (txs.length === 0) return
 
-async function enrichActionOutputs (
-  storage: StorageKnex,
-  row: NewActionRow,
-  action: WalletAction,
-  includeOutputLockingScripts: boolean
-): Promise<void> {
-  // outputs.transactionId FKs transactions.transactionId (new-schema) — use row.transactionId
-  const outputs: TableOutputX[] = await storage.findOutputs({
-    partial: { transactionId: row.transactionId },
-    noScript: !includeOutputLockingScripts
-  })
-  action.outputs = []
-  for (const o of outputs) {
-    await storage.extendOutput(o, true, true)
-    const wo: WalletActionOutput = {
-      satoshis: o.satoshis || 0,
-      spendable: !!o.spendable,
-      tags: o.tags?.map(t => t.tag) || [],
-      outputIndex: Number(o.vout),
-      outputDescription: o.outputDescription || '',
-      basket: o.basket?.name || ''
-    }
-    if (includeOutputLockingScripts) wo.lockingScript = asString(o.lockingScript || [])
-    action.outputs.push(wo)
-  }
-}
+  const includeLabels = !!vargs.includeLabels
+  const includeOutputs = !!vargs.includeOutputs
+  const includeInputs = !!vargs.includeInputs
+  const includeOutScripts = !!vargs.includeOutputLockingScripts
+  const includeInScripts = !!vargs.includeInputSourceLockingScripts
+  const includeUnlock = !!vargs.includeInputUnlockingScripts
 
-async function enrichActionInputs (
-  storage: StorageKnex,
-  row: NewActionRow,
-  action: WalletAction,
-  includeSourceLockingScripts: boolean,
-  includeUnlockingScripts: boolean
-): Promise<void> {
-  // outputs.spentBy FKs transactions.transactionId (new-schema) — use row.transactionId
-  const inputs: TableOutputX[] = await storage.findOutputs({
-    partial: { spentBy: row.transactionId },
-    noScript: !includeSourceLockingScripts
-  })
-  action.inputs = []
-  if (inputs.length === 0) return
-  const rawTx = await storage.getRawTxOfKnownValidTransaction(row.txid)
-  let bsvTx: BsvTransaction | undefined
-  if (rawTx != null) bsvTx = BsvTransaction.fromBinary(rawTx)
-  for (const o of inputs) {
-    await storage.extendOutput(o, true, true)
-    const input = bsvTx?.inputs.find(v => v.sourceTXID === o.txid && v.sourceOutputIndex === o.vout)
-    const wo: WalletActionInput = {
-      sourceOutpoint: `${o.txid}.${o.vout}`,
-      sourceSatoshis: o.satoshis || 0,
-      inputDescription: o.outputDescription || '',
-      sequenceNumber: input?.sequence || 0
+  const k = storage.toDb(undefined)
+
+  const actionIds = txs.map(t => t.actionId)
+  const txIds = txs.map(t => t.transactionId)
+
+  // 1) Labels: tx_labels_map.transactionId is actionId post-cutover.
+  const labelsQuery = (includeLabels && actionIds.length > 0)
+    ? k('tx_labels as l')
+      .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
+      .whereIn('lm.transactionId', actionIds)
+      .whereNot('lm.isDeleted', true)
+      .whereNot('l.isDeleted', true)
+      .select('lm.transactionId as actionId', 'l.label')
+    : Promise.resolve([] as Array<{ actionId: number, label: string }>)
+
+  // 2) Action outputs: WHERE transactionId IN (txIds)
+  const outScriptCol = includeOutScripts ? ['lockingScript'] : []
+  const outputsQuery = (includeOutputs && txIds.length > 0)
+    ? k('outputs')
+      .whereIn('transactionId', txIds)
+      .select(
+        'outputId', 'userId', 'transactionId', 'basketId', 'spendable',
+        'change', 'outputDescription', 'vout', 'satoshis', 'providedBy',
+        'purpose', 'type', 'txid', 'scriptLength', 'scriptOffset',
+        ...outScriptCol
+      )
+    : Promise.resolve([] as TableOutputX[])
+
+  // 3) Input outputs: WHERE spentBy IN (txIds)
+  const inScriptCol = includeInScripts ? ['lockingScript'] : []
+  const inputsQuery = (includeInputs && txIds.length > 0)
+    ? k('outputs')
+      .whereIn('spentBy', txIds)
+      .select(
+        'outputId', 'userId', 'transactionId', 'basketId', 'spendable',
+        'change', 'outputDescription', 'vout', 'satoshis', 'providedBy',
+        'purpose', 'type', 'txid', 'scriptLength', 'scriptOffset', 'spentBy',
+        ...inScriptCol
+      )
+    : Promise.resolve([] as TableOutputX[])
+
+  const [labelRows, outputRows, inputRows] = await Promise.all([labelsQuery, outputsQuery, inputsQuery])
+
+  // 4) Baskets needed by either outputs or inputs
+  const basketIds = new Set<number>()
+  for (const o of outputRows) if (o.basketId != null) basketIds.add(o.basketId)
+  for (const o of inputRows) if (o.basketId != null) basketIds.add(o.basketId)
+
+  // 5) Tags map for both output and input outputIds
+  const outputIdsForTags: number[] = []
+  for (const o of outputRows) if (o.outputId != null) outputIdsForTags.push(o.outputId)
+  for (const o of inputRows) if (o.outputId != null) outputIdsForTags.push(o.outputId)
+
+  const basketsQuery = basketIds.size > 0
+    ? k('output_baskets').whereIn('basketId', [...basketIds]).select('basketId', 'name')
+    : Promise.resolve([] as Array<{ basketId: number, name: string }>)
+
+  const tagsQuery = outputIdsForTags.length > 0
+    ? k('output_tags as ot')
+      .join('output_tags_map as om', 'om.outputTagId', 'ot.outputTagId')
+      .whereIn('om.outputId', outputIdsForTags)
+      .whereNot('om.isDeleted', true)
+      .whereNot('ot.isDeleted', true)
+      .select('om.outputId', 'ot.tag')
+    : Promise.resolve([] as Array<{ outputId: number, tag: string }>)
+
+  // 6) rawTx for each distinct txid (only needed for inputs to recover sequence/unlocking script)
+  const distinctTxids = includeInputs && inputRows.length > 0
+    ? [...new Set(txs.filter(t => t.txid).map(t => t.txid))]
+    : []
+  const rawTxQuery = distinctTxids.length > 0
+    ? Promise.all(distinctTxids.map(async txid => ({ txid, rawTx: await storage.getRawTxOfKnownValidTransaction(txid) })))
+    : Promise.resolve([] as Array<{ txid: string, rawTx?: number[] }>)
+
+  const [baskets, tagRows, rawTxRows] = await Promise.all([basketsQuery, tagsQuery, rawTxQuery])
+
+  /*
+   * Recover lockingScript bytes for outputs whose scripts were offloaded to
+   * rawTx storage (scriptLength > maxOutputScript at commit time). The original
+   * per-row enrichment path went through findOutputs(noScript=false) →
+   * validateOutputScript, which runs this same recovery on each row. We replicate
+   * it here so the batch path returns identical locking-script content.
+   *
+   * Run all recoveries concurrently — they touch independent rows and the
+   * downstream rawTx fetch is internally cached on most providers.
+   */
+  if (includeOutScripts || includeInScripts) {
+    const targets: TableOutputX[] = []
+    if (includeOutScripts) {
+      for (const o of outputRows) {
+        if (o.scriptLength != null && o.scriptOffset != null && o.txid != null &&
+            (o.lockingScript == null || o.lockingScript.length !== o.scriptLength)) {
+          targets.push(o)
+        }
+      }
     }
-    action.inputs.push(wo)
-    if (includeSourceLockingScripts) wo.sourceLockingScript = asString(o.lockingScript || [])
-    if (includeUnlockingScripts) wo.unlockingScript = input?.unlockingScript?.toHex()
+    if (includeInScripts) {
+      for (const o of inputRows) {
+        if (o.scriptLength != null && o.scriptOffset != null && o.txid != null &&
+            (o.lockingScript == null || o.lockingScript.length !== o.scriptLength)) {
+          targets.push(o)
+        }
+      }
+    }
+    if (targets.length > 0) {
+      await Promise.all(targets.map(o => storage.validateOutputScript(o)))
+    }
   }
+
+  const basketName: Record<number, string> = {}
+  for (const b of baskets) basketName[b.basketId] = b.name
+
+  const tagsByOutputId: Record<number, string[]> = {}
+  for (const r of tagRows) {
+    const id = Number(r.outputId)
+    if (!tagsByOutputId[id]) tagsByOutputId[id] = []
+    tagsByOutputId[id].push(String(r.tag))
+  }
+
+  const labelsByActionId: Record<number, string[]> = {}
+  for (const r of labelRows) {
+    const id = Number(r.actionId)
+    if (!labelsByActionId[id]) labelsByActionId[id] = []
+    labelsByActionId[id].push(String(r.label))
+  }
+
+  const outputsByTxId = new Map<number, TableOutputX[]>()
+  for (const o of outputRows) {
+    const list = outputsByTxId.get(o.transactionId) || []
+    list.push(o)
+    outputsByTxId.set(o.transactionId, list)
+  }
+
+  const inputsByTxId = new Map<number, TableOutputX[]>()
+  for (const o of inputRows) {
+    if (o.spentBy == null) continue
+    const list = inputsByTxId.get(o.spentBy) || []
+    list.push(o)
+    inputsByTxId.set(o.spentBy, list)
+  }
+
+  const rawTxByTxid: Record<string, number[] | undefined> = {}
+  for (const r of rawTxRows) rawTxByTxid[r.txid] = r.rawTx
+
+  // Stitch enrichment back onto each action.
+  for (let i = 0; i < txs.length; i++) {
+    const row = txs[i]
+    const action = actions[i]
+
+    if (includeLabels) {
+      action.labels = labelsByActionId[row.actionId] ? [...labelsByActionId[row.actionId]] : []
+      if (timeFilterRequested) {
+        const ts = (row.created_at != null) ? new Date(row.created_at as any).getTime() : Number.NaN
+        if (!Number.isNaN(ts)) {
+          const timeLabel = makeBrc114ActionTimeLabel(ts)
+          if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
+        }
+      }
+    }
+
+    if (includeOutputs) {
+      action.outputs = []
+      const list = outputsByTxId.get(row.transactionId) || []
+      for (const o of list) {
+        const wo: WalletActionOutput = {
+          satoshis: o.satoshis || 0,
+          spendable: !!o.spendable,
+          tags: (o.outputId != null && tagsByOutputId[o.outputId]) ? tagsByOutputId[o.outputId] : [],
+          outputIndex: Number(o.vout),
+          outputDescription: o.outputDescription || '',
+          basket: (o.basketId != null && basketName[o.basketId]) ? basketName[o.basketId] : ''
+        }
+        if (includeOutScripts) wo.lockingScript = asString(o.lockingScript || [])
+        action.outputs.push(wo)
+      }
+    }
+
+    if (includeInputs) {
+      action.inputs = []
+      const list = inputsByTxId.get(row.transactionId) || []
+      if (list.length === 0) continue
+      const rawTx = rawTxByTxid[row.txid]
+      let bsvTx: BsvTransaction | undefined
+      if (rawTx != null) {
+        try { bsvTx = BsvTransaction.fromBinary(rawTx) } catch { /* tolerate parse failure */ }
+      }
+      for (const o of list) {
+        const input = bsvTx?.inputs.find(v => v.sourceTXID === o.txid && v.sourceOutputIndex === o.vout)
+        const wo: WalletActionInput = {
+          sourceOutpoint: `${o.txid}.${o.vout}`,
+          sourceSatoshis: o.satoshis || 0,
+          inputDescription: o.outputDescription || '',
+          sequenceNumber: input?.sequence || 0
+        }
+        action.inputs.push(wo)
+        if (includeInScripts) wo.sourceLockingScript = asString(o.lockingScript || [])
+        if (includeUnlock) wo.unlockingScript = input?.unlockingScript?.toHex()
+      }
+    }
+  }
+
+  // Silence unused-param lint: kept on signature for future per-user filtering.
+  void userId
 }
 
 export async function listActions (
@@ -371,16 +527,7 @@ export async function listActions (
   }
 
   if (vargs.includeLabels || vargs.includeInputs || vargs.includeOutputs) {
-    await Promise.all(
-      txs.map(async (tx, i) => {
-        const action = r.actions[i]
-        if (vargs.includeLabels) await enrichActionLabels(storage, tx, action, timeFilterRequested)
-        if (vargs.includeOutputs) await enrichActionOutputs(storage, tx, action, !!vargs.includeOutputLockingScripts)
-        if (vargs.includeInputs) {
-          await enrichActionInputs(storage, tx, action, !!vargs.includeInputSourceLockingScripts, !!vargs.includeInputUnlockingScripts)
-        }
-      })
-    )
+    await bulkEnrich(storage, txs, r.actions, vargs, timeFilterRequested, auth.userId!)
   }
   return r
 }

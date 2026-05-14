@@ -171,18 +171,30 @@ export async function rollbackSchemaCutover (knex: Knex): Promise<void> {
 }
 
 async function determineDBType (knex: Knex): Promise<DBType> {
-  // Avoid pulling KnexMigrations' determineDBType to keep this module
-  // free of cyclic imports.
+  /*
+   * Prefer the knex client identifier — it is set at construction and is
+   * always available, avoiding a probe query and the engine-specific syntax
+   * differences (SQLite has no `dual`, Postgres rejects `FROM dual`, MySQL
+   * accepts it but only since 5.7+).
+   *
+   * Fall back to a probe-based detection only if the client is unrecognised.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: string | undefined = (knex as any).client?.config?.client ??
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (knex as any).client?.dialect
+  if (client === 'mysql' || client === 'mysql2') return 'MySQL'
+  if (client === 'pg' || client === 'postgres' || client === 'postgresql' ||
+      client === 'pg-native' || client === 'pgnative') return 'Postgres'
+  if (client === 'better-sqlite3' || client === 'sqlite3') return 'SQLite'
+
+  // Probe fallback.
   try {
-    let r: any = await knex.raw("SELECT 'MySQL' AS database_type FROM dual")
-    // mysql2 returns [rows, fields]; pg returns { rows }; better-sqlite3 returns rows directly.
-    if (!r[0]?.database_type) r = r[0]
-    if (r?.rows) r = r.rows
-    const dbtype = r?.[0]?.database_type
-    if (dbtype === 'MySQL') return 'MySQL'
-  } catch (e) {
-    // fallthrough — SQLite has no `dual` table
-  }
+    const r: any = await knex.raw('SELECT version() AS v')
+    const v = r?.rows?.[0]?.v ?? r?.[0]?.[0]?.v ?? r?.[0]?.v
+    if (typeof v === 'string' && /PostgreSQL/i.test(v)) return 'Postgres'
+    if (typeof v === 'string' && /MariaDB|MySQL/i.test(v)) return 'MySQL'
+  } catch { /* ignore */ }
   try {
     await knex.raw('SELECT 1')
     return 'SQLite'
@@ -198,6 +210,14 @@ async function hasTable (knex: Knex, name: string): Promise<boolean> {
 async function disableFks (knex: Knex, isSqlite: boolean): Promise<void> {
   if (isSqlite) {
     await knex.raw('PRAGMA foreign_keys = OFF')
+    return
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: string | undefined = (knex as any).client?.config?.client
+  if (client === 'pg' || client === 'postgres' || client === 'postgresql') {
+    // `session_replication_role = replica` makes Postgres skip FK / triggers
+    // for the duration of the session. Restored to 'origin' by enableFks.
+    await knex.raw("SET session_replication_role = 'replica'")
   } else {
     await knex.raw('SET FOREIGN_KEY_CHECKS=0')
   }
@@ -206,6 +226,12 @@ async function disableFks (knex: Knex, isSqlite: boolean): Promise<void> {
 async function enableFks (knex: Knex, isSqlite: boolean): Promise<void> {
   if (isSqlite) {
     await knex.raw('PRAGMA foreign_keys = ON')
+    return
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client: string | undefined = (knex as any).client?.config?.client
+  if (client === 'pg' || client === 'postgres' || client === 'postgresql') {
+    await knex.raw("SET session_replication_role = 'origin'")
   } else {
     await knex.raw('SET FOREIGN_KEY_CHECKS=1')
   }
@@ -231,26 +257,58 @@ async function rebuildTxLabelsMap (knex: Knex, dbtype: DBType): Promise<void> {
       table.index('transactionId')
       table.index(['transactionId', 'isDeleted'], 'idx_tx_labels_map_tx_deleted')
     })
-  } else {
-    const dbRow: any = (await knex.raw('SELECT DATABASE() AS d'))[0]
-    const dbName = Array.isArray(dbRow) ? dbRow[0]?.d : dbRow?.d
-    const fkRows: any = await knex('information_schema.KEY_COLUMN_USAGE')
-      .select('CONSTRAINT_NAME')
-      .where({
-        TABLE_SCHEMA: dbName,
-        TABLE_NAME: 'tx_labels_map',
-        COLUMN_NAME: 'transactionId'
+    return
+  }
+
+  if (dbtype === 'Postgres') {
+    /*
+     * Postgres FK drop requires the constraint name. Query
+     * information_schema.table_constraints + key_column_usage to find any FK
+     * on tx_labels_map.transactionId, drop them, then add the new FK pointing
+     * at actions(actionId).
+     */
+    const fkRows: any = await knex('information_schema.table_constraints as tc')
+      .join('information_schema.key_column_usage as kcu', function () {
+        this.on('tc.constraint_name', '=', 'kcu.constraint_name')
+          .andOn('tc.table_schema', '=', 'kcu.table_schema')
       })
-      .whereNotNull('REFERENCED_TABLE_NAME')
+      .where('tc.table_name', 'tx_labels_map')
+      .where('kcu.column_name', 'transactionId')
+      .where('tc.constraint_type', 'FOREIGN KEY')
+      .select('tc.constraint_name as constraint_name', 'tc.table_schema as table_schema')
     for (const row of fkRows ?? []) {
-      const constraintName = row.CONSTRAINT_NAME ?? row.constraint_name
-      if (constraintName != null) {
-        await knex.raw('ALTER TABLE tx_labels_map DROP FOREIGN KEY `' + constraintName + '`')
+      const name = row.constraint_name
+      const schema = row.table_schema ?? 'public'
+      if (name != null) {
+        await knex.raw(`ALTER TABLE "${schema}"."tx_labels_map" DROP CONSTRAINT "${name}"`)
       }
     }
     await knex.raw(
       'ALTER TABLE tx_labels_map ADD CONSTRAINT fk_tx_labels_map_action ' +
-      'FOREIGN KEY (transactionId) REFERENCES actions(actionId)'
+      'FOREIGN KEY ("transactionId") REFERENCES actions("actionId")'
     )
+    return
   }
+
+  // MySQL.
+  const dbRow: any = (await knex.raw('SELECT DATABASE() AS d'))[0]
+  const dbName = Array.isArray(dbRow) ? dbRow[0]?.d : dbRow?.d
+  const fkRows: any = await knex('information_schema.KEY_COLUMN_USAGE')
+    .select('CONSTRAINT_NAME')
+    .where({
+      TABLE_SCHEMA: dbName,
+      TABLE_NAME: 'tx_labels_map',
+      COLUMN_NAME: 'transactionId'
+    })
+    .whereNotNull('REFERENCED_TABLE_NAME')
+  for (const row of fkRows ?? []) {
+    const constraintName = row.CONSTRAINT_NAME ?? row.constraint_name
+    if (constraintName != null) {
+      await knex.raw('ALTER TABLE tx_labels_map DROP FOREIGN KEY `' + constraintName + '`')
+    }
+  }
+  await knex.raw(
+    'ALTER TABLE tx_labels_map ADD CONSTRAINT fk_tx_labels_map_action ' +
+    'FOREIGN KEY (transactionId) REFERENCES actions(actionId)'
+  )
 }

@@ -72,6 +72,13 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
   private _postCutoverCache: boolean | undefined = undefined
+  /**
+   * Set by `disableForeignKeys()`, cleared by `enableForeignKeys()`.
+   * Read by `transaction()` to emit a connection-scoped FK bypass on
+   * Postgres (where `disableForeignKeys` cannot directly act on the
+   * connection the upcoming transaction will acquire from the pool).
+   */
+  private _fkBypassPending: boolean = false
 
   constructor (options: StorageKnexOptions) {
     super(options)
@@ -312,13 +319,47 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return r
   }
 
+  /**
+   * Engine-agnostic FK bypass. SQLite uses `PRAGMA foreign_keys`, MySQL uses
+   * `SET FOREIGN_KEY_CHECKS`, Postgres uses `SET session_replication_role`.
+   * Callers pass `disable=true` to bypass FK checks, `false` to restore.
+   *
+   * Note: PRAGMA / SET statements run on the underlying connection; on SQLite
+   * they are no-ops inside an open transaction, so callers that need bypass
+   * during a transaction must call this BEFORE opening it.
+   */
+  async dbBypassFks (disable: boolean): Promise<void> {
+    switch (this.dbtype) {
+      case 'SQLite':
+        await this.knex.raw(disable ? 'PRAGMA foreign_keys = OFF' : 'PRAGMA foreign_keys = ON')
+        return
+      case 'Postgres':
+        await this.knex.raw(disable
+          ? "SET session_replication_role = 'replica'"
+          : "SET session_replication_role = 'origin'")
+        return
+      case 'MySQL':
+        await this.knex.raw(disable ? 'SET FOREIGN_KEY_CHECKS=0' : 'SET FOREIGN_KEY_CHECKS=1')
+        return
+      default:
+        // IndexedDB or unknown — no-op
+    }
+  }
+
   dbTypeSubstring (source: string, fromOffset: number, forLength?: number) {
-    if (this.dbtype === 'MySQL') return `substring(${source} from ${fromOffset} for ${forLength!})`
+    // MySQL + Postgres both support the SQL-standard `substring(col from N for L)`.
+    // SQLite uses `substr(col, N, L)`.
+    if (this.dbtype === 'MySQL' || this.dbtype === 'Postgres') {
+      return `substring(${source} from ${fromOffset} for ${forLength!})`
+    }
     return `substr(${source}, ${fromOffset}, ${forLength})`
   }
 
   private normaliseKnexRawResult (rs: unknown): Array<{ rawTx: Buffer | null }> {
+    // mysql2 returns `[rows, fields]`; pg returns `{ rows }`; better-sqlite3
+    // returns rows directly as an array.
     if (this.dbtype === 'MySQL') return (rs as Array<Array<{ rawTx: Buffer | null }>>)[0]
+    if (this.dbtype === 'Postgres') return (rs as { rows: Array<{ rawTx: Buffer | null }> }).rows
     return rs as Array<{ rawTx: Buffer | null }>
   }
 
@@ -616,16 +657,31 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (e.commissionId === 0) delete e.commissionId
     // Post-cutover bridge-period: commissions.transactionId FKs new transactions.
     // During createAction the transactionId references transactions_legacy, so bypass FK.
-    const isSqlite = this.dbtype === 'SQLite'
-    const postCutover = isSqlite ? await this.isPostCutover() : false
-    if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
-    try {
-      const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
+    const postCutover = await this.isPostCutover()
+    if (postCutover && this.dbtype === 'SQLite') {
+      await this.knex.raw('PRAGMA foreign_keys = OFF')
+      try {
+        const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
+        commission.commissionId = id
+        return commission.commissionId
+      } finally {
+        await this.knex.raw('PRAGMA foreign_keys = ON')
+      }
+    }
+    if (postCutover && this.dbtype === 'Postgres' && trx == null) {
+      // No outer transaction — open one so `SET LOCAL session_replication_role`
+      // (emitted by `transaction()`) covers the insert on the same connection.
+      let id = 0
+      await this.transaction(async (t) => {
+        const [rowId] = await this.toDb(t)<TableCommission>('commissions').insert(e)
+        id = rowId
+      })
       commission.commissionId = id
       return commission.commissionId
-    } finally {
-      if (postCutover) await this.knex.raw('PRAGMA foreign_keys = ON')
     }
+    const [id] = await this.toDb(trx)<TableCommission>('commissions').insert(e)
+    commission.commissionId = id
+    return commission.commissionId
   }
 
   override async insertOutput (output: TableOutput, trx?: TrxToken): Promise<number> {
@@ -633,18 +689,32 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (e.outputId === 0) delete e.outputId
     // Post-cutover bridge-period: outputs.transactionId FKs new transactions,
     // but new unsigned outputs reference transactions_legacy (bridge-period rows).
-    // Temporarily disable FK checks on SQLite. Safe because once processAction
-    // runs, spentBy and transactionId are remapped to real new-schema IDs.
-    const isSqlite = this.dbtype === 'SQLite'
-    const postCutover = isSqlite ? await this.isPostCutover() : false
-    if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
-    try {
-      const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
+    // Engine-specific FK bypass: SQLite uses PRAGMA on the bare connection,
+    // Postgres scopes the bypass to a fresh transaction (so the SET LOCAL emitted
+    // by `transaction()` covers the insert on the same connection).
+    const postCutover = await this.isPostCutover()
+    if (postCutover && this.dbtype === 'SQLite') {
+      await this.knex.raw('PRAGMA foreign_keys = OFF')
+      try {
+        const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
+        output.outputId = id
+        return output.outputId
+      } finally {
+        await this.knex.raw('PRAGMA foreign_keys = ON')
+      }
+    }
+    if (postCutover && this.dbtype === 'Postgres' && trx == null) {
+      let id = 0
+      await this.transaction(async (t) => {
+        const [rowId] = await this.toDb(t)<TableOutput>('outputs').insert(e)
+        id = rowId
+      })
       output.outputId = id
       return output.outputId
-    } finally {
-      if (postCutover) await this.knex.raw('PRAGMA foreign_keys = ON')
     }
+    const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
+    output.outputId = id
+    return output.outputId
   }
 
   override async insertOutputTag (tag: TableOutputTag, trx?: TrxToken): Promise<number> {
@@ -673,18 +743,23 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     // Post-cutover: tx_labels_map.transactionId references actions.actionId
     // (rebuilt during schema cutover). Sync paths that import legacy rows still
     // carry the legacy transactionId until repointLabelsToActionId remaps them.
-    // Temporarily disable FK checks so the import does not fail.
-    const isSqlite = this.dbtype === 'SQLite'
+    // Bypass FK on engines that enforce it for bridge writes.
     const postCutover = await this.isPostCutover()
-    if (postCutover) {
-      if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
-      else await this.knex.raw('SET FOREIGN_KEY_CHECKS=0')
+    if (postCutover && this.dbtype === 'SQLite') {
+      await this.dbBypassFks(true)
       try {
         await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
       } finally {
-        if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = ON')
-        else await this.knex.raw('SET FOREIGN_KEY_CHECKS=1')
+        await this.dbBypassFks(false)
       }
+      return
+    }
+    if (postCutover && this.dbtype === 'Postgres' && trx == null) {
+      // Open a transaction so the `SET LOCAL session_replication_role`
+      // emitted by `transaction()` and the insert share a connection.
+      await this.transaction(async (t) => {
+        await this.toDb(t)<TableTxLabelMap>('tx_labels_map').insert(e)
+      })
       return
     }
     await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
@@ -727,19 +802,33 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
   override async updateCommission (id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> {
     await this.verifyReadyForDatabaseAccess(trx)
-    // Post-cutover SQLite: commissions.transactionId FK references the new
-    // schema `transactions` table. Legacy callers carry transactionId values
-    // that still point at transactions_legacy. Bypass FK so the update lands.
-    const isSqlite = this.dbtype === 'SQLite'
-    const postCutover = isSqlite ? await this.isPostCutover() : false
-    if (postCutover) await this.knex.raw('PRAGMA foreign_keys = OFF')
-    try {
-      return await this.toDb(trx)<TableCommission>('commissions')
-        .where({ commissionId: id })
-        .update(this.validatePartialForUpdate(update))
-    } finally {
-      if (postCutover) await this.knex.raw('PRAGMA foreign_keys = ON')
+    // Post-cutover: commissions.transactionId FK references the new-schema
+    // `transactions` table. Legacy callers carry transactionId values that
+    // still point at transactions_legacy. Bypass FK on engines that enforce
+    // it; MySQL preserves FK metadata across cutover RENAME (no bypass).
+    const postCutover = await this.isPostCutover()
+    if (postCutover && this.dbtype === 'SQLite') {
+      await this.knex.raw('PRAGMA foreign_keys = OFF')
+      try {
+        return await this.toDb(trx)<TableCommission>('commissions')
+          .where({ commissionId: id })
+          .update(this.validatePartialForUpdate(update))
+      } finally {
+        await this.knex.raw('PRAGMA foreign_keys = ON')
+      }
     }
+    if (postCutover && this.dbtype === 'Postgres' && trx == null) {
+      let n = 0
+      await this.transaction(async (t) => {
+        n = await this.toDb(t)<TableCommission>('commissions')
+          .where({ commissionId: id })
+          .update(this.validatePartialForUpdate(update))
+      })
+      return n
+    }
+    return await this.toDb(trx)<TableCommission>('commissions')
+      .where({ commissionId: id })
+      .update(this.validatePartialForUpdate(update))
   }
 
   override async updateOutputBasket (id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> {
@@ -754,6 +843,96 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return await this.toDb(trx)<TableOutput>('outputs')
       .where({ outputId: id })
       .update(this.validatePartialForUpdate(update))
+  }
+
+  /**
+   * Bulk-update many outputs in a single SQL statement (per shape group),
+   * replacing N round-trips with at most a handful regardless of N.
+   *
+   * Updates are grouped by the set of columns whose values are constant across
+   * the group. Per-row columns become `CASE outputId WHEN id THEN value ... END`
+   * expressions. Works on both SQLite and MySQL.
+   *
+   * Falls back to per-row updates when the group is small enough that the CASE
+   * overhead would dominate (currently: ≤ 2 rows).
+   */
+  async bulkUpdateOutputs (
+    updates: Array<{ id: number, update: Partial<TableOutput> }>,
+    trx?: TrxToken
+  ): Promise<number> {
+    if (updates.length === 0) return 0
+    await this.verifyReadyForDatabaseAccess(trx)
+
+    // Fast path for tiny lists.
+    if (updates.length <= 2) {
+      let n = 0
+      for (const u of updates) n += await this.updateOutput(u.id, u.update, trx)
+      return n
+    }
+
+    const k = this.toDb(trx)
+    const knexRaw = this.knex
+
+    // Group by the *shape* (which columns appear, and constant-vs-variable).
+    // For commitNewTxToStorage shape we expect at most 2 groups: with/without
+    // lockingScript cleared.
+    type Group = {
+      keyCols: string[]
+      perRow: Map<string, Map<number, unknown>> // col → outputId → value
+      ids: number[]
+    }
+    const groups = new Map<string, Group>()
+    for (const { id, update } of updates) {
+      const validated = this.validatePartialForUpdate({ ...update })
+      const cols = Object.keys(validated).filter(c => c !== 'updated_at').sort()
+      const key = cols.join('|')
+      let g = groups.get(key)
+      if (g == null) {
+        g = { keyCols: cols, perRow: new Map(), ids: [] }
+        for (const c of cols) g.perRow.set(c, new Map())
+        groups.set(key, g)
+      }
+      g.ids.push(id)
+      for (const c of cols) {
+        g.perRow.get(c)!.set(id, (validated as Record<string, unknown>)[c])
+      }
+    }
+
+    let totalUpdated = 0
+    for (const g of groups.values()) {
+      if (g.ids.length === 1) {
+        const id = g.ids[0]
+        const row: Record<string, unknown> = {}
+        for (const c of g.keyCols) row[c] = g.perRow.get(c)!.get(id)
+        row.updated_at = this.validateEntityDate(new Date())
+        totalUpdated += await k<TableOutput>('outputs').where({ outputId: id }).update(row)
+        continue
+      }
+
+      const set: Record<string, unknown> = {}
+      for (const c of g.keyCols) {
+        const values = g.perRow.get(c)!
+        // If every row has the same value, emit a scalar update.
+        const distinct = new Set<unknown>()
+        for (const v of values.values()) distinct.add(v === undefined ? null : v)
+        if (distinct.size === 1) {
+          set[c] = [...distinct][0]
+          continue
+        }
+        // CASE WHEN outputId = ? THEN ? ... ELSE c END
+        const bindings: unknown[] = []
+        const whens: string[] = []
+        for (const [id, v] of values.entries()) {
+          whens.push('WHEN ? THEN ?')
+          bindings.push(id, v === undefined ? null : v)
+        }
+        set[c] = knexRaw.raw(`CASE outputId ${whens.join(' ')} ELSE ?? END`, [...bindings, c])
+      }
+      set.updated_at = this.validateEntityDate(new Date())
+      totalUpdated += await k<TableOutput>('outputs').whereIn('outputId', g.ids).update(set)
+    }
+
+    return totalUpdated
   }
 
   override async updateOutputTagMap (
@@ -1344,27 +1523,49 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Post-cutover SQLite: disable FK on the bare connection BEFORE opening a
-   * transaction. PRAGMA foreign_keys changes inside SQLite transactions are no-ops,
-   * so this MUST be called before `this.knex.transaction()`.
+   * Post-cutover bridge-period FK bypass. Called before opening a transaction
+   * that contains bridge inserts (legacy-table rows whose FKs reference
+   * renamed tables).
    *
-   * Only acts when post-cutover AND SQLite. Pre-cutover or MySQL: no-op.
+   * SQLite: PRAGMA foreign_keys=OFF on the bare connection (PRAGMA inside
+   * a Knex transaction is a no-op on SQLite, so the call must precede the
+   * `knex.transaction()`).
+   * Postgres: session_replication_role=replica skips FK + trigger enforcement
+   * for the duration of the connection's session.
+   * MySQL: pre-cutover FK semantics already accommodate the bridge inserts
+   * via the rebuild pattern; no-op here.
    */
   override async disableForeignKeys (): Promise<void> {
     const postCutover = await this.isPostCutover()
-    if (postCutover && this.dbtype === 'SQLite') {
-      await this.knex.raw('PRAGMA foreign_keys = OFF')
+    if (!postCutover) return
+    if (this.dbtype === 'SQLite') {
+      // better-sqlite3 is single-connection — PRAGMA on the bare connection
+      // carries into the subsequent transaction.
+      await this.dbBypassFks(true)
+      return
+    }
+    if (this.dbtype === 'Postgres') {
+      // Pg has a real connection pool. Defer the actual `SET LOCAL` to the
+      // transaction body (see `transaction()`), since this method has no way
+      // to know which connection the upcoming transaction will acquire.
+      this._fkBypassPending = true
     }
   }
 
   /**
    * Re-enable FK after the transaction opened via `disableForeignKeys()` completes.
-   * Only acts when post-cutover AND SQLite.
+   * Mirrors `disableForeignKeys` engine handling.
    */
   override async enableForeignKeys (): Promise<void> {
     const postCutover = await this.isPostCutover()
-    if (postCutover && this.dbtype === 'SQLite') {
-      await this.knex.raw('PRAGMA foreign_keys = ON')
+    if (!postCutover) return
+    if (this.dbtype === 'SQLite') {
+      await this.dbBypassFks(false)
+      return
+    }
+    if (this.dbtype === 'Postgres') {
+      // Postgres bypass auto-reverts on COMMIT/ROLLBACK via SET LOCAL.
+      this._fkBypassPending = false
     }
   }
 
@@ -1557,7 +1758,33 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   override async transaction<T>(scope: (trx: TrxToken) => Promise<T>, trx?: TrxToken): Promise<T> {
     if (trx != null) return await scope(trx)
 
+    /*
+     * Post-cutover bridge-period FK bypass.
+     *
+     * Postgres: emit `SET LOCAL session_replication_role = 'replica'` as the
+     * FIRST statement inside every transaction post-cutover. The setting is
+     * connection-scoped and auto-reverts on COMMIT/ROLLBACK. Necessary because
+     * pg uses a real connection pool, so a `disableForeignKeys()` call BEFORE
+     * the transaction would land on a different connection. The cost is one
+     * cheap round-trip per transaction.
+     *
+     * SQLite: the equivalent bypass is set via PRAGMA on the bare connection
+     * before the transaction opens (better-sqlite3 is single-connection so the
+     * setting carries into the transaction). Handled by `disableForeignKeys`.
+     *
+     * MySQL: bridge inserts work without bypass — FK metadata is preserved
+     * across cutover RENAME via information_schema rewrite.
+     *
+     * The bypass is harmless on non-bridge writes (FK is still enforced at the
+     * application level by the schema invariants; the bypass only matters when
+     * a bridge insert references a legacy row).
+     */
+    const pgBypass = this.dbtype === 'Postgres' && this._postCutoverCache === true
+
     return await this.knex.transaction<T>(async knextrx => {
+      if (pgBypass) {
+        await knextrx.raw("SET LOCAL session_replication_role = 'replica'")
+      }
       const trx = knextrx as TrxToken
       return await scope(trx)
     })
@@ -1862,54 +2089,82 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const postCutover = await this.isPostCutover()
     const processingFilter = postCutover ? this.legacyStatiToProcessing(legacyStatus) : undefined
 
-    // Post-cutover bridge-period: `transactionId` here is a legacy row in
-    // `transactions_legacy` (new unsigned tx created by createAction). The
-    // `outputs.spentBy` FK now references `transactions.transactionId`, so
-    // setting spentBy to a transactions_legacy ID would violate the constraint.
-    // PRAGMA foreign_keys is silently ignored inside SQLite transactions, so
-    // we toggle FK enforcement on the bare connection BEFORE opening the
-    // transaction. processAction will remap spentBy to the real new transactionId
-    // once the txid is known and the new schema row is created.
+    /*
+     * Post-cutover bridge-period: `transactionId` here is a legacy row in
+     * `transactions_legacy` (new unsigned tx created by createAction). The
+     * `outputs.spentBy` FK now references `transactions.transactionId`, so
+     * setting spentBy to a transactions_legacy ID would violate the constraint.
+     *
+     * Engines that enforce FK at COMMIT-or-statement time (SQLite, Postgres)
+     * need FK bypass active for the duration of the change-input transaction
+     * so the bridge-period spentBy → transactions_legacy value lands. MySQL
+     * preserves FK metadata across the cutover RENAME via information_schema
+     * rewrite, so its bridge writes do not need a bypass.
+     *
+     * Engine notes:
+     *   SQLite — PRAGMA foreign_keys is silently ignored inside transactions,
+     *            so we toggle FK on the bare connection BEFORE opening the
+     *            transaction. better-sqlite3 is single-connection, so the
+     *            bypass holds for the subsequent transaction.
+     *   Postgres — `SET LOCAL session_replication_role = 'replica'` inside the
+     *              transaction scopes the bypass to the same connection's
+     *              session. We acquire the connection via knex.transaction
+     *              then issue SET LOCAL as the first statement; the setting
+     *              auto-reverts on COMMIT/ROLLBACK.
+     */
     const isSqlite = this.dbtype === 'SQLite'
-    if (postCutover && isSqlite) {
-      await this.knex.raw('PRAGMA foreign_keys = OFF')
+    const isPostgres = this.dbtype === 'Postgres'
+    const bridgeBypass = postCutover && (isSqlite || isPostgres)
+    if (bridgeBypass && isSqlite) {
+      await this.dbBypassFks(true)
     }
 
     let r: TableOutput | undefined
     try {
       r = await this.knex.transaction(async trx => {
-        const baseQuery = () => {
-          const q = trx<TableOutput>('outputs as o')
-            .join('transactions as t', 'o.transactionId', 't.transactionId')
-            .where('o.userId', userId)
-            .where('o.spendable', true)
-            .where('o.basketId', basketId)
-            .select('o.*')
-          if (processingFilter != null) {
-            q.whereIn('t.processing', processingFilter)
-          } else {
-            q.whereIn('t.status', legacyStatus)
-          }
-          return q
+        if (bridgeBypass && isPostgres) {
+          await trx.raw("SET LOCAL session_replication_role = 'replica'")
         }
-
-        let output: TableOutput | undefined
-
-        if (exactSatoshis !== undefined) {
-          output = await baseQuery().where('o.satoshis', exactSatoshis).orderBy('o.outputId', 'asc').first()
+        /*
+         * Single-query coin selection — semantically identical to the prior
+         * three-step ladder (exact → smallest-over → largest-under) but with
+         * one round-trip instead of up to three.
+         *
+         * Bucket priority (ORDER BY first key, ASC):
+         *   0 — satoshis = exactSatoshis  (only when exactSatoshis is set)
+         *   1 — satoshis ≥ targetSatoshis (smallest-over preferred)
+         *   2 — satoshis < targetSatoshis (largest-under fallback)
+         *
+         * Within bucket 1 sort satoshis ASC, outputId ASC.
+         * Within bucket 2 sort satoshis DESC, outputId DESC.
+         * Bucket 0 sort outputId ASC for determinism.
+         *
+         * Note: passing `exactSatoshis = null` makes `satoshis = ?` evaluate to
+         * UNKNOWN in SQL — the CASE then falls through and bucket 0 is never
+         * picked, matching the JS-side `if (exactSatoshis !== undefined)` gate.
+         */
+        const k = trx
+        const q = k<TableOutput>('outputs as o')
+          .join('transactions as t', 'o.transactionId', 't.transactionId')
+          .where('o.userId', userId)
+          .where('o.spendable', true)
+          .where('o.basketId', basketId)
+          .select('o.*')
+        if (processingFilter != null) {
+          q.whereIn('t.processing', processingFilter)
+        } else {
+          q.whereIn('t.status', legacyStatus)
         }
-
-        output ??= await baseQuery()
-          .where('o.satoshis', '>=', targetSatoshis)
-          .orderBy('o.satoshis', 'asc')
-          .orderBy('o.outputId', 'asc')
-          .first()
-
-        output ??= await baseQuery()
-          .where('o.satoshis', '<', targetSatoshis)
-          .orderBy('o.satoshis', 'desc')
-          .orderBy('o.outputId', 'desc')
-          .first()
+        const exactBind = exactSatoshis ?? null
+        q.orderByRaw(
+          'CASE WHEN o.satoshis = ? THEN 0 WHEN o.satoshis >= ? THEN 1 ELSE 2 END ASC, ' +
+          'CASE WHEN o.satoshis >= ? THEN o.satoshis END ASC, ' +
+          'CASE WHEN o.satoshis < ? THEN o.satoshis END DESC, ' +
+          'CASE WHEN o.satoshis >= ? THEN o.outputId END ASC, ' +
+          'CASE WHEN o.satoshis < ? THEN o.outputId END DESC',
+          [exactBind, targetSatoshis, targetSatoshis, targetSatoshis, targetSatoshis, targetSatoshis]
+        )
+        const output: TableOutput | undefined = await q.first()
 
         if (output == null) return undefined
 
@@ -1935,9 +2190,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
         return output
       })
     } finally {
-      if (postCutover && isSqlite) {
-        await this.knex.raw('PRAGMA foreign_keys = ON')
+      if (bridgeBypass && isSqlite) {
+        await this.dbBypassFks(false)
       }
+      // Postgres bypass auto-reverts on COMMIT/ROLLBACK via SET LOCAL.
     }
 
     return r

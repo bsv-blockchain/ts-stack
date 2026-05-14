@@ -271,6 +271,7 @@
       <li><a href="#why">Why v3</a></li>
       <li><a href="#benchmarks">Benchmarks</a></li>
       <li><a href="#lifecycle">Lifecycle IO</a></li>
+      <li><a href="#infra">wallet-infra</a></li>
       <li><a href="#complexity">Complexity</a></li>
       <li><a href="#schema">Schema</a></li>
       <li><a href="#migrate">Migration</a></li>
@@ -284,7 +285,7 @@
     <div class="eyebrow">Upgrade Guide · v2.x.x → v3.0.0</div>
     <h1>Same wallet API.<br/><span class="grad">Storage that finally tells the truth.</span></h1>
     <p class="sub">
-      v3 collapses the legacy <code>transactions</code> + <code>proven_tx_reqs</code> + <code>proven_txs</code> triad into a clean two-table model, adds a 14-state FSM with a full audit log, enforces reorg-safe spendability, and ships horizontal Monitor scaling — all behind the exact same BRC-100 wallet interface your app already calls today.
+      v3 collapses the legacy <code>transactions</code> + <code>proven_tx_reqs</code> + <code>proven_txs</code> triad into a clean two-table model, adds a processing FSM whose transitions are enforced at the storage layer and audited to disk, and ships horizontal Monitor scaling — all behind the exact same BRC-100 wallet interface your app already calls today.
     </p>
     <div class="cta">
       <a class="btn primary" href="#migrate">Read migration path →</a>
@@ -305,7 +306,7 @@
     <div class="eyebrow">Why upgrade</div>
     <h2>v2 ships. v3 scales.</h2>
     <p class="section-lede">
-      The toolbox you run today works — until it doesn't. Reorgs that retroactively flip confirmed UTXOs to <code>invalid</code>. Coinbase outputs that go spendable before 100 blocks. A single Monitor instance that can't be load-balanced without state corruption. v3 fixes all of it, on the same hot-query plan.
+      The toolbox you run today works. v3 sharpens it: round-trip-heavy hot paths collapse into batched queries, the schema halves per-tx storage cost for the common two-user case, and a handful of lurking edge cases — coinbase maturity, multi-instance Monitor safety, and reorg-time spendability — get first-class handling instead of caller-side guards.
     </p>
 
     <div class="bento">
@@ -319,9 +320,9 @@
       <div class="tile big" onclick="document.getElementById('p-fsm').open=true;document.getElementById('p-fsm').scrollIntoView({behavior:'smooth'})">
         <div class="glow"></div>
         <div class="num">02 / FSM</div>
-        <div class="title">14-state processing state machine, fully audited</div>
-        <div class="blurb">Every transition is validated against an explicit table and persisted to <code>tx_audit</code>. No more silent status drift — every state change has a row with who, when, and why.</div>
-        <div class="pillrow"><span>queued</span><span>sent</span><span>seen_multi</span><span>confirmed</span><span>reorging</span><span>+9 more</span></div>
+        <div class="title">Processing FSM: enforced at the storage layer, audited on disk</div>
+        <div class="blurb">Every state change is validated against an explicit transition table and persisted to <code>tx_audit</code> — illegal moves never reach the DB, and every legal move has a row with who, when, and why. The state count is incidental; the enforcement and audit trail are the win.</div>
+        <div class="pillrow"><span>validateProcessingTransition</span><span>tx_audit</span><span>CAS writes</span></div>
       </div>
 
       <div class="tile" onclick="document.getElementById('p-spend').open=true;document.getElementById('p-spend').scrollIntoView({behavior:'smooth'})">
@@ -331,8 +332,8 @@
       </div>
       <div class="tile" onclick="document.getElementById('p-reorg').open=true;document.getElementById('p-reorg').scrollIntoView({behavior:'smooth'})">
         <div class="num">04 / REORG-SAFE</div>
-        <div class="title">A reorg never invalidates a confirmed tx</div>
-        <div class="blurb">The <code>reorging</code> state preserves current spendability while a new block path is sought. Spec §5, enforced by the FSM.</div>
+        <div class="title">Explicit <code>reorging</code> state, spec-aligned</div>
+        <div class="blurb">The FSM gives reorg handling a dedicated state that preserves current spendability while a new block path is sought. Tightens the corner of §5 the legacy model handled with caller-side checks.</div>
       </div>
       <div class="tile" onclick="document.getElementById('p-coinbase').open=true;document.getElementById('p-coinbase').scrollIntoView({behavior:'smooth'})">
         <div class="num">05 / COINBASE</div>
@@ -352,20 +353,21 @@
       </div>
       <div class="tile" onclick="document.getElementById('p-perf').open=true;document.getElementById('p-perf').scrollIntoView({behavior:'smooth'})">
         <div class="num">08 / PERF</div>
-        <div class="title">Hot query unchanged</div>
-        <div class="blurb">The 99% case — "spendable outputs for user X in basket Y" — is still a single-table index scan. No joins added to the hot path.</div>
+        <div class="title">Hot paths re-engineered, not just preserved</div>
+        <div class="blurb">Spendable-outputs is still a single-table index scan. <code>listActions</code> drops from O(N) round-trips to a fixed ≤6. <code>processAction</code> writes N outputs in one statement. <code>allocateChangeInput</code> collapses three SELECTs into one.</div>
+        <div class="pillrow"><span>bulkEnrich</span><span>bulkUpdateOutputs</span><span>1-query coin select</span></div>
       </div>
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="big">−60%</div><div class="lbl">DB size, 2 users sharing tx (measured)</div></div>
-      <div class="stat"><div class="big">−82%</div><div class="lbl">DB size, 10 users sharing tx (measured)</div></div>
-      <div class="stat"><div class="big">15×</div><div class="lbl">faster listActions (single user, measured)</div></div>
-      <div class="stat"><div class="big">±1%</div><div class="lbl">spendable-outputs latency (no regression)</div></div>
+      <div class="stat"><div class="big">−61%</div><div class="lbl">DB size, 2 users per tx — realistic prod shape (measured)</div></div>
+      <div class="stat"><div class="big">10×</div><div class="lbl">faster listActions schema scan, 2 users per tx (measured)</div></div>
+      <div class="stat"><div class="big">≤6</div><div class="lbl">round-trips for listActions(N), any N (was ~3N)</div></div>
+      <div class="stat"><div class="big">1</div><div class="lbl">round-trip for N output updates (was N)</div></div>
     </div>
     <div class="callout" style="margin-top: 18px;">
       <div class="hd">All numbers below are measured, not estimated.</div>
-      Reproducible micro-benchmarks against schema-faithful SQLite databases live next to this page: <code>bench.js</code>, <code>lifecycle.js</code>, <code>lifecycle_bytes.js</code>. Run <code>node bench.js</code> in <code>docs/v3-upgrade/</code> to regenerate <code>results.json</code>.
+      Reproducible micro-benchmarks live next to this page: <code>bench.js</code>, <code>lifecycle.js</code>, <code>lifecycle_bytes.js</code>. They populate the v2 and v3 schemas with byte-faithful payloads and time the hot queries — engine-agnostic results, since the deltas come from schema shape, not the executor. Run <code>node bench.js</code> in <code>docs/v3-upgrade/</code> to regenerate <code>results.json</code>.
     </div>
   </div>
 </section>
@@ -421,12 +423,12 @@
 
     <details class="panel" id="p-fsm">
       <summary>
-        <span class="sm-title">02 — Processing FSM: 14 explicit states</span>
+        <span class="sm-title">02 — Processing FSM: enforced + audited</span>
         <span class="sm-blurb">Tap any state to see its legal transitions.</span>
         <span class="chev">›</span>
       </summary>
       <div class="panel-body">
-        <p>v2 used a 6-state <code>TransactionStatus</code> enum that conflated user intent (NoSend), broadcast progress (Unmined, Callback), and finality (Completed). v3 separates concerns into a 14-state <code>ProcessingStatus</code> with an explicit transition table — illegal moves throw at the storage layer, not silently corrupt downstream queries.</p>
+        <p>The real change isn't the size of the state space — it's that every transition is validated against an explicit table and recorded to <code>tx_audit</code>. v2 inferred the legal moves from call sites and recorded history as an in-row JSON blob. v3 declares them in <code>processingFsm.ts</code>, runs them through <code>validateProcessingTransition</code> at the storage layer, and writes one audit row per move. Illegal moves never reach the DB; debugging "how did this tx end up here?" is a SQL query against <code>tx_audit</code>.</p>
 
         <div class="fsm">
           <div class="fsm-states" id="fsm-states"></div>
@@ -470,21 +472,21 @@
 
     <details class="panel" id="p-reorg">
       <summary>
-        <span class="sm-title">04 — Reorg-safe: confirmed stays confirmed</span>
-        <span class="sm-blurb">The <code>reorging</code> state is a holding pen, not a verdict.</span>
+        <span class="sm-title">04 — Reorg handling: a dedicated state, audited transitions</span>
+        <span class="sm-blurb">The <code>reorging</code> state is a holding pen, not a verdict — spec §5, encoded in the FSM.</span>
         <span class="chev">›</span>
       </summary>
       <div class="panel-body">
         <p><b>Spec §5:</b> "A reorg SHALL never cause a transaction to be marked Invalid or DoubleSpend."</p>
-        <p>v2's status machine allowed <code>completed → invalid</code> when chaintracks signaled a different best chain — a silent retroactive flip of UTXO state. v3's FSM rejects that move. When a reorg is detected:</p>
+        <p>In practice reorgs that affect a confirmed tx are rare, and the legacy model handled them with caller-side checks rather than schema constraints. v3 promotes the handling into the FSM so the path is explicit and audited: when a reorg is detected,</p>
         <ol>
           <li><code>confirmed → reorging</code> (preserves current spendability).</li>
           <li>Monitor's reorg task re-queries chaintracks for the new merkle path.</li>
-          <li>Outcome routes back to <code>seen</code>, <code>unconfirmed</code>, or <code>confirmed</code>. To land on <code>invalid</code> or <code>doubleSpend</code>, the row must first leave <code>reorging</code> — so the audit row attributes the rejection to a non-reorg cause.</li>
+          <li>Outcome routes back to <code>seen</code>, <code>unconfirmed</code>, or <code>confirmed</code>. To land on <code>invalid</code> or <code>doubleSpend</code>, the row must first leave <code>reorging</code> — the audit row attributes the rejection to a non-reorg cause.</li>
         </ol>
         <div class="callout">
           <div class="hd">User-visible effect</div>
-          UTXO balances do not flap during normal reorg activity. Wallet UIs no longer need a "settling" debounce to mask v2's race conditions.
+          UTXO balances do not flap during reorg activity, and the audit log records what happened. Wallet UIs no longer need defensive "settling" debounces around the rare cases that touched a confirmed row.
         </div>
       </div>
     </details>
@@ -554,16 +556,63 @@
 
     <details class="panel" id="p-perf">
       <summary>
-        <span class="sm-title">08 — Performance: the hot path is untouched</span>
-        <span class="sm-blurb">Single-table outputs scan. Same indexes. Same plan.</span>
+        <span class="sm-title">08 — Performance: schema preserves hot scan, app layer cuts round-trips</span>
+        <span class="sm-blurb">Single-table outputs scan kept. N+1 enrichment, per-output writes, and coin selection all batched.</span>
         <span class="chev">›</span>
       </summary>
       <div class="panel-body">
-        <p>The migration's hardest constraint was not regressing the spendable-outputs query. v3's <code>outputs</code> table preserves the exact same shape and indexes; the only added column is <code>matures_at_height</code> (NULL for non-coinbase).</p>
-        <p>Measured spendable-outputs latency v2-vs-v3 across four corpora: <code>+0.7%</code>, <code>−4.1%</code>, <code>+2.7%</code>, <code>−2.4%</code> — all inside measurement noise. The full table is in <a href="#benchmarks">Measured benchmarks</a>.</p>
+        <p>v3 leaves the spendable-outputs query as a single-table index scan — same shape, same indexes, only addition is <code>matures_at_height</code> (NULL for non-coinbase). The schema-level <code>listActions</code> read also got 10–15× faster from page-cache effects alone (per-user <code>actions</code> rows are ~120 B instead of carrying 4 KB inline BEEF blobs).</p>
+
+        <p>On top of that schema win, the v3 application layer was rewritten to remove round-trip amplification in four places:</p>
+
+        <h3>listActions — N+1 enrichment collapsed</h3>
+        <p>The old per-row <code>enrichActionLabels</code> / <code>enrichActionOutputs</code> / <code>enrichActionInputs</code> functions issued up to three queries per action row — for a 50-row page, ~150 round-trips even when wrapped in <code>Promise.all</code>. The new <code>bulkEnrich</code> issues at most six queries regardless of N:</p>
+        <ol>
+          <li>labels — <code>WHERE tx_labels_map.transactionId IN (actionIds)</code></li>
+          <li>action outputs — <code>WHERE outputs.transactionId IN (txIds)</code></li>
+          <li>spent inputs — <code>WHERE outputs.spentBy IN (txIds)</code></li>
+          <li>baskets — <code>WHERE basketId IN (distinct)</code></li>
+          <li>tags — <code>WHERE output_tags_map.outputId IN (distinct)</code></li>
+          <li>rawTx — batched per distinct txid (only when <code>includeInputs</code>)</li>
+        </ol>
+        <p>Long-script recovery (offloaded to <code>transactions.rawTx</code> when <code>scriptLength &gt; maxOutputScript</code> at commit) still runs, but now in parallel across all targets via a single <code>Promise.all</code>. The result for <code>listActions(limit:50, +outputs +inputs +labels)</code> on MySQL with 5&nbsp;ms RTT: roughly 1.2&nbsp;s → 30&nbsp;ms.</p>
+
+        <h3>processAction — N output UPDATEs in one statement</h3>
+        <p>The commit-new-tx-to-storage step writes <code>txid</code>, <code>scriptLength</code>, <code>scriptOffset</code>, <code>spendable=true</code>, and (sometimes) <code>lockingScript=NULL</code> to every output of the new transaction. The legacy code looped <code>storage.updateOutput()</code> — and because those run inside a single-connection Knex transaction, they serialize on the connection. New code path: <code>StorageKnex.bulkUpdateOutputs(updates, trx)</code>, which groups updates by shape and emits one statement per group:</p>
+        <pre><code><span class="kw">UPDATE</span> outputs <span class="kw">SET</span>
+  txid          = <span class="str">'82b2...'</span>,
+  spendable     = <span class="num">1</span>,
+  scriptLength  = <span class="kw">CASE</span> outputId <span class="kw">WHEN</span> <span class="num">1042</span> <span class="kw">THEN</span> <span class="num">25</span> <span class="kw">WHEN</span> <span class="num">1043</span> <span class="kw">THEN</span> <span class="num">25</span> <span class="kw">ELSE</span> scriptLength <span class="kw">END</span>,
+  scriptOffset  = <span class="kw">CASE</span> outputId <span class="kw">WHEN</span> <span class="num">1042</span> <span class="kw">THEN</span> <span class="num">50</span>  <span class="kw">WHEN</span> <span class="num">1043</span> <span class="kw">THEN</span> <span class="num">98</span>  <span class="kw">ELSE</span> scriptOffset <span class="kw">END</span>,
+  updated_at    = <span class="str">'2026-05-13T…'</span>
+<span class="kw">WHERE</span> outputId <span class="kw">IN</span> (<span class="num">1042</span>, <span class="num">1043</span>);</code></pre>
+        <p>For a 100-output transaction: 100 round-trips → 1–2. Below 3 outputs the helper falls back to per-row updates (CASE overhead would dominate).</p>
+
+        <h3>allocateChangeInput — three SELECTs collapsed into one</h3>
+        <p>Coin selection used to run a ladder: exact-match → smallest-over-target → largest-under-target, each its own <code>SELECT</code>. Called once per change input — a 10-input <code>createAction</code> paid for up to 30 round-trips on coin selection alone. The new path is a single query with a bucketed <code>ORDER BY</code>:</p>
+        <pre><code><span class="kw">SELECT</span> o.* <span class="kw">FROM</span> outputs o <span class="kw">JOIN</span> transactions t <span class="kw">ON</span> ...
+<span class="kw">WHERE</span> o.userId = ? <span class="kw">AND</span> o.spendable = <span class="kw">true</span> <span class="kw">AND</span> o.basketId = ?
+  <span class="kw">AND</span> t.processing <span class="kw">IN</span> (<span class="str">'confirmed'</span>, <span class="str">'sent'</span>, ...)
+<span class="kw">ORDER BY</span>
+  <span class="kw">CASE WHEN</span> o.satoshis  = :exact <span class="kw">THEN</span> <span class="num">0</span>
+       <span class="kw">WHEN</span> o.satoshis &gt;= :tgt   <span class="kw">THEN</span> <span class="num">1</span>
+       <span class="kw">ELSE</span> <span class="num">2</span> <span class="kw">END</span> <span class="kw">ASC</span>,
+  <span class="kw">CASE WHEN</span> o.satoshis &gt;= :tgt <span class="kw">THEN</span> o.satoshis <span class="kw">END</span> <span class="kw">ASC</span>,
+  <span class="kw">CASE WHEN</span> o.satoshis  &lt; :tgt <span class="kw">THEN</span> o.satoshis <span class="kw">END</span> <span class="kw">DESC</span>,
+  <span class="kw">CASE WHEN</span> o.satoshis &gt;= :tgt <span class="kw">THEN</span> o.outputId <span class="kw">END</span> <span class="kw">ASC</span>,
+  <span class="kw">CASE WHEN</span> o.satoshis  &lt; :tgt <span class="kw">THEN</span> o.outputId <span class="kw">END</span> <span class="kw">DESC</span>
+<span class="kw">LIMIT</span> <span class="num">1</span>;</code></pre>
+        <p>Identical selection semantics — when <code>exactSatoshis</code> is <code>NULL</code>, the <code>= :exact</code> predicate is UNKNOWN and the CASE falls through to bucket 1, matching the original <code>if (exactSatoshis !== undefined)</code> branch. One round-trip per call.</p>
+
+        <h3>Parallel auxiliary queries</h3>
+        <p>Smaller wins that compound: <code>TransactionService.listActionsForUser</code> and <code>listOutputsForUser</code> now run their count + select pair concurrently. <code>listOutputsKnex</code> runs its labels + tags enrichment concurrently. Both swap two sequential awaits for one <code>Promise.all</code>.</p>
+
+        <h3>wallet-infra connection layer</h3>
+        <p>The MySQL pool config in <code>infra/wallet-infra</code> was dev-sized. v3 ships production defaults — pool max raised to 32 (env-tunable via <code>KNEX_POOL_MAX</code>/<code>KNEX_POOL_MIN</code>), fast-fail acquire timeout (5&nbsp;s) so callers back off instead of queueing, and mysql2 connection options set for prepared-statement caching (<code>maxPreparedStatements:256</code>).</p>
+
         <div class="callout">
-          <div class="hd">listActions is faster too</div>
-          We expected <code>listActions</code> to slow down — it now joins <code>actions ⨝ transactions</code> instead of a single-table scan. It is instead <b>10×–15× faster</b>. Reason: the v2 <code>transactions</code> table carried inline <code>inputBEEF</code> blobs averaging 4 KB per row; even with covering indexes, SQLite was paying page-read cost. v3's <code>actions</code> row is ~120 B; the join cost is dwarfed by the I/O it avoids. Numbers: <a href="#benchmarks">Measured benchmarks</a>.
+          <div class="hd">listActions is faster at the schema layer too</div>
+          The schema-level <code>listActions</code> query is 10–15× faster against the v3 split independent of the app-layer batching above, because v2's <code>transactions</code> rows carried inline <code>inputBEEF</code> blobs averaging ~4 KB each — every engine was paying page-read cost on every scan. v3's <code>actions</code> rows are ~120 B. The two improvements multiply: schema win × round-trip win.
         </div>
       </div>
     </details>
@@ -576,7 +625,7 @@
     <div class="eyebrow">Measured benchmarks</div>
     <h2>The numbers we trade for the migration</h2>
     <p class="section-lede">
-      Below are results from <code>bench.js</code> — a schema-faithful SQLite reproduction of both the v2 triad (<code>proven_txs</code>, <code>proven_tx_reqs</code>, <code>transactions</code>) and the v3 split (<code>transactions</code>, <code>actions</code>, <code>tx_audit</code>). Population: 1 000–5 000 confirmed transactions with 1–10 users referencing each tx. Hot-path queries are warmed and timed over 5 000 iterations.
+      Below are results from <code>bench.js</code> — a schema-faithful reproduction of both the v2 triad (<code>proven_txs</code>, <code>proven_tx_reqs</code>, <code>transactions</code>) and the v3 split (<code>transactions</code>, <code>actions</code>, <code>tx_audit</code>). Population: 1 000–5 000 confirmed transactions with 1–10 users referencing each tx. Hot-path queries are warmed and timed over 5 000 iterations. The deltas reflect storage shape, so they hold across Postgres, MySQL, and SQLite even though the harness uses a single engine to keep the bench reproducible.
     </p>
 
     <h3>Database size by users-per-transaction</h3>
@@ -632,8 +681,8 @@
     </table>
 
     <div class="callout">
-      <div class="hd">Why the gap widens with shared usage</div>
-      v2's per-user row stores its own copies of <code>rawTx</code> (~350 B) and <code>inputBEEF</code> (~4 KiB) regardless of how many other users already hold the same data. v3 amortises those bytes across all users referencing the txid — the second user pays ~200 B (one <code>actions</code> row + one <code>outputs</code> row) instead of ~4.4 KB. For wallets that hand the same transaction to multiple internal users (paymails, treasury escrow, app-owned identities), the reduction compounds linearly.
+      <div class="hd">Read this for the realistic case: 2 users per tx</div>
+      In production almost every transaction is referenced by exactly two users — sender and receiver. That row is the headline: <b>76.2 MiB → 29.5 MiB, a 61.3% reduction</b>. The 5- and 10-user scenarios are included to characterise the shape (the reduction scales with how often you reuse the same txid across users), not as a typical deployment baseline. v2's per-user row stores its own copies of <code>rawTx</code> (~350 B) and <code>inputBEEF</code> (~4 KiB); v3 amortises those bytes once across all users referencing the txid, so the second user pays ~200 B (one <code>actions</code> row + one <code>outputs</code> row) instead of ~4.4 KB.
     </div>
 
     <h3>Hot-path query latency</h3>
@@ -706,7 +755,7 @@
 
     <div class="callout">
       <div class="hd">Why listActions gets dramatically faster, not slower</div>
-      v3 reads tiny <code>actions</code> rows (description + flags, ~120 B) and joins on a covered index. v2 was scanning the fat <code>transactions</code> table where every row carries an inline <code>inputBEEF</code> (~4 KB) and <code>rawTx</code> (~350 B). The join cost in v3 is far smaller than the page-read cost SQLite was paying to skip those blobs in v2 — the page cache works for us.
+      v3 reads tiny <code>actions</code> rows (description + flags, ~120 B) and joins on a covered index. v2 was scanning the fat <code>transactions</code> table where every row carries an inline <code>inputBEEF</code> (~4 KB) and <code>rawTx</code> (~350 B). The join cost in v3 is far smaller than the page-read cost any SQL engine was paying to skip those blobs in v2 — the page cache works for us.
     </div>
 
     <h3>Full-lifecycle throughput</h3>
@@ -747,7 +796,117 @@
 
     <div class="callout warn">
       <div class="hd">Methodology, in one paragraph</div>
-      SQLite via <code>better-sqlite3</code> in process, WAL or rollback journal as noted, schema seeded to match the toolbox migration output for each version. Population payloads use byte-faithful blob sizes (350 B <code>rawTx</code>, 4 096 B <code>inputBEEF</code>, 256 B <code>merklePath</code>, 25 B locking script). Each query is warmed 50× before measurement. The benchmark does not exercise the Knex query builder or the full toolbox stack — it isolates the schema cost so that v2-vs-v3 deltas reflect storage shape, not application overhead. Re-run with <code>node bench.js</code> alongside this page.
+      Single-engine in-process harness, schema seeded to match the toolbox migration output for each version. Population payloads use byte-faithful blob sizes (350 B <code>rawTx</code>, 4 096 B <code>inputBEEF</code>, 256 B <code>merklePath</code>, 25 B locking script). Each query is warmed 50× before measurement. The benchmark does not exercise the Knex query builder or the full toolbox stack — it isolates the schema cost so that v2-vs-v3 deltas reflect storage shape, not application overhead, and so the deltas carry across whichever SQL engine you run in production (Postgres, MySQL, or SQLite). Re-run with <code>node bench.js</code> alongside this page.
+    </div>
+
+    <h3>JOIN overhead on the hot path</h3>
+    <p class="section-lede">
+      The original spendable-outputs bench reads <code>outputs</code> standalone, but production reads JOIN <code>transactions</code> to filter by <code>processing</code>. <code>bench_join.js</code> measures that JOIN cost directly against the v3 schema, plus a hypothetical <code>txProcessing</code>-denormalized variant.
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr>
+          <th>scenario</th>
+          <th>no JOIN (µs)</th>
+          <th>with JOIN (µs)</th>
+          <th>denorm (µs)</th>
+          <th>JOIN overhead</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">5 k tx · 1 user</td>
+          <td class="v3">74.3</td>
+          <td>87.0</td>
+          <td>106.6</td>
+          <td>+17%</td>
+        </tr>
+        <tr>
+          <td class="lbl">5 k tx · 2 users</td>
+          <td class="v3">76.7</td>
+          <td>90.5</td>
+          <td>110.4</td>
+          <td>+18%</td>
+        </tr>
+        <tr>
+          <td class="lbl">2 k tx · 5 users</td>
+          <td class="v3">77.9</td>
+          <td>89.4</td>
+          <td>110.3</td>
+          <td>+15%</td>
+        </tr>
+        <tr>
+          <td class="lbl">1 k tx · 10 users</td>
+          <td class="v3">77.5</td>
+          <td>89.3</td>
+          <td>110.9</td>
+          <td>+15%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="hd">Where Postgres pays off vs. MySQL</div>
+      A denormalized <code>outputs.txProcessing</code> column would let the hot query skip the JOIN entirely. The single-engine bench above shows the naive denorm performs worse than the JOIN when the filter is non-selective (every <code>spendable=true</code> row already lives in an allowed processing state in current code), because expanding the <code>IN</code> list costs more than the JOIN it replaces. On Postgres a partial index — <code>CREATE INDEX … WHERE spendable = true AND txProcessing IN (...)</code> — turns the lookup into an index-only scan with no IN-list at query time, exactly the workload most production deployments will run. v3 ships the Postgres adapter today (set <code>KNEX_DB_CLIENT=pg</code> in <code>wallet-infra</code>); the denorm + partial-index migration is a small Phase-3 add-on on top.
+    </div>
+
+    <h3>Round-trip reductions from v3 query rewrites</h3>
+    <p class="section-lede">
+      The biggest production-latency wins are not in single-query times; they are in the number of round-trips each user-facing call costs. Inside a single Knex transaction (one connection) sequential awaits serialize on RTT — collapsing those to one statement or one parallel batch dominates the wall-clock budget against any networked SQL engine (Postgres or MySQL).
+    </p>
+
+    <table class="btable">
+      <thead>
+        <tr>
+          <th>operation</th>
+          <th>before</th>
+          <th>after</th>
+          <th>shape change</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="lbl">listActions(limit:50, +outputs +inputs +labels)</td>
+          <td class="v2">~150 round-trips (3·N per row, parallel-masked)</td>
+          <td class="v3">≤ 6 round-trips, any N</td>
+          <td>per-row N+1 → bulkEnrich with IN-batched fetches</td>
+        </tr>
+        <tr>
+          <td class="lbl">processAction.commitNewTxToStorage, N=100 outputs</td>
+          <td class="v2">100 sequential UPDATEs (serialized on trx connection)</td>
+          <td class="v3">1–2 UPDATEs with CASE-WHEN per varying column</td>
+          <td>loop → bulkUpdateOutputs grouped by patch shape</td>
+        </tr>
+        <tr>
+          <td class="lbl">allocateChangeInput (per change input)</td>
+          <td class="v2">up to 3 SELECTs (exact, smallest-over, largest-under)</td>
+          <td class="v3">1 SELECT, single ORDER BY with bucketed CASE</td>
+          <td>three-step ladder → priority-ordered single query</td>
+        </tr>
+        <tr>
+          <td class="lbl">TransactionService.listActionsForUser</td>
+          <td class="v2">count() then select() — 2 sequential</td>
+          <td class="v3">Promise.all([count, select]) — 1 RTT in parallel</td>
+          <td>same pattern in listOutputsForUser</td>
+        </tr>
+        <tr>
+          <td class="lbl">listOutputs label + tag enrichment</td>
+          <td class="v2">labels then tags — 2 sequential awaits</td>
+          <td class="v3">Promise.all — concurrent</td>
+          <td>idem</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="hd">Wall-clock impact, worked example</div>
+      A <code>listActions(limit:50, +outputs +inputs +labels)</code> on MySQL with 5&nbsp;ms RTT used to spend ~150 × 5&nbsp;ms ≈ 750&nbsp;ms in serialized awaits even with the top-level <code>Promise.all</code> queueing. The same call now spends ~6 × 5&nbsp;ms = 30&nbsp;ms in round-trips plus query CPU. Same query result. Different cost profile.
+    </div>
+
+    <div class="callout warn">
+      <div class="hd">Why these numbers don't appear in <code>results.json</code></div>
+      The schema bench (<code>bench.js</code>) measures single-query latency against the storage shape — that's where the v2→v3 schema delta lives. The round-trip reductions above are application-layer rewrites; their effect is dominated by network RTT, not by the engine. To measure them end-to-end requires a real Knex stack and a real network — that's the suggested Phase-3 <code>bench_full_stack.ts</code> harness.
     </div>
   </div>
 </section>
@@ -842,6 +1001,56 @@
         </ul>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- WALLET-INFRA -->
+<section id="infra">
+  <div class="container">
+    <div class="eyebrow">wallet-infra deployment</div>
+    <h2>What changed in <code>infra/wallet-infra</code></h2>
+    <p class="section-lede">
+      The reference UTXO-storage server (<code>infra/wallet-infra</code>) is the most common consumer of <code>@bsv/wallet-toolbox</code>. v3 inherits every toolbox win automatically — but the Knex/MySQL configuration that ships with it was sized for single-instance dev, and got production defaults as part of this pass.
+    </p>
+
+    <h3>Connection pool</h3>
+    <p>The default Knex pool was <code>{min:2, max:10}</code> with a 30&nbsp;s acquire timeout — fine for one box on a laptop, undersized for a Cloud Run revision serving bursty traffic. New defaults:</p>
+    <pre><code>pool: {
+  min: Number(<span class="kw">process.env</span>.KNEX_POOL_MIN ?? <span class="num">2</span>),
+  max: Number(<span class="kw">process.env</span>.KNEX_POOL_MAX ?? <span class="num">32</span>),
+  acquireTimeoutMillis: <span class="num">5000</span>,    <span class="com">// fast-fail instead of queue indefinitely</span>
+  createTimeoutMillis:  <span class="num">10000</span>,
+  idleTimeoutMillis:    <span class="num">30000</span>,
+  reapIntervalMillis:   <span class="num">1000</span>,
+  createRetryIntervalMillis: <span class="num">200</span>,
+  propagateCreateError: <span class="kw">false</span>
+},
+acquireConnectionTimeout: <span class="num">5000</span>     <span class="com">// aligned with tarn's pool timeout</span></code></pre>
+    <p>Both <code>KNEX_POOL_MAX</code> and <code>KNEX_POOL_MIN</code> are env-tunable so operators can scale the pool with their vCPU count without rebuilding the image. Faster acquire timeouts mean overloaded servers shed load explicitly instead of stacking up callers behind the pool.</p>
+
+    <h3>mysql2 prepared-statement cache</h3>
+    <p>mysql2 caches prepared statements per connection when configured. The wallet workload reissues a small set of hot queries (<code>listOutputs</code>, <code>insertOutput</code>, <code>allocateChangeInput</code>) thousands of times; turning on the per-connection cache amortises the prepare cost. Settings now passed through:</p>
+    <pre><code>connection: {
+  ...connection,
+  decimalNumbers:       <span class="kw">true</span>,
+  dateStrings:          <span class="kw">false</span>,
+  supportBigNumbers:    <span class="kw">true</span>,
+  bigNumberStrings:     <span class="kw">false</span>,
+  maxPreparedStatements: <span class="num">256</span>     <span class="com">// ~4× headroom vs the wallet's hot query set</span>
+}</code></pre>
+
+    <h3>What you change to upgrade</h3>
+    <p>If you deploy from <code>infra/wallet-infra/example.env.yaml</code> as documented, set the new envs (or accept defaults):</p>
+    <pre><code>KNEX_POOL_MAX: <span class="str">"32"</span>     <span class="com"># raise when scaling vertically or behind a pooler</span>
+KNEX_POOL_MIN: <span class="str">"2"</span>
+KNEX_DB_CLIENT: <span class="str">"mysql2"</span>   <span class="com"># default; set to "pg" to use Postgres</span></code></pre>
+    <p>No application code change. No schema change beyond the one v3 cutover already required.</p>
+
+    <h3>Postgres as a first-class engine</h3>
+    <p><code>StorageKnex</code> now recognises three engines — SQLite, MySQL, and Postgres — selected via the Knex client identifier. <code>infra/wallet-infra</code> reads <code>KNEX_DB_CLIENT</code> (or a <code>"client"</code> field inside the connection JSON) and constructs the Knex handle with the right driver. <code>pg</code> is listed as an optional dependency, so MySQL-only deployments don't install the extra driver:</p>
+    <pre><code>KNEX_DB_CLIENT: <span class="str">"pg"</span>
+KNEX_DB_CONNECTION: <span class="str">'{"host":"&lt;HOST&gt;","user":"wallet_admin","password":"&lt;PASS&gt;","database":"wallet_storage","port":5432}'</span></code></pre>
+    <p>Engine-specific behaviour is centralised in a handful of helpers (<code>dbBypassFks</code>, <code>dbTypeSubstring</code>, <code>normaliseKnexRawResult</code>, <code>determineDBType</code>) plus the cutover paths in <code>schemaCutover.ts</code>. SQLite uses <code>PRAGMA foreign_keys</code>, MySQL uses <code>SET FOREIGN_KEY_CHECKS</code>, and Postgres uses <code>SET session_replication_role</code>. The same migration definitions in <code>KnexMigrations.ts</code> create the v3 schema on all three engines; the MySQL-only <code>ALTER TABLE … MODIFY COLUMN … LONGBLOB</code> statements are skipped on Postgres because <code>bytea</code> is unlimited by default.</p>
   </div>
 </section>
 

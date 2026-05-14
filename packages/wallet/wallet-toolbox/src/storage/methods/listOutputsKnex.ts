@@ -276,61 +276,53 @@ export async function listOutputs (
   const labelsByTransactionId: Record<number, string[]> = {}
   const tagsByOutputId: Record<number, string[]> = {}
 
-  if (vargs.includeLabels) {
-    const txIds = [...new Set(outputs.map(o => o.transactionId).filter((id): id is number => id !== undefined))]
-    if (txIds.length > 0) {
-      /*
-       * Post-cutover the `tx_labels_map.transactionId` column is an FK to
-       * `actions.actionId` — NOT to `transactions.transactionId`.  A direct
-       * `WHERE lm.transactionId IN (output.transactionId)` is therefore wrong
-       * because those two keyspaces no longer overlap.
-       *
-       * Correct hop:
-       *   outputs.transactionId (= transactions.transactionId)
-       *     → actions.transactionId  (same value, user-scoped)
-       *     → actions.actionId
-       *     → tx_labels_map.transactionId
-       *
-       * We join `actions a` on (a.userId, a.transactionId) to obtain
-       * a.actionId, then join `tx_labels_map lm` on lm.transactionId = a.actionId.
-       * The result is grouped back to outputs.transactionId so the caller's
-       * existing `labelsByTransactionId` lookup key is unchanged.
-       */
-      const labels = await k('tx_labels as l')
-        .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
-        .join('actions as a', function () {
-          this.on('a.actionId', '=', 'lm.transactionId')
-            .andOn(k.raw('a.userId = ?', [userId]))
-        })
-        .whereIn('a.transactionId', txIds)
-        .whereNot('lm.isDeleted', true)
-        .whereNot('l.isDeleted', true)
-        .select('a.transactionId as transactionId', 'l.label')
+  /*
+   * Labels and tags are independent enrichment queries. Run them in parallel.
+   * Label keyspace note (post-cutover): tx_labels_map.transactionId FKs
+   * actions.actionId — NOT transactions.transactionId. Join via actions and
+   * regroup by a.transactionId so the caller's lookup key (output.transactionId)
+   * remains unchanged.
+   */
+  const txIds = vargs.includeLabels
+    ? [...new Set(outputs.map(o => o.transactionId).filter((id): id is number => id !== undefined))]
+    : []
+  const outputIds = vargs.includeTags
+    ? [...new Set(outputs.map(o => o.outputId).filter((id): id is number => id !== undefined))]
+    : []
 
-      for (const row of labels) {
-        const txid = Number(row.transactionId)
-        if (!labelsByTransactionId[txid]) labelsByTransactionId[txid] = []
-        labelsByTransactionId[txid].push(String(row.label))
-      }
-    }
+  const labelsQuery = (vargs.includeLabels && txIds.length > 0)
+    ? k('tx_labels as l')
+      .join('tx_labels_map as lm', 'lm.txLabelId', 'l.txLabelId')
+      .join('actions as a', function () {
+        this.on('a.actionId', '=', 'lm.transactionId')
+          .andOn(k.raw('a.userId = ?', [userId]))
+      })
+      .whereIn('a.transactionId', txIds)
+      .whereNot('lm.isDeleted', true)
+      .whereNot('l.isDeleted', true)
+      .select('a.transactionId as transactionId', 'l.label')
+    : Promise.resolve([] as Array<{ transactionId: number, label: string }>)
+
+  const tagsQuery = (vargs.includeTags && outputIds.length > 0)
+    ? k('output_tags as ot')
+      .join('output_tags_map as om', 'om.outputTagId', 'ot.outputTagId')
+      .whereIn('om.outputId', outputIds)
+      .whereNot('om.isDeleted', true)
+      .whereNot('ot.isDeleted', true)
+      .select('om.outputId', 'ot.tag')
+    : Promise.resolve([] as Array<{ outputId: number, tag: string }>)
+
+  const [labelRows, tagRows] = await Promise.all([labelsQuery, tagsQuery])
+
+  for (const row of labelRows) {
+    const txid = Number(row.transactionId)
+    if (!labelsByTransactionId[txid]) labelsByTransactionId[txid] = []
+    labelsByTransactionId[txid].push(String(row.label))
   }
-
-  if (vargs.includeTags) {
-    const outputIds = [...new Set(outputs.map(o => o.outputId).filter((id): id is number => id !== undefined))]
-    if (outputIds.length > 0) {
-      const tags = await k('output_tags as ot')
-        .join('output_tags_map as om', 'om.outputTagId', 'ot.outputTagId')
-        .whereIn('om.outputId', outputIds)
-        .whereNot('om.isDeleted', true)
-        .whereNot('ot.isDeleted', true)
-        .select('om.outputId', 'ot.tag')
-
-      for (const row of tags) {
-        const outputId = Number(row.outputId)
-        if (!tagsByOutputId[outputId]) tagsByOutputId[outputId] = []
-        tagsByOutputId[outputId].push(String(row.tag))
-      }
-    }
+  for (const row of tagRows) {
+    const outputId = Number(row.outputId)
+    if (!tagsByOutputId[outputId]) tagsByOutputId[outputId] = []
+    tagsByOutputId[outputId].push(String(row.tag))
   }
 
   const beef = new Beef()

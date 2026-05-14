@@ -1,0 +1,58 @@
+[
+  {
+    "label": "single_user_5k",
+    "NTx": 5000,
+    "MUsers": 1,
+    "OutPerTx": 2,
+    "ITERS": 5000,
+    "us_per_call": {
+      "q_no_join": "74.33",
+      "q_with_join": "87.02",
+      "q_denorm": "106.57"
+    },
+    "join_overhead_x": "1.17",
+    "denorm_speedup_vs_join_x": "0.82"
+  },
+  {
+    "label": "two_users_5k",
+    "NTx": 5000,
+    "MUsers": 2,
+    "OutPerTx": 2,
+    "ITERS": 5000,
+    "us_per_call": {
+      "q_no_join": "76.65",
+      "q_with_join": "90.52",
+      "q_denorm": "110.38"
+    },
+    "join_overhead_x": "1.18",
+    "denorm_speedup_vs_join_x": "0.82"
+  },
+  {
+    "label": "five_users_2k",
+    "NTx": 2000,
+    "MUsers": 5,
+    "OutPerTx": 2,
+    "ITERS": 5000,
+    "us_per_call": {
+      "q_no_join": "77.89",
+      "q_with_join": "89.41",
+      "q_denorm": "110.27"
+    },
+    "join_overhead_x": "1.15",
+    "denorm_speedup_vs_join_x": "0.81"
+  },
+  {
+    "label": "ten_users_1k",
+    "NTx": 1000,
+    "MUsers": 10,
+    "OutPerTx": 2,
+    "ITERS": 5000,
+    "us_per_call": {
+      "q_no_join": "77.51",
+      "q_with_join": "89.31",
+      "q_denorm": "110.94"
+    },
+    "join_overhead_x": "1.15",
+    "denorm_speedup_vs_join_x": "0.80"
+  }
+]

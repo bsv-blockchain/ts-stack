@@ -31,8 +31,12 @@ Environment variables (from `.env.example`):
 - **ENABLE_NGINX** – Set to `'true'` to start nginx reverse proxy on port 8080 (default: false)
 - **BSV_NETWORK** – Target blockchain network (`main`, `test`, or `regtest`)
 - **SERVER_PRIVATE_KEY** – 256-bit hex private key for server identity (required)
+- **KNEX_DB_CLIENT** – Knex client: `"mysql2"` (default) or `"pg"`. Alternatively set `"client"` inside `KNEX_DB_CONNECTION`. Accepted aliases: `mysql`, `mysql2`, `pg`, `postgres`, `postgresql`.
 - **KNEX_DB_CONNECTION** – Knex database connection JSON string
-  - Example: `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`
+  - MySQL example: `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`
+  - Postgres example: `{"port":5432,"host":"postgres","user":"wallet_admin","password":"walletPass","database":"wallet_storage"}`
+- **KNEX_POOL_MAX** – Pool max connections (default: 32). Tune up with vCPU count or behind a pooler.
+- **KNEX_POOL_MIN** – Pool min connections (default: 2).
 - **COMMISSION_FEE** – Optional commission fee in satoshis per request (default: 0)
 - **COMMISSION_PUBLIC_KEY** – Public key to receive commission payments (if COMMISSION_FEE > 0)
 - **FEE_MODEL** – Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`)
@@ -43,7 +47,7 @@ Environment variables (from `.env.example`):
 - **LEGACY_UPGRADE** – Set to `"true"` ONLY when upgrading an existing v2 database with real legacy `transactions` rows. v3 is the default canonical schema: fresh installs (empty `transactions` table) auto-initialize into the v3 layout at boot without any flag. If the server detects legacy v2 rows but no `transactions_legacy` marker and this flag is unset, it refuses to boot — operator must back up, then either set `LEGACY_UPGRADE=true` or run `npm run cutover` standalone (with server restart afterwards because `StorageKnex._postCutoverCache` is initialised once at `makeAvailable()` and never refreshed).
 
 ## Dependencies
-- **Database** – MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted)
+- **Database** – MySQL 8.0 (default, via Knex + mysql2 driver) **or** PostgreSQL 14+ (via Knex + pg driver). `pg` is declared as an `optionalDependencies` entry so MySQL-only deployments install nothing extra. Set `KNEX_DB_CLIENT=pg` to pick Postgres at deploy time. Reference compose stacks: `docker-compose.yml` (MySQL), `docker-compose.pg.yml` (Postgres).
 - **@bsv packages**
   - `@bsv/wallet-toolbox` – Core UTXO storage, wallet operations, migrations
   - `@bsv/sdk` – Cryptography, key operations, transaction handling
@@ -61,7 +65,7 @@ Environment variables (from `.env.example`):
 - **Migrations** – Auto-run on startup; Knex manages schema versioning
 - **v3 schema** – v3 is the canonical target schema. Fresh installs auto-initialize into v3 at boot (no flag). Upgrading an existing v2 DB with legacy `transactions` rows requires `LEGACY_UPGRADE=true` or a standalone `npm run cutover` + restart. Server refuses to boot on legacy-populated data without explicit authorization. See `@bsv/wallet-toolbox` docs/CUTOVER_RUNBOOK.md for details.
 - **Scaling** – Stateless design; multiple instances can share same MySQL database with connection pooling
-- **Database** – MySQL 8.0 required; ensure adequate indexing on identity_key, output_hash, and blockchain_height
+- **Database** – MySQL 8.0 (default) or PostgreSQL 14+. Both run the same Knex migrations from `@bsv/wallet-toolbox`. Engine-specific paths (FK toggle, substring SQL, raw-result shape, cutover FK rebuild) are encapsulated in `StorageKnex`. Ensure adequate indexing on identity_key, output_hash, and blockchain_height.
 - **Authentication** – BRC-103 mutual auth on all JSON-RPC calls; enforces identity-based access control
 - **Payment enforcement** – Optional via `@bsv/payment-express-middleware`; can charge per-call or per-route
 - **Performance** – Consider database query caching, connection pooling tuning, and output batch operations for high-volume deployments
