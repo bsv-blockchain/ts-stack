@@ -288,6 +288,26 @@ var WalletRelayClient = class {
       throw relayErr;
     }
   }
+  /**
+   * Terminate the session server-side (closes the mobile's WebSocket, marks session
+   * expired), then clean up locally. Fire-and-forget safe — errors are swallowed so
+   * local teardown always completes.
+   *
+   * Prefer this over `destroy()` when you want the mobile app to be notified.
+   */
+  async disconnect() {
+    this._stopPolling();
+    if (this._session?.sessionId && this._desktopToken) {
+      try {
+        await fetch(`${this._apiUrl}/session/${this._session.sessionId}`, {
+          method: "DELETE",
+          headers: { "X-Desktop-Token": this._desktopToken }
+        });
+      } catch {
+      }
+    }
+    this._desktopToken = null;
+  }
   /** Stop polling and clean up resources. Call this on component unmount. */
   destroy() {
     this._stopPolling();
@@ -385,7 +405,8 @@ function useWalletRelayClient(options) {
   const [log, setLog] = (0, import_react2.useState)([]);
   const [error, setError] = (0, import_react2.useState)(null);
   const clientRef = (0, import_react2.useRef)(null);
-  const createdRef = (0, import_react2.useRef)(false);
+  const creatingRef = (0, import_react2.useRef)(null);
+  const resumingRef = (0, import_react2.useRef)(null);
   function ensureClient() {
     clientRef.current ?? (clientRef.current = new WalletRelayClient({
       apiUrl: options?.apiUrl,
@@ -401,8 +422,32 @@ function useWalletRelayClient(options) {
     return clientRef.current;
   }
   const createSession = (0, import_react2.useCallback)(async () => {
+    if (creatingRef.current) return creatingRef.current;
     setError(null);
-    return ensureClient().createSession();
+    const promise = ensureClient().createSession().finally(() => {
+      if (creatingRef.current === promise) creatingRef.current = null;
+    });
+    creatingRef.current = promise;
+    return promise;
+  }, []);
+  const resumeSession = (0, import_react2.useCallback)(async () => {
+    if (resumingRef.current) return resumingRef.current;
+    setError(null);
+    const promise = ensureClient().resumeSession().finally(() => {
+      if (resumingRef.current === promise) resumingRef.current = null;
+    });
+    resumingRef.current = promise;
+    return promise;
+  }, []);
+  const cancelSession = (0, import_react2.useCallback)(() => {
+    const client = clientRef.current;
+    clientRef.current = null;
+    creatingRef.current = null;
+    resumingRef.current = null;
+    setSession(null);
+    setError(null);
+    setLog([]);
+    if (client) void client.disconnect();
   }, []);
   const sendRequest = (0, import_react2.useCallback)(
     async (method, params) => ensureClient().sendRequest(method, params),
@@ -410,24 +455,23 @@ function useWalletRelayClient(options) {
     // eslint-disable-line react-hooks/exhaustive-deps
   );
   (0, import_react2.useEffect)(() => {
-    if (options?.autoCreate === false) return;
-    if (createdRef.current) return;
-    createdRef.current = true;
+    const wantCreate = options?.autoCreate !== false;
+    const wantResumeOnly = !wantCreate && options?.autoResume === true;
+    if (!wantCreate && !wantResumeOnly) return;
     const timer = setTimeout(() => {
-      const client = ensureClient();
-      void client.resumeSession().then((resumed) => {
-        if (!resumed) void createSession();
+      void resumeSession().then((resumed) => {
+        if (!resumed && wantCreate) void createSession();
       });
     }, 0);
     return () => {
       clearTimeout(timer);
-      createdRef.current = false;
-      clientRef.current?.destroy();
+      const client = clientRef.current;
       clientRef.current = null;
+      if (client) void client.disconnect();
     };
-  }, [createSession]);
+  }, [createSession, resumeSession]);
   const wallet = session?.status === "connected" ? clientRef.current?.wallet ?? null : null;
-  return { session, log, error, createSession, sendRequest, wallet };
+  return { session, log, error, createSession, resumeSession, cancelSession, sendRequest, wallet };
 }
 
 // src/react/QRDisplay.tsx
