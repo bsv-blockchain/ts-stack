@@ -135,6 +135,7 @@ export async function runSchemaCutover (knex: Knex): Promise<void> {
     await knex.schema.renameTable('transactions_new', 'transactions')
 
     await rebuildTxLabelsMap(knex, dbtype)
+    await rebuildOutputsAndCommissionsFkTarget(knex, dbtype)
   } finally {
     await enableFks(knex, isSqlite)
   }
@@ -234,6 +235,73 @@ async function enableFks (knex: Knex, isSqlite: boolean): Promise<void> {
     await knex.raw("SET session_replication_role = 'origin'")
   } else {
     await knex.raw('SET FOREIGN_KEY_CHECKS=1')
+  }
+}
+
+/**
+ * MySQL + Postgres only: after the cutover RENAME, FK references on
+ * `outputs.transactionId`, `outputs.spentBy`, and `commissions.transactionId`
+ * follow the renamed `transactions` → `transactions_legacy` target. They need
+ * to be re-pointed at the canonical (post-rename) `transactions` table.
+ *
+ * Idempotent — drops only constraints currently referencing `transactions_legacy`.
+ * SQLite's name-bound FK already resolves to the canonical table after the
+ * rename swap; no rebuild required.
+ */
+async function rebuildOutputsAndCommissionsFkTarget (knex: Knex, dbtype: DBType): Promise<void> {
+  if (dbtype === 'SQLite') return
+
+  if (dbtype === 'MySQL') {
+    const dbRow: any = (await knex.raw('SELECT DATABASE() AS d'))[0]
+    const dbName = Array.isArray(dbRow) ? dbRow[0]?.d : dbRow?.d
+    const fkRows: any = await knex('information_schema.KEY_COLUMN_USAGE')
+      .where({ TABLE_SCHEMA: dbName, REFERENCED_TABLE_NAME: 'transactions_legacy' })
+      .whereIn('TABLE_NAME', ['outputs', 'commissions'])
+      .select('TABLE_NAME', 'CONSTRAINT_NAME', 'COLUMN_NAME')
+    for (const row of fkRows ?? []) {
+      const table = row.TABLE_NAME ?? row.table_name
+      const cname = row.CONSTRAINT_NAME ?? row.constraint_name
+      const col = row.COLUMN_NAME ?? row.column_name
+      if (table == null || cname == null || col == null) continue
+      await knex.raw('ALTER TABLE `' + table + '` DROP FOREIGN KEY `' + cname + '`')
+      await knex.raw(
+        'ALTER TABLE `' + table + '` ADD CONSTRAINT `' + cname + '` ' +
+        'FOREIGN KEY (`' + col + '`) REFERENCES `transactions`(`transactionId`)'
+      )
+    }
+    return
+  }
+
+  // Postgres.
+  const fkRows: any = await knex('information_schema.table_constraints as tc')
+    .join('information_schema.constraint_column_usage as ccu', function () {
+      this.on('tc.constraint_name', '=', 'ccu.constraint_name')
+        .andOn('tc.table_schema', '=', 'ccu.table_schema')
+    })
+    .join('information_schema.key_column_usage as kcu', function () {
+      this.on('tc.constraint_name', '=', 'kcu.constraint_name')
+        .andOn('tc.table_schema', '=', 'kcu.table_schema')
+    })
+    .where('tc.constraint_type', 'FOREIGN KEY')
+    .where('ccu.table_name', 'transactions_legacy')
+    .whereIn('tc.table_name', ['outputs', 'commissions'])
+    .select(
+      'tc.table_name as table_name',
+      'tc.table_schema as table_schema',
+      'tc.constraint_name as constraint_name',
+      'kcu.column_name as column_name'
+    )
+  for (const row of fkRows ?? []) {
+    const schema = row.table_schema ?? 'public'
+    const table = row.table_name
+    const cname = row.constraint_name
+    const col = row.column_name
+    if (table == null || cname == null || col == null) continue
+    await knex.raw(`ALTER TABLE "${schema}"."${table}" DROP CONSTRAINT "${cname}"`)
+    await knex.raw(
+      `ALTER TABLE "${schema}"."${table}" ADD CONSTRAINT "${cname}" ` +
+      `FOREIGN KEY ("${col}") REFERENCES "transactions"("transactionId")`
+    )
   }
 }
 

@@ -640,12 +640,56 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       // name across RENAME TABLE so no FK toggle is required.
       if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = OFF')
       try {
-        const [id] = await this.toDb(trx)<TableTransaction>('transactions_legacy').insert(e)
-        tx.transactionId = id
-        return tx.transactionId
+        const [legacyId] = await this.toDb(trx)<TableTransaction>('transactions_legacy').insert(e)
+        tx.transactionId = legacyId
       } finally {
         if (isSqlite) await this.knex.raw('PRAGMA foreign_keys = ON')
       }
+
+      /*
+       * Sync path bridge: `insertTransaction` is called by the sync entity
+       * (EntityTransaction.mergeNew) for transactions that already have a
+       * txid and a status. We MUST also create the canonical
+       * `transactions` + `actions` rows so downstream reads (`listOutputs`,
+       * `listActions`) that JOIN against the canonical table see the data.
+       *
+       * Without this, sync writes land only in `transactions_legacy`,
+       * outputs.transactionId points at a legacy id, the canonical-table
+       * JOIN returns zero rows, and balance / output listings report 0
+       * despite outputs sitting in the DB.
+       *
+       * We then RETURN the canonical transactionId rather than the legacy
+       * one so the caller's syncMap maps to canonical ids. EntityOutput
+       * picks up that mapping at line 301 of EntityOutput.ts.
+       */
+      if (tx.txid != null && tx.userId != null) {
+        const txService = this.getTransactionService()
+        if (txService != null) {
+          const processing = transactionStatusToProcessing(tx.status as TransactionStatus)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rawTxArr: number[] | undefined = Array.isArray(tx.rawTx)
+            ? (tx.rawTx as number[])
+            : (tx.rawTx != null ? Array.from(tx.rawTx as unknown as Buffer) : undefined)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const inputBeefArr: number[] | undefined = Array.isArray(tx.inputBEEF)
+            ? (tx.inputBEEF as number[])
+            : (tx.inputBEEF != null ? Array.from(tx.inputBEEF as unknown as Buffer) : undefined)
+          const { transaction: canonicalTx } = await txService.findOrCreateActionForTxid({
+            userId: tx.userId,
+            txid: tx.txid,
+            isOutgoing: !!tx.isOutgoing,
+            description: tx.description ?? '',
+            satoshisDelta: tx.satoshis ?? 0,
+            reference: tx.reference ?? '',
+            rawTx: rawTxArr,
+            inputBeef: inputBeefArr,
+            processing
+          })
+          tx.transactionId = canonicalTx.transactionId
+          return canonicalTx.transactionId
+        }
+      }
+      return tx.transactionId
     }
     const [id] = await this.toDb(trx)<TableTransaction>('transactions').insert(e)
     tx.transactionId = id
@@ -712,6 +756,29 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       output.outputId = id
       return output.outputId
     }
+    if (postCutover && this.dbtype === 'MySQL') {
+      // MySQL bridge bypass — outputs.transactionId FK targets canonical
+      // transactions but the value is a transactions_legacy id during the
+      // bridge period. Session-scope FOREIGN_KEY_CHECKS for the insert.
+      const runInTrx = async (t: Knex.Transaction): Promise<number> => {
+        await t.raw('SET FOREIGN_KEY_CHECKS=0')
+        try {
+          const [rowId] = await t<TableOutput>('outputs').insert(e)
+          return rowId
+        } finally {
+          await t.raw('SET FOREIGN_KEY_CHECKS=1')
+        }
+      }
+      let id: number
+      if (trx != null) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        id = await runInTrx(trx as unknown as Knex.Transaction<any, any[]>)
+      } else {
+        id = await this.knex.transaction(runInTrx)
+      }
+      output.outputId = id
+      return output.outputId
+    }
     const [id] = await this.toDb(trx)<TableOutput>('outputs').insert(e)
     output.outputId = id
     return output.outputId
@@ -760,6 +827,35 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       await this.transaction(async (t) => {
         await this.toDb(t)<TableTxLabelMap>('tx_labels_map').insert(e)
       })
+      return
+    }
+    if (postCutover && this.dbtype === 'MySQL') {
+      /*
+       * MySQL post-cutover: `tx_labels_map.transactionId` FK now references
+       * `actions.actionId` (rebuilt by `rebuildTxLabelsMap` during cutover).
+       * createAction writes the map with the LEGACY transactionId of the
+       * unsigned draft transaction in `transactions_legacy`. The action row
+       * does not exist yet (processAction creates it later via
+       * `repointLabelsToActionId`). Bypass FK for this single insert.
+       *
+       * `SET FOREIGN_KEY_CHECKS=0` is a session var. To make the bypass
+       * cover the insert reliably even on a pooled connection, scope it to
+       * a transaction whose connection runs both statements.
+       */
+      const runInTrx = async (t: Knex.Transaction): Promise<void> => {
+        await t.raw('SET FOREIGN_KEY_CHECKS=0')
+        try {
+          await t<TableTxLabelMap>('tx_labels_map').insert(e)
+        } finally {
+          await t.raw('SET FOREIGN_KEY_CHECKS=1')
+        }
+      }
+      if (trx != null) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await runInTrx(trx as unknown as Knex.Transaction<any, any[]>)
+      } else {
+        await this.knex.transaction(runInTrx)
+      }
       return
     }
     await this.toDb(trx)<TableTxLabelMap>('tx_labels_map').insert(e)
@@ -1762,31 +1858,46 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
      * Post-cutover bridge-period FK bypass.
      *
      * Postgres: emit `SET LOCAL session_replication_role = 'replica'` as the
-     * FIRST statement inside every transaction post-cutover. The setting is
-     * connection-scoped and auto-reverts on COMMIT/ROLLBACK. Necessary because
-     * pg uses a real connection pool, so a `disableForeignKeys()` call BEFORE
-     * the transaction would land on a different connection. The cost is one
-     * cheap round-trip per transaction.
+     * FIRST statement inside every transaction post-cutover. Connection-scoped
+     * and auto-reverts on COMMIT/ROLLBACK. Necessary because pg uses a real
+     * connection pool, so a `disableForeignKeys()` call BEFORE the transaction
+     * would land on a different connection.
      *
-     * SQLite: the equivalent bypass is set via PRAGMA on the bare connection
-     * before the transaction opens (better-sqlite3 is single-connection so the
-     * setting carries into the transaction). Handled by `disableForeignKeys`.
+     * MySQL: emit `SET FOREIGN_KEY_CHECKS=0` as the first statement and
+     * `SET FOREIGN_KEY_CHECKS=1` as the last (before COMMIT) so the bypass
+     * stays scoped to this transaction's connection. The cutover rebuild
+     * re-targets outputs/commissions FKs to canonical `transactions`, so the
+     * bridge inserts (whose values point at `transactions_legacy`) need this
+     * bypass during the createAction → processAction window.
      *
-     * MySQL: bridge inserts work without bypass — FK metadata is preserved
-     * across cutover RENAME via information_schema rewrite.
+     * SQLite: PRAGMA on the bare connection before the transaction opens
+     * (better-sqlite3 is single-connection so the setting carries in).
+     * Handled by `disableForeignKeys`.
      *
-     * The bypass is harmless on non-bridge writes (FK is still enforced at the
-     * application level by the schema invariants; the bypass only matters when
-     * a bridge insert references a legacy row).
+     * The bypass is harmless on non-bridge writes (FK invariants are still
+     * enforced by the schema at later checkpoints).
      */
-    const pgBypass = this.dbtype === 'Postgres' && this._postCutoverCache === true
+    const postCutover = this._postCutoverCache === true
+    const pgBypass = postCutover && this.dbtype === 'Postgres'
+    const mysqlBypass = postCutover && this.dbtype === 'MySQL'
 
     return await this.knex.transaction<T>(async knextrx => {
       if (pgBypass) {
         await knextrx.raw("SET LOCAL session_replication_role = 'replica'")
       }
-      const trx = knextrx as TrxToken
-      return await scope(trx)
+      if (mysqlBypass) {
+        await knextrx.raw('SET FOREIGN_KEY_CHECKS=0')
+      }
+      try {
+        const trx = knextrx as TrxToken
+        return await scope(trx)
+      } finally {
+        if (mysqlBypass) {
+          // Restore default before COMMIT so the connection returns to the
+          // pool with FK enforcement on.
+          try { await knextrx.raw('SET FOREIGN_KEY_CHECKS=1') } catch { /* trx may be rolling back */ }
+        }
+      }
     })
   }
 
@@ -2114,7 +2225,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
      */
     const isSqlite = this.dbtype === 'SQLite'
     const isPostgres = this.dbtype === 'Postgres'
-    const bridgeBypass = postCutover && (isSqlite || isPostgres)
+    const isMysql = this.dbtype === 'MySQL'
+    const bridgeBypass = postCutover && (isSqlite || isPostgres || isMysql)
     if (bridgeBypass && isSqlite) {
       await this.dbBypassFks(true)
     }
@@ -2124,6 +2236,12 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       r = await this.knex.transaction(async trx => {
         if (bridgeBypass && isPostgres) {
           await trx.raw("SET LOCAL session_replication_role = 'replica'")
+        }
+        if (bridgeBypass && isMysql) {
+          // Session-scoped FK bypass for the transaction's connection.
+          // MySQL post-cutover: outputs.spentBy FK now targets canonical
+          // transactions, but the bridge value points at transactions_legacy.
+          await trx.raw('SET FOREIGN_KEY_CHECKS=0')
         }
         /*
          * Single-query coin selection — semantically identical to the prior
@@ -2187,6 +2305,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
 
         output.spendable = false
         output.spentBy = transactionId
+        if (bridgeBypass && isMysql) {
+          // Restore FK enforcement before COMMIT so subsequent statements
+          // on this connection (after pool return) get default behaviour.
+          await trx.raw('SET FOREIGN_KEY_CHECKS=1')
+        }
         return output
       })
     } finally {

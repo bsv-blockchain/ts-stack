@@ -9,7 +9,8 @@ import {
   StorageServer,
   Wallet,
   Monitor,
-  runSchemaCutover
+  runSchemaCutover,
+  backfillLegacyOnlySync
 } from '@bsv/wallet-toolbox'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
@@ -83,7 +84,11 @@ async function setupWalletStorageAndMonitor(): Promise<{
     ).toLowerCase()
     delete connection.client
     let client: 'mysql2' | 'pg'
-    if (rawClient === 'pg' || rawClient === 'postgres' || rawClient === 'postgresql') {
+    if (
+      rawClient === 'pg' ||
+      rawClient === 'postgres' ||
+      rawClient === 'postgresql'
+    ) {
       client = 'pg'
     } else if (rawClient === 'mysql' || rawClient === 'mysql2') {
       client = 'mysql2'
@@ -105,18 +110,19 @@ async function setupWalletStorageAndMonitor(): Promise<{
     // postgres driver does most of the right things out of the box (Buffer ↔
     // bytea, dates parsed into Date). mysql2 needs explicit number / date /
     // statement-cache tuning to match.
-    const connectionOptions = client === 'mysql2'
-      ? {
-          ...connection,
-          decimalNumbers: true,
-          dateStrings: false,
-          supportBigNumbers: true,
-          bigNumberStrings: false,
-          // Per-connection prepared-statement cache. Cap at 256 (~4× the
-          // wallet's hot query set).
-          maxPreparedStatements: 256
-        }
-      : { ...connection }
+    const connectionOptions =
+      client === 'mysql2'
+        ? {
+            ...connection,
+            decimalNumbers: true,
+            dateStrings: false,
+            supportBigNumbers: true,
+            bigNumberStrings: false,
+            // Per-connection prepared-statement cache. Cap at 256 (~4× the
+            // wallet's hot query set).
+            maxPreparedStatements: 256
+          }
+        : { ...connection }
 
     const knexConfig: Knex.Config = {
       client,
@@ -178,25 +184,40 @@ async function setupWalletStorageAndMonitor(): Promise<{
     //     an explicit operator decision after backup + read-runbook.
     const hasLegacyMarker = await knex.schema.hasTable('transactions_legacy')
     if (!hasLegacyMarker) {
-      const legacyCount = await knex('transactions').count<{ c: number }>({ c: '*' }).first()
+      const legacyCount = await knex('transactions')
+        .count<{ c: number }>({ c: '*' })
+        .first()
       const legacyRows = Number(legacyCount?.c ?? 0)
       if (legacyRows === 0) {
         console.log('Fresh install detected — initializing v3 schema…')
         await runSchemaCutover(knex)
         console.log('v3 schema ready.')
       } else if (LEGACY_UPGRADE === 'true') {
-        console.log(`LEGACY_UPGRADE=true → migrating ${legacyRows} legacy transaction rows to v3 schema…`)
+        console.log(
+          `LEGACY_UPGRADE=true → migrating ${legacyRows} legacy transaction rows to v3 schema…`
+        )
         await runSchemaCutover(knex)
         console.log('Schema cutover complete.')
       } else {
         throw new Error(
           `Legacy v2 data detected (${legacyRows} rows in transactions, no transactions_legacy marker). ` +
-          'Refusing to start without explicit upgrade authorization. ' +
-          'Backup the database, then either set LEGACY_UPGRADE=true and restart, ' +
-          'or run `npm run cutover` during a maintenance window and restart this process. ' +
-          'See @bsv/wallet-toolbox docs/CUTOVER_RUNBOOK.md before proceeding.'
+            'Refusing to start without explicit upgrade authorization. ' +
+            'Backup the database, then either set LEGACY_UPGRADE=true and restart, ' +
+            'or run `npm run cutover` during a maintenance window and restart this process. ' +
+            'See @bsv/wallet-toolbox docs/CUTOVER_RUNBOOK.md before proceeding.'
         )
       }
+    }
+
+    // Bridge any rows that the sync path wrote into `transactions_legacy`
+    // before the canonical-table bridge in `StorageKnex.insertTransaction`
+    // landed. Idempotent and cheap (one indexed left-join) on clean DBs.
+    const bridge = await backfillLegacyOnlySync(knex)
+    if (bridge.migratedTransactions > 0) {
+      console.log(
+        `Sync-bridge backfill: migrated ${bridge.migratedTransactions} legacy-only transactions, ` +
+          `remapped ${bridge.remappedOutputs} outputs and ${bridge.remappedCommissions} commissions to canonical ids.`
+      )
     }
 
     const settings = await activeStorage.makeAvailable()
