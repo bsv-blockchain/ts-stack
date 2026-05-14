@@ -86,6 +86,9 @@
     "BRC-21": [
       "sync.gasprotocol"
     ],
+    "BRC-40": [
+      "sync.brc40"
+    ],
     "BRC-14": [
       "sdk.scripts.evaluation"
     ],
@@ -97,9 +100,9 @@
     ]
   },
   "stats": {
-    "total_files": 71,
-    "total_vectors": 6601,
-    "last_updated": "2026-05-07"
+    "total_files": 72,
+    "total_vectors": 6625,
+    "last_updated": "2026-05-14"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",
@@ -113,6 +116,7 @@
     "script-fromasm-numeric-token": "ts-sdk#42",
     "fee-model-mismatch": "go-sdk#267",
     "bip276-hex-decode": "go-sdk#286",
-    "beef-isvalid-hydration": "go-sdk#167"
+    "beef-isvalid-hydration": "go-sdk#167",
+    "brc40-stale-chunk-regress": "go-wallet-toolbox#853"
   }
 }
