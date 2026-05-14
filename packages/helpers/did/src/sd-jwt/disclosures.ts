@@ -141,7 +141,7 @@ function transformObject (
     }
   }
 
-  if (sd.length > 0) out._sd = sd.sort()
+  if (sd.length > 0) out._sd = sd.sort((a, b) => a.localeCompare(b))
   return out
 }
 
