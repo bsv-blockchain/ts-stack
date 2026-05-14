@@ -4,15 +4,18 @@ import { TableTxAudit } from './tables'
 import { validateProcessingTransition } from './processingFsm'
 
 /**
- * append-only audit log writer.
+ * Append-only audit log writer.
  *
- * Each call inserts one `tx_audit` row. Events should be small, stable
- * identifiers (e.g. `processing.changed`, `proof.acquired`, `lease.claimed`).
- * Payload is stored as a JSON-encoded string so downstream consumers may add
- * shape over time without a migration.
+ * Each call inserts one `tx_audit` row. Events use small stable identifiers
+ * (e.g. `processing.changed`, `proof.acquired`, `lease.claimed`). Payload is
+ * a JSON-encoded string so consumers can extend shape without migration.
+ *
+ * `txid` is the canonical FK to `transactions(txid)`. `actionId` is the FK
+ * to `actions(actionId)`. Both are nullable so an audit can reference either
+ * side of the model.
  */
 export interface AuditEvent {
-  transactionId?: number
+  txid?: string
   actionId?: number
   event: string
   fromState?: sdk.ProcessingStatus
@@ -27,7 +30,7 @@ export async function appendTxAudit (
 ): Promise<number> {
   const detailsJson = ev.details != null ? JSON.stringify(ev.details) : null
   const [id] = await knex('tx_audit').insert({
-    transactionId: ev.transactionId ?? null,
+    txid: ev.txid ?? null,
     actionId: ev.actionId ?? null,
     event: ev.event,
     from_state: ev.fromState ?? null,
@@ -42,17 +45,13 @@ export async function appendTxAudit (
 }
 
 /**
- * Convenience helper for processing transitions. Validates the move first;
- * on rejection it still records the attempt with `event = 'processing.rejected'`
- * so the audit trail captures impossible transitions for later diagnosis.
- *
- * Returns `true` when the transition is legal (audit row written with
- * `processing.changed`) and `false` when rejected (audit row written with
- * `processing.rejected`).
+ * Validate a processing transition and append the audit row. Returns `true`
+ * when the move is legal (`processing.changed` recorded), `false` when the
+ * FSM rejected it (`processing.rejected` recorded).
  */
 export async function auditProcessingTransition (
   knex: Knex,
-  transactionId: number,
+  txid: string,
   from: sdk.ProcessingStatus,
   to: sdk.ProcessingStatus,
   details?: Record<string, unknown>,
@@ -62,7 +61,7 @@ export async function auditProcessingTransition (
   await appendTxAudit(
     knex,
     {
-      transactionId,
+      txid,
       event: v.ok ? 'processing.changed' : 'processing.rejected',
       fromState: from,
       toState: to,
@@ -73,9 +72,9 @@ export async function auditProcessingTransition (
   return v.ok
 }
 
-/** Read all audit rows for a transaction, oldest first. Useful for tests. */
-export async function listAuditForTransaction (knex: Knex, transactionId: number): Promise<TableTxAudit[]> {
-  const rows = await knex('tx_audit').where({ transactionId }).orderBy('auditId')
+/** Read all audit rows for a transaction, oldest first. */
+export async function listAuditForTransaction (knex: Knex, txid: string): Promise<TableTxAudit[]> {
+  const rows = await knex('tx_audit').where({ txid }).orderBy('auditId')
   return rows.map(mapRow)
 }
 
@@ -84,7 +83,7 @@ function mapRow (row: any): TableTxAudit {
     created_at: new Date(row.created_at),
     updated_at: new Date(row.updated_at),
     auditId: row.auditId,
-    transactionId: row.transactionId ?? undefined,
+    txid: row.txid ?? undefined,
     actionId: row.actionId ?? undefined,
     event: row.event,
     fromState: row.from_state ?? undefined,

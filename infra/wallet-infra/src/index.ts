@@ -8,9 +8,7 @@ import {
   WalletStorageServerOptions,
   StorageServer,
   Wallet,
-  Monitor,
-  runSchemaCutover,
-  backfillLegacyOnlySync
+  Monitor
 } from '@bsv/wallet-toolbox'
 import knexPkg from 'knex'
 const { knex: makeKnex } = knexPkg
@@ -34,8 +32,7 @@ const {
   ARC_CALLBACK_TOKEN,
   COMMISSION_FEE = 0,
   COMMISSION_PUBLIC_KEY,
-  FEE_MODEL = '{"model":"sat/kb","value":1}',
-  LEGACY_UPGRADE = 'false'
+  FEE_MODEL = '{"model":"sat/kb","value":1}'
 } = process.env
 
 async function setupWalletStorageAndMonitor(): Promise<{
@@ -170,55 +167,9 @@ async function setupWalletStorageAndMonitor(): Promise<{
       feeModel: JSON.parse(FEE_MODEL)
     })
 
+    // v3 greenfield: a single migrate() call creates the canonical schema.
+    // No cutover, no bridge tables. v2 deployments perform their own ETL.
     await activeStorage.migrate(databaseName, storageIdentityKey)
-
-    // v3 is the canonical target schema. Auto-detect install posture and
-    // act accordingly:
-    //   - Fresh install (no legacy data, no `transactions_legacy` yet):
-    //     run runSchemaCutover() silently as part of initialization. End
-    //     state is v3 with empty legacy tables.
-    //   - Post-cutover (`transactions_legacy` already exists): no-op.
-    //   - Upgrade from v2 (legacy `transactions` rows exist + no
-    //     `transactions_legacy`): refuse boot unless LEGACY_UPGRADE=true.
-    //     Cutover on populated production data is destructive and must be
-    //     an explicit operator decision after backup + read-runbook.
-    const hasLegacyMarker = await knex.schema.hasTable('transactions_legacy')
-    if (!hasLegacyMarker) {
-      const legacyCount = await knex('transactions')
-        .count<{ c: number }>({ c: '*' })
-        .first()
-      const legacyRows = Number(legacyCount?.c ?? 0)
-      if (legacyRows === 0) {
-        console.log('Fresh install detected — initializing v3 schema…')
-        await runSchemaCutover(knex)
-        console.log('v3 schema ready.')
-      } else if (LEGACY_UPGRADE === 'true') {
-        console.log(
-          `LEGACY_UPGRADE=true → migrating ${legacyRows} legacy transaction rows to v3 schema…`
-        )
-        await runSchemaCutover(knex)
-        console.log('Schema cutover complete.')
-      } else {
-        throw new Error(
-          `Legacy v2 data detected (${legacyRows} rows in transactions, no transactions_legacy marker). ` +
-            'Refusing to start without explicit upgrade authorization. ' +
-            'Backup the database, then either set LEGACY_UPGRADE=true and restart, ' +
-            'or run `npm run cutover` during a maintenance window and restart this process. ' +
-            'See @bsv/wallet-toolbox docs/CUTOVER_RUNBOOK.md before proceeding.'
-        )
-      }
-    }
-
-    // Bridge any rows that the sync path wrote into `transactions_legacy`
-    // before the canonical-table bridge in `StorageKnex.insertTransaction`
-    // landed. Idempotent and cheap (one indexed left-join) on clean DBs.
-    const bridge = await backfillLegacyOnlySync(knex)
-    if (bridge.migratedTransactions > 0) {
-      console.log(
-        `Sync-bridge backfill: migrated ${bridge.migratedTransactions} legacy-only transactions, ` +
-          `remapped ${bridge.remappedOutputs} outputs and ${bridge.remappedCommissions} commissions to canonical ids.`
-      )
-    }
 
     const settings = await activeStorage.makeAvailable()
 

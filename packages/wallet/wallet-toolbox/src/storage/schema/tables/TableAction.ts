@@ -1,14 +1,13 @@
 import * as sdk from '../../../sdk'
 
 /**
- * per-user view of a transaction.
+ * Per-user view of a (potential) transaction.
  *
- * Migrated from the legacy `transactions` table. Holds everything that is truly
- * per-user (description, labels via tx_labels_map -> actionId, soft-delete flags,
- * notification subscribers). All on-chain status lives in the new `transactions`
- * table addressed by `transactionId`.
- *
- * UNIQUE(userId, transactionId).
+ *   - `actionId` is the PK.
+ *   - `txid` is NULLABLE — set to NULL while the action is an unsigned draft
+ *     (createAction inserts the action with `txid = NULL`; processAction sets
+ *     `txid` to the real on-chain txid once signing completes).
+ *   - `(userId, reference)` and `(userId, txid)` are UNIQUE.
  */
 export interface TableAction extends sdk.EntityTimeStamp {
   created_at: Date
@@ -16,23 +15,30 @@ export interface TableAction extends sdk.EntityTimeStamp {
   /** PK */
   actionId: number
   userId: number
-  /** FK -> new transactions.transactionId (per-txid record) */
-  transactionId: number
-  /** Application reference, hex/Base64, max 64 chars */
+  /** Canonical txid FK to `transactions.txid`; NULL until signing completes. */
+  txid?: string
+  /** Application reference, base64/hex, max 64 chars. UNIQUE per user. */
   reference: string
   description: string
-  /** true if originated in this wallet (change returns to it) */
+  /** True if originated in this wallet (change returns to it). */
   isOutgoing: boolean
-  /** Signed net change to this user's balance from this action */
+  /** Signed net satoshi change to this user's balance. */
   satoshisDelta: number
-  /** Per-user nosend override */
+  /** Transaction version (chosen at create-time). */
+  version?: number
+  lockTime?: number
+  /** Per-user nosend override. */
   userNosend: boolean
-  /** Soft-delete flag — hide from default queries */
+  /** Soft-delete flag — hide from default queries. */
   hidden: boolean
-  /** Per-user abort flag */
+  /** Per-user abort flag. */
   userAborted: boolean
-  /** JSON string of per-user notification subscribers (mirrors legacy notify) */
+  /** Unsigned rawTx draft; bytes move to `transactions.raw_tx` on commit. */
+  rawTxDraft?: number[]
+  /** Pre-signing inputBEEF draft; bytes move to `transactions.input_beef` on commit. */
+  inputBeefDraft?: number[]
+  /** JSON string of per-user notification subscribers. */
   notifyJson?: string
-  /** Optimistic concurrency token */
+  /** Optimistic concurrency token. */
   rowVersion: number
 }

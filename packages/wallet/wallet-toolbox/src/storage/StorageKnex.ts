@@ -71,14 +71,12 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 
 export class StorageKnex extends StorageProvider implements WalletStorageProvider {
   knex: Knex
-  private _postCutoverCache: boolean | undefined = undefined
-  /**
-   * Set by `disableForeignKeys()`, cleared by `enableForeignKeys()`.
-   * Read by `transaction()` to emit a connection-scoped FK bypass on
-   * Postgres (where `disableForeignKeys` cannot directly act on the
-   * connection the upcoming transaction will acquire from the pool).
-   */
-  private _fkBypassPending: boolean = false
+  // v3 greenfield: every database is "post-cutover" — there is no bridge.
+  // Retained as legacy fields so the FK-bypass plumbing inside `transaction()`
+  // and the entity-mid-rewrite call sites compile while createAction /
+  // processAction / sync are rewritten onto the clean schema.
+  protected readonly _postCutoverCache: true = true
+  protected _fkBypassPending = false
 
   constructor (options: StorageKnexOptions) {
     super(options)
@@ -86,153 +84,84 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     this.knex = options.knex
   }
 
+  /**
+   * v3 has a single canonical `transactions` table keyed by `txid`. The
+   * transaction service is always available.
+   */
   override getTransactionService (): TransactionService | undefined {
-    // The new-schema transaction service is only valid post-cutover. Pre-cutover,
-    // the `transactions` table is the legacy schema and queries via this service
-    // would return legacy ids that don't satisfy the `tx_audit.transactionId`
-    // FK (which targets `transactions_new`). Callers gate on `undefined` and
-    // fall back to the legacy storage path.
-    if (this._postCutoverCache !== true) return undefined
     return new TransactionService(this.knex)
   }
 
-  /**
-   * Eagerly warm the `_postCutoverCache` so sync query builders such as
-   * `findOutputsQuery` can branch on cutover state without an extra await.
-   * Callers that have invoked `makeAvailable` are guaranteed the cache has
-   * been populated.
-   */
   override async makeAvailable (): Promise<TableSettings> {
-    const settings = await super.makeAvailable()
-    if (this._postCutoverCache === undefined) {
-      this._postCutoverCache = await this.knex.schema.hasTable('transactions_legacy')
-    }
-    return settings
+    return await super.makeAvailable()
   }
 
   /**
-   * Returns true when the database has been through `runSchemaCutover` (i.e.
-   * `transactions_legacy` exists). Result is cached for the lifetime of this
-   * StorageKnex instance.
+   * @deprecated v3 has no bridge. Always true.
    */
-  private async isPostCutover (): Promise<boolean> {
-    if (this._postCutoverCache === undefined) {
-      this._postCutoverCache = await this.knex.schema.hasTable('transactions_legacy')
-    }
-    return this._postCutoverCache
+  protected async isPostCutover (): Promise<boolean> {
+    return true
   }
 
   /**
-   * Maps legacy TransactionStatus values to their ProcessingStatus equivalents
-   * for use in `outputs JOIN transactions` WHERE clauses post-cutover.
+   * v3 schema has no proven_txs table; broadcast/proof state is folded into
+   * `transactions`. Returns the canonical table name for call sites still
+   * doing raw-table reads against the legacy proof store.
+   *
+   * @deprecated remove call sites onto `transactions` directly.
    */
-  private legacyStatiToProcessing (stati: TransactionStatus[]): ProcessingStatus[] {
+  async provenTxsTableName (): Promise<string> {
+    return 'transactions'
+  }
+
+  /**
+   * v3 schema has no proven_tx_reqs table; broadcast queue state lives on
+   * `transactions.processing`. Returns the canonical table name for legacy
+   * call sites.
+   *
+   * @deprecated remove call sites onto `transactions` directly.
+   */
+  async provenTxReqsTableName (): Promise<string> {
+    return 'transactions'
+  }
+
+  /**
+   * v3 has no legacy TransactionStatus values. Identity mapping retained for
+   * call sites mid-rewrite.
+   *
+   * @deprecated use ProcessingStatus directly.
+   */
+  protected legacyStatiToProcessing (stati: TransactionStatus[]): ProcessingStatus[] {
     const result = new Set<ProcessingStatus>()
     for (const s of stati) {
       result.add(transactionStatusToProcessing(s))
       if (s === 'unproven') {
-        // 'sent','seen','seen_multi','unconfirmed' all map to legacy 'unproven'
-        result.add('sent')
-        result.add('seen')
-        result.add('seen_multi')
-        result.add('unconfirmed')
+        result.add('sent'); result.add('seen'); result.add('seen_multi'); result.add('unconfirmed')
       }
     }
     return [...result]
   }
 
   /**
-   * Returns the canonical name of the `proven_txs` table — `proven_txs_legacy`
-   * post-cutover, `proven_txs` otherwise.
+   * Bridge-period methods retained as no-throw stubs while the createAction /
+   * processAction / sync pipelines are rewritten onto the v3 schema. Each
+   * unimplemented method throws clearly so the call-site can be migrated.
    *
-   * Public so that helper modules (reviewStatus, purgeData) can resolve the
-   * correct table name without duplicating the post-cutover detection logic.
+   * @deprecated v3 has no legacy transactions table. createAction will insert
+   * directly into `actions` (with `txid = NULL`) once the rewrite lands.
    */
-  async provenTxsTableName (): Promise<string> {
-    return (await this.isPostCutover()) ? 'proven_txs_legacy' : 'proven_txs'
+  override async insertLegacyTransaction (_tx: TableTransaction, _trx?: TrxToken): Promise<number> {
+    throw new WERR_INTERNAL('insertLegacyTransaction: v3 schema has no legacy transactions table. ' +
+      'createAction should insert into `actions` directly with txid=NULL.')
   }
 
   /**
-   * Returns the canonical name of the `proven_tx_reqs` table —
-   * `proven_tx_reqs_legacy` post-cutover, `proven_tx_reqs` otherwise.
-   *
-   * Public so that helper modules (reviewStatus, purgeData) can resolve the
-   * correct table name without duplicating the post-cutover detection logic.
-   */
-  async provenTxReqsTableName (): Promise<string> {
-    return (await this.isPostCutover()) ? 'proven_tx_reqs_legacy' : 'proven_tx_reqs'
-  }
-
-  /**
-   * Insert a legacy-shaped transaction row into the correct table:
-   * - Post-cutover: `transactions_legacy` (the renamed legacy schema table)
-   * - Pre-cutover:     `transactions` (the standard table, same behaviour as `insertTransaction`)
-   *
-   * This allows `createAction` to store unsigned rows (txid unknown) without
-   * conflicting with the new `transactions` table's NOT NULL txid constraint.
-   * A new `transactions` row + `actions` row are created later by `processAction`
-   * once the real txid is known.
-   *
-   * On SQLite, foreign key enforcement is temporarily disabled while inserting
-   * into `transactions_legacy` because the referenced `proven_txs` table was
-   * renamed to `proven_txs_legacy` during the the schema cutover. Since `provenTxId`
-   * is always NULL for new unsigned transactions this is semantically safe.
-   */
-  override async insertLegacyTransaction (tx: TableTransaction, trx?: TrxToken): Promise<number> {
-    const e = await this.validateEntityForInsert(tx, trx)
-    if (e.transactionId === 0) delete e.transactionId
-    const hasLegacyTable = await this.knex.schema.hasTable('transactions_legacy')
-    const tableName = hasLegacyTable ? 'transactions_legacy' : 'transactions'
-    const isSqlite = this.dbtype === 'SQLite'
-    // On SQLite post-cutover the `transactions_legacy` FK to `proven_txs` is dangling
-    // (proven_txs was renamed to proven_txs_legacy). Temporarily disable FK checks for
-    // this insert since provenTxId is always NULL for a brand-new unsigned transaction.
-    if (isSqlite && hasLegacyTable) await this.knex.raw('PRAGMA foreign_keys = OFF')
-    try {
-      const [id] = await this.toDb(trx)<TableTransaction>(tableName).insert(e)
-      tx.transactionId = id
-      return tx.transactionId
-    } finally {
-      if (isSqlite && hasLegacyTable) await this.knex.raw('PRAGMA foreign_keys = ON')
-    }
-  }
-
-  /**
-   * Insert a `tx_labels_map` row for a legacy transaction that does not yet
-   * have a `actions.actionId`. On post-cutover SQLite, temporarily disables
-   * FK checks so that the legacy transactionId (which is not yet an actionId)
-   * can be written. processAction will repoint it via repointLabelsToActionId.
-   *
-   * Note: bypasses `validateEntityForInsert` (and therefore `verifyReadyForDatabaseAccess`
-   * which would re-enable FK checks) to ensure the PRAGMA=OFF persists across
-   * the insert statement.
+   * @deprecated v3 has no legacy table. tx_labels_map now keys on
+   * `actions.actionId`; insertTxLabelMap handles both unsigned and signed cases.
    */
   override async insertLegacyTxLabelMap (labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> {
-    const isSqlite = this.dbtype === 'SQLite'
-    const hasLegacyTable = isSqlite ? await this.knex.schema.hasTable('transactions_legacy') : false
-    if (!isSqlite || !hasLegacyTable) {
-      // Pre-cutover or non-SQLite: standard insert is safe (no dangling FK issue).
-      await this.insertTxLabelMap(labelMap, trx)
-      return
-    }
-    // Post-cutover SQLite: tx_labels_map.transactionId FK now points to actions.actionId.
-    // We are writing a legacyTransactionId (no corresponding actions row yet).
-    // Temporarily disable FK checks for this single insert.
-    const now = new Date()
-    const e = {
-      created_at: now,
-      updated_at: now,
-      txLabelId: labelMap.txLabelId,
-      transactionId: labelMap.transactionId,
-      isDeleted: labelMap.isDeleted ? 1 : 0
-    }
-    // Use the raw knex handle (not toDb(trx)) to send the PRAGMA on the same connection.
-    await this.knex.raw('PRAGMA foreign_keys = OFF')
-    try {
-      await this.knex('tx_labels_map').insert(e)
-    } finally {
-      await this.knex.raw('PRAGMA foreign_keys = ON')
-    }
+    // Forward unchanged — current v3 schema already accepts actionId-keyed inserts.
+    await this.insertTxLabelMap(labelMap, trx)
   }
 
   async readSettings (): Promise<TableSettings> {

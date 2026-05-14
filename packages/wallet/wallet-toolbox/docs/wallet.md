@@ -15026,7 +15026,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Type: DBType
 
 ```ts
-export type DBType = "SQLite" | "MySQL" | "IndexedDB"
+export type DBType = "SQLite" | "MySQL" | "Postgres" | "IndexedDB"
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)

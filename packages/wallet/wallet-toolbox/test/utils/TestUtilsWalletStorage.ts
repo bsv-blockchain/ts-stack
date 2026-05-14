@@ -59,7 +59,8 @@ import { TableMonitorEvent } from '../../src/storage/schema/tables/TableMonitorE
 import { TableCommission } from '../../src/storage/schema/tables/TableCommission'
 import { asArray } from '../../src/utility/utilityHelpers.noBuffer'
 import { ScriptTemplateBRC29 } from '../../src/utility/ScriptTemplateBRC29'
-import { runSchemaCutover } from '../../src/storage/schema/schemaCutover'
+// v3 greenfield: migrate() produces the final schema. No cutover.
+const runSchemaCutover = async (_knex: any): Promise<void> => {}
 import { TransactionService } from '../../src/storage/schema/transactionService'
 
 dotenv.config()

@@ -3253,13 +3253,23 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ##### Class: KnexMigrations
 
+v3 greenfield schema — see `docs/v3-upgrade/SCHEMA_V4.md`.
+
+ - `transactions` keyed by `txid` (canonical chain record).
+ - `actions` per-user (PK actionId, FK txid nullable for unsigned drafts).
+ - `outputs` FK actionId, with denormalised txid + `spentByActionId`.
+ - `commissions` FK actionId. `tx_audit(txid, actionId)`. `tx_labels_map.actionId`.
+
+No bridge tables. No `runSchemaCutover`. Fresh installs get the canonical
+layout from a single migration; v2 deployments perform their own ETL.
+
 ```ts
 export class KnexMigrations implements MigrationSource<string> {
     migrations: Record<string, Migration> = {};
     constructor(public chain: Chain, public storageName: string, public storageIdentityKey: string, public maxOutputScriptLength: number) 
     async getMigrations(): Promise<string[]> 
-    getMigrationName(migration: string) 
-    async getMigration(migration: string): Promise<Migration> 
+    getMigrationName(m: string) 
+    async getMigration(m: string): Promise<Migration> 
     async getLatestMigration(): Promise<string> 
     static async latestMigration(): Promise<string> 
     setupMigrations(chain: string, storageName: string, storageIdentityKey: string, maxOutputScriptLength: number): Record<string, Migration> 
@@ -3267,20 +3277,6 @@ export class KnexMigrations implements MigrationSource<string> {
 ```
 
 See also: [Chain](./client.md#type-chain)
-
-###### Constructor
-
-```ts
-constructor(public chain: Chain, public storageName: string, public storageIdentityKey: string, public maxOutputScriptLength: number) 
-```
-See also: [Chain](./client.md#type-chain)
-
-Argument Details
-
-+ **storageName**
-  + human readable name for this storage instance
-+ **maxOutputScriptLength**
-  + limit for scripts kept in outputs table, longer scripts will be pulled from rawTx
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -4280,6 +4276,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     override async insertLegacyTxLabelMap(labelMap: TableTxLabelMap, trx?: TrxToken): Promise<void> 
     async readSettings(): Promise<TableSettings> 
     override async getProvenOrRawTx(txid: string, trx?: TrxToken): Promise<ProvenOrRawTx> 
+    async dbBypassFks(disable: boolean): Promise<void> 
     dbTypeSubstring(source: string, fromOffset: number, forLength?: number) 
     override async getRawTxOfKnownValidTransaction(txid?: string, offset?: number, length?: number, trx?: TrxToken): Promise<number[] | undefined> 
     getProvenTxsForUserQuery(args: FindForUserSincePagedArgs): Knex.QueryBuilder 
@@ -4313,6 +4310,10 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     override async updateCommission(id: number, update: Partial<TableCommission>, trx?: TrxToken): Promise<number> 
     override async updateOutputBasket(id: number, update: Partial<TableOutputBasket>, trx?: TrxToken): Promise<number> 
     override async updateOutput(id: number, update: Partial<TableOutput>, trx?: TrxToken): Promise<number> 
+    async bulkUpdateOutputs(updates: Array<{
+        id: number;
+        update: Partial<TableOutput>;
+    }>, trx?: TrxToken): Promise<number> 
     override async updateOutputTagMap(outputId: number, tagId: number, update: Partial<TableOutputTagMap>, trx?: TrxToken): Promise<number> 
     override async updateOutputTag(id: number, update: Partial<TableOutputTag>, trx?: TrxToken): Promise<number> 
     override async updateProvenTxReq(id: number | number[], update: Partial<TableProvenTxReq>, trx?: TrxToken): Promise<number> 
@@ -4588,6 +4589,26 @@ async allocateChangeInput(userId: number, basketId: number, targetSatoshis: numb
 ```
 See also: [TableOutput](./storage.md#interface-tableoutput)
 
+###### Method bulkUpdateOutputs
+
+Bulk-update many outputs in a single SQL statement (per shape group),
+replacing N round-trips with at most a handful regardless of N.
+
+Updates are grouped by the set of columns whose values are constant across
+the group. Per-row columns become `CASE outputId WHEN id THEN value ... END`
+expressions. Works on both SQLite and MySQL.
+
+Falls back to per-row updates when the group is small enough that the CASE
+overhead would dominate (currently: ≤ 2 rows).
+
+```ts
+async bulkUpdateOutputs(updates: Array<{
+    id: number;
+    update: Partial<TableOutput>;
+}>, trx?: TrxToken): Promise<number> 
+```
+See also: [TableOutput](./storage.md#interface-tableoutput), [TrxToken](./client.md#interface-trxtoken)
+
 ###### Method countChangeInputs
 
 Counts the outputs for userId in basketId that are spendable: true
@@ -4600,13 +4621,33 @@ AND whose transaction status is one of:
 async countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number> 
 ```
 
+###### Method dbBypassFks
+
+Engine-agnostic FK bypass. SQLite uses `PRAGMA foreign_keys`, MySQL uses
+`SET FOREIGN_KEY_CHECKS`, Postgres uses `SET session_replication_role`.
+Callers pass `disable=true` to bypass FK checks, `false` to restore.
+
+Note: PRAGMA / SET statements run on the underlying connection; on SQLite
+they are no-ops inside an open transaction, so callers that need bypass
+during a transaction must call this BEFORE opening it.
+
+```ts
+async dbBypassFks(disable: boolean): Promise<void> 
+```
+
 ###### Method disableForeignKeys
 
-Post-cutover SQLite: disable FK on the bare connection BEFORE opening a
-transaction. PRAGMA foreign_keys changes inside SQLite transactions are no-ops,
-so this MUST be called before `this.knex.transaction()`.
+Post-cutover bridge-period FK bypass. Called before opening a transaction
+that contains bridge inserts (legacy-table rows whose FKs reference
+renamed tables).
 
-Only acts when post-cutover AND SQLite. Pre-cutover or MySQL: no-op.
+SQLite: PRAGMA foreign_keys=OFF on the bare connection (PRAGMA inside
+a Knex transaction is a no-op on SQLite, so the call must precede the
+`knex.transaction()`).
+Postgres: session_replication_role=replica skips FK + trigger enforcement
+for the duration of the connection's session.
+MySQL: pre-cutover FK semantics already accommodate the bridge inserts
+via the rebuild pattern; no-op here.
 
 ```ts
 override async disableForeignKeys(): Promise<void> 
@@ -4615,7 +4656,7 @@ override async disableForeignKeys(): Promise<void>
 ###### Method enableForeignKeys
 
 Re-enable FK after the transaction opened via `disableForeignKeys()` completes.
-Only acts when post-cutover AND SQLite.
+Mirrors `disableForeignKeys` engine handling.
 
 ```ts
 override async enableForeignKeys(): Promise<void> 
@@ -6314,10 +6355,6 @@ export async function determineDBType(knex: Knex<any, any[]>): Promise<DBType>
 
 See also: [DBType](./storage.md#type-dbtype)
 
-Returns
-
-connected database engine variant
-
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
@@ -7706,7 +7743,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Type: DBType
 
 ```ts
-export type DBType = "SQLite" | "MySQL" | "IndexedDB"
+export type DBType = "SQLite" | "MySQL" | "Postgres" | "IndexedDB"
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
