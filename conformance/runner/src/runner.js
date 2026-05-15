@@ -52,7 +52,10 @@ let validateRegression
 async function initSchemaValidation () {
   let AjvMod
   try {
-    AjvMod = await import('ajv')
+    // Use ajv/dist/2020 because our schemas declare draft-2020-12
+    // (https://json-schema.org/draft/2020-12/schema). The default 'ajv' import
+    // only supports draft-07 and will fail with "no schema with key or ref".
+    AjvMod = await import('ajv/dist/2020')
   } catch (err) {
     throw new Error(
       'ajv is a hard dependency of the BSV conformance structural runner.\n' +
