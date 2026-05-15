@@ -1,5 +1,5 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.keys.publickey",
   "name": "PublicKey DER encoding, fromString, and BRC-42 child derivation",
   "brc": ["BRC-42"],

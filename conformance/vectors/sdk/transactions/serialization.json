@@ -1,11 +1,11 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.transactions.serialization",
   "name": "Transaction serialization and parsing",
-  "brc": "BRC-62",
-  "version": "1.0.0",
-  "reference_impl": "packages/sdk/ts-sdk/src/transaction/Transaction.ts",
-  "parity_class": "transactions",
+  "brc": ["BRC-62"],
+  "version": "2.0.0",
+  "reference_impl": "@bsv/sdk@2.0.x (Transaction + BEEF/EF)",
+  "parity_class": "required",
   "vectors": [
     {
       "id": "tx-001",

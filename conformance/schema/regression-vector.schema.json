@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bsv-blockchain.github.io/ts-stack/conformance/schema/regression-vector.schema.json",
+  "title": "BSV Conformance Regression Vector File",
+  "description": "Schema for historical regression / bug-reproduction vector files. These have a richer metadata envelope than standard vectors to track cross-SDK parity issues.",
+  "type": "object",
+  "required": ["version", "domain", "category", "description", "regression", "vectors"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Version of this regression file (not the vector format)"
+    },
+    "domain": {
+      "type": "string",
+      "enum": ["sdk", "wallet", "overlay", "messaging", "broadcast", "auth", "payments", "storage", "sync"],
+      "description": "High-level domain this regression belongs to"
+    },
+    "category": {
+      "type": "string",
+      "description": "More specific category (e.g. 'transactions', 'beef', 'script')"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable explanation of the bug / parity issue this file reproduces"
+    },
+    "regression": {
+      "type": "object",
+      "required": ["issue"],
+      "properties": {
+        "issue": {
+          "type": "string",
+          "description": "GitHub issue reference, e.g. 'go-sdk#306' or 'ts-sdk#31'"
+        },
+        "fixed_in": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Map of implementation -> version where the bug was fixed (e.g. { \"go\": \"v1.2.21\" })"
+        },
+        "symptom": { "type": "string" },
+        "root_cause": { "type": "string" }
+      }
+    },
+    "vectors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "input", "expected"],
+        "properties": {
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "parity_class": {
+            "type": "string",
+            "enum": ["required", "intended", "best-effort", "unsupported"]
+          },
+          "input": { "type": "object" },
+          "expected": { "type": "object" },
+          "notes": { "type": "string" },
+          "skip_reason": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

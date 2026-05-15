@@ -3,8 +3,8 @@ id: brc-index
 title: "BRC Standards Index"
 kind: reference
 version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+last_updated: "2026-05-14"
+last_verified: "2026-05-14"
 review_cadence_days: 30
 status: stable
 tags: [reference, brc, standards]
@@ -18,15 +18,19 @@ All Bitcoin Request for Comments (BRC) standards referenced in ts-stack source, 
 
 | BRC | Title | Domain | Spec | Key Packages |
 |-----|-------|--------|------|--------------|
+| BRC-14 | Script Evaluation & Sighash | Scripts | — | `@bsv/sdk` (5,116 conformance vectors) |
 | BRC-29 | Peer-to-Peer Payment Protocol | Payments | [spec](../specs/brc-29-peer-payment.md) | `@bsv/paymail`, `@bsv/message-box-client` |
 | BRC-31 | HTTP Mutual Authentication Handshake | Auth | [spec](../specs/brc-31-auth.md) | `@bsv/auth-express-middleware`, `@bsv/authsocket` |
-| BRC-42 | Key Derivation Scheme (BKDS) | Crypto | — | `@bsv/sdk`, `@bsv/wallet-toolbox` |
+| BRC-42 | Key Derivation Scheme (BKDS) | Crypto | — | `@bsv/sdk`, `@bsv/wallet-toolbox` (heavy BRC-42 vector coverage in sdk/keys + wallet/brc100) |
 | BRC-43 | Security Levels for BKDS | Crypto | — | `@bsv/sdk` |
 | BRC-48 | PushDrop Token Protocol | Tokens | — | `@bsv/overlay-topics`, `@bsv/btms` |
 | BRC-62 | BEEF — Background Evaluation Extended Format | Transactions | — | `@bsv/sdk` |
 | BRC-74 | BUMP — BSV Unified Merkle Path | Transactions | — | `@bsv/sdk` |
 | BRC-95 | BEEF V2 | Transactions | — | `@bsv/sdk` |
-| BRC-100 | BRC-100 Wallet Interface | Wallet | [spec](../specs/brc-100-wallet.md) | `@bsv/wallet-toolbox`, `@bsv/sdk` |
+| BRC-62 | BEEF — Background Evaluation Extended Format | Transactions | — | `@bsv/sdk` (conformance vectors) |
+| BRC-74 | BUMP — BSV Unified Merkle Path | Transactions | — | `@bsv/sdk` (conformance vectors) |
+| BRC-77 | Bitcoin Signed Message (BSM) Compatibility | Crypto | — | `@bsv/sdk` (conformance vectors) |
+| BRC-100 | BRC-100 Wallet Interface | Wallet | [spec](../specs/brc-100-wallet.md) | `@bsv/wallet-toolbox`, `@bsv/sdk` (~950 vectors) |
 | BRC-101 | Wallet storage adapter | Wallet | [spec](../specs/storage-adapter.md) | `@bsv/wallet-toolbox` |
 | BRC-103 | Peer Mutual Authentication Framework | Auth | — | `@bsv/authsocket`, `@bsv/auth-express-middleware` |
 | BRC-104 | Message-Layer Transport | Auth | — | `@bsv/authsocket` |
