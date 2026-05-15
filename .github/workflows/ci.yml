@@ -64,10 +64,6 @@ jobs:
           slug: bsv-blockchain/ts-stack
           fail_ci_if_error: true
 
-      - name: SonarCloud scan
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
-
   docs-validate:
     name: Docs Site Validation
     runs-on: ubuntu-latest
@@ -96,8 +92,6 @@ jobs:
 
       # Full `pnpm docs:build` (SSG + pagefind + built-link checks + TypeDoc merge) runs in docs-deploy.yml
       # on pushes to main. This job provides fast feedback on every PR that touches docs.
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   conformance:
     name: Conformance Vectors

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-toolbox-client",
-  "version": "2.1.25",
+  "version": "2.1.26",
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.client.js",
   "types": "./out/src/index.client.d.ts",
