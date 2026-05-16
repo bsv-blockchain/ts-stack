@@ -1,0 +1,74 @@
+groups:
+  - name: wallet-toolbox-single-instance
+    rules:
+      - alert: WalletToolboxLowUtxoCacheHitRate
+        expr: |
+          (
+            sum(rate(wallet_toolbox_utxo_cache_requests_total{result="hit"}[5m]))
+            /
+            clamp_min(sum(rate(wallet_toolbox_utxo_cache_requests_total[5m])), 1)
+          ) < 0.75
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wallet-toolbox UTXO cache hit rate is low"
+          description: "UTXO cache hit rate has stayed below 75% for 10 minutes."
+
+      - alert: WalletToolboxLowBlockHeaderCacheHitRate
+        expr: |
+          (
+            sum(rate(wallet_toolbox_block_header_cache_requests_total{result="hit"}[5m]))
+            /
+            clamp_min(sum(rate(wallet_toolbox_block_header_cache_requests_total[5m])), 1)
+          ) < 0.75
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wallet-toolbox block-header cache hit rate is low"
+          description: "Block-header cache hit rate has stayed below 75% for 10 minutes."
+
+      - alert: WalletToolboxBroadcastProviderLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(wallet_toolbox_post_beef_provider_duration_seconds_bucket[5m])) by (le, provider)
+          ) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wallet-toolbox broadcast provider latency is high"
+          description: "p95 postBeef provider latency is above 5 seconds for provider {{ $labels.provider }}."
+
+      - alert: WalletToolboxBroadcastQueueBacklog
+        expr: wallet_toolbox_post_beef_queue_size > 1000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Wallet-toolbox broadcast queue backlog is growing"
+          description: "Queued postBeef provider calls have exceeded 1000 for 5 minutes."
+
+      - alert: WalletToolboxSendWaitingBacklog
+        expr: wallet_toolbox_send_waiting_queue_size > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wallet-toolbox SendWaiting backlog is growing"
+          description: "Queued SendWaiting broadcast work items have exceeded 500 for 5 minutes."
+
+      - alert: WalletToolboxStorageQueryLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(wallet_toolbox_storage_query_duration_seconds_bucket[5m])) by (le, operation)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Wallet-toolbox storage query latency is high"
+          description: "p99 storage query latency is above 1 second for operation {{ $labels.operation }}."
