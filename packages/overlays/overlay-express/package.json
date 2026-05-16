@@ -72,7 +72,7 @@
     "@bsv/overlay": "^2.0.2",
     "@bsv/overlay-discovery-services": "^2.0.2",
     "@bsv/sdk": "^2.1.0",
-    "@bsv/wallet-toolbox-client": "^2.1.18",
+    "@bsv/wallet-toolbox-client": "^2.1.26",
     "body-parser": "^2.2.2",
     "chalk": "^5.6.2",
     "express": "^5.2.1",
