@@ -65,17 +65,18 @@ export class WalletError extends Error implements WalletErrorObject {
     let stack: string | undefined
     const details: Record<string, string> = {}
     if (err !== null && typeof err === 'object') {
-      if (err['name'] === 'Error' || err['name'] === 'FetchError') name = err['code'] || err['status'] || 'WERR_UNKNOWN'
-      else name = err['name'] || err['code'] || err['status'] || 'WERR_UNKNOWN'
+      const errObj = err as Record<string, unknown>
+      if (errObj.name === 'Error' || errObj.name === 'FetchError') name = (errObj.code as string) || (errObj.status as string) || 'WERR_UNKNOWN'
+      else name = (errObj.name as string) || (errObj.code as string) || (errObj.status as string) || 'WERR_UNKNOWN'
       if (typeof name !== 'string') name = 'WERR_UNKNOWN'
 
-      message = err['message'] || err['description'] || ''
+      message = (errObj.message as string) || (errObj.description as string) || ''
       if (typeof message !== 'string') message = 'WERR_UNKNOWN'
 
-      if (typeof err['stack'] === 'string') stack = err['stack']
+      if (typeof errObj.stack === 'string') stack = errObj.stack
 
-      if (typeof err['sql'] === 'string') details.sql = err['sql']
-      if (typeof err['sqlMessage'] === 'string') details.sqlMessage = err['sqlMessage']
+      if (typeof errObj.sql === 'string') details.sql = errObj.sql
+      if (typeof errObj.sqlMessage === 'string') details.sqlMessage = errObj.sqlMessage
     }
     const e = new WalletError(name, message, stack, Object.keys(details).length > 0 ? details : undefined)
     if (err !== null && typeof err === 'object') {
