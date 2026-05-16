@@ -278,11 +278,80 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           'an inprocess, outgoing action that has not been signed and shared to the network.'
         )
       }
+      // Chain-status protection for signed nosend txs.
+      //
+      // Background: a nosend tx (created via createAction({noSend:true}))
+      // can be externally broadcast by the caller and reach 'mined' or
+      // mempool-'known' status before any internalizeAction or Monitor
+      // cycle has retired its 'nosend' status in storage. If abortAction
+      // is invoked on it in that window, the destructive transitions
+      // below (transactions.status='failed' + proven_tx_reqs.status='invalid')
+      // orphan every output the tx produced — including auto-fund change
+      // outputs the wallet itself emitted — because listOutputs filters
+      // them out of the spendable set on parent-tx 'failed' status.
+      //
+      // Protection: if the tx has a txid AND status is 'nosend', ask
+      // the network whether it already knows about the tx before
+      // invalidating. getStatusForTxids returns 'mined' | 'known' |
+      // 'unknown' per StatusForTxidResult (WalletServices.interfaces.ts).
+      // Refuse the abort for 'mined' OR 'known' — a tx that's broadcast
+      // and propagating in mempool returns 'known' (depth===0) and
+      // protecting it avoids orphaning during the propagation window.
+      //
+      // Service-unreachable handling: proceed with abort. Refusal is
+      // reserved for positive on-chain confirmation. When the network
+      // confirmation pathway is itself unavailable (services throw or
+      // gracefully return r.status !== 'success'), confirmation is not
+      // possible — and per the BRC-100 contract callers retain the
+      // ability to abort offline. The fallback writes a forensic
+      // history note ('abortAction-offline-fallback') so an operator
+      // can grep for aborts that proceeded under uncertainty. This
+      // hole can never be 100% closed against externally-broadcast
+      // chain-confirmed txs while offline; the audit trail makes it
+      // recoverable.
+      let serviceUnreachable = false
+      if (tx.txid && tx.status === 'nosend') {
+        const services = this.getServices()
+        let chainStatus: 'mined' | 'known' | 'unknown' | undefined
+        try {
+          const r = await services.getStatusForTxids([tx.txid])
+          if (r.status !== 'success') {
+            serviceUnreachable = true
+          } else {
+            chainStatus = r.results.find(x => x.txid === tx.txid)?.status
+          }
+        } catch {
+          serviceUnreachable = true
+        }
+        if (chainStatus === 'mined' || chainStatus === 'known') {
+          const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+          if (req != null) {
+            req.addHistoryNote({
+              what: 'abortAction-skipped-onchain',
+              reference: args.reference,
+              chainStatus
+            })
+            await req.updateStorageDynamicProperties(this, trx)
+          }
+          // Surface the refusal via a sentinel so the surrounding
+          // transaction commits the history note BEFORE returning
+          // the aborted:false result. Returning directly from inside
+          // the transaction would still work, but the sentinel keeps
+          // the audit-write / result-shape decision on the same
+          // commit-then-return path that existed when this surface
+          // threw, minimizing diff churn.
+          return { __abortAction: 'skipped-onchain' as const, chainStatus }
+        }
+      }
       await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
       if (tx.txid != null && tx.txid !== '') {
         const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
         if (req != null) {
-          req.addHistoryNote({ what: 'abortAction', reference: args.reference })
+          req.addHistoryNote(
+            serviceUnreachable
+              ? { what: 'abortAction-offline-fallback', reference: args.reference }
+              : { what: 'abortAction', reference: args.reference }
+          )
           req.status = 'invalid'
           await req.updateStorageDynamicProperties(this, trx)
         }
@@ -292,6 +361,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       }
       return r
     })
+    if ('__abortAction' in r) {
+      // Tone Engel review feedback (PR #122 comment 4444566147 item 3):
+      // do not throw on chain-confirmed refusal — surface it via the
+      // return value so callers can branch on it. Refusal is positive
+      // chain confirmation only; service-unreachable proceeds with
+      // abort and returns aborted:true with an audit-trail note.
+      return { aborted: false }
+    }
     return r
   }
 

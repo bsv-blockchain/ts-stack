@@ -432,6 +432,18 @@ export class Monitor {
     // console.log(`WalletMonitor notified of new block header ${h.height}`)
     // Nudge the proof checker to try again.
     TaskCheckForProofs.checkNow = true
+    // Nudge the nosend checker too. Externally-broadcast nosend txs
+    // (created via createAction({noSend:true}) and broadcast by the
+    // caller through ARC, a ladder, or other external paths) may have
+    // confirmed in this new block. TaskCheckNoSends.runTask processes
+    // 'nosend' reqs via getProofs the same way TaskCheckForProofs
+    // processes 'unmined'/'unknown'/... reqs; without this nudge the
+    // task only fires on its triggerMsecs cadence (default once per
+    // day) which combined with intermittent wallet uptime means the
+    // nosend lifecycle has no reliable retirement path. The
+    // TaskCheckNoSends.checkNow flag was designed for this signal
+    // (see TaskCheckNoSends.ts:22-25) but was never wired.
+    TaskCheckNoSends.checkNow = true
   }
 
   /**

@@ -16,7 +16,14 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
  * Processing starts with simple validation and then checks for a pre-existing transaction.
  * If the transaction is already known to the user, then the outputs are reviewed against the existing outputs treatment,
  * and merge rules are added to the arguments passed to the storage layer.
- * The existing transaction must be in the 'unproven' or 'completed' status. Any other status is an error.
+ *
+ * The existing transaction's `status` determines what the merge path does next:
+ *  - `'unproven'` or `'completed'`: outputs are merged; status is left as-is.
+ *  - `'nosend'`: the `internalizeAction` call is treated as explicit authorization to advance the lifecycle.
+ *    `transactions.status` is promoted to `'completed'` (BUMP-bearing BEEF) or `'unproven'` (otherwise), and the
+ *    `proven_tx_req` is moved out of `'nosend'` so Monitor's proof-fetching flow can finalize it. See storage-layer
+ *    `internalizeAction` docs for the full rationale.
+ *  - Any other status: an error.
  *
  * When the transaction already exists, the description is updated. The isOutgoing sense is not changed.
  *

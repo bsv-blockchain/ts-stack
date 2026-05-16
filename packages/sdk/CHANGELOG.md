@@ -214,6 +214,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
+- `AbortActionResult.aborted` is now typed `boolean` (was the literal `true`). Wallets implementing the BRC-100 interface may now return `aborted: false` when they refuse to abort an action because the underlying transaction is positively confirmed on chain. The recommended caller follow-up is `internalizeAction`. Network-unreachable conditions still return `aborted: true` — refusal is reserved for positive on-chain confirmation. Source: `packages/sdk/src/wallet/Wallet.interfaces.ts`.
+
 ### Deprecated
 
 ### Removed
