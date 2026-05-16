@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@bsv/sdk": "^2.1.0",
-    "@bsv/wallet-toolbox": "^2.1.24",
+    "@bsv/wallet-toolbox": "^2.1.26",
     "chalk": "^5.4.1",
     "crypto": "^1.0.1",
     "dotenv": "^16.5.0",
