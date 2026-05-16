@@ -26,7 +26,7 @@ jest.mock('../wab-client/WABClient', () => {
 })
 
 // Mock wallet builder
-const mockWallet = {} as WalletInterface
+const mockWallet = {} as unknown as WalletInterface
 const mockWalletBuilder = jest.fn(
   async (privateKey: PrivateKey, privilegedKeyManager: PrivilegedKeyManager) => mockWallet
 )
@@ -68,6 +68,7 @@ describe('ShamirWalletManager', () => {
           threshold: 1,
           totalShares: 3
         })
+        return _
       }).toThrow('Threshold must be at least 2')
     })
 
@@ -80,6 +81,7 @@ describe('ShamirWalletManager', () => {
           threshold: 2,
           totalShares: 2
         })
+        return _
       }).toThrow('Total shares must be at least 3')
     })
 
@@ -93,6 +95,7 @@ describe('ShamirWalletManager', () => {
           threshold: 3,
           totalShares: 4
         })
+        return _
       }).not.toThrow()
 
       // 3-of-3 means user gets 2 shares (3-1), which is less than threshold 3 - NOT OK
@@ -104,6 +107,7 @@ describe('ShamirWalletManager', () => {
           threshold: 3,
           totalShares: 3
         })
+        return _
       }).toThrow('User must have at least 3 shares to recover independently')
     })
   })

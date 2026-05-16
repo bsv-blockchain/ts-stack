@@ -32,6 +32,6 @@ export function asArray (val: BufferOrString, encoding?: BufferEncoding): number
   let a: number[]
   if (Array.isArray(val)) a = val
   else if (Buffer.isBuffer(val)) a = Array.from(val)
-  else a = Array.from(Buffer.from(val, encoding || 'hex'))
+  else a = Array.from(Buffer.from(val, encoding ?? 'hex'))
   return a
 }

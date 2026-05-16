@@ -13,7 +13,7 @@ export function parseBrc114ActionTimeLabels (labels: string[] | undefined): Pars
   const remainingLabels: string[] = []
   let timeFilterRequested = false
 
-  for (const label of labels || []) {
+  for (const label of labels ?? []) {
     if (label.startsWith('action time from ')) {
       timeFilterRequested = true
       if (from !== undefined) throw new WERR_INVALID_PARAMETER('labels', 'valid. Duplicate action time from label.')

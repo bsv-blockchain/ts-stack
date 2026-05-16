@@ -1,8 +1,8 @@
 import { Beef, Transaction } from '@bsv/sdk'
-import * as sdk from '../sdk'
 import { TableTransaction } from '../storage/schema/tables'
 import { StorageAdminStats, StorageProvider } from '../storage/StorageProvider'
 
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export abstract class Format {
   static alignLeft (v: string | number, fixedWidth: number): string {
     v = v.toString()
@@ -57,26 +57,25 @@ export abstract class Format {
         let olog: string = ''
         if (i < tx.inputs.length) {
           const input = tx.inputs[i]
-          const satoshis = input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis || 0
+          const satoshis = input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis ?? 0
           totalIn += satoshis
-          const inputRef = am(input.sourceTXID || '', 12) + '.' + String(input.sourceOutputIndex)
+          const inputRef = am(input.sourceTXID ?? '', 12) + '.' + String(input.sourceOutputIndex)
           ilog = `${al(inputRef, 17)} ${ar(sa(satoshis), 12)}`
         }
         if (i < tx.outputs.length) {
           const output = tx.outputs[i]
-          totalOut += output.satoshis || 0
+          totalOut += output.satoshis ?? 0
           const script = output.lockingScript.toHex()
-          olog = `${ar(sa(output.satoshis || 0), 12)} (${script.length})${am(script, 13)}`
+          olog = `${ar(sa(output.satoshis ?? 0), 12)} (${script.length})${am(script, 13)}`
         }
-        log += `${al(ilog, 30)} ${ar('' + i, 5)} ${olog}\n`
+        log += `${al(ilog, 30)} ${ar(String(i), 5)} ${olog}\n`
       }
       let h = `txid ${txid}\n`
       h += `total in:${sa(totalIn)} out:${sa(totalOut)} fee:${sa(totalIn - totalOut)}\n`
       h += `${al('Inputs', 30)} ${ar('Vin/', 5)} ${'Outputs'}\n`
       h += `${al('Outpoint', 17)} ${ar('Satoshis', 12)} ${ar('Vout', 5)} ${ar('Satoshis', 12)} ${al('Lock Script', 23)}\n`
       return h + log
-    } catch (error_: unknown) {
-      const e = sdk.WalletError.fromUnknown(error_)
+    } catch (_error: unknown) {
       return `Transaction with txid ${txid} is invalid`
     }
   }
@@ -88,14 +87,13 @@ export abstract class Format {
   }
 
   static async toLogStringTableTransaction (tx: TableTransaction, storage: StorageProvider): Promise<string> {
-    if (!tx.txid) return `Transaction ${tx.transactionId} has no txid`
+    if (tx.txid == null || tx.txid === '') return `Transaction ${tx.transactionId} has no txid`
     try {
       const beef = await storage.getBeefForTransaction(tx.txid, { minProofLevel: 1 })
       const log = Format.toLogStringBeefTxid(beef, tx.txid)
       const h = `transactionId:${tx.transactionId} userId:${tx.userId} ${tx.status} satoshis:${sa(tx.satoshis)}\n`
       return h + log
-    } catch (error_: unknown) {
-      const e = sdk.WalletError.fromUnknown(error_)
+    } catch (_error: unknown) {
       return `Transaction ${tx.transactionId} with txid ${tx.txid} is invalid`
     }
   }

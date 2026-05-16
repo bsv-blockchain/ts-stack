@@ -68,7 +68,7 @@ export async function mergeInputBeefs (
     const sourceTXID = input.sourceTXID ?? ''
     if (sourceTXID === '') throw new WERR_INTERNAL('req all transaction inputs must have valid sourceTXID')
     if (beef.findTxid(sourceTXID) != null) continue
-    if ((requiredLevels == null || requiredLevels === 0) && knownTxids?.includes(sourceTXID)) {
+    if ((requiredLevels == null || requiredLevels === 0) && (knownTxids?.includes(sourceTXID) === true)) {
       beef.mergeTxidOnly(sourceTXID)
     } else {
       await getValidBeef(sourceTXID, beef, trustSelf, knownTxids, trx, requiredLevels)
@@ -95,7 +95,7 @@ export async function mergeInputsIntoBeef (
     trx,
     undefined,
     async (txid, beef, _trustSelf, knownTxids, trx) =>
-      getValidBeef(txid, beef, undefined, knownTxids as string[], trx)
+      await getValidBeef(txid, beef, undefined, knownTxids as string[], trx)
   )
 }
 

@@ -1,7 +1,7 @@
 const { Validation } = jest.requireActual('@bsv/sdk')
 
 const existingFetch = (globalThis as any).fetch
-if (!existingFetch || !(existingFetch)._isMockFunction) {
+if (existingFetch?._isMockFunction == null) {
   ;(globalThis as any).fetch = jest.fn(async () => ({
     ok: false,
     status: 404,
@@ -31,7 +31,7 @@ export class MockTransaction {
   public outputs: any[] = []
   public fee: number = 0
 
-  static fromAtomicBEEF () {
+  static fromAtomicBEEF (): void {
     // Mocked below
   }
 
@@ -85,7 +85,7 @@ export class MockPushDrop {
   static decode (script: MockLockingScript): { fields: number[][] } | undefined {
     // If you rely on a real format, parse or store a pattern.
     // For now, returning a minimal stub: empty fields
-    if (!script || !script.hex) return undefined
+    if (script?.hex == null || script.hex === '') return undefined
     if (script.hex.includes('some script')) {
       // When needed, return some fields
       return {
@@ -180,13 +180,14 @@ export const MockUtils = {
  * Mocks for Random
  */
 export const MockRandom = (size: number): number[] => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   return [...require('node:crypto').randomBytes(size)]
 }
 
 /**
  * Overriding the real classes with our mocks.
  */
-export const MockedBSV_SDK = {
+export const MockedBsvSdk = {
   Transaction: MockTransaction,
   LockingScript: MockLockingScript,
   PushDrop: MockPushDrop,
@@ -195,6 +196,9 @@ export const MockedBSV_SDK = {
   Certificate: null,
   Validation
 }
+
+// Backward-compatible alias for consumers that have not yet been renamed
+export { MockedBsvSdk as MockedBSV_SDK }
 
 /* ---------------------------------------------------------------------------
  * 2) A full mock for the BRC-100 WalletInterface
@@ -238,7 +242,7 @@ export function mockUnderlyingWallet (): jest.Mocked<any> {
     verifySignature: jest.fn().mockResolvedValue({ valid: true }),
 
     createAction: jest.fn(async x => {
-      if (x.options && x.options.signAndProcess === true) {
+      if (x.options != null && x.options.signAndProcess === true) {
         return {
           tx: []
         }

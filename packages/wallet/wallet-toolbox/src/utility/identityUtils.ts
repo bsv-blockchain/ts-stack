@@ -13,8 +13,6 @@ import {
 } from '@bsv/sdk'
 import { Certifier, TrustSettings } from '../WalletSettingsManager'
 
-const OUTPUT_INDEX = 0
-
 // Our extended certificate includes certifierInfo.
 export interface ExtendedVerifiableCertificate extends IdentityCertificate {
   certifierInfo: IdentityCertifier
@@ -48,10 +46,10 @@ export const transformVerifiableCertificatesWithTrust = (
 
   certificates.forEach(cert => {
     const { subject, certifier } = cert
-    if (!subject || !certifier) return
+    if (subject === '' || certifier === '') return
 
     // Lookup and cache certifier details from trustSettings.
-    if (!certifierCache[certifier]) {
+    if (certifierCache[certifier] == null) {
       const found = trustSettings.trustedCertifiers.find(x => x.identityKey === certifier)
       if (found == null) return // Skip this certificate if its certifier is not trusted.
       certifierCache[certifier] = found
@@ -60,7 +58,7 @@ export const transformVerifiableCertificatesWithTrust = (
     // Create the IdentityCertifier object that we want to attach.
     const certifierInfo: IdentityCertifier = {
       name: certifierCache[certifier].name,
-      iconUrl: certifierCache[certifier].iconUrl || '',
+      iconUrl: certifierCache[certifier].iconUrl ?? '',
       description: certifierCache[certifier].description,
       trust: certifierCache[certifier].trust
     }
@@ -69,14 +67,14 @@ export const transformVerifiableCertificatesWithTrust = (
     // Note: We use object spread to copy over all properties from the original certificate.
     const extendedCert: IdentityCertificate = {
       ...cert,
-      signature: cert.signature!, // We know it exists at this point
+      signature: cert.signature as string, // We know it exists at this point
       decryptedFields: cert.decryptedFields as Record<string, string>,
       publiclyRevealedKeyring: cert.keyring,
       certifierInfo
     }
 
     // Group certificates by subject.
-    if (!identityGroups[subject]) {
+    if (identityGroups[subject] == null) {
       identityGroups[subject] = { totalTrust: 0, members: [] }
     }
     identityGroups[subject].totalTrust += certifierInfo.trust
