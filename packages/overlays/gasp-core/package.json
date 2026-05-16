@@ -54,12 +54,12 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "ts-jest": "^29.4.9",
     "ts-standard": "^12.0.2",
     "ts2md": "^0.2.0",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^5.2.2"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@bsv/sdk": "^2.1.0"

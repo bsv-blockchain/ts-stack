@@ -106,20 +106,20 @@
     "@bsv/sdk": "^2.1.0",
     "@types/jest": "^30.0.0",
     "cross-fetch": "^4.1.0",
-    "express": "^5.1.0",
-    "jest": "^30.3.0",
-    "joi": "^18.0.1",
+    "express": "^5.2.1",
+    "jest": "^30.4.2",
+    "joi": "^18.2.1",
     "node-fetch": "^3",
     "supertest": "^7.1.4",
     "ts-jest": "^29.4.9",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
-    "@jest/globals": "^30.3.0",
+    "@jest/globals": "^30.4.1",
     "@types/body-parser": "^1.19.5",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.8.0",
     "ts-standard": "^12.0.2"
   }
 }

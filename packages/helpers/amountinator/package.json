@@ -28,10 +28,10 @@
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator#readme",
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "jest": "^30.3.0",
+    "jest": "^30.4.2",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "dependencies": {
     "@bsv/sdk": "^2.1.0",
