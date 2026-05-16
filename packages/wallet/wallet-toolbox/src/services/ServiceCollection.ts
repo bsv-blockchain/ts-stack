@@ -1,7 +1,6 @@
 import { WalletError } from '../sdk/WalletError'
 import { ProviderCallHistory, ServiceCallHistory } from '../sdk/WalletServices.interfaces'
 
-const MAX_RESET_COUNTS = 32
 const MAX_CALL_HISTORY = 32
 
 export class ServiceCollection<T> {
@@ -18,7 +17,7 @@ export class ServiceCollection<T> {
     public serviceName: string,
     services?: Array<{ name: string, service: T }>
   ) {
-    this.services = services || []
+    this.services = services ?? []
     this._index = 0
     this.since = new Date()
   }
@@ -32,11 +31,11 @@ export class ServiceCollection<T> {
     this.services = this.services.filter(s => s.name !== name)
   }
 
-  get name () {
+  get name (): string {
     return this.services[this._index].name
   }
 
-  get service () {
+  get service (): T {
     return this.services[this._index].service
   }
 
@@ -63,7 +62,7 @@ export class ServiceCollection<T> {
    * Used to de-prioritize a service call by moving it to the end of the list.
    * @param stc
    */
-  moveServiceToLast (stc: ServiceToCall<T>) {
+  moveServiceToLast (stc: ServiceToCall<T>): void {
     const index = this.services.findIndex(s => s.name === stc.providerName)
     if (index !== -1) {
       const [service] = this.services.splice(index, 1)
@@ -71,19 +70,19 @@ export class ServiceCollection<T> {
     }
   }
 
-  get allServices () {
+  get allServices (): T[] {
     return this.services.map(x => x.service)
   }
 
-  get count () {
+  get count (): number {
     return this.services.length
   }
 
-  get index () {
+  get index (): number {
     return this._index
   }
 
-  reset () {
+  reset (): void {
     this._index = 0
   }
 
@@ -99,7 +98,7 @@ export class ServiceCollection<T> {
   _addServiceCall (providerName: string, call: ServiceCall): ProviderCallHistory {
     const now = new Date()
     let h = this._historyByProvider[providerName]
-    if (!h) {
+    if (h == null) {
       h = {
         serviceName: this.serviceName,
         providerName,
@@ -194,7 +193,7 @@ export class ServiceCollection<T> {
         })
       }
       history.historyByProvider[name] = c
-      if (reset) {
+      if (reset === true) {
         // Make sure intervals are continuous.
         h.resetCounts[0].until = now
         // insert a new resetCounts interval

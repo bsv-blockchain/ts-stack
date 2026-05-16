@@ -112,7 +112,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * @returns
    */
   validateEntityDate (date: Date | string | number): Date | string {
-    if (!this.dbtype) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
+    if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     let r: Date | string = this.validateDate(date)
     switch (this.dbtype) {
       case 'IndexedDB':
@@ -122,7 +122,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
         r = r.toISOString()
         break
       default:
-        throw new sdk.WERR_INTERNAL(`Invalid dateScheme ${this.dbtype}`)
+        throw new sdk.WERR_INTERNAL(`Invalid dateScheme ${String(this.dbtype)}`)
     }
     return r
   }
@@ -137,9 +137,9 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
     date: Date | string | number | null | undefined,
     useNowAsDefault?: boolean
   ): Date | string | undefined {
-    if (!this.dbtype) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
+    if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     let r: Date | string | undefined = this.validateOptionalDate(date)
-    if ((r == null) && useNowAsDefault) r = new Date()
+    if ((r == null) && (useNowAsDefault === true)) r = new Date()
     switch (this.dbtype) {
       case 'IndexedDB':
       case 'MySQL':
@@ -148,7 +148,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
         if (r != null) r = r.toISOString()
         break
       default:
-        throw new sdk.WERR_INTERNAL(`Invalid dateScheme ${this.dbtype}`)
+        throw new sdk.WERR_INTERNAL(`Invalid dateScheme ${String(this.dbtype)}`)
     }
     return r
   }
@@ -166,7 +166,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
   }
 
   validateDateForWhere (date: Date | string | number): Date | string | number {
-    if (!this.dbtype) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
+    if (this.dbtype == null) throw new sdk.WERR_INTERNAL('must call verifyReadyForDatabaseAccess first')
     if (typeof date === 'number') date = validateSecondsSinceEpoch(date)
     const vdate = verifyTruthy(this.validateDate(date))
     let r: Date | string | number
@@ -179,7 +179,7 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
         r = vdate.toISOString()
         break
       default:
-        throw new sdk.WERR_INTERNAL(`Invalid dateScheme ${this.dbtype}`)
+        throw new sdk.WERR_INTERNAL(`Invalid dateScheme ${String(this.dbtype)}`)
     }
     return r
   }
@@ -190,7 +190,3 @@ export interface StorageReaderOptions {
 }
 
 export type DBType = 'SQLite' | 'MySQL' | 'IndexedDB'
-
-type DbEntityTimeStamp<T extends sdk.EntityTimeStamp> = {
-  [K in keyof T]: T[K] extends Date ? Date | string : T[K]
-}

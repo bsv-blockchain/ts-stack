@@ -29,7 +29,7 @@ export class StorageSyncReader implements sdk.WalletStorageSyncReader {
   }
 
   async getSyncChunk (args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {
-    if (!this.auth.userId) await this.makeAvailable()
+    if (this.auth.userId == null) await this.makeAvailable()
     if (args.identityKey !== this.auth.identityKey) throw new sdk.WERR_UNAUTHORIZED()
     return await this.storage.getSyncChunk(args)
   }

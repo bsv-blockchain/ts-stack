@@ -26,7 +26,7 @@ export class WalletError extends Error implements WalletErrorObject {
   ) {
     super(message)
     this.name = name
-    if (stack) this.stack = stack
+    if (stack != null && stack !== '') this.stack = stack
   }
 
   /**
@@ -66,11 +66,12 @@ export class WalletError extends Error implements WalletErrorObject {
     const details: Record<string, string> = {}
     if (err !== null && typeof err === 'object') {
       const errObj = err as Record<string, unknown>
-      if (errObj.name === 'Error' || errObj.name === 'FetchError') name = (errObj.code as string) || (errObj.status as string) || 'WERR_UNKNOWN'
-      else name = (errObj.name as string) || (errObj.code as string) || (errObj.status as string) || 'WERR_UNKNOWN'
+      const ns = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined)
+      if (errObj.name === 'Error' || errObj.name === 'FetchError') name = ns(errObj.code) ?? ns(errObj.status) ?? 'WERR_UNKNOWN'
+      else name = ns(errObj.name) ?? ns(errObj.code) ?? ns(errObj.status) ?? 'WERR_UNKNOWN'
       if (typeof name !== 'string') name = 'WERR_UNKNOWN'
 
-      message = (errObj.message as string) || (errObj.description as string) || ''
+      message = ns(errObj.message) ?? ns(errObj.description) ?? ''
       if (typeof message !== 'string') message = 'WERR_UNKNOWN'
 
       if (typeof errObj.stack === 'string') stack = errObj.stack
@@ -153,17 +154,16 @@ export class WalletError extends Error implements WalletErrorObject {
     let json: string | undefined
     let e: WalletError | undefined
     const t = typeof error
-    const ctor = t === 'object' && error !== null ? (error as any).constructor?.name : undefined
+    const ctorName: unknown = t === 'object' && error !== null ? (error as Record<string, unknown>).constructor : undefined
+    const ctor: string | undefined = ctorName != null && typeof (ctorName as Record<string, unknown>).name === 'string' ? (ctorName as Record<string, unknown>).name as string : undefined
     const name = t === 'object' && error !== null && typeof (error as any).name === 'string' ? (error as any).name : ''
     const message =
       t === 'object' && error !== null && typeof (error as any).message === 'string' ? (error as any).message : ''
-    const toJson =
+    const hasToJson: boolean =
       t === 'object' && typeof (error as any)?.toJson === 'function'
-        ? (error as any).toJson
-        : undefined
-    if (ctor && ctor.startsWith('WERR_') && toJson !== undefined) {
+    if (ctor != null && ctor !== '' && ctor.startsWith('WERR_') && hasToJson) {
       json = (error as WalletError).toJson()
-    } else if (name && message) {
+    } else if (name !== '' && message !== '') {
       e = new WalletError(name, message)
       json = e.toJson()
     } else {

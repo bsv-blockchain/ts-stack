@@ -22,7 +22,7 @@ export class MockChainMigrations implements MigrationSource<string> {
     return Object.keys(this.migrations).sort((a, b) => a.localeCompare(b))
   }
 
-  getMigrationName (migration: string) {
+  getMigrationName (migration: string): string {
     return migration
   }
 

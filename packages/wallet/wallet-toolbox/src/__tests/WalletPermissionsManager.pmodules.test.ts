@@ -188,7 +188,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', config)
       const storedConfig = (manager as any).config as PermissionsManagerConfig
 
-      expect(Object.keys(storedConfig.permissionModules || {}).length).toBe(2)
+      expect(Object.keys(storedConfig.permissionModules ?? {}).length).toBe(2)
       expect(storedConfig.permissionModules?.scheme1).toBe(module1)
       expect(storedConfig.permissionModules?.scheme2).toBe(module2)
     })

@@ -107,17 +107,17 @@ export class MockChainStorage {
 
   async getBlockHeaderByHeight (height: number): Promise<BlockHeader | undefined> {
     const row = await this.knex('mockchain_block_headers').where({ height }).first()
-    return row ? this.rowToBlockHeader(row) : undefined
+    return row != null ? this.rowToBlockHeader(row) : undefined
   }
 
   async getBlockHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
     const row = await this.knex('mockchain_block_headers').where({ hash }).first()
-    return row ? this.rowToBlockHeader(row) : undefined
+    return row != null ? this.rowToBlockHeader(row) : undefined
   }
 
   async getChainTip (): Promise<BlockHeader | undefined> {
     const row = await this.knex('mockchain_block_headers').orderBy('height', 'desc').first()
-    return row ? this.rowToBlockHeader(row) : undefined
+    return row != null ? this.rowToBlockHeader(row) : undefined
   }
 
   async getTransactionsInBlock (height: number): Promise<MockChainTransactionRow[]> {

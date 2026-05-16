@@ -82,7 +82,7 @@ describe('WalletPermissionsManager - Permission Checks', () => {
 
       // The callback denies the request
       manager.bindCallback('onProtocolPermissionRequested', request => {
-        manager.denyPermission(request.requestID)
+        void manager.denyPermission(request.requestID)
       })
 
       // Attempt an operation that requires protocol permission
@@ -354,7 +354,7 @@ describe('WalletPermissionsManager - Permission Checks', () => {
 
       manager.bindCallback('onBasketAccessRequested', async req => {
         // Deny for test
-        manager.denyPermission(req.requestID)
+        void manager.denyPermission(req.requestID)
       })
 
       // Attempt to list a user basket
@@ -515,7 +515,7 @@ describe('WalletPermissionsManager - Permission Checks', () => {
       // Attempt to reveal a field the token does NOT cover -> triggers request
       // Since the existing token does not cover 'someMissingField', we expect a prompt. Let’s deny it:
       manager.bindCallback('onCertificateAccessRequested', async req => {
-        manager.denyPermission(req.requestID)
+        void manager.denyPermission(req.requestID)
       })
       const secondAttempt = manager.proveCertificate(
         {
@@ -687,7 +687,7 @@ describe('WalletPermissionsManager - Permission Checks', () => {
       // Attempt spending 200 => total usage would be 600 which exceeds 500 => prompt renewal
       // We'll auto-deny for test
       manager.bindCallback('onSpendingAuthorizationRequested', req => {
-        manager.denyPermission(req.requestID)
+        void manager.denyPermission(req.requestID)
       })
 
       await expect(

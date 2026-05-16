@@ -105,7 +105,7 @@ export class MockServices implements WalletServices {
     await this.populateMerklePaths(tx)
 
     const verified = await tx.verify('scripts only')
-    if (!verified) throw new WERR_INVALID_PARAMETER('transaction', `pass script validation: ${verified}`)
+    if (!verified) throw new WERR_INVALID_PARAMETER('transaction', `pass script validation: ${String(verified)}`)
 
     await this.storage.insertTransaction(txid, Array.from(rawTx))
     await this.storeOutputs(tx, txid)
@@ -116,12 +116,12 @@ export class MockServices implements WalletServices {
     const currentHeight = await this.tracker.currentHeight()
     for (let i = 0; i < tx.inputs.length; i++) {
       const input = tx.inputs[i]
-      const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
-      if (!sourceTxid) throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${i}`)
+      const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
+      if (sourceTxid == null || sourceTxid === '') throw new WERR_INVALID_PARAMETER('input.sourceTXID', `defined for input ${i}`)
 
       const utxo = await this.storage.getUtxo(sourceTxid, input.sourceOutputIndex)
       if (utxo == null) throw new WERR_INVALID_PARAMETER('input', `reference a known UTXO. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} not found`)
-      if (utxo.spentByTxid) throw new WERR_INVALID_PARAMETER('input', `not be already spent. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} spent by ${utxo.spentByTxid}`)
+      if (utxo.spentByTxid != null && utxo.spentByTxid !== '') throw new WERR_INVALID_PARAMETER('input', `not be already spent. Input ${i}: ${sourceTxid}.${input.sourceOutputIndex} spent by ${utxo.spentByTxid}`)
       if (utxo.isCoinbase && utxo.blockHeight !== null && currentHeight - utxo.blockHeight < 100) {
         throw new WERR_INVALID_PARAMETER('input', `not spend immature coinbase. Input ${i}: coinbase at height ${utxo.blockHeight}, current height ${currentHeight}, need 100 confirmations`)
       }
@@ -165,7 +165,7 @@ export class MockServices implements WalletServices {
 
   private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
     for (const input of tx.inputs) {
-      const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
+      const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : '')
       await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
     }
   }
@@ -199,7 +199,7 @@ export class MockServices implements WalletServices {
       const coinbaseTxid = headerRow?.coinbaseTxid
 
       for (const tx of txsInBlock) {
-        if (coinbaseTxid && tx.txid === coinbaseTxid) {
+        if (coinbaseTxid != null && tx.txid === coinbaseTxid) {
           await trxStorage.deleteUtxosByTxid(tx.txid)
           await trxStorage.deleteTransaction(tx.txid)
         } else {
@@ -207,7 +207,7 @@ export class MockServices implements WalletServices {
           await trxStorage.setUtxoBlockHeight(tx.txid, null)
         }
       }
-      if (headerRow) await trxStorage.deleteBlockHeader(h)
+      if (headerRow != null) await trxStorage.deleteBlockHeader(h)
     }
   }
 
@@ -283,7 +283,7 @@ export class MockServices implements WalletServices {
     const header = await this.storage.getBlockHeaderByHeight(tx.blockHeight)
 
     const merklePath = computeMerklePath(txids, targetIndex, tx.blockHeight)
-    return { merklePath, header: header || undefined, name: 'MockServices' }
+    return { merklePath, header: header ?? undefined, name: 'MockServices' }
   }
 
   async getUtxoStatus (
@@ -296,7 +296,7 @@ export class MockServices implements WalletServices {
     const hashLE = asString(asArray(hashBE).reverse())
 
     const utxos = await this.storage.getUtxosByScriptHash(hashLE)
-    const unspent = utxos.filter(u => !u.spentByTxid)
+    const unspent = utxos.filter(u => u.spentByTxid == null || u.spentByTxid === '')
 
     let isUtxo = unspent.length > 0
     const details = unspent.map(u => ({
@@ -307,7 +307,7 @@ export class MockServices implements WalletServices {
     }))
 
     // If outpoint is provided, filter to match
-    if (outpoint && isUtxo) {
+    if (outpoint != null && outpoint !== '' && isUtxo) {
       const [opTxid, opVoutStr] = outpoint.split('.')
       const opVout = Number.parseInt(opVoutStr, 10)
       const match = details.find(d => d.txid === opTxid && d.index === opVout)
@@ -377,7 +377,7 @@ export class MockServices implements WalletServices {
       throw new WERR_INVALID_PARAMETER('output.lockingScript', 'validated by storage provider validateOutputScript.')
     }
     const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
-    const or = await this.getUtxoStatus(hash, undefined, `${output.txid}.${output.vout}`)
+    const or = await this.getUtxoStatus(hash, undefined, `${output.txid ?? ''}.${output.vout}`)
     return or.isUtxo === true
   }
 
@@ -434,7 +434,7 @@ export class MockServices implements WalletServices {
   async getBeefForTxid (txid: string): Promise<Beef> {
     const beef = new Beef()
 
-    const addTx = async (tid: string, alreadyAdded: Set<string>) => {
+    const addTx = async (tid: string, alreadyAdded: Set<string>): Promise<void> => {
       if (alreadyAdded.has(tid)) return
       alreadyAdded.add(tid)
 
@@ -463,8 +463,8 @@ export class MockServices implements WalletServices {
       // Unmined or no path: recursively add source transactions
       const tx = BsvTransaction.fromBinary(rawTx)
       for (const input of tx.inputs) {
-        const sourceTxid = input.sourceTXID || ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
-        if (sourceTxid && sourceTxid !== '00'.repeat(32)) {
+        const sourceTxid = (input.sourceTXID != null && input.sourceTXID !== '') ? input.sourceTXID : ((input.sourceTransaction != null) ? input.sourceTransaction.id('hex') : undefined)
+        if (sourceTxid != null && sourceTxid !== '' && sourceTxid !== '00'.repeat(32)) {
           await addTx(sourceTxid, alreadyAdded)
         }
       }

@@ -116,6 +116,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
         if (data != null) {
           data.fill(0)
         }
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete (this as any)[name]
       }
       for (const name of this.chunkPadPropNames) {
@@ -123,6 +124,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
         if (data != null) {
           data.fill(0)
         }
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete (this as any)[name]
       }
 
@@ -132,6 +134,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
         if (data != null) {
           data.fill(0)
         }
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
         delete (this as any)[name]
       }
 
@@ -145,7 +148,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
       // the finally block to clear the destruction timer.  Propagating here would leave
       // the timer running and risk a second (no-op) destruction attempt.
     } finally {
-      if (this.destroyTimer) {
+      if (this.destroyTimer != null) {
         clearTimeout(this.destroyTimer)
         this.destroyTimer = undefined
       }
@@ -159,7 +162,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    * for exactly the desired window after its most recent acquisition.
    */
   private scheduleKeyDestruction (): void {
-    if (this.destroyTimer) {
+    if (this.destroyTimer != null) {
       clearTimeout(this.destroyTimer)
     }
     this.destroyTimer = setTimeout(() => {
@@ -209,7 +212,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
       for (let i = 0; i < this.chunkPropNames.length; i++) {
         const chunkEnc = (this as any)[this.chunkPropNames[i]] as Uint8Array
         const chunkPad = (this as any)[this.chunkPadPropNames[i]] as Uint8Array
-        if (!chunkEnc || !chunkPad || chunkEnc.length !== chunkPad.length) {
+        if (chunkEnc == null || chunkPad == null || chunkEnc.length !== chunkPad.length) {
           return null
         }
         const rawChunk = this.xorBytes(chunkEnc, chunkPad)
