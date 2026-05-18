@@ -314,36 +314,54 @@ export async function encryptBRC39 (
   return Array.from(concatBytes(header, result, authenticationTag))
 }
 
-export async function decryptBRC39 (bytes: number[] | Uint8Array, password: string): Promise<BRC38WalletData> {
-  const file = new Uint8Array(bytes)
+interface BRC39Header {
+  saltLength: number
+  nonceLength: number
+  iterations: number
+  memoryKiB: number
+  parallelism: number
+  hashLength: number
+}
+
+function parseBRC39Header (file: Uint8Array): BRC39Header {
   if (file.length < BRC39_HEADER_LENGTH + BRC39_TAG_LENGTH + 2) throw new Error('Invalid BRC-39 file: too short')
   for (let i = 0; i < BRC39_MAGIC.length; i++) {
     if (file[i] !== BRC39_MAGIC[i]) throw new Error('Invalid BRC-39 file: bad magic')
   }
+  assertHeaderConstants(file)
+  for (let i = 21; i < BRC39_HEADER_LENGTH; i++) {
+    if (file[i] !== 0) throw new Error('Invalid BRC-39 reserved bytes')
+  }
+  const saltLength = file[9]
+  const nonceLength = file[10]
+  if (saltLength === 0) throw new Error('Invalid BRC-39 salt length')
+  if (nonceLength === 0) throw new Error('Invalid BRC-39 nonce length')
+  const iterations = readUInt32BE(file, 11)
+  const memoryKiB = readUInt32BE(file, 15)
+  const parallelism = file[19]
+  const hashLength = file[20]
+  validateKdfParams(iterations, memoryKiB, parallelism, hashLength)
+  return { saltLength, nonceLength, iterations, memoryKiB, parallelism, hashLength }
+}
+
+function assertHeaderConstants (file: Uint8Array): void {
   if (file[4] !== 1) throw new Error('Unsupported BRC-39 format version')
   if (file[5] !== 1) throw new Error('Unsupported BRC-39 protector type')
   if (file[6] !== 38) throw new Error('Unsupported BRC-39 inner format')
   if (file[7] !== 1) throw new Error('Unsupported BRC-39 KDF type')
   if (file[8] !== 0) throw new Error('Invalid BRC-39 flags')
-  const saltLength = file[9]
-  const nonceLength = file[10]
-  const iterations = readUInt32BE(file, 11)
-  const memoryKiB = readUInt32BE(file, 15)
-  const parallelism = file[19]
-  const hashLength = file[20]
-  for (let i = 21; i < BRC39_HEADER_LENGTH; i++) {
-    if (file[i] !== 0) throw new Error('Invalid BRC-39 reserved bytes')
-  }
-  if (saltLength === 0) throw new Error('Invalid BRC-39 salt length')
-  if (nonceLength === 0) throw new Error('Invalid BRC-39 nonce length')
-  validateKdfParams(iterations, memoryKiB, parallelism, hashLength)
-  const payloadStart = BRC39_HEADER_LENGTH + saltLength + nonceLength
+}
+
+export async function decryptBRC39 (bytes: number[] | Uint8Array, password: string): Promise<BRC38WalletData> {
+  const file = new Uint8Array(bytes)
+  const header = parseBRC39Header(file)
+  const payloadStart = BRC39_HEADER_LENGTH + header.saltLength + header.nonceLength
   if (file.length <= payloadStart + BRC39_TAG_LENGTH) throw new Error('Invalid BRC-39 ciphertext')
-  const salt = file.slice(BRC39_HEADER_LENGTH, BRC39_HEADER_LENGTH + saltLength)
-  const nonce = file.slice(BRC39_HEADER_LENGTH + saltLength, payloadStart)
+  const salt = file.slice(BRC39_HEADER_LENGTH, BRC39_HEADER_LENGTH + header.saltLength)
+  const nonce = file.slice(BRC39_HEADER_LENGTH + header.saltLength, payloadStart)
   const ciphertext = file.slice(payloadStart, file.length - BRC39_TAG_LENGTH)
   const tag = file.slice(file.length - BRC39_TAG_LENGTH)
-  const key = await deriveBRC39Key(password, salt, iterations, memoryKiB, parallelism)
+  const key = await deriveBRC39Key(password, salt, header.iterations, header.memoryKiB, header.parallelism)
   const plaintext = AESGCMDecrypt(ciphertext, nonce, tag, key)
   if (plaintext == null) throw new Error('BRC-39 authentication failed')
   return parseBRC38Json(Utils.toUTF8(Array.from(plaintext)))
@@ -572,27 +590,36 @@ function normalizeSyncMap (source: unknown): SyncMap {
   if (!isObject(source)) return normalized
   for (const key of Object.keys(normalized) as Array<keyof SyncMap>) {
     const incoming = source[key]
-    if (!isObject(incoming)) continue
-    const target = normalized[key]
-    if (typeof incoming.entityName === 'string') target.entityName = incoming.entityName
-    if (Number.isInteger(incoming.count)) target.count = incoming.count as number
-    if (isObject(incoming.idMap)) {
-      target.idMap = {}
-      for (const [remoteId, localId] of Object.entries(incoming.idMap)) {
-        const parsedRemoteId = Number(remoteId)
-        if (Number.isInteger(parsedRemoteId) && Number.isInteger(localId)) {
-          target.idMap[parsedRemoteId] = localId as number
-        }
-      }
-    }
-    if (typeof incoming.maxUpdated_at === 'string') {
-      const maxUpdatedAt = new Date(incoming.maxUpdated_at)
-      if (!Number.isNaN(maxUpdatedAt.getTime())) target.maxUpdated_at = maxUpdatedAt
-    } else if (incoming.maxUpdated_at instanceof Date) {
-      target.maxUpdated_at = incoming.maxUpdated_at
-    }
+    if (isObject(incoming)) mergeSyncMapEntry(normalized[key], incoming)
   }
   return normalized
+}
+
+function mergeSyncMapEntry (target: SyncMap[keyof SyncMap], incoming: Record<string, unknown>): void {
+  if (typeof incoming.entityName === 'string') target.entityName = incoming.entityName
+  if (Number.isInteger(incoming.count)) target.count = incoming.count as number
+  if (isObject(incoming.idMap)) target.idMap = parseIdMap(incoming.idMap)
+  applyMaxUpdatedAt(target, incoming.maxUpdated_at)
+}
+
+function parseIdMap (incoming: Record<string, unknown>): Record<number, number> {
+  const idMap: Record<number, number> = {}
+  for (const [remoteId, localId] of Object.entries(incoming)) {
+    const parsedRemoteId = Number(remoteId)
+    if (Number.isInteger(parsedRemoteId) && Number.isInteger(localId)) {
+      idMap[parsedRemoteId] = localId as number
+    }
+  }
+  return idMap
+}
+
+function applyMaxUpdatedAt (target: SyncMap[keyof SyncMap], value: unknown): void {
+  if (typeof value === 'string') {
+    const maxUpdatedAt = new Date(value)
+    if (!Number.isNaN(maxUpdatedAt.getTime())) target.maxUpdated_at = maxUpdatedAt
+  } else if (value instanceof Date) {
+    target.maxUpdated_at = value
+  }
 }
 
 function remapEntityIdMap (idMap: Record<number, number>, importIdMap: Record<number, number>): void {
@@ -630,75 +657,122 @@ function countDecodedRows (data: DecodedBRC38): number {
     data.syncStates.length
 }
 
-function validateRelationships (data: BRC38WalletData): void {
-  const userId = requireNumber(data.user.userId, 'user.userId')
-  const txIds = ids(data.tables.transactions, 'transactionId', 'transactions')
-  const txidValues = new Set(data.tables.transactions.map(t => t.txid).filter((v): v is string => typeof v === 'string'))
-  const provenTxIds = ids(data.tables.provenTxs, 'provenTxId', 'provenTxs')
-  const basketIds = ids(data.tables.outputBaskets, 'basketId', 'outputBaskets')
-  const outputIds = ids(data.tables.outputs, 'outputId', 'outputs')
-  const outputTagIds = ids(data.tables.outputTags, 'outputTagId', 'outputTags')
-  const txLabelIds = ids(data.tables.txLabels, 'txLabelId', 'txLabels')
-  const certificateIds = ids(data.tables.certificates, 'certificateId', 'certificates')
+interface RelationshipIndex {
+  userId: number
+  txIds: Set<number>
+  txidValues: Set<string>
+  provenTxIds: Set<number>
+  basketIds: Set<number>
+  outputIds: Set<number>
+  outputTagIds: Set<number>
+  txLabelIds: Set<number>
+  certificateIds: Set<number>
+}
+
+function buildRelationshipIndex (data: BRC38WalletData): RelationshipIndex {
+  return {
+    userId: requireNumber(data.user.userId, 'user.userId'),
+    txIds: ids(data.tables.transactions, 'transactionId', 'transactions'),
+    txidValues: new Set(data.tables.transactions.map(t => t.txid).filter((v): v is string => typeof v === 'string')),
+    provenTxIds: ids(data.tables.provenTxs, 'provenTxId', 'provenTxs'),
+    basketIds: ids(data.tables.outputBaskets, 'basketId', 'outputBaskets'),
+    outputIds: ids(data.tables.outputs, 'outputId', 'outputs'),
+    outputTagIds: ids(data.tables.outputTags, 'outputTagId', 'outputTags'),
+    txLabelIds: ids(data.tables.txLabels, 'txLabelId', 'txLabels'),
+    certificateIds: ids(data.tables.certificates, 'certificateId', 'certificates')
+  }
+}
+
+function requireRef (set: Set<number>, value: unknown, path: string, message: string): void {
+  if (!set.has(requireNumber(value, path))) throw new Error(message)
+}
+
+function validateTransactions (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.transactions) {
-    requireUserId(row, userId, 'transactions')
-    if (row.provenTxId != null && !provenTxIds.has(requireNumber(row.provenTxId, 'transaction.provenTxId'))) {
-      throw new Error('BRC-38 transaction.provenTxId does not reference an exported provenTx')
+    requireUserId(row, idx.userId, 'transactions')
+    if (row.provenTxId != null) {
+      requireRef(idx.provenTxIds, row.provenTxId, 'transaction.provenTxId',
+        'BRC-38 transaction.provenTxId does not reference an exported provenTx')
     }
   }
-  for (const row of data.tables.outputBaskets) requireUserId(row, userId, 'outputBaskets')
-  for (const row of data.tables.outputTags) requireUserId(row, userId, 'outputTags')
-  for (const row of data.tables.txLabels) requireUserId(row, userId, 'txLabels')
-  for (const row of data.tables.certificates) requireUserId(row, userId, 'certificates')
-  for (const row of data.tables.syncStates) requireUserId(row, userId, 'syncStates')
+}
+
+function validateOutputs (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.outputs) {
-    requireUserId(row, userId, 'outputs')
-    if (!txIds.has(requireNumber(row.transactionId, 'output.transactionId'))) {
-      throw new Error('BRC-38 output.transactionId does not reference an exported transaction')
+    requireUserId(row, idx.userId, 'outputs')
+    requireRef(idx.txIds, row.transactionId, 'output.transactionId',
+      'BRC-38 output.transactionId does not reference an exported transaction')
+    if (row.basketId != null) {
+      requireRef(idx.basketIds, row.basketId, 'output.basketId',
+        'BRC-38 output.basketId does not reference an exported output basket')
     }
-    if (row.basketId != null && !basketIds.has(requireNumber(row.basketId, 'output.basketId'))) {
-      throw new Error('BRC-38 output.basketId does not reference an exported output basket')
-    }
-    if (row.spentBy != null && !txIds.has(requireNumber(row.spentBy, 'output.spentBy'))) {
-      throw new Error('BRC-38 output.spentBy does not reference an exported transaction')
+    if (row.spentBy != null) {
+      requireRef(idx.txIds, row.spentBy, 'output.spentBy',
+        'BRC-38 output.spentBy does not reference an exported transaction')
     }
   }
+}
+
+function validateCommissions (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.commissions) {
-    requireUserId(row, userId, 'commissions')
-    if (!txIds.has(requireNumber(row.transactionId, 'commission.transactionId'))) {
-      throw new Error('BRC-38 commission.transactionId does not reference an exported transaction')
-    }
+    requireUserId(row, idx.userId, 'commissions')
+    requireRef(idx.txIds, row.transactionId, 'commission.transactionId',
+      'BRC-38 commission.transactionId does not reference an exported transaction')
   }
+}
+
+function validateTxLabelMaps (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.txLabelMaps) {
-    if (!txIds.has(requireNumber(row.transactionId, 'txLabelMap.transactionId'))) {
-      throw new Error('BRC-38 txLabelMap.transactionId does not reference an exported transaction')
-    }
-    if (!txLabelIds.has(requireNumber(row.txLabelId, 'txLabelMap.txLabelId'))) {
-      throw new Error('BRC-38 txLabelMap.txLabelId does not reference an exported transaction label')
-    }
+    requireRef(idx.txIds, row.transactionId, 'txLabelMap.transactionId',
+      'BRC-38 txLabelMap.transactionId does not reference an exported transaction')
+    requireRef(idx.txLabelIds, row.txLabelId, 'txLabelMap.txLabelId',
+      'BRC-38 txLabelMap.txLabelId does not reference an exported transaction label')
   }
+}
+
+function validateOutputTagMaps (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.outputTagMaps) {
-    if (!outputIds.has(requireNumber(row.outputId, 'outputTagMap.outputId'))) {
-      throw new Error('BRC-38 outputTagMap.outputId does not reference an exported output')
-    }
-    if (!outputTagIds.has(requireNumber(row.outputTagId, 'outputTagMap.outputTagId'))) {
-      throw new Error('BRC-38 outputTagMap.outputTagId does not reference an exported output tag')
-    }
+    requireRef(idx.outputIds, row.outputId, 'outputTagMap.outputId',
+      'BRC-38 outputTagMap.outputId does not reference an exported output')
+    requireRef(idx.outputTagIds, row.outputTagId, 'outputTagMap.outputTagId',
+      'BRC-38 outputTagMap.outputTagId does not reference an exported output tag')
   }
+}
+
+function validateCertificateFields (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.certificateFields) {
-    requireUserId(row, userId, 'certificateFields')
-    if (!certificateIds.has(requireNumber(row.certificateId, 'certificateField.certificateId'))) {
-      throw new Error('BRC-38 certificateField.certificateId does not reference an exported certificate')
-    }
+    requireUserId(row, idx.userId, 'certificateFields')
+    requireRef(idx.certificateIds, row.certificateId, 'certificateField.certificateId',
+      'BRC-38 certificateField.certificateId does not reference an exported certificate')
   }
+}
+
+function validateProvenTxReqs (data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.provenTxReqs) {
-    if (!txidValues.has(requireString(row.txid, 'provenTxReq.txid'))) {
+    if (!idx.txidValues.has(requireString(row.txid, 'provenTxReq.txid'))) {
       throw new Error('BRC-38 provenTxReq.txid does not match an exported transaction')
     }
-    if (row.provenTxId != null && !provenTxIds.has(requireNumber(row.provenTxId, 'provenTxReq.provenTxId'))) {
-      throw new Error('BRC-38 provenTxReq.provenTxId does not reference an exported provenTx')
+    if (row.provenTxId != null) {
+      requireRef(idx.provenTxIds, row.provenTxId, 'provenTxReq.provenTxId',
+        'BRC-38 provenTxReq.provenTxId does not reference an exported provenTx')
     }
   }
+}
+
+function validateRelationships (data: BRC38WalletData): void {
+  const idx = buildRelationshipIndex(data)
+  validateTransactions(data, idx)
+  for (const row of data.tables.outputBaskets) requireUserId(row, idx.userId, 'outputBaskets')
+  for (const row of data.tables.outputTags) requireUserId(row, idx.userId, 'outputTags')
+  for (const row of data.tables.txLabels) requireUserId(row, idx.userId, 'txLabels')
+  for (const row of data.tables.certificates) requireUserId(row, idx.userId, 'certificates')
+  for (const row of data.tables.syncStates) requireUserId(row, idx.userId, 'syncStates')
+  validateOutputs(data, idx)
+  validateCommissions(data, idx)
+  validateTxLabelMaps(data, idx)
+  validateOutputTagMaps(data, idx)
+  validateCertificateFields(data, idx)
+  validateProvenTxReqs(data, idx)
 }
 
 function validatePortableRows (kind: string, rows: PortableRow[], path: string): void {
@@ -706,16 +780,26 @@ function validatePortableRows (kind: string, rows: PortableRow[], path: string):
   const binaryFields = new Set(binaryFieldsByKind[kind] ?? [])
   const jsonFields = new Set(jsonFieldsByKind[kind] ?? [])
   for (const [index, row] of rows.entries()) {
-    if (!isObject(row)) throw new Error(`BRC-38 ${path}[${index}] must be an object`)
-    for (const field of dateFields) {
-      if (field in row) assertIsoDate(row[field], `${path}[${index}].${field}`)
-    }
-    for (const field of binaryFields) {
-      if (field in row) assertBase64(row[field], `${path}[${index}].${field}`)
-    }
-    for (const field of jsonFields) {
-      if (field in row && !isObject(row[field])) throw new Error(`BRC-38 ${path}[${index}].${field} must be an object`)
-    }
+    validatePortableRow(row, `${path}[${index}]`, dateFields, binaryFields, jsonFields)
+  }
+}
+
+function validatePortableRow (
+  row: PortableRow,
+  rowPath: string,
+  dateFields: Set<string>,
+  binaryFields: Set<string>,
+  jsonFields: Set<string>
+): void {
+  if (!isObject(row)) throw new Error(`BRC-38 ${rowPath} must be an object`)
+  for (const field of dateFields) {
+    if (field in row) assertIsoDate(row[field], `${rowPath}.${field}`)
+  }
+  for (const field of binaryFields) {
+    if (field in row) assertBase64(row[field], `${rowPath}.${field}`)
+  }
+  for (const field of jsonFields) {
+    if (field in row && !isObject(row[field])) throw new Error(`BRC-38 ${rowPath}.${field} must be an object`)
   }
 }
 
@@ -746,7 +830,7 @@ function fromPortableRow<T> (kind: string, row: PortableRow): T {
   const jsonFields = new Set(jsonFieldsByKind[kind] ?? [])
   for (const [key, value] of Object.entries(row)) {
     if (dateFields.has(key)) out[key] = new Date(value as string)
-    else if (binaryFields.has(key)) out[key] = Utils.toArray(value as string, 'base64')
+    else if (binaryFields.has(key)) out[key] = Utils.toArray(value, 'base64')
     else if (jsonFields.has(key)) out[key] = JSON.stringify(value)
     else out[key] = value
   }
@@ -839,9 +923,22 @@ function canonicalize (value: unknown): string {
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`
   if (isObject(value)) {
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalize(value[key])}`).join(',')}}`
+    const entries = Object.keys(value)
+      .sort(compareCodepoints)
+      .map(key => canonicalizeEntry(key, value[key]))
+    return `{${entries.join(',')}}`
   }
   throw new Error(`Unsupported JSON value type: ${typeof value}`)
+}
+
+function canonicalizeEntry (key: string, value: unknown): string {
+  return `${JSON.stringify(key)}:${canonicalize(value)}`
+}
+
+function compareCodepoints (a: string, b: string): number {
+  if (a < b) return -1
+  if (a > b) return 1
+  return 0
 }
 
 function isoDate (date: Date): string {
