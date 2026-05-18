@@ -89,26 +89,24 @@ jobs:
           echo "filter=$filter" >> "$GITHUB_OUTPUT"
           echo "Resolved release plan: mode=$mode filter='${filter:-<all workspace packages>}'"
 
-      # Cascade publish: pnpm -r publish walks the workspace in topological order, so
-      # an upstream (e.g. @bsv/sdk) is on the registry before downstream packages
-      # (e.g. @bsv/wallet-toolbox) attempt to install it. `workspace:` protocol ranges
-      # are rewritten to plain semver by pnpm at publish time — downstream packages
-      # ship with concrete `^X.Y.Z` deps.
+      # Cascade publish: `pnpm -r publish` walks the workspace in topological order
+      # by default, so an upstream (e.g. @bsv/sdk) is on the registry before downstream
+      # packages (e.g. @bsv/wallet-toolbox) attempt to install it. `workspace:` protocol
+      # ranges are rewritten to plain semver by pnpm at publish time — downstream
+      # packages ship with concrete `^X.Y.Z` deps.
       #
-      # `--workspace-concurrency=1` forces serial publish so each package fully lands
-      # before the next one starts. The internal poll-then-publish loop waits up to
-      # 30s per package for registry availability before moving on, which is usually
-      # enough; the explicit sleep below covers CDN edges.
+      # pnpm publish does not accept `--workspace-concurrency`; topo ordering of the
+      # recursive publish is sequential by design.
       - name: Cascade publish
         if: steps.plan.outputs.mode == 'cascade'
         env:
           PNPM_FILTER: ${{ steps.plan.outputs.filter }}
         run: |
           if [[ -n "$PNPM_FILTER" ]]; then
-            pnpm -r --filter="$PNPM_FILTER" --workspace-concurrency=1 \
+            pnpm -r --filter="$PNPM_FILTER" \
               publish --access public --no-git-checks --provenance
           else
-            pnpm -r --workspace-concurrency=1 \
+            pnpm -r \
               publish --access public --no-git-checks --provenance
           fi
 
