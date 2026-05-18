@@ -3,8 +3,20 @@ name: Release
 on:
   push:
     tags:
-      - '**/v*'        # e.g. packages/sdk/v1.2.3
-      - 'v*'           # monorepo-wide tag (rare)
+      - '**/v*'        # e.g. packages/sdk/v1.2.3 — single-package release
+      - 'release/v*'   # e.g. release/v2026-05-17 — cascade release (multi-package)
+      - 'v*'           # monorepo-wide tag (publishes everything changed since origin/main)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Release mode'
+        type: choice
+        options: [cascade, single]
+        default: cascade
+      filter:
+        description: 'pnpm filter (single mode only, e.g. ./packages/sdk)'
+        required: false
+        default: ''
 
 jobs:
   publish:
@@ -33,36 +45,92 @@ jobs:
       - name: Build all packages
         run: pnpm -r --filter '!@bsv/ts-stack' run build
 
-      - name: Resolve publish filter
-        id: publish-filter
+      # Resolve release mode + filter. Three shapes:
+      #
+      #   1. Tag `packages/<path>/v*` → single-package publish, filter=./packages/<path>
+      #   2. Tag `release/v*`         → cascade publish across every workspace package
+      #                                 whose package.json version is ahead of npm. Topo
+      #                                 order via `pnpm -r publish` (built-in).
+      #   3. Tag `v*` or manual dispatch → same as cascade, but filter scoped to packages
+      #                                    changed since origin/main (legacy shape).
+      - name: Resolve release plan
+        id: plan
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if [[ "$tag" == v* ]]; then
-            echo "filter=...[origin/main]" >> "$GITHUB_OUTPUT"
-            exit 0
+          mode=""
+          filter=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            mode="${{ inputs.mode }}"
+            filter="${{ inputs.filter }}"
+            if [[ "$mode" == "single" && -z "$filter" ]]; then
+              echo "::error::single mode requires a filter input"
+              exit 1
+            fi
+          else
+            tag="${GITHUB_REF_NAME}"
+            if [[ "$tag" == release/v* ]]; then
+              mode="cascade"
+              filter=""
+            elif [[ "$tag" == v* ]]; then
+              mode="cascade"
+              filter="...[origin/main]"
+            else
+              package_path="${tag%/v*}"
+              if [[ "$package_path" == "$tag" || ! -f "$package_path/package.json" ]]; then
+                echo "::error::Could not resolve package path from tag: $tag"
+                exit 1
+              fi
+              mode="single"
+              filter="./$package_path"
+            fi
           fi
 
-          package_path="${tag%/v*}"
-          if [[ "$package_path" == "$tag" || ! -f "$package_path/package.json" ]]; then
-            echo "Could not resolve package path from tag: $tag" >&2
-            exit 1
+          echo "mode=$mode"     >> "$GITHUB_OUTPUT"
+          echo "filter=$filter" >> "$GITHUB_OUTPUT"
+          echo "Resolved release plan: mode=$mode filter='${filter:-<all workspace packages>}'"
+
+      # Cascade publish: pnpm -r publish walks the workspace in topological order, so
+      # an upstream (e.g. @bsv/sdk) is on the registry before downstream packages
+      # (e.g. @bsv/wallet-toolbox) attempt to install it. `workspace:` protocol ranges
+      # are rewritten to plain semver by pnpm at publish time — downstream packages
+      # ship with concrete `^X.Y.Z` deps.
+      #
+      # `--workspace-concurrency=1` forces serial publish so each package fully lands
+      # before the next one starts. The internal poll-then-publish loop waits up to
+      # 30s per package for registry availability before moving on, which is usually
+      # enough; the explicit sleep below covers CDN edges.
+      - name: Cascade publish
+        if: steps.plan.outputs.mode == 'cascade'
+        env:
+          PNPM_FILTER: ${{ steps.plan.outputs.filter }}
+        run: |
+          if [[ -n "$PNPM_FILTER" ]]; then
+            pnpm -r --filter="$PNPM_FILTER" --workspace-concurrency=1 \
+              publish --access public --no-git-checks --provenance
+          else
+            pnpm -r --workspace-concurrency=1 \
+              publish --access public --no-git-checks --provenance
           fi
 
-          echo "filter=./$package_path" >> "$GITHUB_OUTPUT"
+      - name: Single-package publish
+        if: steps.plan.outputs.mode == 'single'
+        env:
+          PNPM_FILTER: ${{ steps.plan.outputs.filter }}
+        run: |
+          pnpm -r --filter="$PNPM_FILTER" \
+            publish --access public --no-git-checks --provenance
 
-      - name: Publish packages
-        # No token needed — npm authenticates via GitHub OIDC.
-        # Each package must have this repo configured as a trusted publisher
-        # on npmjs.org: package settings → Publishing → Add trusted publisher
-        #   Owner: bsv-blockchain
-        #   Repository: ts-stack
-        #   Workflow: release.yaml
-        #   Environment: (leave blank)
-        run: pnpm -r --filter="${{ steps.publish-filter.outputs.filter }}" publish --access public --no-git-checks --provenance
-
+      # CDN propagation. With multiple new packages published in the same run, give
+      # the npm CDN time to make every just-published tarball available everywhere.
+      # 5 min is conservative; needed because the downstream `pnpm install --lockfile-only`
+      # below would otherwise miss a freshly published version on some mirrors.
       - name: Wait for npm registry propagation
         run: sleep 300
 
+      # After publish, the workspace's `^X.Y.Z` cross-references for *downstream* packages
+      # that we didn't bump still point at old versions. sync-versions rewrites them to the
+      # newly-published versions and opens a PR with the diff + lockfile update. The PR is
+      # idempotent — re-running the workflow updates the existing branch in place.
       - name: Sync published workspace versions
         id: sync-versions
         env:
