@@ -97,6 +97,11 @@ jobs:
       #
       # pnpm publish does not accept `--workspace-concurrency`; topo ordering of the
       # recursive publish is sequential by design.
+      # Belt-and-braces: also exclude example workspaces by name from the recursive
+      # publish. `pnpm publish` already skips packages with `"private": true` (and those
+      # packages are marked private in this repo), but if a contributor adds a new
+      # example workspace and forgets to mark it private, this filter still prevents
+      # a release from failing partway through with a 404 from npm.
       - name: Cascade publish
         if: steps.plan.outputs.mode == 'cascade'
         env:
@@ -104,9 +109,13 @@ jobs:
         run: |
           if [[ -n "$PNPM_FILTER" ]]; then
             pnpm -r --filter="$PNPM_FILTER" \
+              --filter='!@bsv/wallet-toolbox-examples' \
+              --filter='!example-paymail' \
               publish --access public --no-git-checks --provenance
           else
             pnpm -r \
+              --filter='!@bsv/wallet-toolbox-examples' \
+              --filter='!example-paymail' \
               publish --access public --no-git-checks --provenance
           fi
 
