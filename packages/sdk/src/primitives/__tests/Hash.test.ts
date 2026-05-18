@@ -42,6 +42,11 @@ describe('Hash', function () {
     ])
   })
 
+  it('preserves SDK hex normalization before hashing', function () {
+    expect(hash.sha256('abc', 'hex')).toEqual(hash.sha256([0x0a, 0xbc]))
+    expect(() => hash.sha256('zz', 'hex')).toThrow('Invalid hex string')
+  })
+
   it('should support ripemd160', function () {
     test(hash.RIPEMD160, [
       ['', '9c1185a5c5e9fc54612808977ee8f548b2258d31'],
@@ -230,7 +235,7 @@ describe('Hash', function () {
     it('realHtonl preserves value when system is big-endian (forced simulation)', () => {
       // We simulate the big-endian branch of realHtonl by calling
       // the fallback path directly.
-      const forceBigEndianRealHtonl = (w: number) => (w >>> 0)
+      const forceBigEndianRealHtonl = (w: number): number => (w >>> 0)
 
       expect(forceBigEndianRealHtonl(0x11223344)).toBe(0x11223344)
       expect(forceBigEndianRealHtonl(0xaabbccdd)).toBe(0xaabbccdd)

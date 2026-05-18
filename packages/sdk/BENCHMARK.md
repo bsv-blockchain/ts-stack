@@ -31,7 +31,8 @@
 ## Benchmark Suite
 
 TODO: add `bench/` directory with a runner (e.g. tinybench or benchmark.js).
-Command to run: `npm run bench` (not yet wired).
+Command to run all benchmarks: `npm run bench` (not yet wired).
+Hash benchmark: `npm run build:ts && node benchmarks/hash-bench.js`.
 
 Suggested runner: [tinybench](https://github.com/tinylibs/tinybench) — zero-dependency, ESM-native.
 
