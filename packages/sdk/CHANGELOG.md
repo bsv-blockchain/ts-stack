@@ -224,6 +224,31 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [2.1.1] - 2026-05-17
+
+### Added
+- `LookupResolver.query()` accepts an optional `LookupQueryOptions` argument with two new knobs:
+  `graceMs` (override the per-call grace window between the first responder and resolution; default
+  still 80 ms) and `softTimeoutMs` (resolve early with whatever has arrived once any host has
+  answered or the soft timeout has elapsed).
+- `LookupResolver.query$()` — async-iterable form of `query`. Emits a cumulative `outputs` snapshot
+  after the grace window, then re-emits whenever a late host returns additional outputs, and a final
+  `isFinal: true` emission once every in-flight host has settled.
+- `LookupAnswerProgress` envelope on each `query$()` emission carries `txIds`, `isFinal`,
+  `hostCount`, and `completedHosts` so callers can render "still gathering from X more hosts" UI.
+- `IdentityClient.resolveByIdentityKey` and `IdentityClient.resolveByAttributes` accept an
+  options-object form with `parallel?: boolean` to keep the legacy parallel behavior when a fresh
+  overlay answer alongside the contact record is required.
+
+### Changed
+- `HTTPSOverlayLookupFacilitator.lookup()` default per-host timeout dropped from 5 s to 2 s. Real
+  user-abandonment threshold is ~2 s; hosts that can't beat it add latency we never collect on.
+- `IdentityClient.resolveByIdentityKey` / `resolveByAttributes` now short-circuit on a contacts hit
+  by default: the overlay is **not** queried when a matching contact already exists. Callers that
+  want both run can opt in with `{ parallel: true }`.
+
+---
+
 ## [2.1.0] - 2026-05-04
 
 ### Changed

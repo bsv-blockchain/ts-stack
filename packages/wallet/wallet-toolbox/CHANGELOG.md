@@ -6,6 +6,17 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+## wallet-toolbox 2.1.27
+
+- Add optional `contactSource` (and exported `ContactSource` / `ContactRecord` interfaces) on `WalletArgs` and the `Wallet` class. When provided, `Wallet.discoverByIdentityKey` consults the local contacts source **before** the in-process `_overlayCache` and before any network call; on a hit, the overlay is not queried at all. `Wallet.discoverByAttributes` consults the contact source's optional `findByAttributes` when present. Contact-source failures are swallowed and fall through to the existing network path so the network is never gated on a flaky contact store.
+- `Wallet.discoverByIdentityKey` and `Wallet.discoverByAttributes` accept `forceRefresh?: boolean`. When `true`, both the contacts short-circuit and the 2-minute `_overlayCache` are bypassed so the network is consulted fresh — useful for a manual refresh action.
+- `identityUtils.parseResults` now yields to the host runtime between certificates on UI runtimes (browser / React Native, detected at call time). On Node the yield is skipped to avoid timer overhead. Same total work; the JS thread no longer owns the frame for the duration of the loop, so menu taps and scroll keep working while a large identity result is parsed.
+- `identityUtils.parseResults$` — new async-iterable form that emits each successfully parsed `VerifiableCertificate` as soon as it's ready, for callers that want progressive rendering.
+- `queryOverlay` widens the per-call grace window for `ls_identity` queries to 300 ms via the new `LookupQueryOptions.graceMs`, so more in-sync identity hosts contribute outputs before the query resolves.
+- `@bsv/sdk` dependency switched to the local workspace via `workspace:^2.1.1` so SDK changes flow through without an intermediate publish. Publish-time tooling rewrites `workspace:` ranges to concrete versions.
+
+## wallet-toolbox 2.1.26
+
 - Fix: auto-evict confirmed-stale inputs after any failed broadcast, regardless of how the broadcaster classifies the failure. When a tx is marked failed, `updateTransactionStatus(failed)` previously restored ALL consumed inputs to `spendable: true` to support transient retry. That's correct for fee/script/malformed failures where inputs are still UTXOs, but wrong for cases where the input has been spent on chain by a different tx — the wallet then picks the same already-spent UTXO on the next createAction → infinite missing-inputs broadcast loop. The new `markStaleInputsAsSpent` helper runs after `updateTransactionsStatus(failed)` and queries `services.isUtxo` per consumed input (concurrently across inputs via `Promise.all`), overriding `spendable: false` only for inputs the chain authoritatively confirms are spent. Inputs still on chain (transient/false-positive failures) keep the existing retry semantics. Service errors leave inputs untouched (eviction is opt-in based on positive evidence). Helper is broadcaster-agnostic — applies to ARC's `doubleSpend` (`SEEN_IN_ORPHAN_MEMPOOL`) and to WhatsOnChain/Bitails `invalidTx` (`missing-inputs`) classifications alike. Pre-broadcast races where concurrent createActions reach the same UTXO across separate app processes remain out of scope; that's a separate class of double-spend with its own design space (TaskReviewUtxos enqueue, locked-input semantics).
 
 ## wallet-toolbox 2.1.21

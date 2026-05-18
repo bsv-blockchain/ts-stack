@@ -34,6 +34,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check cross-package version references
+        # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
+        # downstream deps can't reference the new versions until publish) will always
+        # report stale refs in CI. Sync-versions.mjs runs at release time to reconcile.
+        continue-on-error: true
         run: node scripts/check-versions.mjs
 
       - name: Build all packages

@@ -99,59 +99,100 @@ export const transformVerifiableCertificatesWithTrust = (
 }
 
 /**
- * Performs an identity overlay service lookup query and returns the parsed results
+ * Performs an identity overlay service lookup query and returns the parsed results.
  *
- * @param query
- * @returns
+ * Identity paths benefit from a larger grace window (more hosts contribute outputs before the
+ * query resolves) — 300 ms is well under the "instant" perception threshold and catches the long
+ * tail of healthy-but-slightly-slow hosts.
  */
 export const queryOverlay = async (query: unknown, resolver: LookupResolver): Promise<VerifiableCertificate[]> => {
   const results = await resolver.query({
     service: 'ls_identity',
     query
-  })
+  }, undefined, { graceMs: 300 })
 
   return await parseResults(results)
 }
 
 /**
- * Internal func: Parse the returned UTXOs Decrypt and verify the certificates and signatures Return the set of identity keys, certificates and decrypted certificate fields
+ * Cooperative yield helper. On environments where the main thread also drives UI work
+ * (React Native, browsers), parsing many certificates synchronously freezes input handling.
+ * Interleaving a 0 ms timeout between iterations gives the runtime a chance to flush UI events.
  *
- * @param {Output[]} outputs
- * @returns {Promise<VerifiableCertificate[]>}
+ * On Node we skip the yield to avoid the timer overhead (no UI to unblock).
+ */
+const isUiRuntime = (): boolean => {
+  if (typeof globalThis === 'undefined') return false
+  const g = globalThis as any
+  // React Native exposes __DEV__/navigator.product; browsers expose window/document.
+  if (typeof g.window !== 'undefined' && typeof g.document !== 'undefined') return true
+  if (typeof g.navigator?.product === 'string' && g.navigator.product === 'ReactNative') return true
+  return false
+}
+
+const yieldToUi = async (): Promise<void> => {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
+
+/**
+ * Parse a single overlay output into a verified, decrypted certificate. Returns `null` on any
+ * parse / decrypt / verify failure so a malformed entry can never block the others.
+ */
+const parseOne = async (
+  output: { beef: number[], outputIndex: number, context?: number[] }
+): Promise<VerifiableCertificate | null> => {
+  try {
+    const tx = Transaction.fromBEEF(output.beef)
+    const decodedOutput = PushDrop.decode(tx.outputs[output.outputIndex].lockingScript)
+    const certificate: VerifiableCertificate = JSON.parse(Utils.toUTF8(decodedOutput.fields[0]))
+    const verifiableCert = new VerifiableCertificate(
+      certificate.type,
+      certificate.serialNumber,
+      certificate.subject,
+      certificate.certifier,
+      certificate.revocationOutpoint,
+      certificate.fields,
+      certificate.keyring,
+      certificate.signature
+    )
+    const decryptedFields = await verifiableCert.decryptFields(new ProtoWallet('anyone'))
+    await verifiableCert.verify()
+    verifiableCert.decryptedFields = decryptedFields
+    return verifiableCert
+  } catch (error) {
+    console.error(error)
+    return null
+  }
+}
+
+/**
+ * Parse the returned UTXOs, decrypting and verifying each certificate.
+ *
+ * On UI runtimes (browser / React Native), yields between iterations so the JS thread does not
+ * own the frame for the full duration. On Node, runs straight through.
  */
 export const parseResults = async (lookupResult: LookupAnswer): Promise<VerifiableCertificate[]> => {
-  if (lookupResult.type === 'output-list') {
-    const parsedResults: VerifiableCertificate[] = []
-
-    for (const output of lookupResult.outputs) {
-      try {
-        const tx = Transaction.fromBEEF(output.beef)
-        // Decode the Identity token fields from the Bitcoin outputScript
-        const decodedOutput = PushDrop.decode(tx.outputs[output.outputIndex].lockingScript)
-
-        // Parse out the certificate and relevant data
-        const certificate: VerifiableCertificate = JSON.parse(Utils.toUTF8(decodedOutput.fields[0])) // TEST
-        const verifiableCert = new VerifiableCertificate(
-          certificate.type,
-          certificate.serialNumber,
-          certificate.subject,
-          certificate.certifier,
-          certificate.revocationOutpoint,
-          certificate.fields,
-          certificate.keyring,
-          certificate.signature
-        )
-        const decryptedFields = await verifiableCert.decryptFields(new ProtoWallet('anyone'))
-        // Verify the certificate signature is correct
-        await verifiableCert.verify()
-        verifiableCert.decryptedFields = decryptedFields
-        parsedResults.push(verifiableCert)
-      } catch (error) {
-        console.error(error)
-        // do nothing
-      }
-    }
-    return parsedResults
+  if (lookupResult.type !== 'output-list') return []
+  const parsedResults: VerifiableCertificate[] = []
+  const shouldYield = isUiRuntime()
+  for (const output of lookupResult.outputs) {
+    if (shouldYield) await yieldToUi()
+    const cert = await parseOne(output)
+    if (cert != null) parsedResults.push(cert)
   }
-  return []
+  return parsedResults
+}
+
+/**
+ * Iterable variant of {@link parseResults}: emits each successfully parsed certificate as soon as
+ * it's ready, so callers can render progressively instead of waiting for the full set.
+ */
+export async function * parseResults$ (lookupResult: LookupAnswer): AsyncIterable<VerifiableCertificate> {
+  if (lookupResult.type !== 'output-list') return
+  const shouldYield = isUiRuntime()
+  for (const output of lookupResult.outputs) {
+    if (shouldYield) await yieldToUi()
+    const cert = await parseOne(output)
+    if (cert != null) yield cert
+  }
 }

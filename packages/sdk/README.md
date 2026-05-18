@@ -1,8 +1,8 @@
 # BSV SDK
 
-[![codecov](https://codecov.io/gh/bsv-blockchain/ts-sdk/branch/master/graph/badge.svg)](https://codecov.io/gh/bsv-blockchain/ts-sdk)
+[![codecov](https://codecov.io/gh/bsv-blockchain/ts-stack/branch/main/graph/badge.svg?flag=sdk)](https://codecov.io/gh/bsv-blockchain/ts-stack)
 [![npm version](https://badge.fury.io/js/@bsv%2Fsdk.svg)](https://badge.fury.io/js/@bsv%2Fsdk)
-[![Build Status](https://github.com/bsv-blockchain/ts-sdk/actions/workflows/push.yaml/badge.svg)](https://github.com/bsv-blockchain/ts-sdk/actions/workflows/push.yaml)
+[![Build Status](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/bsv-blockchain/ts-stack/actions/workflows/ci.yml)
 
 BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
@@ -98,11 +98,11 @@ For a more detailed tutorial and advanced examples, check our [Documentation](#d
 
 Comprehensive documentation is available in several formats:
 
-- **[📚 Online Documentation](https://bsv-blockchain.github.io/ts-sdk)**: Our complete documentation:
-    - **[🚀 Tutorials](https://bsv-blockchain.github.io/ts-sdk/tutorials/)**: Step-by-step lessons to learn by doing
-    - **[🔧 How-To Guides](https://bsv-blockchain.github.io/ts-sdk/guides/)**: Practical solutions to specific problems
-    - **[📚 Reference](https://bsv-blockchain.github.io/ts-sdk/reference/)**: Complete technical specifications and API documentation
-    - **[🏗️ Concepts](https://bsv-blockchain.github.io/ts-sdk/concepts/)**: Architecture and design explanations
+- **[📚 Online Documentation](https://bsv-blockchain.github.io/ts-stack/packages/sdk/)**: Our complete documentation:
+    - **[🚀 Get Started](https://bsv-blockchain.github.io/ts-stack/get-started/)**: Step-by-step lessons to learn by doing
+    - **[🔧 How-To Guides](https://bsv-blockchain.github.io/ts-stack/guides/)**: Practical solutions to specific problems
+    - **[📚 Reference](https://bsv-blockchain.github.io/ts-stack/reference/)**: Complete technical specifications and API documentation
+    - **[🏗️ Architecture](https://bsv-blockchain.github.io/ts-stack/architecture/)**: Architecture and design explanations
 - **[⚡ Examples](https://docs.bsvblockchain.org/guides/sdks/ts/examples)**: Practical code examples
 - **Code Annotations**: The SDK is richly documented with code-level annotations that show up in editors like VSCode
 

@@ -264,7 +264,31 @@ describe('IdentityClient', () => {
 
       expect(identities).toHaveLength(1)
       expect(identities[0].name).toBe('Alice Smith (Personal Contact)') // Contact should be returned, not discovered identity
-      // Both calls fire in parallel, but contacts take priority in the result
+      // New default: contacts-first short-circuit — the overlay is skipped entirely on a contacts hit.
+      expect(walletMock.discoverByIdentityKey).not.toHaveBeenCalled()
+    })
+
+    it('should still call the overlay when parallel: true is passed', async () => {
+      const contact = {
+        name: 'Alice Smith (Personal Contact)',
+        identityKey: 'alice-identity-key',
+        avatarURL: 'alice-avatar.png',
+        abbreviatedKey: 'alice-i...',
+        badgeIconURL: '',
+        badgeLabel: '',
+        badgeClickURL: ''
+      }
+      const mockContactsManager = identityClient['contactsManager']
+      mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
+      walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates: [] })
+
+      const identities = await identityClient.resolveByIdentityKey(
+        { identityKey: 'alice-identity-key' },
+        { parallel: true }
+      )
+
+      expect(identities).toHaveLength(1)
+      expect(identities[0].name).toBe('Alice Smith (Personal Contact)')
       expect(walletMock.discoverByIdentityKey).toHaveBeenCalled()
     })
   })
