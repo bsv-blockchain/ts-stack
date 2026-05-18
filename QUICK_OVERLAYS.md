@@ -12,6 +12,7 @@ But 8 s is not the floor. Measured baselines:
 |---|---|
 | `LookupResolver.query()` simple query, single-result | **~400 ms** (acceptable) |
 | Contacts lookup via local SQLite wallet storage | **~28 ms** |
+| `_overlayCache` hit (in-process, client-side, 2 min TTL) | **~1 ms** |
 | Worst-case observed (web app connect, full discover flow) | **8.1 s** |
 
 The headline number is **28 ms vs 8100 ms** — a **~290× speedup** for any identity already saved as a contact. Even against the *acceptable* overlay path, contacts are ~14× faster. Routing through contacts whenever possible is by far the biggest single win.
@@ -20,14 +21,15 @@ The 8 s outlier is not intrinsic to overlay queries — a single-result lookup i
 
 Two hard constraints shape the solution:
 
-1. **Overlay results must never be served from a TTL cache.** Overlay answers carry "is this output still unspent" state. Returning stale answers breaks UTXO correctness. Every overlay query must hit the network and return live data.
+1. **Overlay servers must never serve from a TTL cache.** Overlay answers carry "is this output still unspent" state — at the source of truth, returning stale answers breaks UTXO correctness. Every server-side `lookup()` must compute against live storage. **Client-side caches are fine** (and useful): the client already accepts that its view may lag by the cache TTL, and a short TTL on the client trades a small amount of staleness for huge UX wins. Keep `Wallet._overlayCache` (2-min TTL, in-process).
 2. **Contacts are already persisted on-disk by the wallet's own SQLite store.** No additional contacts cache layer is needed; the wallet's existing storage IS the disk cache.
 
 Given those constraints, the wins come from:
 
 1. Try contacts (28 ms local SQLite read) **before** the overlay. Don't fire the overlay at all when contacts already answer.
 2. Never wait on the **slowest** overlay host. Return what the **first competent** host says, let stragglers enrich.
-3. Move heavy parse work off the **app JS thread** (RN: yielding loops, native hashing). The query must always be fresh, but the *parse* of its outputs need not block UI.
+3. Move heavy parse work off the **app JS thread** (RN: yielding loops, native hashing). The query, when it does fire, need not block the UI while it parses.
+4. Keep the in-process client cache for repeat lookups within a session. Server side stays strict-live.
 
 This document audits the current state across `ts-stack` and proposes the layered fix.
 
@@ -60,7 +62,7 @@ There is no contacts-first short-circuit at the `Wallet.discoverByIdentityKey` l
 
 A local SQLite contacts read costs **~28 ms** in current measurements — two orders of magnitude faster than the *healthy* overlay path and ~290× faster than the bad case. Any identity the user has saved should never reach the overlay.
 
-> ⚠️ The existing in-process `_overlayCache` (2-min TTL) inside `Wallet.discoverByIdentityKey`/`discoverByAttributes` (wallet-toolbox/src/Wallet.ts:644) violates the "overlay must always be live" rule. This cache should be **removed** as part of this work.
+> The in-process `_overlayCache` (2-min TTL) inside `Wallet.discoverByIdentityKey`/`discoverByAttributes` (wallet-toolbox/src/Wallet.ts:644) stays. It's a client-side memo and the staleness window is acceptable at the wallet layer. The constraint applies on the **server**: `IdentityLookupService` (and any other overlay `LookupService`) must not add a TTL response cache.
 
 ## 2. What already exists (don't reinvent)
 
@@ -72,7 +74,7 @@ A local SQLite contacts read costs **~28 ms** in current measurements — two or
 - Per-host timeout default 5 s.
 
 Gaps:
-- No "answer-level" cache — and per the constraint above, we **do not** want one.
+- No "answer-level" cache at this layer — and we don't want one inside `LookupResolver` itself; the client-side cache lives one layer up at `Wallet.discoverByIdentityKey` where it can be keyed by the wallet-level query shape.
 - 5 s timeout per host means worst-case query latency = 5 s + 80 ms even when *no* host responds with data. Reduce default.
 - Reputation storage defaults to a singleton — fine but not bridgeable to React Native AsyncStorage without a custom adapter (the `reputationStorage` option exists; RN apps are not wiring it). Persisting reputation is fine — it isn't overlay data, it's "which host is fast/healthy."
 
@@ -92,17 +94,18 @@ Gaps:
 No additional disk layer required for contacts. The in-process `MemoryCache` is enough; the underlying basket is already persistent.
 
 ### `@bsv/wallet-toolbox` `Wallet.discoverByIdentityKey` (`packages/wallet/wallet-toolbox/src/Wallet.ts:646`)
-- 2-minute `_overlayCache` keyed by `{ fn, identityKey, certifiers }` — **to be removed** (violates the "always live" rule).
+- 2-minute `_overlayCache` keyed by `{ fn, identityKey, certifiers }` — **keep**. Client-side, in-process, bounded staleness window. Acceptable trade for repeat lookups within a session.
 - 2-minute `_trustSettingsCache` — keep. Trust settings are local user config, not overlay state.
 
-Gap:
-- Does not consult contacts at all. Should short-circuit on a contacts hit before touching the network.
+Gaps:
+- Does not consult contacts at all. Should short-circuit on a contacts hit before touching the network (and before consulting `_overlayCache`).
+- `_overlayCache` lookup happens unconditionally on every call — fine, but the contacts short-circuit should run first so cache misses for known contacts never even check the cache.
 
 ### `@bsv/overlays/topics` `IdentityLookupService` (`packages/overlays/topics/src/identity/IdentityLookupService.ts`)
 - Server-side `lookup()` dispatches to `storageManager.findByIdentityKey()` etc.
-- No documented caching layer; freshness comes from the storage backend (Knex/Mongo).
+- No caching layer today; freshness comes from the storage backend (Knex/Mongo). **Keep it this way.**
 
-The "overlay must be live" rule means we **do not** add a TTL response cache on the overlay either. Optimizations on the overlay side must be storage/query-level (indexes, materialized views invalidated on token spend), not naive TTL caches.
+The "overlay server must be live" rule means we **do not** add a TTL response cache on the overlay. Source-of-truth nodes cannot lie about UTXO state to downstream peers — they'd propagate stale answers everyone else then trusts. Optimizations on the overlay side must be storage/query-level (indexes, materialized views invalidated on token spend), not naive TTL caches.
 
 ### `@bsv/wallet-toolbox-mobile` `parseResults` (`out/src/utility/identityUtils.js`)
 - Same source as `wallet-toolbox/src/utility/identityUtils.ts:122`.
@@ -134,7 +137,7 @@ Gaps:
   - `graceMs?: number` — override the 80 ms grace window per call. Identity / discover paths can dial it up (e.g. 300 ms) to give more hosts a chance to merge without making the wait visible. Cheap paths can dial it down to 0.
   - `softTimeoutMs?: number` — when set, the query resolves as soon as we have *any* answer or `softTimeoutMs` elapses, returning the partial set without waiting for slow hosts.
 - Tighten per-host default timeout (5 s → 2 s). Users abandon flows that don't respond inside ~2 s; budgeting beyond that costs us the user, not just the request.
-- Remove the existing 2-min `_overlayCache` in `Wallet.discoverByIdentityKey`/`discoverByAttributes` so callers always receive live state.
+- Keep `Wallet._overlayCache` (client-side, 2-min TTL). It sits *above* `LookupResolver` and short-circuits repeat lookups within a session without affecting freshness guarantees at the network layer.
 
 ### Layer 3b — late-responder enrichment (lower priority, opt-in)
 
@@ -201,8 +204,8 @@ If implementing the iterable proves expensive, ship option 1 first. The grace-wi
 
 `src/Wallet.ts`
 - [ ] Add optional `contactSource?: ContactSource` in the `Wallet` constructor.
-- [ ] In `discoverByIdentityKey`, consult `contactSource` before the overlay query; short-circuit on hit.
-- [ ] **Remove** the 2-min `_overlayCache`. Every overlay call goes through to `LookupResolver`.
+- [ ] In `discoverByIdentityKey`, consult `contactSource` *before* `_overlayCache` and *before* the network call; short-circuit on hit.
+- [ ] **Keep** the 2-min `_overlayCache` as a second-line memo (after contacts miss, before network). Document that it is a client-side cache with bounded staleness; a `forceRefresh?: boolean` arg on `discoverByIdentityKey` should bypass both contacts and cache.
 - [ ] Keep `_trustSettingsCache` — trust settings are local config, not overlay output state.
 
 `src/utility/identityUtils.ts`
@@ -215,9 +218,10 @@ If implementing the iterable proves expensive, ship option 1 first. The grace-wi
   - any RN-specific facilitator config (timeouts, future native fetch).
 - [ ] (stretch) `NativeFetchFacilitator` + JSI HTTP client.
 
-### `@bsv/overlays/topics` `IdentityLookupService`
-- [ ] No TTL response cache (would break the live-state guarantee).
-- [ ] Server-side perf is a storage problem: ensure indexes on `subject`, `certifier`, attribute fields. Consider materialized views invalidated on `outputSpent`. Document the expected p50/p95 lookup latency per backend so the client can size its timeouts.
+### `@bsv/overlays/topics` `IdentityLookupService` (and sibling `LookupService`s)
+- [ ] **No TTL response cache server-side** — would propagate stale UTXO state to every downstream client. This is the hard constraint.
+- [ ] Audit existing services for any latent response caches; if found, remove.
+- [ ] Server-side perf is a storage problem: ensure indexes on `subject`, `certifier`, attribute fields. Consider materialized views invalidated on `outputSpent`. Document expected p50/p95 lookup latency per backend so clients can size their timeouts.
 
 ### Downstream: `bsv-browser`
 - [ ] At app boot (`index.js` after `react-native-quick-crypto` install), call `installMobileIdentityDefaults({ storage: AsyncStorage })` once it ships.
@@ -252,7 +256,7 @@ CWI substrate addition (browser substrate `window.CWI`):
 
 1. **`@bsv/sdk`** — `LookupResolver` iterable form, tighter timeout, new query knobs. No behavior change for existing callers.
 2. **`@bsv/sdk`** — `IdentityClient` contacts-first short-circuit (default true, `parallel` opt-out).
-3. **`@bsv/wallet-toolbox`** — `Wallet.discoverByIdentityKey` consults `contactSource`; remove `_overlayCache`.
+3. **`@bsv/wallet-toolbox`** — `Wallet.discoverByIdentityKey` consults `contactSource` first, then `_overlayCache`, then network. Add `forceRefresh` bypass.
 4. **`@bsv/wallet-toolbox-mobile`** — `installMobileIdentityDefaults` ships, RN apps adopt one-liner.
 5. **`@bsv/sdk` + toolbox** — yielding `parseResults`, progressive emission.
 6. **Overlay side** — indexes + storage perf; no response caching.
@@ -262,7 +266,7 @@ CWI substrate addition (browser substrate `window.CWI`):
 
 ## 7. Risks & open questions
 
-- **Live-state guarantee**: removing the 2-min `_overlayCache` increases overlay traffic. Mitigated by the contacts short-circuit (most repeat lookups hit contacts, not the overlay). Worth measuring traffic before/after.
+- **Live-state guarantee**: the constraint is server-side. The client-side `_overlayCache` (2 min) is intentionally preserved — repeat lookups within a session can return cache-hit data without re-hitting the network. Combined with the contacts short-circuit, most lookups never touch the wire. Overlay *servers* still serve strict-live answers so the cache never holds dangerously old state at the source.
 - **Contacts as authoritative**: short-circuiting on contacts means the user's own contact data wins over the overlay. That is the desired UX, but it means "stale contact" bugs (renamed/revoked identities) won't auto-correct unless the user explicitly refreshes. Mitigation: a manual refresh path that bypasses contacts (Layer 2's `parallel: true` opt-in for power users, or a refresh button in app UI).
 - **Contact revocation**: a contact entry could exist for an identity whose underlying certificate has been revoked on-overlay. Because we never consult the overlay when a contact is present, the app won't know. Acceptable trade-off; surface a "refresh from network" option in identity views.
 - **`Wallet` ↔ `ContactsManager` coupling**: cleaner if `wallet-toolbox` declares only a `ContactSource` interface and lets the app wire `ContactsManager` from `@bsv/sdk`. Avoids a cyclic-feeling dependency.
