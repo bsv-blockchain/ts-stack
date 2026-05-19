@@ -37,6 +37,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
     try {
       res.json(success(chain))
     } catch (err) {
+      console.error('Failed to get chain:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain'))
     }
   })
@@ -48,6 +49,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const info = await chaintracks.getInfo()
       res.json(success(info))
     } catch (err) {
+      console.error('Failed to get info:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get info'))
     }
   })
@@ -59,6 +61,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const height = await chaintracks.getPresentHeight()
       res.json(success(height))
     } catch (err) {
+      console.error('Failed to get present height:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get present height'))
     }
   })
@@ -73,6 +76,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(hash))
     } catch (err) {
+      console.error('Failed to get chain tip hash:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip hash'))
     }
   })
@@ -87,6 +91,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(header))
     } catch (err) {
+      console.error('Failed to get chain tip header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip header'))
     }
   })
@@ -94,8 +99,8 @@ export function createV1Routes(options: V1RoutesOptions): Router {
   // GET /findHeaderHexForHeight - Get header by height (query param)
   router.get('/findHeaderHexForHeight', async (req: Request, res: Response) => {
     try {
-      const height = parseInt(req.query.height as string, 10)
-      if (isNaN(height) || height < 0) {
+      const height = Number.parseInt(req.query.height as string, 10)
+      if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
       }
 
@@ -112,6 +117,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(header))
     } catch (err) {
+      console.error('Failed to get header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -138,6 +144,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(header))
     } catch (err) {
+      console.error('Failed to get header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -145,13 +152,13 @@ export function createV1Routes(options: V1RoutesOptions): Router {
   // GET /getHeaders - Get multiple headers as hex string
   router.get('/getHeaders', async (req: Request, res: Response) => {
     try {
-      const height = parseInt(req.query.height as string, 10)
-      const count = parseInt(req.query.count as string, 10)
+      const height = Number.parseInt(req.query.height as string, 10)
+      const count = Number.parseInt(req.query.count as string, 10)
 
-      if (isNaN(height) || height < 0) {
+      if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
       }
-      if (isNaN(count) || count <= 0) {
+      if (Number.isNaN(count) || count <= 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
       }
 
@@ -182,6 +189,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(hexString))
     } catch (err) {
+      console.error('Failed to get headers:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
   })
@@ -206,6 +214,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(true))
     } catch (err) {
+      console.error('Failed to add header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to add header'))
     }
   })
@@ -219,6 +228,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const rates = await services.getFiatExchangeRate('USD')
       res.json(success(rates))
     } catch (err) {
+      console.error('Failed to get exchange rates:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get exchange rates'))
     }
   })

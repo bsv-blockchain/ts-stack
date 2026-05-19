@@ -739,8 +739,9 @@ function assertBinaryShape (shape: Record<string, unknown>): void {
   // length_bytes may be a fixed integer or a formula string for variable-length payloads.
   if (typeof len === 'number') {
     expect(Number.isInteger(len) && len >= 0).toBe(true)
-    if (typeof shape['stride'] === 'number') {
-      expect(len % (shape['stride'] as number)).toBe(0)
+    const stride = shape['stride']
+    if (typeof stride === 'number') {
+      expect(len % stride).toBe(0)
     }
   } else {
     expect(typeof len).toBe('string')

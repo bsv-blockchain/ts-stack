@@ -665,7 +665,7 @@ const info = await getInfo()
 
 ### Complete Client Implementation
 
-See `src/client-example.ts` for a complete TypeScript client implementation with all endpoints.
+For a TypeScript client implementation, see `@bsv/wallet-toolbox`'s `ChaintracksServiceClient`.
 
 ### cURL Examples
 

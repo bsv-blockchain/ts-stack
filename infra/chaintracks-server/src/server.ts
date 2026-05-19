@@ -11,15 +11,31 @@
  */
 
 import { BlockHeader, Chaintracks, createDefaultNoDbChaintracksOptions, Services, Chain, ChaintracksFs } from '@bsv/wallet-toolbox'
-import * as path from 'path'
+import * as path from 'node:path'
 import * as express from 'express'
 import * as bodyParser from 'body-parser'
 import { createV1Routes } from './v1-routes'
 import { createV2Routes } from './v2-routes'
 
+function resolveBulkHeadersPath(): string {
+  const raw = process.env.BULK_HEADERS_PATH || path.join(process.cwd(), 'public', 'headers')
+  return path.isAbsolute(raw) ? raw : path.join(process.cwd(), raw)
+}
+
+async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
+  try {
+    const fs = await import('node:fs/promises')
+    await fs.mkdir(bulkHeadersPath, { recursive: true })
+    console.log(`✓ Bulk headers directory ready`)
+  } catch (error) {
+    console.error(`❌ Failed to create bulk headers directory: ${error}`)
+    throw error
+  }
+}
+
 async function main() {
   const chain: Chain = (process.env.CHAIN as Chain) || 'main'
-  const port = parseInt(process.env.PORT || '3013', 10)
+  const port = Number.parseInt(process.env.PORT || '3013', 10)
   const cdnPort = port + 1 // CDN runs on next port
   const whatsonchainApiKey = process.env.WHATSONCHAIN_API_KEY || ''
 
@@ -31,18 +47,12 @@ async function main() {
   // CDN_HOST_URL: Public URL where THIS server's CDN is accessible (written to JSON rootFolder)
   const cdnHostUrl = process.env.CDN_HOST_URL || `http://localhost:${cdnPort}`
 
-  // Process bulk headers path - ensure it's absolute
-  let bulkHeadersPath = process.env.BULK_HEADERS_PATH || path.join(process.cwd(), 'public', 'headers')
-
-  // Convert relative paths to absolute
-  if (!path.isAbsolute(bulkHeadersPath)) {
-    bulkHeadersPath = path.join(process.cwd(), bulkHeadersPath)
-  }
+  const bulkHeadersPath = resolveBulkHeadersPath()
 
   // The source URL is where clients can download headers from (the CDN HTTP endpoint)
   const bulkHeadersSourceUrl = enableBulkHeadersCDN ? cdnHostUrl : undefined
 
-  const bulkHeadersAutoExportInterval = parseInt(process.env.BULK_HEADERS_AUTO_EXPORT_INTERVAL || '240000000', 10) // Default: 400 blocks around 67 hours
+  const bulkHeadersAutoExportInterval = Number.parseInt(process.env.BULK_HEADERS_AUTO_EXPORT_INTERVAL || '240000000', 10) // Default: 400 blocks around 67 hours
 
   console.log(`Starting ChaintracksService with custom configuration`)
   console.log(`Chain: ${chain}Net`)
@@ -53,16 +63,7 @@ async function main() {
     console.log(`CDN Port: ${cdnPort}`)
     console.log(`CDN Host URL: ${cdnHostUrl}`)
     console.log(`Bulk Headers Path: ${bulkHeadersPath}`)
-
-    // Ensure the directory exists before we start
-    try {
-      const fs = await import('fs/promises')
-      await fs.mkdir(bulkHeadersPath, { recursive: true })
-      console.log(`✓ Bulk headers directory ready`)
-    } catch (error) {
-      console.error(`❌ Failed to create bulk headers directory: ${error}`)
-      throw error
-    }
+    await ensureBulkHeadersDir(bulkHeadersPath)
   }
 
   // Create custom Chaintracks options
@@ -93,7 +94,7 @@ async function main() {
   // This creates a "self-hosting" CDN: once headers are downloaded and exported, the server serves them to others
   if (enableBulkHeadersCDN && chaintracksOptions.bulkIngestors.length > 0) {
     const cdnIngestor = chaintracksOptions.bulkIngestors[0] as any
-    if (cdnIngestor && cdnIngestor.localCachePath !== undefined) {
+    if (cdnIngestor?.localCachePath !== undefined) {
       // Override the local cache path to use our bulk headers export directory
       cdnIngestor.localCachePath = bulkHeadersPath
       console.log(`✓ Configured CDN ingestor to use local path: ${bulkHeadersPath}`)
@@ -154,7 +155,7 @@ async function main() {
         console.log(`   Download URL: ${bulkHeadersSourceUrl}/${chain}NetBlockHeaders.json`)
 
         // List files to verify
-        const fs = await import('fs/promises')
+        const fs = await import('node:fs/promises')
         try {
           const files = await fs.readdir(bulkHeadersPath)
           console.log(`   Found ${files.length} files: ${files.join(', ')}`)

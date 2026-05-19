@@ -315,7 +315,8 @@ npm run dev
 ```
 ├── src/
 │   ├── server.ts              # Main server with CDN
-│   └── client-example.ts      # Example client
+│   ├── v1-routes.ts           # Legacy RPC-style routes
+│   └── v2-routes.ts           # RESTful + binary v2 routes
 ├── dist/                      # Compiled JavaScript
 ├── public/
 │   └── headers/              # Exported bulk headers

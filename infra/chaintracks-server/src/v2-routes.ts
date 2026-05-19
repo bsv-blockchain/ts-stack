@@ -51,6 +51,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       const network = chaintracks.chain
       res.json(success(network))
     } catch (err) {
+      console.error('Failed to get network:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get network'))
     }
   })
@@ -65,6 +66,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       }
       res.json(success(header))
     } catch (err) {
+      console.error('Failed to get chain tip:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip'))
     }
   })
@@ -72,8 +74,8 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/header/height/:height - Get header by height
   router.get('/header/height/:height', async (req: Request, res: Response) => {
     try {
-      const height = parseInt(req.params.height, 10)
-      if (isNaN(height) || height < 0) {
+      const height = Number.parseInt(req.params.height, 10)
+      if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid height parameter'))
       }
 
@@ -90,6 +92,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       }
       res.json(success(header))
     } catch (err) {
+      console.error('Failed to get header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -116,6 +119,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
 
       res.json(success(header))
     } catch (err) {
+      console.error('Failed to get header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -123,13 +127,13 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/headers?height=N&count=M - Get multiple headers as binary
   router.get('/headers', async (req: Request, res: Response) => {
     try {
-      const height = parseInt(req.query.height as string, 10)
-      const count = parseInt(req.query.count as string, 10)
+      const height = Number.parseInt(req.query.height as string, 10)
+      const count = Number.parseInt(req.query.count as string, 10)
 
-      if (isNaN(height) || height < 0) {
+      if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
       }
-      if (isNaN(count) || count <= 0) {
+      if (Number.isNaN(count) || count <= 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
       }
 
@@ -151,6 +155,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('Content-Type', 'application/octet-stream')
       res.send(Buffer.concat(buffers))
     } catch (err) {
+      console.error('Failed to get headers:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
   })
@@ -169,6 +174,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
+      console.error('Failed to get chain tip:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip'))
     }
   })
@@ -177,8 +183,8 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   router.get('/header/height/:height.bin', async (req: Request, res: Response) => {
     try {
       const heightStr = req.params.height.replace('.bin', '')
-      const height = parseInt(heightStr, 10)
-      if (isNaN(height) || height < 0) {
+      const height = Number.parseInt(heightStr, 10)
+      if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid height parameter'))
       }
 
@@ -197,6 +203,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
+      console.error('Failed to get header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -225,6 +232,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
+      console.error('Failed to get header:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -232,13 +240,13 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/headers.bin?height=N&count=M - Get multiple headers as binary (80 bytes each)
   router.get('/headers.bin', async (req: Request, res: Response) => {
     try {
-      const height = parseInt(req.query.height as string, 10)
-      const count = parseInt(req.query.count as string, 10)
+      const height = Number.parseInt(req.query.height as string, 10)
+      const count = Number.parseInt(req.query.count as string, 10)
 
-      if (isNaN(height) || height < 0) {
+      if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing height parameter'))
       }
-      if (isNaN(count) || count <= 0) {
+      if (Number.isNaN(count) || count <= 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid or missing count parameter'))
       }
 
@@ -264,6 +272,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Header-Count', String(headerCount))
       res.send(Buffer.concat(buffers))
     } catch (err) {
+      console.error('Failed to get headers:', err)
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
   })
