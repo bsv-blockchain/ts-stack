@@ -97,12 +97,15 @@
     ],
     "message-box": [
       "messaging.messagebox-http"
+    ],
+    "chaintracks-v2": [
+      "sync.chaintracks-v2-http"
     ]
   },
   "stats": {
-    "total_files": 72,
-    "total_vectors": 6625,
-    "last_updated": "2026-05-14"
+    "total_files": 73,
+    "total_vectors": 6646,
+    "last_updated": "2026-05-19"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

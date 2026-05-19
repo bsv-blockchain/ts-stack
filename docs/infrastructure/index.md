@@ -18,6 +18,7 @@ Infrastructure components are deployed services — not npm packages, but applic
 
 | Component | Purpose | Database | Status | Deploy target |
 |-----------|---------|----------|--------|----------------|
+| [Chaintracks Server](chaintracks-server.md) | Block header chain + Merkle root validation (SPV) over REST (v1 + v2) | In-memory / CDN bulk files | stable | Docker / Kubernetes |
 | [Message Box Server](message-box-server.md) | Secure peer-to-peer messaging with real-time WebSocket delivery | MySQL 8.0 | stable | Docker / Kubernetes |
 | [Overlay Server](overlay-server.md) | Topic managers and lookup services for overlay network | MongoDB + MySQL/Knex | stable | Docker / Kubernetes |
 | [UHRP Server (Basic)](uhrp-server-basic.md) | Lightweight file storage via local filesystem (dev/test) | None (filesystem) | beta | Local Docker |
@@ -96,6 +97,7 @@ All infrastructure services:
 
 ## Prerequisites by Service
 
+**Chaintracks Server**: 2GB+ RAM, Docker (in-memory header storage; CDN URL recommended for fast bootstrap)
 **Message Box Server**: MySQL 8.0, 3GB+ RAM, Docker
 **Overlay Server**: MongoDB, MySQL/Knex, 4GB+ RAM, Docker
 **UHRP Basic**: Local filesystem, 1GB+ disk, Docker (lightweight)

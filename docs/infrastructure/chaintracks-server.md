@@ -2,9 +2,9 @@
 id: infra-chaintracks-server
 title: "Chaintracks Server"
 kind: infra
-version: "n/a"
-last_updated: "2026-04-29"
-last_verified: "2026-04-29"
+version: "1.0.2"
+last_updated: "2026-05-19"
+last_verified: "2026-05-19"
 review_cadence_days: 30
 status: stable
 tags: [chaintracks, block-headers, spv, merkle, infrastructure]
@@ -12,52 +12,73 @@ tags: [chaintracks, block-headers, spv, merkle, infrastructure]
 
 # Chaintracks Server
 
-Chaintracks Server is the reference implementation for BSV block header management. It maintains a complete chain of block headers and exposes an API for Merkle root validation — the header-side half of Simplified Payment Verification (SPV). <!-- audio: Chaintracks server.m4a @ 00:00 -->
+Chaintracks Server is the reference implementation for BSV block header management. It maintains a complete chain of block headers and exposes a REST API for header lookup and Merkle proof validation — the header-side half of Simplified Payment Verification (SPV). Source lives in [`infra/chaintracks-server`](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server). <!-- audio: Chaintracks server.m4a @ 00:00 -->
 
-The Chaintracks primitives and client interface are defined in `@bsv/wallet-toolbox`. This server is the reference deployment of those primitives.
+The Chaintracks primitives and client interface are defined in `@bsv/wallet-toolbox`. This server is the Express deployment wrapper around `ChaintracksService` from that package.
 
 ## What it does
 
-- Listens to Teranode peer-to-peer messages for live block header announcements
-- Maintains a chain of headers from genesis to the current tip
-- Exposes an API for validating individual Merkle root / block height assertions
-- Provides bulk header lookup for downstream services
+- Wraps `ChaintracksService` from `@bsv/wallet-toolbox` behind an Express HTTP server
+- Maintains a chain of headers from genesis to the current tip via bulk + live ingestors
+- Exposes JSON v1 (legacy) and v2 (RESTful, with binary variants) APIs
+- Provides bulk header download in concatenated 80-byte format for SPV clients
 
 ## Startup and Bootstrap
 
-On first start, Chaintracks must acquire ~900,000 existing BSV block headers before it can validate recent transactions. The bootstrap sequence:
+On first start, Chaintracks must acquire all existing BSV block headers before serving SPV queries. The bootstrap sequence:
 
-1. **Bundled files** — The repository ships with bulk header files. If no CDN URL is configured, these files are used for the initial bulk ingest.
-2. **CDN bulk ingest** — If a CDN URL is configured (typically another running Chaintracks server), headers are fetched 100,000 at a time. This is the fastest path.
-3. **WhatsOnChain bulk ingester** — Fallback if bundled files and CDN are unavailable.
-4. **Live tip sync** — Once bulk headers are loaded, the server switches to live mode: ingesting new block headers from Teranode P2P connections or the WhatsOnChain live ingester. <!-- audio: Chaintracks server.m4a @ 00:40 -->
+1. **Bundled files** — Repository ships with bulk header files. Used for initial ingest when no CDN URL is configured.
+2. **CDN bulk ingest** — If `CHAINTRACKS_CDN_URL` is set (typically another running Chaintracks server), headers are fetched in 100,000-block batches. Fastest path.
+3. **WhatsOnChain bulk ingester** — Fallback when bundled files and CDN are unavailable.
+4. **Live tip sync** — Once bulk headers are loaded, switches to live mode via Teranode P2P or the WhatsOnChain live ingester. <!-- audio: Chaintracks server.m4a @ 00:40 -->
 
 ## API
 
-The primary purpose of the API is individual Merkle root / block height validation:
+Two API surfaces are mounted on the same port (default `3011`):
 
-```
-GET /blockHeaderForHeight?height=100
-→ { hash, merkleRoot, ... }
+### v1 (JSON, legacy)
 
-POST /verifyMerkleRoot
-body: { blockHeight: 100, merkleRoot: "abc123..." }
-→ { valid: true }
-```
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/getChain` | Network name (`main` or `test`) |
+| GET | `/getInfo` | Service state: heights, storage backend, ingestors |
+| GET | `/getPresentHeight` | Latest external blockchain height |
+| GET | `/findChainTipHashHex` | Active chain tip hash |
+| GET | `/findChainTipHeaderHex` | Active chain tip header |
+| GET | `/findHeaderHexForHeight?height=N` | Header at height |
+| GET | `/findHeaderHexForBlockHash?hash=H` | Header for hash (live storage) |
+| GET | `/getHeaders?height=N&count=M` | Concatenated 80-byte hex header batch |
+| GET | `/getFiatExchangeRates` | BSV fiat exchange rates |
+| POST | `/addHeaderHex` | Submit a new block header for processing |
 
-Applications (primarily `@bsv/wallet-toolbox`) ask: "Does block height 100 have Merkle root `X`?" The server responds valid or not. This is what `Beef.verify()` calls internally to confirm Merkle proofs. <!-- audio: Chaintracks server.m4a @ 03:40 -->
+### v2 (RESTful, JSON + binary)
+
+Mirrors the `go-chaintracks` v2 contract. All responses use the `{status, value}` / `{status, code, description}` envelope; binary variants return raw 80-byte headers with `X-Block-Height` / `X-Start-Height` / `X-Header-Count` headers.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v2/network` | Network name |
+| GET | `/v2/tip` | Chain tip header (JSON) |
+| GET | `/v2/tip.bin` | Chain tip header (80-byte binary) |
+| GET | `/v2/header/height/:height` | Header at height (JSON) |
+| GET | `/v2/header/height/:height.bin` | Header at height (binary) |
+| GET | `/v2/header/hash/:hash` | Header by hash (JSON) |
+| GET | `/v2/header/hash/:hash.bin` | Header by hash (binary) |
+| GET | `/v2/headers?height=N&count=M` | Header batch (binary, JSON envelope omitted) |
+| GET | `/v2/headers.bin?height=N&count=M` | Header batch (binary) |
+
+The v2 surface is exercised by the [`sync.chaintracks-v2-http`](../conformance/index.md) conformance vectors so cross-language implementations (`go-chaintracks`, future Rust/Python ports) can be validated against the same contract. <!-- audio: Chaintracks server.m4a @ 03:40 -->
 
 ## Configuration
 
 ```bash
-# Bootstrap from another Chaintracks server
-CHAINTRACKS_CDN_URL=https://chaintracks.example.com
-
-# Use WhatsOnChain live ingester instead of Teranode
-WHATS_ON_CHAIN_LIVE=true
+PORT=3011                                  # HTTP listen port
+CHAIN=main                                 # main | test
+CHAINTRACKS_CDN_URL=https://chaintracks-us-1.bsvb.tech   # CDN bootstrap source
+WHATS_ON_CHAIN_LIVE=true                   # Use WhatsOnChain live ingester instead of Teranode
 ```
 
-Teranode P2P connection requires bootstrap peer configuration to enter the node network.
+Teranode P2P live ingest requires bootstrap peer configuration.
 
 ## When to deploy this
 
