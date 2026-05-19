@@ -192,7 +192,7 @@ export class EntropyCollector {
    */
   async collectFromBrowser (element: EventTarget = document, onProgress?: EntropyProgressCallback): Promise<Uint8Array> {
     return await new Promise(resolve => {
-      const handler = (event: Event) => {
+      const handler = (event: Event): void => {
         if (event instanceof MouseEvent) {
           const progress = this.addMouseSample(event.clientX, event.clientY)
           if (progress != null) {

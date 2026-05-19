@@ -30,10 +30,6 @@ import {
 import { createSyncMap } from './schema/entities/EntityBase'
 
 export abstract class StorageReaderWriter extends StorageReader {
-  constructor (options: StorageReaderWriterOptions) {
-    super(options)
-  }
-
   abstract dropAllData (): Promise<void>
   abstract migrate (storageName: string, storageIdentityKey: string): Promise<string>
 
@@ -361,7 +357,7 @@ export abstract class StorageReaderWriter extends StorageReader {
     storageIdentityKey: string,
     storageName: string
   ): Promise<{ syncState: TableSyncState, isNew: boolean }> {
-    const partial = { userId: auth.userId!, storageIdentityKey, storageName }
+    const partial = { userId: auth.userId as number, storageIdentityKey, storageName }
     for (let retry = 0; ; retry++) {
       try {
         const now = new Date()

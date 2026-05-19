@@ -175,7 +175,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     )
 
     // Wait a tick so the request can be queued
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
 
     // We expect onProtocolPermissionRequested to have been fired once
     expect(requestedCb).toHaveBeenCalledTimes(1)
@@ -188,7 +188,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
 
     // The original sign call is still pending (since we haven't granted or denied).
     // We'll deny it for cleanup:
-    manager.denyPermission(callArg.requestID)
+    void manager.denyPermission(callArg.requestID)
 
     await expect(signPromise).rejects.toThrow(/Permission denied/)
   })
@@ -209,7 +209,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     )
 
     // Wait for request to appear
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
     expect(requestedCb).toHaveBeenCalledTimes(1)
 
     // Extract the requestID from the callback
@@ -243,13 +243,13 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     )
 
     // Wait to ensure request is triggered
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
     expect(requestedCb).toHaveBeenCalledTimes(1)
 
     const requestID = (requestedCb.mock as any).calls[0][0].requestID
 
     // Deny the request
-    manager.denyPermission(requestID)
+    void manager.denyPermission(requestID)
 
     // The original encryptPromise should reject
     await expect(encryptPromise).rejects.toThrow(/Permission denied/i)
@@ -282,7 +282,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     )
 
     // Wait for the manager to handle them
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
 
     // Because the resource is identical, only ONE request event should be triggered
     expect(requestedCb).toHaveBeenCalledTimes(1)
@@ -327,7 +327,7 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     )
 
     // Wait for them to be triggered
-    await new Promise(r => setTimeout(r, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
 
     // We expect 2 distinct request events
     expect(requestedCb).toHaveBeenCalledTimes(2)
@@ -338,8 +338,8 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
     expect(firstID).not.toBe(secondID)
 
     // We'll grant the first, deny the second
-    manager.grantPermission({ requestID: firstID, ephemeral: true })
-    manager.denyPermission(secondID)
+    void manager.grantPermission({ requestID: firstID, ephemeral: true })
+    void manager.denyPermission(secondID)
 
     // call1 resolves, call2 rejects
     await expect(call1).resolves.toBeDefined()
@@ -371,23 +371,12 @@ describe('WalletPermissionsManager - Callbacks & Event Handling', () => {
       }
 
       // Create a promise that would normally hang forever if the fix isn't in place
-      let resolvedValue: any = null
-      let rejectedError: any = null
       const pendingPromise = new Promise<boolean>((resolve, reject) => {
         ;(manager as any).activeRequests.set(requestID, {
           request: originalRequest,
           pending: [{ resolve, reject }]
         })
-      }).then(
-        val => {
-          resolvedValue = val
-          return val
-        },
-        err => {
-          rejectedError = err
-          throw err
-        }
-      )
+      })
 
       // Try to grant with MISMATCHED permissions (different protocol than requested)
       // This should cause grantGroupedPermission to throw a validation error

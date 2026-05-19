@@ -38,6 +38,44 @@ export type LookupAnswer =
     }>
   }
 
+/**
+ * Per-call options for {@link LookupResolver.query} and {@link LookupResolver.query$}.
+ * All optional; defaults preserve prior behavior.
+ */
+export interface LookupQueryOptions {
+  /**
+   * Override the grace window (ms) between the first valid response and the resolution of the query.
+   * Late responders arriving within this window are merged into the result. Default 80 ms.
+   * Raise for identity-style paths (e.g. ~300 ms) where divergence between hosts matters.
+   */
+  graceMs?: number
+  /**
+   * Soft timeout (ms). When set:
+   *  - `query()` resolves with whatever has arrived as soon as any host answers, or after this timeout.
+   *  - `query$()` emits a (possibly empty) snapshot after this timeout if no host has answered yet,
+   *    then continues yielding late-host enrichments until the iterator is broken or final emission.
+   */
+  softTimeoutMs?: number
+}
+
+/**
+ * One emission from {@link LookupResolver.query$}. Carries the cumulative output set discovered so far
+ * plus a small envelope describing progress across hosts. Callers can render fast on the first emission
+ * and refine in place as more hosts answer.
+ */
+export interface LookupAnswerProgress {
+  type: 'output-list'
+  outputs: Array<{ beef: number[], outputIndex: number, context?: number[] }>
+  /** Parallel array of resolved tx ids for each output (same index as `outputs`). */
+  txIds: string[]
+  /** True only for the final emission, after every in-flight host has settled. */
+  isFinal: boolean
+  /** Number of ranked hosts that were queried. */
+  hostCount: number
+  /** Number of hosts that have settled (success / fail / timeout). */
+  completedHosts: number
+}
+
 /** Default SLAP trackers */
 export const DEFAULT_SLAP_TRACKERS: string[] = [
   // BSVA clusters
@@ -131,7 +169,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
   async lookup (
     url: string,
     question: LookupQuestion,
-    timeout: number = 5000
+    timeout: number = 2000
   ): Promise<LookupAnswer> {
     if (!url.startsWith('https:') && !this.allowHTTP) {
       throw new Error(
@@ -248,11 +286,48 @@ export default class LookupResolver {
 
   /**
    * Given a LookupQuestion, returns a LookupAnswer. Aggregates across multiple services and supports resiliency.
+   *
+   * Optional `options.graceMs` overrides the per-call grace window (default 80 ms).
+   * Optional `options.softTimeoutMs` resolves the query early with whatever has arrived once any host has
+   * answered (or with an empty result if no host has answered by `softTimeoutMs`).
    */
   async query (
     question: LookupQuestion,
-    timeout?: number
+    timeout?: number,
+    options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
+    let last: LookupAnswerProgress | null = null
+    // Existing fast-but-narrow contract: return at the first cumulative emission
+    // (the post-grace aggregate, or the final emission when every host settles
+    // before the grace window). Callers wanting progressive enrichment use query$().
+    for await (const partial of this.query$(question, timeout, options)) {
+      last = partial
+      break
+    }
+    return {
+      type: 'output-list',
+      outputs: last?.outputs ?? []
+    }
+  }
+
+  /**
+   * Iterable form of {@link query}. Emits partial results as hosts answer.
+   *
+   * Emission order:
+   *  - First emission: after the grace window expires (or as soon as the soft timeout elapses), containing
+   *    every output gathered from hosts that answered by then.
+   *  - Subsequent emissions: re-emitted whenever a late host returns extra outputs that weren't in earlier
+   *    emissions. Each emission contains the cumulative `outputs` set.
+   *  - Final emission: `isFinal: true` once all in-flight hosts have settled (success / fail / timeout). The
+   *    caller can `break` early; outstanding work is bounded by the per-host timeout.
+   *
+   * No host work runs past its per-host `timeout` — there is no leak risk on early break.
+   */
+  async * query$ (
+    question: LookupQuestion,
+    timeout?: number,
+    options?: LookupQueryOptions
+  ): AsyncIterable<LookupAnswerProgress> {
     let competentHosts: string[] = []
     if (question.service === 'ls_slap') {
       competentHosts = this.networkPreset === 'local' ? ['http://localhost:8080'] : this.slapTrackers
@@ -282,48 +357,58 @@ export default class LookupResolver {
       throw new Error(`All competent hosts for ${question.service} are temporarily unavailable due to backoff.`)
     }
 
-    // Fire all hosts; resolve as soon as we have results from any host,
-    // then allow a short grace window for additional hosts to contribute.
-    const GRACE_MS = 80
-    const answers: LookupAnswer[] = await new Promise<LookupAnswer[]>((resolve) => {
-      const collected: LookupAnswer[] = []
-      let pending = rankedHosts.length
-      let graceTimer: ReturnType<typeof setTimeout> | null = null
+    const graceMs = options?.graceMs ?? 80
+    const softTimeoutMs = options?.softTimeoutMs
 
-      const tryResolve = (): void => {
-        if (graceTimer !== null) clearTimeout(graceTimer)
-        resolve(collected)
-      }
-
-      for (const host of rankedHosts) {
-        this.lookupHostWithTracking(host, question, timeout)
-          .then((answer) => {
-            if (answer?.type === 'output-list' && Array.isArray(answer.outputs) && answer.outputs.length > 0) {
-              collected.push(answer)
-              // First valid response: start a grace window for others
-              if (collected.length === 1 && pending > 1) {
-                graceTimer = setTimeout(tryResolve, GRACE_MS)
-              }
-            }
-          })
-          .catch(() => { /* host failed; tracked by lookupHostWithTracking */ })
-          .finally(() => {
-            pending--
-            if (pending === 0) tryResolve()
-          })
-      }
-    })
-
+    const hostCount = rankedHosts.length
     const outputsMap = new Map<string, { beef: number[], context?: number[], outputIndex: number }>()
+    const txIds: string[] = []
+    let completedHosts = 0
+    let firstResponseAt: number | null = null
 
-    // Memo key helper for tx parsing
-    const beefKey = (beef: number[]): string => {
-      if (typeof beef !== 'object') return '' // The invalid BEEF has an empty key.
+    type Event = { kind: 'answer', answer: LookupAnswer } | { kind: 'done' } | { kind: 'soft' }
+    const queue: Event[] = []
+    let waiter: ((v: void) => void) | null = null
+    const push = (e: Event): void => {
+      queue.push(e)
+      if (waiter !== null) {
+        const w = waiter
+        waiter = null
+        w()
+      }
+    }
+
+    for (const host of rankedHosts) {
+      this.lookupHostWithTracking(host, question, timeout)
+        .then((answer) => {
+          if (answer?.type === 'output-list' && Array.isArray(answer.outputs) && answer.outputs.length > 0) {
+            push({ kind: 'answer', answer })
+          }
+        })
+        .catch(() => { /* tracked already */ })
+        .finally(() => {
+          completedHosts++
+          push({ kind: 'done' })
+        })
+    }
+
+    let softTimer: ReturnType<typeof setTimeout> | null = null
+    if (typeof softTimeoutMs === 'number' && softTimeoutMs >= 0) {
+      softTimer = setTimeout(() => push({ kind: 'soft' }), softTimeoutMs)
+    }
+
+    let graceTimer: ReturnType<typeof setTimeout> | null = null
+    let graceFired = false
+    let emittedOnce = false
+
+    const beefKey = (beef: number[] | undefined): string => {
+      if (typeof beef !== 'object' || beef == null) return ''
       return beef.join(',')
     }
 
-    for (const response of answers) {
-      for (const output of response.outputs) {
+    const mergeAnswer = (answer: LookupAnswer): boolean => {
+      let added = false
+      for (const output of answer.outputs) {
         const keyForBeef = beefKey(output.beef)
         let memo = this.txMemo.get(keyForBeef)
         const now = Date.now()
@@ -337,14 +422,66 @@ export default class LookupResolver {
             continue
           }
         }
-
         const uniqKey = `${memo.txId}.${output.outputIndex}`
-        outputsMap.set(uniqKey, output)
+        if (!outputsMap.has(uniqKey)) {
+          outputsMap.set(uniqKey, output)
+          txIds.push(memo.txId)
+          added = true
+        }
       }
+      return added
     }
-    return {
+
+    const snapshot = (isFinal: boolean): LookupAnswerProgress => ({
       type: 'output-list',
-      outputs: Array.from(outputsMap.values())
+      outputs: Array.from(outputsMap.values()),
+      txIds: txIds.slice(),
+      isFinal,
+      hostCount,
+      completedHosts
+    })
+
+    try {
+      while (completedHosts < hostCount) {
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => { waiter = resolve })
+        }
+        const e = queue.shift() as Event
+        if (e.kind === 'answer') {
+          const added = mergeAnswer(e.answer)
+          if (firstResponseAt === null) {
+            firstResponseAt = Date.now()
+            if (!graceFired && graceMs > 0) {
+              graceTimer = setTimeout(() => {
+                graceFired = true
+                push({ kind: 'soft' })
+              }, graceMs)
+            } else {
+              graceFired = true
+            }
+          }
+          if (graceFired && added) {
+            emittedOnce = true
+            yield snapshot(false)
+          }
+        } else if (e.kind === 'soft') {
+          if (!emittedOnce) {
+            graceFired = true
+            emittedOnce = true
+            yield snapshot(false)
+          }
+          if (typeof softTimeoutMs === 'number' && firstResponseAt !== null) {
+            // Soft timeout: caller asked to bail out once any answer is in. Yield final.
+            break
+          }
+        } else if (e.kind === 'done') {
+          // continue loop; final emission happens after the loop
+        }
+      }
+      yield snapshot(true)
+    } finally {
+      if (graceTimer !== null) clearTimeout(graceTimer)
+      if (softTimer !== null) clearTimeout(softTimer)
     }
   }
 

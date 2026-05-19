@@ -18,7 +18,7 @@ export class WABClient {
   /**
    * Return the WAB server info
    */
-  public async getInfo () {
+  public async getInfo (): Promise<any> {
     const res = await fetch(`${this.serverUrl}/info`)
     return await res.json()
   }
@@ -33,21 +33,21 @@ export class WABClient {
   /**
    * Start an Auth Method flow
    */
-  public async startAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any) {
+  public async startAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any): Promise<any> {
     return await authMethod.startAuth(this.serverUrl, presentationKey, payload)
   }
 
   /**
    * Complete an Auth Method flow
    */
-  public async completeAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any) {
+  public async completeAuthMethod (authMethod: AuthMethodInteractor, presentationKey: string, payload: any): Promise<any> {
     return await authMethod.completeAuth(this.serverUrl, presentationKey, payload)
   }
 
   /**
    * List user-linked methods
    */
-  public async listLinkedMethods (presentationKey: string) {
+  public async listLinkedMethods (presentationKey: string): Promise<any> {
     const res = await fetch(`${this.serverUrl}/user/linkedMethods`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -59,7 +59,7 @@ export class WABClient {
   /**
    * Unlink a given Auth Method by ID
    */
-  public async unlinkMethod (presentationKey: string, authMethodId: number) {
+  public async unlinkMethod (presentationKey: string, authMethodId: number): Promise<any> {
     const res = await fetch(`${this.serverUrl}/user/unlinkMethod`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -71,7 +71,7 @@ export class WABClient {
   /**
    * Request faucet
    */
-  public async requestFaucet (presentationKey: string) {
+  public async requestFaucet (presentationKey: string): Promise<any> {
     const res = await fetch(`${this.serverUrl}/faucet/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -83,7 +83,7 @@ export class WABClient {
   /**
    * Delete user
    */
-  public async deleteUser (presentationKey: string) {
+  public async deleteUser (presentationKey: string): Promise<any> {
     const res = await fetch(`${this.serverUrl}/user/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

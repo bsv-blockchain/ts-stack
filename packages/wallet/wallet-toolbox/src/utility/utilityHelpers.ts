@@ -91,7 +91,7 @@ export function asBsvSdkPublickKey (pubKey: string): PublicKey {
  * Verifies that a possibly optional value has a value.
  */
 export function verifyTruthy<T> (v: T | null | undefined, description?: string): T {
-  if (!v) throw new WERR_INTERNAL(description ?? 'A truthy value is required.')
+  if (v == null) throw new WERR_INTERNAL(description ?? 'A truthy value is required.')
   return v
 }
 
@@ -112,7 +112,7 @@ export function verifyHexString (v: string): string {
  * Verifies that an optional or null hex string is undefined or a trimmed lowercase string.
  */
 export function verifyOptionalHexString (v?: string | null): string | undefined {
-  if (!v) return undefined
+  if (v == null || v === '') return undefined
   return verifyHexString(v)
 }
 
@@ -221,7 +221,7 @@ export function validateSecondsSinceEpoch (time: number): Date {
  * @param arr2
  * @returns
  */
-export function arraysEqual (arr1: Number[], arr2: Number[]) {
+export function arraysEqual (arr1: Number[], arr2: Number[]): boolean {
   if (arr1.length !== arr2.length) return false
   for (let i = 0; i < arr1.length; i++) {
     if (arr1[i] !== arr2[i]) return false
@@ -229,7 +229,7 @@ export function arraysEqual (arr1: Number[], arr2: Number[]) {
   return true
 }
 
-export function optionalArraysEqual (arr1?: Number[], arr2?: Number[]) {
+export function optionalArraysEqual (arr1?: Number[], arr2?: Number[]): boolean {
   if ((arr1 == null) && (arr2 == null)) return true
   if ((arr1 == null) || (arr2 == null)) return false
   return arraysEqual(arr1, arr2)

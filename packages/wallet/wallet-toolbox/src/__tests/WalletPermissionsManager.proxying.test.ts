@@ -153,10 +153,10 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
       )
       // Confirm the metadata was replaced with some ciphertext array in createAction call
       expect(callArgs.description).not.toBe('User purchase') // manager encrypts it
-      if (callArgs.inputs[0].inputDescription) {
+      if (callArgs.inputs[0].inputDescription != null) {
         expect(callArgs.inputs[0].inputDescription).not.toBe('My input')
       }
-      if (callArgs.outputs[0].outputDescription) {
+      if (callArgs.outputs[0].outputDescription != null) {
         expect(callArgs.outputs[0].outputDescription).not.toBe('Purchase output')
       }
 
@@ -328,9 +328,10 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     // The manager calls ensureLabelAccess first, which triggers a protocol permission request
     // we ephemeral-grant. Then it calls underlying.listActions.
     expect(result.actions[0].description).toBe('*****') // Decrypted from [42, 42, 42, 42, 42, 42, 42]
-    expect(result.actions[0].inputs![0].inputDescription).toBe('*****')
-    expect(result.actions[0].outputs![0].outputDescription).toBe('*****')
-    expect(result.actions[0].outputs![0].customInstructions).toBe('*****')
+    const action0 = result.actions[0] as any
+    expect(action0.inputs[0].inputDescription).toBe('*****')
+    expect(action0.outputs[0].outputDescription).toBe('*****')
+    expect(action0.outputs[0].customInstructions).toBe('*****')
   })
 
   it('should pass internalizeAction calls to underlying, after ensuring basket permissions and encrypting customInstructions if config=on', async () => {

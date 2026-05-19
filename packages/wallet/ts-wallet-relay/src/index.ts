@@ -2,6 +2,7 @@
 // Node.js only. Requires: ws, qrcode, express (peer dependencies).
 
 export { WebSocketRelay } from './server/WebSocketRelay.js'
+export type { WebSocketRelayOptions } from './server/WebSocketRelay.js'
 export { QRSessionManager } from './server/QRSessionManager.js'
 export type { QRSessionManagerOptions } from './server/QRSessionManager.js'
 export { WalletRequestHandler } from './server/WalletRequestHandler.js'
@@ -21,6 +22,8 @@ export type {
 export { parsePairingUri, buildPairingUri, verifyPairingSignature, DEFAULT_ACCEPTED_SCHEMAS } from './shared/pairingUri.js'
 export { encryptEnvelope, decryptEnvelope } from './shared/crypto.js'
 export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
+export { compileOriginMatcher } from './shared/originMatcher.js'
+export type { AllowedOrigins } from './shared/originMatcher.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

@@ -300,7 +300,7 @@ Help improve docs:
 1. Find unclear sections in `docs/`
 2. Edit the relevant `.md` file
 3. Preview locally: `pnpm docs:dev` → `http://localhost:5173`
-4. Submit a PR — CI validates frontmatter and builds the site automatically
+4. Submit a PR — the docs site build (`pnpm docs:build`) validates frontmatter + links on deploy (run `pnpm --filter docs-site validate` locally first for fast feedback)
 
 **Do not delete the `gh-pages` branch** — it hosts the TypeDoc `/api/` tree that
 the deploy workflow merges into the artifact before publishing.

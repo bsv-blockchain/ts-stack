@@ -165,14 +165,14 @@ describe('WalletPermissionsManager - Initialization & Configuration', () => {
     // but once the promise gets to that stage, it populates the queue.
 
     // Wait a short tick to let the async code run
-    await new Promise(res => setTimeout(res, 10))
+    await new Promise(resolve => setTimeout(resolve, 10))
     expect(activeRequests.size).toBeGreaterThan(0)
 
     // We'll forcibly deny the request so the test can conclude:
     const firstRequestKey = Array.from(activeRequests.keys())[0]
     const firstRequestQueue = activeRequests.get(firstRequestKey)
-    if (firstRequestQueue && firstRequestQueue.pending.length > 0) {
-      manager.denyPermission(firstRequestKey)
+    if (firstRequestQueue != null && firstRequestQueue.pending.length > 0) {
+      void manager.denyPermission(firstRequestKey)
     }
 
     // The promise eventually rejects with "Permission denied."
@@ -187,7 +187,7 @@ describe('WalletPermissionsManager - Initialization & Configuration', () => {
     manager.bindCallback(
       'onSpendingAuthorizationRequested',
       jest.fn(x => {
-        manager.grantPermission({ requestID: x.requestID, ephemeral: true })
+        void manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       }) as any
     )
 

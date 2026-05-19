@@ -16,7 +16,7 @@ export function parseSdJwt (sdJwt: string): ParsedSdJwt {
   const issuerSignedJwt = parts[0]
   const last = parts[parts.length - 1]
   const hasKeyBinding = last !== ''
-  const disclosures = hasKeyBinding ? parts.slice(1, -1) : parts.slice(1, -1)
+  const disclosures = parts.slice(1, -1)
   return {
     issuerSignedJwt,
     disclosures,

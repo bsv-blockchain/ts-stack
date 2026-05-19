@@ -18,6 +18,30 @@ import { PrivateKey, Utils } from '../primitives/index.js'
 import { LookupResolver, SHIPBroadcaster, TopicBroadcaster, withDoubleSpendRetry } from '../overlay-tools/index.js'
 import { ContactsManager, Contact } from './ContactsManager.js'
 
+/** Options for {@link IdentityClient.resolveByIdentityKey}. */
+export interface ResolveByIdentityKeyOptions {
+  /** Default `true`. If `false`, contacts are skipped and the overlay is queried directly. */
+  overrideWithContacts?: boolean
+  /**
+   * Default `false`. When `true`, fire contacts and overlay in parallel (legacy behavior) instead
+   * of short-circuiting on a contacts hit. Use when callers specifically need a fresh overlay
+   * answer alongside the contact record.
+   */
+  parallel?: boolean
+}
+
+/** Options for {@link IdentityClient.resolveByAttributes}. */
+export interface ResolveByAttributesOptions {
+  /** Default `true`. If `false`, contacts are skipped and the overlay is queried directly. */
+  overrideWithContacts?: boolean
+  /**
+   * Default `false`. When `true`, fire contacts and overlay in parallel (legacy behavior). The
+   * contacts-first path tries to match the supplied attributes against the locally-stored
+   * contacts; if any contact matches every attribute, the overlay is skipped.
+   */
+  parallel?: boolean
+}
+
 /**
  * IdentityClient lets you discover who others are, and let the world know who you are.
  */
@@ -131,65 +155,122 @@ export class IdentityClient {
   /**
    * Resolves displayable identity certificates, issued to a given identity key by a trusted certifier.
    *
-   * @param {DiscoverByIdentityKeyArgs} args - Arguments for requesting the discovery based on the identity key.
-   * @param {boolean} [overrideWithContacts=true] - Whether to override the results with personal contacts if available.
-   * @returns {Promise<DisplayableIdentity[]>} The promise resolves to displayable identities.
+   * By default, contacts are consulted first and the overlay is only queried on a contacts miss.
+   * Pass `{ parallel: true }` to fire both in parallel (the legacy behavior, useful when callers
+   * specifically want a fresh overlay answer even when a contact exists).
+   *
+   * @param args - Arguments for requesting the discovery based on the identity key.
+   * @param overrideWithContacts - Whether to consult personal contacts. Default true. When `false`,
+   *   contacts are skipped entirely and the overlay is queried directly. Boolean kept for legacy
+   *   call sites; new code should prefer the options-object form.
+   * @returns The promise resolves to displayable identities.
    */
   async resolveByIdentityKey (
     args: DiscoverByIdentityKeyArgs,
-    overrideWithContacts = true
+    overrideWithContacts: boolean | ResolveByIdentityKeyOptions = true
   ): Promise<DisplayableIdentity[]> {
-    // Run both queries in parallel for better performance
+    const opts: ResolveByIdentityKeyOptions =
+      typeof overrideWithContacts === 'boolean'
+        ? { overrideWithContacts }
+        : { overrideWithContacts: true, ...overrideWithContacts }
+    const useContacts = opts.overrideWithContacts !== false
+    const parallel = opts.parallel === true
+
+    if (useContacts && !parallel) {
+      const contacts = await this.contactsManager.getContacts(args.identityKey)
+      if (contacts.length > 0) return contacts
+
+      const certificatesResult = await this.wallet.discoverByIdentityKey(args, this.originator)
+      const certs = certificatesResult?.certificates ?? []
+      return certs.map((cert) => IdentityClient.parseIdentity(cert))
+    }
+
     const [contacts, certificatesResult] = await Promise.all([
-      overrideWithContacts
+      useContacts
         ? this.contactsManager.getContacts(args.identityKey)
-        : Promise.resolve([]),
+        : Promise.resolve([] as Contact[]),
       this.wallet.discoverByIdentityKey(args, this.originator)
     ])
 
-    // Override results with personal contacts if available
-    if (contacts.length > 0) {
-      return contacts
-    }
-
+    if (contacts.length > 0) return contacts
     const certs = certificatesResult?.certificates ?? []
-    return certs.map((cert) => {
-      return IdentityClient.parseIdentity(cert)
-    })
+    return certs.map((cert) => IdentityClient.parseIdentity(cert))
   }
 
   /**
    * Resolves displayable identity certificates by specific identity attributes, issued by a trusted entity.
    *
-   * @param {DiscoverByAttributesArgs} args - Attributes and optional parameters used to discover certificates.
-   * @param {boolean} [overrideWithContacts=true] - Whether to override the results with personal contacts if available.
-   * @returns {Promise<DisplayableIdentity[]>} The promise resolves to displayable identities.
+   * By default, contacts are consulted first: if any contact matches, the overlay call is skipped
+   * entirely. Set `parallel: true` to keep the legacy parallel behavior.
+   *
+   * @param args - Attributes and optional parameters used to discover certificates.
+   * @param overrideWithContacts - Whether to consult personal contacts. Default true. Boolean kept
+   *   for legacy call sites; new code should prefer the options-object form.
+   * @returns The promise resolves to displayable identities.
    */
   async resolveByAttributes (
     args: DiscoverByAttributesArgs,
-    overrideWithContacts = true
+    overrideWithContacts: boolean | ResolveByAttributesOptions = true
   ): Promise<DisplayableIdentity[]> {
-    // Run both queries in parallel for better performance
+    const opts: ResolveByAttributesOptions =
+      typeof overrideWithContacts === 'boolean'
+        ? { overrideWithContacts }
+        : { overrideWithContacts: true, ...overrideWithContacts }
+    const useContacts = opts.overrideWithContacts !== false
+    const parallel = opts.parallel === true
+
+    if (useContacts && !parallel) {
+      const contacts = await this.contactsManager.getContacts()
+      const matches = this.matchContactsByAttributes(contacts, args)
+      if (matches.length > 0) return matches
+
+      const certificatesResult = await this.wallet.discoverByAttributes(args, this.originator)
+      const certs = certificatesResult?.certificates ?? []
+      const contactByKey = new Map<PubKeyHex, Contact>(
+        contacts.map((contact) => [contact.identityKey, contact] as const)
+      )
+      return certs.map(
+        (cert) => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
+      )
+    }
+
     const [contacts, certificatesResult] = await Promise.all([
-      overrideWithContacts
-        ? this.contactsManager.getContacts()
-        : Promise.resolve([]),
+      useContacts ? this.contactsManager.getContacts() : Promise.resolve([] as Contact[]),
       this.wallet.discoverByAttributes(args, this.originator)
     ])
 
-    // Fast lookup by identityKey
     const contactByKey = new Map<PubKeyHex, Contact>(
       contacts.map((contact) => [contact.identityKey, contact] as const)
     )
-
-    // Guard if certificates might be absent
     const certs = certificatesResult?.certificates ?? []
-
-    // Parse certificates and substitute with contacts where available
     return certs.map(
-      (cert) =>
-        contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
+      (cert) => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
     )
+  }
+
+  /**
+   * Best-effort match of contacts against a `DiscoverByAttributesArgs.attributes` shape.
+   * Used by the contacts-first path of {@link resolveByAttributes} to decide whether the overlay
+   * can be skipped. Compares string-valued attributes against same-named fields on the contact's
+   * decrypted record. Returns the subset of contacts that match every supplied attribute.
+   */
+  private matchContactsByAttributes (
+    contacts: Contact[],
+    args: DiscoverByAttributesArgs
+  ): Contact[] {
+    const attrs = (args).attributes
+    if (attrs == null || typeof attrs !== 'object' || Array.isArray(attrs)) return []
+    const entries = Object.entries(attrs as Record<string, unknown>).filter(
+      ([, v]) => typeof v === 'string' && v.length > 0
+    ) as Array<[string, string]>
+    if (entries.length === 0) return []
+    return contacts.filter((contact) => {
+      const bag: Record<string, unknown> = {
+        name: contact.name,
+        identityKey: contact.identityKey
+      }
+      return entries.every(([k, v]) => typeof bag[k] === 'string' && (bag[k] as string).toLowerCase() === v.toLowerCase())
+    })
   }
 
   /**

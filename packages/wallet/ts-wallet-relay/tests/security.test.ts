@@ -7,6 +7,7 @@
  */
 
 import { QRSessionManager } from '../src/server/QRSessionManager.js'
+import { compileOriginMatcher } from '../src/shared/originMatcher.js'
 
 // ── QRSessionManager — desktop token ─────────────────────────────────────────
 
@@ -78,29 +79,112 @@ describe('desktop token validator logic', () => {
 // ── Origin enforcement logic ──────────────────────────────────────────────────
 
 describe('origin header enforcement logic', () => {
-  // Mirrors what WebSocketRelay.handleConnection does
+  // Mirrors what WebSocketRelay.handleConnection does, using the real matcher.
   function shouldAllow(
     requestOrigin: string | undefined,
-    allowedOrigin: string | null
+    matcher: ((o: string) => boolean) | null
   ): boolean {
-    if (requestOrigin && allowedOrigin && requestOrigin !== allowedOrigin) return false
+    if (requestOrigin && matcher && !matcher(requestOrigin)) return false
     return true
   }
 
   it('allows when origin matches allowedOrigin', () => {
-    expect(shouldAllow('https://app.example.com', 'https://app.example.com')).toBe(true)
+    const m = compileOriginMatcher('https://app.example.com')
+    expect(shouldAllow('https://app.example.com', m)).toBe(true)
   })
 
   it('rejects when origin does not match allowedOrigin', () => {
-    expect(shouldAllow('https://evil.attacker.com', 'https://app.example.com')).toBe(false)
+    const m = compileOriginMatcher('https://app.example.com')
+    expect(shouldAllow('https://evil.attacker.com', m)).toBe(false)
   })
 
   it('allows native clients that send no origin header', () => {
-    expect(shouldAllow(undefined, 'https://app.example.com')).toBe(true)
+    const m = compileOriginMatcher('https://app.example.com')
+    expect(shouldAllow(undefined, m)).toBe(true)
   })
 
   it('allows any origin when allowedOrigin is not configured', () => {
     expect(shouldAllow('https://any.example.com', null)).toBe(true)
+  })
+})
+
+// ── compileOriginMatcher (allowlist shapes) ───────────────────────────────────
+
+describe('compileOriginMatcher', () => {
+  it('returns null when allowed is undefined', () => {
+    expect(compileOriginMatcher(undefined)).toBeNull()
+  })
+
+  it('returns null when allowed is null', () => {
+    expect(compileOriginMatcher(null)).toBeNull()
+  })
+
+  describe('string', () => {
+    it('matches exact equality', () => {
+      const m = compileOriginMatcher('https://app.example.com')!
+      expect(m('https://app.example.com')).toBe(true)
+    })
+
+    it('rejects non-matching origin', () => {
+      const m = compileOriginMatcher('https://app.example.com')!
+      expect(m('https://evil.example.com')).toBe(false)
+    })
+
+    it('is case-sensitive (origin spec compliant)', () => {
+      const m = compileOriginMatcher('https://app.example.com')!
+      expect(m('https://APP.example.com')).toBe(false)
+    })
+  })
+
+  describe('string array', () => {
+    it('matches any value in the list', () => {
+      const m = compileOriginMatcher([
+        'https://app.example.com',
+        'https://cities.example.com',
+        'https://eu4.example.com',
+      ])!
+      expect(m('https://app.example.com')).toBe(true)
+      expect(m('https://cities.example.com')).toBe(true)
+      expect(m('https://eu4.example.com')).toBe(true)
+    })
+
+    it('rejects origins not in the list', () => {
+      const m = compileOriginMatcher(['https://app.example.com'])!
+      expect(m('https://evil.example.com')).toBe(false)
+    })
+
+    it('rejects when list is empty', () => {
+      const m = compileOriginMatcher([])!
+      expect(m('https://app.example.com')).toBe(false)
+    })
+  })
+
+  describe('RegExp', () => {
+    it('matches by pattern', () => {
+      const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.example\.com$/)!
+      expect(m('https://app.example.com')).toBe(true)
+      expect(m('https://cities.example.com')).toBe(true)
+    })
+
+    it('rejects origins that do not match the pattern', () => {
+      const m = compileOriginMatcher(/^https:\/\/[a-z0-9-]+\.example\.com$/)!
+      expect(m('https://example.com')).toBe(false)        // no subdomain
+      expect(m('http://app.example.com')).toBe(false)     // wrong scheme
+      expect(m('https://app.example.com.evil.com')).toBe(false) // trailing
+    })
+  })
+
+  describe('predicate function', () => {
+    it('uses the function directly', () => {
+      const calls: string[] = []
+      const m = compileOriginMatcher((o: string) => {
+        calls.push(o)
+        return o.endsWith('.trusted.com')
+      })!
+      expect(m('https://app.trusted.com')).toBe(true)
+      expect(m('https://evil.com')).toBe(false)
+      expect(calls).toEqual(['https://app.trusted.com', 'https://evil.com'])
+    })
   })
 })
 

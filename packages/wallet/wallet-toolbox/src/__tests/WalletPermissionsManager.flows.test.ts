@@ -11,7 +11,7 @@ jest.mock('@bsv/sdk', () => MockedBSV_SDK)
  * We do this so we can reliably test the request flow (i.e., that it truly initiates
  * a new permission request if no token is found).
  */
-function mockNoTokensFound (manager: WalletPermissionsManager) {
+function mockNoTokensFound (manager: WalletPermissionsManager): void {
   jest.spyOn(manager as any, 'findProtocolToken').mockResolvedValue(undefined)
   jest.spyOn(manager as any, 'findBasketToken').mockResolvedValue(undefined)
   jest.spyOn(manager as any, 'findCertificateToken').mockResolvedValue(undefined)
@@ -85,7 +85,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         usageType: 'signing'
       })
 
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
 
       expect(groupRequestCallback).toHaveBeenCalledTimes(1)
       const callbackArg = (groupRequestCallback.mock as any).calls[0][0]
@@ -138,7 +138,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         usageType: 'signing'
       })
 
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
 
       expect(pactRequestCallback).toHaveBeenCalledTimes(1)
       const callbackArg = (pactRequestCallback.mock as any).calls[0][0]
@@ -238,7 +238,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         usageType: 'signing'
       })
 
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
 
       expect(protocolRequestCallback).toHaveBeenCalledTimes(1)
       const callbackArg = (protocolRequestCallback.mock as any).calls[0][0]
@@ -290,7 +290,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         usageType: 'signing'
       })
 
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
 
       expect(groupRequestCallback).toHaveBeenCalledTimes(2)
       const requestID1 = (groupRequestCallback.mock as any).calls[0][0].requestID
@@ -362,7 +362,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       // Wait a short moment for the async request flow to trigger
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
 
       // We expect only one "onProtocolPermissionRequested" event for both calls
       expect(requestCallback).toHaveBeenCalledTimes(1)
@@ -416,7 +416,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       // Wait a moment for them to trigger
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
 
       // We expect one protocol request AND one basket request
       expect(protocolRequestCb).toHaveBeenCalledTimes(1)
@@ -468,7 +468,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       // Let the request event fire
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       expect(requestCb).toHaveBeenCalledTimes(1)
 
       // Extract the requestID from the callback
@@ -513,7 +513,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         counterparty: 'self',
         usageType: 'encrypting'
       })
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       const p1ReqID = (protoCb.mock as any).calls[0][0].requestID
       // At this point, resource 1 is pending in activeRequests. We'll not resolve it yet.
 
@@ -525,7 +525,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         counterparty: 'self',
         usageType: 'encrypting'
       })
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       // the second call triggers a second onProtocolPermissionRequested callback
       expect(protoCb).toHaveBeenCalledTimes(2)
       const p2ReqID = (protoCb.mock as any).calls[1][0].requestID
@@ -573,7 +573,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       // Wait for request callback
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       expect(requestCb).toHaveBeenCalledTimes(1)
       const reqID1 = (requestCb.mock as any).calls[0][0].requestID
 
@@ -603,7 +603,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         usageType: 'signing'
       })
 
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       // We expect a new request callback
       expect(requestCb).toHaveBeenCalledTimes(2)
 
@@ -664,7 +664,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
         reason: 'test persistent #1',
         usageType: 'signing'
       })
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       expect(requestCb).toHaveBeenCalledTimes(1)
 
       // Grant ephemeral=false => triggers createPermissionOnChain
@@ -685,7 +685,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       // We do not expect a new user prompt => requestCb remains at 1
-      await new Promise(res => setTimeout(res, 5))
+      await new Promise(resolve => setTimeout(resolve, 5))
       expect(requestCb).toHaveBeenCalledTimes(1)
 
       // The second call should resolve immediately, no prompt
@@ -730,7 +730,7 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       })
 
       // Wait for request callback
-      await new Promise(res => setTimeout(res, 10))
+      await new Promise(resolve => setTimeout(resolve, 10))
       expect(requestCb).toHaveBeenCalledTimes(1)
 
       // Confirm the callback param includes `renewal=true` and `previousToken=expiredToken`

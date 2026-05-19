@@ -106,6 +106,71 @@ import { ValidListOutputsArgs } from '@bsv/sdk/dist/types/src/wallet/validationH
 /**
  * The preferred means of constructing a `Wallet` is with a `WalletArgs` instance.
  */
+/**
+ * Minimal interface the wallet uses to short-circuit identity discovery against the user's local
+ * contacts before hitting the overlay. The result shape matches what `discoverByIdentityKey` /
+ * `discoverByAttributes` return so callers don't have to special-case contact-sourced records.
+ *
+ * Implementations typically wrap `@bsv/sdk` `ContactsManager` or another on-device source. Reads
+ * are expected to be very fast (single-digit ms against local SQLite is typical).
+ */
+export interface ContactSource {
+  /** Look up a contact by identity key. Return `null` (or undefined) if unknown. */
+  findByIdentityKey: (identityKey: PubKeyHex) => Promise<ContactRecord | null | undefined>
+  /** Look up contacts matching a set of attributes. May be a no-op if attribute search is unsupported. */
+  findByAttributes?: (attributes: Record<string, string> | string[]) => Promise<ContactRecord[]>
+}
+
+/**
+ * What a {@link ContactSource} returns. Carries enough to synthesize a minimal trusted
+ * `DiscoverCertificatesResult` without touching the overlay.
+ */
+export interface ContactRecord {
+  identityKey: PubKeyHex
+  /** Optional certificate type (e.g. xCert / discordCert) so callers can render a badge. */
+  type?: string
+  /** Optional decrypted fields. Whatever the app stored when saving the contact. */
+  decryptedFields?: Record<string, string>
+  /** Optional certifier metadata; missing trust defaults to `Infinity` (contacts override overlay trust). */
+  certifierInfo?: {
+    name?: string
+    iconUrl?: string
+    description?: string
+    trust?: number
+  }
+}
+
+/**
+ * Build a {@link DiscoverCertificatesResult} from contact records so {@link Wallet.discoverByIdentityKey}
+ * and {@link Wallet.discoverByAttributes} can short-circuit on a local contacts hit. The synthetic
+ * certificate has `trust: Infinity` by default so downstream `transformVerifiableCertificatesWithTrust`
+ * style filtering treats contacts as authoritative.
+ */
+function synthesizeContactResult (contacts: ContactRecord[]): DiscoverCertificatesResult {
+  const certificates = contacts.map((c) => ({
+    type: c.type ?? 'contact',
+    subject: c.identityKey,
+    serialNumber: '',
+    certifier: c.identityKey,
+    revocationOutpoint: '',
+    signature: '',
+    fields: {},
+    keyring: {},
+    decryptedFields: c.decryptedFields ?? {},
+    publiclyRevealedKeyring: {},
+    certifierInfo: {
+      name: c.certifierInfo?.name ?? 'Contact',
+      iconUrl: c.certifierInfo?.iconUrl ?? '',
+      description: c.certifierInfo?.description ?? 'Locally saved contact',
+      trust: c.certifierInfo?.trust ?? Number.POSITIVE_INFINITY
+    }
+  }))
+  return {
+    totalCertificates: certificates.length,
+    certificates: certificates as unknown as DiscoverCertificatesResult['certificates']
+  }
+}
+
 export interface WalletArgs {
   chain: Chain
   keyDeriver: KeyDeriverApi
@@ -115,6 +180,13 @@ export interface WalletArgs {
   privilegedKeyManager?: PrivilegedKeyManager
   settingsManager?: WalletSettingsManager
   lookupResolver?: LookupResolver
+  /**
+   * Optional contact source consulted before the overlay in `discoverByIdentityKey` /
+   * `discoverByAttributes`. When a contact matches, the overlay call is skipped entirely.
+   * Pass `forceRefresh: true` on the discover args to bypass both contacts and the overlay
+   * cache.
+   */
+  contactSource?: ContactSource
   /**
    * Optional. Provide a function conforming to the `MakeWalletLogger` type to enable wallet request logging.
    *
@@ -140,6 +212,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   services?: WalletServices
   monitor?: Monitor
+  contactSource?: ContactSource
 
   identityKey: string
 
@@ -221,6 +294,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     this.monitor = args.monitor
     this.privilegedKeyManager = args.privilegedKeyManager
     this.makeLogger = args.makeLogger
+    this.contactSource = args.contactSource
 
     this.identityKey = this.keyDeriver.identityKey
 
@@ -644,7 +718,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   private readonly _overlayCache: Map<string, { expiresAt: number, value: unknown }> = new Map()
 
   async discoverByIdentityKey (
-    args: DiscoverByIdentityKeyArgs,
+    args: DiscoverByIdentityKeyArgs & { forceRefresh?: boolean },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     Validation.validateOriginator(originator)
@@ -652,6 +726,19 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const TTL_MS = 2 * 60 * 1000
     const now = Date.now()
+    const forceRefresh = args.forceRefresh === true
+
+    // --- Contacts short-circuit (sub-10 ms typical, no network) ---
+    if (!forceRefresh && this.contactSource != null) {
+      try {
+        const contact = await this.contactSource.findByIdentityKey(args.identityKey)
+        if (contact != null) {
+          return synthesizeContactResult([contact])
+        }
+      } catch {
+        // Contact source failures must never block the network path.
+      }
+    }
 
     // --- trustSettings cache (2 minutes) ---
     let trustSettings =
@@ -667,14 +754,14 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const certifiers = trustSettings.trustedCertifiers.map(c => c.identityKey).sort((a, b) => a.localeCompare(b))
 
-    // --- queryOverlay cache (2 minutes) ---
+    // --- queryOverlay cache (2 minutes, client-side, bounded staleness) ---
     const cacheKey = JSON.stringify({
       fn: 'discoverByIdentityKey',
       identityKey: args.identityKey,
       certifiers
     })
 
-    let cached = this._overlayCache.get(cacheKey)
+    let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
     if ((cached == null) || cached.expiresAt <= now) {
       const value = await queryOverlay({ identityKey: args.identityKey, certifiers }, this.lookupResolver)
       cached = { value, expiresAt: now + TTL_MS }
@@ -689,7 +776,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   }
 
   async discoverByAttributes (
-    args: DiscoverByAttributesArgs,
+    args: DiscoverByAttributesArgs & { forceRefresh?: boolean },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     Validation.validateOriginator(originator)
@@ -697,6 +784,19 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
     const TTL_MS = 2 * 60 * 1000
     const now = Date.now()
+    const forceRefresh = args.forceRefresh === true
+
+    // --- Contacts short-circuit (optional, only when source supports attribute search) ---
+    if (!forceRefresh && this.contactSource?.findByAttributes != null && args.attributes != null) {
+      try {
+        const matches = await this.contactSource.findByAttributes(args.attributes as Record<string, string> | string[])
+        if (Array.isArray(matches) && matches.length > 0) {
+          return synthesizeContactResult(matches)
+        }
+      } catch {
+        // Fall through to network path on contact-source failure.
+      }
+    }
 
     // --- trustSettings cache (2 minutes) ---
     let trustSettings =
@@ -720,14 +820,14 @@ export class Wallet implements WalletInterface, ProtoWallet {
       attributesKey = JSON.stringify(args.attributes, keys)
     }
 
-    // --- queryOverlay cache (2 minutes) ---
+    // --- queryOverlay cache (2 minutes, client-side, bounded staleness) ---
     const cacheKey = JSON.stringify({
       fn: 'discoverByAttributes',
       attributes: attributesKey,
       certifiers
     })
 
-    let cached = this._overlayCache.get(cacheKey)
+    let cached = forceRefresh ? undefined : this._overlayCache.get(cacheKey)
     if ((cached == null) || cached.expiresAt <= now) {
       const value = await queryOverlay({ attributes: args.attributes, certifiers }, this.lookupResolver)
       cached = { value, expiresAt: now + TTL_MS }

@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import type { IncomingMessage, Server } from 'node:http'
 import type { WireEnvelope } from '../types.js'
+import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
 
 const HEARTBEAT_INTERVAL_MS = 30_000
 const BUFFER_TTL_MS = 60_000
@@ -24,6 +25,21 @@ export type TokenValidator    = (topic: string, token: string | null) => boolean
 export type ConnectHandler    = (topic: string) => void
 export type DisconnectHandler = (topic: string, role: Role) => void
 
+export interface WebSocketRelayOptions {
+  /**
+   * Legacy single-string origin allowlist. Kept for backward compatibility —
+   * prefer `allowedOrigins` for richer matching (arrays, regex, predicates).
+   * If both are set, `allowedOrigins` takes precedence.
+   */
+  allowedOrigin?: string
+  /**
+   * Origin allowlist used to gate browser WS upgrades (role=desktop). Accepts
+   * a single string, an array, a RegExp, or a custom predicate function.
+   * When unset and `allowedOrigin` is also unset, no origin validation runs.
+   */
+  allowedOrigins?: AllowedOrigins
+}
+
 /**
  * Topic-keyed WebSocket relay. Mounts at /ws.
  *
@@ -33,7 +49,8 @@ export type DisconnectHandler = (topic: string, role: Role) => void
  * - Messages from desktop → forwarded to mobile  (or buffered)
  * - Buffered messages are flushed when the other side connects
  * - Heartbeat pings every 30 s; non-responsive sockets are terminated
- * - Origin header validated against allowedOrigin when present (browser clients only)
+ * - Origin header validated against allowedOrigins (or legacy allowedOrigin)
+ *   when present — browser clients only; native mobile clients are exempt
  * - role=desktop connections validated via onValidateDesktopToken callback when set
  */
 export class WebSocketRelay {
@@ -44,11 +61,14 @@ export class WebSocketRelay {
   private validateDesktopToken: TokenValidator | null = null
   private onDisconnectCb: DisconnectHandler | null = null
   private onMobileConnectCb: ConnectHandler | null = null
-  private readonly allowedOrigin: string | null = null
-  private readonly heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private isOriginAllowed: ((origin: string) => boolean) | null = null
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
-  constructor(server: Server, options?: { allowedOrigin?: string }) {
-    this.allowedOrigin = options?.allowedOrigin ?? null
+  constructor(server: Server, options?: WebSocketRelayOptions) {
+    // `allowedOrigins` (new) wins over `allowedOrigin` (legacy) when both set.
+    this.isOriginAllowed = compileOriginMatcher(
+      options?.allowedOrigins ?? options?.allowedOrigin
+    )
     this.wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
     this.wss.on('connection', (ws, req) => this.handleConnection(ws, req))
     this.heartbeatTimer = setInterval(() => this.runHeartbeat(), HEARTBEAT_INTERVAL_MS)
@@ -144,7 +164,7 @@ export class WebSocketRelay {
     // (e.g. React Native on iOS sends "http://localhost" without a port).
     if (role === 'desktop') {
       const origin = req.headers.origin
-      if (origin && this.allowedOrigin && origin !== this.allowedOrigin) {
+      if (origin && this.isOriginAllowed && !this.isOriginAllowed(origin)) {
         ws.close(1008, 'Origin not allowed')
         return
       }
