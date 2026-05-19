@@ -14,7 +14,8 @@ export function parseSdJwt (sdJwt: string): ParsedSdJwt {
   const parts = sdJwt.split('~')
   if (parts.length < 2) throw new Error('Invalid SD-JWT serialization')
   const issuerSignedJwt = parts[0]
-  const last = parts[parts.length - 1]
+  const last = parts.at(-1)
+  if (last == null) throw new Error('Invalid SD-JWT serialization')
   const hasKeyBinding = last !== ''
   const disclosures = parts.slice(1, -1)
   return {

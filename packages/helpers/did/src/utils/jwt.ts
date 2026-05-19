@@ -37,7 +37,7 @@ export function decodeJwt (jwt: string): DecodedJwt {
 export function verifyJwt (jwt: string, publicKey: PublicKeyInput | Jwk): DecodedJwt {
   const decoded = decodeJwt(jwt)
   const alg = decoded.header.alg
-  if (alg !== 'ES256K') throw new Error(`Unsupported JOSE algorithm: ${String(alg)}`)
+  if (typeof alg !== 'string' || alg !== 'ES256K') throw new Error('Unsupported JOSE algorithm')
   if (!verifyCompact(decoded.signingInput, decoded.signature, publicKey, alg)) {
     throw new Error('JWT signature verification failed')
   }

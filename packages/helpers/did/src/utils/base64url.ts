@@ -5,15 +5,15 @@ export function base64UrlEncode (bytes: Uint8Array | number[] | string): string 
     ? Array.from(new TextEncoder().encode(bytes))
     : Array.from(bytes)
   return Utils.toBase64(data)
-    .replace(/\+/gu, '-')
-    .replace(/\//gu, '_')
-    .replace(/=+$/u, '')
+    .split('+').join('-')
+    .split('/').join('_')
+    .split('=', 1)[0]
 }
 
 export function base64UrlDecode (value: string): number[] {
   const base64 = value
-    .replace(/-/gu, '+')
-    .replace(/_/gu, '/')
+    .split('-').join('+')
+    .split('_').join('/')
     .padEnd(Math.ceil(value.length / 4) * 4, '=')
   return Utils.toArray(base64, 'base64')
 }

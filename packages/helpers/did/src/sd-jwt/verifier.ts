@@ -22,11 +22,14 @@ export class SdJwtVcVerifier {
     let disclosures: string[] = []
 
     try {
-      const serialized = typeof presentation === 'string'
-        ? presentation
-        : presentation.kbJwt == null
-          ? presentation.sdJwt
-          : SdJwtVcPresenterString(presentation)
+      let serialized: string
+      if (typeof presentation === 'string') {
+        serialized = presentation
+      } else if (presentation.kbJwt == null) {
+        serialized = presentation.sdJwt
+      } else {
+        serialized = SdJwtVcPresenterString(presentation)
+      }
       const parsed = parseSdJwt(serialized)
       disclosures = parsed.disclosures
       const decoded = decodeJwt(parsed.issuerSignedJwt)
