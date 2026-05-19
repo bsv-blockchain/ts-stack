@@ -49,7 +49,7 @@
   "author": "BSV Blockchain Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
-    "@bsv/auth-express-middleware": "^2.0.5",
+    "@bsv/auth-express-middleware": "workspace:*",
     "@types/body-parser": "^1.19.5",
     "@types/jest": "^30.0.0",
     "jest": "^30.3.0",
@@ -60,7 +60,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@bsv/sdk": "^2.1.0",
+    "@bsv/sdk": "workspace:*",
     "express": "^5.1.0"
   },
   "bugs": {

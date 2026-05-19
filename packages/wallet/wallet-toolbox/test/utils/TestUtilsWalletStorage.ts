@@ -590,6 +590,32 @@ export abstract class TestUtilsWalletStorage {
     return folder + filename
   }
 
+  /**
+   * Create a fresh SQLite-backed StorageProvider for one test. Derives a
+   * unique database name from `expect.getState().currentTestName` so tests
+   * in the same suite never share state. Drops/migrates/makes-available
+   * before returning. Caller owns calling `destroy()` in afterEach.
+   */
+  static async createFreshSQLiteStorage(args: {
+    databasePrefix: string
+    migrationName: string
+    chain?: Chain
+  }): Promise<StorageProvider> {
+    const fallback = args.databasePrefix
+    const testSlug = (expect.getState().currentTestName || fallback).replace(/[^a-zA-Z0-9_]/g, '_')
+    const databaseName = `${args.databasePrefix}_${testSlug.slice(-40)}`
+    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
+    const storage = new StorageKnex({
+      ...StorageKnex.defaultOptions(),
+      chain: args.chain ?? 'test',
+      knex: _tu.createLocalSQLite(localSQLiteFile)
+    })
+    await storage.dropAllData()
+    await storage.migrate(args.migrationName, '1'.repeat(64))
+    await storage.makeAvailable()
+    return storage
+  }
+
   static createLocalSQLite(filename: string): Knex {
     const config: Knex.Config = {
       client: 'better-sqlite3',
