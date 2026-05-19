@@ -137,62 +137,75 @@ const REQUIRED_TOP_LEVEL = ['vectors']
 const REGRESSION_RECOMMENDED_TOP_LEVEL = ['version', 'domain', 'category', 'description', 'regression']
 const REQUIRED_VECTOR_FIELDS = ['id', 'input', 'expected']
 
-function validateFile (path, data) {
-  const errors = []
-
-  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-    // Legacy format: bare array of vectors (no top-level envelope)
-    if (Array.isArray(data)) {
-      errors.push(`WARN: ${path} uses legacy bare-array format — wrap in { "vectors": [...] } envelope`)
-      return { errors, vectors: data }
+function checkTopLevelShape (path, data) {
+  if (Array.isArray(data)) {
+    return {
+      errors: [`WARN: ${path} uses legacy bare-array format — wrap in { "vectors": [...] } envelope`],
+      vectors: data,
+      done: true
     }
-    errors.push(`ERROR: ${path} top level must be an object or array`)
-    return { errors, vectors: [] }
   }
+  if (typeof data !== 'object' || data === null) {
+    return {
+      errors: [`ERROR: ${path} top level must be an object or array`],
+      vectors: [],
+      done: true
+    }
+  }
+  return { errors: [], vectors: null, done: false }
+}
 
-  const isRegression = path.includes('/regressions/')
-
-  // Check required top-level fields (lightweight fast check before full schema validation)
+function checkRequiredFields (path, data) {
+  const errors = []
   for (const field of REQUIRED_TOP_LEVEL) {
     if (!(field in data)) {
       errors.push(`ERROR: ${path} missing required top-level field "${field}"`)
     }
   }
+  return errors
+}
 
-  // For regressions we still do some lightweight metadata checks (the regression schema
-  // is intentionally more permissive at the top level than the standard one).
-  if (isRegression) {
-    for (const field of REGRESSION_RECOMMENDED_TOP_LEVEL) {
-      if (!(field in data)) {
-        errors.push(`WARN: ${path} missing recommended regression field "${field}"`)
-      }
-    }
-    if (!data.regression || typeof data.regression !== 'object' || !data.regression.issue) {
-      errors.push(`WARN: ${path} regression file is missing regression.issue metadata`)
+function checkRegressionMetadata (path, data) {
+  const errors = []
+  for (const field of REGRESSION_RECOMMENDED_TOP_LEVEL) {
+    if (!(field in data)) {
+      errors.push(`WARN: ${path} missing recommended regression field "${field}"`)
     }
   }
+  if (!data.regression || typeof data.regression !== 'object' || !data.regression.issue) {
+    errors.push(`WARN: ${path} regression file is missing regression.issue metadata`)
+  }
+  return errors
+}
 
-  const vectors = Array.isArray(data.vectors) ? data.vectors : []
+function runSchemaValidator (path, data, isRegression) {
+  const validator = isRegression ? validateRegression : validateStandard
+  const schemaName = isRegression ? 'regression-vector.schema.json' : 'vector.schema.json'
+  if (!validator || validator(data)) return []
+  return (validator.errors || []).map(e => {
+    const instancePath = e.instancePath || '(root)'
+    return `ERROR: ${path} SCHEMA: ${schemaName} ${instancePath} ${e.message}`
+  })
+}
+
+function validateFile (path, data) {
+  const shape = checkTopLevelShape(path, data)
+  if (shape.done) return { errors: shape.errors, vectors: shape.vectors }
+
+  const errors = checkRequiredFields(path, data)
+  const isRegression = path.includes('/regressions/')
+
+  if (isRegression) {
+    errors.push(...checkRegressionMetadata(path, data))
+  }
 
   if (!Array.isArray(data.vectors)) {
     errors.push(`ERROR: ${path} "vectors" must be an array`)
     return { errors, vectors: [] }
   }
 
-  // --- Strict JSON Schema validation (always enforced) ---
-  const validator = isRegression ? validateRegression : validateStandard
-  const schemaName = isRegression ? 'regression-vector.schema.json' : 'vector.schema.json'
-
-  if (validator && !validator(data)) {
-    const ajvErrors = (validator.errors || []).map(e => {
-      const instancePath = e.instancePath || '(root)'
-      return `SCHEMA: ${schemaName} ${instancePath} ${e.message}`
-    })
-    // Schema violations are fatal — this is the authoritative check for cross-language ports
-    ajvErrors.forEach(msg => errors.push(`ERROR: ${path} ${msg}`))
-  }
-
-  return { errors, vectors }
+  errors.push(...runSchemaValidator(path, data, isRegression))
+  return { errors, vectors: data.vectors }
 }
 
 function validateVector (filePath, vec, index) {

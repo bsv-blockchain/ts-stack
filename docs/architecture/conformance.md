@@ -102,5 +102,5 @@ See [Contributing Vectors](../conformance/contributing-vectors.md) for the file 
 
 - [Conformance Testing](../conformance/index.md)
 - [Vector Catalog](../conformance/vectors.md)
-- **[Porting Guide](../conformance/PORTING_GUIDE.md)** — Essential reading when aligning another language implementation
+- **[Porting Guide](https://github.com/bsv-blockchain/ts-stack/blob/main/conformance/PORTING_GUIDE.md)** — Essential reading when aligning another language implementation
 - [BRC Standards Index](../reference/brc-index.md)

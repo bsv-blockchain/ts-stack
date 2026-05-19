@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-05-14",
+  "generated_at": "2026-05-19",
   "source": "ts-stack conformance corpus",
-  "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance. Regenerate with: node scripts/generate-parity-matrix.mjs",
+  "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
     "total_files": 72,
     "total_vectors": 6625,

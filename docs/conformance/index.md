@@ -101,4 +101,4 @@ For a non-TypeScript SDK or wallet:
 - [TypeScript Runner](./runner-ts.md) — Runner commands and limitations
 - [Contributing Vectors](./contributing-vectors.md) — Add or refine fixtures
 - [Architecture View](../architecture/conformance.md) — High-level overview for port planning teams
-- **[Porting Guide](../conformance/PORTING_GUIDE.md)** — Practical guide for aligning Go, Rust, Python, or other language implementations (including known deviations and conformance tiers)
+- **[Porting Guide](https://github.com/bsv-blockchain/ts-stack/blob/main/conformance/PORTING_GUIDE.md)** — Practical guide for aligning Go, Rust, Python, or other language implementations (including known deviations and conformance tiers)

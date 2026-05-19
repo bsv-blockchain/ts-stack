@@ -15,6 +15,8 @@ const ROOT = join(__dirname, '..');
 const VECTORS_DIR = join(ROOT, 'conformance/vectors');
 const OUTPUT = join(ROOT, 'conformance/PARITY_MATRIX.json');
 
+const STATEFUL_TAG_KEYS = ['funded', 'live_overlay', 'state', 'harness'];
+
 async function walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   const files = [];
@@ -29,93 +31,99 @@ async function walk(dir) {
   return files;
 }
 
-async function main() {
-  const jsonFiles = await walk(VECTORS_DIR);
-  const files = [];
+function isStatefulTag(tag) {
+  return STATEFUL_TAG_KEYS.some(k => tag.includes(k));
+}
 
-  for (const fullPath of jsonFiles) {
-    const relPath = relative(VECTORS_DIR, fullPath).replace(/\\/g, '/');
-    const raw = await readFile(fullPath, 'utf8');
-    const data = JSON.parse(raw);
+function tallyParity(parity, counts, categories) {
+  if (parity === 'required') counts.required++;
+  else if (parity === 'intended') counts.intended++;
+  else if (parity === 'best-effort') categories.add('best-effort');
+}
 
-    const fileId = data.id || null;
-    const fileLevelParity = data.parity_class || 'required';
-    const vectors = Array.isArray(data.vectors) ? data.vectors : [];
+function collectTagCategories(tags, categories) {
+  if (!tags) return;
+  for (const tag of tags) {
+    if (isStatefulTag(tag)) categories.add('wallet_stateful_harness');
+  }
+}
 
-    let required = 0;
-    let intended = 0;
-    let skipped = 0;
-    const skipReasons = new Set();
-    const categories = new Set();
+function aggregateVectors(vectors, fileLevelParity) {
+  const counts = { required: 0, intended: 0, skipped: 0 };
+  const skipReasons = new Set();
+  const categories = new Set();
 
-    for (const vec of vectors) {
-      const p = vec.parity_class || fileLevelParity;
-      if (p === 'required') required++;
-      else if (p === 'intended') intended++;
-      else if (p === 'best-effort') categories.add('best-effort');
-
-      if (vec.skip === true) skipped++;
-
-      if (vec.skip_reason) skipReasons.add(vec.skip_reason);
-      if (vec.tags) {
-        for (const tag of vec.tags) {
-          if (['funded', 'live_overlay', 'state', 'harness'].some(k => tag.includes(k))) {
-            categories.add('wallet_stateful_harness');
-          }
-        }
-      }
-    }
-
-    const total = vectors.length;
-    let effectiveStatus = 'required';
-    if (intended > 0) effectiveStatus = intended === total ? 'intended' : 'mixed';
-    else if (skipped > 0) effectiveStatus = 'mixed';
-
-    let reasonCategory = 'fully_supported';
-    let justification = '';
-
-    if (relPath.startsWith('regressions/')) {
-      reasonCategory = 'historical_regression';
-      justification = 'Historical cross-SDK bug reproduction vector';
-    } else if (relPath.includes('wallet/brc100/')) {
-      if (intended > 0 || skipped > 0) {
-        reasonCategory = 'wallet_stateful_harness_required';
-        justification = 'Requires funded UTXOs + realistic fee model, live overlay, or pre-existing wallet state (see COVERAGE.md)';
-      }
-    } else if (relPath.includes('sdk/scripts/evaluation')) {
-      if (intended > 0) {
-        reasonCategory = 'partial_ts_behavioral_difference';
-        justification = `${intended} tx_invalid / MINIMALDATA / OP_VER edge cases intentionally differ from reference test vectors`;
-      }
-    }
-
-    if (skipReasons.size > 0 && !justification) {
-      justification = Array.from(skipReasons).join(' | ');
-    }
-
-    files.push({
-      path: relPath,
-      id: fileId,
-      total_vectors: total,
-      file_level_parity: fileLevelParity,
-      effective_status: effectiveStatus,
-      required_count: required,
-      intended_count: intended,
-      skipped_count: skipped,
-      reason_category: reasonCategory,
-      justification: justification || undefined,
-      categories: Array.from(categories)
-    });
+  for (const vec of vectors) {
+    tallyParity(vec.parity_class || fileLevelParity, counts, categories);
+    if (vec.skip === true) counts.skipped++;
+    if (vec.skip_reason) skipReasons.add(vec.skip_reason);
+    collectTagCategories(vec.tags, categories);
   }
 
-  // Sort for stability
-  files.sort((a, b) => a.path.localeCompare(b.path));
+  return { counts, skipReasons, categories };
+}
 
-  const totalVectors = files.reduce((sum, f) => sum + f.total_vectors, 0);
+function effectiveStatus(counts, total) {
+  if (counts.intended > 0) return counts.intended === total ? 'intended' : 'mixed';
+  if (counts.skipped > 0) return 'mixed';
+  return 'required';
+}
 
+function classifyReason(relPath, counts) {
+  if (relPath.startsWith('regressions/')) {
+    return {
+      reasonCategory: 'historical_regression',
+      justification: 'Historical cross-SDK bug reproduction vector'
+    };
+  }
+  if (relPath.includes('wallet/brc100/') && (counts.intended > 0 || counts.skipped > 0)) {
+    return {
+      reasonCategory: 'wallet_stateful_harness_required',
+      justification: 'Requires funded UTXOs + realistic fee model, live overlay, or pre-existing wallet state (see COVERAGE.md)'
+    };
+  }
+  if (relPath.includes('sdk/scripts/evaluation') && counts.intended > 0) {
+    return {
+      reasonCategory: 'partial_ts_behavioral_difference',
+      justification: `${counts.intended} tx_invalid / MINIMALDATA / OP_VER edge cases intentionally differ from reference test vectors`
+    };
+  }
+  return { reasonCategory: 'fully_supported', justification: '' };
+}
+
+async function describeFile(fullPath) {
+  const relPath = relative(VECTORS_DIR, fullPath).replaceAll('\\', '/');
+  const raw = await readFile(fullPath, 'utf8');
+  const data = JSON.parse(raw);
+
+  const fileId = data.id || null;
+  const fileLevelParity = data.parity_class || 'required';
+  const vectors = Array.isArray(data.vectors) ? data.vectors : [];
+
+  const { counts, skipReasons, categories } = aggregateVectors(vectors, fileLevelParity);
+  const total = vectors.length;
+  const { reasonCategory, justification: baseJustification } = classifyReason(relPath, counts);
+  const justification = baseJustification || (skipReasons.size > 0 ? Array.from(skipReasons).join(' | ') : '');
+
+  return {
+    path: relPath,
+    id: fileId,
+    total_vectors: total,
+    file_level_parity: fileLevelParity,
+    effective_status: effectiveStatus(counts, total),
+    required_count: counts.required,
+    intended_count: counts.intended,
+    skipped_count: counts.skipped,
+    reason_category: reasonCategory,
+    justification: justification || undefined,
+    categories: Array.from(categories)
+  };
+}
+
+function buildSummary(files) {
   const summary = {
     total_files: files.length,
-    total_vectors: totalVectors,
+    total_vectors: files.reduce((sum, f) => sum + f.total_vectors, 0),
     fully_required_files: files.filter(f => f.effective_status === 'required').length,
     files_with_intended: files.filter(f => f.intended_count > 0).length,
     files_with_mixed_status: files.filter(f => f.effective_status === 'mixed').length,
@@ -131,6 +139,18 @@ async function main() {
     summary.by_reason_category[f.reason_category] = (summary.by_reason_category[f.reason_category] || 0) + f.total_vectors;
   }
 
+  return summary;
+}
+
+try {
+  const jsonFiles = await walk(VECTORS_DIR);
+  const files = [];
+  for (const fullPath of jsonFiles) {
+    files.push(await describeFile(fullPath));
+  }
+  files.sort((a, b) => a.path.localeCompare(b.path));
+
+  const summary = buildSummary(files);
   const matrix = {
     schema_version: '1.0',
     generated_at: new Date().toISOString().split('T')[0],
@@ -145,9 +165,7 @@ async function main() {
   console.log(`  Files: ${summary.total_files}`);
   console.log(`  Vectors: ${summary.total_vectors}`);
   console.log(`  Fully required files: ${summary.fully_required_files}`);
-}
-
-main().catch(err => {
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}
