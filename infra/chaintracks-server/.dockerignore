@@ -1,0 +1,55 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__/
+
+# CI/CD
+.github/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Temporary files
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Public directory (will be created in container)
+public/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
