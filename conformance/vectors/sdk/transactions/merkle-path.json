@@ -1,5 +1,5 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.transactions.merklepath",
   "name": "MerklePath / BUMP parsing, serialization, and root computation",
   "brc": ["BRC-74"],

@@ -9,8 +9,8 @@
     "$schema": { "type": "string" },
     "id": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)*$",
-      "description": "Stable dot-separated identifier, e.g. sdk.crypto.ecdsa"
+      "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)*$",
+      "description": "Stable dot-separated identifier with lowercase alphanumerics and hyphens, e.g. sdk.crypto.ecdsa or auth.brc31-handshake"
     },
     "name": { "type": "string" },
     "brc": {

@@ -34,12 +34,12 @@ RUN apk upgrade --no-cache && \
 WORKDIR /app
 
 # Copy package files and install production deps only
-COPY --chown=node:node --chmod=0444 package*.json ./
+COPY --chown=root:root --chmod=0444 package*.json ./
 RUN npm ci --omit=dev
 
 # Copy built output from builder
-COPY --from=builder --chown=node:node --chmod=0555 /app/out ./out
-COPY --from=builder --chown=node:node --chmod=0444 /app/knexfile.js ./knexfile.js
+COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
+COPY --from=builder --chown=root:root --chmod=0444 /app/knexfile.js ./knexfile.js
 
 # Copy nginx config
 COPY ./nginx.conf /etc/nginx/nginx.conf

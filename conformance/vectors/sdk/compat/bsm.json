@@ -1,5 +1,5 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.compat.bsm",
   "name": "Bitcoin Signed Message (BSM) — sign, verify, magicHash",
   "brc": ["BRC-77"],

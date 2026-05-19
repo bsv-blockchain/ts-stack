@@ -1,6 +1,8 @@
 # BSV Conformance Suite — Coverage Matrix
 
-**Wave 4 Final Verification** | Generated: 2026-05-07
+**Wave 4 Final Verification (Historical Snapshot)** | Generated: 2026-05-07
+
+> **Note**: This document reflects the corpus state at the end of Wave 4. As of 2026-05-14 the corpus has grown to **72 files / 6,625 vectors** (see `conformance/META.json` for the authoritative current count). Several legacy-format vector files were normalized and the structural runner was improved to cleanly support the special regression format. For the latest numbers and coverage, run `node conformance/runner/src/runner.js --validate-only` or consult `META.json`.
 
 ## Full-Suite Summary
 
@@ -145,7 +147,7 @@ Justification:
 - **Zero `best-effort` vectors** — Wave 3 eliminated all `best-effort` classifications; every vector is either required-and-active or intentionally demoted.
 - **Zero vacuous paths reachable by required vectors from crypto or protocol domains** — the seven identified near-vacuous state-stub paths are all for ProtoWallet lifecycle stubs (isAuthenticated, getHeight, etc.) where real behaviour is impossible without live session infrastructure. These are documented and bounded.
 - **Regression index synced** — all 12 `regression_index` entries in META.json match the 12 files in `conformance/vectors/regressions/`.
-- **META.json refreshed** — `total_files: 71`, `total_vectors: 6601`, `last_updated: 2026-05-07` via `recount-meta.mjs`.
+- **META.json refreshed** — `total_files: 71`, `total_vectors: 6601`, `last_updated: 2026-05-07` via `recount-meta.mjs` (this was the Wave 4 state; current corpus is larger — see META.json + runner output).
 
 **Blockers: None.**
 

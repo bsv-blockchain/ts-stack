@@ -1,11 +1,11 @@
 {
-  "$schema": "https://bsvblockchain.org/conformance/schema/v1.json",
+  "$schema": "../../schema/vector.schema.json",
   "id": "sdk.crypto.ecdsa",
   "name": "ECDSA sign / verify",
-  "brc": "BRC-42",
-  "version": "1.0.0",
-  "reference_impl": "packages/sdk/ts-sdk/src/primitives/ECDSA.ts",
-  "parity_class": "crypto",
+  "brc": ["BRC-42"],
+  "version": "2.0.0",
+  "reference_impl": "@bsv/sdk@2.0.x (ECDSA)",
+  "parity_class": "required",
   "vectors": [
     {
       "id": "ecdsa-001",

@@ -3,8 +3,8 @@ id: conformance-runner-ts
 title: "TypeScript Runner"
 kind: conformance
 version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+last_updated: "2026-05-14"
+last_verified: "2026-05-14"
 review_cadence_days: 30
 status: stable
 tags: [conformance, runner, typescript]

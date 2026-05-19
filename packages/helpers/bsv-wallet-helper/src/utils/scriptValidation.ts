@@ -636,7 +636,7 @@ export function extractMapMetadata (input: ScriptInput): MAP | null {
   }
 
   // Parse key-value pairs
-  const metadata: any = {}
+  const metadata: Record<string, string> = {}
   let currentIndex = opReturnIndex + 3
 
   while (currentIndex < chunks.length - 1) {
@@ -660,7 +660,10 @@ export function extractMapMetadata (input: ScriptInput): MAP | null {
   }
 
   // Validate required fields
-  if (!metadata.app || !metadata.type) {
+  if (
+    metadata.app == null || metadata.app.length === 0 ||
+    metadata.type == null || metadata.type.length === 0
+  ) {
     return null
   }
 
