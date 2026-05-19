@@ -133,6 +133,7 @@ These deployable projects are not included in `pnpm-workspace.yaml`; they keep t
 
 | Path | Package | Role |
 |---|---|---|
+| [`infra/chaintracks-server`](infra/chaintracks-server) | `chaintracks-server` private | Block header service exposing v1 + v2 REST API over `ChaintracksService` |
 | [`infra/message-box-server`](infra/message-box-server) | `@bsv/messagebox-server` private | Message box server |
 | [`infra/overlay-server`](infra/overlay-server) | `@bsv/overlay-express-examples` private | Overlay server deployment |
 | [`infra/uhrp-server-basic`](infra/uhrp-server-basic) | [`@bsv/uhrp-lite`](https://www.npmjs.com/package/@bsv/uhrp-lite) | Basic UHRP storage host |

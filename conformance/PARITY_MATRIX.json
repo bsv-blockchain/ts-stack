@@ -4,18 +4,18 @@
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
-    "total_files": 72,
-    "total_vectors": 6625,
-    "fully_required_files": 53,
+    "total_files": 73,
+    "total_vectors": 6646,
+    "fully_required_files": 54,
     "files_with_intended": 17,
     "files_with_mixed_status": 15,
     "vectors_by_status": {
-      "required": 6421,
+      "required": 6442,
       "intended": 204,
       "skipped": 8
     },
     "by_reason_category": {
-      "fully_supported": 1283,
+      "fully_supported": 1304,
       "historical_regression": 36,
       "partial_ts_behavioral_difference": 5116,
       "wallet_stateful_harness_required": 190
@@ -528,6 +528,18 @@
       "skipped_count": 1,
       "reason_category": "fully_supported",
       "justification": "Runtime-state assertion; requires producer with seeded user table. Cannot be validated by shape-only dispatcher.",
+      "categories": []
+    },
+    {
+      "path": "sync/chaintracks-v2-http.json",
+      "id": "sync.chaintracks-v2-http",
+      "total_vectors": 21,
+      "file_level_parity": "required",
+      "effective_status": "required",
+      "required_count": 21,
+      "intended_count": 0,
+      "skipped_count": 0,
+      "reason_category": "fully_supported",
       "categories": []
     },
     {
