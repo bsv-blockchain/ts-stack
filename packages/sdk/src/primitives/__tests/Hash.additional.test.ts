@@ -1,6 +1,10 @@
 import { createHash, createHmac } from 'node:crypto'
 import { SHA1HMAC, SHA512HMAC, pbkdf2 } from '../../primitives/Hash'
 
+function toHex (arr: number[]): string {
+  return Buffer.from(arr).toString('hex')
+}
+
 describe('Hash – additional coverage', () => {
   describe('SHA1HMAC', () => {
     it('produces a correct HMAC-SHA1 digest', () => {
@@ -81,10 +85,6 @@ describe('Hash – additional coverage', () => {
     const expectedSha512Hmac = createHmac('sha512', key)
       .update(msg)
       .digest('hex')
-
-    function toHex (arr: number[]): string {
-      return Buffer.from(arr).toString('hex')
-    }
 
     it('matches native digests when node:crypto is unavailable', () => {
       const originalGetBuiltin = (process as any).getBuiltinModule

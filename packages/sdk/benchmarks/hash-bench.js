@@ -76,7 +76,9 @@ async function main () {
   await runBenchmark('node sha256 Uint8Array 1MiB', () => nodeSha256(oneMiB), options)
 }
 
-main().catch((err) => {
+try {
+  await main()
+} catch (err) {
   console.error(err)
   process.exit(1)
-})
+}
