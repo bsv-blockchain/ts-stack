@@ -38,7 +38,8 @@ import { expect } from '@jest/globals'
 
 export const categories: ReadonlyArray<string> = [
   'gasp-protocol',
-  'brc40-user-state'
+  'brc40-user-state',
+  'chaintracks-v2-http'
 ]
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -704,6 +705,87 @@ function dispatchBRC40 (
   throw new Error(`sync dispatcher: unknown channel '${channel}' in brc40-user-state`)
 }
 
+// ── Chaintracks v2 HTTP vector dispatcher ──────────────────────────────────────
+//
+// Structural validation of the chaintracks-server v2 REST contract. Cross-language
+// implementations replace this with real HTTP calls against a running server;
+// here we only assert that each vector's expected payload obeys the v2 envelope
+// rules so the corpus stays well-formed.
+
+const V2_PATH_RE = /^\/v2\/(network|tip(?:\.bin)?|header\/height\/.+|header\/hash\/.+|headers(?:\.bin)?)$/
+const V2_ERROR_CODES: ReadonlySet<string> = new Set([
+  'ERR_INVALID_PARAMS',
+  'ERR_NOT_FOUND',
+  'ERR_NO_TIP',
+  'ERR_INTERNAL'
+])
+
+function assertSuccessEnvelope (eb: Record<string, unknown>): void {
+  expect(eb['status']).toBe('success')
+  expect('value' in eb).toBe(true)
+}
+
+function assertErrorEnvelope (eb: Record<string, unknown>): void {
+  expect(eb['status']).toBe('error')
+  const code = eb['code']
+  expect(typeof code).toBe('string')
+  expect(V2_ERROR_CODES.has(code as string)).toBe(true)
+  expect(typeof eb['description']).toBe('string')
+}
+
+function assertBinaryShape (shape: Record<string, unknown>): void {
+  expect(shape['encoding']).toBe('binary')
+  const len = shape['length_bytes']
+  // length_bytes may be a fixed integer or a formula string for variable-length payloads.
+  if (typeof len === 'number') {
+    expect(Number.isInteger(len) && len >= 0).toBe(true)
+    if (typeof shape['stride'] === 'number') {
+      expect(len % (shape['stride'] as number)).toBe(0)
+    }
+  } else {
+    expect(typeof len).toBe('string')
+  }
+}
+
+function dispatchChaintracksV2 (
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): void {
+  const method = getString(input, 'method')
+  const path = getString(input, 'path')
+  expect(method).toBe('GET')
+  expect(V2_PATH_RE.test(path)).toBe(true)
+
+  const status = getNumber(expected, 'status')
+  expect([200, 400, 404].includes(status)).toBe(true)
+
+  if (status >= 400) {
+    const body = expected['body']
+    expect(body !== undefined).toBe(true)
+    assertErrorEnvelope(body as Record<string, unknown>)
+    return
+  }
+
+  // Success path — either a JSON envelope (body) or a binary shape (body_shape).
+  const hasJson = expected['body'] !== undefined
+  const hasShape = expected['body_shape'] !== undefined
+  expect(hasJson || hasShape).toBe(true)
+
+  if (hasJson) {
+    assertSuccessEnvelope(expected['body'] as Record<string, unknown>)
+  }
+  if (hasShape) {
+    const shape = expected['body_shape'] as Record<string, unknown>
+    if (shape['encoding'] === 'binary') {
+      assertBinaryShape(shape)
+    } else {
+      // JSON success shape — must describe a {status, value} envelope.
+      expect(shape['status']).toBe('success')
+      expect('value' in shape).toBe(true)
+    }
+  }
+}
+
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
 export function dispatch (
@@ -713,6 +795,10 @@ export function dispatch (
 ): void | Promise<void> {
   if (category === 'brc40-user-state') {
     dispatchBRC40(input, expected)
+    return
+  }
+  if (category === 'chaintracks-v2-http') {
+    dispatchChaintracksV2(input, expected)
     return
   }
   if (category !== 'gasp-protocol') {
