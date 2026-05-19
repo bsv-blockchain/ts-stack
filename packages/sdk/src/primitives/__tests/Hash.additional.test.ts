@@ -1,4 +1,9 @@
+import { createHash, createHmac } from 'node:crypto'
 import { SHA1HMAC, SHA512HMAC, pbkdf2 } from '../../primitives/Hash'
+
+function toHex (arr: number[]): string {
+  return Buffer.from(arr).toString('hex')
+}
 
 describe('Hash – additional coverage', () => {
   describe('SHA1HMAC', () => {
@@ -54,6 +59,66 @@ describe('Hash – additional coverage', () => {
       expect(() => pbkdf2([1, 2, 3], [4, 5, 6], 1, 32, 'sha256')).toThrow(
         'Only sha512 is supported in this PBKDF2 implementation'
       )
+    })
+  })
+
+  describe('pure-TS fallback parity', () => {
+    const msg = new Uint8Array([
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+      0xff, 0xfe, 0xfd, 0xfc
+    ])
+    const key = new Uint8Array([0xde, 0xad, 0xbe, 0xef])
+
+    const expectedSha256 = createHash('sha256').update(msg).digest('hex')
+    const expectedSha512 = createHash('sha512').update(msg).digest('hex')
+    const expectedRipemd160 = createHash('ripemd160').update(msg).digest('hex')
+    const expectedHash256 = createHash('sha256')
+      .update(createHash('sha256').update(msg).digest())
+      .digest('hex')
+    const expectedHash160 = createHash('ripemd160')
+      .update(createHash('sha256').update(msg).digest())
+      .digest('hex')
+    const expectedSha256Hmac = createHmac('sha256', key)
+      .update(msg)
+      .digest('hex')
+    const expectedSha512Hmac = createHmac('sha512', key)
+      .update(msg)
+      .digest('hex')
+
+    it('matches native digests when node:crypto is unavailable', () => {
+      const originalGetBuiltin = (process as any).getBuiltinModule
+      ;(process as any).getBuiltinModule = (): never => {
+        throw new Error('blocked for test')
+      }
+      try {
+        jest.isolateModules(() => {
+          jest.doMock('node:crypto', () => {
+            throw new Error('blocked for test')
+          })
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const fallback = require('../../primitives/Hash')
+          expect(toHex(fallback.sha256(Array.from(msg)))).toBe(expectedSha256)
+          expect(toHex(fallback.sha512(Array.from(msg)))).toBe(expectedSha512)
+          expect(toHex(fallback.ripemd160(Array.from(msg)))).toBe(
+            expectedRipemd160
+          )
+          expect(toHex(fallback.hash256(Array.from(msg)))).toBe(
+            expectedHash256
+          )
+          expect(toHex(fallback.hash160(Array.from(msg)))).toBe(
+            expectedHash160
+          )
+          expect(
+            toHex(fallback.sha256hmac(Array.from(key), Array.from(msg)))
+          ).toBe(expectedSha256Hmac)
+          expect(
+            toHex(fallback.sha512hmac(Array.from(key), Array.from(msg)))
+          ).toBe(expectedSha512Hmac)
+        })
+      } finally {
+        ;(process as any).getBuiltinModule = originalGetBuiltin
+      }
     })
   })
 })

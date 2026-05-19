@@ -349,10 +349,141 @@ function zero8 (word: string): string {
   }
 }
 
+const BufferCtor =
+  typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
+const CAN_USE_BUFFER =
+  BufferCtor != null && typeof BufferCtor.from === 'function'
+const HEX_DIGITS = '0123456789abcdef'
+const HEX_BYTE_STRINGS = new Array<string>(256)
+for (let i = 0; i < HEX_BYTE_STRINGS.length; i++) {
+  HEX_BYTE_STRINGS[i] = HEX_DIGITS[(i >> 4) & 0xf] + HEX_DIGITS[i & 0xf]
+}
+
 function bytesToHex (data: Uint8Array): string {
-  let res = ''
-  for (const b of data) res += (b.toString(16).padStart(2, '0'))
-  return res
+  if (CAN_USE_BUFFER) {
+    return BufferCtor.from(data).toString('hex')
+  }
+  const out = new Array<string>(data.length)
+  for (let i = 0; i < data.length; i++) out[i] = HEX_BYTE_STRINGS[data[i]]
+  return out.join('')
+}
+
+const NODE_CRYPTO = (() => {
+  const processLike =
+    typeof globalThis === 'undefined' ? undefined : (globalThis as any).process
+  const getBuiltinModule = processLike?.getBuiltinModule
+  if (typeof getBuiltinModule === 'function') {
+    try {
+      const crypto = getBuiltinModule.call(processLike, 'node:crypto')
+      if (crypto != null) return crypto
+    } catch {
+      // continue to CommonJS fallback
+    }
+  }
+
+  try {
+    if (typeof require === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      return require('node:crypto')
+    }
+  } catch {
+    // node:crypto is unavailable in this runtime
+  }
+  return undefined
+})()
+
+type HashInput = Uint8Array | number[] | string
+
+function toHashBytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
+  if (msg instanceof Uint8Array) {
+    return msg
+  }
+  if (Array.isArray(msg)) {
+    return new Uint8Array(msg)
+  }
+  return Uint8Array.from(toArray(msg, enc))
+}
+
+function toHashKeyBytes (key: HashInput): Uint8Array {
+  return typeof key === 'string' ? toHashBytes(key, 'hex') : toHashBytes(key)
+}
+
+interface FallbackHashLike {
+  update: (data: Uint8Array) => unknown
+  digest: () => Uint8Array
+}
+
+function updateNativeOrFallback (
+  native: any,
+  fallback: FallbackHashLike | undefined,
+  data: Uint8Array
+): void {
+  if (native != null) {
+    native.update(data)
+  } else if (fallback != null) {
+    fallback.update(data)
+  }
+}
+
+function digestNativeOrFallback (
+  native: any,
+  fallback: FallbackHashLike | undefined
+): number[] {
+  if (native != null) return Array.from(native.digest())
+  if (fallback != null) return Array.from(fallback.digest())
+  return []
+}
+
+function digestHexNativeOrFallback (
+  native: any,
+  fallback: FallbackHashLike | undefined
+): string {
+  if (native != null) return native.digest('hex')
+  if (fallback != null) return bytesToHex(fallback.digest())
+  return ''
+}
+
+function createNodeHash (algorithm: string): any {
+  const createHash = NODE_CRYPTO?.createHash
+  if (typeof createHash !== 'function') return undefined
+  try {
+    return createHash(algorithm)
+  } catch {
+    return undefined
+  }
+}
+
+function createNodeHmac (algorithm: string, keyBytes: Uint8Array): any {
+  const createHmac = NODE_CRYPTO?.createHmac
+  if (typeof createHmac !== 'function') return undefined
+  try {
+    return createHmac(algorithm, keyBytes)
+  } catch {
+    return undefined
+  }
+}
+
+function digestWithNodeHash (
+  algorithm: string,
+  msg: HashInput,
+  enc?: 'hex' | 'utf8'
+): Uint8Array | undefined {
+  const hash = createNodeHash(algorithm)
+  if (hash == null) return undefined
+  hash.update(toHashBytes(msg, enc))
+  return hash.digest()
+}
+
+function digestWithNodeHmac (
+  algorithm: string,
+  key: HashInput,
+  msg: HashInput,
+  enc?: 'hex' | 'utf8'
+): Uint8Array | undefined {
+  const hmac = createNodeHmac(algorithm, toHashKeyBytes(key))
+  if (hmac == null) return undefined
+  hmac.update(toHashBytes(msg, enc))
+  return hmac.digest()
 }
 
 function join32 (msg, start, end, endian): number[] {
@@ -631,27 +762,27 @@ export class RIPEMD160 extends BaseHash {
  * @property k - The round constants used for each round of SHA-256
  */
 export class SHA256 {
-  private readonly h: FastSHA256
+  private readonly h?: FastSHA256
+  private readonly native?: any
+
   constructor () {
-    this.h = new FastSHA256()
+    this.native = createNodeHash('sha256')
+    if (this.native == null) {
+      this.h = new FastSHA256()
+    }
   }
 
-  update (
-    msg: Uint8Array | number[] | string,
-    enc?: 'hex' | 'utf8'
-  ): this {
-    const data =
-      msg instanceof Uint8Array ? msg : Uint8Array.from(toArray(msg, enc))
-    this.h.update(data)
+  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
   digest (): number[] {
-    return Array.from(this.h.digest())
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   digestHex (): string {
-    return bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
@@ -755,23 +886,27 @@ export class SHA1 extends BaseHash {
  * @property k - The round constants used for each round of SHA-512.
  */
 export class SHA512 {
-  private readonly h: FastSHA512
+  private readonly h?: FastSHA512
+  private readonly native?: any
+
   constructor () {
-    this.h = new FastSHA512()
+    this.native = createNodeHash('sha512')
+    if (this.native == null) {
+      this.h = new FastSHA512()
+    }
   }
 
-  update (msg: number[] | string, enc?: 'hex' | 'utf8'): this {
-    const data = Uint8Array.from(toArray(msg, enc))
-    this.h.update(data)
+  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
   digest (): number[] {
-    return Array.from(this.h.digest())
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   digestHex (): string {
-    return bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
@@ -788,7 +923,8 @@ export class SHA512 {
  * @property outSize - The output size of the SHA-256 hash function, in bytes. It's set to 32 bytes.
  */
 export class SHA256HMAC {
-  private readonly h: HMAC<FastSHA256>
+  private readonly h?: HMAC<FastSHA256>
+  private readonly native?: any
   blockSize = 64
   outSize = 32
 
@@ -805,17 +941,12 @@ export class SHA256HMAC {
    * @example
    * const myHMAC = new SHA256HMAC('deadbeef');
    */
-  constructor (key: Uint8Array | number[] | string) {
-    const k =
-      key instanceof Uint8Array
-        ? key
-        : Uint8Array.from(
-          toArray(
-            key,
-            typeof key === 'string' ? 'hex' : undefined
-          )
-        )
-    this.h = new HMAC(sha256Fast, k)
+  constructor (key: HashInput) {
+    const k = toHashKeyBytes(key)
+    this.native = createNodeHmac('sha256', k)
+    if (this.native == null) {
+      this.h = new HMAC(sha256Fast, k)
+    }
   }
 
   /**
@@ -829,10 +960,8 @@ export class SHA256HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: Uint8Array | number[] | string, enc?: 'hex'): this {
-    const data =
-      msg instanceof Uint8Array ? msg : Uint8Array.from(toArray(msg, enc))
-    this.h.update(data)
+  update (msg: HashInput, enc?: 'hex'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
@@ -846,7 +975,7 @@ export class SHA256HMAC {
    * let hashedMessage = myHMAC.digest();
    */
   digest (): number[] {
-    return Array.from(this.h.digest())
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   /**
@@ -859,7 +988,7 @@ export class SHA256HMAC {
    * let hashedMessage = myHMAC.digestHex();
    */
   digestHex (): string {
-    return bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
@@ -922,7 +1051,8 @@ export class SHA1HMAC {
  * @property outSize - The output size of the SHA-512 hash function, in bytes. It's set to 64 bytes.
  */
 export class SHA512HMAC {
-  private readonly h: HMAC<FastSHA512>
+  private readonly h?: HMAC<FastSHA512>
+  private readonly native?: any
   blockSize = 128
   outSize = 32
 
@@ -939,17 +1069,12 @@ export class SHA512HMAC {
    * @example
    * const myHMAC = new SHA512HMAC('deadbeef');
    */
-  constructor (key: Uint8Array | number[] | string) {
-    const k =
-      key instanceof Uint8Array
-        ? key
-        : Uint8Array.from(
-          toArray(
-            key,
-            typeof key === 'string' ? 'hex' : undefined
-          )
-        )
-    this.h = new HMAC(sha512Fast, k)
+  constructor (key: HashInput) {
+    const k = toHashKeyBytes(key)
+    this.native = createNodeHmac('sha512', k)
+    if (this.native == null) {
+      this.h = new HMAC(sha512Fast, k)
+    }
   }
 
   /**
@@ -963,10 +1088,8 @@ export class SHA512HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: Uint8Array | number[] | string, enc?: 'hex' | 'utf8'): this {
-    const data =
-      msg instanceof Uint8Array ? msg : Uint8Array.from(toArray(msg, enc))
-    this.h.update(data)
+  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
@@ -980,7 +1103,7 @@ export class SHA512HMAC {
    * let hashedMessage = myHMAC.digest();
    */
   digest (): number[] {
-    return Array.from(this.h.digest())
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   /**
@@ -993,8 +1116,30 @@ export class SHA512HMAC {
    * let hashedMessage = myHMAC.digestHex();
    */
   digestHex (): string {
-    return bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
+}
+
+function sha256Bytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
+  const native = digestWithNodeHash('sha256', msg, enc)
+  if (native != null) return native
+  return new FastSHA256().update(toHashBytes(msg, enc)).digest()
+}
+
+function sha512Bytes (
+  msg: HashInput,
+  enc?: 'hex' | 'utf8'
+): Uint8Array {
+  const native = digestWithNodeHash('sha512', msg, enc)
+  if (native != null) return native
+  return new FastSHA512().update(toHashBytes(msg, enc)).digest()
+}
+
+function ripemd160Bytes (
+  msg: HashInput,
+  enc?: 'hex' | 'utf8'
+): Uint8Array | undefined {
+  return digestWithNodeHash('ripemd160', msg, enc)
 }
 
 /**
@@ -1012,6 +1157,8 @@ export const ripemd160 = (
   msg: number[] | string,
   enc?: 'hex' | 'utf8'
 ): number[] => {
+  const native = ripemd160Bytes(msg, enc)
+  if (native != null) return Array.from(native)
   return new RIPEMD160().update(msg, enc).digest()
 }
 
@@ -1044,11 +1191,8 @@ export const sha1 = (
  * @example
  * const digest = sha256('Hello, world!');
  */
-export const sha256 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
-  return new SHA256().update(msg, enc).digest()
+export const sha256 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
+  return Array.from(sha256Bytes(msg, enc))
 }
 
 /**
@@ -1062,11 +1206,8 @@ export const sha256 = (
  * @example
  * const digest = sha512('Hello, world!');
  */
-export const sha512 = (
-  msg: number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
-  return new SHA512().update(msg, enc).digest()
+export const sha512 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
+  return Array.from(sha512Bytes(msg, enc))
 }
 
 /**
@@ -1082,12 +1223,8 @@ export const sha512 = (
  * @example
  * const doubleHash = hash256('Hello, world!');
  */
-export const hash256 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
-  const first = new SHA256().update(msg, enc).digest()
-  return new SHA256().update(first).digest()
+export const hash256 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
+  return Array.from(sha256Bytes(sha256Bytes(msg, enc)))
 }
 
 /**
@@ -1102,11 +1239,10 @@ export const hash256 = (
  * @example
  * const hash = hash160('Hello, world!');
  */
-export const hash160 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
-  const first = new SHA256().update(msg, enc).digest()
+export const hash160 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
+  const first = sha256Bytes(msg, enc)
+  const native = ripemd160Bytes(first)
+  if (native != null) return Array.from(native)
   return new RIPEMD160().update(first).digest()
 }
 
@@ -1123,10 +1259,12 @@ export const hash160 = (
  * const digest = sha256hmac('deadbeef', 'ffff001d');
  */
 export const sha256hmac = (
-  key: Uint8Array | number[] | string,
-  msg: Uint8Array | number[] | string,
+  key: HashInput,
+  msg: HashInput,
   enc?: 'hex'
 ): number[] => {
+  const native = digestWithNodeHmac('sha256', key, msg, enc)
+  if (native != null) return Array.from(native)
   return new SHA256HMAC(key).update(msg, enc).digest()
 }
 
@@ -1143,10 +1281,12 @@ export const sha256hmac = (
  * const digest = sha512hmac('deadbeef', 'ffff001d');
  */
 export const sha512hmac = (
-  key: Uint8Array | number[] | string,
-  msg: Uint8Array | number[] | string,
+  key: HashInput,
+  msg: HashInput,
   enc?: 'hex'
 ): number[] => {
+  const native = digestWithNodeHmac('sha512', key, msg, enc)
+  if (native != null) return Array.from(native)
   return new SHA512HMAC(key).update(msg, enc).digest()
 }
 
@@ -1938,20 +2078,16 @@ export function pbkdf2 (
   if (digest !== 'sha512') {
     throw new Error('Only sha512 is supported in this PBKDF2 implementation')
   }
-  // Attempt to use the native Node.js implementation if available as it is
-  // considerably faster than the pure TypeScript fallback below. If the crypto
-  // module isn't present (for example in a browser build) we'll silently fall
-  // back to the original implementation.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const nodeCrypto = require('node:crypto')
-    if (typeof nodeCrypto.pbkdf2Sync === 'function') {
-      const p = Buffer.from(password)
-      const s = Buffer.from(salt)
-      return [...nodeCrypto.pbkdf2Sync(p, s, iterations, keylen, digest)]
-    }
-  } catch {
-    // ignore
+  const pbkdf2Sync = NODE_CRYPTO?.pbkdf2Sync
+  if (typeof pbkdf2Sync === 'function') {
+    const out = pbkdf2Sync(
+      toHashBytes(password),
+      toHashBytes(salt),
+      iterations,
+      keylen,
+      digest
+    )
+    return Array.from(out)
   }
   const p = Uint8Array.from(password)
   const s = Uint8Array.from(salt)
