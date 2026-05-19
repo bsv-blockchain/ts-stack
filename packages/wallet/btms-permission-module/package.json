@@ -25,13 +25,13 @@
   "license": "Open BSV",
   "peerDependencies": {
     "@bsv/btms": "^1.0.1",
-    "@bsv/sdk": "^2.1.0",
-    "@bsv/wallet-toolbox-client": "^2.1.18"
+    "@bsv/sdk": "^2.1.1",
+    "@bsv/wallet-toolbox-client": "^2.1.27"
   },
   "devDependencies": {
     "@bsv/btms": "^1.0.1",
-    "@bsv/sdk": "^2.1.0",
-    "@bsv/wallet-toolbox-client": "^2.1.18",
+    "@bsv/sdk": "^2.1.1",
+    "@bsv/wallet-toolbox-client": "^2.1.27",
     "@types/node": "^25.6.0",
     "typescript": "^5.2.2"
   },
