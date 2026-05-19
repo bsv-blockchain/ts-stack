@@ -65,8 +65,8 @@
   },
   "dependencies": {
     "@bsv/overlay": "^2.0.2",
-    "@bsv/sdk": "^2.1.0",
-    "@bsv/wallet-toolbox-client": "^2.1.18",
+    "@bsv/sdk": "^2.1.1",
+    "@bsv/wallet-toolbox-client": "^2.1.27",
     "mongodb": "^7.1.0"
   }
 }
