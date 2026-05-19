@@ -30,8 +30,11 @@ RUN npm ci --only=production
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
-# Create directory for bulk headers
-RUN mkdir -p /app/public/headers
+# Create directory for bulk headers and give the non-root node user ownership
+RUN mkdir -p /app/public/headers && chown -R node:node /app
+
+# Drop privileges before running the service
+USER node
 
 # Expose ports
 # 3011 - ChaintracksService
