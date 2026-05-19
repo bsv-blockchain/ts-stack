@@ -686,8 +686,8 @@ importers:
         version: 5.2.1
     devDependencies:
       '@bsv/auth-express-middleware':
-        specifier: ^2.0.5
-        version: 2.0.5
+        specifier: workspace:*
+        version: link:../auth-express-middleware
       '@types/body-parser':
         specifier: ^1.19.5
         version: 1.19.6
