@@ -31,6 +31,7 @@ import pkiRoute from './server/pki';
 import { PaymailRouter } from '@bsv/paymail';
 
 const app = express()
+app.disable('x-powered-by')
 const DOMAIN = process.env.DOMAIN ?? 'localhost' // Replace with your actual domain
 const baseUrl = 'https://' + DOMAIN
 
