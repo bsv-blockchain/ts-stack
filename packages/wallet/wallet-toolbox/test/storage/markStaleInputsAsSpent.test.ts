@@ -47,27 +47,16 @@ setLogging(false)
  */
 describe('markStaleInputsAsSpent', () => {
   jest.setTimeout(30000)
-  const chain: sdk.Chain = 'test'
 
   let storages: StorageProvider[]
 
   beforeEach(async () => {
-    storages = []
-    const testSlug = (expect.getState().currentTestName || 'markStale').replace(/[^a-zA-Z0-9_]/g, '_')
-    const databaseName = `markStale_${testSlug.slice(-40)}`
-    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
-    storages.push(
-      new StorageKnex({
-        ...StorageKnex.defaultOptions(),
-        chain,
-        knex: _tu.createLocalSQLite(localSQLiteFile)
+    storages = [
+      await _tu.createFreshSQLiteStorage({
+        databasePrefix: 'markStale',
+        migrationName: 'markStaleInputsAsSpent'
       })
-    )
-    for (const storage of storages) {
-      await storage.dropAllData()
-      await storage.migrate('markStaleInputsAsSpent', '1'.repeat(64))
-      await storage.makeAvailable()
-    }
+    ]
   })
 
   afterEach(async () => {

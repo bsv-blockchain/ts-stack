@@ -5,6 +5,8 @@ import {
   InternalizeActionArgs,
   TransactionOutput,
   Beef,
+  BeefTx,
+  MerklePath,
   Validation,
   Utils
 } from '@bsv/sdk'
@@ -334,6 +336,36 @@ class InternalizeActionContext {
     return tr.tx
   }
 
+  private async findOrInsertProvenTxFromBump (bump: MerklePath, btx: BeefTx): Promise<TableProvenTx> {
+    const now = new Date()
+    const merkleRoot = bump.computeRoot(this.txid)
+    const indexEntry = bump.path[0].find(p => p.hash === this.txid)
+    if (indexEntry == null) {
+      throw new WERR_INTERNAL(
+        `Could not determine transaction index for txid ${this.txid} in bump path. Expected to find txid in bump.path[0]: ${JSON.stringify(bump.path[0])}`
+      )
+    }
+    const index = indexEntry.offset
+    const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
+    if (!header) {
+      throw new WERR_INTERNAL(`Block header not found for height ${bump.blockHeight}`)
+    }
+    const hash = blockHash(header)
+    const provenTxR = await this.storage.findOrInsertProvenTx({
+      created_at: now,
+      updated_at: now,
+      provenTxId: 0,
+      txid: this.txid,
+      height: bump.blockHeight,
+      index,
+      merklePath: bump.toBinary(),
+      rawTx: btx.rawTx!,
+      blockHash: hash,
+      merkleRoot
+    })
+    return provenTxR.proven
+  }
+
   async mergedInternalize () {
     const transactionId = this.etx!.transactionId
     const wasNoSend = this.etx!.status === 'nosend'
@@ -381,40 +413,15 @@ class InternalizeActionContext {
         if (btx == null) {
           throw new WERR_INTERNAL(`Could not find transaction ${this.txid} in AtomicBEEF`)
         }
-        const now = new Date()
-        const merkleRoot = bump.computeRoot(this.txid)
-        const indexEntry = bump.path[0].find(p => p.hash === this.txid)
-        if (indexEntry == null) {
-          throw new WERR_INTERNAL(
-            `Could not determine transaction index for txid ${this.txid} in bump path. Expected to find txid in bump.path[0]: ${JSON.stringify(bump.path[0])}`
-          )
-        }
-        const index = indexEntry.offset
-        const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
-        if (!header) {
-          throw new WERR_INTERNAL(`Block header not found for height ${bump.blockHeight}`)
-        }
-        const hash = blockHash(header)
-        const provenTxR = await this.storage.findOrInsertProvenTx({
-          created_at: now,
-          updated_at: now,
-          provenTxId: 0,
-          txid: this.txid,
-          height: bump.blockHeight,
-          index,
-          merklePath: bump.toBinary(),
-          rawTx: btx.rawTx!,
-          blockHash: hash,
-          merkleRoot
-        })
+        const proven = await this.findOrInsertProvenTxFromBump(bump, btx)
         await this.storage.updateTransaction(transactionId, {
-          provenTxId: provenTxR.proven.provenTxId,
+          provenTxId: proven.provenTxId,
           status: 'completed'
         })
         const req = await EntityProvenTxReq.fromStorageTxid(this.storage, this.txid)
         if (req != null && req.status === 'nosend') {
           req.addHistoryNote({ what: 'internalizeAction-bumpRetire', userId: this.userId })
-          req.provenTxId = provenTxR.proven.provenTxId
+          req.provenTxId = proven.provenTxId
           req.status = 'completed'
           await req.updateStorageDynamicProperties(this.storage)
         }
@@ -445,33 +452,7 @@ class InternalizeActionContext {
       // The presence bump indicates the transaction has already been mined.
       // Verify a provenTx record exist before creating a new transaction with completed status...
       // Which normally means creating a new provenTx record.
-      const now = new Date()
-      const merkleRoot = bump.computeRoot(this.txid)
-      const indexEntry = bump.path[0].find(p => p.hash === this.txid)
-      if (indexEntry == null) {
-        throw new WERR_INTERNAL(
-          `Could not determine transaction index for txid ${this.txid} in bump path. Expected to find txid in bump.path[0]: ${JSON.stringify(bump.path[0])}`
-        )
-      }
-      const index = indexEntry.offset
-      const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
-      if (!header) {
-        throw new WERR_INTERNAL(`Block header not found for height ${bump.blockHeight}`)
-      }
-      const hash = blockHash(header)
-      const provenTxR = await this.storage.findOrInsertProvenTx({
-        created_at: now,
-        updated_at: now,
-        provenTxId: 0,
-        txid: this.txid,
-        height: bump.blockHeight,
-        index,
-        merklePath: bump.toBinary(),
-        rawTx: btx.rawTx!,
-        blockHash: hash,
-        merkleRoot
-      })
-      pr.proven = provenTxR.proven
+      pr.proven = await this.findOrInsertProvenTxFromBump(bump, btx)
     }
 
     this.etx = await this.findOrInsertTargetTransaction(this.satoshis, pr.proven)
