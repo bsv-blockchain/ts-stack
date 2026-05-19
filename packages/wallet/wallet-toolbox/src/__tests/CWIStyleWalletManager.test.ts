@@ -3,10 +3,6 @@ import { PrivilegedKeyManager } from '../sdk'
 import {
   CWIStyleWalletManager,
   PBKDF2_NUM_ROUNDS,
-  ARGON2ID_DEFAULT_ITERATIONS,
-  ARGON2ID_DEFAULT_MEMORY_KIB,
-  ARGON2ID_DEFAULT_PARALLELISM,
-  ARGON2ID_DEFAULT_HASH_LENGTH,
   UMPToken,
   UMPTokenInteractor,
   OverlayUMPTokenInteractor
@@ -467,7 +463,7 @@ describe('CWIStyleWalletManager Tests', () => {
       expect(updatedProfiles).toHaveLength(2)
       const workProfile = updatedProfiles.find(p => p.name === 'Work')
       expect(workProfile).toBeDefined()
-      expect(workProfile!.active).toBe(false)
+      expect((workProfile as NonNullable<typeof workProfile>).active).toBe(false)
 
       expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
 
@@ -640,9 +636,10 @@ describe('CWIStyleWalletManager Tests', () => {
       expect(customPasswordRetriever).toHaveBeenCalled()
       expect(capturedTestFn).not.toBeNull()
       // Since the internal test function may now be async (Argon2 path), await the result.
-      const testResult = await capturedTestFn!('any-input')
+      const capturedFn = capturedTestFn as unknown as (candidate: string) => boolean | Promise<boolean>
+      const testResult = await capturedFn('any-input')
       expect(typeof testResult).toBe('boolean')
-      expect(await capturedTestFn!('any-input')).toBe(false)
+      expect(await capturedFn('any-input')).toBe(false)
     }, 15000) // Argon2id password derivation in changePassword takes time
 
     test('Privileged key expiry: each call to decrypt via the privileged manager invokes passwordRetriever', async () => {
@@ -856,7 +853,7 @@ describe('CWIStyleWalletManager Tests', () => {
 
       // Step 4: Simulate relogin - overlay now returns the updated token
       mockInteractor.findByPresentationKeyHash = jest.fn(async () => ({
-        ...publishedToken!,
+        ...(publishedToken as UMPToken),
         currentOutpoint: 'updated.0'
       }))
 

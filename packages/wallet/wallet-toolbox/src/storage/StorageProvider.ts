@@ -78,12 +78,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   commissionPubKeyHex?: PubKeyHex
   maxRecursionDepth?: number
 
-  static defaultOptions () {
-    return {
-      feeModel: { model: 'sat/kb', value: 1 } as StorageFeeModel,
+  static defaultOptions (): { feeModel: StorageFeeModel, commissionSatoshis: number, commissionPubKeyHex: undefined } {
+    const opts: { feeModel: StorageFeeModel, commissionSatoshis: number, commissionPubKeyHex: undefined } = {
+      feeModel: { model: 'sat/kb', value: 1 },
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined
     }
+    return opts
   }
 
   static createStorageBaseOptions (chain: Chain): StorageProviderOptions {
@@ -194,7 +195,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       noScript: true,
       trx
     })
-    return rows.reduce((a, r) => a + Number(r.satoshis || 0), 0)
+    return rows.reduce((a, r) => a + (r.satoshis ?? 0), 0)
   }
 
   abstract findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]>
@@ -234,7 +235,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return true
   }
 
-  setServices (v: WalletServices) {
+  setServices (v: WalletServices): void {
     this._services = v
   }
 
@@ -244,7 +245,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async abortAction (auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult> {
-    if (!auth.userId) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
+    if (auth.userId == null) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
 
     const userId = auth.userId
     let reference: string | undefined = args.reference
@@ -278,7 +279,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         )
       }
       await this.updateTransactionStatus('failed', tx.transactionId, userId, reference, trx)
-      if (tx.txid) {
+      if (tx.txid != null && tx.txid !== '') {
         const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
         if (req != null) {
           req.addHistoryNote({ what: 'abortAction', reference: args.reference })
@@ -343,7 +344,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         }
 
         if (d.status === 'readyToSend') {
-          await this.mergeReqToBeefToShareExternally(d.req!, r.beef, knownTxids, trx)
+          await this.mergeReqToBeefToShareExternally(d.req as TableProvenTxReq, r.beef, knownTxids, trx)
         }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
@@ -360,7 +361,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx?: TrxToken
   ): Promise<void> {
     const { rawTx, inputBEEF: beef } = req
-    if (!rawTx || (beef == null)) throw new WERR_INTERNAL('req rawTx and beef must be valid.')
+    if (rawTx == null || beef == null) throw new WERR_INTERNAL('req rawTx and beef must be valid.')
     mergeToBeef.mergeRawTx(asArray(rawTx))
     mergeToBeef.mergeBeef(asArray(beef))
     await mergeInputsIntoBeef(
@@ -394,7 +395,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     const existing = verifyOneOrNone(await this.findProvenTxReqs({ partial: { txid }, trx }))
     if (existing == null && newReq == null) return undefined
     if (existing == null) {
-      await this.insertProvenTxReq(newReq!, trx)
+      await this.insertProvenTxReq(newReq as TableProvenTxReq, trx)
       return newReq
     }
     if (newReq != null) {
@@ -452,13 +453,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     reference?: string,
     trx?: TrxToken
   ): Promise<void> {
-    if (!transactionId && !(userId && reference)) { throw new WERR_MISSING_PARAMETER('either transactionId or userId and reference') }
+    if (transactionId == null && !(userId != null && reference != null && reference !== '')) { throw new WERR_MISSING_PARAMETER('either transactionId or userId and reference') }
 
     await this.transaction(async trx => {
       const where: Partial<TableTransaction> = {}
-      if (transactionId) where.transactionId = transactionId
-      if (userId) where.userId = userId
-      if (reference) where.reference = reference
+      if (transactionId != null) where.transactionId = transactionId
+      if (userId != null) where.userId = userId
+      if (reference != null && reference !== '') where.reference = reference
 
       const tx = verifyOne(await this.findTransactions({ partial: where, noRawTx: true, trx }))
 
@@ -467,7 +468,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       // return
 
       // Once completed, this method cannot be used to "uncomplete" transaction.
-      if ((status !== 'completed' && tx.status === 'completed') || tx.provenTxId) { throw new WERR_INVALID_OPERATION('The status of a "completed" transaction cannot be changed.') }
+      if ((status !== 'completed' && tx.status === 'completed') || tx.provenTxId != null) { throw new WERR_INVALID_OPERATION('The status of a "completed" transaction cannot be changed.') }
       // It is not possible to un-fail a transaction. Information is lost and not recoverable.
       if (status !== 'failed' && tx.status === 'failed') { throw new WERR_INVALID_OPERATION('A "failed" transaction may not be un-failed by this method.') }
 
@@ -501,12 +502,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async createAction (auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
-    if (!auth.userId) throw new WERR_UNAUTHORIZED()
+    if (auth.userId == null) throw new WERR_UNAUTHORIZED()
     return await createAction(this, auth, args)
   }
 
   async processAction (auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults> {
-    if (!auth.userId) throw new WERR_UNAUTHORIZED()
+    if (auth.userId == null) throw new WERR_UNAUTHORIZED()
     return await processAction(this, auth, args)
   }
 
@@ -524,7 +525,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async verifyKnownValidTransaction (txid: string, trx?: TrxToken): Promise<boolean> {
     const { proven, rawTx } = await this.getProvenOrRawTx(txid, trx)
-    return proven != undefined || rawTx != undefined
+    return proven !== undefined || rawTx !== undefined
   }
 
   /**
@@ -570,29 +571,31 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     chainTracker: ChainTracker | undefined,
     skipInvalidProofs: boolean | undefined
   ): Promise<Beef | undefined> {
-    if (requiredLevels) {
+    const proven = r.proven
+    if (proven == null) return undefined
+    if ((requiredLevels ?? 0) > 0) {
       // Need more levels — caller should proceed via rawTx path
-      r.rawTx = r.proven!.rawTx
+      r.rawTx = proven.rawTx
       return undefined
     }
     if (trustSelf === 'known') {
       beef.mergeTxidOnly(txid)
       return beef
     }
-    const mp = new EntityProvenTx(r.proven!).getMerklePath()
+    const mp = new EntityProvenTx(proven).getMerklePath()
     if (chainTracker != null) {
       const root = mp.computeRoot()
-      const isValid = await chainTracker.isValidRootForHeight(root, r.proven!.height)
+      const isValid = await chainTracker.isValidRootForHeight(root, proven.height)
       if (!isValid) {
-        if (!skipInvalidProofs) throw new WERR_INVALID_MERKLE_ROOT(r.proven!.blockHash, r.proven!.height, root, txid)
+        if (skipInvalidProofs !== true) throw new WERR_INVALID_MERKLE_ROOT(proven.blockHash, proven.height, root, txid)
         // Proof is currently invalid — recurse deeper via rawTx path
-        r.rawTx = r.proven!.rawTx
+        r.rawTx = proven.rawTx
         r.proven = undefined
         return undefined
       }
     }
     // Proof is good — merge and return
-    beef.mergeRawTx(r.proven!.rawTx)
+    beef.mergeRawTx(proven.rawTx)
     beef.mergeBump(mp)
     return beef
   }
@@ -624,7 +627,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     } else {
       beef.mergeRawTx(r.rawTx)
       if (r.inputBEEF != null) beef.mergeBeef(r.inputBEEF)
-      if (requiredLevels) requiredLevels--
+      if ((requiredLevels ?? 0) > 0) requiredLevels = (requiredLevels as number) - 1
       await mergeInputBeefs(
         r.rawTx,
         beef,
@@ -706,7 +709,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
     const req = await EntityProvenTxReq.fromStorageId(this, args.provenTxReqId)
     let proven: EntityProvenTx
-    if (req.provenTxId) {
+    if (req.provenTxId != null && req.provenTxId > 0) {
       // Someone beat us to it, grab what we need for results...
       proven = new EntityProvenTx(verifyOne(await this.findProvenTxs({ partial: { txid: args.txid } })))
     } else {
@@ -800,13 +803,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   ): Promise<number> {
     const partial: Partial<TableProvenTxReq> = {}
     if (update.updated_at != null) partial.updated_at = update.updated_at
-    if (update.provenTxId) partial.provenTxId = update.provenTxId
-    if (update.status) partial.status = update.status
+    if (update.provenTxId != null && update.provenTxId > 0) partial.provenTxId = update.provenTxId
+    if (update.status != null) partial.status = update.status
     if (Number.isInteger(update.attempts)) partial.attempts = update.attempts
     if (update.notified !== undefined) partial.notified = update.notified
-    if (update.batch) partial.batch = update.batch
-    if (update.history) partial.history = update.history
-    if (update.notify) partial.notify = update.notify
+    if (update.batch != null && update.batch !== '') partial.batch = update.batch
+    if (update.history != null && update.history !== '') partial.history = update.history
+    if (update.notify != null && update.notify !== '') partial.notify = update.notify
     if (update.wasBroadcast !== undefined) partial.wasBroadcast = update.wasBroadcast ?? false
     if (Number.isInteger(update.rebroadcastAttempts)) partial.rebroadcastAttempts = update.rebroadcastAttempts ?? 0
 
@@ -820,7 +823,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx?: TrxToken
   ): Promise<TableOutputX> {
     const ox = o as TableOutputX
-    if (includeBasket && ox.basketId) ox.basket = await this.findOutputBasketById(o.basketId!, trx)
+    if (includeBasket && ox.basketId != null && ox.basketId > 0) ox.basket = await this.findOutputBasketById(o.basketId as number, trx)
     if (includeTags) {
       ox.tags = await this.getTagsForOutputId(o.outputId)
     }
@@ -829,7 +832,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async validateOutputScript (o: TableOutput, trx?: TrxToken): Promise<void> {
     // without offset and length values return what we have (make no changes)
-    if (!o.scriptLength || !o.scriptOffset || !o.txid) return
+    if (o.scriptLength == null || o.scriptLength === 0 || o.scriptOffset == null || o.scriptOffset === 0 || o.txid == null || o.txid === '') return
     // if there is an outputScript and its length is the expected length return what we have.
     if (o.lockingScript?.length === o.scriptLength) return
 

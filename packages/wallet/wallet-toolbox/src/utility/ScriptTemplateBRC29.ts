@@ -34,13 +34,13 @@ export class ScriptTemplateBRC29 implements ScriptTemplate {
     verifyTruthy(params.derivationSuffix)
   }
 
-  getKeyID () {
-    return `${this.params.derivationPrefix} ${this.params.derivationSuffix}`
+  getKeyID (): string {
+    return `${this.params.derivationPrefix ?? ''} ${this.params.derivationSuffix ?? ''}`
   }
 
   getKeyDeriver (privKey: PrivateKey | HexString): KeyDeriverApi {
     if (typeof privKey === 'string') privKey = PrivateKey.fromHex(privKey)
-    if (!this.params.keyDeriver || this.params.keyDeriver.rootKey.toHex() !== privKey.toHex()) { return new CachedKeyDeriver(privKey) }
+    if (this.params.keyDeriver == null || this.params.keyDeriver.rootKey.toHex() !== privKey.toHex()) { return new CachedKeyDeriver(privKey) }
     return this.params.keyDeriver
   }
 

@@ -14,9 +14,6 @@ import { WalletError } from '../sdk/WalletError'
 import { Chaintracks } from '../services/chaintracker/chaintracks/Chaintracks'
 dotenv.config()
 
-const mainDojoConnection = process.env.MAIN_DOJO_CONNECTION || ''
-const testDojoConnection = process.env.TEST_DOJO_CONNECTION || ''
-
 export interface MonitorDaemonSetup {
   chain?: Chain
   sqliteFilename?: string
@@ -53,7 +50,7 @@ export class MonitorDaemon {
     if (a.monitor == null) {
       a.chain ||= 'test'
 
-      if (a.sqliteFilename) {
+      if (a.sqliteFilename != null && a.sqliteFilename !== '') {
         a.knexConfig = {
           client: 'better-sqlite3',
           connection: { filename: a.sqliteFilename },
@@ -61,7 +58,7 @@ export class MonitorDaemon {
         }
       }
 
-      if (a.mySQLConnection) {
+      if (a.mySQLConnection != null && a.mySQLConnection !== '') {
         a.knexConfig = {
           client: 'mysql2',
           connection: JSON.parse(a.mySQLConnection),
@@ -100,7 +97,7 @@ export class MonitorDaemon {
       }
 
       if (a.servicesOptions != null) {
-        if (a.servicesOptions.chain != a.chain) { throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain') }
+        if (a.servicesOptions.chain !== a.chain) { throw new WERR_INVALID_PARAMETER('serviceOptions.chain', 'same as args.chain') }
         a.servicesOptions.chaintracks ??= a.chaintracks
         a.services = new Services(a.servicesOptions)
       }
@@ -114,7 +111,7 @@ export class MonitorDaemon {
         a.storageManager,
         a.services,
         a.chaintracks,
-        a.startupTaskMode || 'multiuser'
+        a.startupTaskMode ?? 'multiuser'
       )
       a.monitor = new Monitor(monitorOptions)
     }
@@ -126,7 +123,7 @@ export class MonitorDaemon {
 
     const { monitor } = this.setup
 
-    if (!this.noRunTasks) {
+    if (this.noRunTasks !== true) {
       console.log('\n\nRunning startTasks\n\n')
       this.doneTasks = monitor.startTasks()
     }
@@ -135,11 +132,11 @@ export class MonitorDaemon {
   async stop (): Promise<void> {
     console.log('start of stop')
 
-    if ((this.setup == null) || ((this.doneTasks == null) && !this.noRunTasks) || (this.doneListening == null)) { throw new WERR_INTERNAL('call start or createSetup first') }
+    if ((this.setup == null) || ((this.doneTasks == null) && this.noRunTasks !== true) || (this.doneListening == null)) { throw new WERR_INTERNAL('call start or createSetup first') }
 
     const { monitor } = this.setup
 
-    monitor!.stopTasks()
+    ;(monitor as Monitor).stopTasks()
 
     if (this.doneTasks != null) await this.doneTasks
     this.doneTasks = undefined
@@ -149,8 +146,8 @@ export class MonitorDaemon {
 
   async destroy (): Promise<void> {
     if (this.setup == null) return
-    if (this.doneTasks || (this.doneListening != null)) await this.stop()
-    if (this.setup.storageProvider != null) this.setup.storageProvider.destroy()
+    if ((this.doneTasks != null) || (this.doneListening != null)) await this.stop()
+    if (this.setup.storageProvider != null) void this.setup.storageProvider.destroy()
     this.setup = undefined
   }
 

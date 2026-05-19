@@ -26,7 +26,7 @@ export function createCoinbaseTransaction (height: number): Transaction {
       h >>= 8
     }
     // If the high bit is set, add a 0x00 byte to keep it positive
-    if (heightBytes.at(-1)! & 0x80) {
+    if (((heightBytes.at(-1) as number) & 0x80) !== 0) {
       heightBytes.push(0)
     }
   }

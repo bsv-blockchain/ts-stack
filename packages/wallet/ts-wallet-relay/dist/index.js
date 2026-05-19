@@ -1,5 +1,17 @@
 // src/server/WebSocketRelay.ts
 import { WebSocketServer, WebSocket } from "ws";
+
+// src/shared/originMatcher.ts
+function compileOriginMatcher(allowed) {
+  if (allowed == null) return null;
+  if (typeof allowed === "string") return (o) => o === allowed;
+  if (Array.isArray(allowed)) return (o) => allowed.includes(o);
+  if (allowed instanceof RegExp) return (o) => allowed.test(o);
+  if (typeof allowed === "function") return allowed;
+  return null;
+}
+
+// src/server/WebSocketRelay.ts
 var HEARTBEAT_INTERVAL_MS = 3e4;
 var BUFFER_TTL_MS = 6e4;
 var BUFFER_MAX_PER_TOPIC = 50;
@@ -11,9 +23,11 @@ var WebSocketRelay = class {
     this.validateDesktopToken = null;
     this.onDisconnectCb = null;
     this.onMobileConnectCb = null;
-    this.allowedOrigin = null;
+    this.isOriginAllowed = null;
     this.heartbeatTimer = null;
-    this.allowedOrigin = options?.allowedOrigin ?? null;
+    this.isOriginAllowed = compileOriginMatcher(
+      options?.allowedOrigins ?? options?.allowedOrigin
+    );
     this.wss = new WebSocketServer({ server, path: "/ws", maxPayload: 64 * 1024 });
     this.wss.on("connection", (ws, req) => this.handleConnection(ws, req));
     this.heartbeatTimer = setInterval(() => this.runHeartbeat(), HEARTBEAT_INTERVAL_MS);
@@ -91,7 +105,7 @@ var WebSocketRelay = class {
     }
     if (role === "desktop") {
       const origin = req.headers.origin;
-      if (origin && this.allowedOrigin && origin !== this.allowedOrigin) {
+      if (origin && this.isOriginAllowed && !this.isOriginAllowed(origin)) {
         ws.close(1008, "Origin not allowed");
         return;
       }
@@ -406,8 +420,10 @@ var WalletRelayService = class {
     this.origin = opts.origin ?? process.env["ORIGIN"] ?? "http://localhost:5173";
     this.schema = opts.schema ?? process.env["PAIRING_SCHEMA"] ?? "bsv-browser";
     this.signQrCodes = opts.signQrCodes ?? true;
+    const matcherSource = opts.allowedOrigins ?? opts.origin;
+    this.isOriginAllowed = compileOriginMatcher(matcherSource);
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions });
-    this.relay = new WebSocketRelay(opts.server, { allowedOrigin: this.origin });
+    this.relay = new WebSocketRelay(opts.server, { allowedOrigins: matcherSource });
     this.sessions.onSessionExpired((id) => this.relay.removeTopic(id));
     this.relay.onValidateTopic((topic) => {
       const s = this.sessions.getSession(topic);
@@ -438,6 +454,7 @@ var WalletRelayService = class {
           clearTimeout(authTimer);
           this.mobileAuthTimers.delete(topic);
         }
+        if (this.sessions.getSession(topic)?.status === "expired") return;
         this.sessions.setStatus(topic, "disconnected");
         this.rejectPendingForSession(topic);
         this.opts.onSessionDisconnected?.(topic);
@@ -445,15 +462,28 @@ var WalletRelayService = class {
     });
     if (opts.app) this.registerRoutes(opts.app);
   }
-  /** Create a session and return its QR data URL, pairing URI, and desktop WebSocket token. */
-  async createSession() {
+  /**
+   * Create a session and return its QR data URL, pairing URI, and desktop token.
+   *
+   * Pass `options.origin` to embed a per-session origin in the QR (multi-app
+   * deployments where the caller's URL — not the relay's — is the trust anchor).
+   * When omitted, falls back to the constructor `origin`.
+   *
+   * If an allowlist is configured, the per-session origin must match — otherwise
+   * a malicious caller could mint QRs claiming to be any domain.
+   */
+  async createSession(options) {
+    const origin = options?.origin ?? this.origin;
+    if (options?.origin !== void 0 && this.isOriginAllowed && !this.isOriginAllowed(options.origin)) {
+      throw new Error(`Origin '${options.origin}' is not in the allowedOrigins list`);
+    }
     const session = this.sessions.createSession();
     const { publicKey: backendIdentityKey } = await this.wallet.getPublicKey({ identityKey: true });
     const expiry = Math.floor((Date.now() + 12e4) / 1e3);
     let sig;
     if (this.signQrCodes) {
       const data = Array.from(
-        new TextEncoder().encode(`${session.id}|${backendIdentityKey}|${this.origin}|${expiry}`)
+        new TextEncoder().encode(`${session.id}|${backendIdentityKey}|${origin}|${expiry}`)
       );
       const { signature } = await this.wallet.createSignature({
         data,
@@ -467,7 +497,7 @@ var WalletRelayService = class {
       sessionId: session.id,
       backendIdentityKey,
       protocolID: JSON.stringify(PROTOCOL_ID),
-      origin: this.origin,
+      origin,
       expiry,
       sig,
       schema: this.schema
@@ -508,6 +538,19 @@ var WalletRelayService = class {
       this.pending.set(rpc.id, { sessionId, resolve, reject, timer });
     });
   }
+  /**
+   * Terminate a session from the desktop side: closes the mobile's WebSocket,
+   * rejects in-flight requests, and marks the session expired.
+   * Throws if the session is not found or the token is invalid.
+   */
+  deleteSession(sessionId, desktopToken) {
+    const session = this.sessions.getSession(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.desktopToken !== desktopToken) throw new Error("Invalid desktop token");
+    this.relay.disconnectMobile(sessionId);
+    this.rejectPendingForSession(sessionId);
+    this.sessions.setStatus(sessionId, "expired");
+  }
   /** Stop the GC timer, close the WebSocket server, and reject all in-flight requests. */
   stop() {
     for (const timer of this.mobileAuthTimers.values()) clearTimeout(timer);
@@ -533,9 +576,11 @@ var WalletRelayService = class {
   // ── Route registration ────────────────────────────────────────────────────────
   registerRoutes(app) {
     app.get("/api/session", (req, res) => {
-      void this.createSession().then((info) => res.json(info)).catch((err) => {
+      const claimedOrigin = req.headers.origin;
+      void this.createSession(claimedOrigin ? { origin: claimedOrigin } : void 0).then((info) => res.json(info)).catch((err) => {
         const msg = err instanceof Error ? err.message : "Failed";
-        const status = err.code === 429 ? 429 : 500;
+        const code = err.code;
+        const status = code === 429 ? 429 : msg.includes("allowedOrigins") ? 403 : 500;
         res.status(status).json({ error: msg });
       });
     });
@@ -564,6 +609,21 @@ var WalletRelayService = class {
         }
         res.status(status).json({ error: msg });
       });
+    });
+    app.delete("/api/session/:id", (req, res) => {
+      const token = req.headers["x-desktop-token"];
+      if (!token) {
+        res.status(401).json({ error: "Missing desktop token" });
+        return;
+      }
+      try {
+        this.deleteSession(req.params["id"], token);
+        res.status(204).end();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed";
+        const status = msg === "Invalid desktop token" ? 401 : msg === "Session not found" ? 404 : 500;
+        res.status(status).json({ error: msg });
+      }
     });
   }
   // ── Inbound message handling ──────────────────────────────────────────────────
@@ -644,6 +704,7 @@ export {
   base64urlToBytes,
   buildPairingUri,
   bytesToBase64url,
+  compileOriginMatcher,
   decryptEnvelope,
   encryptEnvelope,
   parsePairingUri,

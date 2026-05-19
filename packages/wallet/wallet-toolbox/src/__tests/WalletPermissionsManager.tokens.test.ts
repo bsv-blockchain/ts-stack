@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { mockUnderlyingWallet, MockedBSV_SDK, MockTransaction } from './WalletPermissionsManager.fixtures'
+import { mockUnderlyingWallet, MockedBSV_SDK } from './WalletPermissionsManager.fixtures'
 import { WalletPermissionsManager, PermissionRequest, PermissionToken } from '../WalletPermissionsManager'
-import { Utils } from '@bsv/sdk'
 
 // Re-mock @bsv/sdk with our fixture classes (MockTransaction, MockLockingScript, etc.)
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
@@ -31,7 +30,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
 
   describe('buildPushdropFields() - unit tests for each permission type', () => {
     // We’ll cast the manager to `any` to access the private method.
-    const privateManager = () => manager as any
+    const privateManager = (): any => manager as any
 
     it('should build correct fields for a protocol token (DPACP)', async () => {
       const request: PermissionRequest = {
@@ -486,7 +485,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       expect(createArgs.inputs[0].outpoint).toBe('revocableToken.txid.1')
 
       // No new outputs => final array is empty
-      expect(createArgs.outputs || []).toHaveLength(0)
+      expect(createArgs.outputs ?? []).toHaveLength(0)
 
       // 2) The manager then calls signAction to finalize the spending
       expect(underlying.signAction).toHaveBeenCalledTimes(1)

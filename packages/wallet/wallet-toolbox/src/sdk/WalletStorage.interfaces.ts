@@ -6,10 +6,8 @@ import {
   ChainTracker,
   InternalizeActionArgs,
   InternalizeActionResult,
-  ListActionsArgs,
   ListActionsResult,
   ListCertificatesResult,
-  ListOutputsArgs,
   ListOutputsResult,
   RelinquishCertificateArgs,
   RelinquishOutputArgs,
@@ -52,41 +50,41 @@ export interface WalletStorage {
   /**
    * @returns false
    */
-  isStorageProvider(): boolean
+  isStorageProvider: () => boolean
 
-  isAvailable(): boolean
-  makeAvailable(): Promise<TableSettings>
-  migrate(storageName: string, storageIdentityKey: string): Promise<string>
-  destroy(): Promise<void>
+  isAvailable: () => boolean
+  makeAvailable: () => Promise<TableSettings>
+  migrate: (storageName: string, storageIdentityKey: string) => Promise<string>
+  destroy: () => Promise<void>
 
-  setServices(v: WalletServices): void
-  getServices(): WalletServices
-  getSettings(): TableSettings
+  setServices: (v: WalletServices) => void
+  getServices: () => WalletServices
+  getSettings: () => TableSettings
 
-  getAuth(): Promise<AuthId>
+  getAuth: () => Promise<AuthId>
 
-  findOrInsertUser(identityKey: string): Promise<{ user: TableUser; isNew: boolean }>
+  findOrInsertUser: (identityKey: string) => Promise<{ user: TableUser, isNew: boolean }>
 
-  abortAction(args: AbortActionArgs): Promise<AbortActionResult>
-  createAction(args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult>
-  processAction(args: StorageProcessActionArgs): Promise<StorageProcessActionResults>
-  internalizeAction(args: InternalizeActionArgs): Promise<InternalizeActionResult>
+  abortAction: (args: AbortActionArgs) => Promise<AbortActionResult>
+  createAction: (args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
+  processAction: (args: StorageProcessActionArgs) => Promise<StorageProcessActionResults>
+  internalizeAction: (args: InternalizeActionArgs) => Promise<InternalizeActionResult>
 
-  findCertificates(args: FindCertificatesArgs): Promise<TableCertificateX[]>
-  findOutputBaskets(args: FindOutputBasketsArgs): Promise<TableOutputBasket[]>
-  findOutputs(args: FindOutputsArgs): Promise<TableOutput[]>
-  findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]>
+  findCertificates: (args: FindCertificatesArgs) => Promise<TableCertificateX[]>
+  findOutputBaskets: (args: FindOutputBasketsArgs) => Promise<TableOutputBasket[]>
+  findOutputs: (args: FindOutputsArgs) => Promise<TableOutput[]>
+  findProvenTxReqs: (args: FindProvenTxReqsArgs) => Promise<TableProvenTxReq[]>
 
-  listActions(args: ListActionsArgs): Promise<ListActionsResult>
-  listCertificates(args: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult>
-  listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
+  listActions: (args: Validation.ValidListActionsArgs) => Promise<ListActionsResult>
+  listCertificates: (args: Validation.ValidListCertificatesArgs) => Promise<ListCertificatesResult>
+  listOutputs: (args: Validation.ValidListOutputsArgs) => Promise<ListOutputsResult>
 
-  insertCertificate(certificate: TableCertificateX): Promise<number>
+  insertCertificate: (certificate: TableCertificateX) => Promise<number>
 
-  relinquishCertificate(args: RelinquishCertificateArgs): Promise<number>
-  relinquishOutput(args: RelinquishOutputArgs): Promise<number>
+  relinquishCertificate: (args: RelinquishCertificateArgs) => Promise<number>
+  relinquishOutput: (args: RelinquishOutputArgs) => Promise<number>
 
-  getStores(): WalletStorageInfo[]
+  getStores: () => WalletStorageInfo[]
 }
 
 /**
@@ -112,68 +110,68 @@ export interface WalletStorageProvider extends WalletStorageSync {
   /**
    * @returns true if this object's interface can be extended to the full `StorageProvider` interface
    */
-  isStorageProvider(): boolean
-  setServices(v: WalletServices): void
+  isStorageProvider: () => boolean
+  setServices: (v: WalletServices) => void
 }
 
 export interface WalletStorageSync extends WalletStorageWriter {
-  findOrInsertSyncStateAuth(
+  findOrInsertSyncStateAuth: (
     auth: AuthId,
     storageIdentityKey: string,
     storageName: string
-  ): Promise<{ syncState: TableSyncState; isNew: boolean }>
+  ) => Promise<{ syncState: TableSyncState, isNew: boolean }>
 
   /**
    * Updagte the `activeStorage` property of the authenticated user by their `userId`.
    * @param auth
    * @param newActiveStorageIdentityKey
    */
-  setActive(auth: AuthId, newActiveStorageIdentityKey: string): Promise<number>
+  setActive: (auth: AuthId, newActiveStorageIdentityKey: string) => Promise<number>
 
-  getSyncChunk(args: RequestSyncChunkArgs): Promise<SyncChunk>
-  processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult>
+  getSyncChunk: (args: RequestSyncChunkArgs) => Promise<SyncChunk>
+  processSyncChunk: (args: RequestSyncChunkArgs, chunk: SyncChunk) => Promise<ProcessSyncChunkResult>
 }
 
 /**
  * This is the minimal interface required for a WalletStorageProvider to export data to another provider.
  */
 export interface WalletStorageSyncReader {
-  makeAvailable(): Promise<TableSettings>
-  getSyncChunk(args: RequestSyncChunkArgs): Promise<SyncChunk>
+  makeAvailable: () => Promise<TableSettings>
+  getSyncChunk: (args: RequestSyncChunkArgs) => Promise<SyncChunk>
 }
 
 export interface WalletStorageWriter extends WalletStorageReader {
-  makeAvailable(): Promise<TableSettings>
-  migrate(storageName: string, storageIdentityKey: string): Promise<string>
-  destroy(): Promise<void>
+  makeAvailable: () => Promise<TableSettings>
+  migrate: (storageName: string, storageIdentityKey: string) => Promise<string>
+  destroy: () => Promise<void>
 
-  findOrInsertUser(identityKey: string): Promise<{ user: TableUser; isNew: boolean }>
+  findOrInsertUser: (identityKey: string) => Promise<{ user: TableUser, isNew: boolean }>
 
-  abortAction(auth: AuthId, args: AbortActionArgs): Promise<AbortActionResult>
-  createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult>
-  processAction(auth: AuthId, args: StorageProcessActionArgs): Promise<StorageProcessActionResults>
-  internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult>
+  abortAction: (auth: AuthId, args: AbortActionArgs) => Promise<AbortActionResult>
+  createAction: (auth: AuthId, args: Validation.ValidCreateActionArgs) => Promise<StorageCreateActionResult>
+  processAction: (auth: AuthId, args: StorageProcessActionArgs) => Promise<StorageProcessActionResults>
+  internalizeAction: (auth: AuthId, args: InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
 
-  insertCertificateAuth(auth: AuthId, certificate: TableCertificateX): Promise<number>
+  insertCertificateAuth: (auth: AuthId, certificate: TableCertificateX) => Promise<number>
 
-  relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number>
-  relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number>
+  relinquishCertificate: (auth: AuthId, args: RelinquishCertificateArgs) => Promise<number>
+  relinquishOutput: (auth: AuthId, args: RelinquishOutputArgs) => Promise<number>
 }
 
 export interface WalletStorageReader {
-  isAvailable(): boolean
+  isAvailable: () => boolean
 
-  getServices(): WalletServices
-  getSettings(): TableSettings
+  getServices: () => WalletServices
+  getSettings: () => TableSettings
 
-  findCertificatesAuth(auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]>
-  findOutputBasketsAuth(auth: AuthId, args: FindOutputBasketsArgs): Promise<TableOutputBasket[]>
-  findOutputsAuth(auth: AuthId, args: FindOutputsArgs): Promise<TableOutput[]>
-  findProvenTxReqs(args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]>
+  findCertificatesAuth: (auth: AuthId, args: FindCertificatesArgs) => Promise<TableCertificateX[]>
+  findOutputBasketsAuth: (auth: AuthId, args: FindOutputBasketsArgs) => Promise<TableOutputBasket[]>
+  findOutputsAuth: (auth: AuthId, args: FindOutputsArgs) => Promise<TableOutput[]>
+  findProvenTxReqs: (args: FindProvenTxReqsArgs) => Promise<TableProvenTxReq[]>
 
-  listActions(auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult>
-  listCertificates(auth: AuthId, vargs: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult>
-  listOutputs(auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult>
+  listActions: (auth: AuthId, vargs: Validation.ValidListActionsArgs) => Promise<ListActionsResult>
+  listCertificates: (auth: AuthId, vargs: Validation.ValidListCertificatesArgs) => Promise<ListCertificatesResult>
+  listOutputs: (auth: AuthId, vargs: Validation.ValidListOutputsArgs) => Promise<ListOutputsResult>
 }
 
 export interface AuthId {
@@ -535,7 +533,7 @@ export interface RequestSyncChunkArgs {
    * 10 Certificates
    * 11 CertificateFields
    */
-  offsets: { name: string; offset: number }[]
+  offsets: Array<{ name: string, offset: number }>
 }
 
 /**
@@ -584,7 +582,7 @@ export interface ReproveHeaderResult {
   /**
    * List of proven_txs records that were updated with new proof data.
    */
-  updated: { was: TableProvenTx; update: Partial<TableProvenTx>; logUpdate: string }[]
+  updated: Array<{ was: TableProvenTx, update: Partial<TableProvenTx>, logUpdate: string }>
   /**
    * List of proven_txs records that were checked but currently available proof is unchanged.
    */
@@ -606,7 +604,7 @@ export interface ReproveProvenResult {
   /**
    * Valid if proof data for proven_txs record is available and has changed.
    */
-  updated?: { update: Partial<TableProvenTx>; logUpdate: string }
+  updated?: { update: Partial<TableProvenTx>, logUpdate: string }
   /**
    * True if proof data for proven_txs record was found to be unchanged.
    */

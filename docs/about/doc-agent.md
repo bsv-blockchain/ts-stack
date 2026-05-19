@@ -177,20 +177,20 @@ Automated agents check stale docs daily:
 3. If version mismatch found, create PR with updates
 4. Update `last_verified` date after verification
 
-### GitHub Actions
+### GitHub Actions & Validation (Current State)
 
-Workflow: `.github/workflows/docs-check.yml`
+Frontmatter and link validation run automatically as part of the docs site build:
 
-```yaml
-- name: Check doc staleness
-  run: pnpm check-versions
+- Local author command: `pnpm --filter docs-site validate` (runs `validate-frontmatter.mjs` + `check-links.mjs`)
+- Full build (includes the above + built-link hygiene + pagefind): `pnpm docs:build`
+- Production deployment: `.github/workflows/docs-deploy.yml` runs `pnpm docs:build` on every push to `main` that touches `docs/**`, `docs-site/**`, `specs/**`, or the deploy workflow itself.
 
-- name: Verify links
-  run: pnpm --filter docs-site validate
+A dedicated scheduled "docs-check" workflow (staleness flagging + PR validation on docs changes) is planned but not yet present. Until then, contributors should run `pnpm --filter docs-site validate` locally before opening docs PRs (this is also what the build does).
 
-- name: Build docs
-  run: pnpm docs:build
-```
+See also:
+- `docs-site/scripts/validate-frontmatter.mjs` + `docs/_schemas/page.schema.json`
+- `docs-site/scripts/check-links.mjs` and `check-built-links.mjs`
+- `.github/workflows/docs-deploy.yml` (the actual deploy pipeline)
 
 ## Contributing Documentation
 
@@ -227,7 +227,7 @@ tags: [wallet, brc-100]
 1. Create file in appropriate directory (`docs/specs/`, `docs/guides/`, etc.)
 2. Add required frontmatter
 3. Write content
-4. Run `pnpm docs:verify` to validate
+4. Run `pnpm --filter docs-site validate` (and `pnpm docs:build` for the full check) to validate
 5. Commit and create PR
 
 Template:

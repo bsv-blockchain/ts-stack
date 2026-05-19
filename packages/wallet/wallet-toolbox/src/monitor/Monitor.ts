@@ -160,7 +160,7 @@ export class Monitor {
     this.onTransactionBroadcasted = options.onTransactionBroadcasted
     this.onTransactionStatusChanged = options.onTransactionStatusChanged
 
-    this.applyStartupTaskMode(options.startupTaskMode || 'none')
+    this.applyStartupTaskMode(options.startupTaskMode ?? 'none')
   }
 
   private async _init (): Promise<void> {
@@ -353,7 +353,7 @@ export class Monitor {
         try {
           if (this.storage.getActive().isStorageProvider()) {
             const log = await ttr.runTask()
-            if (log && log.length > 0) {
+            if (log.length > 0) {
               let details = log.slice(0, 1024)
               if (ttr.name === 'MonitorCallHistory') {
                 details = '...'
@@ -364,7 +364,7 @@ export class Monitor {
           }
         } catch (error_: unknown) {
           const e = WalletError.fromUnknown(error_)
-          const details = `monitor task ${ttr.name} runTask error ${e.code} ${e.description}\n${e.stack}`
+          const details = `monitor task ${ttr.name} runTask error ${e.code} ${e.description}\n${e.stack ?? ''}`
           console.log(details)
           await this.logEvent('error1', details)
         } finally {
@@ -443,7 +443,7 @@ export class Monitor {
    */
   callOnBroadcastedTransaction (broadcastResult: ReviewActionResult): void {
     if (this.onTransactionBroadcasted != null) {
-      this.onTransactionBroadcasted(broadcastResult)
+      void this.onTransactionBroadcasted(broadcastResult)
     }
   }
 
@@ -456,7 +456,7 @@ export class Monitor {
    */
   callOnProvenTransaction (txStatus: ProvenTransactionStatus): void {
     if (this.onTransactionProven != null) {
-      this.onTransactionProven(txStatus)
+      void this.onTransactionProven(txStatus)
     }
   }
 
@@ -465,7 +465,7 @@ export class Monitor {
    */
   callOnTransactionStatusChanged (txid: string, newStatus: string): void {
     if (this.onTransactionStatusChanged != null) {
-      this.onTransactionStatusChanged(txid, newStatus)
+      void this.onTransactionStatusChanged(txid, newStatus)
     }
   }
 

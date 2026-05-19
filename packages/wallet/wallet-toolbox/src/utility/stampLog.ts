@@ -37,14 +37,14 @@ export function stampLogFormat (log?: string): string {
     if (spaceAt > -1) {
       const when = new Date(line.substring(0, spaceAt)).getTime()
       const rest = line.substring(spaceAt + 1)
-      const delta = when - (last || when)
+      const delta = when - (last !== 0 ? last : when)
       const newClock = rest.includes('**NETWORK**')
       if (newClock) newClocks.push(data.length)
       data.push({ when, rest, delta, newClock })
       last = when
     }
   }
-  const total = data.at(-1)!.when - data[0].when
+  const total = data[data.length - 1].when - data[0].when
   if (newClocks.length % 2 === 0) {
     // Adjust for paired network crossing times and clock skew between clocks.
     let network = total
@@ -53,7 +53,7 @@ export function stampLogFormat (log?: string): string {
       network -= data[newClock - 1].when - data[lastNewClock].when
       lastNewClock = newClock
     }
-    network -= data.at(-1)!.when - data[lastNewClock].when
+    network -= data[data.length - 1].when - data[lastNewClock].when
     let networks = newClocks.length
     for (const newClock of newClocks) {
       const n = networks > 1 ? Math.floor(network / networks) : network

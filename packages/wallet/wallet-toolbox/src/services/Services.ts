@@ -72,7 +72,7 @@ export class Services implements WalletServices {
     this.whatsonchain = new WhatsOnChain(this.chain, { apiKey: this.options.whatsOnChainApiKey }, this)
 
     this.arcTaal = new ARC(this.options.arcUrl, this.options.arcConfig, 'arcTaal')
-    if (this.options.arcGorillaPoolUrl) {
+    if (this.options.arcGorillaPoolUrl != null && this.options.arcGorillaPoolUrl !== '') {
       this.arcGorillaPool = new ARC(this.options.arcGorillaPoolUrl, this.options.arcGorillaPoolConfig, 'arcGorillaPool')
     }
 
@@ -122,11 +122,11 @@ export class Services implements WalletServices {
 
     // prettier-ignore
     this.updateFiatExchangeRateServices = new ServiceCollection<UpdateFiatExchangeRateService>('updateFiatExchangeRate')
-    if (this.options.exchangeratesapiKey)
     // If the api key for paid service is set, only use that sesrvice.
-    { this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi }) } else
     // Otherwise use the chaintracks service
-    {
+    if (this.options.exchangeratesapiKey != null && this.options.exchangeratesapiKey !== '') {
+      this.updateFiatExchangeRateServices.add({ name: 'exchangeratesapi', service: updateExchangeratesapi })
+    } else {
       this.updateFiatExchangeRateServices.add({
         name: 'ChaintracksFiatRates',
         service: updateChaintracksFiatExchangeRates
@@ -199,25 +199,25 @@ export class Services implements WalletServices {
     }
   }
 
-  get getProofsCount () {
+  get getProofsCount (): number {
     return this.getMerklePathServices.count
   }
 
-  get getRawTxsCount () {
+  get getRawTxsCount (): number {
     return this.getRawTxServices.count
   }
 
-  get postBeefServicesCount () {
+  get postBeefServicesCount (): number {
     return this.postBeefServices.count
   }
 
-  get getUtxoStatsCount () {
+  get getUtxoStatsCount (): number {
     return this.getUtxoStatusServices.count
   }
 
   async getStatusForTxids (txids: string[], useNext?: boolean): Promise<GetStatusForTxidsResult> {
     const services = this.getStatusForTxidsServices
-    if (useNext) services.next()
+    if (useNext === true) services.next()
 
     let r0: GetStatusForTxidsResult = {
       name: '<noservices>',
@@ -286,7 +286,7 @@ export class Services implements WalletServices {
       throw new WERR_INVALID_PARAMETER('output.lockingScript', 'validated by storage provider validateOutputScript.')
     }
     const hash = this.hashOutputScript(Utils.toHex(output.lockingScript))
-    const or = await this.getUtxoStatus(hash, undefined, `${output.txid}.${output.vout}`)
+    const or = await this.getUtxoStatus(hash, undefined, `${output.txid ?? ''}.${output.vout}`)
     return or.isUtxo === true
   }
 
@@ -298,7 +298,7 @@ export class Services implements WalletServices {
     logger?: WalletLoggerInterface
   ): Promise<GetUtxoStatusResult> {
     const services = this.getUtxoStatusServices
-    if (useNext) services.next()
+    if (useNext === true) services.next()
 
     let r0: GetUtxoStatusResult = {
       name: '<noservices>',
@@ -349,7 +349,7 @@ export class Services implements WalletServices {
     logger?: WalletLoggerInterface
   ): Promise<GetScriptHashHistoryResult> {
     const services = this.getScriptHashHistoryServices
-    if (useNext) services.next()
+    if (useNext === true) services.next()
 
     let r0: GetScriptHashHistoryResult = {
       name: '<noservices>',
@@ -434,10 +434,10 @@ export class Services implements WalletServices {
     logger?.groupEnd()
     return rs
 
-    async function callService (stc: ServiceToCall<PostBeefService>, timeoutMs?: number) {
+    async function callService (stc: ServiceToCall<PostBeefService>, timeoutMs?: number): Promise<PostBeefResult> {
       const callPromise = stc.service(beef, txids)
       let r: PostBeefResult
-      if (!timeoutMs || timeoutMs <= 0) {
+      if (timeoutMs == null || timeoutMs <= 0) {
         r = await callPromise
       } else {
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined
@@ -491,7 +491,7 @@ export class Services implements WalletServices {
 
   async getRawTx (txid: string, useNext?: boolean): Promise<GetRawTxResult> {
     const services = this.getRawTxServices
-    if (useNext) services.next()
+    if (useNext === true) services.next()
 
     const r0: GetRawTxResult = { txid }
 
@@ -529,7 +529,6 @@ export class Services implements WalletServices {
     }
 
     if (r.error != null) services.addServiceCallError(stc, r.error)
-    else if (r.rawTx) services.addServiceCallFailure(stc)
     else services.addServiceCallSuccess(stc, 'not found')
 
     // If we have an error and didn't before, capture it.
@@ -545,15 +544,16 @@ export class Services implements WalletServices {
         return r
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
-        if (e.code != 'ECONNRESET') throw error_
+        if (e.code !== 'ECONNRESET') throw error_
       }
     }
     throw new WERR_INVALID_OPERATION('hashToHeader service unavailable')
   }
 
   async getHeaderForHeight (height: number): Promise<number[]> {
-    const method = async () => {
-      const header = await this.options.chaintracks!.findHeaderForHeight(height)
+    const method = async (): Promise<number[]> => {
+      const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
+      const header = await chaintracks.findHeaderForHeight(height)
       if (header == null) throw new WERR_INVALID_PARAMETER('hash', `valid height '${height}' on mined chain ${this.chain}`)
       return toBinaryBaseBlockHeader(header)
     }
@@ -561,15 +561,17 @@ export class Services implements WalletServices {
   }
 
   async getHeight (): Promise<number> {
-    const method = async () => {
-      return await this.options.chaintracks!.currentHeight()
+    const method = async (): Promise<number> => {
+      const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
+      return await chaintracks.currentHeight()
     }
     return await this.invokeChaintracksWithRetry(method)
   }
 
   async hashToHeader (hash: string): Promise<BlockHeader> {
-    const method = async () => {
-      const header = await this.options.chaintracks!.findHeaderForBlockHash(hash)
+    const method = async (): Promise<BlockHeader | undefined> => {
+      const chaintracks = this.options.chaintracks as NonNullable<typeof this.options.chaintracks>
+      const header = await chaintracks.findHeaderForBlockHash(hash)
       return header
     }
     let header = await this.invokeChaintracksWithRetry(method)
@@ -580,7 +582,7 @@ export class Services implements WalletServices {
 
   async getMerklePath (txid: string, useNext?: boolean, logger?: WalletLoggerInterface): Promise<GetMerklePathResult> {
     const services = this.getMerklePathServices
-    if (useNext) services.next()
+    if (useNext === true) services.next()
 
     const r0: GetMerklePathResult = { notes: [] }
 
@@ -589,7 +591,7 @@ export class Services implements WalletServices {
       const stc = services.serviceToCall
       try {
         const r = await stc.service(txid, this)
-        if (r.notes != null) r0.notes!.push(...r.notes)
+        if (r.notes != null) { r0.notes = r0.notes ?? []; r0.notes.push(...r.notes) }
         r0.name ??= r.name
         if (r.merklePath == null) {
           logger?.log(`${stc.providerName} no merklePath`)
@@ -640,7 +642,7 @@ export class Services implements WalletServices {
     const fetched = await this.fetchFiatRates(toFetch)
 
     if (fetched == null) {
-      if (stored && Object.keys(storedRates).length > 0) return stored
+      if (Object.keys(storedRates).length > 0) return stored
       throw new WERR_INTERNAL()
     }
 
@@ -750,7 +752,7 @@ export class Services implements WalletServices {
 
 export function validateScriptHash (output: string, outputFormat?: GetUtxoStatusOutputFormat): string {
   let b = asArray(output)
-  if (!outputFormat) {
+  if (outputFormat == null) {
     if (b.length === 32) outputFormat = 'hashLE'
     else outputFormat = 'script'
   }
@@ -764,7 +766,7 @@ export function validateScriptHash (output: string, outputFormat?: GetUtxoStatus
       b = sha256Hash(b).reverse()
       break
     default:
-      throw new WERR_INVALID_PARAMETER('outputFormat', `not be ${outputFormat}`)
+      throw new WERR_INVALID_PARAMETER('outputFormat', `not be ${String(outputFormat)}`)
   }
   return asString(b)
 }

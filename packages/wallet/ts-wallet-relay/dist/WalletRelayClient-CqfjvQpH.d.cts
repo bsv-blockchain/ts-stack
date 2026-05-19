@@ -1,5 +1,5 @@
 import { WalletInterface } from '@bsv/sdk';
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-BIOdtOVN.js';
+import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-BIOdtOVN.cjs';
 
 interface WalletRelayClientOptions {
     /**
@@ -117,6 +117,14 @@ declare class WalletRelayClient {
      * Throws if there is no active session.
      */
     sendRequest(method: WalletMethodName, params?: unknown): Promise<WalletResponse>;
+    /**
+     * Terminate the session server-side (closes the mobile's WebSocket, marks session
+     * expired), then clean up locally. Fire-and-forget safe — errors are swallowed so
+     * local teardown always completes.
+     *
+     * Prefer this over `destroy()` when you want the mobile app to be notified.
+     */
+    disconnect(): Promise<void>;
     /** Stop polling and clean up resources. Call this on component unmount. */
     destroy(): void;
     private _startPolling;

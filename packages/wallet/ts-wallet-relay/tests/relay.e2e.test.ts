@@ -377,6 +377,143 @@ describe('WalletRelayService E2E', () => {
     })
   })
 
+  // ── Session termination ──────────────────────────────────────────────────────
+
+  describe('session termination', () => {
+    it('deleteSession() marks the session expired', async () => {
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+      service.deleteSession(created.sessionId, created.desktopToken)
+
+      expect(service.getSession(created.sessionId)?.status).toBe('expired')
+      mobile.disconnect()
+    }, 10_000)
+
+    it('deleteSession() rejects in-flight requests immediately', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const created = await service.createSession()
+
+      const mobile = await pairMobile(
+        created.pairingUri, mobileWallet,
+        () => new Promise(() => { /* intentionally never resolves */ }),
+      )
+
+      const requestPromise = service.sendRequest(
+        created.sessionId, 'getPublicKey', {}, created.desktopToken
+      )
+
+      // Give the request one tick to register as pending on the server
+      await new Promise(r => setTimeout(r, 50))
+
+      service.deleteSession(created.sessionId, created.desktopToken)
+
+      await expect(requestPromise).rejects.toThrow()
+      mobile.disconnect()
+    }, 10_000)
+
+    it('deleteSession() throws for an unknown session', () => {
+      expect(() => service.deleteSession('no-such-id', 'token')).toThrow('Session not found')
+    })
+
+    it('deleteSession() throws for an invalid desktop token', async () => {
+      const created = await service.createSession()
+      expect(() => service.deleteSession(created.sessionId, 'wrong-token')).toThrow('Invalid desktop token')
+    })
+
+    it('DELETE /api/session/:id returns 204 and marks session expired', async () => {
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+      const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
+        method: 'DELETE',
+        headers: { 'X-Desktop-Token': created.desktopToken },
+      })
+
+      expect(res.status).toBe(204)
+      expect(service.getSession(created.sessionId)?.status).toBe('expired')
+      mobile.disconnect()
+    }, 10_000)
+
+    it('DELETE /api/session/:id returns 401 with wrong token', async () => {
+      const created = await service.createSession()
+
+      const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
+        method: 'DELETE',
+        headers: { 'X-Desktop-Token': 'wrong-token' },
+      })
+
+      expect(res.status).toBe(401)
+    }, 10_000)
+
+    it('DELETE /api/session/:id returns 401 with missing token', async () => {
+      const created = await service.createSession()
+
+      const res = await fetch(`${baseUrl}/api/session/${created.sessionId}`, {
+        method: 'DELETE',
+      })
+
+      expect(res.status).toBe(401)
+    }, 10_000)
+
+    it('DELETE /api/session/:id returns 404 for unknown session', async () => {
+      const res = await fetch(`${baseUrl}/api/session/does-not-exist`, {
+        method: 'DELETE',
+        headers: { 'X-Desktop-Token': 'any-token' },
+      })
+
+      expect(res.status).toBe(404)
+    }, 10_000)
+
+    it('onSessionDisconnected does not fire after deleteSession', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const disconnectedIds: string[] = []
+
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        onSessionDisconnected: id => disconnectedIds.push(id),
+      })
+      try {
+        const created = await svc.createSession()
+        const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+        svc.deleteSession(created.sessionId, created.desktopToken)
+
+        // Allow the WS close event to propagate through the server
+        await new Promise(r => setTimeout(r, 100))
+
+        expect(disconnectedIds).not.toContain(created.sessionId)
+        mobile.disconnect()
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('POST /api/request on a deleted session returns 400', async () => {
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, new ProtoWallet(PrivateKey.fromRandom()))
+
+      service.deleteSession(created.sessionId, created.desktopToken)
+
+      const res = await fetch(`${baseUrl}/api/request/${created.sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Desktop-Token': created.desktopToken,
+        },
+        body: JSON.stringify({ method: 'getPublicKey', params: {} }),
+      })
+
+      expect(res.status).toBe(400)
+      mobile.disconnect()
+    }, 10_000)
+  })
+
   // ── Error cases ──────────────────────────────────────────────────────────────
 
   describe('error handling', () => {
@@ -450,6 +587,134 @@ describe('WalletRelayService E2E', () => {
       expect(res.status).toBe(504)
       const body = await res.json() as { error: string }
       expect(body.error.toLowerCase()).toMatch(/disconnect/)
+    }, 10_000)
+  })
+
+  // ── Per-session origin & allowedOrigins ─────────────────────────────────────
+  //
+  // These cover the multi-app deployment shape: one relay shared by N webapps,
+  // each passing its own origin per call. The legacy single-`origin` path stays
+  // covered by the rest of the suite — every other test in this file is set up
+  // with `origin: ${baseUrl}` and no `allowedOrigins`, so back-compat is the
+  // implicit baseline.
+
+  describe('per-session origin', () => {
+    it('embeds the constructor origin in the QR by default (legacy behavior)', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      expect(params?.origin).toBe(baseUrl)
+    })
+
+    it('embeds the per-call origin in the QR when passed', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
+      })
+      try {
+        const created = await svc.createSession({ origin: 'https://app.example.com' })
+        const { params } = parsePairingUri(created.pairingUri)
+        expect(params?.origin).toBe('https://app.example.com')
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('rejects per-call origin when not in allowedOrigins', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: ['https://app.example.com'],
+      })
+      try {
+        await expect(
+          svc.createSession({ origin: 'https://evil.com' })
+        ).rejects.toThrow(/not in the allowedOrigins list/)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('forwards the request Origin header via GET /api/session', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
+      })
+      try {
+        const res = await fetch(`http://localhost:${port}/api/session`, {
+          headers: { Origin: 'https://app.example.com' },
+        })
+        expect(res.ok).toBe(true)
+        const body = await res.json() as { pairingUri: string }
+        const { params } = parsePairingUri(body.pairingUri)
+        expect(params?.origin).toBe('https://app.example.com')
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('returns 403 from GET /api/session when Origin header is not in allowlist', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: ['https://app.example.com'],
+      })
+      try {
+        const res = await fetch(`http://localhost:${port}/api/session`, {
+          headers: { Origin: 'https://evil.com' },
+        })
+        expect(res.status).toBe(403)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('falls back to constructor origin when GET /api/session has no Origin header', async () => {
+      // Same-origin / curl / mobile native fetch — no Origin header. Should use
+      // the constructor default rather than rejecting.
+      const res = await fetch(`${baseUrl}/api/session`)
+      expect(res.ok).toBe(true)
+      const body = await res.json() as { pairingUri: string }
+      const { params } = parsePairingUri(body.pairingUri)
+      expect(params?.origin).toBe(baseUrl)
+    })
+
+    it('signs the QR over the per-session origin (signature verifies)', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        allowedOrigins: /^https:\/\/[a-z0-9-]+\.example\.com$/,
+      })
+      try {
+        const created = await svc.createSession({ origin: 'https://app.example.com' })
+        const { params } = parsePairingUri(created.pairingUri)
+        // verifyPairingSignature reconstructs the signed string from params.origin —
+        // if origin was wrong, signature verification would fail.
+        expect(await verifyPairingSignature(params!)).toBe(true)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
     }, 10_000)
   })
 })

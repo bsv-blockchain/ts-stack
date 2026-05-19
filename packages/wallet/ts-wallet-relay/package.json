@@ -1,6 +1,6 @@
 {
   "name": "@bsv/wallet-relay",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BSV mobile wallet relay — relay server and pairing client",
   "type": "module",
   "exports": {

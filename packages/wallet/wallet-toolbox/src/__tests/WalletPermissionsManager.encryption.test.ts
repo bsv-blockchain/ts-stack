@@ -24,7 +24,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       const plaintext = 'Hello, world!'
-      await manager['maybeEncryptMetadata'](plaintext)
+      await (manager as any).maybeEncryptMetadata(plaintext)
 
       // We expect underlying.encrypt() to have been called exactly once
       expect(underlying.encrypt).toHaveBeenCalledTimes(1)
@@ -46,7 +46,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       const plaintext = 'No encryption needed!'
-      const result = await manager['maybeEncryptMetadata'](plaintext)
+      const result = await (manager as any).maybeEncryptMetadata(plaintext)
 
       expect(result).toBe(plaintext)
       expect(underlying.encrypt).not.toHaveBeenCalled()
@@ -64,7 +64,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       const ciphertext = Utils.toBase64(Utils.toArray('random-string-representing-ciphertext'))
-      const result = await manager['maybeDecryptMetadata'](ciphertext)
+      const result = await (manager as any).maybeDecryptMetadata(ciphertext)
 
       // We expect underlying.decrypt() to have been called
       expect(underlying.decrypt).toHaveBeenCalledTimes(1)
@@ -92,7 +92,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       })
 
       const ciphertext = 'this-was-not-valid-for-decryption'
-      const result = await manager['maybeDecryptMetadata'](ciphertext)
+      const result = await (manager as any).maybeDecryptMetadata(ciphertext)
 
       // The manager should return the original ciphertext if decryption throws
       expect(result).toBe(ciphertext)
@@ -105,7 +105,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
         encryptWalletMetadata: true
       })
       manager.bindCallback('onSpendingAuthorizationRequested', x => {
-        manager.grantPermission({ requestID: x.requestID, ephemeral: true })
+        void manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       })
 
       // We prepare an action with multiple metadata fields
@@ -206,7 +206,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
         encryptWalletMetadata: false
       })
       manager.bindCallback('onSpendingAuthorizationRequested', x => {
-        manager.grantPermission({ requestID: x.requestID, ephemeral: true })
+        void manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       })
 
       const actionDescription = 'Plaintext action description'
@@ -302,7 +302,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
         encryptWalletMetadata: true
       })
       manager.bindCallback('onBasketAccessRequested', x => {
-        manager.grantPermission({ requestID: x.requestID, ephemeral: true })
+        void manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       })
 
       // Suppose we have an output with custom instructions that was stored encrypted
@@ -377,7 +377,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
         encryptWalletMetadata: true
       })
       manager.bindCallback('onBasketAccessRequested', x => {
-        manager.grantPermission({ requestID: x.requestID, ephemeral: true })
+        void manager.grantPermission({ requestID: x.requestID, ephemeral: true })
       })
       ;(underlying.listOutputs).mockResolvedValue({
         totalOutputs: 1,
