@@ -389,12 +389,12 @@ const NODE_CRYPTO = (() => {
   } catch {
     // node:crypto is unavailable in this runtime
   }
+  return undefined
 })()
 
-function toHashBytes (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): Uint8Array {
+type HashInput = Uint8Array | number[] | string
+
+function toHashBytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
   if (msg instanceof Uint8Array) {
     return msg
   }
@@ -404,8 +404,43 @@ function toHashBytes (
   return Uint8Array.from(toArray(msg, enc))
 }
 
-function toHashKeyBytes (key: Uint8Array | number[] | string): Uint8Array {
+function toHashKeyBytes (key: HashInput): Uint8Array {
   return typeof key === 'string' ? toHashBytes(key, 'hex') : toHashBytes(key)
+}
+
+interface FallbackHashLike {
+  update: (data: Uint8Array) => unknown
+  digest: () => Uint8Array
+}
+
+function updateNativeOrFallback (
+  native: any,
+  fallback: FallbackHashLike | undefined,
+  data: Uint8Array
+): void {
+  if (native != null) {
+    native.update(data)
+  } else if (fallback != null) {
+    fallback.update(data)
+  }
+}
+
+function digestNativeOrFallback (
+  native: any,
+  fallback: FallbackHashLike | undefined
+): number[] {
+  if (native != null) return Array.from(native.digest())
+  if (fallback != null) return Array.from(fallback.digest())
+  return []
+}
+
+function digestHexNativeOrFallback (
+  native: any,
+  fallback: FallbackHashLike | undefined
+): string {
+  if (native != null) return native.digest('hex')
+  if (fallback != null) return bytesToHex(fallback.digest())
+  return ''
 }
 
 function createNodeHash (algorithm: string): any {
@@ -418,14 +453,11 @@ function createNodeHash (algorithm: string): any {
   }
 }
 
-function createNodeHmac (
-  algorithm: string,
-  key: Uint8Array | number[] | string
-): any {
+function createNodeHmac (algorithm: string, keyBytes: Uint8Array): any {
   const createHmac = NODE_CRYPTO?.createHmac
   if (typeof createHmac !== 'function') return undefined
   try {
-    return createHmac(algorithm, toHashKeyBytes(key))
+    return createHmac(algorithm, keyBytes)
   } catch {
     return undefined
   }
@@ -433,7 +465,7 @@ function createNodeHmac (
 
 function digestWithNodeHash (
   algorithm: string,
-  msg: Uint8Array | number[] | string,
+  msg: HashInput,
   enc?: 'hex' | 'utf8'
 ): Uint8Array | undefined {
   const hash = createNodeHash(algorithm)
@@ -444,11 +476,11 @@ function digestWithNodeHash (
 
 function digestWithNodeHmac (
   algorithm: string,
-  key: Uint8Array | number[] | string,
-  msg: Uint8Array | number[] | string,
+  key: HashInput,
+  msg: HashInput,
   enc?: 'hex' | 'utf8'
 ): Uint8Array | undefined {
-  const hmac = createNodeHmac(algorithm, key)
+  const hmac = createNodeHmac(algorithm, toHashKeyBytes(key))
   if (hmac == null) return undefined
   hmac.update(toHashBytes(msg, enc))
   return hmac.digest()
@@ -740,29 +772,17 @@ export class SHA256 {
     }
   }
 
-  update (
-    msg: Uint8Array | number[] | string,
-    enc?: 'hex' | 'utf8'
-  ): this {
-    const data = toHashBytes(msg, enc)
-    if (this.native != null) {
-      this.native.update(data)
-    } else {
-      this.h.update(data)
-    }
+  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
   digest (): number[] {
-    return Array.from(
-      this.native != null ? this.native.digest() : this.h.digest()
-    )
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   digestHex (): string {
-    return this.native != null
-      ? this.native.digest('hex')
-      : bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
@@ -876,26 +896,17 @@ export class SHA512 {
     }
   }
 
-  update (msg: Uint8Array | number[] | string, enc?: 'hex' | 'utf8'): this {
-    const data = toHashBytes(msg, enc)
-    if (this.native != null) {
-      this.native.update(data)
-    } else {
-      this.h.update(data)
-    }
+  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
   digest (): number[] {
-    return Array.from(
-      this.native != null ? this.native.digest() : this.h.digest()
-    )
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   digestHex (): string {
-    return this.native != null
-      ? this.native.digest('hex')
-      : bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
@@ -930,7 +941,7 @@ export class SHA256HMAC {
    * @example
    * const myHMAC = new SHA256HMAC('deadbeef');
    */
-  constructor (key: Uint8Array | number[] | string) {
+  constructor (key: HashInput) {
     const k = toHashKeyBytes(key)
     this.native = createNodeHmac('sha256', k)
     if (this.native == null) {
@@ -949,13 +960,8 @@ export class SHA256HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: Uint8Array | number[] | string, enc?: 'hex'): this {
-    const data = toHashBytes(msg, enc)
-    if (this.native != null) {
-      this.native.update(data)
-    } else {
-      this.h.update(data)
-    }
+  update (msg: HashInput, enc?: 'hex'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
@@ -969,9 +975,7 @@ export class SHA256HMAC {
    * let hashedMessage = myHMAC.digest();
    */
   digest (): number[] {
-    return Array.from(
-      this.native != null ? this.native.digest() : this.h.digest()
-    )
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   /**
@@ -984,9 +988,7 @@ export class SHA256HMAC {
    * let hashedMessage = myHMAC.digestHex();
    */
   digestHex (): string {
-    return this.native != null
-      ? this.native.digest('hex')
-      : bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
@@ -1067,7 +1069,7 @@ export class SHA512HMAC {
    * @example
    * const myHMAC = new SHA512HMAC('deadbeef');
    */
-  constructor (key: Uint8Array | number[] | string) {
+  constructor (key: HashInput) {
     const k = toHashKeyBytes(key)
     this.native = createNodeHmac('sha512', k)
     if (this.native == null) {
@@ -1086,13 +1088,8 @@ export class SHA512HMAC {
    * @example
    * myHMAC.update('deadbeef', 'hex');
    */
-  update (msg: Uint8Array | number[] | string, enc?: 'hex' | 'utf8'): this {
-    const data = toHashBytes(msg, enc)
-    if (this.native != null) {
-      this.native.update(data)
-    } else {
-      this.h.update(data)
-    }
+  update (msg: HashInput, enc?: 'hex' | 'utf8'): this {
+    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
     return this
   }
 
@@ -1106,9 +1103,7 @@ export class SHA512HMAC {
    * let hashedMessage = myHMAC.digest();
    */
   digest (): number[] {
-    return Array.from(
-      this.native != null ? this.native.digest() : this.h.digest()
-    )
+    return digestNativeOrFallback(this.native, this.h)
   }
 
   /**
@@ -1121,23 +1116,18 @@ export class SHA512HMAC {
    * let hashedMessage = myHMAC.digestHex();
    */
   digestHex (): string {
-    return this.native != null
-      ? this.native.digest('hex')
-      : bytesToHex(this.h.digest())
+    return digestHexNativeOrFallback(this.native, this.h)
   }
 }
 
-function sha256Bytes (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): Uint8Array {
+function sha256Bytes (msg: HashInput, enc?: 'hex' | 'utf8'): Uint8Array {
   const native = digestWithNodeHash('sha256', msg, enc)
   if (native != null) return native
   return new FastSHA256().update(toHashBytes(msg, enc)).digest()
 }
 
 function sha512Bytes (
-  msg: Uint8Array | number[] | string,
+  msg: HashInput,
   enc?: 'hex' | 'utf8'
 ): Uint8Array {
   const native = digestWithNodeHash('sha512', msg, enc)
@@ -1146,7 +1136,7 @@ function sha512Bytes (
 }
 
 function ripemd160Bytes (
-  msg: Uint8Array | number[] | string,
+  msg: HashInput,
   enc?: 'hex' | 'utf8'
 ): Uint8Array | undefined {
   return digestWithNodeHash('ripemd160', msg, enc)
@@ -1201,10 +1191,7 @@ export const sha1 = (
  * @example
  * const digest = sha256('Hello, world!');
  */
-export const sha256 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
+export const sha256 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
   return Array.from(sha256Bytes(msg, enc))
 }
 
@@ -1219,10 +1206,7 @@ export const sha256 = (
  * @example
  * const digest = sha512('Hello, world!');
  */
-export const sha512 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
+export const sha512 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
   return Array.from(sha512Bytes(msg, enc))
 }
 
@@ -1239,10 +1223,7 @@ export const sha512 = (
  * @example
  * const doubleHash = hash256('Hello, world!');
  */
-export const hash256 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
+export const hash256 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
   return Array.from(sha256Bytes(sha256Bytes(msg, enc)))
 }
 
@@ -1258,10 +1239,7 @@ export const hash256 = (
  * @example
  * const hash = hash160('Hello, world!');
  */
-export const hash160 = (
-  msg: Uint8Array | number[] | string,
-  enc?: 'hex' | 'utf8'
-): number[] => {
+export const hash160 = (msg: HashInput, enc?: 'hex' | 'utf8'): number[] => {
   const first = sha256Bytes(msg, enc)
   const native = ripemd160Bytes(first)
   if (native != null) return Array.from(native)
@@ -1281,8 +1259,8 @@ export const hash160 = (
  * const digest = sha256hmac('deadbeef', 'ffff001d');
  */
 export const sha256hmac = (
-  key: Uint8Array | number[] | string,
-  msg: Uint8Array | number[] | string,
+  key: HashInput,
+  msg: HashInput,
   enc?: 'hex'
 ): number[] => {
   const native = digestWithNodeHmac('sha256', key, msg, enc)
@@ -1303,8 +1281,8 @@ export const sha256hmac = (
  * const digest = sha512hmac('deadbeef', 'ffff001d');
  */
 export const sha512hmac = (
-  key: Uint8Array | number[] | string,
-  msg: Uint8Array | number[] | string,
+  key: HashInput,
+  msg: HashInput,
   enc?: 'hex'
 ): number[] => {
   const native = digestWithNodeHmac('sha512', key, msg, enc)
