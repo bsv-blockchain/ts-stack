@@ -53,7 +53,7 @@ export const addOpReturnData = (
   fields: Array<string | number[]>
 ): LockingScript => {
   // Validate script parameter
-  if (!script || typeof script.toASM !== 'function') {
+  if (script == null || typeof script.toASM !== 'function') {
     throw new Error('Invalid script parameter: must be a LockingScript instance')
   }
 

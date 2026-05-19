@@ -24,17 +24,13 @@ export async function makeWallet (
   storageURL: string,
   privateKey: string
 ): Promise<WalletClient> {
-  // Validate parameters
-  if (!chain) {
-    throw new Error('chain parameter is required (must be "test" or "main")')
+  if ((chain as string) !== 'test' && (chain as string) !== 'main') {
+    throw new Error(`Invalid chain "${chain as string}". Must be "test" or "main"`)
   }
-  if (chain !== 'test' && chain !== 'main') {
-    throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`)
-  }
-  if (!storageURL) {
+  if (storageURL.length === 0) {
     throw new Error('storageURL parameter is required')
   }
-  if (!privateKey) {
+  if (privateKey.length === 0) {
     throw new Error('privateKey parameter is required')
   }
 
