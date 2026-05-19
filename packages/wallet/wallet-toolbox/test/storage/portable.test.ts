@@ -11,7 +11,9 @@ import {
   encryptBRC39,
   exportBRC38,
   exportBRC38Json,
+  exportBRC39,
   importBRC38,
+  importBRC39,
   parseBRC38Json,
   verifyOne,
   verifyTruthy
@@ -243,6 +245,69 @@ describe('BRC-38/39 portable wallet data', () => {
 
     const nonBRC38 = await makeBRC39File('{"brc":37}', 'password')
     await expect(decryptBRC39(nonBRC38, 'password')).rejects.toThrow(/brc must equal 38/)
+  })
+
+  test('parseBRC38Json rejects malformed JSON', () => {
+    expect(() => parseBRC38Json('{not-json')).toThrow(/Invalid BRC-38 JSON/)
+  })
+
+  test('importBRC38 rejects chain mismatch and unsupported mode', async () => {
+    const source = await createPortableSource('portable_chain_source', '4'.repeat(64))
+    const document = await exportBRC38(source.activeStorage, source.identityKey)
+    const target = await createEmptyStorage('portable_chain_target')
+
+    const wrongChain = cloneDocument(document)
+    wrongChain.sourceStorage.chain = 'main'
+    await expect(importBRC38(target, wrongChain, { mode: 'restore' })).rejects.toThrow(/chain mismatch/)
+
+    await expect(
+      importBRC38(target, document, { mode: 'bogus' as unknown as 'restore' })
+    ).rejects.toThrow(/Unsupported BRC-38 import mode/)
+  })
+
+  test('exportBRC39 + importBRC39 round-trip preserves user state', async () => {
+    const source = await createPortableSource('portable_brc39_source', '5'.repeat(64))
+    const original = await exportBRC38(source.activeStorage, source.identityKey)
+    const bytes = await exportBRC39(source.activeStorage, source.identityKey, 'round-trip-pw')
+    const target = await createEmptyStorage('portable_brc39_target')
+    const result = await importBRC39(target, bytes, 'round-trip-pw', { mode: 'restore' })
+    const restored = await exportBRC38(target, source.identityKey)
+
+    expect(result).toMatchObject({
+      mode: 'restore',
+      identityKey: source.identityKey,
+      userId: original.user.userId
+    })
+    expect(restored.user).toEqual(original.user)
+    expect(restored.tables).toEqual(original.tables)
+  })
+
+  test('validates output.spentBy and provenTxReq.txid relationships', () => {
+    const spentByDangling = cloneDocument(minimalDocument())
+    spentByDangling.tables.transactions.push({
+      created_at: iso,
+      updated_at: iso,
+      transactionId: 1,
+      userId: 1
+    })
+    spentByDangling.tables.outputs.push({
+      created_at: iso,
+      updated_at: iso,
+      outputId: 1,
+      userId: 1,
+      transactionId: 1,
+      spentBy: 99
+    })
+    expect(() => parseBRC38Json(JSON.stringify(spentByDangling))).toThrow(/output\.spentBy/)
+
+    const provenTxReqDangling = cloneDocument(minimalDocument())
+    provenTxReqDangling.tables.provenTxReqs.push({
+      created_at: iso,
+      updated_at: iso,
+      provenTxReqId: 1,
+      txid: 'txid-without-matching-transaction'
+    })
+    expect(() => parseBRC38Json(JSON.stringify(provenTxReqDangling))).toThrow(/provenTxReq\.txid/)
   })
 
   async function createPortableSource (databaseName: string, rootKeyHex: string): Promise<TestSetup1Wallet> {

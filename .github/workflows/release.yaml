@@ -55,13 +55,17 @@ jobs:
       #                                    changed since origin/main (legacy shape).
       - name: Resolve release plan
         id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          DISPATCH_FILTER: ${{ inputs.filter }}
         run: |
           mode=""
           filter=""
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            mode="${{ inputs.mode }}"
-            filter="${{ inputs.filter }}"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            mode="$DISPATCH_MODE"
+            filter="$DISPATCH_FILTER"
             if [[ "$mode" == "single" && -z "$filter" ]]; then
               echo "::error::single mode requires a filter input"
               exit 1
