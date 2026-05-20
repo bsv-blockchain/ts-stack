@@ -112,14 +112,11 @@ function nativeDecrypt (
       decipher.final()
     ])
     return new Uint8Array(decrypted.buffer, decrypted.byteOffset, decrypted.byteLength)
-  } catch (err: any) {
+  } catch {
     // Node throws "Unsupported state or unable to authenticate data" on auth
-    // failure.  Treat all errors as auth failure (null) so SymmetricKey.decrypt
-    // re-throws its own descriptive message; the pure-TS fallback below would
-    // also return null in the same scenario.
-    // Return `undefined` only for unexpected setup errors so we can retry with
-    // the pure-TS path — but in practice those are also unrecoverable, so null
-    // is fine here too.
+    // failure. Treat any error as auth failure so SymmetricKey.decrypt re-throws
+    // its own descriptive message — pure-TS fallback would return null in the
+    // same scenario.
     return null
   }
 }

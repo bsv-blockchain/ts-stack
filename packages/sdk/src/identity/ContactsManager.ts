@@ -70,13 +70,11 @@ export class ContactsManager {
 
     // Coalesce concurrent loads onto a single Promise so a fan-out of N
     // identity calls produces ONE listOutputs + decrypt batch, not N.
-    if (this.inFlightLoad == null) {
-      this.inFlightLoad = this.loadContactsFromWallet(limit).finally(() => {
-        this.inFlightLoad = null
-      })
-    }
+    this.inFlightLoad ??= this.loadContactsFromWallet(limit).finally(() => {
+      this.inFlightLoad = null
+    })
     const all = await this.inFlightLoad
-    return identityKey != null ? all.filter(c => c.identityKey === identityKey) : all
+    return identityKey == null ? all : all.filter(c => c.identityKey === identityKey)
   }
 
   /** Reset cached state. Call after writes. */

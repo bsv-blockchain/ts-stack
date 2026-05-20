@@ -17,7 +17,6 @@ import { PushDrop } from '../script/index.js'
 import { PrivateKey, Utils } from '../primitives/index.js'
 import { LookupResolver, SHIPBroadcaster, TopicBroadcaster, withDoubleSpendRetry } from '../overlay-tools/index.js'
 import { ContactsManager, Contact } from './ContactsManager.js'
-import { plog, pstart } from '../debug/profiler.js'
 
 /**
  * Maximum number of identity certificates to parse synchronously before yielding to the
@@ -216,48 +215,33 @@ export class IdentityClient {
     args: DiscoverByIdentityKeyArgs,
     opts: boolean | ResolveByIdentityKeyOptions = false
   ): Promise<DisplayableIdentity[]> {
-    const span = pstart('IdentityClient.resolveByIdentityKey', { identityKey: args.identityKey, opts })
     const { useContacts, parallel } = normalizeOpts(opts)
 
-    // Fast path: skip contacts entirely. This is now the default — straight overlay query,
+    // Fast path: skip contacts entirely. Default — straight overlay query,
     // no listOutputs / decrypt / cache churn.
     if (!useContacts) {
-      span.mark('wallet.discoverByIdentityKey start')
       const certificatesResult = await this.wallet.discoverByIdentityKey(args, this.originator)
       const certs = certificatesResult?.certificates ?? []
-      span.mark('wallet.discoverByIdentityKey done', { certs: certs.length })
-      const out = await IdentityClient.parseIdentities(certs)
-      span.end({ identities: out.length, path: 'no-contacts' })
-      return out
+      return await IdentityClient.parseIdentities(certs)
     }
 
     if (!parallel) {
-      span.mark('contacts get start')
       const contacts = await this.contactsManager.getContacts(args.identityKey)
-      span.mark('contacts get done', { contacts: contacts.length })
-      if (contacts.length > 0) { span.end({ identities: contacts.length, path: 'contacts-hit' }); return contacts }
+      if (contacts.length > 0) return contacts
 
-      span.mark('wallet.discoverByIdentityKey start')
       const certificatesResult = await this.wallet.discoverByIdentityKey(args, this.originator)
       const certs = certificatesResult?.certificates ?? []
-      span.mark('wallet.discoverByIdentityKey done', { certs: certs.length })
-      const out = await IdentityClient.parseIdentities(certs)
-      span.end({ identities: out.length, path: 'contacts-miss' })
-      return out
+      return await IdentityClient.parseIdentities(certs)
     }
 
-    span.mark('contacts + overlay parallel start')
     const [contacts, certificatesResult] = await Promise.all([
       this.contactsManager.getContacts(args.identityKey),
       this.wallet.discoverByIdentityKey(args, this.originator)
     ])
-    span.mark('parallel done', { contacts: contacts.length, certs: certificatesResult?.certificates?.length ?? 0 })
 
-    if (contacts.length > 0) { span.end({ identities: contacts.length, path: 'parallel-contacts-hit' }); return contacts }
+    if (contacts.length > 0) return contacts
     const certs = certificatesResult?.certificates ?? []
-    const out = await IdentityClient.parseIdentities(certs)
-    span.end({ identities: out.length, path: 'parallel-no-contacts' })
-    return out
+    return await IdentityClient.parseIdentities(certs)
   }
 
   /**
@@ -273,55 +257,40 @@ export class IdentityClient {
     args: DiscoverByAttributesArgs,
     opts: boolean | ResolveByAttributesOptions = false
   ): Promise<DisplayableIdentity[]> {
-    const span = pstart('IdentityClient.resolveByAttributes', { opts })
     const { useContacts, parallel } = normalizeOpts(opts)
 
     // Fast path: skip contacts entirely.
     if (!useContacts) {
-      span.mark('wallet.discoverByAttributes start')
       const certificatesResult = await this.wallet.discoverByAttributes(args, this.originator)
       const certs = certificatesResult?.certificates ?? []
-      span.mark('wallet.discoverByAttributes done', { certs: certs.length })
-      const out = await IdentityClient.parseIdentities(certs)
-      span.end({ identities: out.length, path: 'no-contacts' })
-      return out
+      return await IdentityClient.parseIdentities(certs)
     }
 
     if (!parallel) {
-      span.mark('contacts get start')
       const contacts = await this.contactsManager.getContacts()
-      span.mark('contacts get done', { contacts: contacts.length })
       const matches = this.matchContactsByAttributes(contacts, args)
-      if (matches.length > 0) { span.end({ identities: matches.length, path: 'contacts-match' }); return matches }
+      if (matches.length > 0) return matches
 
-      span.mark('wallet.discoverByAttributes start')
       const certificatesResult = await this.wallet.discoverByAttributes(args, this.originator)
       const certs = certificatesResult?.certificates ?? []
-      span.mark('wallet.discoverByAttributes done', { certs: certs.length })
-      if (contacts.length === 0) { const out = await IdentityClient.parseIdentities(certs); span.end({ identities: out.length, path: 'no-contact-overrides' }); return out }
+      if (contacts.length === 0) return await IdentityClient.parseIdentities(certs)
       const contactByKey = new Map<PubKeyHex, Contact>(
         contacts.map((contact) => [contact.identityKey, contact] as const)
       )
-      const out2 = await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
-      span.end({ identities: out2.length, path: 'with-overrides' })
-      return out2
+      return await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
     }
 
-    span.mark('contacts + overlay parallel start')
     const [contacts, certificatesResult] = await Promise.all([
       this.contactsManager.getContacts(),
       this.wallet.discoverByAttributes(args, this.originator)
     ])
-    span.mark('parallel done', { contacts: contacts.length, certs: certificatesResult?.certificates?.length ?? 0 })
 
     const certs = certificatesResult?.certificates ?? []
-    if (contacts.length === 0) { const out = await IdentityClient.parseIdentities(certs); span.end({ identities: out.length, path: 'parallel-no-contacts' }); return out }
+    if (contacts.length === 0) return await IdentityClient.parseIdentities(certs)
     const contactByKey = new Map<PubKeyHex, Contact>(
       contacts.map((contact) => [contact.identityKey, contact] as const)
     )
-    const out3 = await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
-    span.end({ identities: out3.length, path: 'parallel-overrides' })
-    return out3
+    return await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
   }
 
   /**
@@ -493,21 +462,14 @@ export class IdentityClient {
    */
   static async parseIdentities (certs: IdentityCertificate[]): Promise<DisplayableIdentity[]> {
     const n = certs.length
-    const span = pstart('IdentityClient.parseIdentities', { n })
     if (n <= PARSE_BATCH_SIZE) {
-      const out = certs.map((c) => IdentityClient.parseIdentity(c))
-      span.end({ batched: false })
-      return out
+      return certs.map((c) => IdentityClient.parseIdentity(c))
     }
     const out: DisplayableIdentity[] = new Array(n)
     for (let i = 0; i < n; i++) {
       out[i] = IdentityClient.parseIdentity(certs[i])
-      if ((i + 1) % PARSE_BATCH_SIZE === 0) {
-        await yieldToEventLoop()
-        span.mark(`yielded after ${i + 1}`)
-      }
+      if ((i + 1) % PARSE_BATCH_SIZE === 0) await yieldToEventLoop()
     }
-    span.end({ batched: true, n })
     return out
   }
 

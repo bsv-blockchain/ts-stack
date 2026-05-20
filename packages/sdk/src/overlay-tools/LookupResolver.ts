@@ -3,7 +3,6 @@ import { Beef } from '../transaction/Beef.js'
 import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
 import * as Utils from '../primitives/utils.js'
 import { getOverlayHostReputationTracker, HostReputationTracker } from './HostReputationTracker.js'
-import { plog, pstart } from '../debug/profiler.js'
 
 const defaultFetch: typeof fetch =
   typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function'
@@ -181,8 +180,6 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       )
     }
 
-    const span = pstart(`facilitator.lookup ${url}`, { service: question.service, timeout })
-
     const controller = typeof AbortController === 'undefined' ? undefined : new AbortController()
     const timer = setTimeout(() => {
       try { controller?.abort() } catch { /* noop */ }
@@ -198,90 +195,64 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
         body: JSON.stringify({ service: question.service, query: question.query }),
         signal: controller?.signal
       }
-      span.mark('fetch start')
       const response: Response = await this.fetchClient(`${url}/lookup`, fco)
-      span.mark('fetch headers', { status: response.status, contentType: response.headers.get('content-type') })
 
       if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
       if (response.headers.get('content-type') === 'application/octet-stream') {
-        const payload = await response.arrayBuffer()
-        span.mark('body arrayBuffer', { bytes: payload.byteLength })
-        const r = new Utils.Reader([...new Uint8Array(payload)])
-        const nOutpoints = r.readVarIntNum()
-        span.mark('parsed outpoint count', { nOutpoints })
-        const outpoints: Array<{ txid: string, outputIndex: number, context?: number[] }> = []
-        for (let i = 0; i < nOutpoints; i++) {
-          const txid = Utils.toHex(r.read(32))
-          const outputIndex = r.readVarIntNum()
-          const contextLength = r.readVarIntNum()
-          let context
-          if (contextLength > 0) {
-            context = r.read(contextLength)
-          }
-          outpoints.push({
-            txid,
-            outputIndex,
-            context
-          })
-        }
-        const beef = r.read()
-        span.mark('outpoints + BEEF read', { beefBytes: beef.length })
-
-        // Parse the aggregated BEEF blob ONCE and extract per-txid atomic slices.
-        // This avoids re-parsing the full blob for every output (dominant cost on device).
-        const t0parse = Date.now()
-        const beefObj = Beef.fromBinary(beef)
-        span.mark('Beef.fromBinary done', { ms: Date.now() - t0parse, txCount: beefObj.txs.length })
-
-        // Memoize per-txid extraction: duplicate txids in the wire outpoints list skip re-extraction.
-        const beefByTxid = new Map<string, number[]>()
-        const outputs: Array<{ outputIndex: number, context?: number[], beef: number[], txid: string }> = new Array(outpoints.length)
-        let reusedCount = 0
-        const yieldEvery = 1 // yield every output to keep the event loop responsive
-        for (let idx = 0; idx < outpoints.length; idx++) {
-          const x = outpoints[idx]
-          let beefBytes = beefByTxid.get(x.txid)
-          if (beefBytes === undefined) {
-            const t0 = Date.now()
-            beefBytes = beefObj.toBinaryAtomic(x.txid)
-            beefByTxid.set(x.txid, beefBytes)
-            const dt = Date.now() - t0
-            if (dt > 50) plog(`  facilitator.lookup BEEF decode slow output #${idx}`, { ms: dt, txid: x.txid, beefBytes: beefBytes.length })
-          } else {
-            reusedCount++
-          }
-          outputs[idx] = {
-            outputIndex: x.outputIndex,
-            context: x.context,
-            beef: beefBytes,
-            txid: x.txid
-          }
-          // Yield to event loop so UI animations and other JS don't starve.
-          if (idx > 0 && (idx % yieldEvery === 0) && idx < outpoints.length - 1) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 0))
-          }
-        }
-        span.end({ outputs: outputs.length, uniqueTxs: beefByTxid.size, reusedCount })
-        return {
-          type: 'output-list',
-          outputs
-        }
-      } else {
-        const body = await response.json()
-        span.end({ jsonBody: true })
-        return body
+        return await this.parseOctetStreamLookup(response)
       }
+      return await response.json()
     } catch (e) {
       // Normalize timeouts to a consistent error message
       if ((e as { name?: string })?.name === 'AbortError') {
-        span.end({ aborted: true })
         throw new Error('Request timed out')
       }
-      span.end({ error: (e as Error)?.message ?? String(e) })
       throw e
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  /** Parse the aggregated octet-stream lookup response into an output-list LookupAnswer. */
+  private async parseOctetStreamLookup (response: Response): Promise<LookupAnswer> {
+    const payload = await response.arrayBuffer()
+    const r = new Utils.Reader([...new Uint8Array(payload)])
+    const nOutpoints = r.readVarIntNum()
+    const outpoints: Array<{ txid: string, outputIndex: number, context?: number[] }> = []
+    for (let i = 0; i < nOutpoints; i++) {
+      const txid = Utils.toHex(r.read(32))
+      const outputIndex = r.readVarIntNum()
+      const contextLength = r.readVarIntNum()
+      const context = contextLength > 0 ? r.read(contextLength) : undefined
+      outpoints.push({ txid, outputIndex, context })
+    }
+    const beef = r.read()
+    const beefObj = Beef.fromBinary(beef)
+    const outputs = await this.extractAtomicOutputs(outpoints, beefObj)
+    return { type: 'output-list', outputs }
+  }
+
+  /** Memoize per-txid atomic BEEF extraction, yielding to the event loop between outputs. */
+  private async extractAtomicOutputs (
+    outpoints: Array<{ txid: string, outputIndex: number, context?: number[] }>,
+    beefObj: Beef
+  ): Promise<Array<{ outputIndex: number, context?: number[], beef: number[], txid: string }>> {
+    const beefByTxid = new Map<string, number[]>()
+    const outputs: Array<{ outputIndex: number, context?: number[], beef: number[], txid: string }> = new Array(outpoints.length)
+    for (let idx = 0; idx < outpoints.length; idx++) {
+      const x = outpoints[idx]
+      let beefBytes = beefByTxid.get(x.txid)
+      if (beefBytes === undefined) {
+        beefBytes = beefObj.toBinaryAtomic(x.txid)
+        beefByTxid.set(x.txid, beefBytes)
+      }
+      outputs[idx] = { outputIndex: x.outputIndex, context: x.context, beef: beefBytes, txid: x.txid }
+      // Yield to event loop so UI animations and other JS don't starve.
+      if (idx > 0 && idx < outpoints.length - 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+    }
+    return outputs
   }
 }
 
@@ -345,7 +316,6 @@ export default class LookupResolver {
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
-    const span = pstart(`LookupResolver.query ${question.service}`, { timeout, options })
     // Existing fast-but-narrow contract: return at the first cumulative emission
     // (the post-grace aggregate, or the final emission when every host settles
     // before the grace window). Callers wanting progressive enrichment use query$().
@@ -355,11 +325,9 @@ export default class LookupResolver {
     let last: LookupAnswerProgress | null = null
     try {
       const { value, done } = await iter.next()
-      span.mark('first emission', { done, outputs: value?.outputs?.length })
       if (done !== true && value != null) last = value
     } finally {
       await iter.return?.(undefined)
-      span.end({ outputs: last?.outputs?.length ?? 0 })
     }
     return {
       type: 'output-list',
@@ -385,7 +353,6 @@ export default class LookupResolver {
     timeout?: number,
     options?: LookupQueryOptions
   ): AsyncIterable<LookupAnswerProgress> {
-    const qSpan = pstart(`LookupResolver.query$ ${question.service}`, { timeout, options })
     let competentHosts: string[] = []
     if (question.service === 'ls_slap') {
       competentHosts = this.networkPreset === 'local' ? ['http://localhost:8080'] : this.slapTrackers
@@ -396,7 +363,6 @@ export default class LookupResolver {
     } else {
       competentHosts = await this.getCompetentHostsCached(question.service)
     }
-    qSpan.mark('competent hosts resolved', { count: competentHosts.length, hosts: competentHosts })
     if (this.additionalHosts[question.service]?.length > 0) {
       const extra = this.additionalHosts[question.service]
       const seen = new Set(competentHosts)
@@ -412,7 +378,6 @@ export default class LookupResolver {
       competentHosts,
       `lookup service ${question.service}`
     )
-    qSpan.mark('hosts ranked', { rankedHosts })
     if (rankedHosts.length < 1) {
       throw new Error(`All competent hosts for ${question.service} are temporarily unavailable due to backoff.`)
     }
@@ -461,63 +426,18 @@ export default class LookupResolver {
     let graceFired = false
     let emittedOnce = false
 
-    const beefKey = (beef: number[] | undefined): string => {
-      if (typeof beef !== 'object' || beef == null) return ''
-      return beef.join(',')
-    }
-
     const mergeAnswer = (answer: LookupAnswer): boolean => {
-      const mt0 = Date.now()
       let added = false
-      let parseCount = 0
-      let parseMs = 0
-      let keyMs = 0
+      const now = Date.now()
       for (const output of answer.outputs) {
-        let txId: string
-        // Fast path: txid was threaded through from the octet-stream facilitator.
-        // Skip the expensive beef-join memo key and Transaction.fromBEEF re-parse.
-        if (typeof output.txid === 'string' && output.txid.length > 0) {
-          txId = output.txid
-        } else {
-          // Slow path: JSON response or legacy facilitator without txid hint.
-          // Memoize by beef bytes to avoid re-parsing the same blob multiple times.
-          const k0 = Date.now()
-          const keyForBeef = beefKey(output.beef)
-          keyMs += Date.now() - k0
-          const now = Date.now()
-          let memo = this.txMemo.get(keyForBeef)
-          if (typeof memo !== 'object' || memo === null || memo.expiresAt <= now) {
-            try {
-              const p0 = Date.now()
-              txId = Transaction.fromBEEF(output.beef).id('hex')
-              parseMs += Date.now() - p0
-              parseCount++
-              memo = { txId, expiresAt: now + this.txMemoTtlMs }
-              if (this.txMemo.size > 4096) this.evictOldest(this.txMemo)
-              this.txMemo.set(keyForBeef, memo)
-            } catch {
-              continue
-            }
-          } else {
-            txId = memo.txId
-          }
-        }
+        const txId = this.resolveTxIdForOutput(output, now)
+        if (txId === null) continue
         const uniqKey = `${txId}.${output.outputIndex}`
         if (!outputsMap.has(uniqKey)) {
           outputsMap.set(uniqKey, output)
           txIds.push(txId)
           added = true
         }
-      }
-      const total = Date.now() - mt0
-      if (total > 20 || parseMs > 20) {
-        plog('LookupResolver.mergeAnswer slow', {
-          totalMs: total,
-          outputs: answer.outputs.length,
-          parsedTxs: parseCount,
-          parseMs,
-          beefKeyJoinMs: keyMs
-        })
       }
       return added
     }
@@ -572,7 +492,6 @@ export default class LookupResolver {
     } finally {
       if (graceTimer !== null) clearTimeout(graceTimer)
       if (softTimer !== null) clearTimeout(softTimer)
-      qSpan.end({ outputs: outputsMap.size, completedHosts, hostCount })
     }
   }
 
@@ -666,7 +585,6 @@ export default class LookupResolver {
    * @returns Array of hosts competent for resolving queries
    */
   private async findCompetentHosts (service: string): Promise<string[]> {
-    const span = pstart(`LookupResolver.findCompetentHosts ${service}`)
     const query: LookupQuestion = {
       service: 'ls_slap',
       query: { service }
@@ -676,8 +594,7 @@ export default class LookupResolver {
       this.slapTrackers,
       'SLAP trackers'
     )
-    span.mark('SLAP trackers ranked', { trackerHosts })
-    if (trackerHosts.length === 0) { span.end({ result: 'no trackers' }); return [] }
+    if (trackerHosts.length === 0) return []
 
     // Fire all trackers, resolve as soon as any returns valid hosts.
     // Remaining trackers continue in the background for reputation tracking.
@@ -690,22 +607,17 @@ export default class LookupResolver {
         this.lookupHostWithTracking(tracker, query, MAX_TRACKER_WAIT_TIME)
           .then((answer) => {
             const hosts = this.extractHostsFromAnswer(answer, service)
-            span.mark(`tracker answered ${tracker}`, { hosts: hosts.length })
             for (const h of hosts) allHosts.add(h)
             if (!resolved && allHosts.size > 0) {
               resolved = true
-              span.end({ resolvedFromFirst: tracker, hosts: allHosts.size })
               resolve([...allHosts])
             }
           })
-          .catch((err) => {
-            span.mark(`tracker failed ${tracker}`, { err: (err as Error)?.message })
-          })
+          .catch(() => { /* tracker failure tracked in reputation */ })
           .finally(() => {
             pending--
             if (pending === 0 && !resolved) {
               resolved = true
-              span.end({ resolvedAfterAll: true, hosts: allHosts.size })
               resolve([...allHosts])
             }
           })
@@ -713,7 +625,34 @@ export default class LookupResolver {
     })
   }
 
-  /** Evict an arbitrary “oldest” entry from a Map (iteration order). */
+  /**
+   * Resolve a txid for an aggregated lookup output. Uses the threaded-through `output.txid`
+   * fast path when present; otherwise memoizes Transaction.fromBEEF(beef).id('hex') keyed by
+   * the BEEF byte sequence. Returns null when the BEEF is unparseable.
+   */
+  private resolveTxIdForOutput (
+    output: { txid?: string, beef: number[], outputIndex: number, context?: number[] },
+    now: number
+  ): string | null {
+    if (typeof output.txid === 'string' && output.txid.length > 0) {
+      return output.txid
+    }
+    const keyForBeef = Array.isArray(output.beef) ? output.beef.join(',') : ''
+    const memo = this.txMemo.get(keyForBeef)
+    if (typeof memo === 'object' && memo !== null && memo.expiresAt > now) {
+      return memo.txId
+    }
+    try {
+      const txId = Transaction.fromBEEF(output.beef).id('hex')
+      if (this.txMemo.size > 4096) this.evictOldest(this.txMemo)
+      this.txMemo.set(keyForBeef, { txId, expiresAt: now + this.txMemoTtlMs })
+      return txId
+    } catch {
+      return null
+    }
+  }
+
+  /** Evict an arbitrary "oldest" entry from a Map (iteration order). */
   private evictOldest<T>(m: Map<string, T>): void {
     const firstKey = m.keys().next().value
     if (firstKey !== undefined) m.delete(firstKey)
@@ -756,8 +695,6 @@ export default class LookupResolver {
         answer.type === 'output-list' &&
         Array.isArray((answer).outputs)
 
-      plog(`lookupHostWithTracking ${host}`, { service: question.service, latencyMs: latency, isValid, outputs: (answer as LookupAnswer)?.outputs?.length })
-
       if (isValid) {
         this.hostReputation.recordSuccess(host, latency)
       } else {
@@ -766,8 +703,6 @@ export default class LookupResolver {
 
       return answer
     } catch (err) {
-      const latency = Date.now() - startedAt
-      plog(`lookupHostWithTracking ${host} FAIL`, { service: question.service, latencyMs: latency, err: (err as Error)?.message })
       this.hostReputation.recordFailure(host, err)
       throw err
     }
