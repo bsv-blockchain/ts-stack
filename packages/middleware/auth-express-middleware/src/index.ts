@@ -9,6 +9,7 @@ import {
   RequestedCertificateSet,
   Transport,
   SessionManager,
+  SessionManagerLike,
   WalletInterface,
   PubKeyHex
 } from '@bsv/sdk'
@@ -37,7 +38,7 @@ export interface AuthRequest extends Request {
 // Developers may optionally provide a handler for incoming certificates.
 export interface AuthMiddlewareOptions {
   wallet: WalletInterface
-  sessionManager?: SessionManager // Optional if dev wants custom SessionManager
+  sessionManager?: SessionManagerLike // Optional if dev wants custom SessionManager
   allowUnauthenticated?: boolean
   certificatesToRequest?: RequestedCertificateSet
   onCertificatesReceived?: (
@@ -378,7 +379,7 @@ export class ExpressTransport implements Transport {
    * @param {NextFunction} next - The Express `next` middleware function.
    * @param {Function} [onCertificatesReceived] - Optional callback invoked when certificates are received.
    */
-  public handleIncomingRequest (
+  public async handleIncomingRequest (
     req: AuthRequest,
     res: Response,
     next: NextFunction,
@@ -389,7 +390,7 @@ export class ExpressTransport implements Transport {
       res: Response,
       next: NextFunction
     ) => void
-  ): void {
+  ): Promise<void> {
     this.log('debug', 'Handling incoming request', {
       path: req.path,
       headers: req.headers,
@@ -402,7 +403,7 @@ export class ExpressTransport implements Transport {
         throw new Error('You must set a Peer before you can handle incoming requests!')
       }
       if (req.path === '/.well-known/auth') {
-        this.handleWellKnownAuth(req, res, next, onCertificatesReceived)
+        await this.handleWellKnownAuth(req, res, next, onCertificatesReceived)
       } else if (req.headers['x-bsv-auth-request-id']) {
         this.handleGeneralMessage(req, res, next)
       } else {
@@ -417,7 +418,7 @@ export class ExpressTransport implements Transport {
   /**
    * Handles a request to /.well-known/auth (non-general / handshake messages).
    */
-  private handleWellKnownAuth (
+  private async handleWellKnownAuth (
     req: AuthRequest,
     res: Response,
     next: NextFunction,
@@ -428,7 +429,7 @@ export class ExpressTransport implements Transport {
       res: Response,
       next: NextFunction
     ) => void
-  ): void {
+  ): Promise<void> {
     const message = req.body as AuthMessage
     this.log('debug', 'Received non-general message at /.well-known/auth', { message })
 
@@ -443,7 +444,7 @@ export class ExpressTransport implements Transport {
       this.openNonGeneralHandles[requestId] = [{ res, next }]
     }
 
-    if (!this.peer!.sessionManager.hasSession(message.identityKey)) {
+    if (!await this.peer!.sessionManager.hasSession(message.identityKey)) {
       this.registerCertificateListener(req, res, next, requestId, message, onCertificatesReceived)
     }
 
@@ -650,7 +651,7 @@ export class ExpressTransport implements Transport {
     }
 
     this.hijackResponse(res, next, wrapper, buildAndSendResponse)
-    this.scheduleNextOrCertificateWait(next, senderPublicKey, wrapper, buildAndSendResponse)
+    void this.scheduleNextOrCertificateWait(next, senderPublicKey, wrapper, buildAndSendResponse).catch(next)
   }
 
   /**
@@ -728,13 +729,13 @@ export class ExpressTransport implements Transport {
   /**
    * Either calls next() immediately or stores it pending certificate arrival.
    */
-  private scheduleNextOrCertificateWait (
+  private async scheduleNextOrCertificateWait (
     next: NextFunction,
     senderPublicKey: string,
     wrapper: ResponseWriterWrapper,
     buildAndSendResponse: () => Promise<void>
-  ): void {
-    const hasSession = this.peer?.sessionManager.hasSession(senderPublicKey) ?? false
+  ): Promise<void> {
+    const hasSession = await (this.peer?.sessionManager.hasSession(senderPublicKey) ?? false)
     const needsCertificates = this.peer?.certificatesToRequest?.certifiers?.length
     this.log('debug', 'Checking if we need to wait for certificates', {
       senderPublicKey,
@@ -991,6 +992,6 @@ export function createAuthMiddleware (options: AuthMiddlewareOptions): (req: Aut
         method: req.method
       })
     }
-    transport.handleIncomingRequest(req, res, next, onCertificatesReceived)
+    void transport.handleIncomingRequest(req, res, next, onCertificatesReceived).catch(next)
   }
 }

@@ -1,4 +1,4 @@
-import { SessionManager } from './SessionManager.js'
+import { SessionManager, SessionManagerLike } from './SessionManager.js'
 import {
   createNonce,
   verifyNonce,
@@ -28,7 +28,7 @@ const BufferCtor =
  * This version supports multiple concurrent sessions per peer identityKey.
  */
 export class Peer {
-  public sessionManager: SessionManager
+  public sessionManager: SessionManagerLike
   private readonly transport: Transport
   private readonly wallet: WalletInterface
   certificatesToRequest: RequestedCertificateSet
@@ -97,7 +97,7 @@ export class Peer {
    * @param {WalletInterface} wallet - The wallet instance used for cryptographic operations.
    * @param {Transport} transport - The transport mechanism used for sending and receiving messages.
    * @param {RequestedCertificateSet} [certificatesToRequest] - Optional set of certificates to request from a peer during the initial handshake.
-   * @param {SessionManager} [sessionManager] - Optional SessionManager to be used for managing peer sessions.
+   * @param {SessionManagerLike} [sessionManager] - Optional SessionManager-compatible store to be used for managing peer sessions.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
    */
@@ -105,7 +105,7 @@ export class Peer {
     wallet: WalletInterface,
     transport: Transport,
     certificatesToRequest?: RequestedCertificateSet,
-    sessionManager?: SessionManager,
+    sessionManager?: SessionManagerLike,
     autoPersistLastSession?: boolean,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ) {
@@ -178,7 +178,7 @@ export class Peer {
     }
 
     peerSession.lastUpdate = Date.now()
-    this.sessionManager.updateSession(peerSession)
+    await this.sessionManager.updateSession(peerSession)
 
     try {
       await this.transport.send(generalMessage)
@@ -233,7 +233,7 @@ export class Peer {
 
     // Update last-used timestamp
     peerSession.lastUpdate = Date.now()
-    this.sessionManager.updateSession(peerSession)
+    await this.sessionManager.updateSession(peerSession)
 
     try {
       await this.transport.send(certRequestMessage)
@@ -262,7 +262,7 @@ export class Peer {
 
     let peerSession: PeerSession | undefined
     if (typeof identityKey === 'string') {
-      peerSession = this.sessionManager.getSession(identityKey)
+      peerSession = await this.sessionManager.getSession(identityKey)
     }
 
     // If that session doesn't exist or isn't authenticated, initiate handshake
@@ -270,7 +270,7 @@ export class Peer {
       // This will create a brand-new session
       const sessionNonce = await this.initiateHandshake(identityKey)
       // Now retrieve it by the sessionNonce
-      peerSession = this.sessionManager.getSession(sessionNonce)
+      peerSession = await this.sessionManager.getSession(sessionNonce)
       if (peerSession?.isAuthenticated !== true) {
         throw new Error('Unable to establish mutual authentication with peer!')
       }
@@ -367,7 +367,7 @@ export class Peer {
     const certificatesRequired =
       this.certificatesToRequest.certifiers.length > 0
 
-    this.sessionManager.addSession({
+    await this.sessionManager.addSession({
       isAuthenticated: false,
       sessionNonce,
       peerIdentityKey: identityKey,
@@ -511,7 +511,7 @@ export class Peer {
       Array.isArray(this.certificatesToRequest?.certifiers) &&
       this.certificatesToRequest.certifiers.length > 0
 
-    this.sessionManager.addSession({
+    await this.sessionManager.addSession({
       isAuthenticated: true,
       sessionNonce,
       peerNonce: message.initialNonce,
@@ -588,7 +588,7 @@ export class Peer {
       )
     }
 
-    const peerSession = this.sessionManager.getSession(message.yourNonce as string)
+    const peerSession = await this.sessionManager.getSession(message.yourNonce as string)
     if (peerSession == null) {
       throw new Error(`Peer session not found for peer: ${message.identityKey}`)
     }
@@ -624,7 +624,7 @@ export class Peer {
     peerSession.certificatesValidated = !peerSession.certificatesRequired
 
     peerSession.lastUpdate = Date.now()
-    this.sessionManager.updateSession(peerSession)
+    await this.sessionManager.updateSession(peerSession)
 
     // --- Validate certificates if provided ---
     if (
@@ -641,7 +641,7 @@ export class Peer {
 
       peerSession.certificatesValidated = true
       peerSession.lastUpdate = Date.now()
-      this.sessionManager.updateSession(peerSession)
+      await this.sessionManager.updateSession(peerSession)
 
       // Resolve any promises waiting for certificate validation
       if (peerSession.sessionNonce != null) {
@@ -711,7 +711,7 @@ export class Peer {
         `Unable to verify nonce for certificate request message from: ${message.identityKey}`
       )
     }
-    const peerSession = this.sessionManager.getSession(message.yourNonce as string)
+    const peerSession = await this.sessionManager.getSession(message.yourNonce as string)
     if (peerSession == null) {
       throw new Error(`Session not found for nonce: ${message.yourNonce as string}`)
     }
@@ -731,7 +731,7 @@ export class Peer {
 
     // Update usage
     peerSession.lastUpdate = Date.now()
-    this.sessionManager.updateSession(peerSession)
+    await this.sessionManager.updateSession(peerSession)
 
     if (
       (message.requestedCertificates != null) &&
@@ -789,7 +789,7 @@ export class Peer {
 
     // Update usage
     peerSession.lastUpdate = Date.now()
-    this.sessionManager.updateSession(peerSession)
+    await this.sessionManager.updateSession(peerSession)
 
     try {
       await this.transport.send(certificateResponse)
@@ -813,7 +813,7 @@ export class Peer {
       )
     }
 
-    const peerSession = this.sessionManager.getSession(message.yourNonce as string)
+    const peerSession = await this.sessionManager.getSession(message.yourNonce as string)
     if (peerSession == null) {
       throw new Error(`Session not found for nonce: ${message.yourNonce as string}`)
     }
@@ -843,7 +843,7 @@ export class Peer {
 
       peerSession.certificatesValidated = true
       peerSession.lastUpdate = Date.now()
-      this.sessionManager.updateSession(peerSession)
+      await this.sessionManager.updateSession(peerSession)
 
       // Resolve any promises waiting for certificate validation
       if (peerSession.sessionNonce != null) {
@@ -878,7 +878,7 @@ export class Peer {
       )
     }
 
-    const peerSession = this.sessionManager.getSession(message.yourNonce as string)
+    const peerSession = await this.sessionManager.getSession(message.yourNonce as string)
     if (peerSession == null) {
       throw new Error(`Session not found for nonce: ${message.yourNonce as string}`)
     }
@@ -942,7 +942,7 @@ export class Peer {
 
     // Mark last usage
     peerSession.lastUpdate = Date.now()
-    this.sessionManager.updateSession(peerSession)
+    await this.sessionManager.updateSession(peerSession)
 
     // Update lastInteractedWithPeer
     this.lastInteractedWithPeer = message.identityKey

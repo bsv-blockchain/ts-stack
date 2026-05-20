@@ -1,10 +1,28 @@
 import { PeerSession } from './types.js'
 
+export type MaybePromise<T> = T | Promise<T>
+
+/**
+ * Pluggable session manager contract used by Peer.
+ *
+ * Implementations may be in-memory and synchronous, or backed by a shared
+ * service such as Redis, SQL, or another durable store. This lets horizontally
+ * scaled HTTP servers share BRC-103 nonce/session state instead of depending on
+ * load-balancer stickiness for every step of the authentication handshake.
+ */
+export interface SessionManagerLike {
+  addSession: (session: PeerSession) => MaybePromise<void>
+  updateSession: (session: PeerSession) => MaybePromise<void>
+  getSession: (identifier: string) => MaybePromise<PeerSession | undefined>
+  removeSession: (session: PeerSession) => MaybePromise<void>
+  hasSession: (identifier: string) => MaybePromise<boolean>
+}
+
 /**
  * Manages sessions for peers, allowing multiple concurrent sessions
  * per identity key. Primary lookup is always by `sessionNonce`.
  */
-export class SessionManager {
+export class SessionManager implements SessionManagerLike {
   /**
    * Maps sessionNonce -> PeerSession
    */
