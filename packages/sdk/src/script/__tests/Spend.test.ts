@@ -573,7 +573,7 @@ describe('Spend', () => {
     )
     const txid = sourceTransaction.id('hex')
     sourceTransaction.merklePath = MerklePath.fromCoinbaseTxidAndHeight(txid, 0)
-    const chain = new MockChain({ blockheaders: [txid, ...Array(100).fill('')] })
+    const chain = new MockChain({ blockheaders: [txid, ...new Array(100).fill('')] })
 
     const spendTx = new Transaction(
       1,
