@@ -17,29 +17,74 @@ import { PushDrop } from '../script/index.js'
 import { PrivateKey, Utils } from '../primitives/index.js'
 import { LookupResolver, SHIPBroadcaster, TopicBroadcaster, withDoubleSpendRetry } from '../overlay-tools/index.js'
 import { ContactsManager, Contact } from './ContactsManager.js'
+import { plog, pstart } from '../debug/profiler.js'
+
+/**
+ * Maximum number of identity certificates to parse synchronously before yielding to the
+ * event loop. Keeps the main thread responsive when an overlay query returns many results
+ * (e.g. a bulk enrichment of N identityKeys).
+ */
+const PARSE_BATCH_SIZE = 32
+
+/**
+ * Yield control to the event loop so queued microtasks / timers can run. Uses
+ * `scheduler.yield()` when available (Chromium) or a 0ms macrotask fallback.
+ */
+async function yieldToEventLoop (): Promise<void> {
+  const sched = (globalThis as any).scheduler
+  if (sched != null && typeof sched.yield === 'function') {
+    return await sched.yield()
+  }
+  return await new Promise<void>((resolve) => setTimeout(resolve, 0))
+}
 
 /** Options for {@link IdentityClient.resolveByIdentityKey}. */
 export interface ResolveByIdentityKeyOptions {
-  /** Default `true`. If `false`, contacts are skipped and the overlay is queried directly. */
+  /**
+   * Opt-in to consulting personal contacts before/alongside the overlay. Default `false`.
+   *
+   * Most callers (including any client without a populated contacts basket) pay no benefit
+   * from the contacts path and incur its setup cost. Set `true` only in UI contexts where
+   * the user has likely saved contacts and a local cache hit is preferable to a fresh overlay
+   * answer.
+   */
+  useContacts?: boolean
+  /**
+   * Legacy alias for {@link useContacts}. When provided, takes precedence over the new flag.
+   * Kept for binary compatibility — new code should use `useContacts`.
+   */
   overrideWithContacts?: boolean
   /**
-   * Default `false`. When `true`, fire contacts and overlay in parallel (legacy behavior) instead
-   * of short-circuiting on a contacts hit. Use when callers specifically need a fresh overlay
-   * answer alongside the contact record.
+   * When `true` (and {@link useContacts} is also true), fire contacts and overlay in parallel
+   * rather than short-circuiting on a contacts hit. Use only when callers specifically need a
+   * fresh overlay answer alongside any cached contact record.
    */
   parallel?: boolean
 }
 
 /** Options for {@link IdentityClient.resolveByAttributes}. */
 export interface ResolveByAttributesOptions {
-  /** Default `true`. If `false`, contacts are skipped and the overlay is queried directly. */
+  /**
+   * Opt-in to consulting personal contacts before/alongside the overlay. Default `false`.
+   * See {@link ResolveByIdentityKeyOptions.useContacts}.
+   */
+  useContacts?: boolean
+  /** Legacy alias for {@link useContacts}. Takes precedence when provided. */
   overrideWithContacts?: boolean
   /**
-   * Default `false`. When `true`, fire contacts and overlay in parallel (legacy behavior). The
-   * contacts-first path tries to match the supplied attributes against the locally-stored
-   * contacts; if any contact matches every attribute, the overlay is skipped.
+   * When `true` (and {@link useContacts} is also true), fire contacts and overlay in parallel.
    */
   parallel?: boolean
+}
+
+/** Normalize either legacy boolean / new options object into a canonical { useContacts, parallel }. */
+function normalizeOpts (
+  raw: boolean | ResolveByIdentityKeyOptions | ResolveByAttributesOptions | undefined
+): { useContacts: boolean, parallel: boolean } {
+  if (raw === undefined) return { useContacts: false, parallel: false }
+  if (typeof raw === 'boolean') return { useContacts: raw, parallel: false }
+  const useContacts = raw.overrideWithContacts ?? raw.useContacts ?? false
+  return { useContacts, parallel: raw.parallel === true }
 }
 
 /**
@@ -153,99 +198,130 @@ export class IdentityClient {
   }
 
   /**
-   * Resolves displayable identity certificates, issued to a given identity key by a trusted certifier.
+   * Resolves displayable identity certificates issued to a given identity key.
    *
-   * By default, contacts are consulted first and the overlay is only queried on a contacts miss.
-   * Pass `{ parallel: true }` to fire both in parallel (the legacy behavior, useful when callers
-   * specifically want a fresh overlay answer even when a contact exists).
+   * **Default behavior (changed): contacts are NOT consulted.** Most clients have no
+   * contacts saved locally, so the previous "contacts-first" default paid setup cost for no
+   * gain. Pass `{ useContacts: true }` to opt in — appropriate when you know the user has
+   * saved contacts and prefers a local hit over a fresh overlay answer.
+   *
+   * When `useContacts: true`:
+   *  - Default short-circuits: if a contact matches, the overlay is skipped entirely.
+   *  - `{ parallel: true }` fires contacts and overlay in parallel; contact wins on hit.
    *
    * @param args - Arguments for requesting the discovery based on the identity key.
-   * @param overrideWithContacts - Whether to consult personal contacts. Default true. When `false`,
-   *   contacts are skipped entirely and the overlay is queried directly. Boolean kept for legacy
-   *   call sites; new code should prefer the options-object form.
-   * @returns The promise resolves to displayable identities.
+   * @param opts - Boolean (legacy) or options object. Boolean `true` ≡ `{ useContacts: true }`.
    */
   async resolveByIdentityKey (
     args: DiscoverByIdentityKeyArgs,
-    overrideWithContacts: boolean | ResolveByIdentityKeyOptions = true
+    opts: boolean | ResolveByIdentityKeyOptions = false
   ): Promise<DisplayableIdentity[]> {
-    const opts: ResolveByIdentityKeyOptions =
-      typeof overrideWithContacts === 'boolean'
-        ? { overrideWithContacts }
-        : { overrideWithContacts: true, ...overrideWithContacts }
-    const useContacts = opts.overrideWithContacts !== false
-    const parallel = opts.parallel === true
+    const span = pstart('IdentityClient.resolveByIdentityKey', { identityKey: args.identityKey, opts })
+    const { useContacts, parallel } = normalizeOpts(opts)
 
-    if (useContacts && !parallel) {
-      const contacts = await this.contactsManager.getContacts(args.identityKey)
-      if (contacts.length > 0) return contacts
-
+    // Fast path: skip contacts entirely. This is now the default — straight overlay query,
+    // no listOutputs / decrypt / cache churn.
+    if (!useContacts) {
+      span.mark('wallet.discoverByIdentityKey start')
       const certificatesResult = await this.wallet.discoverByIdentityKey(args, this.originator)
       const certs = certificatesResult?.certificates ?? []
-      return certs.map((cert) => IdentityClient.parseIdentity(cert))
+      span.mark('wallet.discoverByIdentityKey done', { certs: certs.length })
+      const out = await IdentityClient.parseIdentities(certs)
+      span.end({ identities: out.length, path: 'no-contacts' })
+      return out
     }
 
+    if (!parallel) {
+      span.mark('contacts get start')
+      const contacts = await this.contactsManager.getContacts(args.identityKey)
+      span.mark('contacts get done', { contacts: contacts.length })
+      if (contacts.length > 0) { span.end({ identities: contacts.length, path: 'contacts-hit' }); return contacts }
+
+      span.mark('wallet.discoverByIdentityKey start')
+      const certificatesResult = await this.wallet.discoverByIdentityKey(args, this.originator)
+      const certs = certificatesResult?.certificates ?? []
+      span.mark('wallet.discoverByIdentityKey done', { certs: certs.length })
+      const out = await IdentityClient.parseIdentities(certs)
+      span.end({ identities: out.length, path: 'contacts-miss' })
+      return out
+    }
+
+    span.mark('contacts + overlay parallel start')
     const [contacts, certificatesResult] = await Promise.all([
-      useContacts
-        ? this.contactsManager.getContacts(args.identityKey)
-        : Promise.resolve([] as Contact[]),
+      this.contactsManager.getContacts(args.identityKey),
       this.wallet.discoverByIdentityKey(args, this.originator)
     ])
+    span.mark('parallel done', { contacts: contacts.length, certs: certificatesResult?.certificates?.length ?? 0 })
 
-    if (contacts.length > 0) return contacts
+    if (contacts.length > 0) { span.end({ identities: contacts.length, path: 'parallel-contacts-hit' }); return contacts }
     const certs = certificatesResult?.certificates ?? []
-    return certs.map((cert) => IdentityClient.parseIdentity(cert))
+    const out = await IdentityClient.parseIdentities(certs)
+    span.end({ identities: out.length, path: 'parallel-no-contacts' })
+    return out
   }
 
   /**
-   * Resolves displayable identity certificates by specific identity attributes, issued by a trusted entity.
+   * Resolves displayable identity certificates by specific identity attributes.
    *
-   * By default, contacts are consulted first: if any contact matches, the overlay call is skipped
-   * entirely. Set `parallel: true` to keep the legacy parallel behavior.
+   * **Default behavior (changed): contacts are NOT consulted.** See
+   * {@link resolveByIdentityKey} for the reasoning. Pass `{ useContacts: true }` to opt in.
    *
    * @param args - Attributes and optional parameters used to discover certificates.
-   * @param overrideWithContacts - Whether to consult personal contacts. Default true. Boolean kept
-   *   for legacy call sites; new code should prefer the options-object form.
-   * @returns The promise resolves to displayable identities.
+   * @param opts - Boolean (legacy) or options object. Boolean `true` ≡ `{ useContacts: true }`.
    */
   async resolveByAttributes (
     args: DiscoverByAttributesArgs,
-    overrideWithContacts: boolean | ResolveByAttributesOptions = true
+    opts: boolean | ResolveByAttributesOptions = false
   ): Promise<DisplayableIdentity[]> {
-    const opts: ResolveByAttributesOptions =
-      typeof overrideWithContacts === 'boolean'
-        ? { overrideWithContacts }
-        : { overrideWithContacts: true, ...overrideWithContacts }
-    const useContacts = opts.overrideWithContacts !== false
-    const parallel = opts.parallel === true
+    const span = pstart('IdentityClient.resolveByAttributes', { opts })
+    const { useContacts, parallel } = normalizeOpts(opts)
 
-    if (useContacts && !parallel) {
-      const contacts = await this.contactsManager.getContacts()
-      const matches = this.matchContactsByAttributes(contacts, args)
-      if (matches.length > 0) return matches
-
+    // Fast path: skip contacts entirely.
+    if (!useContacts) {
+      span.mark('wallet.discoverByAttributes start')
       const certificatesResult = await this.wallet.discoverByAttributes(args, this.originator)
       const certs = certificatesResult?.certificates ?? []
+      span.mark('wallet.discoverByAttributes done', { certs: certs.length })
+      const out = await IdentityClient.parseIdentities(certs)
+      span.end({ identities: out.length, path: 'no-contacts' })
+      return out
+    }
+
+    if (!parallel) {
+      span.mark('contacts get start')
+      const contacts = await this.contactsManager.getContacts()
+      span.mark('contacts get done', { contacts: contacts.length })
+      const matches = this.matchContactsByAttributes(contacts, args)
+      if (matches.length > 0) { span.end({ identities: matches.length, path: 'contacts-match' }); return matches }
+
+      span.mark('wallet.discoverByAttributes start')
+      const certificatesResult = await this.wallet.discoverByAttributes(args, this.originator)
+      const certs = certificatesResult?.certificates ?? []
+      span.mark('wallet.discoverByAttributes done', { certs: certs.length })
+      if (contacts.length === 0) { const out = await IdentityClient.parseIdentities(certs); span.end({ identities: out.length, path: 'no-contact-overrides' }); return out }
       const contactByKey = new Map<PubKeyHex, Contact>(
         contacts.map((contact) => [contact.identityKey, contact] as const)
       )
-      return certs.map(
-        (cert) => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
-      )
+      const out2 = await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
+      span.end({ identities: out2.length, path: 'with-overrides' })
+      return out2
     }
 
+    span.mark('contacts + overlay parallel start')
     const [contacts, certificatesResult] = await Promise.all([
-      useContacts ? this.contactsManager.getContacts() : Promise.resolve([] as Contact[]),
+      this.contactsManager.getContacts(),
       this.wallet.discoverByAttributes(args, this.originator)
     ])
+    span.mark('parallel done', { contacts: contacts.length, certs: certificatesResult?.certificates?.length ?? 0 })
 
+    const certs = certificatesResult?.certificates ?? []
+    if (contacts.length === 0) { const out = await IdentityClient.parseIdentities(certs); span.end({ identities: out.length, path: 'parallel-no-contacts' }); return out }
     const contactByKey = new Map<PubKeyHex, Contact>(
       contacts.map((contact) => [contact.identityKey, contact] as const)
     )
-    const certs = certificatesResult?.certificates ?? []
-    return certs.map(
-      (cert) => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
-    )
+    const out3 = await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
+    span.end({ identities: out3.length, path: 'parallel-overrides' })
+    return out3
   }
 
   /**
@@ -408,6 +484,52 @@ export class IdentityClient {
    */
   public async removeContact (identityKey: PubKeyHex): Promise<void> {
     return await this.contactsManager.removeContact(identityKey)
+  }
+
+  /**
+   * Parse an array of certificates into DisplayableIdentity records, yielding to the
+   * event loop every {@link PARSE_BATCH_SIZE} entries so large result sets don't hog
+   * the main thread. Equivalent to `certs.map(parseIdentity)` for small inputs.
+   */
+  static async parseIdentities (certs: IdentityCertificate[]): Promise<DisplayableIdentity[]> {
+    const n = certs.length
+    const span = pstart('IdentityClient.parseIdentities', { n })
+    if (n <= PARSE_BATCH_SIZE) {
+      const out = certs.map((c) => IdentityClient.parseIdentity(c))
+      span.end({ batched: false })
+      return out
+    }
+    const out: DisplayableIdentity[] = new Array(n)
+    for (let i = 0; i < n; i++) {
+      out[i] = IdentityClient.parseIdentity(certs[i])
+      if ((i + 1) % PARSE_BATCH_SIZE === 0) {
+        await yieldToEventLoop()
+        span.mark(`yielded after ${i + 1}`)
+      }
+    }
+    span.end({ batched: true, n })
+    return out
+  }
+
+  /**
+   * Same as {@link parseIdentities} but consults a contact override map keyed by subject
+   * identity key. Used by `resolveByAttributes` when contacts are loaded.
+   */
+  static async parseIdentitiesWithOverrides (
+    certs: IdentityCertificate[],
+    contactByKey: Map<PubKeyHex, Contact>
+  ): Promise<DisplayableIdentity[]> {
+    const n = certs.length
+    if (n <= PARSE_BATCH_SIZE) {
+      return certs.map((cert) => contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert))
+    }
+    const out: DisplayableIdentity[] = new Array(n)
+    for (let i = 0; i < n; i++) {
+      const cert = certs[i]
+      out[i] = contactByKey.get(cert.subject) ?? IdentityClient.parseIdentity(cert)
+      if ((i + 1) % PARSE_BATCH_SIZE === 0) await yieldToEventLoop()
+    }
+    return out
   }
 
   /**

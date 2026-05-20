@@ -34,38 +34,76 @@ export class ContactsManager {
   private readonly CONTACTS_CACHE_KEY = 'metanet-contacts'
   private readonly originator?: string
 
+  // Performance state — prevents thundering herd of concurrent contact loads and
+  // short-circuits the overlay path entirely when we've previously observed an
+  // empty contacts basket. Both are invalidated by saveContact/removeContact and
+  // by an explicit forceRefresh.
+  private inFlightLoad: Promise<Contact[]> | null = null
+  private knownEmpty = false
+
   constructor (wallet?: WalletInterface, originator?: string) {
     this.wallet = wallet ?? new WalletClient()
     this.originator = originator
   }
 
   /**
-   * Load all records from the contacts basket
+   * Load all records from the contacts basket.
+   *
+   * Concurrent calls share a single in-flight load (no thundering herd). After
+   * the basket has been observed empty once, subsequent calls return `[]`
+   * synchronously without hitting the wallet — until `forceRefresh` is passed
+   * or a contact is saved/removed.
+   *
    * @param identityKey Optional specific identity key to fetch
    * @param forceRefresh Whether to force a check for new contact data
    * @param limit Maximum number of contacts to return
-   * @returns A promise that resolves with an array of contacts
    */
   async getContacts (identityKey?: PubKeyHex, forceRefresh = false, limit = 1000): Promise<Contact[]> {
+    if (forceRefresh) this.invalidate()
+
+    if (this.knownEmpty) return []
+
     if (!forceRefresh) {
       const fromCache = this.loadCachedContacts(identityKey)
       if (fromCache !== null) return fromCache
     }
 
-    const tags = await this.buildIdentityKeyTags(identityKey)
+    // Coalesce concurrent loads onto a single Promise so a fan-out of N
+    // identity calls produces ONE listOutputs + decrypt batch, not N.
+    if (this.inFlightLoad == null) {
+      this.inFlightLoad = this.loadContactsFromWallet(limit).finally(() => {
+        this.inFlightLoad = null
+      })
+    }
+    const all = await this.inFlightLoad
+    return identityKey != null ? all.filter(c => c.identityKey === identityKey) : all
+  }
+
+  /** Reset cached state. Call after writes. */
+  private invalidate (): void {
+    this.cache.removeItem(this.CONTACTS_CACHE_KEY)
+    this.knownEmpty = false
+    this.inFlightLoad = null
+  }
+
+  /** Underlying wallet load — invoked at most once concurrently via `inFlightLoad`. */
+  private async loadContactsFromWallet (limit: number): Promise<Contact[]> {
+    // Always load the full basket so subsequent filters (by identityKey) hit cache.
+    // Tag filtering is reserved for explicit per-key write paths.
     const outputs = await this.wallet.listOutputs(
-      { basket: 'contacts', include: 'locking scripts', includeCustomInstructions: true, tags, limit },
+      { basket: 'contacts', include: 'locking scripts', includeCustomInstructions: true, tags: [], limit },
       this.originator
     )
 
     if (outputs.outputs == null || outputs.outputs.length === 0) {
       this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify([]))
+      this.knownEmpty = true
       return []
     }
 
     const contacts = await this.decryptContactOutputs(outputs.outputs)
     this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify(contacts))
-    return identityKey != null ? contacts.filter(c => c.identityKey === identityKey) : contacts
+    return contacts
   }
 
   /** Returns cached contacts (optionally filtered) or null if cache is missing/invalid. */
@@ -158,6 +196,8 @@ export class ContactsManager {
       await this.createContactOutput(lockingScript, keyID, hashedIdentityKey, contact)
     }
     this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify(contacts))
+    this.knownEmpty = false
+    this.inFlightLoad = null
   }
 
   /** Computes the HMAC-based hash of an identity key for tag indexing. */
@@ -265,11 +305,14 @@ export class ContactsManager {
     if (cached != null && cached !== '') {
       try {
         const contacts: Contact[] = JSON.parse(cached)
-        this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify(contacts.filter(c => c.identityKey !== identityKey)))
+        const remaining = contacts.filter(c => c.identityKey !== identityKey)
+        this.cache.setItem(this.CONTACTS_CACHE_KEY, JSON.stringify(remaining))
+        this.knownEmpty = remaining.length === 0
       } catch (e) {
         console.warn('Failed to update cache after contact removal:', e)
       }
     }
+    this.inFlightLoad = null
 
     const tags = await this.buildIdentityKeyTags(identityKey)
     const outputs = await this.wallet.listOutputs(
