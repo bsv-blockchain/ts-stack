@@ -1,4 +1,5 @@
 import { Transaction } from '../transaction/index.js'
+import { Beef } from '../transaction/Beef.js'
 import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
 import * as Utils from '../primitives/utils.js'
 import { getOverlayHostReputationTracker, HostReputationTracker } from './HostReputationTracker.js'
@@ -35,6 +36,8 @@ export type LookupAnswer =
       beef: number[]
       outputIndex: number
       context?: number[]
+      /** Optional txid hint. When present, consumers can skip re-parsing beef to derive the txid. */
+      txid?: string
     }>
   }
 
@@ -65,7 +68,7 @@ export interface LookupQueryOptions {
  */
 export interface LookupAnswerProgress {
   type: 'output-list'
-  outputs: Array<{ beef: number[], outputIndex: number, context?: number[] }>
+  outputs: Array<{ beef: number[], outputIndex: number, context?: number[], txid?: string }>
   /** Parallel array of resolved tx ids for each output (same index as `outputs`). */
   txIds: string[]
   /** True only for the final emission, after every in-flight host has settled. */
@@ -196,43 +199,60 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
 
       if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
       if (response.headers.get('content-type') === 'application/octet-stream') {
-        const payload = await response.arrayBuffer()
-        const r = new Utils.Reader([...new Uint8Array(payload)])
-        const nOutpoints = r.readVarIntNum()
-        const outpoints: Array<{ txid: string, outputIndex: number, context?: number[] }> = []
-        for (let i = 0; i < nOutpoints; i++) {
-          const txid = Utils.toHex(r.read(32))
-          const outputIndex = r.readVarIntNum()
-          const contextLength = r.readVarIntNum()
-          let context
-          if (contextLength > 0) {
-            context = r.read(contextLength)
-          }
-          outpoints.push({
-            txid,
-            outputIndex,
-            context
-          })
-        }
-        const beef = r.read()
-        return {
-          type: 'output-list',
-          outputs: outpoints.map(x => ({
-            outputIndex: x.outputIndex,
-            context: x.context,
-            beef: Transaction.fromBEEF(beef, x.txid).toBEEF()
-          }))
-        }
-      } else {
-        return await response.json()
+        return await this.parseOctetStreamLookup(response)
       }
+      return await response.json()
     } catch (e) {
       // Normalize timeouts to a consistent error message
-      if ((e as { name?: string })?.name === 'AbortError') throw new Error('Request timed out')
+      if ((e as { name?: string })?.name === 'AbortError') {
+        throw new Error('Request timed out')
+      }
       throw e
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  /** Parse the aggregated octet-stream lookup response into an output-list LookupAnswer. */
+  private async parseOctetStreamLookup (response: Response): Promise<LookupAnswer> {
+    const payload = await response.arrayBuffer()
+    const r = new Utils.Reader([...new Uint8Array(payload)])
+    const nOutpoints = r.readVarIntNum()
+    const outpoints: Array<{ txid: string, outputIndex: number, context?: number[] }> = []
+    for (let i = 0; i < nOutpoints; i++) {
+      const txid = Utils.toHex(r.read(32))
+      const outputIndex = r.readVarIntNum()
+      const contextLength = r.readVarIntNum()
+      const context = contextLength > 0 ? r.read(contextLength) : undefined
+      outpoints.push({ txid, outputIndex, context })
+    }
+    const beef = r.read()
+    const beefObj = Beef.fromBinary(beef)
+    const outputs = await this.extractAtomicOutputs(outpoints, beefObj)
+    return { type: 'output-list', outputs }
+  }
+
+  /** Memoize per-txid atomic BEEF extraction, yielding to the event loop between outputs. */
+  private async extractAtomicOutputs (
+    outpoints: Array<{ txid: string, outputIndex: number, context?: number[] }>,
+    beefObj: Beef
+  ): Promise<Array<{ outputIndex: number, context?: number[], beef: number[], txid: string }>> {
+    const beefByTxid = new Map<string, number[]>()
+    const outputs: Array<{ outputIndex: number, context?: number[], beef: number[], txid: string }> = new Array(outpoints.length)
+    for (let idx = 0; idx < outpoints.length; idx++) {
+      const x = outpoints[idx]
+      let beefBytes = beefByTxid.get(x.txid)
+      if (beefBytes === undefined) {
+        beefBytes = beefObj.toBinaryAtomic(x.txid)
+        beefByTxid.set(x.txid, beefBytes)
+      }
+      outputs[idx] = { outputIndex: x.outputIndex, context: x.context, beef: beefBytes, txid: x.txid }
+      // Yield to event loop so UI animations and other JS don't starve.
+      if (idx > 0 && idx < outpoints.length - 1) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+    }
+    return outputs
   }
 }
 
@@ -296,13 +316,18 @@ export default class LookupResolver {
     timeout?: number,
     options?: LookupQueryOptions
   ): Promise<LookupAnswer> {
-    let last: LookupAnswerProgress | null = null
     // Existing fast-but-narrow contract: return at the first cumulative emission
     // (the post-grace aggregate, or the final emission when every host settles
     // before the grace window). Callers wanting progressive enrichment use query$().
-    for await (const partial of this.query$(question, timeout, options)) {
-      last = partial
-      break
+    // Take only the first emission, then explicitly close the iterator so the
+    // generator's `finally` block runs and clears any outstanding timers.
+    const iter = this.query$(question, timeout, options)[Symbol.asyncIterator]()
+    let last: LookupAnswerProgress | null = null
+    try {
+      const { value, done } = await iter.next()
+      if (done !== true && value != null) last = value
+    } finally {
+      await iter.return?.(undefined)
     }
     return {
       type: 'output-list',
@@ -401,31 +426,16 @@ export default class LookupResolver {
     let graceFired = false
     let emittedOnce = false
 
-    const beefKey = (beef: number[] | undefined): string => {
-      if (typeof beef !== 'object' || beef == null) return ''
-      return beef.join(',')
-    }
-
     const mergeAnswer = (answer: LookupAnswer): boolean => {
       let added = false
+      const now = Date.now()
       for (const output of answer.outputs) {
-        const keyForBeef = beefKey(output.beef)
-        let memo = this.txMemo.get(keyForBeef)
-        const now = Date.now()
-        if (typeof memo !== 'object' || memo === null || memo.expiresAt <= now) {
-          try {
-            const txId = Transaction.fromBEEF(output.beef).id('hex')
-            memo = { txId, expiresAt: now + this.txMemoTtlMs }
-            if (this.txMemo.size > 4096) this.evictOldest(this.txMemo)
-            this.txMemo.set(keyForBeef, memo)
-          } catch {
-            continue
-          }
-        }
-        const uniqKey = `${memo.txId}.${output.outputIndex}`
+        const txId = this.resolveTxIdForOutput(output, now)
+        if (txId === null) continue
+        const uniqKey = `${txId}.${output.outputIndex}`
         if (!outputsMap.has(uniqKey)) {
           outputsMap.set(uniqKey, output)
-          txIds.push(memo.txId)
+          txIds.push(txId)
           added = true
         }
       }
@@ -603,7 +613,7 @@ export default class LookupResolver {
               resolve([...allHosts])
             }
           })
-          .catch(() => { /* tracker failed; tracked by lookupHostWithTracking */ })
+          .catch(() => { /* tracker failure tracked in reputation */ })
           .finally(() => {
             pending--
             if (pending === 0 && !resolved) {
@@ -615,7 +625,34 @@ export default class LookupResolver {
     })
   }
 
-  /** Evict an arbitrary “oldest” entry from a Map (iteration order). */
+  /**
+   * Resolve a txid for an aggregated lookup output. Uses the threaded-through `output.txid`
+   * fast path when present; otherwise memoizes Transaction.fromBEEF(beef).id('hex') keyed by
+   * the BEEF byte sequence. Returns null when the BEEF is unparseable.
+   */
+  private resolveTxIdForOutput (
+    output: { txid?: string, beef: number[], outputIndex: number, context?: number[] },
+    now: number
+  ): string | null {
+    if (typeof output.txid === 'string' && output.txid.length > 0) {
+      return output.txid
+    }
+    const keyForBeef = Array.isArray(output.beef) ? output.beef.join(',') : ''
+    const memo = this.txMemo.get(keyForBeef)
+    if (typeof memo === 'object' && memo !== null && memo.expiresAt > now) {
+      return memo.txId
+    }
+    try {
+      const txId = Transaction.fromBEEF(output.beef).id('hex')
+      if (this.txMemo.size > 4096) this.evictOldest(this.txMemo)
+      this.txMemo.set(keyForBeef, { txId, expiresAt: now + this.txMemoTtlMs })
+      return txId
+    } catch {
+      return null
+    }
+  }
+
+  /** Evict an arbitrary "oldest" entry from a Map (iteration order). */
   private evictOldest<T>(m: Map<string, T>): void {
     const firstKey = m.keys().next().value
     if (firstKey !== undefined) m.delete(firstKey)
