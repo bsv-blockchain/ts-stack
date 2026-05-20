@@ -512,7 +512,7 @@ describe('Spend', () => {
     })
   })
 
-  it('Successfully validates a spend where sequence is set to undefined', async () => {
+  it('Rejects spending an immature coinbase transaction', async () => {
     const sourceTransaction = new Transaction(
       1,
       [{
@@ -531,8 +531,49 @@ describe('Spend', () => {
     )
     const txid = sourceTransaction.id('hex')
     sourceTransaction.merklePath = MerklePath.fromCoinbaseTxidAndHeight(txid, 0)
-    const chain = new MockChain({ blockheaders: [] })
-    chain.addBlock(txid)
+    const chain = new MockChain({ blockheaders: [txid] })
+
+    const spendTx = new Transaction(
+      1,
+      [
+        {
+          unlockingScript: Script.fromASM('OP_TRUE'),
+          sourceTransaction,
+          sourceOutputIndex: 0
+        }
+      ],
+      [{
+          lockingScript: Script.fromASM('OP_NOP'),
+          satoshis: 1
+      }],
+      0
+    )
+
+    await expect(spendTx.verify(chain)).rejects.toThrow(
+      `Invalid merkle path for transaction ${txid}`
+    )
+  })
+
+  it('Successfully validates a mature coinbase spend where sequence is set to undefined', async () => {
+    const sourceTransaction = new Transaction(
+      1,
+      [{
+        sourceTXID: '0000000000000000000000000000000000000000000000000000000000000000',
+        sourceOutputIndex: 0,
+        unlockingScript: Script.fromASM('OP_TRUE'),
+        sequence: 0xffffffff
+      }],
+      [
+        {
+          lockingScript: Script.fromASM('OP_NOP'),
+          satoshis: 2
+        }
+      ],
+      0
+    )
+    const txid = sourceTransaction.id('hex')
+    sourceTransaction.merklePath = MerklePath.fromCoinbaseTxidAndHeight(txid, 0)
+    const chain = new MockChain({ blockheaders: [txid, ...Array(100).fill('')] })
 
     const spendTx = new Transaction(
       1,
@@ -551,7 +592,7 @@ describe('Spend', () => {
     )
 
     const valid = await spendTx.verify(chain)
-    
+
     expect(valid).toBe(true)
 
     const b = spendTx.toBinary()
