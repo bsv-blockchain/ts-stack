@@ -260,11 +260,11 @@ describe('IdentityClient', () => {
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
       walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const identities = await identityClient.resolveByIdentityKey({ identityKey: 'alice-identity-key' })
+      const identities = await identityClient.resolveByIdentityKey({ identityKey: 'alice-identity-key' }, { useContacts: true })
 
       expect(identities).toHaveLength(1)
       expect(identities[0].name).toBe('Alice Smith (Personal Contact)') // Contact should be returned, not discovered identity
-      // New default: contacts-first short-circuit — the overlay is skipped entirely on a contacts hit.
+      // With useContacts opt-in, contacts hit short-circuits the overlay query entirely.
       expect(walletMock.discoverByIdentityKey).not.toHaveBeenCalled()
     })
 
@@ -284,7 +284,7 @@ describe('IdentityClient', () => {
 
       const identities = await identityClient.resolveByIdentityKey(
         { identityKey: 'alice-identity-key' },
-        { parallel: true }
+        { useContacts: true, parallel: true }
       )
 
       expect(identities).toHaveLength(1)
@@ -380,7 +380,7 @@ describe('IdentityClient', () => {
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
       walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const identities = await identityClient.resolveByAttributes({ attributes: { name: 'Alice' } })
+      const identities = await identityClient.resolveByAttributes({ attributes: { name: 'Alice' } }, { useContacts: true })
 
       expect(identities).toHaveLength(1)
       expect(identities[0].name).toBe('Alice Smith (Personal)') // Contact should be returned, not discovered identity

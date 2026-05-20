@@ -571,7 +571,7 @@ describe('IdentityClient (additional coverage)', () => {
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
       walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const result = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } })
+      const result = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } }, { useContacts: true })
       expect(result[0].name).toBe('Alice From Contact')
     })
 
