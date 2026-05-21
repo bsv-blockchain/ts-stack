@@ -491,9 +491,9 @@ describe('HostReputationTracker – additional coverage', () => {
       const t = new HostReputationTracker()
       t.recordSuccess('https://ls-test.com', 300)
 
-      // Data should have been persisted to the mock localStorage
-      expect(mockStore.has('bsvsdk_overlay_host_reputation_v1')).toBe(true)
-      const stored = JSON.parse(mockStore.get('bsvsdk_overlay_host_reputation_v1')!)
+      // Data should have been persisted to the mock localStorage (v2 schema)
+      expect(mockStore.has('bsvsdk_overlay_host_reputation_v2')).toBe(true)
+      const stored = JSON.parse(mockStore.get('bsvsdk_overlay_host_reputation_v2')!)
       expect(stored['https://ls-test.com']).toBeDefined()
     })
 

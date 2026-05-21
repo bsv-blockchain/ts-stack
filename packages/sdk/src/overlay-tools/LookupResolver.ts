@@ -59,6 +59,25 @@ export interface LookupQueryOptions {
    *    then continues yielding late-host enrichments until the iterator is broken or final emission.
    */
   softTimeoutMs?: number
+  /**
+   * Fired when a SLAP-advertised host fails (network error, timeout, malformed
+   * response). The resolver itself does not email or escalate — downstream
+   * consumers (e.g. overlay-express) wire this up to the BSVA notification API
+   * to let the originating overlay operator know about a stale advertisement.
+   */
+  onUnreachableHost?: (info: UnreachableHostInfo) => void
+}
+
+/** Info supplied to onUnreachableHost callbacks. */
+export interface UnreachableHostInfo {
+  /** Host URL that failed. */
+  host: string
+  /** Lookup service that was being queried when the failure occurred. */
+  service: string
+  /** Error message from the facilitator. */
+  error: string
+  /** SLAP tracker URL that advertised this host, if known. */
+  advertisedBy?: string
 }
 
 /**
@@ -283,7 +302,17 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       signal
     }
     const response: Response = await this.fetchClient(`${url}/lookup`, fco)
-    if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
+    if (!response.ok) {
+      // HTTP 4xx is a semantic "your request was bad/unsupported" signal —
+      // the host is reachable and responsive, it just doesn't satisfy THIS
+      // query. Treat it as an empty output-list so the host isn't penalized
+      // into backoff (which would disqualify it from serving its OTHER
+      // services too). 5xx remains a throw — those are real outages.
+      if (response.status >= 400 && response.status < 500) {
+        return { type: 'output-list', outputs: [] }
+      }
+      throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
+    }
     if (isOctetStream(response.headers.get('content-type'))) {
       return await this.parseOctetStreamLookup(response)
     }
@@ -353,6 +382,13 @@ export default class LookupResolver {
   private readonly txMemo: Map<string, { txId: string, expiresAt: number }>
   private readonly txMemoTtlMs: number
 
+  /**
+   * Records which SLAP tracker most recently advertised each host. Used to
+   * attach `advertisedBy` to onUnreachableHost callbacks so downstream
+   * notification consumers know which tracker has a stale advertisement.
+   */
+  private readonly advertisedBy: Map<string, string>
+
   constructor (config: LookupResolverConfig = {}) {
     this.networkPreset = config.networkPreset ?? 'mainnet'
     this.facilitator = config.facilitator ?? new HTTPSOverlayLookupFacilitator(undefined, this.networkPreset === 'local')
@@ -379,6 +415,7 @@ export default class LookupResolver {
     this.hostsCache = new Map()
     this.hostsInFlight = new Map()
     this.txMemo = new Map()
+    this.advertisedBy = new Map()
   }
 
   /**
@@ -451,16 +488,48 @@ export default class LookupResolver {
       )
     }
 
-    const rankedHosts = this.prepareHostsForQuery(
-      competentHosts,
-      `lookup service ${question.service}`
-    )
+    // Self-healing: if every cached host has slid into backoff (warm cache went
+    // stale-by-failure rather than by age), evict the cache and re-discover via
+    // SLAP — the network may have rotated healthy hosts in. Only applies to
+    // SLAP-eligible services (no overrides, not local, not ls_slap itself).
+    let rankedHosts: string[]
+    try {
+      rankedHosts = this.prepareHostsForQuery(
+        competentHosts,
+        `lookup service ${question.service}`
+      )
+    } catch (err) {
+      const isSlapEligible =
+        question.service !== 'ls_slap' &&
+        this.hostOverrides[question.service] == null &&
+        this.networkPreset !== 'local'
+      if (!isSlapEligible) throw err
+      this.hostsCache.delete(question.service)
+      const fresh = await this.getCompetentHostsCached(question.service)
+      if (this.additionalHosts[question.service]?.length > 0) {
+        const extra = this.additionalHosts[question.service]
+        const seen = new Set(fresh)
+        for (const h of extra) if (!seen.has(h)) fresh.push(h)
+      }
+      if (fresh.length < 1) {
+        throw new Error(
+          `No competent ${this.networkPreset} hosts found by the SLAP trackers for lookup service: ${question.service}`
+        )
+      }
+      // Re-rank — if SLAP returned the same hosts and they're all still in
+      // backoff, propagate the original error.
+      rankedHosts = this.prepareHostsForQuery(
+        fresh,
+        `lookup service ${question.service}`
+      )
+    }
     if (rankedHosts.length < 1) {
       throw new Error(`All competent hosts for ${question.service} are temporarily unavailable due to backoff.`)
     }
 
     const graceMs = options?.graceMs ?? 80
     const softTimeoutMs = options?.softTimeoutMs
+    const onUnreachableHost = options?.onUnreachableHost
 
     const hostCount = rankedHosts.length
     const outputsMap = new Map<string, { beef: number[], context?: number[], outputIndex: number }>()
@@ -468,7 +537,20 @@ export default class LookupResolver {
     let completedHosts = 0
     let firstResponseAt: number | null = null
 
-    type Event = { kind: 'answer', answer: LookupAnswer } | { kind: 'done' } | { kind: 'soft' }
+    // Per-host bookkeeping for retrospective completeness scoring. We track the
+    // unique output-keys returned by each host so we can compare against the
+    // peer-max after all hosts settle. A host that consistently returns the
+    // largest result set (e.g. overlay-us-1 returning 40 outputs vs overlay-ap-1
+    // returning 2) earns higher reputation, fixing the latency-bias collapse
+    // observed in production where the fast-but-incomplete host wins out.
+    interface HostResult { host: string, uniqueCount: number, succeeded: boolean }
+    const hostResults: HostResult[] = []
+    const perAnswerHostKeys = new Map<LookupAnswer, { host: string, hostKeys: Set<string> }>()
+
+    type Event =
+      | { kind: 'answer', answer: LookupAnswer, host: string }
+      | { kind: 'done' }
+      | { kind: 'soft' }
     const queue: Event[] = []
     let waiter: ((v: void) => void) | null = null
     const push = (e: Event): void => {
@@ -483,11 +565,35 @@ export default class LookupResolver {
     for (const host of rankedHosts) {
       this.lookupHostWithTracking(host, question, timeout)
         .then((answer) => {
-          if (answer?.type === 'output-list' && Array.isArray(answer.outputs) && answer.outputs.length > 0) {
-            push({ kind: 'answer', answer })
+          if (answer?.type === 'output-list' && Array.isArray(answer.outputs)) {
+            // Track host_keys here (in the .then, where we know the host) so
+            // mergeAnswer's added-flag stays clean. Empty result also counts —
+            // a 0-count means the host successfully returned no data, distinct
+            // from completeness-zero (returned fewer than peers).
+            const hostKeys = new Set<string>()
+            perAnswerHostKeys.set(answer, { host, hostKeys })
+            if (answer.outputs.length > 0) {
+              push({ kind: 'answer', answer, host })
+            } else {
+              hostResults.push({ host, uniqueCount: 0, succeeded: true })
+            }
+          } else {
+            hostResults.push({ host, uniqueCount: 0, succeeded: false })
           }
         })
-        .catch(() => { /* tracked already */ })
+        .catch((err) => {
+          hostResults.push({ host, uniqueCount: 0, succeeded: false })
+          if (typeof onUnreachableHost === 'function') {
+            try {
+              onUnreachableHost({
+                host,
+                service: question.service,
+                error: err instanceof Error ? err.message : String(err),
+                advertisedBy: this.advertisedBy.get(host)
+              })
+            } catch { /* never let a consumer callback break the query */ }
+          }
+        })
         .finally(() => {
           completedHosts++
           push({ kind: 'done' })
@@ -506,15 +612,25 @@ export default class LookupResolver {
     const mergeAnswer = (answer: LookupAnswer): boolean => {
       let added = false
       const now = Date.now()
+      const perHost = perAnswerHostKeys.get(answer)
       for (const output of answer.outputs) {
         const txId = this.resolveTxIdForOutput(output, now)
         if (txId === null) continue
         const uniqKey = `${txId}.${output.outputIndex}`
+        if (perHost !== undefined) perHost.hostKeys.add(uniqKey)
         if (!outputsMap.has(uniqKey)) {
           outputsMap.set(uniqKey, output)
           txIds.push(txId)
           added = true
         }
+      }
+      if (perHost !== undefined) {
+        // Push (or replace) this host's result so it's available for the
+        // retrospective recordAnswer pass once all hosts settle.
+        const existing = hostResults.findIndex((r) => r.host === perHost.host)
+        const entry = { host: perHost.host, uniqueCount: perHost.hostKeys.size, succeeded: true }
+        if (existing >= 0) hostResults[existing] = entry
+        else hostResults.push(entry)
       }
       return added
     }
@@ -569,6 +685,20 @@ export default class LookupResolver {
     } finally {
       if (graceTimer !== null) clearTimeout(graceTimer)
       if (softTimer !== null) clearTimeout(softTimer)
+      // Retrospective accuracy scoring: compare each host's unique contribution
+      // against the largest peer result and update reputation. A consistently
+      // higher-completeness host (e.g. overlay-us-1 returning 40 outputs vs
+      // ap-1 returning 2) earns a score bonus that outweighs latency,
+      // self-correcting the bias bug observed in production.
+      const peerMaxUnique = hostResults.reduce(
+        (max, r) => (r.succeeded && r.uniqueCount > max ? r.uniqueCount : max),
+        0
+      )
+      for (const r of hostResults) {
+        if (r.succeeded) {
+          this.hostReputation.recordAnswer(r.host, r.uniqueCount, peerMaxUnique)
+        }
+      }
     }
   }
 
@@ -684,7 +814,14 @@ export default class LookupResolver {
         this.lookupHostWithTracking(tracker, query, MAX_TRACKER_WAIT_TIME)
           .then((answer) => {
             const hosts = this.extractHostsFromAnswer(answer, service)
-            for (const h of hosts) allHosts.add(h)
+            for (const h of hosts) {
+              if (!allHosts.has(h)) {
+                allHosts.add(h)
+                // First-seen attribution: the tracker that surfaced this host
+                // gets credit, used by onUnreachableHost callbacks.
+                this.advertisedBy.set(h, tracker)
+              }
+            }
             if (!resolved && allHosts.size > 0) {
               resolved = true
               resolve([...allHosts])
@@ -766,16 +903,18 @@ export default class LookupResolver {
     try {
       const answer = await this.facilitator.lookup(host, question, timeout)
       const latency = Date.now() - startedAt
-      const isValid =
-        typeof answer === 'object' &&
-        answer !== null &&
-        answer.type === 'output-list' &&
-        Array.isArray((answer).outputs)
+      // Any structurally-valid response (output-list OR a service's own
+      // freeform shape, e.g. ls_kvstore for missing keys) means the host is
+      // reachable and responsive. Don't penalize it for query semantics — that
+      // would needlessly backoff a healthy host and disqualify it from serving
+      // its OTHER services. Only record failure for malformed payloads.
+      const isStructurallyValid =
+        typeof answer === 'object' && answer !== null && typeof (answer as any).type === 'string'
 
-      if (isValid) {
+      if (isStructurallyValid) {
         this.hostReputation.recordSuccess(host, latency)
       } else {
-        this.hostReputation.recordFailure(host, 'Invalid lookup response')
+        this.hostReputation.recordFailure(host, 'Malformed lookup response')
       }
 
       return answer

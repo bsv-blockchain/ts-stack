@@ -356,12 +356,18 @@ describe('LookupResolver – additional coverage', () => {
   // -----------------------------------------------------------------------
 
   describe('prepareHostsForQuery – backoff error', () => {
-    it('throws when all competent hosts are in backoff', async () => {
+    it('throws when all competent hosts are in backoff and no alternatives exist', async () => {
       const slapTx = await makeSlapTx(42, 'https://backing.off', 'ls_backoff_test')
 
-      mockFacilitator.lookup.mockResolvedValueOnce({
-        type: 'output-list',
-        outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }]
+      // SLAP keeps returning the same backed-off host on every call — including
+      // the self-healing retry after backoff is detected. This emulates the
+      // genuine "every host is genuinely down" case.
+      mockFacilitator.lookup.mockImplementation(async (_url: string, q: any) => {
+        if (q.service === 'ls_slap') {
+          return { type: 'output-list', outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }] }
+        }
+        // Host queries — shouldn't be reached because backoff filter blocks them.
+        return { type: 'output-list', outputs: [] }
       })
 
       const r = new LookupResolver({
@@ -375,10 +381,10 @@ describe('LookupResolver – additional coverage', () => {
         tracker.recordFailure('https://backing.off', 'connection refused')
       }
 
-      // Now the host is deeply in backoff
-      // prepareHostsForQuery throws with context = 'lookup service ls_backoff_test'
+      // Self-healing re-discovers via SLAP, sees the SAME backed-off host, and
+      // rethrows the backoff error.
       await expect(r.query({ service: 'ls_backoff_test', query: {} })).rejects.toThrow(
-        'All lookup service ls_backoff_test hosts are backing off'
+        /All lookup service ls_backoff_test hosts are backing off/
       )
     })
 
@@ -659,9 +665,13 @@ describe('LookupResolver – additional coverage', () => {
   // lookupHostWithTracking – invalid response tracking
   // -----------------------------------------------------------------------
 
-  describe('lookupHostWithTracking – invalid response', () => {
-    it('records failure when host returns a non-output-list response', async () => {
-      mockFacilitator.lookup.mockResolvedValueOnce({
+  describe('lookupHostWithTracking – non-output-list responses', () => {
+    it('does NOT penalize a host that returns a structurally valid freeform response', async () => {
+      // Many lookup services legitimately return freeform shapes for some
+      // queries (e.g. ls_kvstore for missing keys). A reachable host
+      // answering with a valid shape should not accumulate failures and slide
+      // into backoff just because we asked a question it didn't have data for.
+      mockFacilitator.lookup.mockResolvedValue({
         type: 'freeform',
         data: 'some free data'
       })
@@ -671,13 +681,32 @@ describe('LookupResolver – additional coverage', () => {
         hostOverrides: { ls_invalid: ['https://weird.host'] }
       })
 
-      // The query returns empty outputs since the response is ignored
-      const res = await r.query({ service: 'ls_invalid', query: {} })
-      expect(res.outputs).toHaveLength(0)
+      // Multiple repeated queries shouldn't push the host into backoff.
+      for (let i = 0; i < 6; i++) {
+        const res = await r.query({ service: 'ls_invalid', query: { i } })
+        expect(res.outputs).toHaveLength(0)
+      }
 
-      // The host should have been penalised in the tracker
       const tracker: HostReputationTracker = (r as any).hostReputation
       const snap = tracker.snapshot('https://weird.host')
+      expect(snap?.totalFailures).toBe(0)
+      expect(snap?.totalSuccesses).toBeGreaterThan(0)
+      expect(snap?.backoffUntil).toBe(0)
+    })
+
+    it('records failure for a structurally MALFORMED response (no type field)', async () => {
+      mockFacilitator.lookup.mockResolvedValueOnce({ garbage: true })
+
+      const r = new LookupResolver({
+        facilitator: mockFacilitator,
+        hostOverrides: { ls_bad: ['https://malformed.host'] }
+      })
+
+      const res = await r.query({ service: 'ls_bad', query: {} })
+      expect(res.outputs).toHaveLength(0)
+
+      const tracker: HostReputationTracker = (r as any).hostReputation
+      const snap = tracker.snapshot('https://malformed.host')
       expect(snap?.totalFailures).toBeGreaterThan(0)
     })
   })

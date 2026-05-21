@@ -5,6 +5,13 @@ interface HostReputationEntry {
   consecutiveFailures: number
   avgLatencyMs: number | null
   lastLatencyMs: number | null
+  /**
+   * EMA of completeness ratio (this host's unique outputs / peer max unique outputs)
+   * across recent queries. `null` until at least one recordAnswer call. A host that
+   * consistently returns the largest result set converges to 1.0; one that returns
+   * only a fraction converges down toward that fraction.
+   */
+  avgCompleteness: number | null
   backoffUntil: number
   lastUpdatedAt: number
   lastError?: string
@@ -16,12 +23,21 @@ export interface RankedHost extends HostReputationEntry {
 
 const DEFAULT_LATENCY_MS = 1500
 const LATENCY_SMOOTHING_FACTOR = 0.25
+const COMPLETENESS_SMOOTHING_FACTOR = 0.3
 const BASE_BACKOFF_MS = 1000
 const MAX_BACKOFF_MS = 60_000
 const FAILURE_PENALTY_MS = 400
 const SUCCESS_BONUS_MS = 30
 const FAILURE_BACKOFF_GRACE = 2
-const STORAGE_KEY = 'bsvsdk_overlay_host_reputation_v1'
+/**
+ * Latency in ms beyond which we stop forgiving a slow host even if it returns more
+ * complete data. Mirrors the "ten times as long is unacceptable" rule.
+ */
+const ACCURACY_LATENCY_TOLERANCE_MS = 10_000
+/** Score weight: how much completeness shifts the score (in latency-equivalent ms). */
+const COMPLETENESS_SCORE_WEIGHT_MS = 1200
+const STORAGE_KEY = 'bsvsdk_overlay_host_reputation_v2'
+const LEGACY_STORAGE_KEY_V1 = 'bsvsdk_overlay_host_reputation_v1'
 
 interface KeyValueStore {
   get: (key: string) => string | null | undefined
@@ -59,6 +75,32 @@ export class HostReputationTracker {
     entry.backoffUntil = 0
     entry.lastUpdatedAt = now
     entry.lastError = undefined
+    this.saveToStorage()
+  }
+
+  /**
+   * Records the completeness of an answer relative to peers from the same query.
+   * Updates only the completeness EMA — latency and success counts are owned by
+   * `recordSuccess` so call sites that fire both don't double-count.
+   *
+   * `peerMaxUniqueOutputCount` of 0 (nobody returned anything) is treated as neutral —
+   * no signal about who is more accurate, so the EMA is not touched.
+   */
+  recordAnswer (
+    host: string,
+    uniqueOutputCount: number,
+    peerMaxUniqueOutputCount: number
+  ): void {
+    if (peerMaxUniqueOutputCount <= 0) return
+    const entry = this.getOrCreate(host)
+    const ratio = Math.min(1, Math.max(0, uniqueOutputCount / peerMaxUniqueOutputCount))
+    if (entry.avgCompleteness === null) {
+      entry.avgCompleteness = ratio
+    } else {
+      entry.avgCompleteness =
+        (1 - COMPLETENESS_SMOOTHING_FACTOR) * entry.avgCompleteness +
+        COMPLETENESS_SMOOTHING_FACTOR * ratio
+    }
     this.saveToStorage()
   }
 
@@ -166,7 +208,13 @@ export class HostReputationTracker {
     const s = this.store
     if (s == null) return
     try {
-      const raw = s.get(STORAGE_KEY)
+      let raw = s.get(STORAGE_KEY)
+      // Migrate v1 → v2: legacy entries get a neutral avgCompleteness so they
+      // neither help nor hurt until we observe a real query.
+      if (typeof raw !== 'string' || raw.length === 0) {
+        const legacy = s.get(LEGACY_STORAGE_KEY_V1)
+        if (typeof legacy === 'string' && legacy.length > 0) raw = legacy
+      }
       if (typeof raw !== 'string' || raw.length === 0) return
       const data = JSON.parse(raw)
       if (typeof data !== 'object' || data === null) return
@@ -181,6 +229,7 @@ export class HostReputationTracker {
             consecutiveFailures: Number(v.consecutiveFailures ?? 0),
             avgLatencyMs: v.avgLatencyMs == null ? null : Number(v.avgLatencyMs),
             lastLatencyMs: v.lastLatencyMs == null ? null : Number(v.lastLatencyMs),
+            avgCompleteness: v.avgCompleteness == null ? null : Number(v.avgCompleteness),
             backoffUntil: Number(v.backoffUntil ?? 0),
             lastUpdatedAt: Number(v.lastUpdatedAt ?? 0),
             lastError: typeof v.lastError === 'string' ? v.lastError : undefined
@@ -208,7 +257,20 @@ export class HostReputationTracker {
     const failurePenalty = entry.consecutiveFailures * FAILURE_PENALTY_MS
     const successBonus = Math.min(entry.totalSuccesses * SUCCESS_BONUS_MS, latency / 2)
     const backoffPenalty = entry.backoffUntil > now ? entry.backoffUntil - now : 0
-    return latency + failurePenalty + backoffPenalty - successBonus
+
+    // Completeness adjustment: a host that consistently returns the largest result
+    // set gets a bonus (lower score = better rank); one that returns less than peers
+    // gets a penalty. Only applies once we've observed completeness, and we stop
+    // rewarding hosts that exceed the latency tolerance.
+    let completenessAdjustment = 0
+    if (entry.avgCompleteness !== null && latency <= ACCURACY_LATENCY_TOLERANCE_MS) {
+      // ratio of 1.0 → -COMPLETENESS_SCORE_WEIGHT_MS (better)
+      // ratio of 0.5 → 0
+      // ratio of 0.0 → +COMPLETENESS_SCORE_WEIGHT_MS (worse)
+      completenessAdjustment = (0.5 - entry.avgCompleteness) * 2 * COMPLETENESS_SCORE_WEIGHT_MS
+    }
+
+    return latency + failurePenalty + backoffPenalty - successBonus + completenessAdjustment
   }
 
   private getOrCreate (host: string): HostReputationEntry {
@@ -221,6 +283,7 @@ export class HostReputationTracker {
         consecutiveFailures: 0,
         avgLatencyMs: null,
         lastLatencyMs: null,
+        avgCompleteness: null,
         backoffUntil: 0,
         lastUpdatedAt: 0
       }
