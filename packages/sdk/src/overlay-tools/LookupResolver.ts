@@ -140,6 +140,17 @@ function normalizeLookupError (err: unknown, timedOut: boolean): Error {
   return err instanceof Error ? err : new Error(String(err))
 }
 
+/**
+ * Returns true when the given Content-Type header value represents
+ * `application/octet-stream`, ignoring case and any media-type parameters
+ * (e.g. `; charset=utf-8`).
+ */
+function isOctetStream (contentType: string | null): boolean {
+  if (typeof contentType !== 'string') return false
+  const baseType = contentType.split(';', 1)[0].trim().toLowerCase()
+  return baseType === 'application/octet-stream'
+}
+
 /** Internal cache options. Kept optional to preserve drop-in compatibility. */
 interface CacheOptions {
   /** How long (ms) a hosts entry is considered fresh. Default 5 minutes. */
@@ -252,7 +263,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     }
     const response: Response = await this.fetchClient(`${url}/lookup`, fco)
     if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
-    if (response.headers.get('content-type') === 'application/octet-stream') {
+    if (isOctetStream(response.headers.get('content-type'))) {
       return await this.parseOctetStreamLookup(response)
     }
     return await response.json()

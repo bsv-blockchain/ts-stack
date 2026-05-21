@@ -522,6 +522,36 @@ describe('LookupResolver – additional coverage', () => {
       expect(result.outputs[0].outputIndex).toBe(0)
     })
 
+    it('parses octet-stream responses when header carries parameters or differing case', async () => {
+      const tx = new Transaction(
+        1,
+        [],
+        [{ lockingScript: LockingScript.fromHex('88'), satoshis: 1 }],
+        0
+      )
+      const beef = tx.toBEEF()
+      const txid = Buffer.from(tx.id('hex'), 'hex')
+      const payload = Buffer.concat([
+        Buffer.from([0x01]), txid, Buffer.from([0x00]), Buffer.from([0x00]), Buffer.from(beef)
+      ])
+
+      for (const header of [
+        'application/octet-stream; charset=utf-8',
+        'Application/Octet-Stream',
+        '  application/octet-stream  '
+      ]) {
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          headers: { get: () => header },
+          arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
+        })
+        const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+        const result = await facilitator.lookup('http://host', { service: 'ls_test', query: {} })
+        expect(result.type).toBe('output-list')
+        expect(result.outputs).toHaveLength(1)
+      }
+    })
+
     it('parses octet-stream responses with context bytes', async () => {
       const tx = new Transaction(
         1,
