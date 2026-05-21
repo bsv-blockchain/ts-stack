@@ -593,6 +593,50 @@ describe('LookupResolver – additional coverage', () => {
       ).rejects.toThrow('DNS failure')
     })
 
+    it('normalises string thrown values from fetch', async () => {
+      const mockFetch = jest.fn().mockRejectedValue('boom')
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('boom')
+    })
+
+    it('normalises object-with-message thrown values from fetch', async () => {
+      const mockFetch = jest.fn().mockRejectedValue({ message: 'object boom' })
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('object boom')
+    })
+
+    it('normalises plain-object thrown values via JSON', async () => {
+      const mockFetch = jest.fn().mockRejectedValue({ code: 42 })
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('{"code":42}')
+    })
+
+    it('normalises number/boolean/null thrown values from fetch', async () => {
+      for (const value of [123, true, null]) {
+        const mockFetch = jest.fn().mockRejectedValue(value)
+        const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+        await expect(
+          facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+        ).rejects.toThrow(String(value))
+      }
+    })
+
+    it('normalises circular thrown values without crashing', async () => {
+      const circular: { self?: unknown } = {}
+      circular.self = circular
+      const mockFetch = jest.fn().mockRejectedValue(circular)
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('Unknown error')
+    })
+
     it('sends correct request body to /lookup endpoint', async () => {
       const mockFetch = jest.fn().mockResolvedValue({
         ok: true,
