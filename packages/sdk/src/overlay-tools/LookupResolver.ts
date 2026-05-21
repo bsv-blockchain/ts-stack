@@ -181,11 +181,23 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     }
 
     const controller = typeof AbortController === 'undefined' ? undefined : new AbortController()
-    const timer = setTimeout(() => {
-      try { controller?.abort() } catch { /* noop */ }
-    }, timeout)
+    let timedOut = false
+    let timer: ReturnType<typeof setTimeout> | null = null
 
-    try {
+    // Hard wall-clock deadline. In some environments (e.g. browser/Electron CORS
+    // failures) the underlying fetch can stall without ever settling, and the
+    // AbortController signal alone is insufficient to make the returned promise
+    // resolve or reject. Race the fetch against a setTimeout that rejects so the
+    // consumer-facing promise always settles within `timeout` ms.
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true
+        try { controller?.abort() } catch { /* noop */ }
+        reject(new Error('Request timed out'))
+      }, timeout)
+    })
+
+    const fetchPromise = (async (): Promise<LookupAnswer> => {
       const fco: RequestInit = {
         method: 'POST',
         headers: {
@@ -202,14 +214,22 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
         return await this.parseOctetStreamLookup(response)
       }
       return await response.json()
+    })()
+
+    // Prevent unhandled rejection if fetchPromise settles after we've already
+    // rejected via the timeout. The result is intentionally discarded.
+    fetchPromise.catch(() => { /* noop */ })
+
+    try {
+      return await Promise.race([fetchPromise, timeoutPromise])
     } catch (e) {
       // Normalize timeouts to a consistent error message
-      if ((e as { name?: string })?.name === 'AbortError') {
+      if (timedOut || (e as { name?: string })?.name === 'AbortError') {
         throw new Error('Request timed out')
       }
       throw e
     } finally {
-      clearTimeout(timer)
+      if (timer !== null) clearTimeout(timer)
     }
   }
 

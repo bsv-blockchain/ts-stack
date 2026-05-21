@@ -472,6 +472,22 @@ describe('LookupResolver – additional coverage', () => {
       ).rejects.toThrow('Request timed out')
     })
 
+    it('rejects within the timeout even when fetch never settles', async () => {
+      // Simulate the CORS-blocked / hung-preflight case where the fetch promise
+      // does not honor the AbortController signal and never settles.
+      const neverFetch = jest.fn().mockImplementation(
+        () => new Promise(() => { /* never resolves */ })
+      )
+      const facilitator = new HTTPSOverlayLookupFacilitator(neverFetch, true)
+      const start = Date.now()
+      await expect(
+        facilitator.lookup('http://host', { service: 'ls_test', query: {} }, 50)
+      ).rejects.toThrow('Request timed out')
+      const elapsed = Date.now() - start
+      // Allow generous slack but must complete well before any global jest timeout.
+      expect(elapsed).toBeLessThan(2000)
+    })
+
     it('parses octet-stream responses', async () => {
       // Build a minimal octet-stream payload: 1 outpoint, then BEEF bytes
       const tx = new Transaction(
