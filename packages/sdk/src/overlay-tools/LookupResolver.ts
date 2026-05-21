@@ -137,7 +137,27 @@ function createDeadline (timeoutMs: number, controller?: AbortController): Deadl
 function normalizeLookupError (err: unknown, timedOut: boolean): Error {
   if (timedOut) return new Error('Request timed out')
   if ((err as { name?: string })?.name === 'AbortError') return new Error('Request timed out')
-  return err instanceof Error ? err : new Error(String(err))
+  if (err instanceof Error) return err
+  return new Error(stringifyErrorValue(err))
+}
+
+/**
+ * Coerce a non-Error thrown value to a human-readable string without falling
+ * back to the default `'[object Object]'` for plain objects.
+ */
+function stringifyErrorValue (value: unknown): string {
+  if (value === null || value === undefined) return String(value)
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value)
+  }
+  const message = (value as { message?: unknown }).message
+  if (typeof message === 'string' && message.length > 0) return message
+  try {
+    return JSON.stringify(value) ?? 'Unknown error'
+  } catch {
+    return 'Unknown error'
+  }
 }
 
 /**

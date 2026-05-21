@@ -546,7 +546,7 @@ describe('LookupResolver – additional coverage', () => {
           arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
         })
         const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
-        const result = await facilitator.lookup('http://host', { service: 'ls_test', query: {} })
+        const result = await facilitator.lookup('https://host', { service: 'ls_test', query: {} })
         expect(result.type).toBe('output-list')
         expect(result.outputs).toHaveLength(1)
       }
