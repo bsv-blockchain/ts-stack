@@ -40,32 +40,90 @@ jobs:
         continue-on-error: true
         run: node scripts/check-versions.mjs
 
-      - name: Build all packages
-        # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
-        run: pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run build
+      - name: Determine changed scope
+        # On PRs, restrict build/lint/test to packages with changes (plus dependents)
+        # via pnpm's `...[BASE]` filter. Push events run the full matrix.
+        id: scope
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            echo "filter=...[${BASE_SHA}]" >> "$GITHUB_OUTPUT"
+            CHANGED=$(git diff --name-only "${BASE_SHA}"...HEAD)
+            if echo "$CHANGED" | grep -q '^packages/sdk/'; then
+              echo "sdk=true" >> "$GITHUB_OUTPUT"
+            fi
+            if echo "$CHANGED" | grep -q '^packages/helpers/did/'; then
+              echo "did=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "filter=" >> "$GITHUB_OUTPUT"
+            echo "sdk=true" >> "$GITHUB_OUTPUT"
+            echo "did=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Lint all packages
+      - name: Build changed packages
+        # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
+        env:
+          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
+        run: |
+          EXTRA=""
+          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
+          pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' $EXTRA run build
+
+      - name: Lint changed packages
         continue-on-error: true
-        run: pnpm -r --filter '!@bsv/ts-stack' run lint --if-present
+        env:
+          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
+        run: |
+          EXTRA=""
+          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
+          pnpm -r --filter '!@bsv/ts-stack' $EXTRA run lint --if-present
 
-      - name: Test all packages
+      - name: Test changed packages
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
-        run: pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run test
+        env:
+          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
+        run: |
+          EXTRA=""
+          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
+          pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' $EXTRA run test
 
-      - name: Generate coverage
+      - name: Generate coverage (sdk)
+        if: steps.scope.outputs.sdk == 'true'
         run: |
           pnpm --filter @bsv/sdk run test:coverage
           node scripts/normalize-lcov-paths.mjs packages/sdk/coverage/lcov.info packages/sdk
+
+      - name: Generate coverage (did)
+        if: steps.scope.outputs.did == 'true'
+        run: |
           pnpm --filter @bsv/did run test:coverage
           node scripts/normalize-lcov-paths.mjs packages/helpers/did/coverage/lcov.info packages/helpers/did
 
+      - name: Compose codecov inputs
+        id: cov
+        if: steps.scope.outputs.sdk == 'true' || steps.scope.outputs.did == 'true'
+        run: |
+          FILES=""
+          FLAGS=""
+          if [ "${{ steps.scope.outputs.sdk }}" = "true" ]; then
+            FILES="packages/sdk/coverage/lcov.info"
+            FLAGS="sdk"
+          fi
+          if [ "${{ steps.scope.outputs.did }}" = "true" ]; then
+            FILES="${FILES:+$FILES,}packages/helpers/did/coverage/lcov.info"
+            FLAGS="${FLAGS:+$FLAGS,}did"
+          fi
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+          echo "flags=$FLAGS" >> "$GITHUB_OUTPUT"
+
       - name: Upload coverage to Codecov
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: (steps.scope.outputs.sdk == 'true' || steps.scope.outputs.did == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: packages/sdk/coverage/lcov.info,packages/helpers/did/coverage/lcov.info
-          flags: sdk,did
+          files: ${{ steps.cov.outputs.files }}
+          flags: ${{ steps.cov.outputs.flags }}
           name: ts-stack
           slug: bsv-blockchain/ts-stack
           fail_ci_if_error: true
