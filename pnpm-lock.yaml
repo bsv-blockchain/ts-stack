@@ -127,8 +127,8 @@ importers:
         specifier: ^2.1.2
         version: 2.1.2
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0
@@ -152,8 +152,8 @@ importers:
         specifier: ^2.1.2
         version: 2.1.2
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
     devDependencies:
       '@jest/globals':
         specifier: ^30.3.0
@@ -223,8 +223,8 @@ importers:
         specifier: ^2.1.2
         version: 2.1.2
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
     devDependencies:
       '@eslint/js':
         specifier: ^9.23.0
@@ -318,8 +318,8 @@ importers:
         specifier: ^2.1.27
         version: 2.1.27(@types/node@20.19.39)(sqlite3@5.1.7)
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0
@@ -895,8 +895,8 @@ importers:
         specifier: ^2.1.2
         version: 2.1.2
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
       mongodb:
         specifier: ^7.1.0
         version: 7.2.0(socks@2.8.7)
@@ -935,14 +935,14 @@ importers:
         specifier: ^2.0.2
         version: 2.0.3
       '@bsv/overlay-discovery-services':
-        specifier: ^2.0.2
-        version: 2.0.2(socks@2.8.7)
+        specifier: ^2.0.3
+        version: 2.0.3(socks@2.8.7)
       '@bsv/sdk':
         specifier: ^2.1.2
         version: 2.1.2
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1118,8 +1118,8 @@ importers:
         specifier: ^2.1.2
         version: 2.1.2
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.27
-        version: 2.1.27
+        specifier: ^2.1.28
+        version: 2.1.28
       '@types/node':
         specifier: ^25.6.0
         version: 25.6.0
@@ -2137,8 +2137,8 @@ packages:
   '@bsv/message-box-client@2.1.1':
     resolution: {integrity: sha512-nJURA9HFL1BVH7kt5nsbrlk8H8YERI/GZS8m+vfdounsWuE9JKrmvSZph3wNsZCPCtv/EwDi9RGewLHsOknzkg==}
 
-  '@bsv/overlay-discovery-services@2.0.2':
-    resolution: {integrity: sha512-tdrEAWtfbF5HmF5kBNYjF195OFVmA/aFsSGjp9jv2jNoScrHfHC1+WeXOCU81lktHv6pAOC2kFTZOL4V4QdAYg==}
+  '@bsv/overlay-discovery-services@2.0.3':
+    resolution: {integrity: sha512-/arPaPeCu3IRsD1FLgn6tZbeeZE7c4Pv5gJ2ydUjwK7x0uHGev2Y2/83HxC3tSQCOuHK5Jv4dDeLZgjpIZDLDg==}
 
   '@bsv/overlay@2.0.3':
     resolution: {integrity: sha512-dM1cJsxpEZakk0PyXtYCXE2ND9pBynl+cM2UFyGtpYXSZ7ZVzjXge3DTeuRvSI6qrnYR00a56brKTiDensw6RQ==}
@@ -2149,8 +2149,8 @@ packages:
   '@bsv/sdk@2.1.2':
     resolution: {integrity: sha512-648RLJEkbH+vFt5Q65orm3jdmZDnmLdt8YUpyQcctxVYwHvhEN/7RxMXjA+OnNLHZV1IOstqwXQ+4ar89KUs7Q==}
 
-  '@bsv/wallet-toolbox-client@2.1.27':
-    resolution: {integrity: sha512-WTdoxFZjnhifyL7l4txu29jcgq02X4u+qeiFucNPTEpvU1CT1Egd5gAQon4eg+HrCxo2eXduMxJQSwk+dlb4gw==}
+  '@bsv/wallet-toolbox-client@2.1.28':
+    resolution: {integrity: sha512-kxkQXQxff0xk9IfWjSJW5xq1orlGfoG0ZYG3MFOmGXykMeTruYp++79ESIt0M9xtusMuB78ktaJvcdeuY1T5mg==}
 
   '@bsv/wallet-toolbox@2.1.27':
     resolution: {integrity: sha512-SdiRSIlDyA1KThFV6V3/E9vue+vXCQCidOjXUWq97mWipzgtcCudUg9dvITJ7k0jBHjnIzxgLXgbhQQlvVH6qA==}
@@ -11996,11 +11996,11 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@bsv/overlay-discovery-services@2.0.2(socks@2.8.7)':
+  '@bsv/overlay-discovery-services@2.0.3(socks@2.8.7)':
     dependencies:
       '@bsv/overlay': 2.0.3
       '@bsv/sdk': 2.1.2
-      '@bsv/wallet-toolbox-client': 2.1.27
+      '@bsv/wallet-toolbox-client': 2.1.28
       mongodb: 7.2.0(socks@2.8.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-providers'
@@ -12045,7 +12045,7 @@ snapshots:
 
   '@bsv/sdk@2.1.2': {}
 
-  '@bsv/wallet-toolbox-client@2.1.27':
+  '@bsv/wallet-toolbox-client@2.1.28':
     dependencies:
       '@bsv/sdk': 2.1.2
       hash-wasm: 4.12.0

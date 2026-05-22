@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-storage-server",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
   "files": [
@@ -21,9 +21,9 @@
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.0.5",
     "@bsv/payment-express-middleware": "^2.0.2",
-    "@bsv/sdk": "^2.0.14",
-    "@bsv/wallet-toolbox": "^2.1.22",
-    "@bsv/wallet-toolbox-client": "^2.1.18",
+    "@bsv/sdk": "^2.1.2",
+    "@bsv/wallet-toolbox": "^2.1.27",
+    "@bsv/wallet-toolbox-client": "^2.1.28",
     "@bugsnag/js": "^7.14.1",
     "@bugsnag/plugin-express": "^7.14.0",
     "@google-cloud/storage": "^7.19.0",
