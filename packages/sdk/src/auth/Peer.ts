@@ -1,4 +1,4 @@
-import { SessionManager, SessionManagerLike } from './SessionManager.js'
+import { SessionManager, AsyncSessionManager } from './SessionManager.js'
 import {
   createNonce,
   verifyNonce,
@@ -28,7 +28,14 @@ const BufferCtor =
  * This version supports multiple concurrent sessions per peer identityKey.
  */
 export class Peer {
-  public sessionManager: SessionManagerLike
+  // Declared as the synchronous {@link SessionManager} for back-compat with
+  // pre-existing consumers that read `peer.sessionManager.getSession(...)`
+  // and friends as synchronous calls. The constructor also accepts an
+  // {@link AsyncSessionManager}; in that case the runtime value's methods
+  // return Promises. Peer always awaits internal calls so both work, but
+  // external code that reaches in directly should match the implementation
+  // it injected. See `AsyncSessionManager` for the opt-in async contract.
+  public sessionManager: SessionManager
   private readonly transport: Transport
   private readonly wallet: WalletInterface
   certificatesToRequest: RequestedCertificateSet
@@ -97,7 +104,7 @@ export class Peer {
    * @param {WalletInterface} wallet - The wallet instance used for cryptographic operations.
    * @param {Transport} transport - The transport mechanism used for sending and receiving messages.
    * @param {RequestedCertificateSet} [certificatesToRequest] - Optional set of certificates to request from a peer during the initial handshake.
-   * @param {SessionManagerLike} [sessionManager] - Optional SessionManager-compatible store to be used for managing peer sessions.
+   * @param {SessionManager | AsyncSessionManager} [sessionManager] - Optional session store. Pass an {@link AsyncSessionManager} for shared/durable storage in load-balanced deployments; otherwise the default in-process {@link SessionManager} is used.
    * @param {boolean} [autoPersistLastSession] - Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
    * @param {OriginatorDomainNameStringUnder250Bytes} [originator] - Optional originator domain name.
    */
@@ -105,7 +112,7 @@ export class Peer {
     wallet: WalletInterface,
     transport: Transport,
     certificatesToRequest?: RequestedCertificateSet,
-    sessionManager?: SessionManagerLike,
+    sessionManager?: SessionManager | AsyncSessionManager,
     autoPersistLastSession?: boolean,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ) {
@@ -117,8 +124,11 @@ export class Peer {
       types: {}
     }
     this.ready = this.transport.onData(this.handleIncomingMessage.bind(this)) // NOSONAR(typescript:S7059): listener must register synchronously — see ready field comment
+    // Cast keeps the public field typed as the synchronous `SessionManager`
+    // for back-compat. When an `AsyncSessionManager` is injected, the actual
+    // runtime methods return Promises — Peer awaits them internally below.
     this.sessionManager =
-      sessionManager ?? new SessionManager()
+      (sessionManager ?? new SessionManager()) as SessionManager
     if (autoPersistLastSession === false) {
       this.autoPersistLastSession = false
     } else {

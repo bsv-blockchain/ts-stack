@@ -9,7 +9,7 @@ import {
   RequestedCertificateSet,
   Transport,
   SessionManager,
-  SessionManagerLike,
+  AsyncSessionManager,
   WalletInterface,
   PubKeyHex
 } from '@bsv/sdk'
@@ -38,7 +38,10 @@ export interface AuthRequest extends Request {
 // Developers may optionally provide a handler for incoming certificates.
 export interface AuthMiddlewareOptions {
   wallet: WalletInterface
-  sessionManager?: SessionManagerLike // Optional if dev wants custom SessionManager
+  // Optional session store. Default is in-process synchronous `SessionManager`.
+  // Pass an `AsyncSessionManager` (Redis/SQL-backed, etc.) to share state
+  // across load-balanced instances; Peer awaits internally so both work.
+  sessionManager?: SessionManager | AsyncSessionManager
   allowUnauthenticated?: boolean
   certificatesToRequest?: RequestedCertificateSet
   onCertificatesReceived?: (

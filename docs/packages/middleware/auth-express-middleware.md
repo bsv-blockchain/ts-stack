@@ -57,7 +57,7 @@ app.listen(3000)
 - **AuthRequest** — Extended Request with `.auth` object containing `identityKey`
 - **BRC-103 mutual authentication** — Nonce-based challenge-response with signatures
 - **BRC-104 HTTP transport** — Custom headers (`x-bsv-auth-*`) for non-general messages
-- **Session management** — Tracks nonces per identity; SessionManagerLike interface extensible to synchronous or asynchronous stores
+- **Session management** — Tracks nonces per identity; AsyncSessionManager interface extensible to synchronous or asynchronous stores
 - **Certificate exchange** — Optional verifiable certificates during handshake
 - **Response wrapping** — Middleware intercepts response methods to sign responses before sending
 - **Optional authentication** — `allowUnauthenticated` flag for mixed public/private endpoints
@@ -106,14 +106,14 @@ app.use(authMiddleware)
 
 ### Shared sessions for scaled servers
 
-The default `SessionManager` stores BRC-103 nonce/session state in one process. For load-balanced Express servers, pass a `SessionManagerLike` backed by shared storage so every instance can resolve the same handshake state instead of relying on sticky routing.
+The default `SessionManager` stores BRC-103 nonce/session state in one process. For load-balanced Express servers, pass a `AsyncSessionManager` backed by shared storage so every instance can resolve the same handshake state instead of relying on sticky routing.
 
 ```typescript
-import { SessionManagerLike } from '@bsv/sdk'
+import { AsyncSessionManager } from '@bsv/sdk'
 
 const authMiddleware = createAuthMiddleware({
   wallet,
-  sessionManager: sharedSessionManager satisfies SessionManagerLike
+  sessionManager: sharedSessionManager satisfies AsyncSessionManager
 })
 ```
 
@@ -131,7 +131,7 @@ app.post('/secure-endpoint', createAuthMiddleware({ wallet }), (req, res) => {
 - **BRC-104 HTTP transport** — Uses custom headers and `/.well-known/auth` endpoint
 - **General vs non-general messages** — Non-general for handshake, general for authenticated app requests
 - **Nonce binding** — Each request/response pair bound to server-generated nonce; prevents replay attacks
-- **Session management** — Tracks nonces per identity; SessionManagerLike interface extensible to synchronous or asynchronous stores
+- **Session management** — Tracks nonces per identity; AsyncSessionManager interface extensible to synchronous or asynchronous stores
 - **Certificate exchange** — Optional verifiable certificates during handshake
 - **Response wrapping** — Middleware intercepts response methods to sign responses before sending
 

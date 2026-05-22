@@ -8,7 +8,7 @@ import { MasterCertificate } from '../../auth/certificates/MasterCertificate.js'
 import { getVerifiableCertificates } from '../../auth/utils/getVerifiableCertificates.js'
 import { CompletedProtoWallet } from '../certificates/__tests/CompletedProtoWallet.js'
 import { SimplifiedFetchTransport } from '../../auth/transports/SimplifiedFetchTransport.js'
-import { SessionManager, SessionManagerLike } from '../../auth/SessionManager.js'
+import { SessionManager, AsyncSessionManager } from '../../auth/SessionManager.js'
 
 const certifierPrivKey = new PrivateKey(21)
 const alicePrivKey = new PrivateKey(22)
@@ -52,7 +52,7 @@ class LocalTransport implements Transport {
   }
 }
 
-class AsyncSessionManager implements SessionManagerLike {
+class AsyncSessionStore implements AsyncSessionManager {
   private readonly sessions = new SessionManager()
 
   async addSession(session: PeerSession): Promise<void> {
@@ -321,8 +321,8 @@ describe('Peer class mutual authentication and certificate exchange', () => {
   }, 15000)
 
   it('supports asynchronous shared session managers', async () => {
-    alice = new Peer(walletA, transportA, undefined, new AsyncSessionManager())
-    bob = new Peer(walletB, transportB, undefined, new AsyncSessionManager())
+    alice = new Peer(walletA, transportA, undefined, new AsyncSessionStore())
+    bob = new Peer(walletB, transportB, undefined, new AsyncSessionStore())
 
     const bobReceivedGeneralMessage = waitForNextGeneralMessage(bob)
     const aliceReceivedGeneralMessage = waitForNextGeneralMessage(alice)
@@ -1205,8 +1205,8 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       // Now spy on bob's sessionManager.getSession to return session without sessionNonce
       // This simulates a corrupted session state
       const originalGetSession = bob.sessionManager.getSession.bind(bob.sessionManager)
-      jest.spyOn(bob.sessionManager, 'getSession').mockImplementation(async (nonce: string) => {
-        const session = await originalGetSession(nonce)
+      jest.spyOn(bob.sessionManager, 'getSession').mockImplementation((nonce: string) => {
+        const session = originalGetSession(nonce)
         if (session != null) {
           // Return a session with undefined sessionNonce but requiring certificates
           return {

@@ -1,28 +1,32 @@
 import { PeerSession } from './types.js'
 
-export type MaybePromise<T> = T | Promise<T>
-
 /**
- * Pluggable session manager contract used by Peer.
+ * Opt-in async session-manager contract for horizontally scaled deployments.
  *
- * Implementations may be in-memory and synchronous, or backed by a shared
- * service such as Redis, SQL, or another durable store. This lets horizontally
- * scaled HTTP servers share BRC-103 nonce/session state instead of depending on
- * load-balancer stickiness for every step of the authentication handshake.
+ * The default in-process {@link SessionManager} stores BRC-103 nonce/session
+ * state in memory and is synchronous. Multi-instance HTTP servers that need
+ * every instance to resolve the same handshake state — e.g. behind a load
+ * balancer without sticky routing — can implement `AsyncSessionManager`
+ * against a shared store such as Redis or SQL and pass it to {@link Peer}
+ * or `createAuthMiddleware` instead.
+ *
+ * {@link Peer} accepts `SessionManager | AsyncSessionManager` and awaits every
+ * call internally, so sync stores incur no extra latency while async stores
+ * work transparently.
  */
-export interface SessionManagerLike {
-  addSession: (session: PeerSession) => MaybePromise<void>
-  updateSession: (session: PeerSession) => MaybePromise<void>
-  getSession: (identifier: string) => MaybePromise<PeerSession | undefined>
-  removeSession: (session: PeerSession) => MaybePromise<void>
-  hasSession: (identifier: string) => MaybePromise<boolean>
+export interface AsyncSessionManager {
+  addSession: (session: PeerSession) => Promise<void>
+  updateSession: (session: PeerSession) => Promise<void>
+  getSession: (identifier: string) => Promise<PeerSession | undefined>
+  removeSession: (session: PeerSession) => Promise<void>
+  hasSession: (identifier: string) => Promise<boolean>
 }
 
 /**
  * Manages sessions for peers, allowing multiple concurrent sessions
  * per identity key. Primary lookup is always by `sessionNonce`.
  */
-export class SessionManager implements SessionManagerLike {
+export class SessionManager {
   /**
    * Maps sessionNonce -> PeerSession
    */

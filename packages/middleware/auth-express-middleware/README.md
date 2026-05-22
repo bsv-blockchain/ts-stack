@@ -53,7 +53,7 @@ By layering **BRC-103** on top of Express, you can:
   Supports BRC-103’s concept of revealing only certain fields in a certificate, helping to preserve privacy for you and your users while verifying necessary information.
 
 - **Extendable**  
-  Provide a custom `SessionManagerLike`, including asynchronous shared stores, or plug in advanced logic for verifying user attributes.
+  Provide a custom `AsyncSessionManager`, including asynchronous shared stores, or plug in advanced logic for verifying user attributes.
 
 ---
 
@@ -123,7 +123,7 @@ Use the factory function:
 createAuthMiddleware({
   wallet: myWallet, 
   allowUnauthenticated?: boolean,
-  sessionManager?: SessionManagerLike,
+  sessionManager?: AsyncSessionManager,
   certificatesToRequest?: RequestedCertificateSet,
   onCertificatesReceived?: (senderPublicKey, certs, req, res, next) => void
 })
@@ -133,16 +133,16 @@ createAuthMiddleware({
 
 - **`wallet`** *(required)*: A wallet instance that implements signing and key management, typically from `@bsv/sdk` or your own custom build.  
 - **`allowUnauthenticated`** *(default: `false`)*: If `true`, requests without valid BRC-103 authentication will **not** be rejected. Instead, `req.auth.identityKey` is set to `"unknown"`.  
-- **`sessionManager`** *(optional)*: Customize session management (nonce tracking, etc.). By default, an internal `SessionManager` is used. For horizontally scaled servers, pass a `SessionManagerLike` backed by shared storage so every instance can resolve the same nonce/session state.
+- **`sessionManager`** *(optional)*: Customize session management (nonce tracking, etc.). By default, an internal `SessionManager` is used. For horizontally scaled servers, pass a `AsyncSessionManager` backed by shared storage so every instance can resolve the same nonce/session state.
 - **`certificatesToRequest`** *(optional)*: A specification of which certificates (by type, fields, issuer) to request automatically from the peer.  
 - **`onCertificatesReceived`** *(optional)*: Callback invoked when the peer responds with **Verifiable Certificates**.
 
 ### Horizontal Scaling
 
-The default `SessionManager` stores handshake state in memory. That is appropriate for one process, but a load-balanced deployment can route the initial nonce exchange, certificate request, and general message to different server instances. In that topology, provide a `SessionManagerLike` backed by shared storage so nonce lookups are available to every instance:
+The default `SessionManager` stores handshake state in memory. That is appropriate for one process, but a load-balanced deployment can route the initial nonce exchange, certificate request, and general message to different server instances. In that topology, provide a `AsyncSessionManager` backed by shared storage so nonce lookups are available to every instance:
 
 ```ts
-import { PeerSession, SessionManagerLike } from '@bsv/sdk'
+import { PeerSession, AsyncSessionManager } from '@bsv/sdk'
 
 async function getSharedSession(identifier: string): Promise<PeerSession | undefined> {
   const session = await store.get(`auth:nonce:${identifier}`)
@@ -152,7 +152,7 @@ async function getSharedSession(identifier: string): Promise<PeerSession | undef
   return nonce == null ? undefined : await store.get(`auth:nonce:${nonce}`)
 }
 
-const sessionManager: SessionManagerLike = {
+const sessionManager: AsyncSessionManager = {
   async addSession(session: PeerSession) {
     await store.set(`auth:nonce:${session.sessionNonce}`, session)
     await store.set(`auth:identity:${session.peerIdentityKey}`, session.sessionNonce)
@@ -239,7 +239,7 @@ If `allowUnauthenticated` is **false**, any request without a valid handshake or
 Returns an Express middleware function. **Options**:
 
 - **`wallet`**: (required) A BRC-100 object implementing your signing and verification logic.  
-- **`sessionManager`**: (optional) Manage nonces & state across requests. Supports synchronous or asynchronous `SessionManagerLike` implementations.
+- **`sessionManager`**: (optional) Manage nonces & state across requests. Supports synchronous or asynchronous `AsyncSessionManager` implementations.
 - **`allowUnauthenticated`**: (optional) If true, non-authenticated requests are allowed but marked as `identityKey: 'unknown'`.  
 - **`certificatesToRequest`**: (optional) Automatic certificate request data structure.  
 - **`onCertificatesReceived`**: (optional) A callback triggered when certs arrive from the client.
