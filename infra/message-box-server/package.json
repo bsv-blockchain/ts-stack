@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.5",
+  "version": "1.1.6",
   "main": "./out/src/index.js",
   "type": "module",
   "scripts": {
@@ -64,8 +64,8 @@
     "@bsv/auth-express-middleware": "^2.0.5",
     "@bsv/authsocket": "^2.0.1",
     "@bsv/payment-express-middleware": "^2.0.2",
-    "@bsv/sdk": "^2.0.14",
-    "@bsv/wallet-toolbox": "^2.1.22",
+    "@bsv/sdk": "^2.1.2",
+    "@bsv/wallet-toolbox": "^2.1.27",
     "body-parser": "^1.20.3",
     "dotenv": "^8.6.0",
     "express": "^4.21.2",

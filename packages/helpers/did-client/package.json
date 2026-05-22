@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@bsv/sdk": "^2.1.2",
-    "@bsv/wallet-toolbox-client": "^2.1.27"
+    "@bsv/wallet-toolbox-client": "^2.1.28"
   },
   "repository": {
     "type": "git",
