@@ -146,11 +146,12 @@ function normalizeLookupError (err: unknown, timedOut: boolean): Error {
  * back to the default `'[object Object]'` for plain objects.
  */
 function stringifyErrorValue (value: unknown): string {
-  if (value === null || value === undefined) return String(value)
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
   if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
-    return String(value)
-  }
+  if (typeof value === 'number') return value.toString()
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'bigint') return value.toString()
   const message = (value as { message?: unknown }).message
   if (typeof message === 'string' && message.length > 0) return message
   try {
