@@ -90,11 +90,40 @@ const INFRA_DIR = resolve(ROOT, 'infra')
 let infraDepChanges = 0
 let infraBumps = 0
 
+// Plain-string parse of a semver-shaped `MAJOR.MINOR.PATCH[suffix]`. Avoids a
+// regex so we can't accidentally hit catastrophic backtracking (and don't trip
+// SonarCloud's typescript:S5852 "super-linear regex" rule) on a degenerate
+// version string. Linear scan, capped length.
+const isAsciiDigit = (code) => code >= 48 && code <= 57
+const allDigits = (s) => {
+  if (s.length === 0) return false
+  for (let i = 0; i < s.length; i++) {
+    if (!isAsciiDigit(s.charCodeAt(i))) return false
+  }
+  return true
+}
 const bumpPatch = (version) => {
-  const m = /^(\d+)\.(\d+)\.(\d+)(.*)$/.exec(version)
-  if (!m) return null
-  const [, major, minor, patch, rest] = m
-  return `${major}.${minor}.${Number(patch) + 1}${rest}`
+  if (typeof version !== 'string' || version.length === 0 || version.length > 64) return null
+
+  const dot1 = version.indexOf('.')
+  if (dot1 < 1) return null
+  const dot2 = version.indexOf('.', dot1 + 1)
+  if (dot2 < dot1 + 2) return null
+
+  const major = version.slice(0, dot1)
+  const minor = version.slice(dot1 + 1, dot2)
+  if (!allDigits(major) || !allDigits(minor)) return null
+
+  const tail = version.slice(dot2 + 1)
+  let patchEnd = 0
+  while (patchEnd < tail.length && isAsciiDigit(tail.charCodeAt(patchEnd))) {
+    patchEnd++
+  }
+  if (patchEnd === 0) return null
+
+  const patch = Number(tail.slice(0, patchEnd))
+  const suffix = tail.slice(patchEnd)
+  return `${major}.${minor}.${patch + 1}${suffix}`
 }
 
 if (existsSync(INFRA_DIR)) {
