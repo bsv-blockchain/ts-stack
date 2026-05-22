@@ -748,7 +748,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   async relinquishOutput (auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
     const vargs = Validation.validateRelinquishOutputArgs(args)
     const { txid, vout } = Validation.parseWalletOutpoint(vargs.output)
-    const output = verifyOne(await this.findOutputs({ partial: { txid, vout } }))
+    const output = verifyOne(
+      await this.findOutputs({ partial: { userId: auth.userId, txid, vout } })
+    )
     return await this.updateOutput(output.outputId, { basketId: undefined })
   }
 
