@@ -171,7 +171,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml 'packages/**/package.json'
+          git add pnpm-lock.yaml 'packages/**/package.json' 'infra/**/package.json'
           git commit -m "chore: sync published workspace versions"
           git push --force-with-lease origin "HEAD:$SYNC_BRANCH"
 

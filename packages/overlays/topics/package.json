@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Canonical BSV overlay topic managers and lookup services",
   "type": "module",
   "main": "./dist/index.js",
@@ -43,5 +43,12 @@
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics#readme",
+  "keywords": [
+    "bsv",
+    "overlay",
+    "topic-manager",
+    "lookup-service",
+    "blockchain"
+  ]
 }
