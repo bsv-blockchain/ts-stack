@@ -1,4 +1,4 @@
-import { Transaction as BsvTransaction, TransactionInput } from '@bsv/sdk'
+import { Transaction as BsvTransaction } from '@bsv/sdk'
 import { _tu } from '../utils/TestUtilsWalletStorage'
 import { StorageProvider } from '../../src/index.all'
 import {
@@ -6,6 +6,18 @@ import {
   restoreInputsToSpendable,
   SpentInputTransition
 } from '../../src/storage/methods/internalizeAction'
+
+function buildTxConsuming (
+  outpoints: Array<{ txid: string, vout: number }>
+): BsvTransaction {
+  const tx = new BsvTransaction()
+  tx.inputs = outpoints.map(o => ({
+    sourceTXID: o.txid,
+    sourceOutputIndex: o.vout,
+    sequence: 0xffffffff
+  }))
+  return tx
+}
 
 /**
  * Storage-level coverage for the new spent-input bookkeeping inside
@@ -38,18 +50,6 @@ describe('internalizeAction spent-input bookkeeping', () => {
   afterEach(async () => {
     await storage.destroy()
   })
-
-  function buildTxConsuming (
-    outpoints: Array<{ txid: string, vout: number }>
-  ): BsvTransaction {
-    const tx = new BsvTransaction()
-    tx.inputs = outpoints.map(o => ({
-      sourceTXID: o.txid,
-      sourceOutputIndex: o.vout,
-      sequence: 0xffffffff
-    })) as unknown as TransactionInput[]
-    return tx
-  }
 
   test('marks a spendable user output as spent with spentBy=transactionId', async () => {
     const user = await _tu.insertTestUser(storage)
@@ -290,7 +290,7 @@ describe('internalizeAction spent-input bookkeeping', () => {
     const tx = new BsvTransaction()
     tx.inputs = [
       { sourceTXID: undefined, sourceOutputIndex: 0, sequence: 0xffffffff }
-    ] as unknown as TransactionInput[]
+    ]
 
     const transitioned = await markUserInputsSpent(
       storage,
