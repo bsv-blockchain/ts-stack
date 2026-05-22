@@ -105,6 +105,73 @@ export const DEFAULT_TESTNET_SLAP_TRACKERS: string[] = [
 
 const MAX_TRACKER_WAIT_TIME = 5000
 
+/** A wall-clock deadline that rejects after `timeoutMs`, optionally aborting a controller. */
+interface Deadline {
+  /** Rejects with `Error('Request timed out')` once the timer fires. */
+  promise: Promise<never>
+  /** Clears the underlying timer. Safe to call after the timer has already fired. */
+  cancel: () => void
+  /** Returns true once the timer has fired. */
+  didTimeOut: () => boolean
+}
+
+function createDeadline (timeoutMs: number, controller?: AbortController): Deadline {
+  let expired = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const promise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      expired = true
+      try { controller?.abort() } catch { /* noop */ }
+      reject(new Error('Request timed out'))
+    }, timeoutMs)
+  })
+  return {
+    promise,
+    cancel: () => {
+      if (timer !== null) clearTimeout(timer)
+    },
+    didTimeOut: () => expired
+  }
+}
+
+function normalizeLookupError (err: unknown, timedOut: boolean): Error {
+  if (timedOut) return new Error('Request timed out')
+  if ((err as { name?: string })?.name === 'AbortError') return new Error('Request timed out')
+  if (err instanceof Error) return err
+  return new Error(stringifyErrorValue(err))
+}
+
+/**
+ * Coerce a non-Error thrown value to a human-readable string without falling
+ * back to the default `'[object Object]'` for plain objects.
+ */
+function stringifyErrorValue (value: unknown): string {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number') return value.toString()
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (typeof value === 'bigint') return value.toString()
+  const message = (value as { message?: unknown }).message
+  if (typeof message === 'string' && message.length > 0) return message
+  try {
+    return JSON.stringify(value) ?? 'Unknown error'
+  } catch {
+    return 'Unknown error'
+  }
+}
+
+/**
+ * Returns true when the given Content-Type header value represents
+ * `application/octet-stream`, ignoring case and any media-type parameters
+ * (e.g. `; charset=utf-8`).
+ */
+function isOctetStream (contentType: string | null): boolean {
+  if (typeof contentType !== 'string') return false
+  const baseType = contentType.split(';', 1)[0].trim().toLowerCase()
+  return baseType === 'application/octet-stream'
+}
+
 /** Internal cache options. Kept optional to preserve drop-in compatibility. */
 interface CacheOptions {
   /** How long (ms) a hosts entry is considered fresh. Default 5 minutes. */
@@ -181,36 +248,46 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     }
 
     const controller = typeof AbortController === 'undefined' ? undefined : new AbortController()
-    const timer = setTimeout(() => {
-      try { controller?.abort() } catch { /* noop */ }
-    }, timeout)
+    const deadline = createDeadline(timeout, controller)
+
+    // Hard wall-clock deadline: in some environments (e.g. browser/Electron CORS
+    // failures) the underlying fetch can stall without ever settling, and the
+    // AbortController signal alone is insufficient to make the returned promise
+    // resolve or reject. Race the fetch against a setTimeout-backed reject so
+    // the consumer-facing promise always settles within `timeout` ms.
+    const fetchPromise = this.performLookupRequest(url, question, controller?.signal)
+    // Swallow background rejection if the deadline wins first.
+    fetchPromise.catch(() => { /* noop */ })
 
     try {
-      const fco: RequestInit = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Aggregation': 'yes'
-        },
-        body: JSON.stringify({ service: question.service, query: question.query }),
-        signal: controller?.signal
-      }
-      const response: Response = await this.fetchClient(`${url}/lookup`, fco)
-
-      if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
-      if (response.headers.get('content-type') === 'application/octet-stream') {
-        return await this.parseOctetStreamLookup(response)
-      }
-      return await response.json()
+      return await Promise.race([fetchPromise, deadline.promise])
     } catch (e) {
-      // Normalize timeouts to a consistent error message
-      if ((e as { name?: string })?.name === 'AbortError') {
-        throw new Error('Request timed out')
-      }
-      throw e
+      throw normalizeLookupError(e, deadline.didTimeOut())
     } finally {
-      clearTimeout(timer)
+      deadline.cancel()
     }
+  }
+
+  private async performLookupRequest (
+    url: string,
+    question: LookupQuestion,
+    signal: AbortSignal | undefined
+  ): Promise<LookupAnswer> {
+    const fco: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Aggregation': 'yes'
+      },
+      body: JSON.stringify({ service: question.service, query: question.query }),
+      signal
+    }
+    const response: Response = await this.fetchClient(`${url}/lookup`, fco)
+    if (!response.ok) throw new Error(`Failed to facilitate lookup (HTTP ${response.status})`)
+    if (isOctetStream(response.headers.get('content-type'))) {
+      return await this.parseOctetStreamLookup(response)
+    }
+    return await response.json()
   }
 
   /** Parse the aggregated octet-stream lookup response into an output-list LookupAnswer. */
