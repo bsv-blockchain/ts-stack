@@ -310,7 +310,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       // chain-confirmed txs while offline; the audit trail makes it
       // recoverable.
       let serviceUnreachable = false
-      if (tx.txid && tx.status === 'nosend') {
+      if (tx.txid != null && tx.txid !== '' && tx.status === 'nosend') {
         const services = this.getServices()
         let chainStatus: 'mined' | 'known' | 'unknown' | undefined
         try {
