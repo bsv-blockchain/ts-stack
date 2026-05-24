@@ -74,13 +74,13 @@ Implementations: `@bsv/paymail`, `@bsv/message-box-client`, `@bsv/402-pay`
 
 Conformance vectors: `conformance/vectors/wallet/brc29/`
 
-### BRC-31: HTTP Mutual Authentication Handshake
+### BRC-103 / BRC-104: Mutual Authentication Handshake + HTTP Transport
 
-Specifies the `x-bsv-auth-*` HTTP headers that implement mutual-auth challenge-response over standard HTTP. Built on the BRC-103 Peer framework.
+BRC-103 specifies the peer-to-peer mutual authentication protocol (AuthMessage envelope, nonces, certificates, sessions). BRC-104 binds it to HTTP via the `/.well-known/auth` endpoint and `x-bsv-auth-*` headers. Replaces the legacy BRC-31 identifier.
 
-Implementations: `@bsv/auth-express-middleware`, `@bsv/authsocket`
+Implementations: `@bsv/auth-express-middleware`, `@bsv/authsocket`, `@bsv/sdk` (`Peer`, `Transport`)
 
-Spec: `specs/auth/brc31-handshake.yaml`
+Spec: `specs/auth/brc103-mutual-auth.yaml`
 
 ### BRC-42: Key Derivation Scheme (BKDS)
 

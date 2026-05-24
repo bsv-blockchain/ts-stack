@@ -186,4 +186,4 @@ BRC-31-related portable coverage currently lives in `conformance/vectors/messagi
 
 ## Spec artifact
 
-[brc31-handshake.yaml](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/auth/brc31-handshake.yaml)
+[brc103-mutual-auth.yaml](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/auth/brc103-mutual-auth.yaml)
