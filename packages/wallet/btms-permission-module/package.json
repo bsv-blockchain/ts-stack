@@ -24,13 +24,13 @@
   "author": "BSV Blockchain Association",
   "license": "Open BSV",
   "peerDependencies": {
-    "@bsv/btms": "^1.0.1",
-    "@bsv/sdk": "^2.1.2",
+    "@bsv/btms": "^1.0.2",
+    "@bsv/sdk": "^2.1.3",
     "@bsv/wallet-toolbox-client": "^2.1.28"
   },
   "devDependencies": {
-    "@bsv/btms": "^1.0.1",
-    "@bsv/sdk": "^2.1.2",
+    "@bsv/btms": "^1.0.2",
+    "@bsv/sdk": "^2.1.3",
     "@bsv/wallet-toolbox-client": "^2.1.28",
     "@types/node": "^25.6.0",
     "typescript": "^5.2.2"
