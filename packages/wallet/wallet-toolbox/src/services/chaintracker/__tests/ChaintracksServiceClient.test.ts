@@ -3,6 +3,38 @@ import { ChaintracksServiceClient } from '../chaintracks/index.client'
 
 const includeTestChaintracks = false
 
+// Fixtures captured from a healthy chaintracks endpoint
+// (e.g. https://chaintracks-us-1.bsvb.tech/findHeaderHexForHeight?height=877595).
+// We mock fetch so these tests are independent of the live service.
+const HEADER_877595 = {
+  version: 671088640,
+  previousHash: '00000000000000000337ee607330d9167ae4e0f94d48375c8aab3e88aab9b1f4',
+  merkleRoot: 'fba13592ecc6a703d7148378b01f884457bcb81bbdaebee06f9ada204e6cece2',
+  time: 1735680482,
+  bits: 403546957,
+  nonce: 293027114,
+  height: 877595,
+  hash: '00000000000000000b010edee7422c59ec9131742e35f3e0d5837d710b961406'
+}
+
+const realFetch = global.fetch
+beforeAll(() => {
+  global.fetch = jest.fn(async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('chaintracks.babbage.systems/findHeaderHexForHeight')) {
+      const height = Number(new URL(url).searchParams.get('height'))
+      if (height === 877595) {
+        return jsonResponse({ status: 'success', value: HEADER_877595 })
+      }
+      return jsonResponse({ status: 'success' })
+    }
+    return realFetch(input, init)
+  }) as any
+})
+afterAll(() => {
+  global.fetch = realFetch
+})
+
 describe('ChaintracksServiceClient tests', () => {
   jest.setTimeout(99999999)
 
@@ -26,4 +58,8 @@ function makeClient (chain: sdk.Chain) {
   // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
   const chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
   return new ChaintracksServiceClient(chain, chaintracksUrl)
+}
+
+function jsonResponse (body: unknown): any {
+  return { ok: true, status: 200, json: async () => body }
 }

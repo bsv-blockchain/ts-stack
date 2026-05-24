@@ -3,6 +3,41 @@ import { Services } from '../Services'
 import { _tu, logger } from '../../../test/utils/TestUtilsWalletStorage'
 import { verifyTruthy } from '../../utility/utilityHelpers'
 
+// Header fixture captured from a healthy chaintracks endpoint
+// (https://chaintracks-us-1.bsvb.tech/findHeaderHexForHeight?height=885628). This is the
+// block referenced by the bump in the BEEF used below.
+const HEADER_885628 = {
+  version: 905969664,
+  previousHash: '000000000000000001c3ac10f47a28e6ddb3b5f3c38fef480a7b5fb70fcf5e3e',
+  merkleRoot: 'bbd1033be8d1afcf37eeaafeed649d32e31da27c04cd0411729ec8d1ca434a39',
+  time: 1740526241,
+  bits: 403623859,
+  nonce: 550614619,
+  height: 885628,
+  hash: '00000000000000000e3b28296c665942ad8c611c6d4a84f19b35f090df4ec56e'
+}
+
+const realFetch = global.fetch
+beforeAll(() => {
+  global.fetch = jest.fn(async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
+      return jsonResponse({ status: 'success', value: 950000 })
+    }
+    if (url.includes('chaintracks.babbage.systems/findHeaderHexForHeight')) {
+      const height = Number(new URL(url).searchParams.get('height'))
+      if (height === 885628) {
+        return jsonResponse({ status: 'success', value: HEADER_885628 })
+      }
+      return jsonResponse({ status: 'success' })
+    }
+    return realFetch(input, init)
+  }) as any
+})
+afterAll(() => {
+  global.fetch = realFetch
+})
+
 describe('verifyBeef tests', () => {
   jest.setTimeout(99999999)
 
@@ -48,3 +83,7 @@ describe('verifyBeef tests', () => {
     logger(beef.bumps[0].computeRoot('e47df21819ed320a78392e62e963ddd77143c3c52ad5255a07ff55ba507df71d'))
   })
 })
+
+function jsonResponse (body: unknown): any {
+  return { ok: true, status: 200, json: async () => body }
+}
