@@ -1,6 +1,6 @@
 {
   "name": "@bsv/simple",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Simplified, modular helper library for BSV blockchain development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

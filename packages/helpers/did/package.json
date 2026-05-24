@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SD-JWT VC and did:key helpers for BSV SDK identities",
   "publishConfig": {
     "access": "public"
