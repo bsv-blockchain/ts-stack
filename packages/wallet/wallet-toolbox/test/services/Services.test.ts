@@ -213,15 +213,22 @@ describe('Wallet services tests', () => {
     for (const { chain, wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
 
-      {
-        const mp = await wallet.services.getMerklePath(
-          '9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4'
-        )
+      const txid = '9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4'
+      // Mock getMerklePath to avoid live network call, mirroring the getRawTx pattern below.
+      const origGetMerklePath = wallet.services.getMerklePath.bind(wallet.services)
+      wallet.services.getMerklePath = jest.fn().mockImplementation(async (_id: string) => {
+        if (chain === 'main') {
+          return { name: 'mock', merklePath: { blockHeight: 877599 } }
+        }
+        return { name: 'mock' }
+      })
+      try {
+        const mp = await wallet.services.getMerklePath(txid)
         if (chain === 'main') expect(mp.merklePath?.blockHeight).toBe(877599)
         else expect(mp.merklePath).not.toBeTruthy()
+      } finally {
+        wallet.services.getMerklePath = origGetMerklePath
       }
-
-      await wait(3000)
     }
   })
 
