@@ -7,7 +7,7 @@ import { OriginatorDomainNameStringUnder250Bytes, WalletInterface } from '../../
 import { createNonce } from '../utils/createNonce.js'
 import { Peer } from '../Peer.js'
 import { SimplifiedFetchTransport } from '../transports/SimplifiedFetchTransport.js'
-import { SessionManager } from '../SessionManager.js'
+import { SessionManager, AsyncSessionManager } from '../SessionManager.js'
 import { RequestedCertificateSet } from '../types.js'
 import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
@@ -79,10 +79,13 @@ export class AuthFetch {
   * @param wallet - The wallet instance for signing and authentication.
   * @param requestedCertificates - Optional set of certificates to request from peers.
   */
-  constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager, originator?: OriginatorDomainNameStringUnder250Bytes) {
+  constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes) {
     this.wallet = wallet
     this.requestedCertificates = requestedCertificates
-    this.sessionManager = sessionManager ?? new SessionManager()
+    // See `Peer.sessionManager`: field stays typed as the synchronous
+    // `SessionManager` for back-compat; if an `AsyncSessionManager` is
+    // injected, the underlying Peer awaits all calls internally.
+    this.sessionManager = (sessionManager ?? new SessionManager()) as SessionManager
     this.originator = originator
   }
 

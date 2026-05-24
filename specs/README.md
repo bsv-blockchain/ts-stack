@@ -40,7 +40,7 @@ specs/
     authsocket-asyncapi.yaml   — AsyncAPI 3.0 for AuthSocket WebSocket protocol (done)
 
   auth/
-    brc31-handshake.yaml       — AsyncAPI 3.0 for BRC-31 mutual auth handshake (done)
+    brc103-mutual-auth.yaml    — AsyncAPI 3.0 for BRC-103 mutual auth handshake / BRC-104 HTTP transport (done)
 
   payments/
     brc29-payment-protocol.yaml — AsyncAPI 3.0 for BRC-29 peer payment protocol (done)
@@ -72,7 +72,7 @@ specs/
 | `EXCEPTIONS.md` | Tracked gaps | Done | Unspecced boundaries with reasons |
 | `messaging/message-box-http.yaml` | OpenAPI 3.1 | Done | message-box-server REST (all 9 endpoints) |
 | `messaging/authsocket-asyncapi.yaml` | AsyncAPI 3.0 | Done | AuthSocket WebSocket protocol (all events) |
-| `auth/brc31-handshake.yaml` | AsyncAPI 3.0 | Done | BRC-31 mutual auth handshake (both phases) |
+| `auth/brc103-mutual-auth.yaml` | AsyncAPI 3.0 | Done | BRC-103 mutual auth handshake (both phases) / BRC-104 HTTP transport |
 | `payments/brc29-payment-protocol.yaml` | AsyncAPI 3.0 | Done | BRC-29 P2PKH peer payment (key derivation, BEEF message, internalizeAction remittance) |
 | `payments/brc121.yaml` | OpenAPI 3.1 | Done | BRC-121 HTTP 402 payment middleware (all 7 headers, 2-trip exchange, replay guards) |
 | `sync/gasp-asyncapi.yaml` | AsyncAPI 3.0 | Done | GASP cross-node sync protocol (initial exchange, graph walk, all message shapes) |
