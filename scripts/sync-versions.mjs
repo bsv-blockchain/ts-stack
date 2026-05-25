@@ -63,7 +63,17 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
       const ws = workspaceMap[dep]
       if (!ws) continue
       const target = `^${ws.version}`
-      if (range !== target && range !== 'workspace:*') {
+      // `workspace:^` is the canonical form for cross-workspace deps in this repo —
+      // publishes as `^X.Y.Z` so downstream installs dedupe. `workspace:*` publishes
+      // as an exact pin and causes duplicate-install bugs; rewrite it to `workspace:^`.
+      if (range === 'workspace:*') {
+        console.log(`  ${pkg.name}: ${dep} workspace:* → workspace:^`)
+        pkg[field][dep] = 'workspace:^'
+        changed = true
+        totalChanges++
+        continue
+      }
+      if (range !== target && range !== 'workspace:^') {
         console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
         pkg[field][dep] = target
         changed = true

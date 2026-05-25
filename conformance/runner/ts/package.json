@@ -6,7 +6,7 @@
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.mjs"
   },
   "devDependencies": {
-    "@bsv/sdk": "workspace:*",
+    "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.3.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",
