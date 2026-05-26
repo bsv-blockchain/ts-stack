@@ -8,16 +8,18 @@ const config: JestConfigWithTsJest = {
   testPathIgnorePatterns: ['dist/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transform: {
-    '^.+\\.ts?$': 'ts-jest'
+    '^.+\\.ts?$': ['ts-jest', {
+      useESM: true,
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'bundler',
+        isolatedModules: true
+      }
+    }]
   },
   testMatch: ['**/test/integration/**/*.test.ts'], // Only run integration tests
   verbose: true,
   setupFilesAfterEnv: ['./jest.setup.ts'], // Ensures the test server/db start correctly
-  globals: {
-    'ts-jest': {
-      isolatedModules: true
-    }
-  },
   testTimeout: 30000 // Longer timeout for integration tests
 }
 

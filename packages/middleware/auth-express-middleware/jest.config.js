@@ -11,7 +11,8 @@ export default {
     '^.+\\.ts$': ['ts-jest', {
       diagnostics: false,
       tsconfig: {
-        moduleResolution: 'node',
+        module: 'commonjs',
+        moduleResolution: 'bundler',
         strict: false,
         strictNullChecks: false,
         noImplicitAny: false

@@ -7,6 +7,14 @@ module.exports = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        module: 'commonjs',
+        moduleResolution: 'bundler'
+      }
+    }]
+  },
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/__tests__/**',

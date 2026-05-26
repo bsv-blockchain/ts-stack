@@ -1,6 +1,25 @@
 /* eslint-env jest */
-import { MessageBoxClient } from '../MessageBoxClient.js'
 import { WalletClient, AuthFetch, Transaction, LockingScript, PushDrop, TopicBroadcaster, Beef } from '@bsv/sdk'
+import { jest } from '@jest/globals'
+
+// MOCK: WebSocket behavior
+const socketOnMap: Record<string, (...args: any[]) => void> = {}
+
+const mockSocket = {
+  on: jest.fn((event, callback) => {
+    socketOnMap[event] = callback
+  }),
+  emit: jest.fn(),
+  disconnect: jest.fn(),
+  connected: true,
+  off: jest.fn()
+}
+
+jest.unstable_mockModule('@bsv/authsocket-client', () => ({
+  AuthSocketClient: jest.fn(() => mockSocket)
+}))
+
+const { MessageBoxClient } = await import('../MessageBoxClient.js')
 
 // MOCK: WalletClient methods globally
 jest.spyOn(WalletClient.prototype, 'createHmac').mockResolvedValue({
@@ -61,23 +80,6 @@ jest.spyOn(MessageBoxClient.prototype as any, 'queryAdvertisements')
 
 jest.spyOn(AuthFetch.prototype, 'fetch')
   .mockResolvedValue(defaultMockResponse as Response)
-
-// MOCK: WebSocket behavior
-const socketOnMap: Record<string, (...args: any[]) => void> = {}
-
-const mockSocket = {
-  on: jest.fn((event, callback) => {
-    socketOnMap[event] = callback
-  }),
-  emit: jest.fn(),
-  disconnect: jest.fn(),
-  connected: true,
-  off: jest.fn()
-}
-
-jest.mock('@bsv/authsocket-client', () => ({
-  AuthSocketClient: jest.fn(() => mockSocket)
-}))
 
 // Optional: Global WebSocket override (not strictly needed with AuthSocketClient)
 class MockWebSocket {

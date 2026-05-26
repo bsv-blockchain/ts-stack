@@ -14,7 +14,11 @@ const config: JestConfigWithTsJest = {
   // These globals configure ts-jest to output ESM
   globals: {
     'ts-jest': {
-      useESM: true
+      useESM: true,
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'bundler'
+      }
     }
   },
 

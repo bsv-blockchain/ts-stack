@@ -20,7 +20,15 @@ const getJestConfig = async (): Promise<Config> => {
     testMatch: ['**/?(*.)+(test).[tj]s',"**/__test/**/*.test.ts"],
     // default []
     testRegex: [],
-    transform: { '^.+\\.ts$': ['ts-jest', { rootDir: '.' }] },
+    transform: {
+      '^.+\\.ts$': ['ts-jest', {
+        rootDir: '.',
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'bundler'
+        }
+      }]
+    },
     testTimeout: 30000,
   }
 }

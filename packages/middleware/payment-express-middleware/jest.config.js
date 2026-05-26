@@ -2,5 +2,13 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testPathIgnorePatterns: ['dist/']
+  testPathIgnorePatterns: ['dist/'],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        module: 'commonjs',
+        moduleResolution: 'bundler'
+      }
+    }]
+  }
 }

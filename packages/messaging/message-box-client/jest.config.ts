@@ -14,10 +14,20 @@ const config: JestConfigWithTsJest = {
     '/node_modules/',
     './src/__tests/integration/'
   ],
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
 
   // Keep ts-jest options in transform to avoid deprecated globals config
   transform: {
-    '^.+\\.ts$': ['ts-jest', { useESM: true, isolatedModules: true }]
+    '^.+\\.ts$': ['ts-jest', {
+      useESM: true,
+      tsconfig: {
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        esModuleInterop: true,
+        isolatedModules: true,
+        strictNullChecks: true
+      }
+    }]
   },
 
   // Tell Jest that files ending in .ts should be treated as ESM modules

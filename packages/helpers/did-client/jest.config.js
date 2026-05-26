@@ -10,7 +10,11 @@ export default {
   testPathIgnorePatterns: ['dist/'],
   transform: {
       '^.+\\.test.ts?$': ['ts-jest', { 
-        useESM: true
+        useESM: true,
+        tsconfig: {
+          module: 'ESNext',
+          moduleResolution: 'bundler'
+        }
       }],
   },
 

@@ -7,7 +7,13 @@ export default {
     setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
     extensionsToTreatAsEsm: ['.ts'],
     transform: {
-        '^.+\\.ts$': ['ts-jest', { useESM: true }]
+        '^.+\\.ts$': ['ts-jest', {
+            useESM: true,
+            tsconfig: {
+                module: 'ESNext',
+                moduleResolution: 'bundler'
+            }
+        }]
     },
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1'

@@ -15,7 +15,7 @@ export default {
           lib: ['dom', 'ESNext'],
           target: 'esnext',
           module: 'ESNext',
-          moduleResolution: 'node',
+          moduleResolution: 'bundler',
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
           strict: true,
