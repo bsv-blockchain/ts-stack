@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "node",
@@ -14,7 +15,8 @@
     "skipLibCheck": true,
     "strict": true,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["node"]
   },
   "include": [
     "src/**/*"

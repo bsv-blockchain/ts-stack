@@ -96,6 +96,9 @@ export class WalletAdvertiser implements Advertiser {
       description: 'SHIP/SLAP Advertisement Issuance'
     })
 
+    if (tx.tx === undefined) {
+      throw new Error('createAction did not return a transaction')
+    }
     const beef = Transaction.fromAtomicBEEF(tx.tx).toBEEF()
 
     return {
@@ -196,6 +199,9 @@ export class WalletAdvertiser implements Advertiser {
       description: 'Revoke SHIP/SLAP advertisements'
     })
 
+    if (revokePartial.signableTransaction === undefined) {
+      throw new Error('createAction did not return a signable transaction')
+    }
     const signableTx = Transaction.fromAtomicBEEF(revokePartial.signableTransaction.tx)
     const spends: Record<number, SignActionSpend> = {}
     const pushdrop = new PushDrop(this.wallet)
@@ -217,6 +223,9 @@ export class WalletAdvertiser implements Advertiser {
       reference: revokePartial.signableTransaction.reference
     })
 
+    if (revokeTx.tx === undefined) {
+      throw new Error('signAction did not return a transaction')
+    }
     return {
       beef: Transaction.fromAtomicBEEF(revokeTx.tx).toBEEF(),
       topics: [...new Set(advertisements.map(ad => ad.protocol === 'SHIP' ? 'tm_ship' : 'tm_slap'))]

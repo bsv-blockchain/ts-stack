@@ -1,6 +1,8 @@
 {
   "files": [],
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "types": ["jest"],
     "esModuleInterop": true,
     "module": "ESNext"
   },

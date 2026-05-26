@@ -1,7 +1,15 @@
 {
     "files": [],
     "compilerOptions": {
-        "esModuleInterop": true
+        "ignoreDeprecations": "6.0",
+        "types": ["jest", "node"],
+        "esModuleInterop": true,
+        "noImplicitAny": false,
+        "allowJs": true,
+        "isolatedModules": true,
+        "lib": ["es2022", "dom"],
+        "target": "es2022",
+        "rootDir": "."
     },
     "references": [
         {
