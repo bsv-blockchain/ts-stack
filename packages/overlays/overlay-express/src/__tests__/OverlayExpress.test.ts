@@ -941,7 +941,7 @@ describe('OverlayExpress', () => {
         revokeAdvertisements: jest.fn(),
         parseAdvertisement: jest.fn()
       }
-      instance.engine.advertiser = mockAdvertiser
+      instance.engine!.advertiser = mockAdvertiser
 
       jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
         callback()

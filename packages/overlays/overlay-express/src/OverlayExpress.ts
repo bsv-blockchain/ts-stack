@@ -1351,7 +1351,7 @@ export default class OverlayExpress {
      */
     const checkAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
       // Method 1: BSV mutual authentication (identity key match)
-      const authReq = req as AuthRequest
+      const authReq = req as unknown as AuthRequest
       if (
         typeof this.adminIdentityKey === 'string' &&
         authReq.auth !== undefined &&

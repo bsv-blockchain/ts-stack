@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "target": "es2019",
      "jsx": "react-jsx",
     "module": "ESNext",
@@ -16,7 +17,8 @@
     "declarationMap": true,
     "rootDir": ".",
     "composite": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "types": ["jest", "node"]
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "jest.config.ts"],

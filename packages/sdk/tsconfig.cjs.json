@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "target": "es2020",
     "module": "commonjs",
     "moduleResolution": "node",

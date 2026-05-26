@@ -1,7 +1,13 @@
 {
   "files": [],
   "compilerOptions": {
-    "esModuleInterop": true
+    "ignoreDeprecations": "6.0",
+    "types": ["jest", "node"],
+    "esModuleInterop": true,
+    "noImplicitAny": false,
+    "allowJs": true,
+    "isolatedModules": true,
+    "rootDir": "./src"
   },
   "references": [
     {
