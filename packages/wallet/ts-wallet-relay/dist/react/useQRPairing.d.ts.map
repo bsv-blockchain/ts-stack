@@ -1,0 +1,1 @@
+{"version":3,"file":"useQRPairing.d.ts","sourceRoot":"","sources":["../../src/react/useQRPairing.ts"],"names":[],"mappings":"AAEA;;;;;;;;;;;;GAYG;AACH,wBAAgB,YAAY,CAC1B,UAAU,EAAE,MAAM,EAClB,OAAO,CAAC,EAAE;IACR,oEAAoE;IACpE,OAAO,CAAC,EAAE,CAAC,GAAG,EAAE,MAAM,KAAK,IAAI,CAAA;CAChC,GACA;IAAE,IAAI,EAAE,MAAM,IAAI,CAAC;IAAC,UAAU,EAAE,MAAM,CAAA;CAAE,CAU1C"}

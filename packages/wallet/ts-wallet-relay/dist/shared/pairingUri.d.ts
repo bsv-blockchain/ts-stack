@@ -1,8 +1,6 @@
-import { e as ParseResult, d as PairingParams, c as WalletLike } from './types-BIOdtOVN.cjs';
-import { WalletProtocol } from '@bsv/sdk';
-
+import type { PairingParams, ParseResult } from '../types.js';
 /** Default accepted URI schemes for parsePairingUri. */
-declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
+export declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
 /**
  * Parse and validate a bsv-browser://pair?… QR code URI.
  *
@@ -23,7 +21,7 @@ declare const DEFAULT_ACCEPTED_SCHEMAS: ReadonlySet<string>;
  *   Defaults to `DEFAULT_ACCEPTED_SCHEMAS`. Pass your own set to support custom deep-link
  *   schemes used by third-party wallet apps.
  */
-declare function parsePairingUri(raw: string, acceptedSchemas?: ReadonlySet<string>): ParseResult;
+export declare function parsePairingUri(raw: string, acceptedSchemas?: ReadonlySet<string>): ParseResult;
 /**
  * Build a bsv-browser://pair?… URI from session parameters.
  * `pairingTtlMs` controls how long the QR code is valid (default 120 s).
@@ -33,7 +31,7 @@ declare function parsePairingUri(raw: string, acceptedSchemas?: ReadonlySet<stri
  * Note: the relay URL is intentionally omitted. The mobile fetches it at
  * connect-time from the origin server — see WalletPairingSession.resolveRelay().
  */
-declare function buildPairingUri(params: {
+export declare function buildPairingUri(params: {
     sessionId: string;
     backendIdentityKey: string;
     protocolID: string;
@@ -54,27 +52,5 @@ declare function buildPairingUri(params: {
  * compatible with servers that have `signQrCodes: false`.
  * Returns `false` on any verification failure.
  */
-declare function verifyPairingSignature(params: PairingParams): Promise<boolean>;
-
-interface CryptoParams {
-    protocolID: WalletProtocol;
-    keyID: string;
-    counterparty: string;
-}
-/**
- * Encrypt a plaintext string and return a base64url ciphertext.
- * Works in Node.js, browsers, and React Native (no Buffer dependency).
- */
-declare function encryptEnvelope(wallet: WalletLike, params: CryptoParams, payload: string): Promise<string>;
-/**
- * Decrypt a base64url ciphertext and return the plaintext string.
- * Works in Node.js, browsers, and React Native (no Buffer dependency).
- */
-declare function decryptEnvelope(wallet: WalletLike, params: CryptoParams, ciphertextB64: string): Promise<string>;
-
-/** Convert a byte array to a base64url string using @bsv/sdk Utils. */
-declare function bytesToBase64url(bytes: number[]): string;
-/** Decode a base64url string to a byte array using @bsv/sdk Utils. */
-declare function base64urlToBytes(str: string): number[];
-
-export { type CryptoParams as C, DEFAULT_ACCEPTED_SCHEMAS as D, buildPairingUri as a, base64urlToBytes as b, bytesToBase64url as c, decryptEnvelope as d, encryptEnvelope as e, parsePairingUri as p, verifyPairingSignature as v };
+export declare function verifyPairingSignature(params: PairingParams): Promise<boolean>;
+//# sourceMappingURL=pairingUri.d.ts.map

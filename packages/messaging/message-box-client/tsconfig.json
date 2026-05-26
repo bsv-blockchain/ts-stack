@@ -3,8 +3,7 @@
   "compilerOptions": {
     "types": ["jest", "node"],
     "esModuleInterop": true,
-    "strictNullChecks": true,
-    "ignoreDeprecations": "6.0"
+    "strictNullChecks": true
   },
   "references": [
     {

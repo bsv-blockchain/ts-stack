@@ -1,7 +1,6 @@
-import { WalletInterface } from '@bsv/sdk';
-import { f as SessionInfo, h as RequestLogEntry, g as WalletMethodName, k as WalletResponse } from './types-BIOdtOVN.js';
-
-interface WalletRelayClientOptions {
+import type { WalletInterface } from '@bsv/sdk';
+import type { SessionInfo, WalletResponse, RequestLogEntry, WalletMethodName } from '../types.js';
+export interface WalletRelayClientOptions {
     /**
      * Base URL for the relay API. Can be the bare host (`http://localhost:3001`)
      * or include the `/api` prefix — `/api` is appended automatically if missing.
@@ -37,8 +36,8 @@ interface WalletRelayClientOptions {
     /** Called when an error occurs during session creation. */
     onError?: (error: string) => void;
 }
-type WalletRelayErrorCode = 'SESSION_NOT_CONNECTED' | 'REQUEST_TIMEOUT' | 'SESSION_DISCONNECTED' | 'INVALID_TOKEN' | 'NETWORK_ERROR';
-declare class WalletRelayError extends Error {
+export type WalletRelayErrorCode = 'SESSION_NOT_CONNECTED' | 'REQUEST_TIMEOUT' | 'SESSION_DISCONNECTED' | 'INVALID_TOKEN' | 'NETWORK_ERROR';
+export declare class WalletRelayError extends Error {
     readonly code: WalletRelayErrorCode;
     constructor(message: string, code: WalletRelayErrorCode);
 }
@@ -59,7 +58,7 @@ declare class WalletRelayError extends Error {
  * client.destroy()
  * ```
  */
-declare class WalletRelayClient {
+export declare class WalletRelayClient {
     private readonly _apiUrl;
     private readonly _pollInterval;
     private readonly _connectedPollInterval;
@@ -136,5 +135,4 @@ declare class WalletRelayClient {
     private _addLogEntry;
     private _resolveLogEntry;
 }
-
-export { WalletRelayClient as W, type WalletRelayClientOptions as a, WalletRelayError as b, type WalletRelayErrorCode as c };
+//# sourceMappingURL=WalletRelayClient.d.ts.map

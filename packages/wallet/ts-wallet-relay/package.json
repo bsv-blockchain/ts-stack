@@ -32,7 +32,7 @@
     "template"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "jest --config jest.config.cjs"

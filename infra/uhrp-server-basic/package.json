@@ -46,6 +46,6 @@
     "nodemon": "^2.0.19",
     "standard": "^16.0.4",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^6.0.3"
   }
 }

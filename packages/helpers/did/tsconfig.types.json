@@ -1,9 +1,7 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "rootDir": "./",
-    "baseUrl": "./",
     "outDir": "./dist/types",
     "emitDeclarationOnly": true,
     "declaration": true,

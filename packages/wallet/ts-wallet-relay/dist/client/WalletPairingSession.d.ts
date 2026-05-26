@@ -1,23 +1,18 @@
-import { g as WalletMethodName, c as WalletLike, d as PairingParams } from './types-BIOdtOVN.cjs';
-export { P as PROTOCOL_ID, e as ParseResult, h as RequestLogEntry, R as RpcRequest, b as RpcResponse, f as SessionInfo, a as SessionStatus, i as WALLET_METHOD_NAMES, j as WalletRequest, k as WalletResponse, W as WireEnvelope } from './types-BIOdtOVN.cjs';
-export { W as WalletRelayClient, a as WalletRelayClientOptions, b as WalletRelayError, c as WalletRelayErrorCode } from './WalletRelayClient-CqfjvQpH.cjs';
-export { C as CryptoParams, D as DEFAULT_ACCEPTED_SCHEMAS, b as base64urlToBytes, c as bytesToBase64url, d as decryptEnvelope, e as encryptEnvelope, p as parsePairingUri, v as verifyPairingSignature } from './encoding-B2hOFTFs.cjs';
-import '@bsv/sdk';
-
-type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
+import type { WalletLike, PairingParams, WalletMethodName } from '../types.js';
+export type PairingSessionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 /**
  * The wallet methods implemented by the BSV Browser mobile app.
  * Used as the default for `WalletPairingSessionOptions.implementedMethods`.
  */
-declare const DEFAULT_IMPLEMENTED_METHODS: ReadonlySet<WalletMethodName>;
+export declare const DEFAULT_IMPLEMENTED_METHODS: ReadonlySet<WalletMethodName>;
 /**
  * Methods approved without user interaction by default.
  * Used as the default for `WalletPairingSessionOptions.autoApproveMethods`.
  */
-declare const DEFAULT_AUTO_APPROVE_METHODS: ReadonlySet<WalletMethodName>;
+export declare const DEFAULT_AUTO_APPROVE_METHODS: ReadonlySet<WalletMethodName>;
 /** Return a result or an error string — used for the onRequest handler. */
-type RequestHandler = (method: string, params: unknown) => Promise<unknown>;
-interface WalletPairingSessionOptions {
+export type RequestHandler = (method: string, params: unknown) => Promise<unknown>;
+export interface WalletPairingSessionOptions {
     /**
      * Methods your handler actually implements.
      * Requests for any other method receive a 501 without invoking onRequest or onApprovalRequired.
@@ -69,7 +64,7 @@ interface WalletPairingSessionOptions {
  * await session.reconnect(Number(lastSeq))
  * ```
  */
-declare class WalletPairingSession {
+export declare class WalletPairingSession {
     private readonly wallet;
     private readonly params;
     private readonly options;
@@ -141,5 +136,4 @@ declare class WalletPairingSession {
     private emitError;
     private handleRpc;
 }
-
-export { DEFAULT_AUTO_APPROVE_METHODS, DEFAULT_IMPLEMENTED_METHODS, PairingParams, type PairingSessionStatus, type RequestHandler, WalletLike, WalletMethodName, WalletPairingSession, type WalletPairingSessionOptions };
+//# sourceMappingURL=WalletPairingSession.d.ts.map

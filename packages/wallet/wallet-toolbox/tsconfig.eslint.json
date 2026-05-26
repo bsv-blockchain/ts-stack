@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "target": "es2018",
     "module": "commonjs",
-    "moduleResolution": "node",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,

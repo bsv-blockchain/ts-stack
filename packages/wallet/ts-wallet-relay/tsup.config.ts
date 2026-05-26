@@ -7,7 +7,7 @@ export default defineConfig({
     react: 'src/react.tsx',  // React / React Native component + hook
   },
   format: ['cjs', 'esm'],
-  dts: true,
+  dts: false,
   clean: true,
   sourcemap: true,
   splitting: false,

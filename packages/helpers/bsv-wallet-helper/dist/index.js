@@ -599,16 +599,13 @@ var import_sdk9 = require("@bsv/sdk");
 var import_sdk5 = require("@bsv/sdk");
 var import_wallet_toolbox_client = require("@bsv/wallet-toolbox-client");
 async function makeWallet(chain, storageURL, privateKey) {
-  if (!chain) {
-    throw new Error('chain parameter is required (must be "test" or "main")');
-  }
   if (chain !== "test" && chain !== "main") {
     throw new Error(`Invalid chain "${chain}". Must be "test" or "main"`);
   }
-  if (!storageURL) {
+  if (storageURL.length === 0) {
     throw new Error("storageURL parameter is required");
   }
-  if (!privateKey) {
+  if (privateKey.length === 0) {
     throw new Error("privateKey parameter is required");
   }
   try {
@@ -646,7 +643,7 @@ var toHexField = (field) => {
   return import_sdk6.Utils.toHex(import_sdk6.Utils.toArray(field));
 };
 var addOpReturnData = (script, fields) => {
-  if (!script || typeof script.toASM !== "function") {
+  if (script == null || typeof script.toASM !== "function") {
     throw new Error("Invalid script parameter: must be a LockingScript instance");
   }
   const scriptAsm = script.toASM();
@@ -978,7 +975,7 @@ function extractMapMetadata(input) {
     }
     currentIndex += 2;
   }
-  if (!metadata.app || !metadata.type) {
+  if (metadata.app == null || metadata.app.length === 0 || metadata.type == null || metadata.type.length === 0) {
     return null;
   }
   return metadata;

@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "target": "es2019",
      "jsx": "react-jsx",
     "module": "ESNext",
