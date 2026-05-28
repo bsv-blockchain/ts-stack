@@ -31,6 +31,8 @@ export interface OverlayMonitorConfig {
   targets: OverlayMonitorTarget[]
   thresholds?: OverlayMonitorThresholds
   intervalMs?: number
+  /** Per-probe request timeout in milliseconds. Defaults to 30000. */
+  timeoutMs?: number
   fetchImpl?: typeof fetch
   logger?: OverlayMonitorLogger
   onReport?: (report: OverlayMonitorReport) => Promise<void> | void
@@ -128,17 +130,21 @@ export class OverlayMonitor {
   private readonly onReport?: (report: OverlayMonitorReport) => Promise<void> | void
   private readonly now: () => Date
   private readonly intervalMs?: number
+  private readonly timeoutMs: number
   private timer?: ReturnType<typeof setInterval>
   private running = false
 
   constructor (config: OverlayMonitorConfig) {
     this.targets = config.targets
     this.thresholds = { ...defaultThresholds, ...config.thresholds }
-    this.fetchImpl = config.fetchImpl ?? fetch
+    // Bind to globalThis so calling through this.fetchImpl does not rebind `this`
+    // (browser fetch throws "Illegal invocation" when invoked as a method).
+    this.fetchImpl = config.fetchImpl ?? fetch.bind(globalThis)
     this.logger = config.logger ?? console
     this.onReport = config.onReport
     this.now = config.now ?? (() => new Date())
     this.intervalMs = config.intervalMs
+    this.timeoutMs = config.timeoutMs ?? 30000
   }
 
   async runOnce (): Promise<OverlayMonitorReport> {
@@ -193,6 +199,8 @@ export class OverlayMonitor {
   private async runProbe (target: OverlayMonitorTarget, probe: OverlayLookupProbe): Promise<OverlayLookupProbeResult> {
     const startedAt = this.now()
     const url = new URL('/lookup', target.baseUrl).toString()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
 
     try {
       const response = await this.fetchImpl(url, {
@@ -202,7 +210,8 @@ export class OverlayMonitor {
           'Content-Type': 'application/json',
           ...target.headers
         },
-        body: JSON.stringify({ service: probe.service, query: probe.query })
+        body: JSON.stringify({ service: probe.service, query: probe.query }),
+        signal: controller.signal
       })
       const text = await response.text()
       const responseBytes = new TextEncoder().encode(text).length
@@ -239,6 +248,7 @@ export class OverlayMonitor {
       })
     } catch (error) {
       const completedAt = this.now()
+      const aborted = controller.signal.aborted
       return makeFailedResult({
         target,
         probe,
@@ -247,8 +257,12 @@ export class OverlayMonitor {
         ok: false,
         responseBytes: 0,
         durationMs: completedAt.getTime() - startedAt.getTime(),
-        error: error instanceof Error ? error.message : 'Lookup probe failed'
+        error: aborted
+          ? `Lookup probe timed out after ${this.timeoutMs}ms`
+          : error instanceof Error ? error.message : 'Lookup probe failed'
       })
+    } finally {
+      clearTimeout(timeout)
     }
   }
 }

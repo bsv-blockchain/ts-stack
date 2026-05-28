@@ -86,4 +86,31 @@ describe('OverlayMonitor', () => {
     expect(report.summary.probeCount).toBe(1)
     expect(report.summary.outputsMissingSubjectProof).toBe(1)
   })
+
+  it('aborts a probe that exceeds the configured timeout', async () => {
+    // Never resolves on its own; only settles when the abort signal fires.
+    const fetchImpl = jest.fn<typeof fetch>(async (_url, init) => await new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+    }))
+    const monitor = new OverlayMonitor({
+      targets: [
+        {
+          name: 'slow-overlay',
+          baseUrl: 'https://overlay.example',
+          probes: [{ name: 'slow', service: 'ls_slow', query: {} }]
+        }
+      ],
+      fetchImpl,
+      timeoutMs: 10
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(fetchImpl).toHaveBeenCalledWith('https://overlay.example/lookup', expect.objectContaining({
+      signal: expect.anything()
+    }))
+    expect(report.results[0].ok).toBe(false)
+    expect(report.results[0].error).toContain('timed out')
+    expect(report.summary.failedProbeCount).toBe(1)
+  })
 })
