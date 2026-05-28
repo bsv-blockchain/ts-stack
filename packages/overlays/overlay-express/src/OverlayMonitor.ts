@@ -248,7 +248,10 @@ export class OverlayMonitor {
       })
     } catch (error) {
       const completedAt = this.now()
-      const aborted = controller.signal.aborted
+      const fallbackMessage = error instanceof Error ? error.message : 'Lookup probe failed'
+      const message = controller.signal.aborted
+        ? `Lookup probe timed out after ${this.timeoutMs}ms`
+        : fallbackMessage
       return makeFailedResult({
         target,
         probe,
@@ -257,9 +260,7 @@ export class OverlayMonitor {
         ok: false,
         responseBytes: 0,
         durationMs: completedAt.getTime() - startedAt.getTime(),
-        error: aborted
-          ? `Lookup probe timed out after ${this.timeoutMs}ms`
-          : error instanceof Error ? error.message : 'Lookup probe failed'
+        error: message
       })
     } finally {
       clearTimeout(timeout)
