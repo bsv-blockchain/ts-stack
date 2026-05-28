@@ -571,7 +571,7 @@ describe('IdentityClient (additional coverage)', () => {
       mockContactsManager.getContacts = jest.fn().mockResolvedValue([contact])
       walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates: [discoveredCertificate] })
 
-      const result = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } })
+      const result = await identityClient.resolveByAttributes({ attributes: { email: 'alice@example.com' } }, { useContacts: true })
       expect(result[0].name).toBe('Alice From Contact')
     })
 
@@ -762,6 +762,155 @@ describe('IdentityClient (additional coverage)', () => {
 
       await identityClient.removeContact('key-to-remove')
       expect(mockContactsManager.removeContact).toHaveBeenCalledWith('key-to-remove')
+    })
+  })
+
+  // ─── useContacts branches in resolveByIdentityKey / resolveByAttributes ─────
+
+  // Shared helpers — extracted to keep new tests DRY (avoid Sonar duplication gate).
+  const xCert = (subject: string, userName: string): any => ({
+    type: KNOWN_IDENTITY_TYPES.xCert,
+    subject,
+    decryptedFields: { userName, profilePhoto: '' },
+    certifierInfo: { name: 'CX', iconUrl: '' }
+  })
+  const emailCertOf = (subject: string, email: string): any => ({
+    type: KNOWN_IDENTITY_TYPES.emailCert,
+    subject,
+    decryptedFields: { email },
+    certifierInfo: { name: 'EC', iconUrl: '' }
+  })
+  const contactOf = (name: string, identityKey: string): any => ({
+    name, identityKey, avatarURL: '', abbreviatedKey: '', badgeIconURL: '', badgeLabel: '', badgeClickURL: ''
+  })
+  const stubDiscoveryByKey = (contacts: any[], certificates: any[]): void => {
+    identityClient['contactsManager'].getContacts = jest.fn().mockResolvedValue(contacts)
+    walletMock.discoverByIdentityKey = jest.fn().mockResolvedValue({ certificates })
+  }
+  const stubDiscoveryByAttr = (contacts: any[], certificates: any[]): void => {
+    identityClient['contactsManager'].getContacts = jest.fn().mockResolvedValue(contacts)
+    walletMock.discoverByAttributes = jest.fn().mockResolvedValue({ certificates })
+  }
+
+  describe('resolveByIdentityKey with useContacts opt-in', () => {
+    it('contacts miss falls through to overlay (sequential)', async () => {
+      stubDiscoveryByKey([], [xCert('k1', 'XUser')])
+      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k1' }, { useContacts: true })
+      expect(walletMock.discoverByIdentityKey).toHaveBeenCalled()
+      expect(result[0].name).toBe('XUser')
+    })
+
+    it('parallel mode returns contact on hit even though overlay runs', async () => {
+      const contact = contactOf('Cached Alice', 'k2')
+      stubDiscoveryByKey([contact], [])
+      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k2' }, { useContacts: true, parallel: true })
+      expect(walletMock.discoverByIdentityKey).toHaveBeenCalled()
+      expect(result).toEqual([contact])
+    })
+
+    it('parallel mode contacts miss returns parsed overlay results', async () => {
+      stubDiscoveryByKey([], [xCert('k3', 'XOnly')])
+      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k3' }, { useContacts: true, parallel: true })
+      expect(result[0].name).toBe('XOnly')
+    })
+
+    it('legacy boolean opt-in (true) consults contacts', async () => {
+      stubDiscoveryByKey([contactOf('Legacy True', 'k4')], [])
+      const result = await identityClient.resolveByIdentityKey({ identityKey: 'k4' }, true)
+      expect(result[0].name).toBe('Legacy True')
+      expect(walletMock.discoverByIdentityKey).not.toHaveBeenCalled()
+    })
+
+    it('overrideWithContacts legacy alias takes precedence over useContacts', async () => {
+      stubDiscoveryByKey([contactOf('Override Wins', 'k5')], [])
+      const result = await identityClient.resolveByIdentityKey(
+        { identityKey: 'k5' },
+        { useContacts: false, overrideWithContacts: true }
+      )
+      expect(result[0].name).toBe('Override Wins')
+    })
+  })
+
+  describe('resolveByAttributes with useContacts opt-in', () => {
+    it('contacts no-match falls through to overlay with contact overrides applied', async () => {
+      stubDiscoveryByAttr([contactOf('Override Alice', 'k-over')], [emailCertOf('k-over', 'alice@example.com')])
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { email: 'alice@example.com' } },
+        { useContacts: true }
+      )
+      expect(result[0].name).toBe('Override Alice')
+    })
+
+    it('contacts empty + overlay miss returns empty', async () => {
+      stubDiscoveryByAttr([], [])
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { email: 'nobody@example.com' } },
+        { useContacts: true }
+      )
+      expect(result).toEqual([])
+    })
+
+    it('parallel mode with no contacts parses overlay only', async () => {
+      stubDiscoveryByAttr([], [emailCertOf('no-contact-key', 'lone@example.com')])
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { email: 'lone@example.com' } },
+        { useContacts: true, parallel: true }
+      )
+      expect(result[0].name).toBe('lone@example.com')
+    })
+
+    it('parallel mode with contacts applies overrides on overlay results', async () => {
+      stubDiscoveryByAttr([contactOf('Parallel Contact', 'pk')], [emailCertOf('pk', 'p@example.com')])
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { email: 'p@example.com' } },
+        { useContacts: true, parallel: true }
+      )
+      expect(result[0].name).toBe('Parallel Contact')
+    })
+
+    it('matchContactsByAttributes ignores non-string attribute values', async () => {
+      stubDiscoveryByAttr([contactOf('X', 'kkkk')], [])
+      const result = await identityClient.resolveByAttributes(
+        { attributes: { count: 5 as unknown as string } },
+        { useContacts: true }
+      )
+      // No string-valued attrs → matchContactsByAttributes returns [] → overlay path
+      expect(walletMock.discoverByAttributes).toHaveBeenCalled()
+      expect(result).toEqual([])
+    })
+  })
+
+  describe('parseIdentities batched path', () => {
+    it('yields to event loop when batch > PARSE_BATCH_SIZE', async () => {
+      const certs = Array.from({ length: 64 }, (_, i) => xCert(`subject-${i}`, `user-${i}`))
+      const result = await IdentityClient.parseIdentities(certs)
+      expect(result).toHaveLength(64)
+      expect(result[63].name).toBe('user-63')
+    })
+
+    it('parseIdentitiesWithOverrides batches with overrides applied', async () => {
+      const certs = Array.from({ length: 50 }, (_, i) => xCert(`subject-${i}`, `user-${i}`))
+      const overrideMap = new Map<string, any>([
+        ['subject-5', contactOf('Override 5', 'subject-5')],
+        ['subject-40', contactOf('Override 40', 'subject-40')]
+      ])
+      const result = await IdentityClient.parseIdentitiesWithOverrides(certs, overrideMap)
+      expect(result[5].name).toBe('Override 5')
+      expect(result[40].name).toBe('Override 40')
+      expect(result[6].name).toBe('user-6')
+    })
+  })
+
+  describe('yieldToEventLoop scheduler.yield path', () => {
+    const origScheduler = (globalThis as any).scheduler
+    afterEach(() => { (globalThis as any).scheduler = origScheduler })
+
+    it('uses scheduler.yield when available', async () => {
+      const yieldFn = jest.fn().mockResolvedValue(undefined)
+      ;(globalThis as any).scheduler = { yield: yieldFn }
+      const certs = Array.from({ length: 64 }, (_, i) => xCert(`s-${i}`, `u-${i}`))
+      await IdentityClient.parseIdentities(certs)
+      expect(yieldFn).toHaveBeenCalled()
     })
   })
 })

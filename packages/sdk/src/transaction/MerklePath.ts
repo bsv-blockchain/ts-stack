@@ -375,7 +375,7 @@ export default class MerklePath {
     if (this.indexOf(txid) === 0) {
       // Coinbase transaction outputs can only be spent once they're 100 blocks deep.
       const height = await chainTracker.currentHeight()
-      if (this.blockHeight + 100 < height) {
+      if (this.blockHeight + 100 > height) {
         return false
       }
     }

@@ -51,9 +51,9 @@ Server response:
 
 Both parties emerge from the handshake having verified each other's identity keys. Subsequent requests in the same session use a session token derived from the initial handshake.
 
-`@bsv/auth-express-middleware` installs BRC-31 as Express middleware. Any route wrapped by it requires a valid BRC-31 handshake from the client.
+`@bsv/auth-express-middleware` installs BRC-103/BRC-104 as Express middleware. Any route wrapped by it requires a valid BRC-103 handshake from the client over the BRC-104 HTTP binding.
 
-The machine-readable spec is at `specs/auth/brc31-handshake.yaml` (AsyncAPI 3.0).
+The machine-readable spec is at `specs/auth/brc103-mutual-auth.yaml` (AsyncAPI 3.0).
 
 ## Identity Keys
 

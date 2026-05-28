@@ -94,6 +94,46 @@ describe('createAction2 nosend transactions', () => {
     }
   })
 
+  test('spends a locally known noSend output without resubmitting inputBEEF', async () => {
+    for (const { wallet } of ctxs) {
+      wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
+      const sourceScript = '76a914abcdef0123456789abcdef0123456789abcdef88ac'
+      const fundingResult = await wallet.createAction({
+        outputs: [
+          {
+            satoshis: 100,
+            lockingScript: sourceScript,
+            basket: 'local contract outputs',
+            outputDescription: 'locally staged contract output'
+          }
+        ],
+        description: 'Stage locally known noSend output',
+        options: { noSend: true, randomizeOutputs: false }
+      })
+      const spendingResult = await wallet.createAction({
+        inputs: [
+          {
+            outpoint: `${fundingResult.txid}.0`,
+            unlockingScript: '00',
+            inputDescription: 'spend locally staged contract output'
+          }
+        ],
+        outputs: [
+          {
+            satoshis: 50,
+            lockingScript: '76a914fedcba9876543210fedcba9876543210fedcba88ac',
+            outputDescription: 'replacement contract output'
+          }
+        ],
+        description: 'Spend local staged output without inputBEEF',
+        options: { noSend: true, randomizeOutputs: false, noSendChange: [] }
+      })
+
+      expect(spendingResult.tx).toBeDefined()
+      expect(spendingResult.txid).toBeDefined()
+    }
+  })
+
   test('2_transaction with multiple outputs checked using toLogString', async () => {
     for (const { wallet } of ctxs) {
       wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]

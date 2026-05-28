@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [2.1.4 - 2026-05-26](#214---2026-05-26)
+- [2.1.3 - 2026-05-23](#213---2026-05-23)
+- [2.1.2 - 2026-05-20](#212---2026-05-20)
+- [2.1.1 - 2026-05-17](#211---2026-05-17)
 - [2.1.0 - 2026-05-04](#210---2026-05-04)
   - ts-stack hereon
 - [2.0.14 - 2026-04-22](#2014---2026-04-22)
@@ -214,8 +218,6 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Changed
 
-- `AbortActionResult.aborted` is now typed `boolean` (was the literal `true`). Wallets implementing the BRC-100 interface may now return `aborted: false` when they refuse to abort an action because the underlying transaction is positively confirmed on chain. The recommended caller follow-up is `internalizeAction`. Network-unreachable conditions still return `aborted: true` — refusal is reserved for positive on-chain confirmation. Source: `packages/sdk/src/wallet/Wallet.interfaces.ts`.
-
 ### Deprecated
 
 ### Removed
@@ -223,6 +225,61 @@ All notable changes to this project will be documented in this file. The format 
 ### Fixed
 
 ### Security
+
+---
+
+## [2.1.4] - 2026-05-26
+
+### Fixed
+- `Mnemonic.fromString()` now validates the input phrase at parse time and throws if it is not a
+  valid BIP-39 mnemonic (unknown words, wrong length, or bad checksum). Previously the method
+  accepted any string and the error only surfaced later when `toSeed()` was called.
+
+---
+
+## [2.1.3] - 2026-05-23
+
+### Added
+- Opt-in `AsyncSessionManager` for auth peers that need async session-store backends; the default
+  `SessionManager` remains sync so existing callers are unaffected.
+
+### Changed
+- `AbortActionResult.aborted` is now typed `boolean` (was the literal `true`). Wallets implementing
+  the BRC-100 interface may return `aborted: false` when they refuse to abort an action because the
+  underlying transaction is positively confirmed on chain. Recommended caller follow-up is
+  `internalizeAction`. Network-unreachable conditions still return `aborted: true` — refusal is
+  reserved for positive on-chain confirmation. Source:
+  `packages/sdk/src/wallet/Wallet.interfaces.ts`.
+- `HTTPSOverlayLookupFacilitator.lookup()` now enforces a hard wall-clock timeout; deadline + error
+  helpers extracted to keep cognitive complexity within Sonar's threshold.
+- Content-Type detection for octet-stream lookup responses is now normalized (case/whitespace
+  tolerant).
+
+### Fixed
+- Coinbase transaction validation condition + added immature/mature coinbase spend test cases.
+- `stringifyErrorValue` no longer wraps unknown branches in `String()` (S6551); added branch
+  coverage for lookup error normalisation.
+
+---
+
+## [2.1.2] - 2026-05-20
+
+### Changed
+- Refactored `HTTPSOverlayLookupFacilitator.lookup` + `mergeAnswer` (extracted
+  `parseOctetStreamLookup`, `extractAtomicOutputs`, `resolveTxIdForOutput`) to bring cognitive
+  complexity under Sonar's 15-line threshold.
+- `ContactsManager`: use `??=` for `inFlightLoad`; flip negated `identityKey` check.
+- `SymmetricKey`: drop unused `err` binding in native AES-GCM catch.
+- `LookupResolver`: drop unnecessary `LookupAnswer` cast in `lookupHostWithTracking`.
+
+### Removed
+- `debug/profiler.ts` and all `plog`/`pstart` instrumentation — the RN perf work is done and the
+  spans were a development aid, not part of the public API.
+
+### Added
+- `IdentityClient` branch coverage: contacts-miss paths, parallel hit/miss, legacy boolean opt-in,
+  `overrideWithContacts` precedence, `parseIdentities` batched path, `scheduler.yield` fallback.
+  Line coverage now 99.5%.
 
 ---
 

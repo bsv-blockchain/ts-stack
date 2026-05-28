@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "types": ["jest", "node"],
+    "ignoreDeprecations": "6.0",
     "target": "ES2020",
     "lib": ["ES2020", "DOM"],
     "jsx": "react-jsx",

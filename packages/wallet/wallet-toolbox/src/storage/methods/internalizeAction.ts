@@ -24,6 +24,110 @@ import { blockHash } from '../../services/chaintracker/chaintracks/util/blockHea
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 
 /**
+ * Record of a spent-input transition this internalize call performed.
+ * Carries enough state to roll back the exact change via
+ * {@link restoreInputsToSpendable}: which row, and whether we touched
+ * `spentBy` (only true for rows owned by the internalizing user).
+ */
+export interface SpentInputTransition {
+  outputId: number
+  /** true if the call set spentBy; false if only spendable was flipped. */
+  setSpentBy: boolean
+}
+
+/**
+ * Mark every storage row at each consumed-input outpoint as spent — across
+ * all users that track that outpoint. An on-chain spend invalidates the UTXO
+ * for every wallet that references it, not just the wallet that called
+ * `internalizeAction`. Returns the per-row transitions so the caller can
+ * roll back via {@link restoreInputsToSpendable} on broadcast failure.
+ *
+ * Cross-user semantics:
+ *   - For rows owned by `userId` (the internalizing user) we also set
+ *     `spentBy=transactionId`. They own the corresponding transaction
+ *     record; the FK target exists in their scope.
+ *   - For rows owned by other users we set `spendable=false` and leave
+ *     `spentBy` untouched. `spentBy` references the owning user's
+ *     `transactions.transactionId`, and that user has no record of our
+ *     transaction yet — they'd need to internalize it themselves to get
+ *     one. Leaving `spentBy` undefined keeps the field consistent with
+ *     "this UTXO is spent, but my wallet didn't witness the spend".
+ *
+ * Mirrors what `createAction` does for wallet-originated transactions and
+ * what `TaskUnFail.unfailReq` does when reviving a previously-failed tx.
+ * Without this, an externally-broadcast tx that consumed user UTXOs would
+ * leave those UTXOs as phantom spendable rows, picked up by subsequent
+ * `createAction` fund selection.
+ *
+ * Idempotent: rows already `spendable=false` are skipped. Rows already
+ * `spentBy` a different transaction are also skipped (a competing spend
+ * has been recorded; do not overwrite).
+ */
+export async function markUserInputsSpent (
+  storage: StorageProvider,
+  userId: number,
+  tx: BsvTransaction,
+  transactionId: number
+): Promise<SpentInputTransition[]> {
+  const outpoints = tx.inputs
+    .map(i => ({ txid: i.sourceTXID ?? '', vout: i.sourceOutputIndex ?? 0 }))
+    .filter(o => o.txid !== '')
+  if (outpoints.length === 0) return []
+  const transitioned: SpentInputTransition[] = []
+  await storage.transaction(async trx => {
+    for (const op of outpoints) {
+      const matches = await storage.findOutputs({
+        partial: { txid: op.txid, vout: op.vout },
+        noScript: true,
+        trx
+      })
+      for (const o of matches) {
+        if (!o.spendable) continue
+        if (o.spentBy != null && o.spentBy !== transactionId) continue
+        const setSpentBy = o.userId === userId
+        const update: Partial<TableOutput> = setSpentBy
+          ? { spendable: false, spentBy: transactionId }
+          : { spendable: false }
+        await storage.updateOutput(verifyId(o.outputId), update, trx)
+        transitioned.push({ outputId: verifyId(o.outputId), setSpentBy })
+      }
+    }
+  })
+  return transitioned
+}
+
+/**
+ * Revert the spendable=true → false transitions performed by
+ * {@link markUserInputsSpent}. Used when an internalize call's downstream
+ * broadcast fails non-fatally so the caller can retry with the same UTXOs.
+ *
+ * Only undoes what was changed: `spendable=true` always; `spentBy=undefined`
+ * only when the original transition set it. Avoids clobbering a competing
+ * spent-by on cross-user rows.
+ *
+ * The downstream `attemptToPostReqsToNetwork` path also calls
+ * `updateTransactionStatus('failed')` on doubleSpend/invalidTx outcomes,
+ * which independently restores same-user inputs (via
+ * `EntityTransaction.getInputs` filtered by userId). This explicit rollback
+ * covers cross-user rows and any path where the downstream restore did not
+ * run, and is a no-op when the downstream restore already happened.
+ */
+export async function restoreInputsToSpendable (
+  storage: StorageProvider,
+  transitions: SpentInputTransition[]
+): Promise<void> {
+  if (transitions.length === 0) return
+  await storage.transaction(async trx => {
+    for (const t of transitions) {
+      const update: Partial<TableOutput> = t.setSpentBy
+        ? { spendable: true, spentBy: undefined }
+        : { spendable: true }
+      await storage.updateOutput(verifyId(t.outputId), update, trx)
+    }
+  })
+}
+
+/**
  * Internalize Action allows a wallet to take ownership of outputs in a pre-existing transaction.
  * The transaction may, or may not already be known to both the storage and user.
  *
@@ -112,6 +216,8 @@ class InternalizeActionContext {
   basketInsertions: BasketInsertionX[]
   /** all the wallet payments from incoming outputs array */
   walletPayments: WalletPaymentX[]
+  /** outputs this call transitioned spendable=true → false (for rollback) */
+  spentInputs: SpentInputTransition[]
   userId: number
   vargs: Validation.ValidInternalizeActionArgs
 
@@ -135,6 +241,7 @@ class InternalizeActionContext {
     this.basketInsertions = []
     this.walletPayments = []
     this.eos = []
+    this.spentInputs = []
   }
 
   get isMerge (): boolean {
@@ -372,6 +479,14 @@ class InternalizeActionContext {
 
     await this.addLabels(transactionId)
 
+    // Externally-broadcast txs internalized into a pre-existing storage
+    // record (typically a nosend created by this wallet) still need their
+    // consumed user UTXOs marked spent. createAction marks them when the
+    // tx is wallet-originated, but a nosend can be merged from a sender
+    // that doesn't share storage. Idempotent for the wallet-originated
+    // case — already-spent outputs are skipped.
+    await this.markInputsSpent(transactionId)
+
     for (const payment of this.walletPayments) {
       if ((payment.eo != null) && !payment.ignore) await this.mergeWalletPaymentForOutput(transactionId, payment)
       else if (!payment.ignore) await this.storeNewWalletPaymentForOutput(transactionId, payment)
@@ -459,6 +574,10 @@ class InternalizeActionContext {
 
     const transactionId = this.etx.transactionId
 
+    // Mark any user-owned outputs the incoming tx consumes as spent BEFORE
+    // attempting broadcast. If broadcast fails we restore them below.
+    await this.markInputsSpent(transactionId)
+
     if (pr.proven == null) {
       // beef doesn't include proof of mining for the transaction (etx).
       // the new transaction record has been added to storage, but (baring race conditions)
@@ -489,6 +608,11 @@ class InternalizeActionContext {
       }
       const { swr, ndr } = await shareReqsWithWorld(this.storage, this.userId, [], false, r)
       if (ndr![0].status !== 'success') {
+        // Roll back the spendable=true → false transitions performed above
+        // so the caller can retry with the same UTXOs. Idempotent w.r.t.
+        // attemptToPostReqsToNetwork's own updateTransactionStatus('failed')
+        // restore on doubleSpend/invalidTx outcomes.
+        await this.restoreSpentInputs()
         this.r.sendWithResults = swr
         this.r.notDelayedResults = ndr
         // abort the internalize action, WERR_REVIEW_ACTIONS exception will be thrown
@@ -512,6 +636,16 @@ class InternalizeActionContext {
       const txLabel = await this.storage.findOrInsertTxLabel(this.userId, label)
       await this.storage.findOrInsertTxLabelMap(verifyId(transactionId), verifyId(txLabel.txLabelId))
     }
+  }
+
+  async markInputsSpent (transactionId: number): Promise<void> {
+    const transitioned = await markUserInputsSpent(this.storage, this.userId, this.tx, transactionId)
+    this.spentInputs.push(...transitioned)
+  }
+
+  async restoreSpentInputs (): Promise<void> {
+    await restoreInputsToSpendable(this.storage, this.spentInputs)
+    this.spentInputs = []
   }
 
   async addBasketTags (basket: BasketInsertionX, outputId: number) {

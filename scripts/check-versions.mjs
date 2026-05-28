@@ -52,7 +52,10 @@ function caretUpperBound (version) {
 }
 
 function acceptsWorkspaceVersion (range, wsVersion) {
-  if (range === 'workspace:*' || range === `^${wsVersion}`) return true
+  // workspace:^ is the only `workspace:` form we allow — it publishes as `^X.Y.Z`,
+  // letting downstream consumers dedupe. `workspace:*` publishes as an exact pin
+  // and causes duplicate-install bugs across infra components, so reject it here.
+  if (range === 'workspace:^' || range === `^${wsVersion}`) return true
   if (!range.startsWith('^')) return false
 
   const min = parseVersion(range.slice(1))

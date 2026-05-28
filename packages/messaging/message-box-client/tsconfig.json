@@ -1,8 +1,10 @@
 {
   "files": [],
   "compilerOptions": {
+    "types": ["jest", "node"],
     "esModuleInterop": true,
-    "strictNullChecks": true
+    "strictNullChecks": true,
+    "ignoreDeprecations": "6.0"
   },
   "references": [
     {

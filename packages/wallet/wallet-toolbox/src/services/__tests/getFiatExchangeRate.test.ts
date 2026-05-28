@@ -5,6 +5,32 @@ import type { FiatCurrencyCode, FiatExchangeRates } from '../../sdk/WalletServic
 
 dotenv.config()
 
+// Capture of a healthy chaintracks /getFiatExchangeRates payload from
+// https://chaintracks-us-1.bsvb.tech/getFiatExchangeRates. Tests that exercise the chaintracks
+// fiat-rates path replace fetch with a deterministic stub so they don't depend on the live service.
+const CHAINTRACKS_FIAT_RATES_PAYLOAD = {
+  status: 'success',
+  value: {
+    timestamp: '2026-03-25T00:00:00.000Z',
+    base: 'USD',
+    rates: { USD: 1, GBP: 0.7528, EUR: 0.8558 }
+  }
+}
+
+const realFetch = global.fetch
+beforeAll(() => {
+  global.fetch = jest.fn(async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('chaintracks.babbage.systems/getFiatExchangeRates')) {
+      return { ok: true, status: 200, json: async () => CHAINTRACKS_FIAT_RATES_PAYLOAD } as any
+    }
+    return realFetch(input, init)
+  }) as any
+})
+afterAll(() => {
+  global.fetch = realFetch
+})
+
 describe('getFiatExchangeRate service tests', () => {
   jest.setTimeout(99999999)
 

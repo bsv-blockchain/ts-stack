@@ -3,6 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# better-sqlite3 (transitive via @bsv/wallet-toolbox) ships no musl prebuilt for
+# node 20 — needs python3/make/g++ to compile from source on Alpine.
+RUN apk add --no-cache python3 make g++
+
 # Copy package files
 COPY package*.json ./
 
@@ -21,11 +25,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# better-sqlite3 native build (see builder stage). Install build tools, run
+# npm ci, then remove the toolchain in the same layer to keep the image slim.
+RUN apk add --no-cache --virtual .build-deps python3 make g++
+
 # Copy package files
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --only=production
+RUN npm ci --omit=dev \
+ && apk del .build-deps
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist

@@ -14,7 +14,7 @@
     "rootDir": "./",
     "baseUrl": "./",
     "strict": false,
-    "ignoreDeprecations": "5.0",
+    "ignoreDeprecations": "6.0",
     "isolatedModules": true,
     "strictNullChecks": false,
     "downlevelIteration": false,

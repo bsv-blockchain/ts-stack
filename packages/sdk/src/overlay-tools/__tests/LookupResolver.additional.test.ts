@@ -472,6 +472,22 @@ describe('LookupResolver – additional coverage', () => {
       ).rejects.toThrow('Request timed out')
     })
 
+    it('rejects within the timeout even when fetch never settles', async () => {
+      // Simulate the CORS-blocked / hung-preflight case where the fetch promise
+      // does not honor the AbortController signal and never settles.
+      const neverFetch = jest.fn().mockImplementation(
+        () => new Promise(() => { /* never resolves */ })
+      )
+      const facilitator = new HTTPSOverlayLookupFacilitator(neverFetch, true)
+      const start = Date.now()
+      await expect(
+        facilitator.lookup('http://host', { service: 'ls_test', query: {} }, 50)
+      ).rejects.toThrow('Request timed out')
+      const elapsed = Date.now() - start
+      // Allow generous slack but must complete well before any global jest timeout.
+      expect(elapsed).toBeLessThan(2000)
+    })
+
     it('parses octet-stream responses', async () => {
       // Build a minimal octet-stream payload: 1 outpoint, then BEEF bytes
       const tx = new Transaction(
@@ -504,6 +520,36 @@ describe('LookupResolver – additional coverage', () => {
       expect(result.type).toBe('output-list')
       expect(result.outputs).toHaveLength(1)
       expect(result.outputs[0].outputIndex).toBe(0)
+    })
+
+    it('parses octet-stream responses when header carries parameters or differing case', async () => {
+      const tx = new Transaction(
+        1,
+        [],
+        [{ lockingScript: LockingScript.fromHex('88'), satoshis: 1 }],
+        0
+      )
+      const beef = tx.toBEEF()
+      const txid = Buffer.from(tx.id('hex'), 'hex')
+      const payload = Buffer.concat([
+        Buffer.from([0x01]), txid, Buffer.from([0x00]), Buffer.from([0x00]), Buffer.from(beef)
+      ])
+
+      for (const header of [
+        'application/octet-stream; charset=utf-8',
+        'Application/Octet-Stream',
+        '  application/octet-stream  '
+      ]) {
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: true,
+          headers: { get: () => header },
+          arrayBuffer: async () => payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength)
+        })
+        const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+        const result = await facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+        expect(result.type).toBe('output-list')
+        expect(result.outputs).toHaveLength(1)
+      }
     })
 
     it('parses octet-stream responses with context bytes', async () => {
@@ -545,6 +591,50 @@ describe('LookupResolver – additional coverage', () => {
       await expect(
         facilitator.lookup('http://host', { service: 'ls_test', query: {} })
       ).rejects.toThrow('DNS failure')
+    })
+
+    it('normalises string thrown values from fetch', async () => {
+      const mockFetch = jest.fn().mockRejectedValue('boom')
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('boom')
+    })
+
+    it('normalises object-with-message thrown values from fetch', async () => {
+      const mockFetch = jest.fn().mockRejectedValue({ message: 'object boom' })
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('object boom')
+    })
+
+    it('normalises plain-object thrown values via JSON', async () => {
+      const mockFetch = jest.fn().mockRejectedValue({ code: 42 })
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('{"code":42}')
+    })
+
+    it('normalises number/boolean/null thrown values from fetch', async () => {
+      for (const value of [123, true, null]) {
+        const mockFetch = jest.fn().mockRejectedValue(value)
+        const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+        await expect(
+          facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+        ).rejects.toThrow(String(value))
+      }
+    })
+
+    it('normalises circular thrown values without crashing', async () => {
+      const circular: { self?: unknown } = {}
+      circular.self = circular
+      const mockFetch = jest.fn().mockRejectedValue(circular)
+      const facilitator = new HTTPSOverlayLookupFacilitator(mockFetch, true)
+      await expect(
+        facilitator.lookup('https://host', { service: 'ls_test', query: {} })
+      ).rejects.toThrow('Unknown error')
     })
 
     it('sends correct request body to /lookup endpoint', async () => {

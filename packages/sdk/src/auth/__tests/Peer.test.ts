@@ -1,5 +1,5 @@
 import { Peer } from '../../auth/Peer.js'
-import { AuthMessage, Transport } from '../../auth/types.js'
+import { AuthMessage, PeerSession, Transport } from '../../auth/types.js'
 import { jest } from '@jest/globals'
 import { WalletInterface } from '../../wallet/Wallet.interfaces.js'
 import { Utils, PrivateKey } from '../../primitives/index.js'
@@ -8,6 +8,7 @@ import { MasterCertificate } from '../../auth/certificates/MasterCertificate.js'
 import { getVerifiableCertificates } from '../../auth/utils/getVerifiableCertificates.js'
 import { CompletedProtoWallet } from '../certificates/__tests/CompletedProtoWallet.js'
 import { SimplifiedFetchTransport } from '../../auth/transports/SimplifiedFetchTransport.js'
+import { SessionManager, AsyncSessionManager } from '../../auth/SessionManager.js'
 
 const certifierPrivKey = new PrivateKey(21)
 const alicePrivKey = new PrivateKey(22)
@@ -48,6 +49,35 @@ class LocalTransport implements Transport {
         // to prevent unhandled promise rejections in tests.
       })
     }
+  }
+}
+
+class AsyncSessionStore implements AsyncSessionManager {
+  private readonly sessions = new SessionManager()
+
+  async addSession(session: PeerSession): Promise<void> {
+    await Promise.resolve()
+    this.sessions.addSession(session)
+  }
+
+  async updateSession(session: PeerSession): Promise<void> {
+    await Promise.resolve()
+    this.sessions.updateSession(session)
+  }
+
+  async getSession(identifier: string): Promise<PeerSession | undefined> {
+    await Promise.resolve()
+    return this.sessions.getSession(identifier)
+  }
+
+  async removeSession(session: PeerSession): Promise<void> {
+    await Promise.resolve()
+    this.sessions.removeSession(session)
+  }
+
+  async hasSession(identifier: string): Promise<boolean> {
+    await Promise.resolve()
+    return this.sessions.hasSession(identifier)
   }
 }
 
@@ -288,6 +318,22 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
     expect(certificatesReceivedByAlice).toEqual([])
     expect(certificatesReceivedByBob).toEqual([])
+  }, 15000)
+
+  it('supports asynchronous shared session managers', async () => {
+    alice = new Peer(walletA, transportA, undefined, new AsyncSessionStore())
+    bob = new Peer(walletB, transportB, undefined, new AsyncSessionStore())
+
+    const bobReceivedGeneralMessage = waitForNextGeneralMessage(bob)
+    const aliceReceivedGeneralMessage = waitForNextGeneralMessage(alice)
+
+    bob.listenForGeneralMessages((senderPublicKey) => {
+      void bob.toPeer(Utils.toArray('Hello Alice!'), senderPublicKey)
+    })
+
+    await alice.toPeer(Utils.toArray('Hello Bob!'))
+    await bobReceivedGeneralMessage
+    await aliceReceivedGeneralMessage
   }, 15000)
 
   it('Alice talks to Bob across two devices, Bob can respond across both sessions', async () => {

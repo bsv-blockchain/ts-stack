@@ -49,15 +49,21 @@ describe('Mnemonic', function () {
     mnemonic = m.mnemonic
 
     // mnemonics with extra whitespace do not pass the check
-    m = new Mnemonic().fromString(mnemonic + ' ')
-    expect(m.check()).toEqual(false)
+    const trailingSpace = mnemonic + ' '
+    const trailing = new Mnemonic()
+    trailing.mnemonic = trailingSpace
+    expect(trailing.check()).toEqual(false)
+    expect(() => new Mnemonic().fromString(trailingSpace)).toThrow()
 
     // mnemonics with a word replaced do not pass the check
     const words = mnemonic.split(' ')
     expect(words[words.length - 1]).not.toEqual('zoo')
     words[words.length - 1] = 'zoo'
-    mnemonic = words.join(' ')
-    expect(new Mnemonic().fromString(mnemonic).check()).toEqual(false)
+    const badWord = words.join(' ')
+    const replaced = new Mnemonic()
+    replaced.mnemonic = badWord
+    expect(replaced.check()).toEqual(false)
+    expect(() => new Mnemonic().fromString(badWord)).toThrow()
   })
 
   describe('#toBinary', () => {
@@ -132,11 +138,49 @@ describe('Mnemonic', function () {
   })
 
   describe('#fromString', () => {
-    it('should throw an error in invalid mnemonic', () => {
+    it('should throw an error on invalid mnemonic when toSeed is called', () => {
       expect(() => {
         new Mnemonic().fromString('invalid mnemonic').toSeed()
       }).toThrow(
         'Mnemonic does not pass the check - was the mnemonic typed incorrectly? Are there extra spaces?'
+      )
+    })
+
+    it('should throw immediately on nonsense input', () => {
+      expect(() => {
+        Mnemonic.fromString('this is not a real bip39 mnemonic phrase at all')
+      }).toThrow(
+        'Mnemonic does not pass the check - was the mnemonic typed incorrectly? Are there extra spaces?'
+      )
+    })
+
+    it('should throw on garbage string', () => {
+      expect(() => {
+        Mnemonic.fromString('asdfghjkl qwertyuiop zxcvbnm')
+      }).toThrow()
+    })
+
+    it('should throw on empty string', () => {
+      expect(() => {
+        Mnemonic.fromString('')
+      }).toThrow()
+    })
+
+    it('should throw on valid words but wrong checksum', () => {
+      // 12 valid wordlist entries but checksum will not match
+      expect(() => {
+        Mnemonic.fromString(
+          'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon'
+        )
+      }).toThrow()
+    })
+
+    it('should accept a known-valid BIP-39 phrase', () => {
+      const m = Mnemonic.fromString(
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+      )
+      expect(m.mnemonic).toEqual(
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
       )
     })
   })

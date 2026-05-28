@@ -7,7 +7,8 @@ export default {
   modulePathIgnorePatterns: ['<rootDir>/dist/'],
   transform: {
     '^.+\\.test.ts?$': ['ts-jest', {
-      useESM: true
+      useESM: true,
+      tsconfig: 'tsconfig.test.json'
     }]
   },
   extensionsToTreatAsEsm: ['.ts'],

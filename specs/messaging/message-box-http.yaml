@@ -34,11 +34,11 @@ components:
       in: header
       name: x-bsv-auth-identity-key
       description: |
-        BRC-31 mutual authentication. The client sends a family of `x-bsv-auth-*`
-        headers (version, identity-key, nonce, your-nonce, request-id, signature).
-        The server validates the signature and sets `req.auth.identityKey` for
-        downstream route handlers. See `specs/auth/brc31-handshake.yaml` for the
-        full protocol description.
+        BRC-103 mutual authentication over the BRC-104 HTTP binding. The client
+        sends a family of `x-bsv-auth-*` headers (version, identity-key, nonce,
+        your-nonce, request-id, signature). The server validates the signature
+        and sets `req.auth.identityKey` for downstream route handlers. See
+        `specs/auth/brc103-mutual-auth.yaml` for the full protocol description.
     BearerAuth:
       type: http
       scheme: bearer

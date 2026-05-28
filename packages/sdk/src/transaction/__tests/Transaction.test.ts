@@ -15,6 +15,23 @@ import MerklePath from '../../transaction/MerklePath'
 import { BEEF_V1 } from '../../transaction/Beef'
 import SatoshisPerKilobyte from '../../transaction/fee-models/SatoshisPerKilobyte'
 
+// Default Transaction.fee() resolves to LivePolicy.getInstance(), which fetches the live ARC
+// policy endpoint. Replace it with a deterministic 100 sat/kb model so tests never hit the
+// network — the live endpoint is unreliable and not part of what these tests exercise.
+jest.mock('../../transaction/fee-models/LivePolicy', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const SPKB = require('../../transaction/fee-models/SatoshisPerKilobyte').default
+  class MockLivePolicy extends SPKB {
+    static instance: MockLivePolicy | null = null
+    constructor () { super(100) }
+    static getInstance (): MockLivePolicy {
+      if (!MockLivePolicy.instance) MockLivePolicy.instance = new MockLivePolicy()
+      return MockLivePolicy.instance
+    }
+  }
+  return { __esModule: true, default: MockLivePolicy }
+})
+
 import sighashVectors from '../../primitives/__tests/sighash.vectors'
 import invalidTransactions from './tx.invalid.vectors'
 import validTransactions from './tx.valid.vectors'

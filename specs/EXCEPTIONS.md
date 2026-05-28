@@ -21,7 +21,7 @@ The following exceptions were resolved by Phase 2 spec work (2026-04-24):
 |----------|-----------|---------|
 | `message-box-server` REST endpoints | [`specs/messaging/message-box-http.yaml`](messaging/message-box-http.yaml) | 2026-04-24 |
 | `message-box-server` WebSocket / authsocket | [`specs/messaging/authsocket-asyncapi.yaml`](messaging/authsocket-asyncapi.yaml) | 2026-04-24 |
-| BRC-31 mutual auth handshake | [`specs/auth/brc31-handshake.yaml`](auth/brc31-handshake.yaml) | 2026-04-24 |
+| BRC-103 mutual auth handshake | [`specs/auth/brc103-mutual-auth.yaml`](auth/brc103-mutual-auth.yaml) | 2026-04-24 |
 | BRC-29 peer payment protocol | [`specs/payments/brc29-payment-protocol.yaml`](payments/brc29-payment-protocol.yaml) | 2026-04-24 |
 | GASP sync protocol | [`specs/sync/gasp-asyncapi.yaml`](sync/gasp-asyncapi.yaml) | 2026-04-24 |
 | UHRP resolution HTTP API | [`specs/storage/uhrp-http.yaml`](storage/uhrp-http.yaml) | 2026-04-24 |
@@ -48,4 +48,4 @@ Tier 1 boundaries now have executable contracts.*
 
 ---
 
-*Last updated: 2026-04-24. Phase 2 resolved: message-box HTTP, authsocket AsyncAPI, BRC-31 handshake, BRC-29 payment protocol, GASP sync, UHRP HTTP, BRC-121 402 payments, Merkle service, wallet storage adapter.*
+*Last updated: 2026-04-24. Phase 2 resolved: message-box HTTP, authsocket AsyncAPI, BRC-103 handshake, BRC-29 payment protocol, GASP sync, UHRP HTTP, BRC-121 402 payments, Merkle service, wallet storage adapter.*

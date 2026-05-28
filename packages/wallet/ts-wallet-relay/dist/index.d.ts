@@ -263,12 +263,12 @@ interface WalletRelayServiceOptions {
  *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
 declare class WalletRelayService {
-    private opts;
-    private sessions;
-    private relay;
-    private handler;
-    private pending;
-    private mobileAuthTimers;
+    private readonly opts;
+    private readonly sessions;
+    private readonly relay;
+    private readonly handler;
+    private readonly pending;
+    private readonly mobileAuthTimers;
     private wallet;
     private relayUrl;
     private origin;

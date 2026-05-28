@@ -1,6 +1,28 @@
 import { PeerSession } from './types.js'
 
 /**
+ * Opt-in async session-manager contract for horizontally scaled deployments.
+ *
+ * The default in-process {@link SessionManager} stores BRC-103 nonce/session
+ * state in memory and is synchronous. Multi-instance HTTP servers that need
+ * every instance to resolve the same handshake state — e.g. behind a load
+ * balancer without sticky routing — can implement `AsyncSessionManager`
+ * against a shared store such as Redis or SQL and pass it to {@link Peer}
+ * or `createAuthMiddleware` instead.
+ *
+ * {@link Peer} accepts `SessionManager | AsyncSessionManager` and awaits every
+ * call internally, so sync stores incur no extra latency while async stores
+ * work transparently.
+ */
+export interface AsyncSessionManager {
+  addSession: (session: PeerSession) => Promise<void>
+  updateSession: (session: PeerSession) => Promise<void>
+  getSession: (identifier: string) => Promise<PeerSession | undefined>
+  removeSession: (session: PeerSession) => Promise<void>
+  hasSession: (identifier: string) => Promise<boolean>
+}
+
+/**
  * Manages sessions for peers, allowing multiple concurrent sessions
  * per identity key. Primary lookup is always by `sessionNonce`.
  */

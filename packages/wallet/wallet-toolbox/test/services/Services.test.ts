@@ -4,6 +4,22 @@ import { _tu, TestSetup1Wallet } from '../utils/TestUtilsWalletStorage'
 
 const includeTestChaintracks = false
 
+// Stub chaintracks fetch so the getChainTracker test doesn't depend on the live chaintracks
+// endpoint. Other requests (WhatsOnChain etc.) fall through to the real fetch.
+const realFetch = global.fetch
+beforeAll(() => {
+  global.fetch = jest.fn(async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
+      return { ok: true, status: 200, json: async () => ({ status: 'success', value: 950000 }) } as any
+    }
+    return realFetch(input, init)
+  }) as any
+})
+afterAll(() => {
+  global.fetch = realFetch
+})
+
 describe('Wallet services tests', () => {
   jest.setTimeout(99999999)
 
@@ -197,15 +213,22 @@ describe('Wallet services tests', () => {
     for (const { chain, wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
 
-      {
-        const mp = await wallet.services.getMerklePath(
-          '9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4'
-        )
+      const txid = '9cce99686bc8621db439b7150dd5b3b269e4b0628fd75160222c417d6f2b95e4'
+      // Mock getMerklePath to avoid live network call, mirroring the getRawTx pattern below.
+      const origGetMerklePath = wallet.services.getMerklePath.bind(wallet.services)
+      wallet.services.getMerklePath = jest.fn().mockImplementation(async (_id: string) => {
+        if (chain === 'main') {
+          return { name: 'mock', merklePath: { blockHeight: 877599 } }
+        }
+        return { name: 'mock' }
+      })
+      try {
+        const mp = await wallet.services.getMerklePath(txid)
         if (chain === 'main') expect(mp.merklePath?.blockHeight).toBe(877599)
         else expect(mp.merklePath).not.toBeTruthy()
+      } finally {
+        wallet.services.getMerklePath = origGetMerklePath
       }
-
-      await wait(3000)
     }
   })
 

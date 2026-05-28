@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Canonical BSV overlay topic managers and lookup services",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,19 +18,19 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.0.2",
-    "@bsv/sdk": "^2.1.1",
+    "@bsv/overlay": "^2.0.3",
+    "@bsv/sdk": "^2.1.3",
     "mongodb": "^7.1.0"
   },
   "devDependencies": {
-    "@jest/globals": "^30.3.0",
+    "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.0.3",
-    "jest": "^30.3.0",
-    "mongodb-memory-server": "^9.1.3",
-    "ts-jest": "^29.4.9",
+    "@types/node": "^25.9.1",
+    "jest": "^30.4.2",
+    "mongodb-memory-server": "^11.1.0",
+    "ts-jest": "^29.4.11",
     "ts-standard": "^12.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^6.0.3"
   },
   "license": "Open BSV",
   "author": "BSV Blockchain Association",
@@ -43,5 +43,12 @@
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/topics#readme",
+  "keywords": [
+    "bsv",
+    "overlay",
+    "topic-manager",
+    "lookup-service",
+    "blockchain"
+  ]
 }

@@ -13,6 +13,26 @@ import { makeWallet } from '../../utils/mockWallet';
 // Test storage URL for wallet (can be any URL for testing)
 const storageURL = 'https://store-us-1.bsvb.tech';
 
+// Transaction.fee() with no args resolves to the SDK's LivePolicy, which fetches the live ARC
+// policy endpoint. Intercept just that URL with a deterministic 100 sat/kb stub; fall through
+// to the real fetch for everything else (e.g. the wallet storage server).
+const realFetch = global.fetch
+beforeAll(() => {
+  global.fetch = jest.fn(async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input?.url ?? ''
+    if (url.includes('arc.gorillapool.io/v1/policy')) {
+      return {
+        ok: true,
+        json: async () => ({ policy: { miningFee: { satoshis: 1, bytes: 10 } } })
+      } as any
+    }
+    return realFetch(input, init)
+  }) as any
+})
+afterAll(() => {
+  global.fetch = realFetch
+})
+
 describe('OrdP2PKH locking script', () => {
   describe('lock with public key string', () => {
     test('should create a valid ordinal locking script from a public key hex string', async () => {
