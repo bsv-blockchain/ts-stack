@@ -48,7 +48,7 @@
     "hash-wasm": "^4.12.0",
     "idb": "^8.0.2",
     "knex": "^3.2.10",
-    "mysql2": "^3.22.3",
+    "mysql2": "^3.22.4",
     "ws": "^8.21.0"
   },
   "devDependencies": {
@@ -58,9 +58,9 @@
     "@types/diff": "^8.0.0",
     "@types/fs-extra": "^11.0.4",
     "@types/jest": "^30.0.0",
-    "@types/jest-diff": "^20.0.1",
+    "@types/jest-diff": "^24.3.0",
     "@types/node": "^25.9.1",
-    "chalk": "^4.1.2",
+    "chalk": "^5.6.2",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "fake-indexeddb": "^6.0.0",
