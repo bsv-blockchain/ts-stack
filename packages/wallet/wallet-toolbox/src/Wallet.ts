@@ -101,7 +101,7 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIE
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
-import { ValidListOutputsArgs } from '@bsv/sdk/dist/types/src/wallet/validationHelpers'
+import type { ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 
 /**
  * The preferred means of constructing a `Wallet` is with a `WalletArgs` instance.

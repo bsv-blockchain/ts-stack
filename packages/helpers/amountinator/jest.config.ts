@@ -20,7 +20,15 @@ async function jestConfig(): Promise<Config> {
     testMatch: ['**/?(*.)+(test).[tj]s'],
     // default []
     testRegex: [],
-    transform: { '^.+\\.ts$': ['ts-jest', { 'rootDir': "." }] },
+    transform: {
+      '^.+\\.ts$': ['ts-jest', {
+        rootDir: '.',
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'bundler'
+        }
+      }]
+    },
   }
 }
 

@@ -5,7 +5,11 @@ module.exports = {
   testMatch: ['**/__tests/**/*.test.js', '**/*.test.ts'],
   transform: {
     '^.+\\.ts$': ['ts-jest', {
-      useESM: true
+      useESM: true,
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'bundler'
+      }
     }],
     '^.+\\.js$': 'babel-jest'
   },

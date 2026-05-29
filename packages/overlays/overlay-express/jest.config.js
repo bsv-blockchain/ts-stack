@@ -17,13 +17,21 @@ export default {
     '^.+\\.tsx?$': [
       'ts-jest',
       {
-        useESM: true
+        useESM: true,
+        tsconfig: {
+          module: 'ESNext',
+          moduleResolution: 'bundler'
+        }
       }
     ],
     '^.+\\.jsx?$': [
       'ts-jest',
       {
-        useESM: true
+        useESM: true,
+        tsconfig: {
+          module: 'ESNext',
+          moduleResolution: 'bundler'
+        }
       }
     ]
   },

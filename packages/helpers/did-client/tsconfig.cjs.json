@@ -1,12 +1,10 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "target": "es2019",
     "module": "commonjs",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "rootDir": "./",
-    "baseUrl": "./",
     "outDir": "./dist/cjs"
   }
 }

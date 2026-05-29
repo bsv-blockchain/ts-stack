@@ -26,7 +26,7 @@
     "lint": "ts-standard --fix src/**/*.ts",
     "test:watch": "jest --watch",
     "test:coverage-disabled": "jest --coverage",
-    "build": "tsup"
+    "build": "tsup && tsc --emitDeclarationOnly"
   },
   "keywords": [],
   "author": "",

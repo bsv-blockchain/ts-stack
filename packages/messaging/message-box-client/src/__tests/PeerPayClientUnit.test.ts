@@ -1,6 +1,6 @@
 /* eslint-env jest */
 import { PeerPayClient } from '../PeerPayClient.js'
-import { WalletClient, CreateHmacResult, PrivateKey } from '@bsv/sdk'
+import { CreateHmacResult, PrivateKey, type WalletInterface } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 
 const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
@@ -23,33 +23,24 @@ const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
   }
 }
 
-// Mock dependencies
-jest.mock('@bsv/sdk', () => {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const actualSDK = jest.requireActual('@bsv/sdk') as any
-
-  return {
-    ...actualSDK,
-    WalletClient: jest.fn().mockImplementation(() => ({
-      getPublicKey: jest.fn(),
-      createAction: jest.fn(),
-      internalizeAction: jest.fn(),
-      createHmac: jest.fn<() => Promise<CreateHmacResult>>().mockResolvedValue({
-        hmac: [1, 2, 3, 4, 5]
-      }),
-      verifyHmac: jest.fn<() => Promise<{ valid: true }>>().mockResolvedValue({ valid: true as const })
-    }))
-  }
-})
+const createMockWalletClient = (): jest.Mocked<WalletInterface> => ({
+  getPublicKey: jest.fn(),
+  createAction: jest.fn(),
+  internalizeAction: jest.fn(),
+  createHmac: jest.fn<() => Promise<CreateHmacResult>>().mockResolvedValue({
+    hmac: [1, 2, 3, 4, 5]
+  }),
+  verifyHmac: jest.fn<() => Promise<{ valid: true }>>().mockResolvedValue({ valid: true as const })
+} as unknown as jest.Mocked<WalletInterface>)
 
 describe('PeerPayClient Unit Tests', () => {
   let peerPayClient: PeerPayClient
-  let mockWalletClient: jest.Mocked<WalletClient>
+  let mockWalletClient: jest.Mocked<WalletInterface>
 
   beforeEach(() => {
     jest.clearAllMocks()
 
-    mockWalletClient = new WalletClient() as jest.Mocked<WalletClient>
+    mockWalletClient = createMockWalletClient()
 
     // Ensure a valid compressed public key (33 bytes, hex format)
     mockWalletClient.getPublicKey.mockResolvedValue({

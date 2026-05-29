@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "lib": [
       "dom",
       "ESNext"
@@ -10,11 +9,9 @@
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
     "rootDir": "./",
-    "baseUrl": "./",
     "strict": false,
     "isolatedModules": true,
     "strictNullChecks": false,
-    "downlevelIteration": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,

@@ -63,6 +63,6 @@
     "standard": "^16.0.4",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^6.0.3"
   }
 }

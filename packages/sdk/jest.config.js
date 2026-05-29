@@ -16,6 +16,8 @@ export default {
       tsconfig: {
         // Explicitly enable ES2020 to support BigInt literals
         target: 'ES2020',
+        module: 'ESNext',
+        moduleResolution: 'bundler',
         strict: false,
         strictNullChecks: false,
         noImplicitAny: false,

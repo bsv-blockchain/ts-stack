@@ -9,7 +9,12 @@ const config: JestConfigWithTsJest = {
     globalSetup: '<rootDir>/jest.globalSetup.ts',
     setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
     transform: {
-        '^.+\\.ts$': 'ts-jest'
+        '^.+\\.ts$': ['ts-jest', {
+            tsconfig: {
+                module: 'commonjs',
+                moduleResolution: 'bundler'
+            }
+        }]
     },
     moduleFileExtensions: ['ts', 'js', 'json'],
     collectCoverage: false,

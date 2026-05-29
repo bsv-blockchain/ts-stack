@@ -1,7 +1,6 @@
 {
     "files": [],
     "compilerOptions": {
-        "ignoreDeprecations": "6.0",
         "types": ["jest", "node"],
         "esModuleInterop": true,
         "noImplicitAny": false,
