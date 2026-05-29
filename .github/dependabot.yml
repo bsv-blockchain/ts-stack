@@ -37,6 +37,34 @@ updates:
       - dependency-name: "@bsv/gasp"
       - dependency-name: "@bsv/402-pay"
 
+  # Infra services each ship their own npm package-lock.json and live OUTSIDE
+  # the pnpm workspace, so the root entry above does not cover them. List each
+  # explicitly (incl. the nested notifier). @bsv/* ranges here are rewritten by
+  # the release workflow, so Dependabot ignores them.
+  - package-ecosystem: npm
+    directories:
+      - "/infra/chaintracks-server"
+      - "/infra/message-box-server"
+      - "/infra/overlay-server"
+      - "/infra/uhrp-server-basic"
+      - "/infra/uhrp-server-cloud-bucket"
+      - "/infra/uhrp-server-cloud-bucket/notifier"
+      - "/infra/wab"
+      - "/infra/wallet-infra"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      infra-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@bsv/*"
+    ignore:
+      # @bsv/* ranges in infra lockfiles are managed by the release workflow
+      - dependency-name: "@bsv/*"
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
