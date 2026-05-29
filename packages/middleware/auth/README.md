@@ -1,4 +1,4 @@
-# @bsv/auth-proof
+# @bsv/auth
 
 Simple, secure wallet login for BSV apps. A client wallet signs a short-lived
 proof that it controls an identity key; the server verifies the signature,
@@ -17,7 +17,7 @@ has not been seen before.
 ## Install
 
 ```bash
-npm install @bsv/auth-proof
+npm install @bsv/auth
 ```
 
 Requires `@bsv/sdk` (>= 2.0).
@@ -35,7 +35,7 @@ const OPTIONS = { protocol: [2, 'myapp auth'] }
 ### Client
 
 ```ts
-import { AuthProofClient } from '@bsv/auth-proof'
+import { AuthProofClient } from '@bsv/auth'
 
 const authClient = new AuthProofClient(OPTIONS)
 const proof = await authClient.createAuthProof(wallet, backendPublicKey, 'login')
@@ -45,7 +45,7 @@ const proof = await authClient.createAuthProof(wallet, backendPublicKey, 'login'
 ### Server
 
 ```ts
-import { AuthProofServer } from '@bsv/auth-proof'
+import { AuthProofServer } from '@bsv/auth'
 
 const authServer = new AuthProofServer(OPTIONS)
 const result = await authServer.verifyAuthProof(serverWallet, proof, 'login', {
