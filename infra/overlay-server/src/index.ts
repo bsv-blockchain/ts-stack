@@ -43,31 +43,53 @@ import { config } from 'dotenv'
 import packageJson from '../package.json'
 config()
 
+// Reads a required environment variable, failing fast with a clear message if it is missing.
+const requireEnv = (name: string): string => {
+    const value = process.env[name]
+    if (value === undefined || value === '') {
+        throw new Error(`Missing required environment variable: ${name}`)
+    }
+    return value
+}
+
 // Hi there! Let's configure Overlay Express!
 const main = async () => {
-    const env = process.env as Record<string, string>
+    // Validate required configuration up front so misconfiguration fails fast.
+    const NODE_NAME = requireEnv('NODE_NAME')
+    const SERVER_PRIVATE_KEY = requireEnv('SERVER_PRIVATE_KEY')
+    const HOSTING_URL = requireEnv('HOSTING_URL')
+    const WALLET_STORAGE_URL = requireEnv('WALLET_STORAGE_URL')
+    const ARC_API_KEY = requireEnv('ARC_API_KEY')
+    const KNEX_URL = requireEnv('KNEX_URL')
+    const MONGO_URL = requireEnv('MONGO_URL')
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN // optional: a random token is generated if unset
+
+    const NETWORK = requireEnv('NETWORK')
+    if (NETWORK !== 'main' && NETWORK !== 'test') {
+        throw new Error(`NETWORK must be "main" or "test", got: ${NETWORK}`)
+    }
 
     // We'll make a new server for our overlay node.
     const server = new OverlayExpress(
 
         // Name your overlay node with a one-word lowercase string
-        env.NODE_NAME,
+        NODE_NAME,
 
         // Provide the private key that gives your node its identity
-        env.SERVER_PRIVATE_KEY,
+        SERVER_PRIVATE_KEY,
 
         // Provide the HTTPS URL where your node is available on the internet
-        env.HOSTING_URL,
+        HOSTING_URL,
 
         // Provide an adminToken to enable the admin API
-        env.ADMIN_TOKEN
+        ADMIN_TOKEN
     )
 
     const wa = new WalletAdvertiser(
-        env.NETWORK as 'main' | 'test',
-        env.SERVER_PRIVATE_KEY,
-        env.WALLET_STORAGE_URL,
-        env.HOSTING_URL
+        NETWORK,
+        SERVER_PRIVATE_KEY,
+        WALLET_STORAGE_URL,
+        HOSTING_URL
     )
 
     await wa.init()
@@ -77,16 +99,16 @@ const main = async () => {
     })
 
     // Set the ARC API key
-    server.configureArcApiKey(env.ARC_API_KEY)
+    server.configureArcApiKey(ARC_API_KEY)
 
     // Decide what port you want the server to listen on.
     server.configurePort(8080)
 
     // Connect to your SQL database with Knex
-    await server.configureKnex(env.KNEX_URL)
+    await server.configureKnex(KNEX_URL)
 
     // Also, be sure to connect to MongoDB
-    await server.configureMongo(env.MONGO_URL)
+    await server.configureMongo(MONGO_URL)
 
     // Here, you will configure the overlay topic managers and lookup services you want.
     // - Topic managers decide what outputs can go in your overlay
