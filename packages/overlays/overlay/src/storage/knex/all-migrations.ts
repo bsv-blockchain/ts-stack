@@ -7,6 +7,7 @@ import { up as enlargeUp, down as enlargeDown } from './migrations/2025-05-28-00
 import { up as gaspPaginationSupportUp, down as gaspPaginationSupportDown } from './migrations/2025-06-25-001-gasp-pagination-support.js'
 import { up as fixScoreColumnTypeUp, down as fixScoreColumnTypeDown } from './migrations/2025-07-22-001-fix-score-column-type.js'
 import { up as utxoLookupIndexUp, down as utxoLookupIndexDown } from './migrations/2025-11-11-001-utxo-lookup-index.js'
+import { up as brc136BasmUp, down as brc136BasmDown } from './migrations/2026-05-29-001-brc136-basm.js'
 
 /**
  * An array of all migrations, in order.
@@ -24,7 +25,8 @@ const allMigrations: Migration[] = [
   { up: enlargeUp, down: enlargeDown },
   { up: gaspPaginationSupportUp, down: gaspPaginationSupportDown },
   { up: fixScoreColumnTypeUp, down: fixScoreColumnTypeDown },
-  { up: utxoLookupIndexUp, down: utxoLookupIndexDown }
+  { up: utxoLookupIndexUp, down: utxoLookupIndexDown },
+  { up: brc136BasmUp, down: brc136BasmDown }
 ]
 
 export default allMigrations

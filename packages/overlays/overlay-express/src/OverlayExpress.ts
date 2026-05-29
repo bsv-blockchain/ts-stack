@@ -1,6 +1,13 @@
 import express from 'express'
 import bodyParser from 'body-parser'
-import { Engine, KnexStorage, LookupService, TopicManager, KnexStorageMigrations, Advertiser } from '@bsv/overlay'
+import {
+  Engine,
+  KnexStorage,
+  LookupService,
+  TopicManager,
+  KnexStorageMigrations,
+  Advertiser
+} from '@bsv/overlay'
 import {
   ARC,
   ChainTracker,
@@ -92,6 +99,9 @@ export interface EngineConfig {
   throwOnBroadcastFailure?: boolean
   overlayBroadcastFacilitator?: OverlayBroadcastFacilitator
   suppressDefaultSyncAdvertisements?: boolean
+  topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
+  enableBASMSync?: boolean
+  unprovenEvictionBlocks?: number
 }
 
 export type HealthStatus = 'ok' | 'degraded' | 'error'
@@ -137,6 +147,22 @@ export interface HealthReport {
   }
   checks: HealthCheckResult[]
   context?: Record<string, any>
+}
+
+export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<{
+  blockHeight: number
+  blockHash: string
+  merkleRoot?: string
+} | undefined>
+
+interface BASMCapableEngine extends Engine {
+  provideTopicAnchorTip: (topic: string) => Promise<any>
+  provideTopicAnchorRange: (topic: string, fromHeight: number, toHeight: number) => Promise<any>
+  provideAdmittedList: (topic: string, blockHeight: number, blockHash?: string) => Promise<any>
+  provideCompoundMerklePath: (topic: string, blockHeight: number, txids: string[]) => Promise<any>
+  provideRawTransactions: (txids: string[]) => Promise<any>
+  startBASMSync: () => Promise<any>
+  evictUnprovenTransactions: (options?: { topic?: string, thresholdBlocks?: number }) => Promise<any>
 }
 
 /**
@@ -185,6 +211,16 @@ export default class OverlayExpress {
   // Enable GASP Sync
   // (We allow an on/off toggle, but also can do advanced custom sync config below)
   enableGASPSync: boolean = true
+
+  // Enable BRC-136 BASM sync. Off by default; endpoints remain available when
+  // storage supports anchors.
+  enableBASMSync: boolean = false
+
+  // Opt-in unproven eviction default threshold in blocks.
+  unprovenEvictionBlocks: number = 144
+
+  // Optional resolver for block hashes and header merkle roots used by BASM.
+  topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
 
   // ARC API Key
   arcApiKey: string | undefined = undefined
@@ -395,6 +431,33 @@ export default class OverlayExpress {
   }
 
   /**
+   * Enables or disables BRC-136 BASM synchronization.
+   * BASM is opt-in because it requires direct proofs and block hash resolution.
+   */
+  configureEnableBASMSync (enable: boolean): void {
+    this.enableBASMSync = enable
+    this.logger.log(chalk.blue(`BASM synchronization ${enable ? 'enabled' : 'disabled'}.`))
+  }
+
+  /**
+   * Configures the block header resolver used to derive BASM block hashes.
+   */
+  configureTopicAnchorHeaderResolver (resolver: TopicAnchorHeaderResolver): void {
+    this.topicAnchorHeaderResolver = resolver
+    this.logger.log(chalk.blue('BASM topic anchor header resolver has been configured.'))
+  }
+
+  /**
+   * Configures the opt-in unproven state eviction threshold.
+   */
+  configureUnprovenEviction (config: { thresholdBlocks?: number }): void {
+    if (config.thresholdBlocks !== undefined) {
+      this.unprovenEvictionBlocks = config.thresholdBlocks
+    }
+    this.logger.log(chalk.blue('Unproven transaction eviction has been configured.'))
+  }
+
+  /**
    * Enables or disables verbose request logging.
    * @param enable - true to enable, false to disable
    */
@@ -540,7 +603,8 @@ export default class OverlayExpress {
     const broadcaster = this.buildBroadcaster()
     const advertiser = await this.buildAdvertiser()
 
-    this.engine = new Engine(
+    const EngineWithBASM = Engine as unknown as new (...args: any[]) => Engine
+    this.engine = new EngineWithBASM(
       this.managers,
       this.services,
       storage,
@@ -558,7 +622,10 @@ export default class OverlayExpress {
       this.engineConfig.throwOnBroadcastFailure ?? false,
       this.engineConfig.overlayBroadcastFacilitator ?? new HTTPSOverlayBroadcastFacilitator(),
       this.logger,
-      this.engineConfig.suppressDefaultSyncAdvertisements ?? true
+      this.engineConfig.suppressDefaultSyncAdvertisements ?? true,
+      this.buildTopicAnchorHeaderResolver(),
+      this.engineConfig.enableBASMSync ?? this.enableBASMSync,
+      this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks
     )
 
     this.initServerWallet()
@@ -598,6 +665,33 @@ export default class OverlayExpress {
       callbackUrl: `https://${this.advertisableFQDN}/arc-ingest`,
       callbackToken: this.arcCallbackToken
     })
+  }
+
+  /** Build the BASM block header resolver. */
+  private buildTopicAnchorHeaderResolver (): TopicAnchorHeaderResolver | undefined {
+    const configured = this.engineConfig.topicAnchorHeaderResolver ?? this.topicAnchorHeaderResolver
+    if (configured !== undefined) {
+      return configured
+    }
+
+    return async (blockHeight: number) => {
+      const response = await fetch(`https://api.whatsonchain.com/v1/bsv/${this.network}/block/${blockHeight}/header`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      })
+      if (!response.ok) {
+        throw new Error(`WhatsOnChain header lookup failed for height ${blockHeight}: ${response.status}`)
+      }
+      const header = await response.json() as { hash?: string, merkleroot?: string }
+      if (typeof header.hash !== 'string') {
+        throw new Error(`WhatsOnChain did not return a block hash for height ${blockHeight}`)
+      }
+      return {
+        blockHeight,
+        blockHash: header.hash,
+        merkleRoot: header.merkleroot
+      }
+    }
   }
 
   /** Resolve the SLAP trackers from config or network defaults. */
@@ -1350,6 +1444,114 @@ export default class OverlayExpress {
       this.logger.warn(chalk.yellow('GASP sync is disabled.'))
     }
 
+    // BRC-136 BASM anchor and raw transaction endpoints.
+    const basmEngine = engine as BASMCapableEngine
+    const readBasmTopic = (req: express.Request): string => {
+      const header = req.headers['x-bsv-topic']
+      if (typeof header !== 'string' || header.length === 0) {
+        throw new TypeError('Missing x-bsv-topic header')
+      }
+      return header
+    }
+
+    this.app.post('/requestTopicAnchorTip', (req, res) => {
+      ; (async () => {
+        try {
+          const topic = readBasmTopic(req)
+          return res.status(200).json(await basmEngine.provideTopicAnchorTip(topic))
+        } catch (error) {
+          console.error(chalk.red('Error in /requestTopicAnchorTip:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({ status: 'error', message: 'Unexpected error' })
+      })
+    })
+
+    this.app.post('/requestTopicAnchorRange', (req, res) => {
+      ; (async () => {
+        try {
+          const topic = readBasmTopic(req)
+          const { fromHeight, toHeight } = req.body
+          return res.status(200).json(await basmEngine.provideTopicAnchorRange(topic, Number(fromHeight), Number(toHeight)))
+        } catch (error) {
+          console.error(chalk.red('Error in /requestTopicAnchorRange:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({ status: 'error', message: 'Unexpected error' })
+      })
+    })
+
+    this.app.post('/requestAdmittedList', (req, res) => {
+      ; (async () => {
+        try {
+          const topic = readBasmTopic(req)
+          const { blockHeight, blockHash } = req.body
+          return res.status(200).json(await basmEngine.provideAdmittedList(
+            topic,
+            Number(blockHeight),
+            typeof blockHash === 'string' ? blockHash : undefined
+          ))
+        } catch (error) {
+          console.error(chalk.red('Error in /requestAdmittedList:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({ status: 'error', message: 'Unexpected error' })
+      })
+    })
+
+    this.app.post('/requestCompoundMerklePath', (req, res) => {
+      ; (async () => {
+        try {
+          const topic = readBasmTopic(req)
+          const { blockHeight, txids } = req.body
+          if (!Array.isArray(txids) || !txids.every(txid => typeof txid === 'string')) {
+            return res.status(400).json({ status: 'error', message: 'txids must be an array of strings' })
+          }
+          return res.status(200).json(await basmEngine.provideCompoundMerklePath(topic, Number(blockHeight), txids))
+        } catch (error) {
+          console.error(chalk.red('Error in /requestCompoundMerklePath:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({ status: 'error', message: 'Unexpected error' })
+      })
+    })
+
+    this.app.post('/requestRawTransactions', (req, res) => {
+      ; (async () => {
+        try {
+          const { txids } = req.body
+          if (!Array.isArray(txids) || !txids.every(txid => typeof txid === 'string')) {
+            return res.status(400).json({ status: 'error', message: 'txids must be an array of strings' })
+          }
+          return res.status(200).json(await basmEngine.provideRawTransactions(txids))
+        } catch (error) {
+          console.error(chalk.red('Error in /requestRawTransactions:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({ status: 'error', message: 'Unexpected error' })
+      })
+    })
+
     /**
      * ============== ADMIN ROUTES ==============
      * These routes expose advanced engine operations.
@@ -1447,7 +1649,9 @@ export default class OverlayExpress {
               totalBans: banStats.totalBans,
               topicManagers: Object.keys(this.managers),
               lookupServices: Object.keys(this.services),
-              gaspSyncEnabled: this.enableGASPSync
+              gaspSyncEnabled: this.enableGASPSync,
+              basmSyncEnabled: this.enableBASMSync,
+              unprovenEvictionBlocks: this.unprovenEvictionBlocks
             }
           })
         } catch (error) {
@@ -1757,6 +1961,56 @@ export default class OverlayExpress {
     })
 
     /**
+     * Admin route to manually start BASM sync, calling `engine.startBASMSync()`.
+     */
+    this.app.post('/admin/startBASMSync', checkAdminAuth as any, (req, res) => {
+      ; (async () => {
+        try {
+          const report = await basmEngine.startBASMSync()
+          return res.status(200).json({ status: 'success', message: 'BASM sync started and completed', data: report })
+        } catch (error) {
+          console.error(chalk.red('Error in /admin/startBASMSync:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({
+          status: 'error',
+          message: 'Unexpected error'
+        })
+      })
+    })
+
+    /**
+     * Admin route to evict expired unproven topic transactions.
+     */
+    this.app.post('/admin/evictUnproven', checkAdminAuth as any, (req, res) => {
+      ; (async () => {
+        try {
+          const { topic, thresholdBlocks } = req.body ?? {}
+          const report = await basmEngine.evictUnprovenTransactions({
+            topic: typeof topic === 'string' ? topic : undefined,
+            thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
+          })
+          return res.status(200).json({ status: 'success', message: 'Unproven eviction completed', data: report })
+        } catch (error) {
+          console.error(chalk.red('Error in /admin/evictUnproven:'), error)
+          return res.status(400).json({
+            status: 'error',
+            message: error instanceof Error ? error.message : 'An unknown error occurred'
+          })
+        }
+      })().catch(() => {
+        res.status(500).json({
+          status: 'error',
+          message: 'Unexpected error'
+        })
+      })
+    })
+
+    /**
      * Admin route to evict an outpoint, either from all services or a specific one.
      */
     this.app.post('/admin/evictOutpoint', checkAdminAuth as any, (req, res) => {
@@ -1866,6 +2120,17 @@ export default class OverlayExpress {
       }
     } else {
       this.logger.log(chalk.yellow(`${this.name} will not sync because GASP has been disabled.`))
+    }
+
+    // Attempt to do BASM sync if enabled
+    if (this.enableBASMSync || this.engineConfig.enableBASMSync === true) {
+      try {
+        this.logger.log(chalk.green('Starting BASM sync...'))
+        const report = await (this.engine as BASMCapableEngine | undefined)?.startBASMSync()
+        this.logger.log(chalk.green('BASM sync complete!'), report)
+      } catch (e) {
+        console.error(chalk.red('Failed to BASM sync'), e)
+      }
     }
 
     // Start listening on the configured port
