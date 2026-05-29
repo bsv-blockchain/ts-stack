@@ -1,4 +1,4 @@
-# Using `@bsv/auth-proof`
+# Using `@bsv/auth`
 
 A signed, expiry-bound, single-use proof that a request comes from the holder of
 a wallet's identity key.
@@ -36,7 +36,7 @@ export const AUTH_OPTIONS = {
 ## Client
 
 ```ts
-import { AuthProofClient } from '@bsv/auth-proof'
+import { AuthProofClient } from '@bsv/auth'
 import { AUTH_OPTIONS } from './shared'
 
 const authClient = new AuthProofClient(AUTH_OPTIONS)
@@ -58,7 +58,7 @@ await fetch('/api/auth/login', {
 that the proof's `identityKey` matches the identity the request claims to act on.
 
 ```ts
-import { AuthProofServer } from '@bsv/auth-proof'
+import { AuthProofServer } from '@bsv/auth'
 import { AUTH_OPTIONS } from './shared'
 
 const authServer = new AuthProofServer(AUTH_OPTIONS)
@@ -81,7 +81,7 @@ records only until `expiresAt`, so storage stays bounded.
 
 ```ts
 // indexes (once): { nonce: 1 } unique, { expiresAt: 1 } expireAfterSeconds: 0
-import type { ConsumeNonce } from '@bsv/auth-proof'
+import type { ConsumeNonce } from '@bsv/auth'
 
 export const consumeNonce: ConsumeNonce = async (nonce, expiresAt) => {
   try {
