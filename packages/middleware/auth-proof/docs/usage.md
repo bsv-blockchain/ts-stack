@@ -41,8 +41,8 @@ import { AUTH_OPTIONS } from './shared'
 
 const authClient = new AuthProofClient(AUTH_OPTIONS)
 
-// `wallet` is any BRC-100 wallet (e.g. WalletClient); `backendPublicKey` is the
-// server's identity public key.
+// `wallet` is any BRC-100 wallet (e.g. WalletClient). The 2nd arg is the
+// `counterparty` — the server's identity public key the wallet signs toward.
 const proof = await authClient.createAuthProof(wallet, backendPublicKey, 'login')
 
 await fetch('/api/auth/login', {

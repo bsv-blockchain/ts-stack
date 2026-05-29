@@ -22,8 +22,8 @@ import type {
 export class AuthProofClient {
   constructor(private readonly options: AuthProofOptions = {}) {}
 
-  createAuthProof(wallet: ProofSignerWallet, backendPublicKey: string, action: string): Promise<AuthProof> {
-    return createAuthProof(wallet, backendPublicKey, action, this.options);
+  createAuthProof(wallet: ProofSignerWallet, counterparty: string, action: string): Promise<AuthProof> {
+    return createAuthProof(wallet, counterparty, action, this.options);
   }
 
   createAuthSigData(action: string, identityKey: string, now?: number): AuthSigData {

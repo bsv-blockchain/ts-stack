@@ -82,10 +82,15 @@ export function checkAuthSigData(
   return { valid: true };
 }
 
-/** Client-side: signed proof authorizing `action` for this wallet, addressed to the backend. */
+/**
+ * Client-side: build a signed proof authorizing `action` for this wallet.
+ * `counterparty` is the verifier's identity key (e.g. your backend) that the
+ * wallet signs toward — relative to the wallet, so it's a different key than the
+ * server passes to verify (there the counterparty is this signer's identity).
+ */
 export async function createAuthProof(
   wallet: ProofSignerWallet,
-  backendPublicKey: string,
+  counterparty: string,
   action: string,
   options?: AuthProofOptions,
 ): Promise<AuthProof> {
@@ -97,7 +102,7 @@ export async function createAuthProof(
     data: serializeAuthSigData(data),
     protocolID: protocol,
     keyID: data.nonce,
-    counterparty: backendPublicKey,
+    counterparty,
   });
 
   return { data, signature };
