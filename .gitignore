@@ -1,11 +1,5 @@
 node_modules/
 dist/
-!packages/wallet/ts-wallet-relay/dist/
-!packages/wallet/ts-wallet-relay/dist/**/*.d.ts
-!packages/wallet/ts-wallet-relay/dist/**/*.d.ts.map
-!packages/helpers/bsv-wallet-helper/dist/
-!packages/helpers/bsv-wallet-helper/dist/**/*.d.ts
-!packages/helpers/bsv-wallet-helper/dist/**/*.d.ts.map
 build/
 *.tsbuildinfo
 .env
