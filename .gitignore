@@ -35,6 +35,5 @@ docs-site/src/manifest.json
 
 # Stale npm lockfiles. packages/** is pnpm-managed via the root pnpm-lock.yaml,
 # so these are unused leftovers that only inflate Dependabot's alert count.
-# Kept out so they don't regenerate. ts-p2p is excepted: its Dockerfile uses `npm ci`.
+# Kept out so they don't regenerate.
 packages/**/package-lock.json
-!packages/network/ts-p2p/package-lock.json
