@@ -872,6 +872,91 @@ describe('OverlayExpress', () => {
       expect(postSpy.mock.calls.some(call => call[0] === '/arc-ingest')).toBe(false)
     })
 
+    describe('ARC ingest callback token', () => {
+      const mockRes = (): any => {
+        const res: any = {}
+        res.status = jest.fn<any>().mockReturnValue(res)
+        res.json = jest.fn<any>().mockReturnValue(res)
+        return res
+      }
+      // Flush the async IIFE inside the /arc-ingest handler.
+      const flush = async (): Promise<void> => { await new Promise(resolve => setImmediate(resolve)) }
+
+      const captureArcIngestHandler = async (): Promise<any> => {
+        const postSpy = jest.spyOn(instance.app, 'post')
+        jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
+          callback()
+          return {} as any
+        })
+        await instance.start()
+        const handler = postSpy.mock.calls.find(call => call[0] === '/arc-ingest')?.[1]
+        expect(handler).toBeDefined()
+        return handler
+      }
+
+      it('rejects a callback with no token when a token is configured', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: {}, body: {} }, res)
+        await flush()
+
+        expect(res.status).toHaveBeenCalledWith(401)
+      })
+
+      it('rejects a callback with an invalid token', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: { authorization: 'Bearer wrong-token' }, body: {} }, res)
+        await flush()
+
+        expect(res.status).toHaveBeenCalledWith(401)
+      })
+
+      it('accepts a callback with a valid Bearer token', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: { authorization: 'Bearer secret-token' }, body: {} }, res)
+        await flush()
+
+        expect(res.status).not.toHaveBeenCalledWith(401)
+        expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
+      })
+
+      it('accepts a callback with a valid x-callback-token header', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: { 'x-callback-token': 'secret-token' }, body: {} }, res)
+        await flush()
+
+        expect(res.status).not.toHaveBeenCalledWith(401)
+        expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
+      })
+
+      it('does not enforce a token when none is configured', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({ headers: {}, body: {} }, res)
+        await flush()
+
+        expect(res.status).not.toHaveBeenCalledWith(401)
+        expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
+      })
+    })
+
     it('should run knex migrations on start', async () => {
       jest.spyOn(instance.app, 'listen').mockImplementation((port: any, callback: any) => {
         callback()

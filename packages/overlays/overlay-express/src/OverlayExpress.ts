@@ -189,6 +189,9 @@ export default class OverlayExpress {
   // ARC API Key
   arcApiKey: string | undefined = undefined
 
+  // Optional ARC callback token for /arc-ingest notifications
+  arcCallbackToken: string | undefined = undefined
+
   // Verbose request logging
   verboseRequestLogging: boolean = false
 
@@ -370,6 +373,15 @@ export default class OverlayExpress {
   configureArcApiKey (apiKey: string): void {
     this.arcApiKey = apiKey
     this.logger.log(chalk.blue('ARC API key has been configured.'))
+  }
+
+  /**
+   * Configures the ARC callback token expected by /arc-ingest.
+   * @param token - The token ARC should present when posting callback notifications.
+   */
+  configureArcCallbackToken (token: string): void {
+    this.arcCallbackToken = token
+    this.logger.log(chalk.blue('ARC callback token has been configured.'))
   }
 
   /**
@@ -581,7 +593,11 @@ export default class OverlayExpress {
   private buildBroadcaster (): Broadcaster | undefined {
     if (typeof this.arcApiKey !== 'string') return undefined
     const arcUrl = this.network === 'test' ? 'https://arc-test.taal.com' : 'https://arc.taal.com'
-    return new ARC(arcUrl, { apiKey: this.arcApiKey })
+    return new ARC(arcUrl, {
+      apiKey: this.arcApiKey,
+      callbackUrl: `https://${this.advertisableFQDN}/arc-ingest`,
+      callbackToken: this.arcCallbackToken
+    })
   }
 
   /** Resolve the SLAP trackers from config or network defaults. */
@@ -1253,6 +1269,18 @@ export default class OverlayExpress {
       this.app.post('/arc-ingest', (req, res) => {
         ; (async () => {
           try {
+            if (typeof this.arcCallbackToken === 'string' && this.arcCallbackToken.length > 0) {
+              const authorization = req.headers.authorization
+              const headerToken = Array.isArray(authorization) ? authorization[0] : authorization
+              const xCallbackToken = req.headers['x-callback-token']
+              const callbackToken = Array.isArray(xCallbackToken) ? xCallbackToken[0] : xCallbackToken
+              const bearerToken = typeof headerToken === 'string' && headerToken.startsWith('Bearer ')
+                ? headerToken.slice('Bearer '.length)
+                : headerToken
+              if (bearerToken !== this.arcCallbackToken && callbackToken !== this.arcCallbackToken) {
+                return res.status(401).json({ status: 'error', message: 'Unauthorized callback' })
+              }
+            }
             const { txid, merklePath: merklePathHex, blockHeight } = req.body
             const merklePath = MerklePath.fromHex(merklePathHex)
             await engine.handleNewMerkleProof(txid, merklePath, blockHeight)

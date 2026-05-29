@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [2.1.4 - 2026-05-26](#214---2026-05-26)
 - [2.1.3 - 2026-05-23](#213---2026-05-23)
 - [2.1.2 - 2026-05-20](#212---2026-05-20)
 - [2.1.1 - 2026-05-17](#211---2026-05-17)
@@ -224,6 +225,15 @@ All notable changes to this project will be documented in this file. The format 
 ### Fixed
 
 ### Security
+
+---
+
+## [2.1.4] - 2026-05-26
+
+### Fixed
+- `Mnemonic.fromString()` now validates the input phrase at parse time and throws if it is not a
+  valid BIP-39 mnemonic (unknown words, wrong length, or bad checksum). Previously the method
+  accepted any string and the error only surfaced later when `toSeed()` was called.
 
 ---
 

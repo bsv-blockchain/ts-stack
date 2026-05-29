@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [2.3.0](#230-2026-05-28)
 - [0.7.11](#0711-2025-08-13)
 
 ## [Unreleased]
@@ -26,6 +27,18 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
+
+---
+
+## [2.3.0] - 2026-05-28
+
+### Added
+- Added `OverlayMonitor`, a reusable worker for probing Overlay Express `/lookup`
+  responses and reporting BEEF proof-shape bloat.
+
+### Fixed
+- ARC broadcasts now include an explicit `/arc-ingest` callback URL, with optional
+  callback-token validation for deployments that configure one.
 
 ---
 

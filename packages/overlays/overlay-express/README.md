@@ -116,6 +116,39 @@ server.registerHealthCheck({
 
 The janitor service also understands the richer `/health` response format, so existing SHIP/SLAP health validation remains compatible.
 
+### Overlay Monitor
+
+`OverlayMonitor` provides a reusable worker for monitoring Overlay Express lookup behavior. It posts configured `/lookup` probes to any Overlay Express deployment, measures response size, parses returned BEEF, and reports whether responsive output transactions have direct Merkle proofs or are being served with deeper proof ancestry.
+
+This is intended to be run by deployments as a long-running monitor process or by cluster scheduling. It is not tied to a specific deployment platform.
+
+```typescript
+import { OverlayMonitor } from '@bsv/overlay-express'
+
+const monitor = new OverlayMonitor({
+  intervalMs: 24 * 60 * 60 * 1000,
+  targets: [
+    {
+      name: 'example-overlay',
+      baseUrl: 'https://overlay.example',
+      probes: [
+        {
+          name: 'example-topic',
+          service: 'ls_example',
+          query: { topic: 'tm_example' },
+          maxOutputs: 20
+        }
+      ]
+    }
+  ],
+  onReport: async report => {
+    console.log(JSON.stringify(report.summary))
+  }
+})
+
+monitor.start()
+```
+
 ## License
 
 The license for the code in this repository is the Open BSV License. Refer to [LICENSE.txt](./LICENSE.txt) for the license text.

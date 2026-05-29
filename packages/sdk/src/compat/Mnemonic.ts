@@ -125,9 +125,22 @@ export default class Mnemonic {
    * Sets the mnemonic for the instance from a string.
    * @param {string} mnemonic - The mnemonic phrase as a string.
    * @returns {this} The Mnemonic instance with the set mnemonic.
+   * @throws {Error} If the mnemonic does not pass BIP-39 validation
+   * (unknown words, invalid length, or bad checksum).
    */
   public fromString (mnemonic: string): this {
     this.mnemonic = mnemonic
+    let valid = false
+    try {
+      valid = this.check()
+    } catch {
+      valid = false
+    }
+    if (!valid) {
+      throw new Error(
+        'Mnemonic does not pass the check - was the mnemonic typed incorrectly? Are there extra spaces?'
+      )
+    }
     return this
   }
 
