@@ -254,21 +254,21 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.4.1",
-    "@rspack/cli": "^2.0.4",
-    "@rspack/core": "^2.0.4",
+    "@rspack/cli": "^2.0.5",
+    "@rspack/core": "^2.0.5",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.9.1",
-    "eslint": "^10.4.0",
+    "eslint": "^10.4.1",
     "globals": "^17.6.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "ts-jest": "^29.4.11",
-    "ts-loader": "^9.5.4",
+    "ts-loader": "^9.6.0",
     "ts-standard": "^12.0.2",
     "ts2md": "^0.2.8",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.60.0"
+    "typescript-eslint": "^8.60.1"
   },
   "ts-standard": {
     "project": "tsconfig.eslint.json",
