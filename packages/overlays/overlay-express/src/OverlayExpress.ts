@@ -30,6 +30,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
 import { BanService } from './BanService.js'
 import { BanAwareLookupWrapper } from './BanAwareLookupWrapper.js'
+import { BanAwareTopicManager } from './BanAwareTopicManager.js'
+import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoveryStorage.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
@@ -511,9 +513,9 @@ export default class OverlayExpress {
    * By default, auto-configures SHIP and SLAP unless autoConfigureShipSlap = false
    * Then it merges in any advanced engine config from `this.engineConfig`.
    *
-   * When a BanService is available (from configureMongo), SHIP and SLAP lookup
-   * services are automatically wrapped with BanAwareLookupWrapper to prevent
-   * GASP from re-syncing banned tokens.
+   * When a BanService is available (from configureMongo), auto-configured SHIP
+   * and SLAP managers, discovery storage, and lookup services are wrapped so
+   * banned outputs are not admitted or indexed.
    *
    * @param autoConfigureShipSlap - Whether to auto-configure SHIP and SLAP services (default: true)
    */
@@ -523,12 +525,20 @@ export default class OverlayExpress {
     if (autoConfigureShipSlap) {
       this.configureTopicManager('tm_ship', new DiscoveryServices.SHIPTopicManager())
       this.configureTopicManager('tm_slap', new DiscoveryServices.SLAPTopicManager())
-      this.configureLookupServiceWithMongo('ls_ship', (db) => new DiscoveryServices.SHIPLookupService(
-        new DiscoveryServices.SHIPStorage(db)
-      ))
-      this.configureLookupServiceWithMongo('ls_slap', (db) => new DiscoveryServices.SLAPLookupService(
-        new DiscoveryServices.SLAPStorage(db)
-      ))
+      this.configureLookupServiceWithMongo('ls_ship', (db) => {
+        const storage = new DiscoveryServices.SHIPStorage(db)
+        const storageForLookup = this.banService !== undefined
+          ? new BanAwareSHIPStorage(storage, this.banService, this.logger)
+          : storage
+        return new DiscoveryServices.SHIPLookupService(storageForLookup as any)
+      })
+      this.configureLookupServiceWithMongo('ls_slap', (db) => {
+        const storage = new DiscoveryServices.SLAPStorage(db)
+        const storageForLookup = this.banService !== undefined
+          ? new BanAwareSLAPStorage(storage, this.banService, this.logger)
+          : storage
+        return new DiscoveryServices.SLAPLookupService(storageForLookup as any)
+      })
     }
 
     this.wrapBanAwareServices()
@@ -565,9 +575,16 @@ export default class OverlayExpress {
     this.logger.log(chalk.green('Engine has been configured.'))
   }
 
-  /** Wrap SHIP/SLAP with ban-aware filter if BanService is configured. */
+  /** Wrap SHIP/SLAP managers and services with ban-aware filters if BanService is configured. */
   private wrapBanAwareServices (): void {
     if (this.banService === undefined) return
+    for (const key of ['tm_ship', 'tm_slap'] as const) {
+      if (this.managers[key] !== undefined) {
+        const label = key === 'tm_ship' ? 'SHIP' : 'SLAP'
+        this.managers[key] = new BanAwareTopicManager(this.managers[key], this.banService, label, this.logger)
+        this.logger.log(chalk.blue(`${label} topic manager wrapped with ban-aware filter.`))
+      }
+    }
     for (const key of ['ls_ship', 'ls_slap'] as const) {
       if (this.services[key] !== undefined) {
         const label = key === 'ls_ship' ? 'SHIP' : 'SLAP'
