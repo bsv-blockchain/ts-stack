@@ -224,6 +224,25 @@ export interface Storage {
   deleteAppliedTransaction?: (txid: string, topic: string) => Promise<void>
 
   /**
+   * Returns proven topic-applied transactions whose proof anchors to the given
+   * block hash. Used to demote admissions when that block is reorged out.
+   */
+  findProvenAppliedTransactionsByBlockHash?: (blockHash: string) => Promise<Array<{ txid: string, topic: string, blockHeight: number }>>
+
+  /**
+   * Returns proven topic-applied transactions in a closed block-height range,
+   * including the proof's block hash and merkle root for revalidation sweeps.
+   */
+  findProvenAppliedTransactionsInRange?: (fromHeight: number, toHeight: number, topic?: string) => Promise<Array<{ txid: string, topic: string, blockHeight: number, blockHash?: string, merkleRoot?: string }>>
+
+  /**
+   * Demotes a proven applied transaction back to unproven: clears the block
+   * proof metadata and `proven` flag while retaining `firstSeenHeight`, so the
+   * "received" record survives until re-proof or unproven eviction.
+   */
+  demoteAppliedTransactionToUnproven?: (txid: string, topic: string) => Promise<void>
+
+  /**
    * Updates the last interaction score for a given host and topic
    * @param host — The host identifier
    * @param topic — The topic for which to update the interaction score

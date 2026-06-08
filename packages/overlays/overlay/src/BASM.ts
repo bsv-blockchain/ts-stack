@@ -88,6 +88,15 @@ export interface MerkleProofMetadata {
   merkleRoot: string
 }
 
+export interface ReorgReport {
+  perTopic: Array<{
+    topic: string
+    demotedTxids: string[]
+    rebuiltFrom: number
+    rebuiltTo: number
+  }>
+}
+
 export interface BASMPeerSyncReport {
   topic: string
   endpoint: string

@@ -598,4 +598,54 @@ export class KnexStorage implements Storage {
   async deleteAppliedTransaction(txid: string, topic: string): Promise<void> {
     await this.knex('applied_transactions').where({ txid, topic }).del()
   }
+
+  async findProvenAppliedTransactionsByBlockHash(blockHash: string): Promise<Array<{ txid: string, topic: string, blockHeight: number }>> {
+    const rows = await this.knex('applied_transactions')
+      .where({ blockHash, proven: true })
+      .whereNotNull('blockHeight')
+      .select(['txid', 'topic', 'blockHeight'])
+
+    return rows.map(row => ({
+      txid: row.txid,
+      topic: row.topic,
+      blockHeight: Number(row.blockHeight)
+    }))
+  }
+
+  async findProvenAppliedTransactionsInRange(fromHeight: number, toHeight: number, topic?: string): Promise<Array<{ txid: string, topic: string, blockHeight: number, blockHash?: string, merkleRoot?: string }>> {
+    const query = this.knex('applied_transactions')
+      .where({ proven: true })
+      .andWhere('blockHeight', '>=', fromHeight)
+      .andWhere('blockHeight', '<=', toHeight)
+
+    if (topic !== undefined) {
+      void query.andWhere({ topic })
+    }
+
+    const rows = await query.select(['txid', 'topic', 'blockHeight', 'blockHash', 'merkleRoot'])
+
+    return rows.map(row => ({
+      txid: row.txid,
+      topic: row.topic,
+      blockHeight: Number(row.blockHeight),
+      blockHash: row.blockHash ?? undefined,
+      merkleRoot: row.merkleRoot ?? undefined
+    }))
+  }
+
+  async demoteAppliedTransactionToUnproven(txid: string, topic: string): Promise<void> {
+    await this.knex('applied_transactions')
+      .where({ txid, topic })
+      .update({
+        blockHeight: null,
+        blockHash: null,
+        blockIndex: null,
+        merkleRoot: null,
+        proven: false
+      })
+
+    await this.knex('outputs')
+      .where({ txid, topic })
+      .update({ blockHeight: null })
+  }
 }

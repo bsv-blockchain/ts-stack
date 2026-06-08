@@ -31,6 +31,7 @@ import {
   type BASMPeerSyncReport,
   type CompoundMerklePathResponse,
   type RawTransactionResponse,
+  type ReorgReport,
   type TopicAnchorHeaderResolver,
   type TopicAnchorRangeResponse,
   type TopicAnchorTip,
@@ -288,7 +289,8 @@ export class Engine {
     topic: string,
     fromHeight: number,
     toHeight: number,
-    blockHashHints: Map<number, string> = new Map()
+    blockHashHints: Map<number, string> = new Map(),
+    forceResolve = false
   ): Promise<void> {
     if (
       typeof this.storage.findAdmittedTransactionsForBlock !== 'function' ||
@@ -313,7 +315,9 @@ export class Engine {
     for (let height = fromHeight; height <= toHeight; height++) {
       const admitted = await this.storage.findAdmittedTransactionsForBlock(topic, height)
       const existing = await this.storage.findTopicBlockAnchor(topic, height)
-      const blockHash = blockHashHints.get(height) ?? existing?.blockHash ?? await this.resolveBlockHash(height)
+      // On a reorg rebuild the existing anchor's block hash is stale, so force
+      // canonical re-resolution from the header resolver instead of reusing it.
+      const blockHash = blockHashHints.get(height) ?? (forceResolve ? undefined : existing?.blockHash) ?? await this.resolveBlockHash(height)
       if (blockHash === undefined) {
         this.logger.warn(`[BASM] unable to resolve block hash for "${topic}" at height ${height}; halting chain extension`)
         return
@@ -331,6 +335,131 @@ export class Engine {
       })
       prevTac = tac
     }
+  }
+
+  /**
+   * Reconciles BASM anchors with a blockchain reorganization reported by the
+   * chain tracker (e.g. go-chaintracks `/v2/reorg/stream`). Proven topic
+   * transactions whose block was orphaned are demoted to unproven so they leave
+   * the admitted set, then every topic anchor chain intersecting the affected
+   * height range is rebuilt over the canonical block hashes. A reorg changes the
+   * canonical block hash for the affected heights, so topics with no demoted
+   * transaction are rebuilt too. Idempotent: a clean window demotes nothing and
+   * reproduces an identical TAC, so this is safe to invoke on every reorg event,
+   * SSE reconnect, and poll.
+   */
+  async handleReorg(input: {
+    orphanedBlockHashes: string[]
+    rebuildFromHeight: number
+    newTipHeight: number
+  }): Promise<ReorgReport> {
+    const report: ReorgReport = { perTopic: [] }
+    if (
+      typeof this.storage.findProvenAppliedTransactionsByBlockHash !== 'function' ||
+      typeof this.storage.demoteAppliedTransactionToUnproven !== 'function' ||
+      typeof this.storage.findTopicBlockAnchors !== 'function' ||
+      typeof this.storage.upsertTopicBlockAnchor !== 'function'
+    ) {
+      return report
+    }
+
+    // 1) Demote proven admissions whose block was orphaned. Hashes are
+    //    normalized to lower-case display hex to match stored block hashes
+    //    (go-sdk chainhash.Hash marshals as reversed display hex).
+    const demotedByTopic = new Map<string, string[]>()
+    for (const rawHash of input.orphanedBlockHashes) {
+      const blockHash = rawHash.toLowerCase()
+      const rows = await this.storage.findProvenAppliedTransactionsByBlockHash(blockHash)
+      for (const row of rows) {
+        await this.storage.demoteAppliedTransactionToUnproven(row.txid, row.topic)
+        const list = demotedByTopic.get(row.topic) ?? []
+        list.push(row.txid)
+        demotedByTopic.set(row.topic, list)
+      }
+    }
+
+    // 2) Rebuild every topic anchor chain that intersects the reorged range,
+    //    forcing canonical block-hash re-resolution so stale hashes are replaced.
+    for (const topic of Object.keys(this.managers)) {
+      const existing = await this.storage.findTopicBlockAnchors(topic, input.rebuildFromHeight, input.newTipHeight)
+      if (existing.length === 0) {
+        continue
+      }
+      const startHeight = Math.min(...existing.map(anchor => anchor.blockHeight))
+      await this.rebuildTopicAnchorChain(topic, startHeight, input.newTipHeight, new Map(), true)
+      report.perTopic.push({
+        topic,
+        demotedTxids: demotedByTopic.get(topic) ?? [],
+        rebuiltFrom: startHeight,
+        rebuiltTo: input.newTipHeight
+      })
+    }
+
+    return report
+  }
+
+  /**
+   * Revalidation sweep: the reorg fallback for chain trackers without a reorg
+   * event stream, and the catch-up step on every reorg-SSE (re)connect (the
+   * go-chaintracks reorg stream carries no event ids, so a reconnect cannot
+   * replay events missed while disconnected). Scans proven applied transactions
+   * in `[tip - depth + 1, tip]`; any whose proof root no longer validates against
+   * the chain tracker, or whose block hash diverges from the canonical header, is
+   * treated as orphaned and reconciled via {@link handleReorg}.
+   */
+  async revalidateRecentAnchors(depth = 3): Promise<ReorgReport | undefined> {
+    const chainTracker = this.chainTracker
+    if (chainTracker === 'scripts only') {
+      this.logger.warn('[BASM] revalidation sweep requires a ChainTracker; skipping')
+      return undefined
+    }
+    if (typeof this.storage.findProvenAppliedTransactionsInRange !== 'function') {
+      return undefined
+    }
+    const tip = await this.currentHeightOrUndefined()
+    if (tip === undefined) {
+      return undefined
+    }
+
+    const fromHeight = Math.max(0, tip - depth + 1)
+    const rows = await this.storage.findProvenAppliedTransactionsInRange(fromHeight, tip)
+    const orphaned = new Set<string>()
+    let minAffected = Number.POSITIVE_INFINITY
+
+    for (const row of rows) {
+      if (row.blockHash === undefined) {
+        continue
+      }
+      let stale = false
+      if (row.merkleRoot !== undefined) {
+        try {
+          stale = !(await chainTracker.isValidRootForHeight(row.merkleRoot, row.blockHeight))
+        } catch (error) {
+          this.logger.warn(`[BASM] root validation failed for ${row.txid} at height ${row.blockHeight}: ${error instanceof Error ? error.message : String(error)}`)
+          continue
+        }
+      }
+      if (!stale) {
+        const canonical = await this.resolveBlockHash(row.blockHeight)
+        if (canonical !== undefined && canonical.toLowerCase() !== row.blockHash.toLowerCase()) {
+          stale = true
+        }
+      }
+      if (stale) {
+        orphaned.add(row.blockHash.toLowerCase())
+        minAffected = Math.min(minAffected, row.blockHeight)
+      }
+    }
+
+    if (orphaned.size === 0) {
+      return { perTopic: [] }
+    }
+
+    return await this.handleReorg({
+      orphanedBlockHashes: Array.from(orphaned),
+      rebuildFromHeight: minAffected,
+      newTipHeight: tip
+    })
   }
 
   /**
