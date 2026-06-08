@@ -173,6 +173,96 @@ active, **lookup-set counts can legitimately differ between nodes even when thei
 TACs match**. To validate BRC-136 agreement, compare `TAC(topic, tip)` between
 peers — not lookup row counts.
 
+## Reorg handling
+
+A blockchain reorganization can orphan a block whose transactions were already
+admitted and anchored. Since anchors and the admitted set are keyed by
+`(topic, blockHeight, blockHash)`, an orphaned block would otherwise leave stale
+`applied_transactions` rows and an anchor whose `basmRoot`/`tac` commit to a
+block hash that is no longer canonical — permanently diverging the TAC from peers
+that observed the reorg. The engine reconciles this automatically.
+
+### Chaintracks is the reorg authority
+
+Reorg detection is **not** reinvented here. The production chain tracker is
+Arcade, which wraps go-chaintracks; its reorg SSE is the source of truth:
+
+- **`GET /v2/reorg/stream`** emits `data: <JSON>\n\n` frames (no `event:`/`id:`
+  lines; `: keepalive` comments between events). Each frame is a `ReorgEvent`:
+
+  ```jsonc
+  {
+    "orphanedHashes": ["<blockHash>", ...], // blocks removed from the active chain
+    "commonAncestor": { "height": 100, "hash": "..." },
+    "newTip":         { "height": 103, "hash": "..." },
+    "depth": 3
+  }
+  ```
+
+- The same go-chaintracks service answers the merkle-root checks
+  (`isValidRootForHeight`) the engine already trusts for all SPV verification.
+
+`packages/overlays/overlay-express/src/ReorgStream.ts` consumes this stream and
+maps each event to the engine: `orphanedHashes` → blocks to reconcile,
+`commonAncestor.height + 1` → rebuild floor, `newTip.height` → rebuild ceiling.
+Block hashes are lower-cased to match stored display-hex hashes (go-sdk
+`chainhash.Hash` marshals as reversed/display hex).
+
+> **No replay on this stream.** It carries no event ids, so a reorg that fires
+> while the SSE client is disconnected is lost. Every (re)connect therefore runs a
+> catch-up revalidation sweep (below), and the periodic block poll runs the same
+> sweep as a standing fallback for chain trackers that expose no reorg stream.
+
+### What the engine does on a reorg — `Engine.handleReorg`
+
+1. **Demote orphaned admissions.** For each orphaned block hash, every **proven**
+   `applied_transactions` row anchored to it is demoted to unproven
+   (`demoteAppliedTransactionToUnproven`): block height/hash/index/merkleRoot are
+   cleared and `proven` is set to `false`, **but `firstSeenHeight` is kept**. The
+   transaction immediately leaves the admitted set.
+2. **Rebuild affected anchor chains.** Every topic whose chain intersects the
+   reorged height range is rebuilt over the **canonical** block hashes (the rebuild
+   forces header re-resolution rather than reusing the stale stored hash). Topics
+   with no demoted transaction are rebuilt too, because the canonical block hash
+   for those heights changed and the `tac` must re-chain over it.
+
+`handleReorg` is **idempotent**: a clean window demotes nothing and reproduces an
+identical TAC, so it is safe to run on every reorg event, SSE reconnect, and poll.
+
+### Fallback / catch-up — `Engine.revalidateRecentAnchors(depth = 3)`
+
+Scans proven `applied_transactions` in `[tip - depth + 1, tip]`. Any row whose
+proof root no longer validates (`isValidRootForHeight`) or whose block hash
+diverges from the canonical header is treated as orphaned and fed into
+`handleReorg`. This is the reorg path for chain trackers without a reorg stream,
+and the catch-up step on every SSE reconnect. Default depth is 3 blocks
+(`reorgScanDepth`, configurable via `configureReorgStream`).
+
+### Interaction with admin/janitor removal
+
+Reorg recovery and lookup-layer removal are independent and do not interfere:
+
+- Removal/bans touch only the lookup layer; they never demote `applied_transactions`.
+- Reorg demotion touches only the admitted set (proven → unproven) via the chain
+  tracker; it never consults the ban list or lookup index.
+
+A demoted transaction follows the engine's existing unproven lifecycle: if it is
+re-mined, Arcade/ARC re-notifies `/arc-ingest` → `handleNewMerkleProof` re-proves
+it at its new height and the anchor includes it again; if it is never re-mined,
+`evictUnprovenTransactions` removes it after the threshold. The "we received it"
+record survives until one of those resolves.
+
+### Configuration
+
+```ts
+server.configureReorgStream('https://arcade.example/v2/reorg/stream', 3)
+```
+
+- `reorgStreamUrl` — when set, the SSE adapter reconciles reorgs in real time.
+- `reorgScanDepth` — sweep depth from tip (default `3`).
+- The block poll (`basmBlockPollIntervalMs`) runs the sweep as a fallback even
+  when no stream is configured.
+
 ## Verification checklist for operators
 
 1. After removing a token, confirm its `applied_transactions` row still exists
@@ -183,3 +273,13 @@ peers — not lookup row counts.
 
 If all three hold, removal is behaving correctly: the node no longer serves the
 token, yet can still prove it was received and admitted.
+
+### Reorg verification
+
+4. After a reorg orphans an admitted transaction's block, confirm its
+   `applied_transactions` row is demoted (`proven: false`, block fields cleared,
+   `firstSeenHeight` retained) and the affected `topic_block_anchors` rows now
+   carry the canonical block hashes with a recomputed `tac`.
+5. Confirm `TAC(topic, tip)` reconverges with peers that observed the same reorg.
+6. If the orphaned transaction is re-mined, confirm `/arc-ingest` re-proves it and
+   the anchor re-includes it; otherwise confirm it is eventually evicted as unproven.
