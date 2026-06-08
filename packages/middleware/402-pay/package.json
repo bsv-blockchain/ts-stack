@@ -49,9 +49,9 @@
   },
   "devDependencies": {
     "@bsv/sdk": "^2.1.4",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
