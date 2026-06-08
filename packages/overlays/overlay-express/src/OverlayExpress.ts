@@ -37,6 +37,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
 import { BanService } from './BanService.js'
 import { BanAwareLookupWrapper } from './BanAwareLookupWrapper.js'
+import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
@@ -102,6 +103,8 @@ export interface EngineConfig {
   topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
   enableBASMSync?: boolean
   unprovenEvictionBlocks?: number
+  reorgStreamUrl?: string
+  reorgScanDepth?: number
 }
 
 export type HealthStatus = 'ok' | 'degraded' | 'error'
@@ -164,6 +167,8 @@ interface BASMCapableEngine extends Engine {
   startBASMSync: () => Promise<any>
   advanceTopicAnchorChains: (toHeight?: number) => Promise<void>
   evictUnprovenTransactions: (options?: { topic?: string, thresholdBlocks?: number }) => Promise<any>
+  handleReorg: (input: ReorgHandlerInput) => Promise<any>
+  revalidateRecentAnchors: (depth?: number) => Promise<any>
 }
 
 /**
@@ -227,6 +232,17 @@ export default class OverlayExpress {
 
   // Handle for the BASM block-poll timer so it can be stopped.
   private basmBlockPollTimer?: ReturnType<typeof setInterval>
+
+  // Optional go-chaintracks (Arcade) reorg SSE URL (e.g. `<base>/v2/reorg/stream`).
+  // When set, reorgs are reconciled in real time; the block poll also runs a
+  // revalidation sweep as a fallback / reconnect catch-up.
+  reorgStreamUrl?: string
+
+  // Depth (in blocks from the tip) for the reorg revalidation sweep.
+  reorgScanDepth: number = 3
+
+  // Handle for the reorg SSE adapter.
+  private reorgAdapter?: ReorgSseAdapter
 
   // Optional resolver for block hashes and header merkle roots used by BASM.
   topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
@@ -454,6 +470,20 @@ export default class OverlayExpress {
   configureTopicAnchorHeaderResolver (resolver: TopicAnchorHeaderResolver): void {
     this.topicAnchorHeaderResolver = resolver
     this.logger.log(chalk.blue('BASM topic anchor header resolver has been configured.'))
+  }
+
+  /**
+   * Configures the go-chaintracks (Arcade) reorg SSE stream used to reconcile
+   * BASM anchors with blockchain reorganizations in real time.
+   * @param url - The reorg stream URL, e.g. `https://arcade.example/v2/reorg/stream`.
+   * @param scanDepth - Optional revalidation-sweep depth in blocks (default 3).
+   */
+  configureReorgStream (url: string, scanDepth?: number): void {
+    this.reorgStreamUrl = url
+    if (scanDepth !== undefined) {
+      this.reorgScanDepth = scanDepth
+    }
+    this.logger.log(chalk.blue('BASM reorg stream has been configured.'))
   }
 
   /**
@@ -2156,8 +2186,26 @@ export default class OverlayExpress {
       if (this.basmBlockPollIntervalMs > 0) {
         this.basmBlockPollTimer = setInterval(() => {
           void this.advanceBASMAnchorChains()
+          // Fallback reorg detection for chain trackers without a reorg stream,
+          // and a safety net even when the SSE adapter is active.
+          void this.revalidateBASMAnchors()
         }, this.basmBlockPollIntervalMs)
         this.basmBlockPollTimer.unref?.()
+      }
+
+      // Real-time reorg reconciliation via the go-chaintracks (Arcade) reorg SSE.
+      const reorgStreamUrl = this.engineConfig.reorgStreamUrl ?? this.reorgStreamUrl
+      const reorgScanDepth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
+      if (reorgStreamUrl !== undefined && reorgStreamUrl !== '') {
+        const basmEngine = this.engine as BASMCapableEngine | undefined
+        this.reorgAdapter = new ReorgSseAdapter({
+          url: reorgStreamUrl,
+          onReorg: async input => { await basmEngine?.handleReorg(input) },
+          onConnect: async () => { await basmEngine?.revalidateRecentAnchors(reorgScanDepth) },
+          logger: this.logger
+        })
+        this.reorgAdapter.start()
+        this.logger.log(chalk.green(`BASM reorg stream listening at ${reorgStreamUrl}`))
       }
     }
 
@@ -2174,6 +2222,16 @@ export default class OverlayExpress {
       await (this.engine as BASMCapableEngine | undefined)?.advanceTopicAnchorChains()
     } catch (e) {
       console.error(chalk.red('Failed to advance BASM anchor chains'), e)
+    }
+  }
+
+  /** Revalidate recent BASM anchors against the chain tracker, reconciling any reorg. */
+  private async revalidateBASMAnchors (): Promise<void> {
+    try {
+      const depth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
+      await (this.engine as BASMCapableEngine | undefined)?.revalidateRecentAnchors(depth)
+    } catch (e) {
+      console.error(chalk.red('Failed to revalidate BASM anchors'), e)
     }
   }
 }
