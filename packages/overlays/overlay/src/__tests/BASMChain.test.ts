@@ -152,35 +152,38 @@ describe('BRC-136 BASM anchor chain continuity', () => {
   })
 })
 
+/** Replacement canonical block hash for height 101 after a reorg. */
+const H101_NEW = 'aaaa000000000000000000000000000000000000000000000000000000000000'
+
+/** Header resolver where height 101's canonical block hash is H101_NEW (post-reorg). */
+const reorgResolver = async (h: number): Promise<{ blockHeight: number, blockHash: string }> =>
+  ({ blockHeight: h, blockHash: h === 101 ? H101_NEW : blockHashFor(h) })
+
+/**
+ * Builds a topic with a proven admission at height 100 (TXID_1, stays canonical)
+ * and a proven admission at height 101 (TXID_2) in a block that will be orphaned.
+ */
+function seedTwoBlockChain (): FakeStore {
+  const applied: AppliedRow[] = [
+    { txid: TXID_1, topic: 'tm_test', blockHeight: 100, blockHash: blockHashFor(100), blockIndex: 0, merkleRoot: 'm100', firstSeenHeight: 100, proven: true },
+    { txid: TXID_2, topic: 'tm_test', blockHeight: 101, blockHash: blockHashFor(101), blockIndex: 0, merkleRoot: 'm101', firstSeenHeight: 101, proven: true }
+  ]
+  const root100 = computeBasmRoot([{ txid: TXID_1, blockIndex: 0 }])
+  const tac100 = computeTac(ZERO, blockHashFor(100), root100)
+  const root101 = computeBasmRoot([{ txid: TXID_2, blockIndex: 0 }])
+  const tac101 = computeTac(tac100, blockHashFor(101), root101)
+  const anchors = new Map<string, TopicBlockAnchor>()
+  anchors.set('tm_test:100', { topic: 'tm_test', blockHeight: 100, blockHash: blockHashFor(100), basmRoot: root100, admittedCount: 1, tac: tac100 })
+  anchors.set('tm_test:101', { topic: 'tm_test', blockHeight: 101, blockHash: blockHashFor(101), basmRoot: root101, admittedCount: 1, tac: tac101 })
+  return { anchors, applied }
+}
+
 describe('BRC-136 BASM reorg handling', () => {
-  const TXID_3 = '0303030303030303030303030303030303030303030303030303030303030303'
-  const H101_NEW = 'aaaa000000000000000000000000000000000000000000000000000000000000'
-
-  /**
-   * Builds a topic with a proven admission at height 100 (TXID_1, stays canonical)
-   * and a proven admission at height 101 (TXID_2) in a block that will be orphaned.
-   */
-  function seedTwoBlockChain (): FakeStore {
-    const applied: AppliedRow[] = [
-      { txid: TXID_1, topic: 'tm_test', blockHeight: 100, blockHash: blockHashFor(100), blockIndex: 0, merkleRoot: 'm100', firstSeenHeight: 100, proven: true },
-      { txid: TXID_2, topic: 'tm_test', blockHeight: 101, blockHash: blockHashFor(101), blockIndex: 0, merkleRoot: 'm101', firstSeenHeight: 101, proven: true }
-    ]
-    const root100 = computeBasmRoot([{ txid: TXID_1, blockIndex: 0 }])
-    const tac100 = computeTac(ZERO, blockHashFor(100), root100)
-    const root101 = computeBasmRoot([{ txid: TXID_2, blockIndex: 0 }])
-    const tac101 = computeTac(tac100, blockHashFor(101), root101)
-    const anchors = new Map<string, TopicBlockAnchor>()
-    anchors.set('tm_test:100', { topic: 'tm_test', blockHeight: 100, blockHash: blockHashFor(100), basmRoot: root100, admittedCount: 1, tac: tac100 })
-    anchors.set('tm_test:101', { topic: 'tm_test', blockHeight: 101, blockHash: blockHashFor(101), basmRoot: root101, admittedCount: 1, tac: tac101 })
-    return { anchors, applied }
-  }
-
   it('demotes an orphaned-block tx to unproven and rebuilds the anchor over the canonical hash', async () => {
     const store = seedTwoBlockChain()
     // Reorg: height 101's block (blockHashFor(101)) is orphaned; the replacement
     // canonical block at 101 (H101_NEW) does not re-include TXID_2.
-    const resolver = async (h: number) => ({ blockHeight: h, blockHash: h === 101 ? H101_NEW : blockHashFor(h) })
-    const engine = makeEngine(store, { resolver, currentHeight: 101 })
+    const engine = makeEngine(store, { resolver: reorgResolver, currentHeight: 101 })
 
     await (engine as any).handleReorg({
       orphanedBlockHashes: [blockHashFor(101)],
@@ -225,8 +228,7 @@ describe('BRC-136 BASM reorg handling', () => {
 
   it('re-proving a demoted tx at a new height restores it to the admitted set', async () => {
     const store = seedTwoBlockChain()
-    const resolver = async (h: number) => ({ blockHeight: h, blockHash: h === 101 ? H101_NEW : blockHashFor(h) })
-    const engine = makeEngine(store, { resolver, currentHeight: 101 })
+    const engine = makeEngine(store, { resolver: reorgResolver, currentHeight: 101 })
 
     await (engine as any).handleReorg({
       orphanedBlockHashes: [blockHashFor(101)],
@@ -257,30 +259,12 @@ describe('BRC-136 BASM reorg handling', () => {
 })
 
 describe('BRC-136 BASM reorg revalidation sweep', () => {
-  const H101_NEW = 'aaaa000000000000000000000000000000000000000000000000000000000000'
-
-  function seedTwoBlockChain (): FakeStore {
-    const applied: AppliedRow[] = [
-      { txid: TXID_1, topic: 'tm_test', blockHeight: 100, blockHash: blockHashFor(100), blockIndex: 0, merkleRoot: 'm100', firstSeenHeight: 100, proven: true },
-      { txid: TXID_2, topic: 'tm_test', blockHeight: 101, blockHash: blockHashFor(101), blockIndex: 0, merkleRoot: 'm101', firstSeenHeight: 101, proven: true }
-    ]
-    const root100 = computeBasmRoot([{ txid: TXID_1, blockIndex: 0 }])
-    const tac100 = computeTac(ZERO, blockHashFor(100), root100)
-    const root101 = computeBasmRoot([{ txid: TXID_2, blockIndex: 0 }])
-    const tac101 = computeTac(tac100, blockHashFor(101), root101)
-    const anchors = new Map<string, TopicBlockAnchor>()
-    anchors.set('tm_test:100', { topic: 'tm_test', blockHeight: 100, blockHash: blockHashFor(100), basmRoot: root100, admittedCount: 1, tac: tac100 })
-    anchors.set('tm_test:101', { topic: 'tm_test', blockHeight: 101, blockHash: blockHashFor(101), basmRoot: root101, admittedCount: 1, tac: tac101 })
-    return { anchors, applied }
-  }
-
   it('detects a stale proof root within the window and reorgs the affected height', async () => {
     const store = seedTwoBlockChain()
     // Height 101's proof root no longer validates (block orphaned); canonical
     // header at 101 is now H101_NEW.
-    const isValidRootForHeight = async (root: string, height: number) => !(height === 101 && root === 'm101')
-    const resolver = async (h: number) => ({ blockHeight: h, blockHash: h === 101 ? H101_NEW : blockHashFor(h) })
-    const engine = makeEngine(store, { resolver, currentHeight: 101, isValidRootForHeight })
+    const isValidRootForHeight = async (root: string, height: number): Promise<boolean> => !(height === 101 && root === 'm101')
+    const engine = makeEngine(store, { resolver: reorgResolver, currentHeight: 101, isValidRootForHeight })
 
     await (engine as any).revalidateRecentAnchors(3)
 
