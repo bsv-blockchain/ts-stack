@@ -55,11 +55,11 @@ speedup against real transaction validation.
 
 ### Core SDK change (minimal)
 
-New interface (new file `packages/sdk/src/transaction/ScriptVerificationBackend.ts`,
+New interface (new file `packages/sdk/src/transaction/BdkVerifierInterface.ts`,
 re-exported from `mod.ts`):
 
 ```ts
-export interface ScriptVerificationBackend {
+export interface BdkVerifierInterface {
   /**
    * Verify ALL input scripts of a single transaction.
    * Resolves true/false for script validity; throws if the backend itself
@@ -81,7 +81,7 @@ async verify (
   chainTracker: ChainTracker | 'scripts only' = defaultChainTracker(),
   feeModel?: FeeModel,
   memoryLimit?: number,
-  scriptBackend?: ScriptVerificationBackend
+  verifier?: BdkVerifierInterface
 ): Promise<boolean>
 ```
 
@@ -90,7 +90,7 @@ Behaviour change inside the per-tx body:
 - The script-validity check changes:
   - **No backend (default):** per input, construct `Spend` and call `validate()` exactly as today.
   - **Backend present:** skip per-input `Spend`; after the loop, call
-    `await scriptBackend.verifyScripts({ tx, blockHeight, consensus, verifyFlags })` **once**.
+    `await verifier.verifyScripts({ tx, blockHeight, consensus, verifyFlags })` **once**.
     If it resolves `false`, `verify()` returns `false`. If it throws, the error propagates.
 - `blockHeight` / `consensus` / `verifyFlags` for the backend call: default
   `consensus = true`; `verifyFlags` undefined (BDK default policy); `blockHeight`
@@ -106,7 +106,7 @@ packages/verifast/
   package.json            # name @bsv/verifast, deps: @bsv/sdk
   src/
     mod.ts                # exports BdkVerifier, flag map, types
-    BdkVerifier.ts        # implements ScriptVerificationBackend
+    BdkVerifier.ts        # implements BdkVerifierInterface
     flags.ts              # TS string flags -> BDK uint32 bitfield
     wasm/                 # (gitignored) user-supplied bdk-core.{mjs,wasm}
     __tests/
@@ -139,7 +139,7 @@ packages/verifast/
 
 ## Testing & benchmarks
 
-- **Mock backend test** (SDK): a fake `ScriptVerificationBackend` proves
+- **Mock backend test** (SDK): a fake `BdkVerifierInterface` proves
   `Transaction.verify(..., backend)` routes through the backend, returns its bool,
   and propagates its throw — no wasm needed.
 - **Equivalence corpus** (`bench/equivalence.test.ts`): N transactions covering
@@ -161,7 +161,7 @@ packages/verifast/
 
 ## Acceptance
 
-- `@bsv/sdk` exposes `ScriptVerificationBackend`; `Transaction.verify` accepts and
+- `@bsv/sdk` exposes `BdkVerifierInterface`; `Transaction.verify` accepts and
   uses it; default path (no backend) behaviour byte-for-byte unchanged; mock-backed
   tests green.
 - `@bsv/verifast` builds, lints, `BdkVerifier` unit-tested against a mock wasm.
