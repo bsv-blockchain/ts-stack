@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "test": "jest",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "bench": "tsx bench/benchmark.ts",
     "lint": "ts-standard --fix \"src/**/*.ts\" \"bench/**/*.ts\" mod.ts",
     "lint:ci": "ts-standard \"src/**/*.ts\" \"bench/**/*.ts\" mod.ts"
