@@ -18,6 +18,10 @@ import P2PKH from '../script/templates/P2PKH.js'
 import type { WalletInterface, DescriptionString5to50Bytes, CreateActionOptions } from '../wallet/Wallet.interfaces.js'
 import TransactionSignature from '../primitives/TransactionSignature.js'
 import Random from '../primitives/Random.js'
+import type BdkVerifierInterface from './BdkVerifierInterface.js'
+
+/** Post-Chronicle height used when an input's source UTXO mined-height is unobtainable. */
+const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
 
 /**
  * Represents a complete Bitcoin transaction. This class encapsulates all the details
@@ -833,7 +837,8 @@ export default class Transaction {
   async verify (
     chainTracker: ChainTracker | 'scripts only' = defaultChainTracker(),
     feeModel?: FeeModel,
-    memoryLimit?: number
+    memoryLimit?: number,
+    verifier?: BdkVerifierInterface
   ): Promise<boolean> {
     const verifiedTxids = new Set<string>()
     const txQueue: Transaction[] = [this]
@@ -910,23 +915,40 @@ export default class Transaction {
         const otherInputs = tx.inputs.filter((_, idx) => idx !== i)
         input.sourceTXID ??= sourceTxid
 
-        const spend = new Spend({
-          sourceTXID: input.sourceTXID,
-          sourceOutputIndex: input.sourceOutputIndex,
-          lockingScript: sourceOutput.lockingScript,
-          sourceSatoshis: sourceOutput.satoshis ?? 0,
-          transactionVersion: tx.version,
-          otherInputs,
-          unlockingScript: input.unlockingScript,
-          inputSequence: input.sequence ?? 0xffffffff, // default to max sequence
-          inputIndex: i,
-          outputs: tx.outputs,
-          lockTime: tx.lockTime,
-          memoryLimit
-        })
-        const spendValid = spend.validate()
+        if (verifier === undefined) {
+          const spend = new Spend({
+            sourceTXID: input.sourceTXID,
+            sourceOutputIndex: input.sourceOutputIndex,
+            lockingScript: sourceOutput.lockingScript,
+            sourceSatoshis: sourceOutput.satoshis ?? 0,
+            transactionVersion: tx.version,
+            otherInputs,
+            unlockingScript: input.unlockingScript,
+            inputSequence: input.sequence ?? 0xffffffff, // default to max sequence
+            inputIndex: i,
+            outputs: tx.outputs,
+            lockTime: tx.lockTime,
+            memoryLimit
+          })
+          const spendValid = spend.validate()
 
-        if (!spendValid) {
+          if (!spendValid) {
+            return false
+          }
+        }
+      }
+
+      // When a pluggable verifier is configured, hand the whole transaction to it
+      // once (BDK operates at whole-tx granularity). Strict: its verdict is
+      // authoritative and any thrown error propagates (no JS fallback).
+      if (verifier !== undefined) {
+        const blockHeight = tx.merklePath?.blockHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
+        const scriptsValid = await verifier.verifyScripts({
+          tx,
+          blockHeight,
+          consensus: true
+        })
+        if (!scriptsValid) {
           return false
         }
       }
