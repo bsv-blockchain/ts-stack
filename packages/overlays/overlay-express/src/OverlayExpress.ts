@@ -162,6 +162,7 @@ interface BASMCapableEngine extends Engine {
   provideCompoundMerklePath: (topic: string, blockHeight: number, txids: string[]) => Promise<any>
   provideRawTransactions: (txids: string[]) => Promise<any>
   startBASMSync: () => Promise<any>
+  advanceTopicAnchorChains: (toHeight?: number) => Promise<void>
   evictUnprovenTransactions: (options?: { topic?: string, thresholdBlocks?: number }) => Promise<any>
 }
 
@@ -218,6 +219,14 @@ export default class OverlayExpress {
 
   // Opt-in unproven eviction default threshold in blocks.
   unprovenEvictionBlocks: number = 144
+
+  // How often (ms) to poll the chain tip and extend each topic's BASM anchor
+  // chain with empty anchors, so the cumulative TAC advances "after each new
+  // block" per BRC-136. Set to 0 to disable polling (startup extension still runs).
+  basmBlockPollIntervalMs: number = 10 * 60 * 1000
+
+  // Handle for the BASM block-poll timer so it can be stopped.
+  private basmBlockPollTimer?: ReturnType<typeof setInterval>
 
   // Optional resolver for block hashes and header merkle roots used by BASM.
   topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
@@ -455,6 +464,15 @@ export default class OverlayExpress {
       this.unprovenEvictionBlocks = config.thresholdBlocks
     }
     this.logger.log(chalk.blue('Unproven transaction eviction has been configured.'))
+  }
+
+  /**
+   * Configures how often the BASM anchor chain is extended with empty anchors to
+   * follow the chain tip. Set to 0 to disable periodic polling.
+   */
+  configureBASMBlockPollInterval (intervalMs: number): void {
+    this.basmBlockPollIntervalMs = intervalMs
+    this.logger.log(chalk.blue(`BASM block poll interval set to ${intervalMs}ms.`))
   }
 
   /**
@@ -2131,6 +2149,16 @@ export default class OverlayExpress {
       } catch (e) {
         console.error(chalk.red('Failed to BASM sync'), e)
       }
+
+      // Extend each topic's anchor chain to the current tip on startup, then keep
+      // it following the tip so the cumulative TAC advances after each new block.
+      await this.advanceBASMAnchorChains()
+      if (this.basmBlockPollIntervalMs > 0) {
+        this.basmBlockPollTimer = setInterval(() => {
+          void this.advanceBASMAnchorChains()
+        }, this.basmBlockPollIntervalMs)
+        this.basmBlockPollTimer.unref?.()
+      }
     }
 
     // Start listening on the configured port
@@ -2138,5 +2166,14 @@ export default class OverlayExpress {
       this.isListening = true
       this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
     })
+  }
+
+  /** Extend every topic's BASM anchor chain to the current chain tip. */
+  private async advanceBASMAnchorChains (): Promise<void> {
+    try {
+      await (this.engine as BASMCapableEngine | undefined)?.advanceTopicAnchorChains()
+    } catch (e) {
+      console.error(chalk.red('Failed to advance BASM anchor chains'), e)
+    }
   }
 }

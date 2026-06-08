@@ -222,56 +222,114 @@ export class Engine {
   private async recomputeTopicBlockAnchor(topic: string, blockHeight: number, blockHash?: string): Promise<TopicBlockAnchor | undefined> {
     if (
       typeof this.storage.findAdmittedTransactionsForBlock !== 'function' ||
-      typeof this.storage.upsertTopicBlockAnchor !== 'function'
+      typeof this.storage.upsertTopicBlockAnchor !== 'function' ||
+      typeof this.storage.findTopicBlockAnchor !== 'function'
     ) {
       return undefined
     }
 
-    const admitted = await this.storage.findAdmittedTransactionsForBlock(topic, blockHeight, blockHash)
-    const anchorBlockHash = blockHash ?? (await this.storage.findTopicBlockAnchor?.(topic, blockHeight))?.blockHash
+    const anchorBlockHash = blockHash ?? (await this.storage.findTopicBlockAnchor(topic, blockHeight))?.blockHash
     if (anchorBlockHash === undefined) {
       return undefined
     }
 
-    const basmRoot = computeBasmRoot(admitted)
-    const previousAnchor = await this.storage.findTopicBlockAnchor?.(topic, blockHeight - 1)
-    const prevTac = previousAnchor?.tac ?? BASM_ZERO_HASH
-    const anchor: TopicBlockAnchor = {
-      topic,
-      blockHeight,
-      blockHash: anchorBlockHash,
-      basmRoot,
-      admittedCount: admitted.length,
-      tac: computeTac(prevTac, anchorBlockHash, basmRoot)
-    }
+    // BRC-136 per-block completeness: establish the chain's genesis at the first
+    // admitted height, then keep every height from there to the tip contiguous so
+    // the cumulative TAC never resets across blocks with no admitted transactions.
+    // We rebuild [fromHeight, toHeight] rather than only the touched height so that
+    // an out-of-order proof (older height arriving after a newer one) can never
+    // leave a gap that silently breaks the chain.
+    const tip = await this.storage.findTopicAnchorTip?.(topic)
+    const tipHeight = tip !== undefined && tip.blockHeight >= 0 ? tip.blockHeight : undefined
+    const fromHeight = tipHeight === undefined ? blockHeight : Math.min(blockHeight, tipHeight + 1)
+    const toHeight = tipHeight === undefined ? blockHeight : Math.max(blockHeight, tipHeight)
 
-    await this.storage.upsertTopicBlockAnchor(anchor)
-    await this.recomputeDownstreamTopicAnchors(topic, blockHeight + 1, anchor.tac)
-    return anchor
+    await this.rebuildTopicAnchorChain(topic, fromHeight, toHeight, new Map([[blockHeight, anchorBlockHash]]))
+    return await this.storage.findTopicBlockAnchor(topic, blockHeight)
   }
 
-  private async recomputeDownstreamTopicAnchors(topic: string, fromHeight: number, prevTac: string): Promise<void> {
+  /**
+   * Extends every configured topic's anchor chain forward with empty Topic Block
+   * Anchors (basmRoot = zero hash, admittedCount = 0) up to `toHeight`, so the
+   * cumulative TAC advances on every block even when a topic admits nothing —
+   * this is what lets a peer authoritatively confirm "this block contained no
+   * transactions for this topic". Chains with no first admission yet are left
+   * unstarted (genesis is the topic's first admitted height).
+   */
+  async advanceTopicAnchorChains(toHeight?: number): Promise<void> {
     if (
-      typeof this.storage.findTopicBlockAnchors !== 'function' ||
+      typeof this.storage.findTopicAnchorTip !== 'function' ||
       typeof this.storage.upsertTopicBlockAnchor !== 'function'
     ) {
       return
     }
+    const targetHeight = toHeight ?? await this.currentHeightOrUndefined()
+    if (targetHeight === undefined) {
+      return
+    }
+    for (const topic of Object.keys(this.managers)) {
+      const tip = await this.storage.findTopicAnchorTip(topic)
+      if (tip === undefined || tip.blockHeight < 0 || tip.blockHeight >= targetHeight) {
+        continue
+      }
+      await this.rebuildTopicAnchorChain(topic, tip.blockHeight + 1, targetHeight)
+    }
+  }
 
-    const tip = await this.storage.findTopicAnchorTip?.(topic)
-    if (tip === undefined || tip.blockHeight < fromHeight) {
+  /**
+   * Rebuilds a contiguous slice of a topic's anchor chain over [fromHeight,
+   * toHeight]. Each height uses its admitted transactions (empty -> zero basmRoot)
+   * and chains the cumulative TAC from the prior height. Missing heights are
+   * filled rather than skipped, so the chain stays gap-free. If a block hash
+   * cannot be resolved for some height the extension halts there to preserve
+   * contiguity instead of leaving a hole.
+   */
+  private async rebuildTopicAnchorChain(
+    topic: string,
+    fromHeight: number,
+    toHeight: number,
+    blockHashHints: Map<number, string> = new Map()
+  ): Promise<void> {
+    if (
+      typeof this.storage.findAdmittedTransactionsForBlock !== 'function' ||
+      typeof this.storage.upsertTopicBlockAnchor !== 'function' ||
+      typeof this.storage.findTopicBlockAnchor !== 'function' ||
+      toHeight < fromHeight
+    ) {
       return
     }
 
-    const anchors = await this.storage.findTopicBlockAnchors(topic, fromHeight, tip.blockHeight)
-    let workingTac = prevTac
-    for (const anchor of anchors) {
-      const updated = {
-        ...anchor,
-        tac: computeTac(workingTac, anchor.blockHash, anchor.basmRoot)
+    if (toHeight - fromHeight + 1 > DEFAULT_BASM_RANGE_LIMIT) {
+      // Bound the work per pass; the next trigger resumes from the new tip.
+      this.logger.warn(`[BASM] capping anchor chain extension for "${topic}" at ${DEFAULT_BASM_RANGE_LIMIT} blocks (requested ${fromHeight}..${toHeight}); will continue on the next pass`)
+      toHeight = fromHeight + DEFAULT_BASM_RANGE_LIMIT - 1
+    }
+
+    const previousAnchor = fromHeight > 0
+      ? await this.storage.findTopicBlockAnchor(topic, fromHeight - 1)
+      : undefined
+    let prevTac = previousAnchor?.tac ?? BASM_ZERO_HASH
+
+    for (let height = fromHeight; height <= toHeight; height++) {
+      const admitted = await this.storage.findAdmittedTransactionsForBlock(topic, height)
+      const existing = await this.storage.findTopicBlockAnchor(topic, height)
+      const blockHash = blockHashHints.get(height) ?? existing?.blockHash ?? await this.resolveBlockHash(height)
+      if (blockHash === undefined) {
+        this.logger.warn(`[BASM] unable to resolve block hash for "${topic}" at height ${height}; halting chain extension`)
+        return
       }
-      await this.storage.upsertTopicBlockAnchor(updated)
-      workingTac = updated.tac
+
+      const basmRoot = computeBasmRoot(admitted)
+      const tac = computeTac(prevTac, blockHash, basmRoot)
+      await this.storage.upsertTopicBlockAnchor({
+        topic,
+        blockHeight: height,
+        blockHash,
+        basmRoot,
+        admittedCount: admitted.length,
+        tac
+      })
+      prevTac = tac
     }
   }
 
