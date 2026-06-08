@@ -1,3 +1,20 @@
+---
+id: brc136-basm-reorg-handling-design
+title: BRC-136 BASM Reorg Handling — Design
+kind: spec
+domain: overlays
+version: 1.0.0
+last_updated: "2026-06-08"
+last_verified: "2026-06-08"
+status: experimental
+tags:
+  - brc-136
+  - basm
+  - reorg
+  - overlays
+  - chaintracks
+---
+
 # BRC-136 BASM Reorg Handling — Design
 
 **Date:** 2026-06-08
