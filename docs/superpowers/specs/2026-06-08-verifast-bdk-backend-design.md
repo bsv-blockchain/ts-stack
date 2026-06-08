@@ -151,6 +151,34 @@ packages/verifast/
   marshalling overhead. Runs against any supplied backend; with the mock it measures
   marshalling only.
 
+## Monorepo linkage constraint (discovered)
+
+The root `package.json` sets `pnpm.overrides["@bsv/sdk"] = "2.1.3"`. This forces
+**every** workspace consumer — even those declaring `"@bsv/sdk": "workspace:^"` — to
+resolve to the **published** registry `@bsv/sdk@2.1.3`, not the local `packages/sdk`
+source (currently `2.1.4`). Verified: `packages/wallet/wallet-toolbox` and
+`packages/middleware/auth` both symlink to `.pnpm/@bsv+sdk@2.1.3`. So local SDK
+source changes are NOT visible to sibling packages via `@bsv/sdk`.
+
+Consequences for this work:
+
+1. **Core SDK changes** (`BdkVerifierInterface`, the `Transaction.verify` param, the
+   mock-backed seam test) live in `packages/sdk` and are exercised by **`packages/sdk`'s
+   own jest suite**, which compiles local source directly. This works today with no
+   linkage workaround.
+2. **`@bsv/verifast`'s `BdkVerifier` + `flags.ts`** depend only on
+   `Transaction.toEF()` (present in published 2.1.3) and the *shape* of
+   `BdkVerifierInterface` (structural — `BdkVerifier` re-declares a local copy of the
+   interface and `implements` it, so it does not need the unpublished export).
+3. **`@bsv/verifast`'s equivalence + benchmark harness** needs the *new*
+   `Transaction.verify(verifier)` signature, which only exists in local SDK source.
+   To avoid touching the repo-wide override, verifast configures a **jest
+   `moduleNameMapper` / tsconfig path** that maps `@bsv/sdk` → `../sdk/mod.ts` (local
+   source) for its own test/bench runs only. The published dep declaration stays for
+   type/publish hygiene; the mapper is dev-only and isolated to verifast.
+
+The root override is deliberately left untouched.
+
 ## Out of scope / caveats
 
 - Building a real, logic-validated `bdk-core.wasm` (upstream's is a stub). Documented
