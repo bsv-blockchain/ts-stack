@@ -1,0 +1,4 @@
+dist
+node_modules
+src/wasm/*.wasm
+src/wasm/*.mjs
