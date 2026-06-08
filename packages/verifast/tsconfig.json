@@ -1,12 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": ".",
-    "declaration": true,
-    "types": ["jest", "node"],
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "strictNullChecks": true,
+    "noEmit": true,
+    "types": ["jest", "node"]
   },
-  "include": ["mod.ts", "src/**/*.ts"],
-  "exclude": ["bench/**", "src/**/__tests/**", "dist", "node_modules"]
+  "include": ["mod.ts", "src/**/*.ts", "bench/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
 }

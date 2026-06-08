@@ -1,4 +1,4 @@
-import { mapVerifyFlags, BDK_FLAG_BITS } from '../flags'
+import { mapVerifyFlags, BDK_FLAG_BITS } from '../flags.js'
 
 describe('mapVerifyFlags', () => {
   it('returns 0 for undefined', () => {

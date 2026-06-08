@@ -13,11 +13,10 @@
     }
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -p tsconfig.build.json",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "bench": "tsx bench/benchmark.ts",
-    "lint": "ts-standard --fix \"src/**/*.ts\" \"bench/**/*.ts\" mod.ts",
-    "lint:ci": "ts-standard \"src/**/*.ts\" \"bench/**/*.ts\" mod.ts"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@bsv/sdk": "^2.1.4"
