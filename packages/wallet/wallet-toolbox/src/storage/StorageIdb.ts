@@ -267,7 +267,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         noScript: true,
         trx: dbTrx
       }
-      const outputs = await this.findOutputs(args)
+      const outputs = (await this.findOutputs(args)).filter(o => o.spentBy == null)
       let output: TableOutput | undefined
       let scores: Array<{ output: TableOutput, score: number }> = []
       for (const o of outputs) {

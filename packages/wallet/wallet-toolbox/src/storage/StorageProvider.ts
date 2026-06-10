@@ -195,7 +195,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       noScript: true,
       trx
     })
-    return rows.reduce((a, r) => a + (r.satoshis ?? 0), 0)
+    return rows.filter(r => r.spentBy == null).reduce((a, r) => a + (r.satoshis ?? 0), 0)
   }
 
   abstract findCertificatesAuth (auth: AuthId, args: FindCertificatesArgs): Promise<TableCertificateX[]>

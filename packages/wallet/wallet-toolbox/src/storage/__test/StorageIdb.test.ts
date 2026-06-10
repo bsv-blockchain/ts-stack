@@ -3,6 +3,7 @@ import { Setup } from '../../Setup'
 import { SetupClient } from '../../SetupClient'
 import { StorageIdb } from '../StorageIdb'
 import { StorageProvider, StorageProviderOptions } from '../StorageProvider'
+import { TableOutput, TableOutputBasket, TableTransaction, TableUser } from '../schema/tables'
 import 'fake-indexeddb/auto'
 
 describe('StorageIdb tests', () => {
@@ -11,9 +12,74 @@ describe('StorageIdb tests', () => {
   test('0', async () => {
     const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions('main')
     const storage = new StorageIdb(options)
-    const r = await storage.migrate('storageIdbTest', '42'.repeat(32))
-    const db = storage.db!
-    expect(db).toBeTruthy()
+    await resetStorage(storage)
+    try {
+      const r = await storage.migrate(`storageIdbTest-${Date.now()}`, '42'.repeat(32))
+      const db = storage.db
+      expect(r).toBe('1')
+      expect(db).toBeTruthy()
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('reviewStatus releases outputs reserved by failed transactions', async () => {
+    const storage = await makeStorage()
+    try {
+      const { userId, basketId, holderTxId } = await seedSpendableOutputHeldByFailedTx(storage)
+
+      const review = await storage.reviewStatus({ agedLimit: new Date(0) })
+      const outputs = await storage.findOutputs({ partial: { userId, basketId }, noScript: true })
+
+      expect(review.log).toContain(`released from failed transaction ${holderTxId}`)
+      expect(outputs).toHaveLength(1)
+      expect(outputs[0].spendable).toBe(true)
+      expect(outputs[0].spentBy).toBeUndefined()
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('allocateChangeInput ignores spendable outputs that are still held by another transaction', async () => {
+    const storage = await makeStorage()
+    try {
+      const { userId, basketId, holderTxId } = await seedSpendableOutputHeldByFailedTx(storage)
+      const cleanTxId = await insertTransaction(storage, userId, { status: 'completed', txid: '02'.repeat(32) })
+      const cleanOutputId = await insertOutput(storage, userId, cleanTxId, basketId, {
+        txid: '02'.repeat(32),
+        satoshis: 500
+      })
+      const newTxId = await insertTransaction(storage, userId, { status: 'unsigned', txid: '03'.repeat(32) })
+
+      const allocated = await storage.allocateChangeInput(userId, basketId, 200, undefined, true, newTxId)
+      const lockedOutputs = await storage.findOutputs({ partial: { userId }, noScript: true })
+      const staleOutput = lockedOutputs.find(o => o.spentBy === holderTxId)
+
+      expect(allocated?.outputId).toBe(cleanOutputId)
+      expect(allocated?.spentBy).toBeUndefined()
+      expect(staleOutput?.satoshis).toBe(300)
+      expect(staleOutput?.spendable).toBe(true)
+    } finally {
+      await resetStorage(storage)
+    }
+  })
+
+  test('sumSpendableSatoshisInBasket excludes outputs that still have spentBy set', async () => {
+    const storage = await makeStorage()
+    try {
+      const { userId, basketId } = await seedSpendableOutputHeldByFailedTx(storage)
+      const cleanTxId = await insertTransaction(storage, userId, { status: 'completed', txid: '04'.repeat(32) })
+      await insertOutput(storage, userId, cleanTxId, basketId, {
+        txid: '04'.repeat(32),
+        satoshis: 700
+      })
+
+      const total = await storage.sumSpendableSatoshisInBasket(userId, basketId, true)
+
+      expect(total).toBe(700)
+    } finally {
+      await resetStorage(storage)
+    }
   })
 
   test.skip('1', async () => {
@@ -41,3 +107,120 @@ describe('StorageIdb tests', () => {
     await wallet.destroy()
   })
 })
+
+async function makeStorage (): Promise<StorageIdb> {
+  const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions('main')
+  const storage = new StorageIdb(options)
+  await resetStorage(storage)
+  await storage.migrate(`storageIdbTest-${Date.now()}-${Math.random()}`, '42'.repeat(32))
+  await storage.makeAvailable()
+  return storage
+}
+
+async function resetStorage (storage: StorageIdb): Promise<void> {
+  await storage.destroy()
+  await storage.dropAllData()
+}
+
+async function seedSpendableOutputHeldByFailedTx (
+  storage: StorageIdb
+): Promise<{ userId: number, basketId: number, holderTxId: number, outputId: number }> {
+  const userId = await insertUser(storage)
+  const basketId = await insertBasket(storage, userId)
+  const sourceTxId = await insertTransaction(storage, userId, { status: 'completed', txid: '01'.repeat(32) })
+  const holderTxId = await insertTransaction(storage, userId, { status: 'failed', txid: '05'.repeat(32) })
+  const outputId = await insertOutput(storage, userId, sourceTxId, basketId, {
+    txid: '01'.repeat(32),
+    satoshis: 300,
+    spentBy: holderTxId
+  })
+  return { userId, basketId, holderTxId, outputId }
+}
+
+async function insertUser (storage: StorageIdb): Promise<number> {
+  const now = new Date()
+  const user: TableUser = {
+    created_at: now,
+    updated_at: now,
+    userId: 0,
+    identityKey: '02'.repeat(33),
+    activeStorage: '42'.repeat(32)
+  }
+  return await storage.insertUser(user)
+}
+
+async function insertBasket (storage: StorageIdb, userId: number): Promise<number> {
+  const now = new Date()
+  const basket: TableOutputBasket = {
+    created_at: now,
+    updated_at: now,
+    basketId: 0,
+    userId,
+    name: 'default',
+    numberOfDesiredUTXOs: 32,
+    minimumDesiredUTXOValue: 1,
+    isDeleted: false
+  }
+  return await storage.insertOutputBasket(basket)
+}
+
+async function insertTransaction (
+  storage: StorageIdb,
+  userId: number,
+  partial: Pick<TableTransaction, 'status' | 'txid'>
+): Promise<number> {
+  const now = new Date()
+  const transaction: TableTransaction = {
+    created_at: now,
+    updated_at: now,
+    transactionId: 0,
+    userId,
+    status: partial.status,
+    reference: RandomDefault.reference(),
+    isOutgoing: true,
+    satoshis: 0,
+    description: 'storage state test transaction',
+    txid: partial.txid
+  }
+  return await storage.insertTransaction(transaction)
+}
+
+async function insertOutput (
+  storage: StorageIdb,
+  userId: number,
+  transactionId: number,
+  basketId: number,
+  partial: Pick<TableOutput, 'txid' | 'satoshis'> & Pick<Partial<TableOutput>, 'spentBy'>
+): Promise<number> {
+  const now = new Date()
+  const output: TableOutput = {
+    created_at: now,
+    updated_at: now,
+    outputId: 0,
+    userId,
+    transactionId,
+    basketId,
+    spendable: true,
+    change: true,
+    outputDescription: 'Test Output',
+    vout: 0,
+    satoshis: partial.satoshis,
+    providedBy: 'storage',
+    purpose: 'change',
+    type: 'P2PKH',
+    txid: partial.txid,
+    spentBy: partial.spentBy,
+    lockingScript: [0x51],
+    scriptLength: 1,
+    scriptOffset: 0
+  }
+  return await storage.insertOutput(output)
+}
+
+const RandomDefault = {
+  counter: 0,
+  reference (): string {
+    this.counter++
+    return Buffer.from(`storage-test-reference-${this.counter}`).toString('base64')
+  }
+}

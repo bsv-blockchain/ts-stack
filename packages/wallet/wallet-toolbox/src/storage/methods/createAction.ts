@@ -47,6 +47,7 @@ import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 import { throwDummyReviewActions } from '../../Wallet'
 import { createStorageServiceChargeScript } from './offsetKey'
 import { transactionSize } from './utils'
+import { WalletError } from '../../sdk'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest (v: boolean) {
@@ -319,7 +320,7 @@ async function createNewInputs (
   if (knownInputRows.length > 0) {
     const doubleSpendTxid = await markKnownInputsSpent(storage, knownInputRows, ctx.transactionId)
     if (doubleSpendTxid) {
-      const beef = await storage.getBeefForTransaction(doubleSpendTxid, {})
+      const beef = await getCompetingBeefForReview(storage, doubleSpendTxid)
       throw new WERR_REVIEW_ACTIONS([{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toBinary() }], [])
     }
   }
@@ -337,6 +338,20 @@ async function createNewInputs (
     }
   }
   return r
+}
+
+async function getCompetingBeefForReview (storage: StorageProvider, txid: string): Promise<Beef> {
+  try {
+    return await storage.getBeefForTransaction(txid, {})
+  } catch (e) {
+    const walletError = WalletError.fromUnknown(e)
+    if (walletError instanceof WERR_INVALID_PARAMETER || walletError.code === 'WERR_INVALID_PARAMETER') {
+      const beef = new Beef()
+      beef.mergeTxidOnly(txid)
+      return beef
+    }
+    throw e
+  }
 }
 
 /** Randomly reassign vout values across newOutputs using either the provided randomVals or crypto-random bytes. */
