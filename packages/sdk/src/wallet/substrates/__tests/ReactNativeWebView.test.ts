@@ -24,6 +24,7 @@ describe('ReactNativeWebView', () => {
   })
 
   afterEach(() => {
+    jest.useRealTimers()
     global.window = originalWindow
     jest.restoreAllMocks()
   })
@@ -71,7 +72,7 @@ describe('ReactNativeWebView', () => {
       jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
       const substrate = new ReactNativeWebView()
 
-      void substrate.invoke('getVersion', {})
+      const promise = substrate.invoke('getVersion', {})
 
       expect(addEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
       expect(postMessageMock).toHaveBeenCalledWith(
@@ -83,6 +84,14 @@ describe('ReactNativeWebView', () => {
           args: {}
         })
       )
+      dispatchMessage({
+        type: 'CWI',
+        isInvocation: false,
+        id: 'request-id',
+        status: 'success',
+        result: { version: '1.0.0' }
+      })
+      return expect(promise).resolves.toEqual({ version: '1.0.0' })
     })
 
     it('resolves the result from a matching response', async () => {
@@ -169,6 +178,91 @@ describe('ReactNativeWebView', () => {
       })
 
       await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('ignores malformed response messages', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+      const promise = substrate.invoke('getVersion', {})
+      let settled = false
+      promise.then(
+        () => { settled = true },
+        () => { settled = true }
+      )
+
+      getMessageListener()({ data: '{not-json' })
+
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      expect(settled).toBe(false)
+      expect(removeEventListenerMock).not.toHaveBeenCalled()
+
+      dispatchMessage({
+        type: 'CWI',
+        isInvocation: false,
+        id: 'request-id',
+        status: 'success',
+        result: { version: '1.0.0' }
+      })
+
+      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+    })
+
+    it('rejects and removes the listener when a normal wallet call times out', async () => {
+      jest.useFakeTimers()
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+
+      const promise = substrate.invoke('getVersion', {})
+      jest.advanceTimersByTime(45000)
+
+      await expect(promise).rejects.toThrow(WalletError)
+      await expect(promise).rejects.toThrow('React Native wallet request getVersion timed out after 45000ms.')
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
+    })
+
+    it('uses the longer timeout for user-review wallet calls', async () => {
+      jest.useFakeTimers()
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView()
+
+      const promise = substrate.invoke('createAction', { description: 'Test action' })
+      jest.advanceTimersByTime(119999)
+      let settled = false
+      promise.then(
+        () => { settled = true },
+        () => { settled = true }
+      )
+      await Promise.resolve()
+
+      expect(settled).toBe(false)
+      expect(removeEventListenerMock).not.toHaveBeenCalled()
+
+      jest.advanceTimersByTime(1)
+      await expect(promise).rejects.toThrow('React Native wallet request createAction timed out after 120000ms.')
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
+    })
+
+    it('supports custom response timeouts', async () => {
+      jest.useFakeTimers()
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      const substrate = new ReactNativeWebView('*', { responseTimeoutMs: 25 })
+
+      const promise = substrate.invoke('getVersion', {})
+      jest.advanceTimersByTime(25)
+
+      await expect(promise).rejects.toThrow('React Native wallet request getVersion timed out after 25ms.')
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
+    })
+
+    it('removes the listener when posting to the React Native bridge throws', async () => {
+      jest.spyOn(Utils, 'toBase64').mockReturnValue('request-id')
+      postMessageMock.mockImplementation(() => {
+        throw new Error('bridge unavailable')
+      })
+      const substrate = new ReactNativeWebView()
+
+      await expect(substrate.invoke('getVersion', {})).rejects.toThrow('bridge unavailable')
+      expect(removeEventListenerMock).toHaveBeenCalledWith('message', expect.any(Function))
     })
   })
 })
