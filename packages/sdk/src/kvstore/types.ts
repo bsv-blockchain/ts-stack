@@ -1,6 +1,8 @@
 import { Beef } from '../transaction/Beef.js'
 import { PubKeyHex, WalletProtocol } from '../wallet/Wallet.interfaces.js'
 import { WalletInterface } from '../wallet/index.js'
+// Type-only import — erased at runtime, so it introduces no module cycle with overlay-tools.
+import type { LookupResolver } from '../overlay-tools/index.js'
 
 /**
  * Configuration interface for GlobalKVStore operations.
@@ -23,6 +25,32 @@ export interface KVStoreConfig {
   wallet?: WalletInterface
   /** Network preset for overlay services */
   networkPreset?: 'mainnet' | 'testnet' | 'local'
+  /**
+   * A pre-built lookup resolver to use for all overlay queries — both reads and
+   * write-host (SHIP) discovery. When provided, it takes precedence and
+   * `hostOverrides` / `slapTrackers` are ignored for resolver construction.
+   * Use this to fully control overlay host resolution.
+   */
+  lookupResolver?: LookupResolver
+  /**
+   * Per-service overlay host overrides (`serviceName -> hosts`), applied when
+   * the store builds its default lookup resolver. This pins which hosts answer
+   * *lookup* queries for a given service (e.g. read lookups via `ls_kvstore`),
+   * instead of discovering them via SLAP.
+   *
+   * Note this does not by itself pin the *broadcast* target: writes are
+   * submitted to the hosts that the `ls_ship` SHIP lookup returns, so an
+   * `ls_ship` override only changes which tracker answers — the broadcast host
+   * is whatever advertisements that lookup names. To force writes to a specific
+   * backend, use a resolver / SHIP setup whose `ls_ship` results return the
+   * desired host. Ignored when `lookupResolver` is supplied.
+   */
+  hostOverrides?: Record<string, string[]>
+  /**
+   * Override the SLAP trackers used by the default lookup resolver. Ignored when
+   * `lookupResolver` is supplied.
+   */
+  slapTrackers?: string[]
   /** Whether to accept delayed broadcast */
   acceptDelayedBroadcast?: boolean
   /** Whether to let overlay handle broadcasting (prevents UTXO spending on rejection) */
