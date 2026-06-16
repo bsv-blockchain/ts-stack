@@ -29,40 +29,17 @@ describe('update tests', () => {
   jest.setTimeout(99999999)
 
   const chain: sdk.Chain = 'test'
-  const env = _tu.getEnvFlags(chain)
-  const testName = () => expect.getState().currentTestName || 'test'
 
   let storages: StorageProvider[]
   let setups: { setup: TestSetup1; storage: StorageProvider }[]
 
   beforeEach(async () => {
+    storages = await _tu.createTestStorages({
+      databasePrefix: 'update',
+      migrationName: 'update tests'
+    })
     setups = []
-    storages = []
-    const databaseName = testName()
-
-    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
-    const knexSQLite = _tu.createLocalSQLite(localSQLiteFile)
-    storages.push(
-      new StorageKnex({
-        ...StorageKnex.defaultOptions(),
-        chain,
-        knex: knexSQLite
-      })
-    )
-    if (env.runMySQL) {
-      const knexMySQL = _tu.createLocalMySQL(`${databaseName}.mysql`)
-      storages.push(
-        new StorageKnex({
-          ...StorageKnex.defaultOptions(),
-          chain,
-          knex: knexMySQL
-        })
-      )
-    }
     for (const storage of storages) {
-      await storage.dropAllData()
-      await storage.migrate('update tests', '1'.repeat(64))
-      await storage.makeAvailable()
       setups.push({ storage, setup: await _tu.createTestSetup1(storage) })
     }
   })
