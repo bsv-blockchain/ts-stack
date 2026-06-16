@@ -1,5 +1,5 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { KeyDeriver, ProtocolString5To400Bytes, ProtoWallet, PushDrop, SecurityLevel, Transaction, Utils, WalletProtocol } from '@bsv/sdk'
+import { KeyDeriver, ProtoWallet, PushDrop, SecurityLevel, Transaction, Utils, WalletProtocol } from '@bsv/sdk'
 
 export function deserializeWalletProtocol (str: string): WalletProtocol {
   const parsed = JSON.parse(str)
