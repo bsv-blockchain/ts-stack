@@ -527,16 +527,16 @@ export default class OverlayExpress {
       this.configureTopicManager('tm_slap', new DiscoveryServices.SLAPTopicManager())
       this.configureLookupServiceWithMongo('ls_ship', (db) => {
         const storage = new DiscoveryServices.SHIPStorage(db)
-        const storageForLookup = this.banService !== undefined
-          ? new BanAwareSHIPStorage(storage, this.banService, this.logger)
-          : storage
+        const storageForLookup = this.banService === undefined
+          ? storage
+          : new BanAwareSHIPStorage(storage, this.banService, this.logger)
         return new DiscoveryServices.SHIPLookupService(storageForLookup as any)
       })
       this.configureLookupServiceWithMongo('ls_slap', (db) => {
         const storage = new DiscoveryServices.SLAPStorage(db)
-        const storageForLookup = this.banService !== undefined
-          ? new BanAwareSLAPStorage(storage, this.banService, this.logger)
-          : storage
+        const storageForLookup = this.banService === undefined
+          ? storage
+          : new BanAwareSLAPStorage(storage, this.banService, this.logger)
         return new DiscoveryServices.SLAPLookupService(storageForLookup as any)
       })
     }

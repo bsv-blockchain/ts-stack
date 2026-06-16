@@ -116,7 +116,7 @@ describe('BanAwareTopicManager', () => {
 
   it('should return no needed inputs when wrapped manager does not implement it', async () => {
     const manager = new BanAwareTopicManager(
-      { ...mockWrapped, identifyNeededInputs: undefined } as any,
+      { ...mockWrapped, identifyNeededInputs: undefined },
       mockBanService,
       'SLAP',
       mockLogger
