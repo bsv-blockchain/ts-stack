@@ -1,7 +1,7 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { KeyDeriver, ProtocolString5To400Bytes, ProtoWallet, PushDrop, SecurityLevel, Transaction, Utils, WalletProtocol } from '@bsv/sdk'
 
-export function deserializeWalletProtocol(str: string): WalletProtocol {
+export function deserializeWalletProtocol (str: string): WalletProtocol {
   const parsed = JSON.parse(str)
 
   if (!Array.isArray(parsed) || parsed.length !== 2) {
@@ -18,11 +18,11 @@ export function deserializeWalletProtocol(str: string): WalletProtocol {
     throw new TypeError('Invalid protocolID')
   }
 
-  return [security as SecurityLevel, protocolString as ProtocolString5To400Bytes]
+  return [security as SecurityLevel, protocolString]
 }
 
 export default class ProtoMapTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     try {
       const parsedTransaction = Transaction.fromBEEF(beef)
@@ -46,8 +46,8 @@ export default class ProtoMapTopicManager implements TopicManager {
           const registryOperator = Utils.toUTF8(fields[5])
 
           if (
-            protocolID === undefined || typeof protocolID[1] !== 'string'
-            || (protocolID[0] !== 0 && protocolID[0] !== 1 && protocolID[0] !== 2)
+            protocolID === undefined || typeof protocolID[1] !== 'string' ||
+            (protocolID[0] !== 0 && protocolID[0] !== 1 && protocolID[0] !== 2)
           ) {
             throw new Error('Invalid protocol ID')
           }
@@ -94,11 +94,11 @@ export default class ProtoMapTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'ProtoMap Topic Manager: register protocol names for service discovery.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

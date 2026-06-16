@@ -1,9 +1,8 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction, Utils, OP, Script } from '@bsv/sdk'
 
-
 export default class MonsterBattleTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
 
     try {
@@ -44,11 +43,11 @@ export default class MonsterBattleTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'MonsterBattle Topic Manager: stores bsv-21 tokens from the MonsterBattle web game.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -68,7 +67,7 @@ const TEMPLATES = {
   formatEnd: '88ac'
 }
 
-function checkScriptFormat(script: Script) {
+function checkScriptFormat (script: Script) {
   try {
     const chunks = script.chunks
     if (chunks.length < 14) throw new Error('Insufficient chunks in script')
@@ -97,7 +96,7 @@ function checkScriptFormat(script: Script) {
   }
 }
 
-function isP2PKH(script: Script): boolean {
+function isP2PKH (script: Script): boolean {
   const chunks = script.chunks
   if (chunks.length !== 5) return false
   return chunks[0].op === OP.OP_DUP &&

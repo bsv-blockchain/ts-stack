@@ -2062,6 +2062,20 @@ export default class OverlayExpress {
       })
     })
 
+    await this.runStartupSync()
+
+    // Start listening on the configured port
+    this.app.listen(this.port, () => {
+      this.isListening = true
+      this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
+    })
+  }
+
+  /**
+   * Runs the post-listen startup work: advertiser init, advertisement sync,
+   * and the optional GASP/BASM background syncs.
+   */
+  private async runStartupSync (): Promise<void> {
     // The legacy Ninja advertiser has a setLookupEngine method.
     if (this.engine?.advertiser instanceof DiscoveryServices.WalletAdvertiser) {
       this.logger.log(
@@ -2085,63 +2099,75 @@ export default class OverlayExpress {
       this.logger.log(chalk.red('Error syncing advertisements:'), e)
     }
 
-    // Attempt to do GASP sync if enabled
-    if (this.enableGASPSync) {
-      try {
-        this.logger.log(chalk.green('Starting GASP sync...'))
-        await this.engine?.startGASPSync()
-        this.logger.log(chalk.green('GASP sync complete!'))
-      } catch (e) {
-        console.error(chalk.red('Failed to GASP sync'), e)
-      }
-    } else {
+    await this.runGaspStartupSync()
+    await this.runBasmStartupSync()
+  }
+
+  /** Attempt a GASP sync at startup when enabled. */
+  private async runGaspStartupSync (): Promise<void> {
+    if (!this.enableGASPSync) {
       this.logger.log(chalk.yellow(`${this.name} will not sync because GASP has been disabled.`))
+      return
+    }
+    try {
+      this.logger.log(chalk.green('Starting GASP sync...'))
+      await this.engine?.startGASPSync()
+      this.logger.log(chalk.green('GASP sync complete!'))
+    } catch (e) {
+      console.error(chalk.red('Failed to GASP sync'), e)
+    }
+  }
+
+  /** Attempt a BASM sync at startup when enabled, then begin tip-following. */
+  private async runBasmStartupSync (): Promise<void> {
+    if (!(this.enableBASMSync || this.engineConfig.enableBASMSync === true)) {
+      return
+    }
+    try {
+      this.logger.log(chalk.green('Starting BASM sync...'))
+      const report = await (this.engine as BASMCapableEngine | undefined)?.startBASMSync()
+      this.logger.log(chalk.green('BASM sync complete!'), report)
+    } catch (e) {
+      console.error(chalk.red('Failed to BASM sync'), e)
     }
 
-    // Attempt to do BASM sync if enabled
-    if (this.enableBASMSync || this.engineConfig.enableBASMSync === true) {
-      try {
-        this.logger.log(chalk.green('Starting BASM sync...'))
-        const report = await (this.engine as BASMCapableEngine | undefined)?.startBASMSync()
-        this.logger.log(chalk.green('BASM sync complete!'), report)
-      } catch (e) {
-        console.error(chalk.red('Failed to BASM sync'), e)
-      }
+    // Extend each topic's anchor chain to the current tip on startup, then keep
+    // it following the tip so the cumulative TAC advances after each new block.
+    await this.advanceBASMAnchorChains()
+    this.startBASMBlockPolling()
+    this.startBASMReorgStream()
+  }
 
-      // Extend each topic's anchor chain to the current tip on startup, then keep
-      // it following the tip so the cumulative TAC advances after each new block.
-      await this.advanceBASMAnchorChains()
-      if (this.basmBlockPollIntervalMs > 0) {
-        this.basmBlockPollTimer = setInterval(() => {
-          void this.advanceBASMAnchorChains()
-          // Fallback reorg detection for chain trackers without a reorg stream,
-          // and a safety net even when the SSE adapter is active.
-          void this.revalidateBASMAnchors()
-        }, this.basmBlockPollIntervalMs)
-        this.basmBlockPollTimer.unref?.()
-      }
-
-      // Real-time reorg reconciliation via the go-chaintracks (Arcade) reorg SSE.
-      const reorgStreamUrl = this.engineConfig.reorgStreamUrl ?? this.reorgStreamUrl
-      const reorgScanDepth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
-      if (reorgStreamUrl !== undefined && reorgStreamUrl !== '') {
-        const basmEngine = this.engine as BASMCapableEngine | undefined
-        this.reorgAdapter = new ReorgSseAdapter({
-          url: reorgStreamUrl,
-          onReorg: async input => { await basmEngine?.handleReorg(input) },
-          onConnect: async () => { await basmEngine?.revalidateRecentAnchors(reorgScanDepth) },
-          logger: this.logger
-        })
-        this.reorgAdapter.start()
-        this.logger.log(chalk.green(`BASM reorg stream listening at ${reorgStreamUrl}`))
-      }
+  /** Poll for new blocks to advance anchor chains and detect reorgs. */
+  private startBASMBlockPolling (): void {
+    if (this.basmBlockPollIntervalMs <= 0) {
+      return
     }
+    this.basmBlockPollTimer = setInterval(() => {
+      void this.advanceBASMAnchorChains()
+      // Fallback reorg detection for chain trackers without a reorg stream,
+      // and a safety net even when the SSE adapter is active.
+      void this.revalidateBASMAnchors()
+    }, this.basmBlockPollIntervalMs)
+    this.basmBlockPollTimer.unref?.()
+  }
 
-    // Start listening on the configured port
-    this.app.listen(this.port, () => {
-      this.isListening = true
-      this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
+  /** Real-time reorg reconciliation via the go-chaintracks (Arcade) reorg SSE. */
+  private startBASMReorgStream (): void {
+    const reorgStreamUrl = this.engineConfig.reorgStreamUrl ?? this.reorgStreamUrl
+    const reorgScanDepth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
+    if (reorgStreamUrl === undefined || reorgStreamUrl === '') {
+      return
+    }
+    const basmEngine = this.engine as BASMCapableEngine | undefined
+    this.reorgAdapter = new ReorgSseAdapter({
+      url: reorgStreamUrl,
+      onReorg: async input => { await basmEngine?.handleReorg(input) },
+      onConnect: async () => { await basmEngine?.revalidateRecentAnchors(reorgScanDepth) },
+      logger: this.logger
     })
+    this.reorgAdapter.start()
+    this.logger.log(chalk.green(`BASM reorg stream listening at ${reorgStreamUrl}`))
   }
 
   /** Extend every topic's BASM anchor chain to the current chain tip. */

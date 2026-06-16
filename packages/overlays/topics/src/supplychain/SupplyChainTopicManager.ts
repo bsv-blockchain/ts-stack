@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction, OP } from '@bsv/sdk'
 
 export default class SupplyChainTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
 
     try {
@@ -37,11 +37,11 @@ export default class SupplyChainTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: previousCoins }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'SupplyChain Topic Manager: saves hashes of files and integrity off-chain values.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

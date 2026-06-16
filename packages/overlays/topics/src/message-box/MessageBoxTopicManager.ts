@@ -34,7 +34,7 @@ export default class MessageBoxTopicManager implements TopicManager {
    * @param previousCoins - Previous outputs to retain (not modified).
    * @returns A list of admissible outputs and retained coins.
    */
-  async identifyAdmissibleOutputs(
+  async identifyAdmissibleOutputs (
     beef: number[],
     previousCoins: number[]
   ): Promise<AdmittanceInstructions> {
@@ -108,14 +108,14 @@ export default class MessageBoxTopicManager implements TopicManager {
   /**
    * Returns a Markdown string with documentation for this topic manager.
    */
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return docs
   }
 
   /**
    * Returns metadata used by SHIP dashboards or discovery tools.
    */
-  async getMetaData() {
+  async getMetaData () {
     return {
       name: 'MessageBox Topic Manager',
       shortDescription: 'Advertises and validates hosts for message routing.'
@@ -125,7 +125,7 @@ export default class MessageBoxTopicManager implements TopicManager {
   /**
    * Returns the topics supported by this TopicManager.
    */
-  getTopics(): string[] {
+  getTopics (): string[] {
     return ['tm_messagebox']
   }
 }

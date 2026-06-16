@@ -8,9 +8,9 @@ class WalletConfigLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
-  constructor(public storageManager: WalletConfigStorageManager) { }
+  constructor (public storageManager: WalletConfigStorageManager) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== 'tm_walletconfig') return
@@ -29,18 +29,18 @@ class WalletConfigLookupService implements LookupService {
     await this.storageManager.storeRecord(txid, outputIndex, registration)
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_walletconfig') return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number) {
+  async outputEvicted (txid: string, outputIndex: number) {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) throw new Error('A valid query must be provided!')
     if (question.service !== 'ls_walletconfig') throw new Error('Lookup service not supported!')
 
@@ -58,11 +58,11 @@ class WalletConfigLookupService implements LookupService {
     return await this.storageManager.listAll(questionToAnswer.registryOperators)
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'WalletConfig Lookup Service: wallet configuration service discovery.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -76,5 +76,5 @@ class WalletConfigLookupService implements LookupService {
   }
 }
 
-function create(db: Db): WalletConfigLookupService { return new WalletConfigLookupService(new WalletConfigStorageManager(db)) }
+function create (db: Db): WalletConfigLookupService { return new WalletConfigLookupService(new WalletConfigStorageManager(db)) }
 export default create

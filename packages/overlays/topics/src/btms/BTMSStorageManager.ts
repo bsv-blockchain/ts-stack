@@ -16,7 +16,7 @@ export class BTMSStorageManager {
     this.records = db.collection<BTMSRecord>('btmsRecords')
   }
 
-  private ensureIndexes (): Promise<void> {
+  private async ensureIndexes (): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await Promise.all([
@@ -26,7 +26,7 @@ export class BTMSStorageManager {
         ])
       })()
     }
-    return this.indexInit
+    return await this.indexInit
   }
 
   /**

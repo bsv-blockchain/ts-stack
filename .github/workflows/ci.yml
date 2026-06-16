@@ -79,6 +79,17 @@ jobs:
           if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
           pnpm -r --filter '!@bsv/ts-stack' $EXTRA run lint --if-present
 
+      - name: Warm MongoDB memory-server binary cache
+        # The mongodb-memory-server tests download+extract the mongod binary on first
+        # use. When that cold start happens under the parallel `pnpm -r run test` load
+        # below, the just-extracted binary can still be open for writing when it is
+        # exec'd, producing `spawn ETXTBSY` and startup timeouts (seen on Node 24).
+        # Pre-extract the binary serially here so the test step reuses a settled cache.
+        continue-on-error: true
+        run: >
+          pnpm --filter @bsv/overlay-topics exec node --input-type=module -e
+          "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
+
       - name: Test changed packages
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
         env:
