@@ -1213,7 +1213,14 @@ export default class Spend {
               sig = this.parseChecksigSignature(bufSig)
 
               const scriptForChecksig: Script = this.context === 'UnlockingScript' ? this.unlockingScript : this.lockingScript
-              const scriptCodeChunks = scriptForChecksig.chunks.slice(this.lastCodeSeparator === null ? 0 : this.lastCodeSeparator + 1)
+              let scriptCodeChunks = scriptForChecksig.chunks.slice(this.lastCodeSeparator === null ? 0 : this.lastCodeSeparator + 1)
+              // When an OP_CODESEPARATOR appears in the unlocking script, the CHECKSIG subscript
+              // continues across the unlock/lock boundary into the full locking script (legacy
+              // combined-script semantics; matches BSV node consensus). Without this, signatures
+              // taken over such a subscript (e.g. OP_PUSH_TX-style contracts) are wrongly rejected.
+              if (this.context === 'UnlockingScript') {
+                scriptCodeChunks = scriptCodeChunks.concat(this.lockingScript.chunks)
+              }
               subscript = new Script(scriptCodeChunks)
               subscript.findAndDelete(new Script().writeBin(bufSig))
 
