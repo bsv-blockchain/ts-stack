@@ -1,29 +1,19 @@
-# Default owner for everything
+# Default owner for everything (infra, repo config, anything unmatched)
 *                                               @sirdeggen
 
-# SDK
-packages/sdk/                                   @sirdeggen
-
-# Wallet
-packages/wallet/                                @sirdeggen
-
-# Network
-packages/network/                               @sirdeggen
-
-# Overlays
-packages/overlays/                              @sirdeggen
-
-# Messaging
-packages/messaging/                             @sirdeggen
-
-# Middleware
-packages/middleware/                            @sirdeggen
-
-# Helpers
-packages/helpers/                               @sirdeggen
+# ── Packages ─────────────────────────────────────────────────────────────────
+# All package code is co-owned. Any one listed owner can approve.
+packages/                                       @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/sdk/                                   @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/wallet/                                @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/network/                               @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/overlays/                              @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/messaging/                             @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/middleware/                            @sirdeggen @ty-everett @BraydenLangley @tonesnotes
+packages/helpers/                               @sirdeggen @ty-everett @BraydenLangley @tonesnotes
 
 # Conformance runner
-conformance/                                    @sirdeggen
+conformance/                                    @sirdeggen @ty-everett @BraydenLangley @tonesnotes
 
 # CI / release / repo config
 .github/                                        @sirdeggen
