@@ -602,7 +602,7 @@ export abstract class TestUtilsWalletStorage {
     chain?: Chain
   }): Promise<StorageProvider> {
     const fallback = args.databasePrefix
-    const testSlug = (expect.getState().currentTestName || fallback).replace(/[^a-zA-Z0-9_]/g, '_')
+    const testSlug = (expect.getState().currentTestName || fallback).replace(/\W/g, '_')
     const databaseName = `${args.databasePrefix}_${testSlug.slice(-40)}`
     const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const storage = new StorageKnex({
@@ -631,7 +631,7 @@ export abstract class TestUtilsWalletStorage {
     const chain = args.chain ?? 'test'
     const env = _tu.getEnvFlags(chain)
     const storages: StorageProvider[] = []
-    const testSlug = (expect.getState().currentTestName || args.databasePrefix).replace(/[^a-zA-Z0-9_]/g, '_')
+    const testSlug = (expect.getState().currentTestName || args.databasePrefix).replace(/\W/g, '_')
     const databaseName = `${args.databasePrefix}_${testSlug.slice(-40)}`
 
     const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
