@@ -6,7 +6,8 @@ export {
   type HealthCheckResult,
   type HealthConfig,
   type HealthReport,
-  type HealthStatus
+  type HealthStatus,
+  type TopicAnchorHeaderResolver
 } from './src/OverlayExpress.js'
 export { BanService, type BannedRecord } from './src/BanService.js'
 export { BanAwareLookupWrapper } from './src/BanAwareLookupWrapper.js'
@@ -15,7 +16,10 @@ export { BanAwareSHIPStorage, BanAwareSLAPStorage } from './src/BanAwareDiscover
 export { JanitorService, type JanitorConfig, type JanitorReport, type HostHealthResult } from './src/JanitorService.js'
 export {
   OverlayMonitor,
+  analyzeOverlayAnchorTip,
   analyzeOverlayLookupResponse,
+  type OverlayAnchorProbe,
+  type OverlayAnchorProbeResult,
   type OverlayLookupOutputSummary,
   type OverlayLookupProbe,
   type OverlayLookupProbeResult,

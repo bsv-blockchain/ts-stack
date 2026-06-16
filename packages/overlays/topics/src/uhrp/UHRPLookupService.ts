@@ -8,22 +8,22 @@ class UHRPLookupService implements LookupService {
   readonly spendNotificationMode: SpendNotificationMode = 'none'
   records: Collection<UHRPRecord>
 
-  constructor(db: Db) {
+  constructor (db: Db) {
     this.records = db.collection<UHRPRecord>('uhrp')
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'UHRP Lookup Service: lookup service for user file hosting commitment tokens.'
   }
 
-  async getMetaData(): Promise<{ name: string; shortDescription: string; iconURL?: string; version?: string; informationURL?: string }> {
+  async getMetaData (): Promise<{ name: string, shortDescription: string, iconURL?: string, version?: string, informationURL?: string }> {
     return {
       name: 'UHRP Lookup Service',
       shortDescription: 'Lookup Service for User file hosting commitment tokens'
     }
   }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic) {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic) {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { topic, txid, outputIndex, lockingScript } = payload
     if (topic !== 'tm_uhrp') return
@@ -46,18 +46,18 @@ class UHRPLookupService implements LookupService {
     })
   }
 
-  async outputSpent(payload: OutputSpent) {
+  async outputSpent (payload: OutputSpent) {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_uhrp') return
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async outputEvicted(txid: string, outputIndex: number) {
+  async outputEvicted (txid: string, outputIndex: number) {
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async lookup({ query }: any): Promise<UTXOReference[]> {
+  async lookup ({ query }: any): Promise<UTXOReference[]> {
     if (typeof query !== 'object') throw new Error('Lookup must include a valid query!')
     if (query.outpoint) {
       const [txid, outputIndex] = (query.outpoint as string).split('.')
@@ -73,5 +73,5 @@ class UHRPLookupService implements LookupService {
   }
 }
 
-function create(db: Db): UHRPLookupService { return new UHRPLookupService(db) }
+function create (db: Db): UHRPLookupService { return new UHRPLookupService(db) }
 export default create

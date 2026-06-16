@@ -4,7 +4,7 @@ import { PublishedAppMetadata } from './types.js'
 import { isTokenSignatureCorrectlyLinked } from './isTokenSignatureCorrectlyLinked.js'
 
 export default class AppsTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     try {
       console.log('Apps topic manager was invoked')
@@ -64,11 +64,11 @@ export default class AppsTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Apps Topic Manager: admits PushDrop tokens representing published Metanet Apps.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

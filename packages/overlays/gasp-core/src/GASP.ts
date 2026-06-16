@@ -68,6 +68,23 @@ export type GASPNodeResponse = {
 }
 
 /**
+ * Optional extension request for transports that can fetch raw transactions
+ * after independent BUMP proof verification.
+ */
+export type GASPRawTransactionRequest = {
+  txids: string[]
+}
+
+/**
+ * Optional extension response carrying raw transaction hex without BEEF proof
+ * wrapping. Existing GASP behavior remains unchanged.
+ */
+export type GASPRawTransactionResponse = {
+  transactions: Array<{ txid: string, rawTx: string }>
+  missing?: string[]
+}
+
+/**
  * Facilitates the finding of UTXOs, determination of needed inputs, temporary graph management, and eventual graph finalization.
  */
 export interface GASPStorage {

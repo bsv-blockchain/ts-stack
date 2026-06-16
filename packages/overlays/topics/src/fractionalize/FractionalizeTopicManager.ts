@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction, Script, Utils, OP } from '@bsv/sdk'
 
 export default class FractionalizeTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
 
     try {
@@ -42,11 +42,11 @@ export default class FractionalizeTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Fractionalize Topic Manager: fractionalized ownership PoC.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -77,7 +77,7 @@ const TEMPLATES = {
   }
 }
 
-function checkScriptFormat(script: Script, type: 'server-token' | 'transfer-token' | 'payment') {
+function checkScriptFormat (script: Script, type: 'server-token' | 'transfer-token' | 'payment') {
   try {
     const chunks = script.chunks
     switch (type) {

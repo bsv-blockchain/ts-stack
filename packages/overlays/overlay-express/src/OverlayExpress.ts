@@ -1,6 +1,13 @@
 import express from 'express'
 import bodyParser from 'body-parser'
-import { Engine, KnexStorage, LookupService, TopicManager, KnexStorageMigrations, Advertiser } from '@bsv/overlay'
+import {
+  Engine,
+  KnexStorage,
+  LookupService,
+  TopicManager,
+  KnexStorageMigrations,
+  Advertiser
+} from '@bsv/overlay'
 import {
   ARC,
   ChainTracker,
@@ -32,6 +39,7 @@ import { BanService } from './BanService.js'
 import { BanAwareLookupWrapper } from './BanAwareLookupWrapper.js'
 import { BanAwareTopicManager } from './BanAwareTopicManager.js'
 import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoveryStorage.js'
+import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 
@@ -94,6 +102,11 @@ export interface EngineConfig {
   throwOnBroadcastFailure?: boolean
   overlayBroadcastFacilitator?: OverlayBroadcastFacilitator
   suppressDefaultSyncAdvertisements?: boolean
+  topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
+  enableBASMSync?: boolean
+  unprovenEvictionBlocks?: number
+  reorgStreamUrl?: string
+  reorgScanDepth?: number
 }
 
 export type HealthStatus = 'ok' | 'degraded' | 'error'
@@ -139,6 +152,25 @@ export interface HealthReport {
   }
   checks: HealthCheckResult[]
   context?: Record<string, any>
+}
+
+export type TopicAnchorHeaderResolver = (blockHeight: number) => Promise<{
+  blockHeight: number
+  blockHash: string
+  merkleRoot?: string
+} | undefined>
+
+interface BASMCapableEngine extends Engine {
+  provideTopicAnchorTip: (topic: string) => Promise<any>
+  provideTopicAnchorRange: (topic: string, fromHeight: number, toHeight: number) => Promise<any>
+  provideAdmittedList: (topic: string, blockHeight: number, blockHash?: string) => Promise<any>
+  provideCompoundMerklePath: (topic: string, blockHeight: number, txids: string[]) => Promise<any>
+  provideRawTransactions: (txids: string[]) => Promise<any>
+  startBASMSync: () => Promise<any>
+  advanceTopicAnchorChains: (toHeight?: number) => Promise<void>
+  evictUnprovenTransactions: (options?: { topic?: string, thresholdBlocks?: number }) => Promise<any>
+  handleReorg: (input: ReorgHandlerInput) => Promise<any>
+  revalidateRecentAnchors: (depth?: number) => Promise<any>
 }
 
 /**
@@ -187,6 +219,35 @@ export default class OverlayExpress {
   // Enable GASP Sync
   // (We allow an on/off toggle, but also can do advanced custom sync config below)
   enableGASPSync: boolean = true
+
+  // Enable BRC-136 BASM sync. Off by default; endpoints remain available when
+  // storage supports anchors.
+  enableBASMSync: boolean = false
+
+  // Opt-in unproven eviction default threshold in blocks.
+  unprovenEvictionBlocks: number = 144
+
+  // How often (ms) to poll the chain tip and extend each topic's BASM anchor
+  // chain with empty anchors, so the cumulative TAC advances "after each new
+  // block" per BRC-136. Set to 0 to disable polling (startup extension still runs).
+  basmBlockPollIntervalMs: number = 10 * 60 * 1000
+
+  // Handle for the BASM block-poll timer so it can be stopped.
+  private basmBlockPollTimer?: ReturnType<typeof setInterval>
+
+  // Optional go-chaintracks (Arcade) reorg SSE URL (e.g. `<base>/v2/reorg/stream`).
+  // When set, reorgs are reconciled in real time; the block poll also runs a
+  // revalidation sweep as a fallback / reconnect catch-up.
+  reorgStreamUrl?: string
+
+  // Depth (in blocks from the tip) for the reorg revalidation sweep.
+  reorgScanDepth: number = 3
+
+  // Handle for the reorg SSE adapter.
+  private reorgAdapter?: ReorgSseAdapter
+
+  // Optional resolver for block hashes and header merkle roots used by BASM.
+  topicAnchorHeaderResolver?: TopicAnchorHeaderResolver
 
   // ARC API Key
   arcApiKey: string | undefined = undefined
@@ -397,6 +458,56 @@ export default class OverlayExpress {
   }
 
   /**
+   * Enables or disables BRC-136 BASM synchronization.
+   * BASM is opt-in because it requires direct proofs and block hash resolution.
+   */
+  configureEnableBASMSync (enable: boolean): void {
+    this.enableBASMSync = enable
+    this.logger.log(chalk.blue(`BASM synchronization ${enable ? 'enabled' : 'disabled'}.`))
+  }
+
+  /**
+   * Configures the block header resolver used to derive BASM block hashes.
+   */
+  configureTopicAnchorHeaderResolver (resolver: TopicAnchorHeaderResolver): void {
+    this.topicAnchorHeaderResolver = resolver
+    this.logger.log(chalk.blue('BASM topic anchor header resolver has been configured.'))
+  }
+
+  /**
+   * Configures the go-chaintracks (Arcade) reorg SSE stream used to reconcile
+   * BASM anchors with blockchain reorganizations in real time.
+   * @param url - The reorg stream URL, e.g. `https://arcade.example/v2/reorg/stream`.
+   * @param scanDepth - Optional revalidation-sweep depth in blocks (default 3).
+   */
+  configureReorgStream (url: string, scanDepth?: number): void {
+    this.reorgStreamUrl = url
+    if (scanDepth !== undefined) {
+      this.reorgScanDepth = scanDepth
+    }
+    this.logger.log(chalk.blue('BASM reorg stream has been configured.'))
+  }
+
+  /**
+   * Configures the opt-in unproven state eviction threshold.
+   */
+  configureUnprovenEviction (config: { thresholdBlocks?: number }): void {
+    if (config.thresholdBlocks !== undefined) {
+      this.unprovenEvictionBlocks = config.thresholdBlocks
+    }
+    this.logger.log(chalk.blue('Unproven transaction eviction has been configured.'))
+  }
+
+  /**
+   * Configures how often the BASM anchor chain is extended with empty anchors to
+   * follow the chain tip. Set to 0 to disable periodic polling.
+   */
+  configureBASMBlockPollInterval (intervalMs: number): void {
+    this.basmBlockPollIntervalMs = intervalMs
+    this.logger.log(chalk.blue(`BASM block poll interval set to ${intervalMs}ms.`))
+  }
+
+  /**
    * Enables or disables verbose request logging.
    * @param enable - true to enable, false to disable
    */
@@ -550,7 +661,8 @@ export default class OverlayExpress {
     const broadcaster = this.buildBroadcaster()
     const advertiser = await this.buildAdvertiser()
 
-    this.engine = new Engine(
+    const EngineWithBASM = Engine as unknown as new (...args: any[]) => Engine
+    this.engine = new EngineWithBASM(
       this.managers,
       this.services,
       storage,
@@ -568,7 +680,10 @@ export default class OverlayExpress {
       this.engineConfig.throwOnBroadcastFailure ?? false,
       this.engineConfig.overlayBroadcastFacilitator ?? new HTTPSOverlayBroadcastFacilitator(),
       this.logger,
-      this.engineConfig.suppressDefaultSyncAdvertisements ?? true
+      this.engineConfig.suppressDefaultSyncAdvertisements ?? true,
+      this.buildTopicAnchorHeaderResolver(),
+      this.engineConfig.enableBASMSync ?? this.enableBASMSync,
+      this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks
     )
 
     this.initServerWallet()
@@ -615,6 +730,33 @@ export default class OverlayExpress {
       callbackUrl: `https://${this.advertisableFQDN}/arc-ingest`,
       callbackToken: this.arcCallbackToken
     })
+  }
+
+  /** Build the BASM block header resolver. */
+  private buildTopicAnchorHeaderResolver (): TopicAnchorHeaderResolver | undefined {
+    const configured = this.engineConfig.topicAnchorHeaderResolver ?? this.topicAnchorHeaderResolver
+    if (configured !== undefined) {
+      return configured
+    }
+
+    return async (blockHeight: number) => {
+      const response = await fetch(`https://api.whatsonchain.com/v1/bsv/${this.network}/block/${blockHeight}/header`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      })
+      if (!response.ok) {
+        throw new Error(`WhatsOnChain header lookup failed for height ${blockHeight}: ${response.status}`)
+      }
+      const header = await response.json() as { hash?: string, merkleroot?: string }
+      if (typeof header.hash !== 'string') {
+        throw new TypeError(`WhatsOnChain did not return a block hash for height ${blockHeight}`)
+      }
+      return {
+        blockHeight,
+        blockHash: header.hash,
+        merkleRoot: header.merkleroot
+      }
+    }
   }
 
   /** Resolve the SLAP trackers from config or network defaults. */
@@ -935,6 +1077,71 @@ export default class OverlayExpress {
   }
 
   /**
+   * Renders a request or response body for verbose logging, truncating overly long payloads.
+   */
+  private formatBodyForLog (body: any, tooLongLabel: string, okPrefix: string): string {
+    let bodyString: string
+    if (typeof body === 'object') {
+      bodyString = JSON.stringify(body, null, 2)
+    } else if (Buffer.isBuffer(body)) {
+      bodyString = body.toString('utf8')
+    } else {
+      bodyString = String(body)
+    }
+    return bodyString.length > 280
+      ? chalk.yellow(`(${tooLongLabel}, length: ${String(bodyString.length)} characters)`)
+      : chalk.green(`${okPrefix}\n${bodyString}`)
+  }
+
+  /**
+   * Installs middleware that verbosely logs incoming requests and outgoing responses.
+   */
+  private setupVerboseRequestLogging (): void {
+    this.app.use((req, res, next) => {
+      const startTime = Date.now()
+
+      // Log incoming request details
+      this.logger.log(chalk.magenta.bold(`Incoming Request: ${String(req.method)} ${String(req.originalUrl)}`))
+      // Pretty-print headers
+      this.logger.log(chalk.cyan('Headers:'))
+      this.logger.log(util.inspect(req.headers, { colors: true, depth: null }))
+
+      // Handle request body
+      if (req.body != null && Object.keys(req.body).length > 0) {
+        this.logger.log(this.formatBodyForLog(req.body, 'Body too long to display', 'Request Body:'))
+      }
+
+      // Intercept the res.send method to log responses
+      const originalSend = res.send
+      let responseBody: any
+
+      res.send = function (body?: any): any {
+        responseBody = body
+        return originalSend.call(this, body)
+      }
+
+      // Log outgoing response details after the response is finished
+      res.on('finish', () => {
+        const duration = Date.now() - startTime
+        this.logger.log(
+          chalk.magenta.bold(
+            `Outgoing Response: ${String(req.method)} ${String(req.originalUrl)} - Status: ${String(res.statusCode)} - Duration: ${String(duration)}ms`
+          )
+        )
+        this.logger.log(chalk.cyan('Response Headers:'))
+        this.logger.log(util.inspect(res.getHeaders(), { colors: true, depth: null }))
+
+        // Handle response body
+        if (responseBody != null) {
+          this.logger.log(this.formatBodyForLog(responseBody, 'Response body too long to display', 'Response Body:'))
+        }
+      })
+
+      next()
+    })
+  }
+
+  /**
    * Starts the Express server.
    * Sets up routes and begins listening on the configured port.
    */
@@ -947,78 +1154,7 @@ export default class OverlayExpress {
     this.app.use(bodyParser.raw({ limit: '1gb', type: 'application/octet-stream' }))
 
     if (this.verboseRequestLogging) {
-      this.app.use((req, res, next) => {
-        const startTime = Date.now()
-
-        // Log incoming request details
-        this.logger.log(chalk.magenta.bold(`Incoming Request: ${String(req.method)} ${String(req.originalUrl)}`))
-        // Pretty-print headers
-        this.logger.log(chalk.cyan('Headers:'))
-        this.logger.log(util.inspect(req.headers, { colors: true, depth: null }))
-
-        // Handle request body
-        if (req.body != null && Object.keys(req.body).length > 0) {
-          let bodyContent
-          let bodyString
-          if (typeof req.body === 'object') {
-            bodyString = JSON.stringify(req.body, null, 2)
-          } else if (Buffer.isBuffer(req.body)) {
-            bodyString = req.body.toString('utf8')
-          } else {
-            bodyString = String(req.body)
-          }
-          if (bodyString.length > 280) {
-            bodyContent = chalk.yellow(`(Body too long to display, length: ${String(bodyString.length)} characters)`)
-          } else {
-            bodyContent = chalk.green(`Request Body:\n${String(bodyString)}`)
-          }
-          this.logger.log(bodyContent)
-        }
-
-        // Intercept the res.send method to log responses
-        const originalSend = res.send
-        let responseBody: any
-
-        res.send = function (body?: any): any {
-          responseBody = body
-          return originalSend.call(this, body)
-        }
-
-        // Log outgoing response details after the response is finished
-        res.on('finish', () => {
-          const duration = Date.now() - startTime
-          this.logger.log(
-            chalk.magenta.bold(
-              `Outgoing Response: ${String(req.method)} ${String(req.originalUrl)} - Status: ${String(res.statusCode)} - Duration: ${String(duration)}ms`
-            )
-          )
-          this.logger.log(chalk.cyan('Response Headers:'))
-          this.logger.log(util.inspect(res.getHeaders(), { colors: true, depth: null }))
-
-          // Handle response body
-          if (responseBody != null) {
-            let bodyContent
-            let bodyString
-            if (typeof responseBody === 'object') {
-              bodyString = JSON.stringify(responseBody, null, 2)
-            } else if (Buffer.isBuffer(responseBody)) {
-              bodyString = responseBody.toString('utf8')
-            } else if (typeof responseBody === 'string') {
-              bodyString = responseBody
-            } else {
-              bodyString = String(responseBody)
-            }
-            if (bodyString.length > 280) {
-              bodyContent = chalk.yellow(`(Response body too long to display, length: ${String(bodyString.length)} characters)`)
-            } else {
-              bodyContent = chalk.green(`Response Body:\n${String(bodyString)}`)
-            }
-            this.logger.log(bodyContent)
-          }
-        })
-
-        next()
-      })
+      this.setupVerboseRequestLogging()
     }
 
     // Enable CORS
@@ -1367,6 +1503,78 @@ export default class OverlayExpress {
       this.logger.warn(chalk.yellow('GASP sync is disabled.'))
     }
 
+    // BRC-136 BASM anchor and raw transaction endpoints.
+    const basmEngine = engine as BASMCapableEngine
+    const readBasmTopic = (req: express.Request): string => {
+      const header = req.headers['x-bsv-topic']
+      if (typeof header !== 'string' || header.length === 0) {
+        throw new TypeError('Missing x-bsv-topic header')
+      }
+      return header
+    }
+
+    /**
+     * Registers a POST route whose handler resolves to the JSON payload returned
+     * with HTTP 200. Any thrown error is logged and returned as HTTP 400, while
+     * unexpected rejections fall back to HTTP 500. This consolidates the shared
+     * async/try-catch boilerplate used by the BRC-136 BASM endpoints (and the
+     * BASM-related admin endpoints, which additionally pass `checkAdminAuth`).
+     */
+    const registerJsonRoute = (
+      path: string,
+      handler: (req: express.Request) => Promise<unknown>,
+      ...middleware: express.RequestHandler[]
+    ): void => {
+      this.app.post(path, ...(middleware as any[]), (req: express.Request, res: express.Response) => {
+        ; (async () => {
+          try {
+            return res.status(200).json(await handler(req))
+          } catch (error) {
+            console.error(chalk.red(`Error in ${path}:`), error)
+            return res.status(400).json({
+              status: 'error',
+              message: error instanceof Error ? error.message : 'An unknown error occurred'
+            })
+          }
+        })().catch(() => {
+          res.status(500).json({ status: 'error', message: 'Unexpected error' })
+        })
+      })
+    }
+
+    const requireTxids = (value: unknown): string[] => {
+      if (!Array.isArray(value) || !value.every(txid => typeof txid === 'string')) {
+        throw new TypeError('txids must be an array of strings')
+      }
+      return value
+    }
+
+    registerJsonRoute('/requestTopicAnchorTip', async req =>
+      await basmEngine.provideTopicAnchorTip(readBasmTopic(req)))
+
+    registerJsonRoute('/requestTopicAnchorRange', async req => {
+      const { fromHeight, toHeight } = req.body
+      return await basmEngine.provideTopicAnchorRange(readBasmTopic(req), Number(fromHeight), Number(toHeight))
+    })
+
+    registerJsonRoute('/requestAdmittedList', async req => {
+      const { blockHeight, blockHash } = req.body
+      return await basmEngine.provideAdmittedList(
+        readBasmTopic(req),
+        Number(blockHeight),
+        typeof blockHash === 'string' ? blockHash : undefined
+      )
+    })
+
+    registerJsonRoute('/requestCompoundMerklePath', async req => {
+      const topic = readBasmTopic(req)
+      const { blockHeight, txids } = req.body
+      return await basmEngine.provideCompoundMerklePath(topic, Number(blockHeight), requireTxids(txids))
+    })
+
+    registerJsonRoute('/requestRawTransactions', async req =>
+      await basmEngine.provideRawTransactions(requireTxids(req.body.txids)))
+
     /**
      * ============== ADMIN ROUTES ==============
      * These routes expose advanced engine operations.
@@ -1464,7 +1672,9 @@ export default class OverlayExpress {
               totalBans: banStats.totalBans,
               topicManagers: Object.keys(this.managers),
               lookupServices: Object.keys(this.services),
-              gaspSyncEnabled: this.enableGASPSync
+              gaspSyncEnabled: this.enableGASPSync,
+              basmSyncEnabled: this.enableBASMSync,
+              unprovenEvictionBlocks: this.unprovenEvictionBlocks
             }
           })
         } catch (error) {
@@ -1774,6 +1984,26 @@ export default class OverlayExpress {
     })
 
     /**
+     * Admin route to manually start BASM sync, calling `engine.startBASMSync()`.
+     */
+    registerJsonRoute('/admin/startBASMSync', async () => {
+      const report = await basmEngine.startBASMSync()
+      return { status: 'success', message: 'BASM sync started and completed', data: report }
+    }, checkAdminAuth as any)
+
+    /**
+     * Admin route to evict expired unproven topic transactions.
+     */
+    registerJsonRoute('/admin/evictUnproven', async req => {
+      const { topic, thresholdBlocks } = req.body ?? {}
+      const report = await basmEngine.evictUnprovenTransactions({
+        topic: typeof topic === 'string' ? topic : undefined,
+        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
+      })
+      return { status: 'success', message: 'Unproven eviction completed', data: report }
+    }, checkAdminAuth as any)
+
+    /**
      * Admin route to evict an outpoint, either from all services or a specific one.
      */
     this.app.post('/admin/evictOutpoint', checkAdminAuth as any, (req, res) => {
@@ -1849,6 +2079,20 @@ export default class OverlayExpress {
       })
     })
 
+    await this.runStartupSync()
+
+    // Start listening on the configured port
+    this.app.listen(this.port, () => {
+      this.isListening = true
+      this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
+    })
+  }
+
+  /**
+   * Runs the post-listen startup work: advertiser init, advertisement sync,
+   * and the optional GASP/BASM background syncs.
+   */
+  private async runStartupSync (): Promise<void> {
     // The legacy Ninja advertiser has a setLookupEngine method.
     if (this.engine?.advertiser instanceof DiscoveryServices.WalletAdvertiser) {
       this.logger.log(
@@ -1872,23 +2116,93 @@ export default class OverlayExpress {
       this.logger.log(chalk.red('Error syncing advertisements:'), e)
     }
 
-    // Attempt to do GASP sync if enabled
-    if (this.enableGASPSync) {
-      try {
-        this.logger.log(chalk.green('Starting GASP sync...'))
-        await this.engine?.startGASPSync()
-        this.logger.log(chalk.green('GASP sync complete!'))
-      } catch (e) {
-        console.error(chalk.red('Failed to GASP sync'), e)
-      }
-    } else {
+    await this.runGaspStartupSync()
+    await this.runBasmStartupSync()
+  }
+
+  /** Attempt a GASP sync at startup when enabled. */
+  private async runGaspStartupSync (): Promise<void> {
+    if (!this.enableGASPSync) {
       this.logger.log(chalk.yellow(`${this.name} will not sync because GASP has been disabled.`))
+      return
+    }
+    try {
+      this.logger.log(chalk.green('Starting GASP sync...'))
+      await this.engine?.startGASPSync()
+      this.logger.log(chalk.green('GASP sync complete!'))
+    } catch (e) {
+      console.error(chalk.red('Failed to GASP sync'), e)
+    }
+  }
+
+  /** Attempt a BASM sync at startup when enabled, then begin tip-following. */
+  private async runBasmStartupSync (): Promise<void> {
+    if (!(this.enableBASMSync || this.engineConfig.enableBASMSync === true)) {
+      return
+    }
+    try {
+      this.logger.log(chalk.green('Starting BASM sync...'))
+      const report = await (this.engine as BASMCapableEngine | undefined)?.startBASMSync()
+      this.logger.log(chalk.green('BASM sync complete!'), report)
+    } catch (e) {
+      console.error(chalk.red('Failed to BASM sync'), e)
     }
 
-    // Start listening on the configured port
-    this.app.listen(this.port, () => {
-      this.isListening = true
-      this.logger.log(chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`))
+    // Extend each topic's anchor chain to the current tip on startup, then keep
+    // it following the tip so the cumulative TAC advances after each new block.
+    await this.advanceBASMAnchorChains()
+    this.startBASMBlockPolling()
+    this.startBASMReorgStream()
+  }
+
+  /** Poll for new blocks to advance anchor chains and detect reorgs. */
+  private startBASMBlockPolling (): void {
+    if (this.basmBlockPollIntervalMs <= 0) {
+      return
+    }
+    this.basmBlockPollTimer = setInterval(() => {
+      void this.advanceBASMAnchorChains()
+      // Fallback reorg detection for chain trackers without a reorg stream,
+      // and a safety net even when the SSE adapter is active.
+      void this.revalidateBASMAnchors()
+    }, this.basmBlockPollIntervalMs)
+    this.basmBlockPollTimer.unref?.()
+  }
+
+  /** Real-time reorg reconciliation via the go-chaintracks (Arcade) reorg SSE. */
+  private startBASMReorgStream (): void {
+    const reorgStreamUrl = this.engineConfig.reorgStreamUrl ?? this.reorgStreamUrl
+    const reorgScanDepth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
+    if (reorgStreamUrl === undefined || reorgStreamUrl === '') {
+      return
+    }
+    const basmEngine = this.engine as BASMCapableEngine | undefined
+    this.reorgAdapter = new ReorgSseAdapter({
+      url: reorgStreamUrl,
+      onReorg: async input => { await basmEngine?.handleReorg(input) },
+      onConnect: async () => { await basmEngine?.revalidateRecentAnchors(reorgScanDepth) },
+      logger: this.logger
     })
+    this.reorgAdapter.start()
+    this.logger.log(chalk.green(`BASM reorg stream listening at ${reorgStreamUrl}`))
+  }
+
+  /** Extend every topic's BASM anchor chain to the current chain tip. */
+  private async advanceBASMAnchorChains (): Promise<void> {
+    try {
+      await (this.engine as BASMCapableEngine | undefined)?.advanceTopicAnchorChains()
+    } catch (e) {
+      console.error(chalk.red('Failed to advance BASM anchor chains'), e)
+    }
+  }
+
+  /** Revalidate recent BASM anchors against the chain tracker, reconciling any reorg. */
+  private async revalidateBASMAnchors (): Promise<void> {
+    try {
+      const depth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth
+      await (this.engine as BASMCapableEngine | undefined)?.revalidateRecentAnchors(depth)
+    } catch (e) {
+      console.error(chalk.red('Failed to revalidate BASM anchors'), e)
+    }
   }
 }

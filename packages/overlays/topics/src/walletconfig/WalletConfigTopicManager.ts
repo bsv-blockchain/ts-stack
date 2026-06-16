@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { KeyDeriver, ProtoWallet, PushDrop, Transaction, Utils } from '@bsv/sdk'
 
 export default class WalletConfigTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     try {
       const parsedTransaction = Transaction.fromBEEF(beef)
@@ -70,11 +70,11 @@ export default class WalletConfigTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'WalletConfig Topic Manager: register wallet configuration options for service discovery.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

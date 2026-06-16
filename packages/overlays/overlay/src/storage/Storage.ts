@@ -1,4 +1,10 @@
 import type { Output } from '../Output.js'
+import type {
+  AdmittedTxRef,
+  RawTransactionRecord,
+  TopicAnchorTip,
+  TopicBlockAnchor
+} from '../BASM.js'
 
 /**
  * Represents a transaction that has been applied to a topic.
@@ -8,6 +14,45 @@ export interface AppliedTransaction {
   txid: string
   /** Output index of the applied transaction */
   topic: string
+  /** Block height of the transaction proof, when known */
+  blockHeight?: number
+  /** Block hash for the proven transaction's block, when known */
+  blockHash?: string
+  /** Transaction's canonical in-block index, when known */
+  blockIndex?: number
+  /** Merkle root computed from the direct proof, when known */
+  merkleRoot?: string
+  /** Chain height when this transaction was first seen by this overlay */
+  firstSeenHeight?: number
+  /** Whether this applied transaction has a direct proof of inclusion */
+  proven?: boolean
+}
+
+export interface StoredTransactionRecord {
+  txid: string
+  beef?: number[]
+  rawTx?: number[]
+  merklePath?: number[]
+  blockHeight?: number
+  blockHash?: string
+  blockIndex?: number
+  merkleRoot?: string
+}
+
+export interface AppliedTransactionProofUpdate {
+  txid: string
+  topic: string
+  blockHeight: number
+  blockHash?: string
+  blockIndex?: number
+  merkleRoot?: string
+}
+
+export interface UnprovenAppliedTransactionCandidate {
+  txid: string
+  topic: string
+  firstSeenHeight?: number
+  outputs: Array<{ txid: string, outputIndex: number }>
 }
 
 /**
@@ -103,6 +148,17 @@ export interface Storage {
   updateOutputBlockHeight?: (txid: string, outputIndex: number, topic: string, blockHeight: number) => Promise<void>
 
   /**
+   * Upserts transaction-level data used for compact BEEF, raw-tx BASM fetches,
+   * and direct proof retrieval.
+   */
+  upsertTransactionRecord?: (record: StoredTransactionRecord) => Promise<void>
+
+  /**
+   * Updates direct proof metadata for an applied topic transaction.
+   */
+  updateAppliedTransactionProof?: (record: AppliedTransactionProofUpdate) => Promise<void>
+
+  /**
    * Inserts record of the applied transaction
    * @param tx — The transaction to insert
    */
@@ -114,6 +170,77 @@ export interface Storage {
    * @returns Whether the transaction is already applied
    */
   doesAppliedTransactionExist: (tx: AppliedTransaction) => Promise<boolean>
+
+  /**
+   * Returns proven topic transactions admitted in one block, in canonical block order.
+   */
+  findAdmittedTransactionsForBlock?: (topic: string, blockHeight: number, blockHash?: string) => Promise<AdmittedTxRef[]>
+
+  /**
+   * Persists or replaces a topic block anchor for one height.
+   */
+  upsertTopicBlockAnchor?: (anchor: TopicBlockAnchor) => Promise<void>
+
+  /**
+   * Returns one topic block anchor.
+   */
+  findTopicBlockAnchor?: (topic: string, blockHeight: number, blockHash?: string) => Promise<TopicBlockAnchor | undefined>
+
+  /**
+   * Returns topic block anchors across a closed height range.
+   */
+  findTopicBlockAnchors?: (topic: string, fromHeight: number, toHeight: number) => Promise<TopicBlockAnchor[]>
+
+  /**
+   * Returns the latest known topic anchor tip.
+   */
+  findTopicAnchorTip?: (topic: string) => Promise<TopicAnchorTip | undefined>
+
+  /**
+   * Returns raw transactions for the requested txids.
+   */
+  findRawTransactions?: (txids: string[]) => Promise<RawTransactionRecord[]>
+
+  /**
+   * Returns direct Merkle paths for the requested txids.
+   */
+  findTransactionMerklePaths?: (txids: string[]) => Promise<Array<{
+    txid: string
+    merklePath: string
+    blockHeight?: number
+    blockHash?: string
+    blockIndex?: number
+    merkleRoot?: string
+  }>>
+
+  /**
+   * Finds topic-applied transactions with no direct proof old enough to evict.
+   */
+  findUnprovenAppliedTransactions?: (cutoffHeight: number, topic?: string) => Promise<UnprovenAppliedTransactionCandidate[]>
+
+  /**
+   * Deletes a topic-applied transaction record.
+   */
+  deleteAppliedTransaction?: (txid: string, topic: string) => Promise<void>
+
+  /**
+   * Returns proven topic-applied transactions whose proof anchors to the given
+   * block hash. Used to demote admissions when that block is reorged out.
+   */
+  findProvenAppliedTransactionsByBlockHash?: (blockHash: string) => Promise<Array<{ txid: string, topic: string, blockHeight: number }>>
+
+  /**
+   * Returns proven topic-applied transactions in a closed block-height range,
+   * including the proof's block hash and merkle root for revalidation sweeps.
+   */
+  findProvenAppliedTransactionsInRange?: (fromHeight: number, toHeight: number, topic?: string) => Promise<Array<{ txid: string, topic: string, blockHeight: number, blockHash?: string, merkleRoot?: string }>>
+
+  /**
+   * Demotes a proven applied transaction back to unproven: clears the block
+   * proof metadata and `proven` flag while retaining `firstSeenHeight`, so the
+   * "received" record survives until re-proof or unproven eviction.
+   */
+  demoteAppliedTransactionToUnproven?: (txid: string, topic: string) => Promise<void>
 
   /**
    * Updates the last interaction score for a given host and topic

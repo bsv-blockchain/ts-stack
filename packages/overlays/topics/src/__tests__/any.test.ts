@@ -82,9 +82,9 @@ describe('AnyTopicManager', () => {
 // ---------------------------------------------------------------------------
 
 describe('AnyLookupService (MongoDB)', () => {
-  let mongod: MongoMemoryServer
-  let client: MongoClient
-  let db: Db
+  let mongod: MongoMemoryServer | undefined
+  let client: MongoClient | undefined
+  let db: Db | undefined
   let service: AnyLookupService
 
   beforeAll(async () => {
@@ -97,12 +97,18 @@ describe('AnyLookupService (MongoDB)', () => {
   })
 
   afterAll(async () => {
-    await client.close()
-    await mongod.stop()
+    if (client !== undefined) {
+      await client.close()
+    }
+    if (mongod !== undefined) {
+      await mongod.stop()
+    }
   })
 
   afterEach(async () => {
-    await db.collection('anyRecords').deleteMany({})
+    if (db !== undefined) {
+      await db.collection('anyRecords').deleteMany({})
+    }
   })
 
   it('stores a record via outputAdmittedByTopic and retrieves it via lookup', async () => {

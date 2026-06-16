@@ -89,11 +89,26 @@ export class GlobalKVStore {
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.wallet = config.wallet ?? new WalletClient()
     this.historian = new Historian<string, KVContext>(kvStoreInterpreter)
-    this.lookupResolver = new LookupResolver({
-      networkPreset: this.config.networkPreset
+    // Resolve overlay hosts via, in order of precedence: an injected resolver,
+    // otherwise a default resolver built from `networkPreset` plus any
+    // `hostOverrides` / `slapTrackers`. The same resolver is shared with the
+    // topic broadcaster so read lookups and the broadcaster's SHIP host
+    // discovery both go through it. Note this shares the *lookup* path, not the
+    // broadcast target: writes still go to whatever hosts the `ls_ship` SHIP
+    // lookup returns, so pinning the broadcast backend requires that lookup to
+    // return the desired host (a host override alone does not force it). With no
+    // overrides this is behaviourally identical to the previous
+    // networkPreset-only construction.
+    // `hostOverrides` / `slapTrackers` are passed straight through; LookupResolver
+    // already falls back to its defaults when they're undefined.
+    this.lookupResolver = this.config.lookupResolver ?? new LookupResolver({
+      networkPreset: this.config.networkPreset,
+      hostOverrides: this.config.hostOverrides,
+      slapTrackers: this.config.slapTrackers
     })
     this.topicBroadcaster = new TopicBroadcaster(this.config.topics as string[], {
-      networkPreset: this.config.networkPreset
+      networkPreset: this.config.networkPreset,
+      resolver: this.lookupResolver
     })
   }
 

@@ -10,6 +10,30 @@ export type { TaggedBEEF, STEAK, LookupQuestion, LookupAnswer, AdmittanceInstruc
 export type { LookupFormula } from './src/LookupFormula.js'
 export type { Advertisement } from './src/Advertisement.js'
 export type { AdvertisementData, Advertiser } from './src/Advertiser.js'
+export {
+  BASM_ZERO_HASH,
+  computeBasmRoot,
+  computeTac,
+  extractMerkleProofMetadata
+} from './src/BASM.js'
+export type {
+  AdmittedListRequest,
+  AdmittedListResponse,
+  AdmittedTxRef,
+  BASMPeerSyncReport,
+  CompoundMerklePathRequest,
+  CompoundMerklePathResponse,
+  MerkleProofMetadata,
+  RawTransactionRecord,
+  RawTransactionRequest,
+  RawTransactionResponse,
+  TopicAnchorHeader,
+  TopicAnchorHeaderResolver,
+  TopicAnchorRangeRequest,
+  TopicAnchorRangeResponse,
+  TopicAnchorTip,
+  TopicBlockAnchor
+} from './src/BASM.js'
 
 // The Knex storage system
 export { KnexStorage } from './src/storage/knex/KnexStorage.js'
