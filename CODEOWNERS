@@ -5,18 +5,4 @@
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # ── Default (catch-all) ──────────────────────────────────────────────────────
-*                               @bsv-blockchain/stack-architects
-
-# ── Package Defaults ─────────────────────────────────────────────────────────
-/packages/                      @bsv-blockchain/ent:bsva-technology
-# Add package-specific owners below this default as they are assigned.
-
-# ── Conformance & Specs ──────────────────────────────────────────────────────
-/conformance/                   @bsv-blockchain/stack-architects
-/specs/                         @bsv-blockchain/stack-architects
-
-# ── CI / Workflows ───────────────────────────────────────────────────────────
-/.github/                       @bsv-blockchain/stack-architects
-
-# ── Scripts ──────────────────────────────────────────────────────────────────
-/scripts/                       @bsv-blockchain/stack-architects
+*                               @/ent:bsva-technology
