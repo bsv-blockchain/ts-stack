@@ -62,13 +62,14 @@ jobs:
           fi
 
       - name: Build changed packages
+        # Build the FULL workspace (not just the changed scope): a changed
+        # package's workspace dependencies must have their built dist present
+        # for tsc to resolve them, but those dependencies are not part of the
+        # `...[BASE]` changed+dependents scope. This matches the push-event
+        # build (which already builds everything). Lint/test stay scoped below.
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
-        env:
-          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
         run: |
-          EXTRA=""
-          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
-          pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' $EXTRA run build
+          pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run build
 
       - name: Lint changed packages
         continue-on-error: true
