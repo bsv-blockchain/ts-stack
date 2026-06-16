@@ -1018,4 +1018,38 @@ describe('update tests', () => {
       }
     }
   })
+
+  test('16_updateTransactionStatus failed releases inputs and neutralizes generated outputs', async () => {
+    for (const { storage } of setups) {
+      const { tx: fundingTx, user } = await _tu.insertTestTransaction(storage, undefined, false, {
+        status: 'completed',
+        txid: 'b'.repeat(64)
+      })
+      const { tx: failedTx } = await _tu.insertTestTransaction(storage, user, false, {
+        status: 'unsigned',
+        txid: undefined
+      })
+      const inputOutput = await _tu.insertTestOutput(storage, fundingTx, 0, 1000, undefined, false, {
+        spendable: false,
+        spentBy: failedTx.transactionId
+      })
+      const generatedOutput = await _tu.insertTestOutput(storage, failedTx, 0, 900, undefined, false, {
+        spendable: true,
+        spentBy: failedTx.transactionId
+      })
+
+      await storage.updateTransactionStatus('failed', failedTx.transactionId)
+
+      const inputAfter = verifyOne(await storage.findOutputs({ partial: { outputId: inputOutput.outputId } }))
+      expect(inputAfter.spendable).toBe(true)
+      expect(inputAfter.spentBy).toBeUndefined()
+
+      const generatedAfter = verifyOne(await storage.findOutputs({ partial: { outputId: generatedOutput.outputId } }))
+      expect(generatedAfter.spendable).toBe(false)
+      expect(generatedAfter.spentBy).toBeUndefined()
+
+      const txAfter = verifyOne(await storage.findTransactions({ partial: { transactionId: failedTx.transactionId } }))
+      expect(txAfter.status).toBe('failed')
+    }
+  })
 })
