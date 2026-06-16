@@ -1502,103 +1502,67 @@ export default class OverlayExpress {
       return header
     }
 
-    this.app.post('/requestTopicAnchorTip', (req, res) => {
-      ; (async () => {
-        try {
-          const topic = readBasmTopic(req)
-          return res.status(200).json(await basmEngine.provideTopicAnchorTip(topic))
-        } catch (error) {
-          console.error(chalk.red('Error in /requestTopicAnchorTip:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({ status: 'error', message: 'Unexpected error' })
-      })
-    })
-
-    this.app.post('/requestTopicAnchorRange', (req, res) => {
-      ; (async () => {
-        try {
-          const topic = readBasmTopic(req)
-          const { fromHeight, toHeight } = req.body
-          return res.status(200).json(await basmEngine.provideTopicAnchorRange(topic, Number(fromHeight), Number(toHeight)))
-        } catch (error) {
-          console.error(chalk.red('Error in /requestTopicAnchorRange:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({ status: 'error', message: 'Unexpected error' })
-      })
-    })
-
-    this.app.post('/requestAdmittedList', (req, res) => {
-      ; (async () => {
-        try {
-          const topic = readBasmTopic(req)
-          const { blockHeight, blockHash } = req.body
-          return res.status(200).json(await basmEngine.provideAdmittedList(
-            topic,
-            Number(blockHeight),
-            typeof blockHash === 'string' ? blockHash : undefined
-          ))
-        } catch (error) {
-          console.error(chalk.red('Error in /requestAdmittedList:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({ status: 'error', message: 'Unexpected error' })
-      })
-    })
-
-    this.app.post('/requestCompoundMerklePath', (req, res) => {
-      ; (async () => {
-        try {
-          const topic = readBasmTopic(req)
-          const { blockHeight, txids } = req.body
-          if (!Array.isArray(txids) || !txids.every(txid => typeof txid === 'string')) {
-            return res.status(400).json({ status: 'error', message: 'txids must be an array of strings' })
+    /**
+     * Registers a POST route whose handler resolves to the JSON payload returned
+     * with HTTP 200. Any thrown error is logged and returned as HTTP 400, while
+     * unexpected rejections fall back to HTTP 500. This consolidates the shared
+     * async/try-catch boilerplate used by the BRC-136 BASM endpoints (and the
+     * BASM-related admin endpoints, which additionally pass `checkAdminAuth`).
+     */
+    const registerJsonRoute = (
+      path: string,
+      handler: (req: express.Request) => Promise<unknown>,
+      ...middleware: express.RequestHandler[]
+    ): void => {
+      this.app.post(path, ...(middleware as any[]), (req: express.Request, res: express.Response) => {
+        ; (async () => {
+          try {
+            return res.status(200).json(await handler(req))
+          } catch (error) {
+            console.error(chalk.red(`Error in ${path}:`), error)
+            return res.status(400).json({
+              status: 'error',
+              message: error instanceof Error ? error.message : 'An unknown error occurred'
+            })
           }
-          return res.status(200).json(await basmEngine.provideCompoundMerklePath(topic, Number(blockHeight), txids))
-        } catch (error) {
-          console.error(chalk.red('Error in /requestCompoundMerklePath:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({ status: 'error', message: 'Unexpected error' })
+        })().catch(() => {
+          res.status(500).json({ status: 'error', message: 'Unexpected error' })
+        })
       })
+    }
+
+    const requireTxids = (value: unknown): string[] => {
+      if (!Array.isArray(value) || !value.every(txid => typeof txid === 'string')) {
+        throw new TypeError('txids must be an array of strings')
+      }
+      return value
+    }
+
+    registerJsonRoute('/requestTopicAnchorTip', async req =>
+      await basmEngine.provideTopicAnchorTip(readBasmTopic(req)))
+
+    registerJsonRoute('/requestTopicAnchorRange', async req => {
+      const { fromHeight, toHeight } = req.body
+      return await basmEngine.provideTopicAnchorRange(readBasmTopic(req), Number(fromHeight), Number(toHeight))
     })
 
-    this.app.post('/requestRawTransactions', (req, res) => {
-      ; (async () => {
-        try {
-          const { txids } = req.body
-          if (!Array.isArray(txids) || !txids.every(txid => typeof txid === 'string')) {
-            return res.status(400).json({ status: 'error', message: 'txids must be an array of strings' })
-          }
-          return res.status(200).json(await basmEngine.provideRawTransactions(txids))
-        } catch (error) {
-          console.error(chalk.red('Error in /requestRawTransactions:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({ status: 'error', message: 'Unexpected error' })
-      })
+    registerJsonRoute('/requestAdmittedList', async req => {
+      const { blockHeight, blockHash } = req.body
+      return await basmEngine.provideAdmittedList(
+        readBasmTopic(req),
+        Number(blockHeight),
+        typeof blockHash === 'string' ? blockHash : undefined
+      )
     })
+
+    registerJsonRoute('/requestCompoundMerklePath', async req => {
+      const topic = readBasmTopic(req)
+      const { blockHeight, txids } = req.body
+      return await basmEngine.provideCompoundMerklePath(topic, Number(blockHeight), requireTxids(txids))
+    })
+
+    registerJsonRoute('/requestRawTransactions', async req =>
+      await basmEngine.provideRawTransactions(requireTxids(req.body.txids)))
 
     /**
      * ============== ADMIN ROUTES ==============
@@ -2011,52 +1975,22 @@ export default class OverlayExpress {
     /**
      * Admin route to manually start BASM sync, calling `engine.startBASMSync()`.
      */
-    this.app.post('/admin/startBASMSync', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
-        try {
-          const report = await basmEngine.startBASMSync()
-          return res.status(200).json({ status: 'success', message: 'BASM sync started and completed', data: report })
-        } catch (error) {
-          console.error(chalk.red('Error in /admin/startBASMSync:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({
-          status: 'error',
-          message: 'Unexpected error'
-        })
-      })
-    })
+    registerJsonRoute('/admin/startBASMSync', async () => {
+      const report = await basmEngine.startBASMSync()
+      return { status: 'success', message: 'BASM sync started and completed', data: report }
+    }, checkAdminAuth as any)
 
     /**
      * Admin route to evict expired unproven topic transactions.
      */
-    this.app.post('/admin/evictUnproven', checkAdminAuth as any, (req, res) => {
-      ; (async () => {
-        try {
-          const { topic, thresholdBlocks } = req.body ?? {}
-          const report = await basmEngine.evictUnprovenTransactions({
-            topic: typeof topic === 'string' ? topic : undefined,
-            thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
-          })
-          return res.status(200).json({ status: 'success', message: 'Unproven eviction completed', data: report })
-        } catch (error) {
-          console.error(chalk.red('Error in /admin/evictUnproven:'), error)
-          return res.status(400).json({
-            status: 'error',
-            message: error instanceof Error ? error.message : 'An unknown error occurred'
-          })
-        }
-      })().catch(() => {
-        res.status(500).json({
-          status: 'error',
-          message: 'Unexpected error'
-        })
+    registerJsonRoute('/admin/evictUnproven', async req => {
+      const { topic, thresholdBlocks } = req.body ?? {}
+      const report = await basmEngine.evictUnprovenTransactions({
+        topic: typeof topic === 'string' ? topic : undefined,
+        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
       })
-    })
+      return { status: 'success', message: 'Unproven eviction completed', data: report }
+    }, checkAdminAuth as any)
 
     /**
      * Admin route to evict an outpoint, either from all services or a specific one.
