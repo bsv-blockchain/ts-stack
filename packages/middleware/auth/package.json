@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Signed, expiry-bound, single-use wallet auth proofs for BSV apps.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -25,6 +25,7 @@
     "lint:ci-disabled": "ts-standard src/**/*.ts",
     "lint": "ts-standard --fix src/**/*.ts",
     "test:watch": "jest --watch",
+    "test:perf": "jest --config jest.perf.config.js --runInBand",
     "test:coverage-disabled": "jest --coverage",
     "build": "tsup && tsc --emitDeclarationOnly"
   },

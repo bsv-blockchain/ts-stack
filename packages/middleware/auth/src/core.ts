@@ -4,9 +4,9 @@ import type {
   AuthProof,
   AuthProofOptions,
   AuthSigData,
-  ConsumeNonce,
-  ProofSignerWallet,
-  ProofVerifierWallet,
+  CreateAuthProofArgs,
+  RequestBody,
+  VerifyAuthProofArgs,
   VerifyAuthProofResult,
 } from './types.js';
 
@@ -28,6 +28,41 @@ function resolveOptions(options: AuthProofOptions = {}): ResolvedOptions {
 export function serializeAuthSigData(data: AuthSigData): number[] {
   const canonical = [data.action, data.identityKey, String(data.expiresAt), data.nonce].join('\n');
   return Utils.toArray(canonical, 'utf8');
+}
+
+/**
+ * Reduce a request body to the exact bytes bound into the signature, so the
+ * client can pass the value it sends and the verifier the raw body it received:
+ * a string is UTF-8, an `ArrayBuffer` or typed array is taken as raw bytes (so
+ * binary is preserved), and anything else — a plain object or any array — is
+ * JSON-encoded then UTF-8.
+ */
+export function normalizeBody(body: RequestBody): number[] {
+  if (typeof body === 'string') return Utils.toArray(body, 'utf8');
+  if (body instanceof ArrayBuffer) return Array.from(new Uint8Array(body));
+  if (ArrayBuffer.isView(body)) {
+    return Array.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+  }
+  return Utils.toArray(JSON.stringify(body), 'utf8'); // plain objects and all arrays → JSON
+}
+
+/**
+ * Bytes that are signed and verified for a proof: the canonical auth fields and,
+ * when the request carries a body, that body bound in too. The body is appended
+ * length-prefixed (not delimited) so arbitrary binary stays unambiguous. With no
+ * body the result is exactly `serializeAuthSigData(data)`, so login proofs are
+ * byte-for-byte unchanged. A body-bound proof and a bodyless one never collide:
+ * an empty body (length 0) still differs from "no body" (nothing appended).
+ */
+export function serializeSignablePayload(data: AuthSigData, body?: RequestBody): number[] {
+  const head = serializeAuthSigData(data);
+  if (body === undefined) return head;
+  const writer = new Utils.Writer();
+  writer.write(head);
+  const bytes = normalizeBody(body);
+  writer.writeVarIntNum(bytes.length);
+  writer.write(bytes);
+  return writer.toArray();
 }
 
 /** Builds the per-request signable data: fresh expiry + strong random nonce. */
@@ -87,19 +122,20 @@ export function checkAuthSigData(
  * `counterparty` is the verifier's identity key (e.g. your backend) that the
  * wallet signs toward — relative to the wallet, so it's a different key than the
  * server passes to verify (there the counterparty is this signer's identity).
+ *
+ * Pass `body` to bind a request payload (e.g. the new username for a profile
+ * update) into the signature; the verifier must be given the same body. Omit it
+ * for bodyless actions like login. The body is bound only — it is not stored in
+ * the returned proof; send it over the wire as usual.
  */
-export async function createAuthProof(
-  wallet: ProofSignerWallet,
-  counterparty: string,
-  action: string,
-  options?: AuthProofOptions,
-): Promise<AuthProof> {
-  const { protocol } = resolveOptions(options);
+export async function createAuthProof(args: CreateAuthProofArgs): Promise<AuthProof> {
+  const { wallet, counterparty, action, body } = args;
+  const { protocol } = resolveOptions(args);
   const { publicKey: identityKey } = await wallet.getPublicKey({ identityKey: true });
-  const data = createAuthSigData(action, identityKey, options);
+  const data = createAuthSigData(action, identityKey, args);
 
   const { signature } = await wallet.createSignature({
-    data: serializeAuthSigData(data),
+    data: serializeSignablePayload(data, body),
     protocolID: protocol,
     keyID: data.nonce,
     counterparty,
@@ -111,23 +147,22 @@ export async function createAuthProof(
 /**
  * Server-side: verify a proof. Steps: shape/action/freshness → signature →
  * single-use (via the injected `consumeNonce`). Returns the authenticated
- * identityKey on success. `deps.now` is injectable for tests.
+ * identityKey on success. `now` is injectable for tests.
+ *
+ * If the proof was created with a `body`, pass the raw received body as `body`
+ * so it is bound into the verified bytes identically; a tampered or missing body
+ * then fails the signature check. Omit it for bodyless actions.
  */
-export async function verifyAuthProof(
-  wallet: ProofVerifierWallet,
-  proof: AuthProof | undefined | null,
-  expectedAction: string,
-  deps: { consumeNonce: ConsumeNonce; now?: number },
-  options?: AuthProofOptions,
-): Promise<VerifyAuthProofResult> {
-  const { protocol } = resolveOptions(options);
-  const now = deps.now ?? Date.now();
+export async function verifyAuthProof(args: VerifyAuthProofArgs): Promise<VerifyAuthProofResult> {
+  const { wallet, proof, action: expectedAction, consumeNonce, body } = args;
+  const { protocol } = resolveOptions(args);
+  const now = args.now ?? Date.now();
 
   if (!proof || typeof proof !== 'object' || !proof.data || !Array.isArray(proof.signature)) {
     return { valid: false, error: 'Malformed proof' };
   }
 
-  const shape = checkAuthSigData(proof.data, expectedAction, now, options);
+  const shape = checkAuthSigData(proof.data, expectedAction, now, args);
   if (!shape.valid) {
     return { valid: false, error: shape.error };
   }
@@ -139,7 +174,7 @@ export async function verifyAuthProof(
   let signatureValid = false;
   try {
     const result = await wallet.verifySignature({
-      data: serializeAuthSigData(proof.data),
+      data: serializeSignablePayload(proof.data, body),
       signature: proof.signature,
       protocolID: protocol,
       keyID: nonce,
@@ -153,7 +188,7 @@ export async function verifyAuthProof(
     return { valid: false, error: 'Invalid signature' };
   }
 
-  const fresh = await deps.consumeNonce(nonce, new Date(expiresAt));
+  const fresh = await consumeNonce(nonce, new Date(expiresAt));
   if (!fresh) {
     return { valid: false, error: 'Proof already used' };
   }
