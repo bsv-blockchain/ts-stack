@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { PrivateKey } from '@bsv/sdk'
 import { Setup } from '../../Setup'
 import { SetupClient } from '../../SetupClient'
@@ -112,7 +113,7 @@ async function makeStorage (): Promise<StorageIdb> {
   const options: StorageProviderOptions = StorageProvider.createStorageBaseOptions('main')
   const storage = new StorageIdb(options)
   await resetStorage(storage)
-  await storage.migrate(`storageIdbTest-${Date.now()}-${Math.random()}`, '42'.repeat(32))
+  await storage.migrate(`storageIdbTest-${Date.now()}-${randomUUID()}`, '42'.repeat(32))
   await storage.makeAvailable()
   return storage
 }
