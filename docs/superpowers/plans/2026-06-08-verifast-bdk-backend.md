@@ -1,3 +1,14 @@
+---
+id: verifast-bdk-backend-plan
+title: "@bsv/verifast BDK WASM Backend Implementation Plan"
+kind: guide
+version: "n/a"
+last_updated: "2026-06-08"
+last_verified: "2026-06-16"
+status: experimental
+tags: [verifast, bdk, wasm, plan]
+---
+
 # @bsv/verifast BDK WASM Backend Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

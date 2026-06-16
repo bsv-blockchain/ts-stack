@@ -1,3 +1,14 @@
+---
+id: verifast-bdk-backend-design
+title: "Design: Pluggable C++/WASM script-verification backend (@bsv/verifast + BDK)"
+kind: spec
+version: "n/a"
+last_updated: "2026-06-08"
+last_verified: "2026-06-16"
+status: experimental
+tags: [verifast, bdk, wasm, design]
+---
+
 # Design: Pluggable C++/WASM script-verification backend (`@bsv/verifast` + BDK)
 
 **Date:** 2026-06-08
