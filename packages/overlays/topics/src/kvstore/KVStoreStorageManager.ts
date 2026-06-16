@@ -6,11 +6,11 @@ export class KVStoreStorageManager {
   private readonly records: Collection<KVStoreRecord>
   private indexInit?: Promise<void>
 
-  constructor(private readonly db: Db) {
+  constructor (private readonly db: Db) {
     this.records = db.collection<KVStoreRecord>('kvstoreRecords')
   }
 
-  private ensureIndexes(): Promise<void> {
+  private async ensureIndexes (): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await Promise.all([
@@ -22,10 +22,10 @@ export class KVStoreStorageManager {
         ])
       })()
     }
-    return this.indexInit
+    return await this.indexInit
   }
 
-  async storeRecord(
+  async storeRecord (
     txid: string,
     outputIndex: number,
     key: string,
@@ -46,12 +46,12 @@ export class KVStoreStorageManager {
     await this.records.insertOne(record)
   }
 
-  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async findWithFilters(
+  async findWithFilters (
     filters: {
       key?: string
       protocolID?: WalletProtocol
@@ -78,15 +78,15 @@ export class KVStoreStorageManager {
       }
     }
 
-    return this.findRecordWithQuery(query, limit, skip, sortOrder)
+    return await this.findRecordWithQuery(query, limit, skip, sortOrder)
   }
 
-  async findAllRecords(limit: number = 50, skip: number = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<KVStoreRecord[]> {
+  async findAllRecords (limit: number = 50, skip: number = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<KVStoreRecord[]> {
     await this.ensureIndexes()
-    return this.findRecordWithQuery({}, limit, skip, sortOrder)
+    return await this.findRecordWithQuery({}, limit, skip, sortOrder)
   }
 
-  private async findRecordWithQuery(
+  private async findRecordWithQuery (
     query: object,
     limit: number = 50,
     skip: number = 0,

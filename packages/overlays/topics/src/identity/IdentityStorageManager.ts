@@ -10,11 +10,11 @@ export class IdentityStorageManager {
   private readonly records: Collection<IdentityRecord>
   private indexInit?: Promise<void>
 
-  constructor(private readonly db: Db) {
+  constructor (private readonly db: Db) {
     this.records = db.collection<IdentityRecord>('identityRecords')
   }
 
-  private ensureIndexes(): Promise<void> {
+  private async ensureIndexes (): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await Promise.all([
@@ -30,10 +30,10 @@ export class IdentityStorageManager {
         ])
       })()
     }
-    return this.indexInit
+    return await this.indexInit
   }
 
-  async storeRecord(txid: string, outputIndex: number, certificate: Certificate): Promise<void> {
+  async storeRecord (txid: string, outputIndex: number, certificate: Certificate): Promise<void> {
     await this.ensureIndexes()
     await this.records.insertOne({
       txid,
@@ -47,16 +47,16 @@ export class IdentityStorageManager {
     })
   }
 
-  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  private normalizeSearchInput(input: string): string {
+  private normalizeSearchInput (input: string): string {
     return input.trim().replaceAll(/\s+/g, ' ')
   }
 
-  private getFuzzyRegex(input: string): RegExp {
+  private getFuzzyRegex (input: string): RegExp {
     const normalizedInput = this.normalizeSearchInput(input)
     if (normalizedInput.length === 0) {
       return /^$/
@@ -68,7 +68,7 @@ export class IdentityStorageManager {
     return new RegExp(fuzzyPattern, 'i')
   }
 
-  async findByAttribute(attributes: IdentityAttributes, certifiers?: string[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+  async findByAttribute (attributes: IdentityAttributes, certifiers?: string[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (attributes === undefined || Object.keys(attributes).length === 0) {
       return []
@@ -106,7 +106,7 @@ export class IdentityStorageManager {
     return await this.findRecordWithQuery(query, limit, offset)
   }
 
-  async findByIdentityKey(identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+  async findByIdentityKey (identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (identityKey === undefined) return []
 
@@ -119,7 +119,7 @@ export class IdentityStorageManager {
     return await this.findRecordWithQuery(query, limit, offset)
   }
 
-  async findByCertifier(certifiers: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+  async findByCertifier (certifiers: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (certifiers === undefined || certifiers.length === 0) return []
 
@@ -127,7 +127,7 @@ export class IdentityStorageManager {
     return await this.findRecordWithQuery(query, limit, offset)
   }
 
-  async findByCertificateType(certificateTypes: Base64String[], identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
+  async findByCertificateType (certificateTypes: Base64String[], identityKey: PubKeyHex, certifiers?: PubKeyHex[], limit?: number, offset?: number): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (certificateTypes === undefined || certificateTypes.length === 0 || identityKey === undefined) return []
 
@@ -143,7 +143,7 @@ export class IdentityStorageManager {
     return await this.findRecordWithQuery(query, limit, offset)
   }
 
-  async findByCertificateSerialNumber(serialNumber: Base64String, limit?: number, offset?: number): Promise<UTXOReference[]> {
+  async findByCertificateSerialNumber (serialNumber: Base64String, limit?: number, offset?: number): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (serialNumber === undefined || serialNumber === '') return []
 
@@ -151,7 +151,7 @@ export class IdentityStorageManager {
     return await this.findRecordWithQuery(query, limit, offset)
   }
 
-  private async findRecordWithQuery(query: object, limit?: number, offset?: number): Promise<UTXOReference[]> {
+  private async findRecordWithQuery (query: object, limit?: number, offset?: number): Promise<UTXOReference[]> {
     let cursor = this.records.find(query).project({ txid: 1, outputIndex: 1 })
     if (typeof limit === 'number' && limit > 0) {
       cursor = cursor.limit(limit)

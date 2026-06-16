@@ -5,34 +5,34 @@ export class HelloWorldStorage {
   private readonly records: Collection<HelloWorldRecord>
   private indexInit?: Promise<void>
 
-  constructor(private readonly db: Db) {
+  constructor (private readonly db: Db) {
     this.records = db.collection<HelloWorldRecord>('helloWorldRecords')
   }
 
-  private ensureIndexes(): Promise<void> {
+  private async ensureIndexes (): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await this.records.createIndex({ message: 'text' }, { name: 'MessageTextIndex' })
       })()
     }
-    return this.indexInit
+    return await this.indexInit
   }
 
-  async storeRecord(txid: string, outputIndex: number, message: string): Promise<void> {
+  async storeRecord (txid: string, outputIndex: number, message: string): Promise<void> {
     await this.ensureIndexes()
     await this.records.insertOne({ txid, outputIndex, message, createdAt: new Date() })
   }
 
-  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async findByMessage(message: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findByMessage (message: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (!message) return []
     const direction = sortOrder === 'asc' ? 1 : -1
-    return this.records
+    return await this.records
       .find({ $text: { $search: message } }, { projection: { txid: 1, outputIndex: 1, createdAt: 1 } })
       .sort({ createdAt: direction })
       .skip(skip)
@@ -41,7 +41,7 @@ export class HelloWorldStorage {
       .then(results => results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex })))
   }
 
-  async findAll(limit = 50, skip = 0, startDate?: Date, endDate?: Date, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findAll (limit = 50, skip = 0, startDate?: Date, endDate?: Date, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     const query: any = {}
     if (startDate || endDate) {
@@ -50,7 +50,7 @@ export class HelloWorldStorage {
       if (endDate) query.createdAt.$lte = endDate
     }
     const sortDirection = sortOrder === 'asc' ? 1 : -1
-    return this.records.find(query)
+    return await this.records.find(query)
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)

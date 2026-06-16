@@ -13,10 +13,20 @@ export interface OverlayLookupProbe {
   maxOutputs?: number
 }
 
+export interface OverlayAnchorProbe {
+  name?: string
+  topic: string
+  expectedTac?: string
+  expectedBlockHeight?: number
+  currentHeight?: number
+  maxTipLagBlocks?: number
+}
+
 export interface OverlayMonitorTarget {
   name: string
   baseUrl: string
   probes: OverlayLookupProbe[]
+  anchorProbes?: OverlayAnchorProbe[]
   headers?: Record<string, string>
 }
 
@@ -25,6 +35,8 @@ export interface OverlayMonitorThresholds {
   beefBytes?: number
   txsWithoutProof?: number
   requireSubjectProof?: boolean
+  anchorTipLagBlocks?: number
+  expiredUnprovenCount?: number
 }
 
 export interface OverlayMonitorConfig {
@@ -40,7 +52,7 @@ export interface OverlayMonitorConfig {
 }
 
 export interface OverlayMonitorWarning {
-  code: 'response-bytes' | 'beef-bytes' | 'txs-without-proof' | 'subject-proof-missing'
+  code: 'response-bytes' | 'beef-bytes' | 'txs-without-proof' | 'subject-proof-missing' | 'anchor-tip-mismatch' | 'anchor-stale-height' | 'expired-unproven-state'
   message: string
   value: number | boolean
   threshold?: number | boolean
@@ -78,14 +90,31 @@ export interface OverlayLookupProbeResult {
   error?: string
 }
 
+export interface OverlayAnchorProbeResult {
+  target: string
+  url: string
+  probe: string
+  topic: string
+  status: number
+  ok: boolean
+  responseBytes: number
+  blockHeight?: number
+  tac?: string
+  warnings: OverlayMonitorWarning[]
+  durationMs: number
+  error?: string
+}
+
 export interface OverlayMonitorReport {
   startedAt: Date
   completedAt: Date
   durationMs: number
   results: OverlayLookupProbeResult[]
+  anchorResults: OverlayAnchorProbeResult[]
   summary: {
     targetCount: number
     probeCount: number
+    anchorProbeCount: number
     failedProbeCount: number
     responseBytes: number
     outputCount: number
@@ -114,7 +143,9 @@ const defaultThresholds: Required<OverlayMonitorThresholds> = {
   responseBytes: 1024 * 1024,
   beefBytes: 64 * 1024,
   txsWithoutProof: 1,
-  requireSubjectProof: true
+  requireSubjectProof: true,
+  anchorTipLagBlocks: 6,
+  expiredUnprovenCount: 0
 }
 
 /**
@@ -150,10 +181,14 @@ export class OverlayMonitor {
   async runOnce (): Promise<OverlayMonitorReport> {
     const startedAt = this.now()
     const results: OverlayLookupProbeResult[] = []
+    const anchorResults: OverlayAnchorProbeResult[] = []
 
     for (const target of this.targets) {
       for (const probe of target.probes) {
         results.push(await this.runProbe(target, probe))
+      }
+      for (const probe of target.anchorProbes ?? []) {
+        anchorResults.push(await this.runAnchorProbe(target, probe))
       }
     }
 
@@ -163,7 +198,8 @@ export class OverlayMonitor {
       completedAt,
       durationMs: completedAt.getTime() - startedAt.getTime(),
       results,
-      summary: summarize(results, this.targets.length)
+      anchorResults,
+      summary: summarize(results, anchorResults, this.targets.length)
     }
 
     await this.onReport?.(report)
@@ -266,6 +302,154 @@ export class OverlayMonitor {
       clearTimeout(timeout)
     }
   }
+
+  private async runAnchorProbe(target: OverlayMonitorTarget, probe: OverlayAnchorProbe): Promise<OverlayAnchorProbeResult> {
+    const startedAt = this.now()
+    const url = new URL('/requestTopicAnchorTip', target.baseUrl).toString()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+
+    try {
+      const response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'x-bsv-topic': probe.topic,
+          ...target.headers
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal
+      })
+      const text = await response.text()
+      const responseBytes = new TextEncoder().encode(text).length
+      const completedAt = this.now()
+      let body: Record<string, unknown>
+
+      try {
+        body = text.length === 0 ? {} : JSON.parse(text)
+      } catch (error) {
+        return makeFailedAnchorResult({
+          target,
+          probe,
+          url,
+          status: response.status,
+          ok: response.ok,
+          responseBytes,
+          durationMs: completedAt.getTime() - startedAt.getTime(),
+          error: error instanceof Error ? error.message : 'Invalid JSON response'
+        })
+      }
+
+      return analyzeOverlayAnchorTip({
+        target: target.name,
+        url,
+        probe: probe.name ?? probe.topic,
+        topic: probe.topic,
+        status: response.status,
+        ok: response.ok,
+        responseBody: body,
+        responseBytes,
+        durationMs: completedAt.getTime() - startedAt.getTime(),
+        thresholds: this.thresholds,
+        expectedTac: probe.expectedTac,
+        expectedBlockHeight: probe.expectedBlockHeight,
+        currentHeight: probe.currentHeight,
+        maxTipLagBlocks: probe.maxTipLagBlocks
+      })
+    } catch (error) {
+      const completedAt = this.now()
+      const fallbackMessage = error instanceof Error ? error.message : 'Anchor probe failed'
+      const message = controller.signal.aborted
+        ? `Anchor probe timed out after ${this.timeoutMs}ms`
+        : fallbackMessage
+      return makeFailedAnchorResult({
+        target,
+        probe,
+        url,
+        status: 0,
+        ok: false,
+        responseBytes: 0,
+        durationMs: completedAt.getTime() - startedAt.getTime(),
+        error: message
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+export function analyzeOverlayAnchorTip(options: {
+  target: string
+  url: string
+  probe: string
+  topic: string
+  status: number
+  ok: boolean
+  responseBody: Record<string, unknown>
+  responseBytes: number
+  durationMs: number
+  thresholds?: OverlayMonitorThresholds
+  expectedTac?: string
+  expectedBlockHeight?: number
+  currentHeight?: number
+  maxTipLagBlocks?: number
+}): OverlayAnchorProbeResult {
+  const thresholds = { ...defaultThresholds, ...options.thresholds }
+  const blockHeight = typeof options.responseBody.blockHeight === 'number' ? options.responseBody.blockHeight : undefined
+  const tac = typeof options.responseBody.tac === 'string' ? options.responseBody.tac : undefined
+  let expiredUnprovenCount: number | undefined
+  if (typeof options.responseBody.expiredUnprovenCount === 'number') {
+    expiredUnprovenCount = options.responseBody.expiredUnprovenCount
+  } else if (typeof options.responseBody.unprovenExpiredCount === 'number') {
+    expiredUnprovenCount = options.responseBody.unprovenExpiredCount
+  } else {
+    expiredUnprovenCount = undefined
+  }
+  const warnings: OverlayMonitorWarning[] = []
+
+  if (options.expectedTac !== undefined && tac !== undefined && tac !== options.expectedTac) {
+    warnings.push({
+      code: 'anchor-tip-mismatch',
+      message: 'Topic anchor TAC does not match expected value',
+      value: true,
+      threshold: false
+    })
+  }
+
+  const expectedHeight = options.expectedBlockHeight ?? options.currentHeight
+  const maxLag = options.maxTipLagBlocks ?? thresholds.anchorTipLagBlocks
+  if (expectedHeight !== undefined && blockHeight !== undefined && expectedHeight - blockHeight > maxLag) {
+    warnings.push({
+      code: 'anchor-stale-height',
+      message: `Topic anchor tip is ${expectedHeight - blockHeight} blocks behind`,
+      value: expectedHeight - blockHeight,
+      threshold: maxLag
+    })
+  }
+
+  if (expiredUnprovenCount !== undefined && expiredUnprovenCount > thresholds.expiredUnprovenCount) {
+    warnings.push({
+      code: 'expired-unproven-state',
+      message: `Overlay reports ${expiredUnprovenCount} expired unproven transactions`,
+      value: expiredUnprovenCount,
+      threshold: thresholds.expiredUnprovenCount
+    })
+  }
+
+  return {
+    target: options.target,
+    url: options.url,
+    probe: options.probe,
+    topic: options.topic,
+    status: options.status,
+    ok: options.ok,
+    responseBytes: options.responseBytes,
+    blockHeight,
+    tac,
+    warnings,
+    durationMs: options.durationMs
+  }
 }
 
 export function analyzeOverlayLookupResponse (options: AnalyzeOptions): OverlayLookupProbeResult {
@@ -332,18 +516,46 @@ function makeFailedResult (options: {
   }
 }
 
-function summarize (results: OverlayLookupProbeResult[], targetCount: number): OverlayMonitorReport['summary'] {
+function makeFailedAnchorResult(options: {
+  target: OverlayMonitorTarget
+  probe: OverlayAnchorProbe
+  url: string
+  status: number
+  ok: boolean
+  responseBytes: number
+  durationMs: number
+  error: string
+}): OverlayAnchorProbeResult {
+  return {
+    target: options.target.name,
+    url: options.url,
+    probe: options.probe.name ?? options.probe.topic,
+    topic: options.probe.topic,
+    status: options.status,
+    ok: options.ok,
+    responseBytes: options.responseBytes,
+    warnings: [],
+    durationMs: options.durationMs,
+    error: options.error
+  }
+}
+
+function summarize (results: OverlayLookupProbeResult[], anchorResults: OverlayAnchorProbeResult[], targetCount: number): OverlayMonitorReport['summary'] {
   return {
     targetCount,
     probeCount: results.length,
-    failedProbeCount: results.filter(result => !result.ok || result.error !== undefined).length,
-    responseBytes: results.reduce((sum, result) => sum + result.responseBytes, 0),
+    anchorProbeCount: anchorResults.length,
+    failedProbeCount: results.filter(result => !result.ok || result.error !== undefined).length +
+      anchorResults.filter(result => !result.ok || result.error !== undefined).length,
+    responseBytes: results.reduce((sum, result) => sum + result.responseBytes, 0) +
+      anchorResults.reduce((sum, result) => sum + result.responseBytes, 0),
     outputCount: results.reduce((sum, result) => sum + result.outputCount, 0),
     analyzedOutputCount: results.reduce((sum, result) => sum + result.analyzedOutputCount, 0),
     outputsMissingSubjectProof: results.reduce((sum, result) => {
       return sum + result.outputs.filter(output => output.subjectHasProof === false).length
     }, 0),
-    warningCount: results.reduce((sum, result) => sum + result.warnings.length, 0)
+    warningCount: results.reduce((sum, result) => sum + result.warnings.length, 0) +
+      anchorResults.reduce((sum, result) => sum + result.warnings.length, 0)
   }
 }
 

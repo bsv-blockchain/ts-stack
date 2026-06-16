@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { ProtoWallet, PushDrop, Transaction, Utils, VerifiableCertificate } from '@bsv/sdk'
 
 export default class IdentityTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     try {
       console.log('Identity topic manager was invoked')
@@ -68,11 +68,11 @@ export default class IdentityTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Identity Topic Manager: register verifiable identity certificates for public discovery.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
