@@ -9,9 +9,9 @@ class IdentityLookupService implements LookupService {
   readonly spendNotificationMode: SpendNotificationMode = 'none'
   private readonly anyoneWallet = new ProtoWallet('anyone')
 
-  constructor(public storageManager: IdentityStorageManager) { }
+  constructor (public storageManager: IdentityStorageManager) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== 'tm_identity') return
@@ -36,18 +36,18 @@ class IdentityLookupService implements LookupService {
     await this.storageManager.storeRecord(txid, outputIndex, certificate)
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_identity') return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided!')
     }
@@ -76,11 +76,11 @@ class IdentityLookupService implements LookupService {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Identity Lookup Service: find identity certificates by attribute, identity key, certifier, or certificate type.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -94,5 +94,5 @@ class IdentityLookupService implements LookupService {
   }
 }
 
-function create(db: Db): IdentityLookupService { return new IdentityLookupService(new IdentityStorageManager(db)) }
+function create (db: Db): IdentityLookupService { return new IdentityLookupService(new IdentityStorageManager(db)) }
 export default create

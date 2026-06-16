@@ -25,9 +25,9 @@ export class DesktopIntegrityLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
-  constructor(public storage: DesktopIntegrityStorage) { }
+  constructor (public storage: DesktopIntegrityStorage) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
     const { topic, lockingScript, txid, outputIndex } = payload
     if (topic !== 'tm_desktopintegrity') return
@@ -42,18 +42,18 @@ export class DesktopIntegrityLookupService implements LookupService {
     }
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid mode')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_desktopintegrity') return
     await this.storage.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.storage.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (!question) throw new Error('A valid query must be provided!')
     if (question.service !== 'ls_desktopintegrity') throw new Error('Lookup service not supported!')
 
@@ -67,16 +67,16 @@ export class DesktopIntegrityLookupService implements LookupService {
     if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
     if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
 
-    if (fileHash) return this.storage.findByFileHash(fileHash, limit, skip, sortOrder)
-    if (txid) return this.storage.findByTxid(txid, limit, skip, sortOrder)
-    return this.storage.findAll(limit, skip, from, to, sortOrder)
+    if (fileHash) return await this.storage.findByFileHash(fileHash, limit, skip, sortOrder)
+    if (txid) return await this.storage.findByTxid(txid, limit, skip, sortOrder)
+    return await this.storage.findAll(limit, skip, from, to, sortOrder)
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'DesktopIntegrity Lookup Service: find files on-chain.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -90,5 +90,5 @@ export class DesktopIntegrityLookupService implements LookupService {
   }
 }
 
-function create(db: Db): DesktopIntegrityLookupService { return new DesktopIntegrityLookupService(new DesktopIntegrityStorage(db)) }
+function create (db: Db): DesktopIntegrityLookupService { return new DesktopIntegrityLookupService(new DesktopIntegrityStorage(db)) }
 export default create

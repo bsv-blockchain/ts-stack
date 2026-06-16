@@ -8,9 +8,9 @@ class DIDLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
-  constructor(public storageManager: DIDStorageManager) { }
+  constructor (public storageManager: DIDStorageManager) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== 'tm_did') return
@@ -22,18 +22,18 @@ class DIDLookupService implements LookupService {
     await this.storageManager.storeRecord(txid, outputIndex, serialNumber)
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_did') return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided!')
     }
@@ -54,11 +54,11 @@ class DIDLookupService implements LookupService {
     throw new Error('No valid query parameters provided!')
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'DID Lookup Service: resolve decentralized identifiers by serial number or outpoint.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -72,5 +72,5 @@ class DIDLookupService implements LookupService {
   }
 }
 
-function create(db: Db): DIDLookupService { return new DIDLookupService(new DIDStorageManager(db)) }
+function create (db: Db): DIDLookupService { return new DIDLookupService(new DIDStorageManager(db)) }
 export default create

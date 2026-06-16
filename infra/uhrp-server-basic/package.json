@@ -23,7 +23,7 @@
     "@bsv/payment-express-middleware": "^2.0.3",
     "@bsv/sdk": "^2.1.4",
     "@bsv/wallet-toolbox-client": "^2.1.28",
-    "axios": "^1.16.1",
+    "axios": "^1.17.0",
     "body-parser": "^2.2.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
@@ -43,7 +43,7 @@
   "devDependencies": {
     "@types/body-parser": "^1.19.5",
     "@types/express": "^5.0.6",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/prettyjson": "^0.0.33",
     "jest": "^30.3.0",
     "nodemon": "^3.1.14",

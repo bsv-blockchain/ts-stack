@@ -25,8 +25,25 @@ import { GASP, GASPInitialRequest, GASPInitialResponse, GASPNode } from '@bsv/ga
 import { SyncConfiguration } from './SyncConfiguration.js'
 import { OverlayGASPRemote } from './GASP/OverlayGASPRemote.js'
 import { OverlayGASPStorage } from './GASP/OverlayGASPStorage.js'
+import {
+  BASM_ZERO_HASH,
+  type AdmittedListResponse,
+  type BASMPeerSyncReport,
+  type CompoundMerklePathResponse,
+  type RawTransactionResponse,
+  type ReorgReport,
+  type TopicAnchorHeaderResolver,
+  type TopicAnchorRangeResponse,
+  type TopicAnchorTip,
+  type TopicBlockAnchor,
+  computeBasmRoot,
+  computeTac,
+  extractMerkleProofMetadata
+} from './BASM.js'
+import { BASMRemote } from './BASMRemote.js'
 
 const DEFAULT_GASP_SYNC_LIMIT = 10000
+const DEFAULT_BASM_RANGE_LIMIT = 1024
 
 type UTXOHistoryHydrationContext = {
   outputCache: Map<string, Promise<Output | null>>
@@ -59,6 +76,9 @@ export class Engine {
    * @param {OverlayBroadcastFacilitator} overlayBroadcastFacilitator - Facilitator for propagation to other Overlay Services.
    * @param {typeof console} logger - The place where log entries are written.
    * @param {boolean} suppressDefaultSyncAdvertisements - Whether to suppress the default (SHIP/SLAP) sync advertisements.
+   * @param {TopicAnchorHeaderResolver} topicAnchorHeaderResolver - Resolves block hashes for BASM anchors.
+   * @param {boolean} basmSyncEnabled - Whether BASM sync should run automatically.
+   * @param {number} unprovenEvictionBlocks - Default block age for opt-in unproven state eviction.
    */
   constructor(
     public managers: { [key: string]: TopicManager },
@@ -76,7 +96,10 @@ export class Engine {
     public throwOnBroadcastFailure = false,
     public overlayBroadcastFacilitator: OverlayBroadcastFacilitator = new HTTPSOverlayBroadcastFacilitator(),
     public logger: typeof console = console,
-    public suppressDefaultSyncAdvertisements = true
+    public suppressDefaultSyncAdvertisements = true,
+    public topicAnchorHeaderResolver?: TopicAnchorHeaderResolver,
+    public basmSyncEnabled = false,
+    public unprovenEvictionBlocks = 144
   ) {
     // To encourage synchronization of overlay services, the SHIP sync strategy is used by default for all overlay topics, except for 'tm_ship' and 'tm_slap'.
     // For these two topics, any existing trackers are combined with the provided shipTrackers and slapTrackers omitting any duplicates.
@@ -119,6 +142,329 @@ export class Engine {
     if (this.logTime) {
       this.logger.timeEnd(`${this.logPrefix} ${label}`)
     }
+  }
+
+  private async currentHeightOrUndefined(): Promise<number | undefined> {
+    if (this.chainTracker === 'scripts only') {
+      return undefined
+    }
+    try {
+      return await this.chainTracker.currentHeight()
+    } catch (error) {
+      this.logger.warn(`Unable to resolve current chain height for overlay metadata: ${error instanceof Error ? error.message : String(error)}`)
+      return undefined
+    }
+  }
+
+  private async resolveBlockHash(blockHeight: number, merkleRoot?: string): Promise<string | undefined> {
+    try {
+      const header = await this.topicAnchorHeaderResolver?.(blockHeight)
+      if (header === undefined) {
+        return undefined
+      }
+      if (header.merkleRoot !== undefined && merkleRoot !== undefined && header.merkleRoot !== merkleRoot) {
+        throw new Error(`Header merkle root ${header.merkleRoot} does not match proof root ${merkleRoot} at height ${blockHeight}`)
+      }
+      return header.blockHash
+    } catch (error) {
+      this.logger.warn(`Unable to resolve BASM block hash for height ${blockHeight}: ${error instanceof Error ? error.message : String(error)}`)
+      return undefined
+    }
+  }
+
+  private compactBEEFForStorage(tx: Transaction, originalBEEF: number[]): number[] {
+    return tx.merklePath === undefined ? originalBEEF : tx.toAtomicBEEF()
+  }
+
+  private async recordTransactionData(tx: Transaction, beef: number[], blockHash?: string): Promise<void> {
+    if (typeof this.storage.upsertTransactionRecord !== 'function') {
+      return
+    }
+
+    const txid = tx.id('hex')
+    const metadata = extractMerkleProofMetadata(txid, tx.merklePath)
+    await this.storage.upsertTransactionRecord({
+      txid,
+      beef: this.compactBEEFForStorage(tx, beef),
+      rawTx: Array.from(tx.toBinary()),
+      merklePath: tx.merklePath?.toBinary(),
+      blockHeight: metadata?.blockHeight,
+      blockHash,
+      blockIndex: metadata?.blockIndex,
+      merkleRoot: metadata?.merkleRoot
+    })
+  }
+
+  private async buildAppliedTransactionRecord(tx: Transaction): Promise<{
+    blockHeight?: number
+    blockHash?: string
+    blockIndex?: number
+    merkleRoot?: string
+    firstSeenHeight?: number
+    proven: boolean
+  }> {
+    const txid = tx.id('hex')
+    const metadata = extractMerkleProofMetadata(txid, tx.merklePath)
+    const [firstSeenHeight, blockHash] = await Promise.all([
+      this.currentHeightOrUndefined(),
+      metadata === undefined ? undefined : this.resolveBlockHash(metadata.blockHeight, metadata.merkleRoot)
+    ])
+
+    return {
+      blockHeight: metadata?.blockHeight,
+      blockHash,
+      blockIndex: metadata?.blockIndex,
+      merkleRoot: metadata?.merkleRoot,
+      firstSeenHeight: firstSeenHeight ?? metadata?.blockHeight,
+      proven: metadata !== undefined
+    }
+  }
+
+  private async recomputeTopicBlockAnchor(topic: string, blockHeight: number, blockHash?: string): Promise<TopicBlockAnchor | undefined> {
+    if (
+      typeof this.storage.findAdmittedTransactionsForBlock !== 'function' ||
+      typeof this.storage.upsertTopicBlockAnchor !== 'function' ||
+      typeof this.storage.findTopicBlockAnchor !== 'function'
+    ) {
+      return undefined
+    }
+
+    const anchorBlockHash = blockHash ?? (await this.storage.findTopicBlockAnchor(topic, blockHeight))?.blockHash
+    if (anchorBlockHash === undefined) {
+      return undefined
+    }
+
+    // BRC-136 per-block completeness: establish the chain's genesis at the first
+    // admitted height, then keep every height from there to the tip contiguous so
+    // the cumulative TAC never resets across blocks with no admitted transactions.
+    // We rebuild [fromHeight, toHeight] rather than only the touched height so that
+    // an out-of-order proof (older height arriving after a newer one) can never
+    // leave a gap that silently breaks the chain.
+    const tip = await this.storage.findTopicAnchorTip?.(topic)
+    const tipHeight = tip !== undefined && tip.blockHeight >= 0 ? tip.blockHeight : undefined
+    const fromHeight = tipHeight === undefined ? blockHeight : Math.min(blockHeight, tipHeight + 1)
+    const toHeight = tipHeight === undefined ? blockHeight : Math.max(blockHeight, tipHeight)
+
+    await this.rebuildTopicAnchorChain(topic, fromHeight, toHeight, new Map([[blockHeight, anchorBlockHash]]))
+    return await this.storage.findTopicBlockAnchor(topic, blockHeight)
+  }
+
+  /**
+   * Extends every configured topic's anchor chain forward with empty Topic Block
+   * Anchors (basmRoot = zero hash, admittedCount = 0) up to `toHeight`, so the
+   * cumulative TAC advances on every block even when a topic admits nothing —
+   * this is what lets a peer authoritatively confirm "this block contained no
+   * transactions for this topic". Chains with no first admission yet are left
+   * unstarted (genesis is the topic's first admitted height).
+   */
+  async advanceTopicAnchorChains(toHeight?: number): Promise<void> {
+    if (
+      typeof this.storage.findTopicAnchorTip !== 'function' ||
+      typeof this.storage.upsertTopicBlockAnchor !== 'function'
+    ) {
+      return
+    }
+    const targetHeight = toHeight ?? await this.currentHeightOrUndefined()
+    if (targetHeight === undefined) {
+      return
+    }
+    for (const topic of Object.keys(this.managers)) {
+      const tip = await this.storage.findTopicAnchorTip(topic)
+      if (tip === undefined || tip.blockHeight < 0 || tip.blockHeight >= targetHeight) {
+        continue
+      }
+      await this.rebuildTopicAnchorChain(topic, tip.blockHeight + 1, targetHeight)
+    }
+  }
+
+  /**
+   * Rebuilds a contiguous slice of a topic's anchor chain over [fromHeight,
+   * toHeight]. Each height uses its admitted transactions (empty -> zero basmRoot)
+   * and chains the cumulative TAC from the prior height. Missing heights are
+   * filled rather than skipped, so the chain stays gap-free. If a block hash
+   * cannot be resolved for some height the extension halts there to preserve
+   * contiguity instead of leaving a hole.
+   */
+  private async rebuildTopicAnchorChain(
+    topic: string,
+    fromHeight: number,
+    toHeight: number,
+    blockHashHints: Map<number, string> = new Map(),
+    forceResolve = false
+  ): Promise<void> {
+    if (
+      typeof this.storage.findAdmittedTransactionsForBlock !== 'function' ||
+      typeof this.storage.upsertTopicBlockAnchor !== 'function' ||
+      typeof this.storage.findTopicBlockAnchor !== 'function' ||
+      toHeight < fromHeight
+    ) {
+      return
+    }
+
+    if (toHeight - fromHeight + 1 > DEFAULT_BASM_RANGE_LIMIT) {
+      // Bound the work per pass; the next trigger resumes from the new tip.
+      this.logger.warn(`[BASM] capping anchor chain extension for "${topic}" at ${DEFAULT_BASM_RANGE_LIMIT} blocks (requested ${fromHeight}..${toHeight}); will continue on the next pass`)
+      toHeight = fromHeight + DEFAULT_BASM_RANGE_LIMIT - 1
+    }
+
+    const previousAnchor = fromHeight > 0
+      ? await this.storage.findTopicBlockAnchor(topic, fromHeight - 1)
+      : undefined
+    let prevTac = previousAnchor?.tac ?? BASM_ZERO_HASH
+
+    for (let height = fromHeight; height <= toHeight; height++) {
+      const admitted = await this.storage.findAdmittedTransactionsForBlock(topic, height)
+      const existing = await this.storage.findTopicBlockAnchor(topic, height)
+      // On a reorg rebuild the existing anchor's block hash is stale, so force
+      // canonical re-resolution from the header resolver instead of reusing it.
+      const blockHash = blockHashHints.get(height) ?? (forceResolve ? undefined : existing?.blockHash) ?? await this.resolveBlockHash(height)
+      if (blockHash === undefined) {
+        this.logger.warn(`[BASM] unable to resolve block hash for "${topic}" at height ${height}; halting chain extension`)
+        return
+      }
+
+      const basmRoot = computeBasmRoot(admitted)
+      const tac = computeTac(prevTac, blockHash, basmRoot)
+      await this.storage.upsertTopicBlockAnchor({
+        topic,
+        blockHeight: height,
+        blockHash,
+        basmRoot,
+        admittedCount: admitted.length,
+        tac
+      })
+      prevTac = tac
+    }
+  }
+
+  /**
+   * Reconciles BASM anchors with a blockchain reorganization reported by the
+   * chain tracker (e.g. go-chaintracks `/v2/reorg/stream`). Proven topic
+   * transactions whose block was orphaned are demoted to unproven so they leave
+   * the admitted set, then every topic anchor chain intersecting the affected
+   * height range is rebuilt over the canonical block hashes. A reorg changes the
+   * canonical block hash for the affected heights, so topics with no demoted
+   * transaction are rebuilt too. Idempotent: a clean window demotes nothing and
+   * reproduces an identical TAC, so this is safe to invoke on every reorg event,
+   * SSE reconnect, and poll.
+   */
+  async handleReorg(input: {
+    orphanedBlockHashes: string[]
+    rebuildFromHeight: number
+    newTipHeight: number
+  }): Promise<ReorgReport> {
+    const report: ReorgReport = { perTopic: [] }
+    if (
+      typeof this.storage.findProvenAppliedTransactionsByBlockHash !== 'function' ||
+      typeof this.storage.demoteAppliedTransactionToUnproven !== 'function' ||
+      typeof this.storage.findTopicBlockAnchors !== 'function' ||
+      typeof this.storage.upsertTopicBlockAnchor !== 'function'
+    ) {
+      return report
+    }
+
+    // 1) Demote proven admissions whose block was orphaned. Hashes are
+    //    normalized to lower-case display hex to match stored block hashes
+    //    (go-sdk chainhash.Hash marshals as reversed display hex).
+    const demotedByTopic = new Map<string, string[]>()
+    for (const rawHash of input.orphanedBlockHashes) {
+      const blockHash = rawHash.toLowerCase()
+      const rows = await this.storage.findProvenAppliedTransactionsByBlockHash(blockHash)
+      for (const row of rows) {
+        await this.storage.demoteAppliedTransactionToUnproven(row.txid, row.topic)
+        const list = demotedByTopic.get(row.topic) ?? []
+        list.push(row.txid)
+        demotedByTopic.set(row.topic, list)
+      }
+    }
+
+    // 2) Rebuild every topic anchor chain that intersects the reorged range,
+    //    forcing canonical block-hash re-resolution so stale hashes are replaced.
+    for (const topic of Object.keys(this.managers)) {
+      const existing = await this.storage.findTopicBlockAnchors(topic, input.rebuildFromHeight, input.newTipHeight)
+      if (existing.length === 0) {
+        continue
+      }
+      const startHeight = Math.min(...existing.map(anchor => anchor.blockHeight))
+      await this.rebuildTopicAnchorChain(topic, startHeight, input.newTipHeight, new Map(), true)
+      report.perTopic.push({
+        topic,
+        demotedTxids: demotedByTopic.get(topic) ?? [],
+        rebuiltFrom: startHeight,
+        rebuiltTo: input.newTipHeight
+      })
+    }
+
+    return report
+  }
+
+  /**
+   * Revalidation sweep: the reorg fallback for chain trackers without a reorg
+   * event stream, and the catch-up step on every reorg-SSE (re)connect (the
+   * go-chaintracks reorg stream carries no event ids, so a reconnect cannot
+   * replay events missed while disconnected). Scans proven applied transactions
+   * in `[tip - depth + 1, tip]`; any whose proof root no longer validates against
+   * the chain tracker, or whose block hash diverges from the canonical header, is
+   * treated as orphaned and reconciled via {@link handleReorg}.
+   */
+  private async isProvenAnchorStale(
+    row: { txid: string, blockHeight: number, blockHash?: string, merkleRoot?: string },
+    chainTracker: ChainTracker
+  ): Promise<boolean | undefined> {
+    if (row.merkleRoot !== undefined) {
+      try {
+        if (!(await chainTracker.isValidRootForHeight(row.merkleRoot, row.blockHeight))) {
+          return true
+        }
+      } catch (error) {
+        this.logger.warn(`[BASM] root validation failed for ${row.txid} at height ${row.blockHeight}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      }
+    }
+
+    const canonical = await this.resolveBlockHash(row.blockHeight)
+    return canonical !== undefined && canonical.toLowerCase() !== row.blockHash?.toLowerCase()
+  }
+
+  async revalidateRecentAnchors(depth = 3): Promise<ReorgReport | undefined> {
+    const chainTracker = this.chainTracker
+    if (chainTracker === 'scripts only') {
+      this.logger.warn('[BASM] revalidation sweep requires a ChainTracker; skipping')
+      return undefined
+    }
+    if (typeof this.storage.findProvenAppliedTransactionsInRange !== 'function') {
+      return undefined
+    }
+    const tip = await this.currentHeightOrUndefined()
+    if (tip === undefined) {
+      return undefined
+    }
+
+    const fromHeight = Math.max(0, tip - depth + 1)
+    const rows = await this.storage.findProvenAppliedTransactionsInRange(fromHeight, tip)
+    const orphaned = new Set<string>()
+    let minAffected = Number.POSITIVE_INFINITY
+
+    for (const row of rows) {
+      if (row.blockHash === undefined) {
+        continue
+      }
+      const stale = await this.isProvenAnchorStale(row, chainTracker)
+      if (stale === true) {
+        orphaned.add(row.blockHash.toLowerCase())
+        minAffected = Math.min(minAffected, row.blockHeight)
+      }
+    }
+
+    if (orphaned.size === 0) {
+      return { perTopic: [] }
+    }
+
+    return await this.handleReorg({
+      orphanedBlockHashes: Array.from(orphaned),
+      rebuildFromHeight: minAffected,
+      newTipHeight: tip
+    })
   }
 
   /**
@@ -435,10 +781,11 @@ export class Engine {
             satoshis: tx.outputs[outputIndex].satoshis,
             topic,
             spent: false,
-            beef: taggedBEEF.beef,
+            beef: this.compactBEEFForStorage(tx, taggedBEEF.beef),
             consumedBy: [],
             outputsConsumed,
-            score: Date.now()
+            score: Date.now(),
+            blockHeight: extractMerkleProofMetadata(txid, tx.merklePath)?.blockHeight
           })
           this.endTime(`insertNewOutput_${txid.substring(0, 10)}`)
           newUTXOs.push({ txid, outputIndex })
@@ -480,6 +827,9 @@ export class Engine {
 
         this.startTime(`outputConsumed_${txid.substring(0, 10)}`)
         // Update each output consumed to know who consumed it and insert applied transaction in parallel
+        const appliedRecord = await this.buildAppliedTransactionRecord(tx)
+        await this.recordTransactionData(tx, taggedBEEF.beef, appliedRecord.blockHash)
+
         await Promise.all([
           ...outputsConsumed.map(async output => {
             const outputToUpdate = await this.storage.findOutput(output.txid, output.outputIndex, topic)
@@ -490,9 +840,14 @@ export class Engine {
           }),
           this.storage.insertAppliedTransaction({
             txid,
-            topic
+            topic,
+            ...appliedRecord
           })
         ])
+
+        if (appliedRecord.blockHeight !== undefined && appliedRecord.blockHash !== undefined) {
+          await this.recomputeTopicBlockAnchor(topic, appliedRecord.blockHeight, appliedRecord.blockHash)
+        }
         this.endTime(`outputConsumed_${txid.substring(0, 10)}`)
       } catch (error) {
         this.logger.error('Error updating storage and notifying lookup services for topic', topic, error)
@@ -910,6 +1265,336 @@ export class Engine {
     }
   }
 
+  private async resolveSyncEndpointsForTopic(topic: string): Promise<string[]> {
+    if (this.syncConfiguration === undefined) {
+      return []
+    }
+
+    let syncEndpoints: string[] | string | false = this.syncConfiguration[topic]
+    if (syncEndpoints === false || syncEndpoints === undefined) {
+      return []
+    }
+
+    if (syncEndpoints === 'SHIP') {
+      const resolverConfig: LookupResolverConfig = this.slapTrackers
+        ? { slapTrackers: this.slapTrackers }
+        : {}
+      const resolver = new LookupResolver(resolverConfig)
+      const lookupAnswer: LookupAnswer = await resolver.query({
+        service: 'ls_ship',
+        query: {
+          topics: [topic]
+        }
+      })
+
+      const endpointSet = new Set<string>()
+      if (lookupAnswer.type === 'output-list') {
+        lookupAnswer.outputs.forEach(output => {
+          try {
+            const tx = Transaction.fromBEEF(output.beef)
+            const advertisement = this.advertiser?.parseAdvertisement(tx.outputs[output.outputIndex].lockingScript)
+            if (advertisement?.protocol === 'SHIP') {
+              endpointSet.add(advertisement.domain)
+            }
+          } catch (error) {
+            this.logger.error('Failed to parse BASM advertisement output:', error)
+          }
+        })
+      }
+      syncEndpoints = Array.from(endpointSet)
+    }
+
+    if (!Array.isArray(syncEndpoints)) {
+      return []
+    }
+
+    return syncEndpoints.filter(endpoint => endpoint !== this.hostingURL)
+  }
+
+  async provideTopicAnchorTip(topic: string): Promise<TopicAnchorTip> {
+    const tip = await this.storage.findTopicAnchorTip?.(topic)
+    return tip ?? {
+      topic,
+      blockHeight: -1,
+      tac: BASM_ZERO_HASH
+    }
+  }
+
+  async provideTopicAnchorRange(topic: string, fromHeight: number, toHeight: number): Promise<TopicAnchorRangeResponse> {
+    if (typeof this.storage.findTopicBlockAnchors !== 'function') {
+      throw new TypeError('Storage does not support BASM topic anchor ranges')
+    }
+    if (!Number.isInteger(fromHeight) || !Number.isInteger(toHeight) || fromHeight < 0 || toHeight < fromHeight) {
+      throw new Error('Invalid topic anchor range')
+    }
+    if (toHeight - fromHeight + 1 > DEFAULT_BASM_RANGE_LIMIT) {
+      throw new Error(`Topic anchor range is capped at ${DEFAULT_BASM_RANGE_LIMIT} heights`)
+    }
+
+    return {
+      topic,
+      anchors: await this.storage.findTopicBlockAnchors(topic, fromHeight, toHeight)
+    }
+  }
+
+  async provideAdmittedList(topic: string, blockHeight: number, blockHash?: string): Promise<AdmittedListResponse> {
+    if (typeof this.storage.findAdmittedTransactionsForBlock !== 'function') {
+      throw new TypeError('Storage does not support BASM admitted lists')
+    }
+
+    return {
+      topic,
+      blockHeight,
+      blockHash,
+      admitted: await this.storage.findAdmittedTransactionsForBlock(topic, blockHeight, blockHash)
+    }
+  }
+
+  async provideCompoundMerklePath(topic: string, blockHeight: number, txids: string[]): Promise<CompoundMerklePathResponse> {
+    if (typeof this.storage.findTransactionMerklePaths !== 'function') {
+      throw new TypeError('Storage does not support direct Merkle path lookup')
+    }
+    if (txids.length === 0) {
+      throw new Error('At least one txid is required')
+    }
+
+    const admitted = await this.storage.findAdmittedTransactionsForBlock?.(topic, blockHeight)
+    if (admitted !== undefined) {
+      const admittedSet = new Set(admitted.map(item => item.txid))
+      const missingAdmissions = txids.filter(txid => !admittedSet.has(txid))
+      if (missingAdmissions.length > 0) {
+        throw new Error(`Requested txids are not admitted to topic ${topic} at height ${blockHeight}: ${missingAdmissions.join(',')}`)
+      }
+    }
+
+    const proofs = await this.storage.findTransactionMerklePaths(txids)
+    const proofByTxid = new Map(proofs.map(proof => [proof.txid, proof]))
+    const missing = txids.filter(txid => !proofByTxid.has(txid))
+    if (missing.length > 0) {
+      throw new Error(`No direct Merkle path found for txids: ${missing.join(',')}`)
+    }
+
+    let compound: MerklePath | undefined
+    for (const txid of txids) {
+      const proof = proofByTxid.get(txid)
+      if (proof === undefined) continue
+      const path = MerklePath.fromHex(proof.merklePath)
+      if (path.blockHeight !== blockHeight) {
+        throw new Error(`Merkle path for ${txid} is at height ${path.blockHeight}, expected ${blockHeight}`)
+      }
+      if (compound === undefined) {
+        compound = path
+      } else {
+        compound.combine(path)
+      }
+    }
+
+    if (compound === undefined) {
+      throw new Error('Unable to build compound Merkle path')
+    }
+
+    return {
+      topic,
+      blockHeight,
+      txids,
+      merklePath: compound.toHex()
+    }
+  }
+
+  async provideRawTransactions(txids: string[]): Promise<RawTransactionResponse> {
+    if (typeof this.storage.findRawTransactions !== 'function') {
+      throw new TypeError('Storage does not support raw transaction lookup')
+    }
+
+    const transactions = await this.storage.findRawTransactions(txids)
+    const found = new Set(transactions.map(tx => tx.txid))
+    return {
+      transactions,
+      missing: txids.filter(txid => !found.has(txid))
+    }
+  }
+
+  async startBASMSync(): Promise<BASMPeerSyncReport[]> {
+    if (this.syncConfiguration === undefined) {
+      throw new Error('Overlay Service Engine not configured for topical synchronization!')
+    }
+
+    const reports: BASMPeerSyncReport[] = []
+    for (const topic of Object.keys(this.syncConfiguration)) {
+      const endpoints = await this.resolveSyncEndpointsForTopic(topic)
+      for (const endpoint of endpoints) {
+        reports.push(await this.reconcileBASMWithPeer(topic, endpoint))
+      }
+    }
+
+    return reports
+  }
+
+  private async reconcileBASMWithPeer(topic: string, endpoint: string): Promise<BASMPeerSyncReport> {
+    const report: BASMPeerSyncReport = {
+      topic,
+      endpoint,
+      status: 'skipped',
+      checkedHeights: [],
+      missingTxids: [],
+      fetchedTxCount: 0
+    }
+
+    try {
+      const remote = new BASMRemote(endpoint, topic)
+      const [localTip, remoteTip] = await Promise.all([
+        this.provideTopicAnchorTip(topic),
+        remote.requestTopicAnchorTip()
+      ])
+      report.localTip = localTip
+      report.remoteTip = remoteTip
+
+      if (localTip.blockHeight >= remoteTip.blockHeight) {
+        report.status = localTip.tac === remoteTip.tac && localTip.blockHeight === remoteTip.blockHeight ? 'matched' : 'diverged'
+        report.message = report.status === 'matched'
+          ? 'Topic anchor tips match'
+          : 'Remote tip is not ahead; historical divergence needs manual or binary-search reconciliation'
+        return report
+      }
+
+      const fromHeight = Math.max(localTip.blockHeight + 1, remoteTip.blockHeight - DEFAULT_BASM_RANGE_LIMIT + 1, 0)
+      const range = await remote.requestTopicAnchorRange(fromHeight, remoteTip.blockHeight)
+      for (const remoteAnchor of range.anchors) {
+        await this.reconcileRemoteAnchor(topic, remote, remoteAnchor, report)
+      }
+
+      const refreshedTip = await this.provideTopicAnchorTip(topic)
+      report.localTip = refreshedTip
+      report.status = refreshedTip.blockHeight >= remoteTip.blockHeight && refreshedTip.tac === remoteTip.tac ? 'matched' : 'advanced'
+      return report
+    } catch (error) {
+      report.status = 'error'
+      report.message = error instanceof Error ? error.message : String(error)
+      this.logger.error(`[BASM SYNC] Sync failed for topic "${topic}" with peer "${endpoint}"`, error)
+      return report
+    }
+  }
+
+  private async reconcileRemoteAnchor(
+    topic: string,
+    remote: BASMRemote,
+    remoteAnchor: TopicBlockAnchor,
+    report: BASMPeerSyncReport
+  ): Promise<void> {
+    report.checkedHeights.push(remoteAnchor.blockHeight)
+    const localAnchor = await this.storage.findTopicBlockAnchor?.(topic, remoteAnchor.blockHeight, remoteAnchor.blockHash)
+    if (localAnchor?.tac === remoteAnchor.tac) {
+      return
+    }
+
+    const admittedResponse = await remote.requestAdmittedList(remoteAnchor.blockHeight, remoteAnchor.blockHash)
+    const remoteBasmRoot = computeBasmRoot(admittedResponse.admitted)
+    if (
+      remoteBasmRoot !== remoteAnchor.basmRoot ||
+      admittedResponse.admitted.length !== remoteAnchor.admittedCount
+    ) {
+      throw new Error(`Peer ${report.endpoint} supplied an admitted list inconsistent with its anchor at height ${remoteAnchor.blockHeight}`)
+    }
+
+    const localAdmitted = await this.storage.findAdmittedTransactionsForBlock?.(topic, remoteAnchor.blockHeight, remoteAnchor.blockHash) ?? []
+    const localTxids = new Set(localAdmitted.map(item => item.txid))
+    const missingTxids = admittedResponse.admitted
+      .map(item => item.txid)
+      .filter(txid => !localTxids.has(txid))
+
+    report.missingTxids.push(...missingTxids)
+    if (missingTxids.length === 0) {
+      report.status = 'diverged'
+      return
+    }
+
+    await this.fetchBASMMissingTransactions(remote, topic, remoteAnchor, missingTxids)
+    report.fetchedTxCount += missingTxids.length
+  }
+
+  private async fetchBASMMissingTransactions(
+    remote: BASMRemote,
+    topic: string,
+    anchor: TopicBlockAnchor,
+    txids: string[]
+  ): Promise<void> {
+    if (this.chainTracker === 'scripts only') {
+      throw new Error('BASM reconciliation requires a ChainTracker capable of validating BUMP proofs')
+    }
+
+    const proofResponse = await remote.requestCompoundMerklePath(anchor.blockHeight, txids)
+    const compoundPath = MerklePath.fromHex(proofResponse.merklePath)
+    for (const txid of txids) {
+      const valid = await compoundPath.verify(txid, this.chainTracker)
+      if (!valid) {
+        throw new Error(`Peer supplied invalid compound Merkle path for ${txid} at height ${anchor.blockHeight}`)
+      }
+    }
+
+    const rawResponse = await remote.requestRawTransactions(txids)
+    if (rawResponse.missing.length > 0) {
+      throw new Error(`Peer did not return raw transactions for txids: ${rawResponse.missing.join(',')}`)
+    }
+
+    for (const record of rawResponse.transactions) {
+      const tx = Transaction.fromHex(record.rawTx)
+      if (tx.id('hex') !== record.txid) {
+        throw new Error(`Raw transaction txid mismatch: expected ${record.txid}, got ${tx.id('hex')}`)
+      }
+      try {
+        tx.merklePath = compoundPath.extract([record.txid])
+      } catch {
+        tx.merklePath = compoundPath
+      }
+      await this.submit({ beef: tx.toBEEF(), topics: [topic] }, undefined, 'historical-tx')
+    }
+  }
+
+  async evictUnprovenTransactions(options: {
+    topic?: string
+    thresholdBlocks?: number
+  } = {}): Promise<{
+      cutoffHeight: number
+      candidates: number
+      evictedTransactions: number
+      evictedOutputs: number
+    }> {
+    if (typeof this.storage.findUnprovenAppliedTransactions !== 'function') {
+      throw new TypeError('Storage does not support unproven transaction eviction')
+    }
+    if (this.chainTracker === 'scripts only') {
+      throw new Error('Unproven eviction requires a ChainTracker to determine block age')
+    }
+
+    const thresholdBlocks = options.thresholdBlocks ?? this.unprovenEvictionBlocks
+    const currentHeight = await this.chainTracker.currentHeight()
+    const cutoffHeight = currentHeight - thresholdBlocks
+    const candidates = await this.storage.findUnprovenAppliedTransactions(cutoffHeight, options.topic)
+    let evictedOutputs = 0
+
+    for (const candidate of candidates) {
+      for (const output of candidate.outputs) {
+        for (const service of Object.values(this.lookupServices)) {
+          try {
+            await service.outputEvicted(output.txid, output.outputIndex)
+          } catch (error) {
+            this.logger.debug(`outputEvicted notification failed for ${output.txid}.${output.outputIndex}: ${error}`)
+          }
+        }
+        await this.storage.deleteOutput(output.txid, output.outputIndex, candidate.topic)
+        evictedOutputs++
+      }
+      await this.storage.deleteAppliedTransaction?.(candidate.txid, candidate.topic)
+    }
+
+    return {
+      cutoffHeight,
+      candidates: candidates.length,
+      evictedTransactions: candidates.length,
+      evictedOutputs
+    }
+  }
+
   /**
    * Given a GASP request, create an initial response.
    *
@@ -1187,13 +1872,40 @@ export class Engine {
       throw new Error('Could not find matching transaction outputs for proof ingest!')
     }
 
+    const proofMetadata = extractMerkleProofMetadata(txid, proof)
+    const resolvedBlockHeight = blockHeight ?? proofMetadata?.blockHeight
+    const resolvedBlockHash = resolvedBlockHeight === undefined
+      ? undefined
+      : await this.resolveBlockHash(resolvedBlockHeight, proofMetadata?.merkleRoot)
+
     for (const output of outputs) {
       await this.updateMerkleProof(output, txid, proof)
 
       // Add the associated blockHeight
-      if (blockHeight !== undefined) {
-        output.blockHeight = blockHeight
-        await this.storage.updateOutputBlockHeight?.(output.txid, output.outputIndex, output.topic, blockHeight)
+      if (resolvedBlockHeight !== undefined) {
+        output.blockHeight = resolvedBlockHeight
+        await this.storage.updateOutputBlockHeight?.(output.txid, output.outputIndex, output.topic, resolvedBlockHeight)
+      }
+
+      if (output.beef !== undefined) {
+        const tx = Transaction.fromBEEF(output.beef)
+        this.updateInputProofs(tx, txid, proof)
+        await this.recordTransactionData(tx, tx.toBEEF(), resolvedBlockHash)
+      }
+
+      if (resolvedBlockHeight !== undefined) {
+        await this.storage.updateAppliedTransactionProof?.({
+          txid,
+          topic: output.topic,
+          blockHeight: resolvedBlockHeight,
+          blockHash: resolvedBlockHash,
+          blockIndex: proofMetadata?.blockIndex,
+          merkleRoot: proofMetadata?.merkleRoot
+        })
+      }
+
+      if (resolvedBlockHeight !== undefined && resolvedBlockHash !== undefined) {
+        await this.recomputeTopicBlockAnchor(output.topic, resolvedBlockHeight, resolvedBlockHash)
       }
     }
   }

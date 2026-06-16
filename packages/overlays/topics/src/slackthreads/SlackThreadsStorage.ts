@@ -5,34 +5,34 @@ export class SlackThreadsStorage {
   private readonly records: Collection<SlackThreadRecord>
   private indexInit?: Promise<void>
 
-  constructor(private readonly db: Db) {
+  constructor (private readonly db: Db) {
     this.records = db.collection<SlackThreadRecord>('slackThreadRecords')
   }
 
-  private ensureIndexes(): Promise<void> {
+  private async ensureIndexes (): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await this.records.createIndex({ threadHash: 1 }, { name: 'threadHashIndex' })
       })()
     }
-    return this.indexInit
+    return await this.indexInit
   }
 
-  async storeRecord(txid: string, outputIndex: number, threadHash: string): Promise<void> {
+  async storeRecord (txid: string, outputIndex: number, threadHash: string): Promise<void> {
     await this.ensureIndexes()
     await this.records.insertOne({ txid, outputIndex, threadHash, createdAt: new Date() })
   }
 
-  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async findByThreadHash(threadHash: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findByThreadHash (threadHash: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (!threadHash) return []
     const direction = sortOrder === 'asc' ? 1 : -1
-    return this.records
+    return await this.records
       .find({ threadHash }, { projection: { txid: 1, outputIndex: 1, createdAt: 1 } })
       .sort({ createdAt: direction })
       .skip(skip)
@@ -41,11 +41,11 @@ export class SlackThreadsStorage {
       .then(results => results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex })))
   }
 
-  async findByTxid(txid: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findByTxid (txid: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (!txid) return []
     const direction = sortOrder === 'asc' ? 1 : -1
-    return this.records
+    return await this.records
       .find({ txid }, { projection: { txid: 1, outputIndex: 1, createdAt: 1 } })
       .sort({ createdAt: direction })
       .skip(skip)
@@ -54,7 +54,7 @@ export class SlackThreadsStorage {
       .then(results => results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex })))
   }
 
-  async findAll(limit = 50, skip = 0, startDate?: Date, endDate?: Date, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findAll (limit = 50, skip = 0, startDate?: Date, endDate?: Date, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     const query: any = {}
     if (startDate || endDate) {
@@ -63,7 +63,7 @@ export class SlackThreadsStorage {
       if (endDate) query.createdAt.$lte = endDate
     }
     const sortDirection = sortOrder === 'asc' ? 1 : -1
-    return this.records.find(query)
+    return await this.records.find(query)
       .sort({ createdAt: sortDirection })
       .skip(skip)
       .limit(limit)

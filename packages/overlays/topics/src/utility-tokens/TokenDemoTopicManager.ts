@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { OP, Transaction, PushDrop, Utils } from '@bsv/sdk'
 
 export default class TokenDemoTopicManager implements TopicManager {
-  async identifyNeededInputs(beef: number[], offChainValues?: number[]): Promise<Array<{ txid: string, outputIndex: number }>> {
+  async identifyNeededInputs (beef: number[], offChainValues?: number[]): Promise<Array<{ txid: string, outputIndex: number }>> {
     console.log('identifyNeededInputs called')
     const tx = Transaction.fromBEEF(beef)
 
@@ -17,7 +17,7 @@ export default class TokenDemoTopicManager implements TopicManager {
     return previousOutpoints
   }
 
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     console.log({ previousCoins })
     const outputsToAdmit: number[] = []
 
@@ -90,11 +90,11 @@ export default class TokenDemoTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return "TokenDemo Topic Manager: what's your message to the world?"
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

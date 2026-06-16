@@ -11,9 +11,9 @@ class AppsLookupService implements LookupService {
   private static readonly TOPIC = 'tm_apps'
   private static readonly SERVICE_ID = 'ls_apps'
 
-  constructor(public storageManager: AppsStorageManager) { }
+  constructor (public storageManager: AppsStorageManager) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== AppsLookupService.TOPIC) return
@@ -33,18 +33,18 @@ class AppsLookupService implements LookupService {
     await this.storageManager.storeRecord(txid, outputIndex, metadata)
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== AppsLookupService.TOPIC) return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) throw new Error('A valid query must be provided!')
     if (question.service !== AppsLookupService.SERVICE_ID) throw new Error('Lookup service not supported!')
 
@@ -60,11 +60,11 @@ class AppsLookupService implements LookupService {
     return await this.storageManager.findAllApps(query.limit, query.skip, query.sortOrder)
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Apps Lookup Service: find published Metanet Apps.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -78,7 +78,7 @@ class AppsLookupService implements LookupService {
   }
 }
 
-function createAppsLookupService(db: Db): AppsLookupService {
+function createAppsLookupService (db: Db): AppsLookupService {
   return new AppsLookupService(new AppsStorageManager(db))
 }
 export default createAppsLookupService

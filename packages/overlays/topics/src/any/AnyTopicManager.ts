@@ -7,7 +7,7 @@ import { Transaction } from '@bsv/sdk'
  * 1. There are no rules.
  */
 export default class AnyTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(
+  async identifyAdmissibleOutputs (
     beef: number[],
     previousCoins: number[]
   ): Promise<AdmittanceInstructions> {
@@ -35,11 +35,11 @@ export default class AnyTopicManager implements TopicManager {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Any Topic Manager: admits all transaction outputs.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

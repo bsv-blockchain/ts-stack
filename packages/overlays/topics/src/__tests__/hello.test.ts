@@ -181,9 +181,9 @@ describe('HelloWorldTopicManager', () => {
 // ---------------------------------------------------------------------------
 
 describe('HelloWorldLookupService (MongoDB)', () => {
-  let mongod: MongoMemoryServer
-  let client: MongoClient
-  let db: Db
+  let mongod: MongoMemoryServer | undefined
+  let client: MongoClient | undefined
+  let db: Db | undefined
   let service: HelloWorldLookupService
 
   beforeAll(async () => {
@@ -196,12 +196,18 @@ describe('HelloWorldLookupService (MongoDB)', () => {
   })
 
   afterAll(async () => {
-    await client.close()
-    await mongod.stop()
+    if (client !== undefined) {
+      await client.close()
+    }
+    if (mongod !== undefined) {
+      await mongod.stop()
+    }
   })
 
   afterEach(async () => {
-    await db.collection('helloWorldRecords').deleteMany({})
+    if (db !== undefined) {
+      await db.collection('helloWorldRecords').deleteMany({})
+    }
   })
 
   it('stores a record and retrieves it via lookup (findAll)', async () => {

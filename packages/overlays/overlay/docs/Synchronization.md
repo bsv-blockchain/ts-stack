@@ -201,3 +201,12 @@ Example (adapt the table/query to your schema):
 ```
 
 **What you’re looking for:** the topic(s) you care about (e.g. tm_plite, tm_blockbeta) should move toward the same counts/data across nodes after sync, and your lookup results for identical queries should converge as well.
+
+> **Caveat (BRC-136 / janitor / admin removal):** Row-count comparison is only a
+> valid convergence check on nodes that do **not** remove outputs locally. Once
+> the janitor or `/admin/remove-token` is active, lookup-set counts can
+> legitimately differ between peers even when they fully agree on what was
+> admitted, because bans/removals are per-node policy and are not synchronized.
+> To verify that two nodes agree on which transactions were admitted to a topic,
+> compare their per-topic Topic Anchor Chain (`TAC`) at the tip rather than
+> lookup row counts. See [BRC-136 BASM](./BRC-136-BASM.md).

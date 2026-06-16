@@ -1,6 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals'
 import { Transaction } from '@bsv/sdk'
-import { OverlayMonitor, analyzeOverlayLookupResponse } from '../OverlayMonitor.js'
+import { OverlayMonitor, analyzeOverlayAnchorTip, analyzeOverlayLookupResponse } from '../OverlayMonitor.js'
 
 describe('OverlayMonitor', () => {
   it('summarizes an empty lookup response', () => {
@@ -85,6 +85,71 @@ describe('OverlayMonitor', () => {
     expect(report.summary.targetCount).toBe(1)
     expect(report.summary.probeCount).toBe(1)
     expect(report.summary.outputsMissingSubjectProof).toBe(1)
+  })
+
+  it('reports stale and mismatched BASM anchor tips', () => {
+    const result = analyzeOverlayAnchorTip({
+      target: 'local-overlay',
+      url: 'https://overlay.example/requestTopicAnchorTip',
+      probe: 'anchors',
+      topic: 'tm_example',
+      status: 200,
+      ok: true,
+      responseBody: {
+        blockHeight: 850000,
+        tac: '11'.repeat(32),
+        expiredUnprovenCount: 2
+      },
+      responseBytes: 128,
+      durationMs: 5,
+      expectedTac: '22'.repeat(32),
+      currentHeight: 850020,
+      thresholds: {
+        anchorTipLagBlocks: 6,
+        expiredUnprovenCount: 0
+      }
+    })
+
+    expect(result.warnings.map(warning => warning.code)).toEqual([
+      'anchor-tip-mismatch',
+      'anchor-stale-height',
+      'expired-unproven-state'
+    ])
+  })
+
+  it('runs configured anchor probes through Overlay Express BASM endpoints', async () => {
+    const responseBody = JSON.stringify({
+      topic: 'tm_example',
+      blockHeight: 850000,
+      tac: '11'.repeat(32)
+    })
+    const fetchImpl = jest.fn<typeof fetch>(async () => new Response(responseBody, { status: 200 }))
+    const monitor = new OverlayMonitor({
+      targets: [
+        {
+          name: 'local-overlay',
+          baseUrl: 'https://overlay.example',
+          probes: [],
+          anchorProbes: [
+            {
+              name: 'topic-tip',
+              topic: 'tm_example',
+              expectedTac: '11'.repeat(32)
+            }
+          ]
+        }
+      ],
+      fetchImpl
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(fetchImpl).toHaveBeenCalledWith('https://overlay.example/requestTopicAnchorTip', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'x-bsv-topic': 'tm_example' })
+    }))
+    expect(report.summary.anchorProbeCount).toBe(1)
+    expect(report.anchorResults[0].warnings).toHaveLength(0)
   })
 
   it('aborts a probe that exceeds the configured timeout', async () => {

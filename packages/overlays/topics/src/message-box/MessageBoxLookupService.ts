@@ -33,34 +33,34 @@ class MessageBoxLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
-  constructor(public storage: MessageBoxStorage) { }
+  constructor (public storage: MessageBoxStorage) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { topic, txid, outputIndex, lockingScript } = payload
-    if (topic !== 'tm_messagebox') return;
+    if (topic !== 'tm_messagebox') return
 
     try {
-      const decoded = PushDrop.decode(lockingScript);
-      const [identityKeyBuf, hostBuf] = decoded.fields;
+      const decoded = PushDrop.decode(lockingScript)
+      const [identityKeyBuf, hostBuf] = decoded.fields
 
       const ad = {
         identityKey: Utils.toHex(identityKeyBuf),
         host: Utils.toUTF8(hostBuf)
-      };
+      }
 
       await this.storage.storeRecord(
         ad.identityKey,
         ad.host,
         txid,
         outputIndex
-      );
+      )
     } catch (e) {
-      console.error('[LOOKUP ERROR] Failed to process outputAdded:', e);
+      console.error('[LOOKUP ERROR] Failed to process outputAdded:', e)
     }
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { txid, outputIndex, topic } = payload
     if (topic === 'tm_messagebox') {
@@ -68,14 +68,14 @@ class MessageBoxLookupService implements LookupService {
     }
   }
 
-  async outputEvicted(
+  async outputEvicted (
     txid: string,
     outputIndex: number
   ): Promise<void> {
     await this.storage.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.service !== 'ls_messagebox') {
       throw new Error('Unsupported lookup service')
     }
@@ -88,11 +88,11 @@ class MessageBoxLookupService implements LookupService {
     return await this.storage.findAdvertisements(query.identityKey, query.host)
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return docs
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -106,7 +106,7 @@ class MessageBoxLookupService implements LookupService {
   }
 }
 
-function create(mongoDb: Db): MessageBoxLookupService {
+function create (mongoDb: Db): MessageBoxLookupService {
   return new MessageBoxLookupService(new MessageBoxStorage(mongoDb))
 }
 export default create
