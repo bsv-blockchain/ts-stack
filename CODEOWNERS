@@ -1,8 +1,0 @@
-# CODEOWNERS — bsv-blockchain/ts-stack
-#
-# Each line: path pattern → GitHub teams or users responsible for review.
-# Later matching rules override earlier ones.
-# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
-
-# ── Default (catch-all) ──────────────────────────────────────────────────────
-*                               @bsv-blockchain/technology
