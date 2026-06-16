@@ -942,10 +942,11 @@ export default class Transaction {
       // once (BDK operates at whole-tx granularity). Strict: its verdict is
       // authoritative and any thrown error propagates (no JS fallback).
       if (verifier !== undefined) {
-        const blockHeight = tx.merklePath?.blockHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
+        // A tx reaching here has no merkle proof (mined txs short-circuit above),
+        // so its source UTXO mined-height is unobtainable -> post-Chronicle fallback.
         const scriptsValid = await verifier.verifyScripts({
           tx,
-          blockHeight,
+          blockHeight: POST_CHRONICLE_HEIGHT_FALLBACK,
           consensus: true
         })
         if (!scriptsValid) {

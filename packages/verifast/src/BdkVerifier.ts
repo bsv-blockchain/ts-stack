@@ -52,9 +52,7 @@ export default class BdkVerifier implements BdkVerifierInterface {
 
   private async getModule (): Promise<BdkWasmModule> {
     if (this.module !== undefined) return this.module
-    if (this.loading === undefined) {
-      this.loading = this.factory().then((m) => { this.module = m; return m })
-    }
+    this.loading ??= this.factory().then((m) => { this.module = m; return m })
     return await this.loading
   }
 

@@ -8,7 +8,7 @@
  * canonical bsv ordering.
  */
 export const BDK_FLAG_BITS = {
-  P2SH: 1 << 0,
+  P2SH: 1,
   STRICTENC: 1 << 1,
   DERSIG: 1 << 2,
   LOW_S: 1 << 3,

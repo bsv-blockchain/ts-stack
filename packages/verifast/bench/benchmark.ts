@@ -56,4 +56,9 @@ async function main (): Promise<void> {
   console.log(`speedup:         ${(jsMs / bdkMs).toFixed(2)}x`)
 }
 
-main().catch((e) => { console.error(e); process.exit(1) })
+try {
+  await main()
+} catch (e) {
+  console.error(e)
+  process.exit(1)
+}

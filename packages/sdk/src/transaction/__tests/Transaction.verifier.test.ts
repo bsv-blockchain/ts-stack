@@ -60,13 +60,13 @@ describe('Transaction.verify with a pluggable verifier', () => {
       .rejects.toThrow('wasm unavailable')
   })
 
-  it('passes blockHeight from merklePath, else 943816 fallback', async () => {
-    const tx = await buildValidTx() // source has merklePath height 1000, but THIS tx has none
+  it('passes the post-Chronicle fallback blockHeight (943816) to the verifier', async () => {
+    const tx = await buildValidTx() // unmined tx -> no merkle proof -> fallback height
     let seenHeight = -1
     const verifier: BdkVerifierInterface = {
       verifyScripts: async ({ blockHeight }) => { seenHeight = blockHeight; return true }
     }
     await tx.verify('scripts only', undefined, undefined, verifier)
-    expect(seenHeight).toBe(943816) // tx itself has no merklePath -> fallback
+    expect(seenHeight).toBe(943816)
   })
 })

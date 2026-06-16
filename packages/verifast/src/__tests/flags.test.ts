@@ -2,7 +2,7 @@ import { mapVerifyFlags, BDK_FLAG_BITS } from '../flags.js'
 
 describe('mapVerifyFlags', () => {
   it('returns 0 for undefined', () => {
-    expect(mapVerifyFlags(undefined)).toBe(0)
+    expect(mapVerifyFlags()).toBe(0)
   })
 
   it('maps a single string flag to its bit', () => {
