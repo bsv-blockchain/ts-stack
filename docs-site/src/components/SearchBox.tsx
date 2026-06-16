@@ -8,9 +8,7 @@ interface SearchResult {
 }
 
 interface PagefindResult {
-  url: string
-  meta: () => Promise<{ title?: string }>
-  excerpt: () => Promise<string>
+  data: () => Promise<{ url: string; meta: { title?: string }; excerpt: string }>
 }
 
 interface Pagefind {
@@ -40,11 +38,10 @@ export default function SearchBox() {
     const { results: raw } = await pf.search(q)
     const top = raw.slice(0, 8)
     const resolved = await Promise.all(
-      top.map(async r => ({
-        url: r.url,
-        meta: await r.meta(),
-        excerpt: await r.excerpt(),
-      }))
+      top.map(async r => {
+        const d = await r.data()
+        return { url: d.url, meta: d.meta, excerpt: d.excerpt }
+      })
     )
     setResults(resolved)
   }, [])

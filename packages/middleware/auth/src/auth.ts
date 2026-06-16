@@ -12,6 +12,7 @@ import type {
   ConsumeNonce,
   ProofSignerWallet,
   ProofVerifierWallet,
+  RequestBody,
   VerifyAuthProofResult,
 } from './types.js';
 
@@ -22,8 +23,10 @@ import type {
 export class AuthProofClient {
   constructor(private readonly options: AuthProofOptions = {}) {}
 
-  createAuthProof(wallet: ProofSignerWallet, counterparty: string, action: string): Promise<AuthProof> {
-    return createAuthProof(wallet, counterparty, action, this.options);
+  createAuthProof(
+    args: { wallet: ProofSignerWallet; counterparty: string; action: string; body?: RequestBody },
+  ): Promise<AuthProof> {
+    return createAuthProof({ ...args, ...this.options });
   }
 
   createAuthSigData(action: string, identityKey: string, now?: number): AuthSigData {
@@ -44,12 +47,16 @@ export class AuthProofServer {
   constructor(private readonly options: AuthProofOptions = {}) {}
 
   verifyAuthProof(
-    wallet: ProofVerifierWallet,
-    proof: AuthProof | undefined | null,
-    expectedAction: string,
-    deps: { consumeNonce: ConsumeNonce; now?: number },
+    args: {
+      wallet: ProofVerifierWallet;
+      proof: AuthProof | undefined | null;
+      action: string;
+      consumeNonce: ConsumeNonce;
+      now?: number;
+      body?: RequestBody;
+    },
   ): Promise<VerifyAuthProofResult> {
-    return verifyAuthProof(wallet, proof, expectedAction, deps, this.options);
+    return verifyAuthProof({ ...args, ...this.options });
   }
 
   checkAuthSigData(

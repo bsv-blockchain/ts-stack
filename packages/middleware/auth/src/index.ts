@@ -1,6 +1,8 @@
 // Standalone functions — the base API.
 export {
   serializeAuthSigData,
+  serializeSignablePayload,
+  normalizeBody,
   createAuthSigData,
   checkAuthSigData,
   createAuthProof,
@@ -15,6 +17,9 @@ export { DEFAULT_PROTOCOL, DEFAULT_WINDOW_MS, DEFAULT_CLOCK_SKEW_MS } from './co
 export type {
   AuthProof,
   AuthSigData,
+  RequestBody,
+  CreateAuthProofArgs,
+  VerifyAuthProofArgs,
   VerifyAuthProofResult,
   ConsumeNonce,
   AuthProofOptions,

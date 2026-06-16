@@ -33,7 +33,7 @@ const SPECS = [
     out:  'docs-site/public/assets/asyncapi/brc29',
   },
   {
-    spec: 'specs/auth/brc31-handshake.yaml',
+    spec: 'specs/auth/brc103-mutual-auth.yaml',
     out:  'docs-site/public/assets/asyncapi/brc31',
   },
   {
