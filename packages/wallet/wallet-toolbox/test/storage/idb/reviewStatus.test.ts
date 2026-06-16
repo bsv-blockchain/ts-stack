@@ -1,7 +1,10 @@
-import { _tu } from '../../utils/TestUtilsWalletStorage'
-import { sdk, StorageProviderOptions, verifyOne } from '../../../src/index.client'
+import { sdk, StorageProviderOptions } from '../../../src/index.client'
 import { setLogging } from '../../utils/TestUtilsWalletStorage'
 import { StorageIdb } from '../../../src/storage/StorageIdb'
+import {
+  expectFailedTransactionOutputStateRepaired,
+  seedFailedTransactionOutputState
+} from '../failedTransactionOutputHelpers'
 
 import 'fake-indexeddb/auto'
 
@@ -26,31 +29,9 @@ describe('idb reviewStatus tests', () => {
   })
 
   test('restores failed transaction inputs and neutralizes failed transaction outputs', async () => {
-    const { tx: fundingTx, user } = await _tu.insertTestTransaction(storage, undefined, false, {
-      status: 'completed',
-      txid: 'b'.repeat(64)
-    })
-    const { tx: failedTx } = await _tu.insertTestTransaction(storage, user, false, {
-      status: 'failed',
-      txid: 'c'.repeat(64)
-    })
-    const inputOutput = await _tu.insertTestOutput(storage, fundingTx, 0, 1000, undefined, false, {
-      spendable: false,
-      spentBy: failedTx.transactionId
-    })
-    const generatedOutput = await _tu.insertTestOutput(storage, failedTx, 0, 900, undefined, false, {
-      spendable: true,
-      spentBy: failedTx.transactionId
-    })
+    const state = await seedFailedTransactionOutputState(storage, 'failed')
 
     await storage.reviewStatus({ agedLimit: new Date() })
-
-    const inputAfter = verifyOne(await storage.findOutputs({ partial: { outputId: inputOutput.outputId } }))
-    expect(inputAfter.spendable).toBe(true)
-    expect(inputAfter.spentBy).toBeUndefined()
-
-    const generatedAfter = verifyOne(await storage.findOutputs({ partial: { outputId: generatedOutput.outputId } }))
-    expect(generatedAfter.spendable).toBe(false)
-    expect(generatedAfter.spentBy).toBeUndefined()
+    await expectFailedTransactionOutputStateRepaired(storage, state)
   })
 })

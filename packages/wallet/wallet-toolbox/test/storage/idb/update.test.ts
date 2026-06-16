@@ -2,6 +2,10 @@ import { _tu, TestSetup1 } from '../../utils/TestUtilsWalletStorage'
 import { sdk, StorageProvider, StorageProviderOptions, verifyOne } from '../../../src/index.client'
 import { normalizeDate, setLogging, updateTable, verifyValues } from '../../utils/TestUtilsWalletStorage'
 import {
+  expectFailedTransactionOutputStateRepaired,
+  seedFailedTransactionOutputState
+} from '../failedTransactionOutputHelpers'
+import {
   TableProvenTx,
   TableProvenTxReq,
   TableUser,
@@ -999,34 +1003,12 @@ describe('idb update tests', () => {
 
   test('16_updateTransactionStatus failed releases inputs and neutralizes generated outputs', async () => {
     for (const { storage } of setups) {
-      const { tx: fundingTx, user } = await _tu.insertTestTransaction(storage, undefined, false, {
-        status: 'completed',
-        txid: 'b'.repeat(64)
-      })
-      const { tx: failedTx } = await _tu.insertTestTransaction(storage, user, false, {
-        status: 'unsigned',
-        txid: undefined
-      })
-      const inputOutput = await _tu.insertTestOutput(storage, fundingTx, 0, 1000, undefined, false, {
-        spendable: false,
-        spentBy: failedTx.transactionId
-      })
-      const generatedOutput = await _tu.insertTestOutput(storage, failedTx, 0, 900, undefined, false, {
-        spendable: true,
-        spentBy: failedTx.transactionId
-      })
+      const state = await seedFailedTransactionOutputState(storage, 'unsigned')
 
-      await storage.updateTransactionStatus('failed', failedTx.transactionId)
+      await storage.updateTransactionStatus('failed', state.failedTx.transactionId)
+      await expectFailedTransactionOutputStateRepaired(storage, state)
 
-      const inputAfter = verifyOne(await storage.findOutputs({ partial: { outputId: inputOutput.outputId } }))
-      expect(inputAfter.spendable).toBe(true)
-      expect(inputAfter.spentBy).toBeUndefined()
-
-      const generatedAfter = verifyOne(await storage.findOutputs({ partial: { outputId: generatedOutput.outputId } }))
-      expect(generatedAfter.spendable).toBe(false)
-      expect(generatedAfter.spentBy).toBeUndefined()
-
-      const txAfter = verifyOne(await storage.findTransactions({ partial: { transactionId: failedTx.transactionId } }))
+      const txAfter = verifyOne(await storage.findTransactions({ partial: { transactionId: state.failedTx.transactionId } }))
       expect(txAfter.status).toBe('failed')
     }
   })
