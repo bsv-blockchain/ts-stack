@@ -126,7 +126,8 @@ jobs:
           flags: ${{ steps.cov.outputs.flags }}
           name: ts-stack
           slug: bsv-blockchain/ts-stack
-          fail_ci_if_error: true
+          # Coverage upload is non-blocking: Codecov CLI GPG-verify/outages must not gate CI.
+          fail_ci_if_error: false
 
   docs-validate:
     name: Docs Site Validation
