@@ -167,15 +167,22 @@ export class ReorgSseAdapter {
     }
 
     // No event-id replay on this stream: catch up on (re)connect.
-    if (this.onConnect !== undefined) {
-      try {
-        await this.onConnect()
-      } catch (error) {
-        this.logger.warn(`[BASM] reorg catch-up failed: ${error instanceof Error ? error.message : String(error)}`)
-      }
-    }
+    await this.runCatchUp()
+    await this.pumpEvents(response.body.getReader())
+  }
 
-    const reader = response.body.getReader()
+  private async runCatchUp (): Promise<void> {
+    if (this.onConnect === undefined) {
+      return
+    }
+    try {
+      await this.onConnect()
+    } catch (error) {
+      this.logger.warn(`[BASM] reorg catch-up failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  private async pumpEvents (reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
     const decoder = new TextDecoder()
     let buffer = ''
     while (!this.stopped) {
@@ -187,17 +194,21 @@ export class ReorgSseAdapter {
       const { events, rest } = extractSseFrames(buffer)
       buffer = rest
       for (const frame of events) {
-        const input = parseReorgEvent(frame)
-        if (input === null) {
-          this.logger.warn('[BASM] skipping malformed reorg frame')
-          continue
-        }
-        try {
-          await this.onReorg(input)
-        } catch (error) {
-          this.logger.error(`[BASM] handleReorg failed: ${error instanceof Error ? error.message : String(error)}`)
-        }
+        await this.processReorgFrame(frame)
       }
+    }
+  }
+
+  private async processReorgFrame (frame: string): Promise<void> {
+    const input = parseReorgEvent(frame)
+    if (input === null) {
+      this.logger.warn('[BASM] skipping malformed reorg frame')
+      return
+    }
+    try {
+      await this.onReorg(input)
+    } catch (error) {
+      this.logger.error(`[BASM] handleReorg failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

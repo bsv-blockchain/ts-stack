@@ -732,7 +732,7 @@ export default class OverlayExpress {
       }
       const header = await response.json() as { hash?: string, merkleroot?: string }
       if (typeof header.hash !== 'string') {
-        throw new Error(`WhatsOnChain did not return a block hash for height ${blockHeight}`)
+        throw new TypeError(`WhatsOnChain did not return a block hash for height ${blockHeight}`)
       }
       return {
         blockHeight,
@@ -1060,6 +1060,71 @@ export default class OverlayExpress {
   }
 
   /**
+   * Renders a request or response body for verbose logging, truncating overly long payloads.
+   */
+  private formatBodyForLog (body: any, tooLongLabel: string, okPrefix: string): string {
+    let bodyString: string
+    if (typeof body === 'object') {
+      bodyString = JSON.stringify(body, null, 2)
+    } else if (Buffer.isBuffer(body)) {
+      bodyString = body.toString('utf8')
+    } else {
+      bodyString = String(body)
+    }
+    return bodyString.length > 280
+      ? chalk.yellow(`(${tooLongLabel}, length: ${String(bodyString.length)} characters)`)
+      : chalk.green(`${okPrefix}\n${bodyString}`)
+  }
+
+  /**
+   * Installs middleware that verbosely logs incoming requests and outgoing responses.
+   */
+  private setupVerboseRequestLogging (): void {
+    this.app.use((req, res, next) => {
+      const startTime = Date.now()
+
+      // Log incoming request details
+      this.logger.log(chalk.magenta.bold(`Incoming Request: ${String(req.method)} ${String(req.originalUrl)}`))
+      // Pretty-print headers
+      this.logger.log(chalk.cyan('Headers:'))
+      this.logger.log(util.inspect(req.headers, { colors: true, depth: null }))
+
+      // Handle request body
+      if (req.body != null && Object.keys(req.body).length > 0) {
+        this.logger.log(this.formatBodyForLog(req.body, 'Body too long to display', 'Request Body:'))
+      }
+
+      // Intercept the res.send method to log responses
+      const originalSend = res.send
+      let responseBody: any
+
+      res.send = function (body?: any): any {
+        responseBody = body
+        return originalSend.call(this, body)
+      }
+
+      // Log outgoing response details after the response is finished
+      res.on('finish', () => {
+        const duration = Date.now() - startTime
+        this.logger.log(
+          chalk.magenta.bold(
+            `Outgoing Response: ${String(req.method)} ${String(req.originalUrl)} - Status: ${String(res.statusCode)} - Duration: ${String(duration)}ms`
+          )
+        )
+        this.logger.log(chalk.cyan('Response Headers:'))
+        this.logger.log(util.inspect(res.getHeaders(), { colors: true, depth: null }))
+
+        // Handle response body
+        if (responseBody != null) {
+          this.logger.log(this.formatBodyForLog(responseBody, 'Response body too long to display', 'Response Body:'))
+        }
+      })
+
+      next()
+    })
+  }
+
+  /**
    * Starts the Express server.
    * Sets up routes and begins listening on the configured port.
    */
@@ -1072,78 +1137,7 @@ export default class OverlayExpress {
     this.app.use(bodyParser.raw({ limit: '1gb', type: 'application/octet-stream' }))
 
     if (this.verboseRequestLogging) {
-      this.app.use((req, res, next) => {
-        const startTime = Date.now()
-
-        // Log incoming request details
-        this.logger.log(chalk.magenta.bold(`Incoming Request: ${String(req.method)} ${String(req.originalUrl)}`))
-        // Pretty-print headers
-        this.logger.log(chalk.cyan('Headers:'))
-        this.logger.log(util.inspect(req.headers, { colors: true, depth: null }))
-
-        // Handle request body
-        if (req.body != null && Object.keys(req.body).length > 0) {
-          let bodyContent
-          let bodyString
-          if (typeof req.body === 'object') {
-            bodyString = JSON.stringify(req.body, null, 2)
-          } else if (Buffer.isBuffer(req.body)) {
-            bodyString = req.body.toString('utf8')
-          } else {
-            bodyString = String(req.body)
-          }
-          if (bodyString.length > 280) {
-            bodyContent = chalk.yellow(`(Body too long to display, length: ${String(bodyString.length)} characters)`)
-          } else {
-            bodyContent = chalk.green(`Request Body:\n${String(bodyString)}`)
-          }
-          this.logger.log(bodyContent)
-        }
-
-        // Intercept the res.send method to log responses
-        const originalSend = res.send
-        let responseBody: any
-
-        res.send = function (body?: any): any {
-          responseBody = body
-          return originalSend.call(this, body)
-        }
-
-        // Log outgoing response details after the response is finished
-        res.on('finish', () => {
-          const duration = Date.now() - startTime
-          this.logger.log(
-            chalk.magenta.bold(
-              `Outgoing Response: ${String(req.method)} ${String(req.originalUrl)} - Status: ${String(res.statusCode)} - Duration: ${String(duration)}ms`
-            )
-          )
-          this.logger.log(chalk.cyan('Response Headers:'))
-          this.logger.log(util.inspect(res.getHeaders(), { colors: true, depth: null }))
-
-          // Handle response body
-          if (responseBody != null) {
-            let bodyContent
-            let bodyString
-            if (typeof responseBody === 'object') {
-              bodyString = JSON.stringify(responseBody, null, 2)
-            } else if (Buffer.isBuffer(responseBody)) {
-              bodyString = responseBody.toString('utf8')
-            } else if (typeof responseBody === 'string') {
-              bodyString = responseBody
-            } else {
-              bodyString = String(responseBody)
-            }
-            if (bodyString.length > 280) {
-              bodyContent = chalk.yellow(`(Response body too long to display, length: ${String(bodyString.length)} characters)`)
-            } else {
-              bodyContent = chalk.green(`Response Body:\n${String(bodyString)}`)
-            }
-            this.logger.log(bodyContent)
-          }
-        })
-
-        next()
-      })
+      this.setupVerboseRequestLogging()
     }
 
     // Enable CORS

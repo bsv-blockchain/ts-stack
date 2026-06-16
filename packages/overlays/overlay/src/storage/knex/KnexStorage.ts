@@ -85,7 +85,7 @@ export class KnexStorage implements Storage {
     const metadata = extractMerkleProofMetadata(txid, tx.merklePath)
     return {
       txid,
-      beef: tx.merklePath !== undefined ? tx.toAtomicBEEF() : beef,
+      beef: tx.merklePath === undefined ? beef : tx.toAtomicBEEF(),
       rawTx: Array.from(tx.toBinary()),
       merklePath: tx.merklePath?.toBinary(),
       blockHeight: metadata?.blockHeight,
@@ -393,12 +393,12 @@ export class KnexStorage implements Storage {
   }
 
   async findAdmittedTransactionsForBlock(topic: string, blockHeight: number, blockHash?: string): Promise<AdmittedTxRef[]> {
-    const query = this.knex('applied_transactions')
+    let query = this.knex('applied_transactions')
       .where({ topic, blockHeight, proven: true })
       .whereNotNull('blockIndex')
 
     if (blockHash !== undefined) {
-      void query.andWhere({ blockHash })
+      query = query.andWhere({ blockHash })
     }
 
     const rows = await query
@@ -433,9 +433,9 @@ export class KnexStorage implements Storage {
   }
 
   async findTopicBlockAnchor(topic: string, blockHeight: number, blockHash?: string): Promise<TopicBlockAnchor | undefined> {
-    const query = this.knex('topic_block_anchors').where({ topic, blockHeight })
+    let query = this.knex('topic_block_anchors').where({ topic, blockHeight })
     if (blockHash !== undefined) {
-      void query.andWhere({ blockHash })
+      query = query.andWhere({ blockHash })
     }
     const row = await query.first()
     if (row === undefined) {
@@ -561,7 +561,7 @@ export class KnexStorage implements Storage {
   }
 
   async findUnprovenAppliedTransactions(cutoffHeight: number, topic?: string): Promise<UnprovenAppliedTransactionCandidate[]> {
-    const query = this.knex('applied_transactions')
+    let query = this.knex('applied_transactions')
       .where(builder => {
         builder.where({ proven: false }).orWhereNull('proven')
       })
@@ -570,7 +570,7 @@ export class KnexStorage implements Storage {
       .select(['txid', 'topic', 'firstSeenHeight'])
 
     if (topic !== undefined) {
-      void query.andWhere({ topic })
+      query = query.andWhere({ topic })
     }
 
     const rows = await query
@@ -613,13 +613,13 @@ export class KnexStorage implements Storage {
   }
 
   async findProvenAppliedTransactionsInRange(fromHeight: number, toHeight: number, topic?: string): Promise<Array<{ txid: string, topic: string, blockHeight: number, blockHash?: string, merkleRoot?: string }>> {
-    const query = this.knex('applied_transactions')
+    let query = this.knex('applied_transactions')
       .where({ proven: true })
       .andWhere('blockHeight', '>=', fromHeight)
       .andWhere('blockHeight', '<=', toHeight)
 
     if (topic !== undefined) {
-      void query.andWhere({ topic })
+      query = query.andWhere({ topic })
     }
 
     const rows = await query.select(['txid', 'topic', 'blockHeight', 'blockHash', 'merkleRoot'])

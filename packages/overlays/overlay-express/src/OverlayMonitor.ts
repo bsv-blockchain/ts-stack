@@ -398,11 +398,14 @@ export function analyzeOverlayAnchorTip(options: {
   const thresholds = { ...defaultThresholds, ...options.thresholds }
   const blockHeight = typeof options.responseBody.blockHeight === 'number' ? options.responseBody.blockHeight : undefined
   const tac = typeof options.responseBody.tac === 'string' ? options.responseBody.tac : undefined
-  const expiredUnprovenCount = typeof options.responseBody.expiredUnprovenCount === 'number'
-    ? options.responseBody.expiredUnprovenCount
-    : typeof options.responseBody.unprovenExpiredCount === 'number'
-      ? options.responseBody.unprovenExpiredCount
-      : undefined
+  let expiredUnprovenCount: number | undefined
+  if (typeof options.responseBody.expiredUnprovenCount === 'number') {
+    expiredUnprovenCount = options.responseBody.expiredUnprovenCount
+  } else if (typeof options.responseBody.unprovenExpiredCount === 'number') {
+    expiredUnprovenCount = options.responseBody.unprovenExpiredCount
+  } else {
+    expiredUnprovenCount = undefined
+  }
   const warnings: OverlayMonitorWarning[] = []
 
   if (options.expectedTac !== undefined && tac !== undefined && tac !== options.expectedTac) {
