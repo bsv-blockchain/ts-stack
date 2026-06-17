@@ -37,7 +37,7 @@ describe('Cross-SDK Compatibility Tests', () => {
         // Convert hex to byte array
         const ciphertext: number[] = []
         for (let i = 0; i < ciphertextHex.length; i += 2) {
-          ciphertext.push(parseInt(ciphertextHex.slice(i, i + 2), 16))
+          ciphertext.push(Number.parseInt(ciphertextHex.slice(i, i + 2), 16))
         }
 
         // Decrypt using TypeScript SDK
@@ -83,7 +83,7 @@ describe('Cross-SDK Compatibility Tests', () => {
         // Convert hex to byte array
         const ciphertext: number[] = []
         for (let i = 0; i < ciphertextHex.length; i += 2) {
-          ciphertext.push(parseInt(ciphertextHex.slice(i, i + 2), 16))
+          ciphertext.push(Number.parseInt(ciphertextHex.slice(i, i + 2), 16))
         }
 
         // Decrypt using TypeScript SDK
@@ -127,7 +127,7 @@ describe('Cross-SDK Compatibility Tests', () => {
         // Test TypeScript decrypting Go ciphertext
         const goCiphertextBytes: number[] = []
         for (let i = 0; i < goCiphertext.length; i += 2) {
-          goCiphertextBytes.push(parseInt(goCiphertext.substr(i, 2), 16))
+          goCiphertextBytes.push(Number.parseInt(goCiphertext.substr(i, 2), 16))
         }
 
         const goDecrypted = symKey.decrypt(goCiphertextBytes, 'utf8')
@@ -136,7 +136,7 @@ describe('Cross-SDK Compatibility Tests', () => {
         // Test TypeScript decrypting TypeScript ciphertext (sanity check)
         const tsCiphertextBytes: number[] = []
         for (let i = 0; i < tsCiphertext.length; i += 2) {
-          tsCiphertextBytes.push(parseInt(tsCiphertext.substr(i, 2), 16))
+          tsCiphertextBytes.push(Number.parseInt(tsCiphertext.substr(i, 2), 16))
         }
 
         const tsDecrypted = symKey.decrypt(tsCiphertextBytes, 'utf8')

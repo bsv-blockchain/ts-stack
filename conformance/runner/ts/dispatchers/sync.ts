@@ -524,8 +524,8 @@ function mergeAction (
   existing: Record<string, unknown>,
   incoming: Record<string, unknown>
 ): 'update' | 'skip' {
-  const e = typeof existing['updated_at'] === 'string' ? Date.parse(existing['updated_at'] as string) : NaN
-  const i = typeof incoming['updated_at'] === 'string' ? Date.parse(incoming['updated_at'] as string) : NaN
+  const e = typeof existing['updated_at'] === 'string' ? Date.parse(existing['updated_at'] as string) : Number.NaN
+  const i = typeof incoming['updated_at'] === 'string' ? Date.parse(incoming['updated_at'] as string) : Number.NaN
   if (Number.isNaN(e) || Number.isNaN(i)) return 'skip'
   return i > e ? 'update' : 'skip'
 }
@@ -688,7 +688,7 @@ function dispatchBRC40 (
           if (!Array.isArray(arr)) continue
           for (const row of arr) {
             const r2 = row as Record<string, unknown>
-            const u = typeof r2['updated_at'] === 'string' ? Date.parse(r2['updated_at'] as string) : NaN
+            const u = typeof r2['updated_at'] === 'string' ? Date.parse(r2['updated_at'] as string) : Number.NaN
             if (!Number.isNaN(u) && u >= sinceMs) {
               foundBoundary = true
               break

@@ -153,7 +153,7 @@ describe('Wallet services tests', () => {
   })
 
   test('0e getUtxoStatus invalid outpoint', async () => {
-    for (const { chain, wallet, services } of ctxs) {
+    for (const { wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
       {
         const script =
@@ -164,13 +164,9 @@ describe('Wallet services tests', () => {
           undefined,
           'e4154d8ab6993addc9b8705318cc8e971dfc0780e233038ecf44c601229d93ce.1'
         )
-        if (chain === 'main') {
-          expect(us.status).toBe('success')
-          expect(us.isUtxo).toBe(false)
-        } else {
-          expect(us.status).toBe('success')
-          expect(us.isUtxo).toBe(false)
-        }
+        // Behavior is identical for both chains for this invalid outpoint.
+        expect(us.status).toBe('success')
+        expect(us.isUtxo).toBe(false)
       }
     }
   })

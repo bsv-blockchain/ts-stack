@@ -44,7 +44,7 @@ export default function fromUtxo (
   }
 ): TransactionInput {
   const sourceTransaction = new Transaction(0, [], [], 0)
-  sourceTransaction.outputs = Array(utxo.vout + 1).fill(null)
+  sourceTransaction.outputs = new Array(utxo.vout + 1).fill(null)
   sourceTransaction.outputs[utxo.vout] = {
     satoshis: utxo.satoshis,
     lockingScript: LockingScript.fromHex(utxo.script)

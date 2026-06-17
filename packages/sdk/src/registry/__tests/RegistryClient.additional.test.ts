@@ -77,10 +77,10 @@ jest.mock('../../transaction/index.js', () => ({
 jest.mock('../../primitives/index.js', () => ({
   Utils: {
     toArray: jest.fn().mockImplementation((str: string) =>
-      Array.from(str).map((c) => c.charCodeAt(0))
+      Array.from(str).map((c) => c.codePointAt(0))
     ),
     toUTF8: jest.fn().mockImplementation((arr: number[] | string) => {
-      if (Array.isArray(arr)) return arr.map((n) => String.fromCharCode(n)).join('')
+      if (Array.isArray(arr)) return arr.map((n) => String.fromCodePoint(n)).join('')
       return arr
     })
   }
@@ -628,7 +628,7 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
     // protocol has 7 fields: protocolID, name, iconURL, description, docURL, operator, sig
     ;(PushDrop.decode as jest.Mock).mockReturnValueOnce({
       fields: [
-        Array.from('[1,"proto"]').map((c) => c.charCodeAt(0)), // protocolID JSON
+        Array.from('[1,"proto"]').map((c) => c.codePointAt(0)), // protocolID JSON
         [110, 97, 109, 101],  // 'name'
         [105, 99, 111, 110],  // 'icon'
         [100, 101, 115, 99],  // 'desc'
@@ -658,7 +658,7 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
         [105, 99, 111, 110],   // 'icon'
         [100, 101, 115, 99],   // 'desc'
         [100, 111, 99],        // 'doc'
-        Array.from(fieldsJSON).map((c) => c.charCodeAt(0)), // fieldsJSON
+        Array.from(fieldsJSON).map((c) => c.codePointAt(0)), // fieldsJSON
         [111, 112],            // 'op' - operator
         [115, 105, 103]        // signature
       ]

@@ -65,7 +65,8 @@ const listener = new TeranodeListener({
   'bitcoin/mainnet-subtree': subtreeCallback
 });
 
-// The listener starts automatically and connects to Teranode mainnet
+// Start the listener and connect to Teranode mainnet
+await listener.start();
 console.log('Listener started and waiting for messages...');
 ```
 
@@ -86,7 +87,7 @@ const { node, stop } = await startSubscriber({
 console.log('Subscriber started and listening for messages...');
 ```
 
-Both approaches automatically:
+Once started, both approaches automatically:
 - Connect to the official Teranode bootstrap peer
 - Use the mainnet shared key
 - Listen on `127.0.0.1:9901`
@@ -157,10 +158,14 @@ const listener = new TeranodeListener({
     console.log('Subtree update:', data);
   }
 });
+
+// Start the listener (it does not start automatically)
+await listener.start();
 ```
 
 #### Methods
 
+- `start(): Promise<void>` - Start the listener and connect to Teranode peers (must be called after construction)
 - `addTopicCallback(topic: Topic, callback: MessageCallback): void` - Add a new topic subscription
 - `removeTopicCallback(topic: Topic): void` - Remove a topic subscription
 - `stop(): Promise<void>` - Stop the listener
@@ -275,6 +280,7 @@ const listener = new TeranodeListener({
   }
 });
 
+await listener.start();
 console.log('Listener started, waiting for messages...');
 ```
 
@@ -293,7 +299,7 @@ const listener = new TeranodeListener({
   }
 });
 
-// The listener starts automatically
+await listener.start();
 console.log('Connected peers:', listener.getConnectedPeerCount());
 
 // Add more topics dynamically

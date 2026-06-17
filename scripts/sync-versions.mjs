@@ -108,7 +108,7 @@ const isAsciiDigit = (code) => code >= 48 && code <= 57
 const allDigits = (s) => {
   if (s.length === 0) return false
   for (let i = 0; i < s.length; i++) {
-    if (!isAsciiDigit(s.charCodeAt(i))) return false
+    if (!isAsciiDigit(s.codePointAt(i))) return false
   }
   return true
 }
@@ -126,7 +126,7 @@ const bumpPatch = (version) => {
 
   const tail = version.slice(dot2 + 1)
   let patchEnd = 0
-  while (patchEnd < tail.length && isAsciiDigit(tail.charCodeAt(patchEnd))) {
+  while (patchEnd < tail.length && isAsciiDigit(tail.codePointAt(patchEnd))) {
     patchEnd++
   }
   if (patchEnd === 0) return null

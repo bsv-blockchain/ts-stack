@@ -93,7 +93,7 @@ describe('HostReputationTracker – additional coverage', () => {
 
     it('treats NaN latency as DEFAULT_LATENCY_MS (1500)', () => {
       const t = new HostReputationTracker()
-      t.recordSuccess('https://host.com', NaN)
+      t.recordSuccess('https://host.com', Number.NaN)
       const snap = t.snapshot('https://host.com')!
       expect(snap.avgLatencyMs).toBe(1500)
     })

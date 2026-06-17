@@ -39,7 +39,7 @@ function hexToBytes (hex) {
   if (hex.length % 2 !== 0) hex = '0' + hex
   const out = []
   for (let i = 0; i < hex.length; i += 2) {
-    out.push(parseInt(hex.slice(i, i + 2), 16))
+    out.push(Number.parseInt(hex.slice(i, i + 2), 16))
   }
   return out
 }
@@ -50,7 +50,7 @@ function bytesToHex (bytes) {
 
 function bumpPatch (version) {
   const parts = version.split('.')
-  parts[2] = String(parseInt(parts[2], 10) + 1)
+  parts[2] = String(Number.parseInt(parts[2], 10) + 1)
   return parts.join('.')
 }
 
@@ -88,7 +88,7 @@ const vectors = corpus.vectors
 
 // Build index by numeric suffix
 function vectorNum (v) {
-  return parseInt(v.id.split('.').pop(), 10)
+  return Number.parseInt(v.id.split('.').pop(), 10)
 }
 
 // Map from create-vector-num → verify-vector-num (from descriptions)
@@ -101,7 +101,7 @@ for (const v of vectors) {
     // Extract "from vector N" from description
     const match = v.description.match(/from vector (\d+)/i)
     if (match) {
-      const createNum = parseInt(match[1], 10)
+      const createNum = Number.parseInt(match[1], 10)
       pairsCreateToVerify.set(createNum, num)
     }
   }

@@ -1566,9 +1566,10 @@ export abstract class TestUtilsWalletStorage {
   static async createTestSetup2(
     storage: StorageProvider,
     identityKey: string,
-    mockData: MockData = { actions: [] }
+    mockData?: MockData
   ): Promise<TestSetup2> {
-    if (!mockData || !mockData.actions) {
+    mockData ??= { actions: [] }
+    if (!mockData.actions) {
       throw new Error('mockData.actions is required')
     }
 
@@ -2494,7 +2495,7 @@ export async function cleanUnprocessedTransactionsUsingAbort(wallet: Wallet, sto
 export const normalizeDate = (value: any): string | null => {
   if (value instanceof Date) {
     return value.toISOString()
-  } else if (typeof value === 'string' && !isNaN(Date.parse(value))) {
+  } else if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
     return new Date(value).toISOString()
   }
   return null

@@ -152,7 +152,7 @@ describe('P2MSKH', () => {
     })
 
     it('should fail to create a 3 of 11 multisig', async () => {
-        const publicKeys = Array(11).fill('024964ca56207e80b55e21c4da143c20cde3649643f27dcf944e96f8b8265d773c').map(p => PublicKey.fromString(p))
+        const publicKeys = new Array(11).fill('024964ca56207e80b55e21c4da143c20cde3649643f27dcf944e96f8b8265d773c').map(p => PublicKey.fromString(p))
         const threshold = 3
         expect(() => new P2MSKH().lock(undefined, publicKeys, threshold)).toThrow('total must be less than or equal to 10')
     })

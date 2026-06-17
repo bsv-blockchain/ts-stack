@@ -176,16 +176,16 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       // Also mock decrypt calls to simulate a correct round-trip
       const decryptMock = underlying.decrypt
       decryptMock.mockResolvedValueOnce({
-        plaintext: Array.from(actionDescription).map(c => c.charCodeAt(0))
+        plaintext: Array.from(actionDescription).map(c => c.codePointAt(0))
       })
       decryptMock.mockResolvedValueOnce({
-        plaintext: Array.from(inputDesc).map(c => c.charCodeAt(0))
+        plaintext: Array.from(inputDesc).map(c => c.codePointAt(0))
       })
       decryptMock.mockResolvedValueOnce({
-        plaintext: Array.from(outputDesc).map(c => c.charCodeAt(0))
+        plaintext: Array.from(outputDesc).map(c => c.codePointAt(0))
       })
       decryptMock.mockResolvedValueOnce({
-        plaintext: Array.from(customInstr).map(c => c.charCodeAt(0))
+        plaintext: Array.from(customInstr).map(c => c.codePointAt(0))
       })
 
       const result = await (manager as any).listActions({}, 'nonadmin.com')
@@ -322,7 +322,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       const originalInstr = 'Please do not reveal this data.'
       // We'll mock decrypt() to interpret 'fake-encrypted-instructions-string' as a success
       ;(underlying.decrypt).mockResolvedValueOnce({
-        plaintext: Array.from(originalInstr).map(ch => ch.charCodeAt(0))
+        plaintext: Array.from(originalInstr).map(ch => ch.codePointAt(0))
       })
 
       const outputsResult = await manager.listOutputs(

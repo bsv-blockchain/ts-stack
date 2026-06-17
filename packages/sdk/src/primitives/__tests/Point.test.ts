@@ -40,7 +40,7 @@ describe('Point.fromJSON / fromDER / fromX curve validation (TOB-24)', () => {
   it('rejects invalid compressed points in fromDER', () => {
     // 0x02 is a valid compressed prefix, but x = 0 gives y^2 = 7,
     // which has no square root mod p on secp256k1 → invalid point.
-    const der = [0x02, ...Array(32).fill(0x00)]
+    const der = [0x02, ...new Array(32).fill(0x00)]
     expect(() => Point.fromDER(der)).toThrow(/Invalid point/)
     })
 

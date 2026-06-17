@@ -1174,27 +1174,27 @@ function makeTransaction (params: GenerateChangeSdkParams, results: GenerateChan
   const tx = new BsvTransaction()
   for (const i of params.fixedInputs) {
     tx.inputs.push({
-      unlockingScript: Script.fromBinary(Array(i.unlockingScriptLength).fill(0)),
+      unlockingScript: Script.fromBinary(new Array(i.unlockingScriptLength).fill(0)),
       sourceOutputIndex: 0,
       sourceTXID: '00'.repeat(32)
     })
   }
   for (const i of results.allocatedChangeInputs) {
     tx.inputs.push({
-      unlockingScript: Script.fromBinary(Array(params.changeUnlockingScriptLength).fill(0)),
+      unlockingScript: Script.fromBinary(new Array(params.changeUnlockingScriptLength).fill(0)),
       sourceOutputIndex: 0,
       sourceTXID: '00'.repeat(32)
     })
   }
   for (const o of params.fixedOutputs) {
     tx.outputs.push({
-      lockingScript: Script.fromBinary(Array(o.lockingScriptLength).fill(0)),
+      lockingScript: Script.fromBinary(new Array(o.lockingScriptLength).fill(0)),
       satoshis: o.satoshis
     })
   }
   for (const o of results.changeOutputs) {
     tx.outputs.push({
-      lockingScript: Script.fromBinary(Array(o.lockingScriptLength).fill(0)),
+      lockingScript: Script.fromBinary(new Array(o.lockingScriptLength).fill(0)),
       satoshis: o.satoshis
     })
   }

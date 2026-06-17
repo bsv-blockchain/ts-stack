@@ -261,8 +261,10 @@ function appendUtf8CodeUnit (msg: string, i: number, out: number[]): number {
 
 function utf8StringToArray (msg: string): number[] {
   const res: number[] = []
-  for (let i = 0; i < msg.length; i++) {
-    i = appendUtf8CodeUnit(msg, i, res)
+  let i = 0
+  while (i < msg.length) {
+    const lastConsumed = appendUtf8CodeUnit(msg, i, res)
+    i = lastConsumed + 1
   }
   return res
 }

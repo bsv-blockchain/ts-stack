@@ -9,10 +9,10 @@ TypeScript library for subscribing to Teranode P2P topics (blocks, subtrees, min
 - **Constructor**: `new TeranodeListener(topicCallbacks, config?)`
   - `topicCallbacks: Partial<Record<Topic, MessageCallback>>` — object mapping topic names to callbacks
   - `config?: TeranodeListenerConfig` — optional connection config (uses mainnet defaults if omitted)
-  - Auto-starts immediately on construction
-  
+  - Does not start automatically; call `await start()` after construction
+
 - **Methods**:
-  - `async start()` — start listener and connect to Teranode peers
+  - `async start()` — start listener and connect to Teranode peers (required after construction)
   - `async stop()` — cleanly shutdown listener
   - `addTopicCallback(topic, callback)` — dynamically add/subscribe to a topic
   - `removeTopicCallback(topic)` — unsubscribe from a topic
@@ -45,6 +45,7 @@ const listener = new TeranodeListener({
   'bitcoin/mainnet-subtree': subtreeCallback
 })
 
+await listener.start()
 console.log('Listener started, waiting for messages...')
 ```
 
@@ -76,6 +77,8 @@ const listener = new TeranodeListener(
     dhtProtocolID: '/custom-protocol'
   }
 )
+
+await listener.start()
 ```
 
 Dynamic topic subscription:
@@ -85,6 +88,8 @@ const listener = new TeranodeListener({
     console.log('Block:', data)
   }
 })
+
+await listener.start()
 
 // Later, add more topics
 listener.addTopicCallback('bitcoin/mainnet-subtree', (data, topic, from) => {

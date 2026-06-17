@@ -132,11 +132,12 @@ describe('createActionToGenerateBeefs test', () => {
   })
 
   test('3_test tranaction log', async () => {
-    for (const { activeStorage: storage } of ctxs) {
+    const ctx = ctxs[0]
+    if (ctx) {
+      const { activeStorage: storage } = ctx
       const txid: bsv.HexString = 'ed11e4b7402e38bac0ec7431063ae7c14ee82370e5f1963d48ae27a70527f784'
       const rl = await logTransaction(storage, txid)
       console.log(rl)
-      break
     }
   })
   test('4_abort set of nosend transactions', async () => {

@@ -93,7 +93,7 @@ function docsRouteFromMarkdownPath(relPath: string) {
 }
 
 function routeForMarkdownFile(file: string, suffix: string) {
-  const relPath = relative(DOCS_ROOT, file).replace(/\\/g, '/')
+  const relPath = relative(DOCS_ROOT, file).replaceAll('\\', '/')
   if (relPath.startsWith('../') || relPath === '..' || relPath.startsWith('/') || !relPath.endsWith('.md')) {
     return null
   }

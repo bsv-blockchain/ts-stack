@@ -29,6 +29,13 @@ const listener = new TeranodeListener({
   'bitcoin/mainnet-bestblock': bestBlockCallback
 });
 
+// The listener no longer starts on construction; start it explicitly.
+try {
+  await listener.start();
+} catch (err) {
+  console.error('Failed to start listener:', err);
+}
+
 console.log('✅ TeranodeListener created and starting...');
 console.log('📡 Connecting to Teranode mainnet...');
 console.log('⏳ Waiting for messages...');

@@ -8,13 +8,13 @@ const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
   if (msg === undefined) return []
 
   if (typeof msg !== 'string') {
-    return Array.from(msg, (item: any) => item | 0)
+    return Array.from(msg, (item: any) => Math.trunc(item))
   }
 
   switch (enc) {
     case 'hex': {
       const matches = msg.match(/.{1,2}/g)
-      return matches != null ? matches.map(byte => parseInt(byte, 16)) : []
+      return matches != null ? matches.map(byte => Number.parseInt(byte, 16)) : []
     }
     case 'base64':
       return Array.from(Buffer.from(msg, 'base64'))

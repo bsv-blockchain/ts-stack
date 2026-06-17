@@ -57,32 +57,32 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
 
       // Confirm the 1st call was the domain
       expect(underlying.encrypt.mock.calls[0][0].plaintext).toEqual(
-        expect.arrayContaining([...'some-app.com'].map(c => c.charCodeAt(0)))
+        expect.arrayContaining([...'some-app.com'].map(c => c.codePointAt(0)))
       )
 
       // Confirm the 2nd call was the expiry, as a string
       expect(underlying.encrypt.mock.calls[1][0].plaintext).toEqual(
-        expect.arrayContaining([...'1234567890'].map(c => c.charCodeAt(0)))
+        expect.arrayContaining([...'1234567890'].map(c => c.codePointAt(0)))
       )
 
       // 3rd => privileged? 'true'
       expect(underlying.encrypt.mock.calls[2][0].plaintext).toEqual(
-        expect.arrayContaining([...'true'].map(c => c.charCodeAt(0)))
+        expect.arrayContaining([...'true'].map(c => c.codePointAt(0)))
       )
 
       // 4th => security level => '2'
       expect(underlying.encrypt.mock.calls[3][0].plaintext).toEqual(
-        expect.arrayContaining([...'2'].map(c => c.charCodeAt(0)))
+        expect.arrayContaining([...'2'].map(c => c.codePointAt(0)))
       )
 
       // 5th => protoName => 'myProto'
       expect(underlying.encrypt.mock.calls[4][0].plaintext).toEqual(
-        expect.arrayContaining([...'myProto'].map(c => c.charCodeAt(0)))
+        expect.arrayContaining([...'myProto'].map(c => c.codePointAt(0)))
       )
 
       // 6th => counterparty => 'some-other-pubkey'
       expect(underlying.encrypt.mock.calls[5][0].plaintext).toEqual(
-        expect.arrayContaining([...'some-other-pubkey'].map(c => c.charCodeAt(0)))
+        expect.arrayContaining([...'some-other-pubkey'].map(c => c.codePointAt(0)))
       )
     })
 
@@ -128,7 +128,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
 
       // 5th encryption call is the fields JSON => ["name","dob"]
       const fifthCallPlaintext = underlying.encrypt.mock.calls[4][0].plaintext
-      const str = String.fromCharCode(...fifthCallPlaintext)
+      const str = String.fromCodePoint(...fifthCallPlaintext)
       expect(str).toContain('"name"')
       expect(str).toContain('"dob"')
     })
@@ -152,7 +152,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
 
       // The second encryption call is '10000'
       const secondPlaintext = underlying.encrypt.mock.calls[1][0].plaintext
-      const asString = String.fromCharCode(...secondPlaintext)
+      const asString = String.fromCodePoint(...secondPlaintext)
       expect(asString).toBe('10000')
     })
   })
@@ -444,7 +444,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       expect(underlying.encrypt).toHaveBeenCalledTimes(5)
       // The second call’s plaintext should be "50000"
       const secondPlaintext = underlying.encrypt.mock.calls[1][0].plaintext
-      const asStr = String.fromCharCode(...secondPlaintext)
+      const asStr = String.fromCodePoint(...secondPlaintext)
       expect(asStr).toBe('50000')
     })
   })

@@ -703,7 +703,7 @@ describe('Transaction', () => {
             sequence: 0xffffffff
           }
         ],
-        Array(21)
+        new Array(21)
           .fill(null)
           .map(() => ({
             lockingScript: p2pkh.lock(publicKeyHash),
@@ -1508,7 +1508,7 @@ describe('Transaction', () => {
 
             tx.addInput({
               sourceTXID: txid,
-              sourceOutputIndex: parseInt(voutStr),
+              sourceOutputIndex: Number.parseInt(voutStr),
               unlockingScript
             })
           }
@@ -1553,7 +1553,7 @@ describe('Transaction', () => {
         for (const [index, spend] of Object.entries(args.spends)) {
           tx.addInput({
             sourceTXID: '00'.repeat(32),
-            sourceOutputIndex: parseInt(index),
+            sourceOutputIndex: Number.parseInt(index),
             unlockingScript: Script.fromHex((spend as any).unlockingScript)
           })
         }

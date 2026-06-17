@@ -15,7 +15,7 @@ describe('Mnemonic – additional coverage', () => {
     })
 
     it('uses 128 bits when bits is NaN', () => {
-      const m = new Mnemonic().fromRandom(NaN)
+      const m = new Mnemonic().fromRandom(Number.NaN)
       expect(m.mnemonic.split(' ')).toHaveLength(12)
     })
 

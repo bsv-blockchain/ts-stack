@@ -648,13 +648,10 @@ describe('PrivilegedKeyManager', () => {
 
       // By default CHUNK_COUNT = 4
       // Typically each chunk would be 8 bytes (for a 32-byte key).
-      chunks.forEach((chunk: Uint8Array, i: number) => {
-        if (i < 3) {
-          expect(chunk.length).toBe(8)
-        } else {
-          // last chunk picks up leftover
-          expect(chunk.length).toBe(8)
-        }
+      chunks.forEach((chunk: Uint8Array) => {
+        // For a 32-byte key with CHUNK_COUNT = 4, every chunk (including the
+        // last one which picks up any leftover) is 8 bytes.
+        expect(chunk.length).toBe(8)
       })
 
       // Reassemble logic typically is done by reassembleKeyFromChunks,

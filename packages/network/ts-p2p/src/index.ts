@@ -68,15 +68,21 @@ export class TeranodeListener {
 
   /**
    * Creates a new TeranodeListener instance.
+   *
+   * The listener does not start automatically. Call {@link start} after
+   * construction to begin connecting and listening:
+   *
+   * ```ts
+   * const listener = new TeranodeListener(topicCallbacks)
+   * await listener.start()
+   * ```
+   *
    * @param topicCallbacks - Object mapping topic names to callback functions
    * @param config - Optional configuration (uses Teranode mainnet defaults)
    */
   constructor(topicCallbacks: TopicCallbacks, config: TeranodeListenerConfig = {}) {
     this.topicCallbacks = topicCallbacks;
     this.config = config;
-    
-    // Start the listener automatically
-    this.start().catch(console.error);
   }
 
   /**
