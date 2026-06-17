@@ -26,6 +26,15 @@ export function buildSignableTransaction (
 
   const { inputs: storageInputs, outputs: storageOutputs } = dctr
 
+  // SECURITY (GHSA-36f9-7rg5-cpf8): The locking scripts used to build and sign
+  // the transaction are taken from the storage response. When storage is remote
+  // (StorageClient, the default configuration), a malicious or compromised
+  // storage operator could return a different recipient script than the caller
+  // requested; it would be signed and broadcast while the calling app/UI still
+  // shows the originally requested recipient. Verify that every caller-specified
+  // output is echoed back by storage unchanged before anything is signed.
+  verifyRequestedOutputsUnchanged(storageOutputs, args)
+
   const tx = new Transaction(args.version, [], [], args.lockTime)
 
   // The order of outputs in storageOutputs is always:
@@ -160,6 +169,68 @@ export function buildSignableTransaction (
     amount,
     pdi: pendingStorageInputs,
     log: ''
+  }
+}
+
+/**
+ * Verify that the outputs returned by storage for caller-specified outputs match
+ * exactly what the caller requested in `args.outputs`.
+ *
+ * The storage response (`StorageCreateActionResult.outputs`) is ordered, by
+ * contract, as: the caller's `args.outputs` in their original order, followed by
+ * the optional commission output, followed by storage-provided change outputs.
+ * Only the `vout` field is randomized when `randomizeOutputs` is set; the array
+ * order is stable. Therefore array index `i` (for `i < args.outputs.length`)
+ * corresponds to `args.outputs[i]`.
+ *
+ * Because the locking script that is ultimately signed is taken from the storage
+ * response, an untrusted storage provider must not be allowed to alter the
+ * recipient script (or amount) of a caller-specified output. Any mismatch is a
+ * hard error. (GHSA-36f9-7rg5-cpf8)
+ *
+ * @throws WERR_INVALID_PARAMETER if storage omitted, reclassified, or modified
+ *   any caller-specified output.
+ */
+export function verifyRequestedOutputsUnchanged (
+  storageOutputs: StorageCreateTransactionSdkOutput[],
+  args: Validation.ValidCreateActionArgs
+): void {
+  for (let i = 0; i < args.outputs.length; i++) {
+    const requested = args.outputs[i]
+    const provided = storageOutputs[i]
+
+    if (provided == null) {
+      throw new WERR_INVALID_PARAMETER(
+        'storage outputs',
+        `present for every requested output. Storage did not return an output for requested output index ${i}.`
+      )
+    }
+
+    // A caller-specified output must never be reclassified by storage as change
+    // or as storage-provided; doing so would route it through makeChangeLock and
+    // bypass the script comparison below.
+    if (provided.purpose === 'change' || provided.providedBy === 'storage') {
+      throw new WERR_INVALID_PARAMETER(
+        'output.providedBy',
+        `consistent with the request. Storage reclassified requested output ${i} as providedBy='${provided.providedBy}' purpose='${provided.purpose ?? ''}'.`
+      )
+    }
+
+    const requestedScript = (requested.lockingScript ?? '').toLowerCase()
+    const providedScript = (typeof provided.lockingScript === 'string' ? provided.lockingScript : '').toLowerCase()
+    if (requestedScript.length === 0 || requestedScript !== providedScript) {
+      throw new WERR_INVALID_PARAMETER(
+        'output.lockingScript',
+        `equal to the caller-requested locking script. Storage returned a different locking script for output index ${i}; the recipient may have been substituted.`
+      )
+    }
+
+    if (provided.satoshis !== requested.satoshis) {
+      throw new WERR_INVALID_PARAMETER(
+        'output.satoshis',
+        `equal to the caller-requested satoshis. Storage returned ${provided.satoshis} for output index ${i}, caller requested ${requested.satoshis}.`
+      )
+    }
   }
 }
 
