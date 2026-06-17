@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "type": "module",
   "description": "BSV Blockchain Overlay Express",
   "main": "dist/cjs/mod.js",
@@ -70,10 +70,10 @@
   },
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.0.6",
-    "@bsv/overlay": "^2.0.3",
+    "@bsv/overlay": "^2.0.4",
     "@bsv/overlay-discovery-services": "^2.0.3",
-    "@bsv/sdk": "^2.1.4",
-    "@bsv/wallet-toolbox-client": "^2.1.28",
+    "@bsv/sdk": "^2.1.5",
+    "@bsv/wallet-toolbox-client": "^2.1.29",
     "body-parser": "^2.2.2",
     "chalk": "^5.6.2",
     "express": "^5.2.1",

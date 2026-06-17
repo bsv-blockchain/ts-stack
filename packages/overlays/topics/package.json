@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Canonical BSV overlay topic managers and lookup services",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,8 +18,8 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.0.3",
-    "@bsv/sdk": "^2.1.4",
+    "@bsv/overlay": "^2.0.4",
+    "@bsv/sdk": "^2.1.5",
     "mongodb": "^7.3.0"
   },
   "devDependencies": {

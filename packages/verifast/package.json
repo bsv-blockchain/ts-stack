@@ -1,11 +1,16 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Optional C++/WASM (BDK) transaction script-verification backend for @bsv/sdk",
   "main": "dist/mod.js",
   "types": "dist/mod.d.ts",
-  "files": ["dist", "src", "mod.ts", "README.md"],
+  "files": [
+    "dist",
+    "src",
+    "mod.ts",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "types": "./dist/mod.d.ts",
@@ -19,7 +24,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bsv/sdk": "^2.1.4"
+    "@bsv/sdk": "^2.1.5"
   },
   "devDependencies": {
     "@jest/globals": "^30.0.0",
