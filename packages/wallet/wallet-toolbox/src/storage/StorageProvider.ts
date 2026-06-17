@@ -80,7 +80,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   static defaultOptions (): { feeModel: StorageFeeModel, commissionSatoshis: number, commissionPubKeyHex: undefined } {
     const opts: { feeModel: StorageFeeModel, commissionSatoshis: number, commissionPubKeyHex: undefined } = {
-      feeModel: { model: 'sat/kb', value: 1 },
+      feeModel: { model: 'sat/kb', value: 100 },
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined
     }
@@ -955,7 +955,7 @@ export interface StorageProviderOptions extends StorageReaderWriterOptions {
 export function validateStorageFeeModel (v?: StorageFeeModel): StorageFeeModel {
   const r: StorageFeeModel = {
     model: 'sat/kb',
-    value: 1
+    value: 100
   }
   if (typeof v === 'object') {
     if (v.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('StorageFeeModel.model', '"sat/kb"')

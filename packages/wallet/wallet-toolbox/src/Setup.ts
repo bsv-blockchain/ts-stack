@@ -388,7 +388,7 @@ DEV_KEYS = '{
       knex: args.knex,
       commissionSatoshis: 0,
       commissionPubKeyHex: undefined,
-      feeModel: { model: 'sat/kb', value: 1 }
+      feeModel: { model: 'sat/kb', value: 100 }
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
     await storage.makeAvailable()
