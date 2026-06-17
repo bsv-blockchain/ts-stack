@@ -68,7 +68,7 @@ describe('desktop token validator logic', () => {
   })
 
   it('rejects unknown topic', () => {
-    const sessions = new Map<string, { desktopToken: string }>()
+    const sessions = new Map([['topic-1', { desktopToken: 'secret-abc' }]])
     const validator = (topic: string, token: string | null) =>
       sessions.has(topic) && token !== null && token === sessions.get(topic)!.desktopToken
 

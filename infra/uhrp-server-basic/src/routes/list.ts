@@ -65,7 +65,7 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
         : ''
 
       const expiryTime = expiryTimeTag
-        ? parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
+        ? Number.parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
         : 0
 
       if (Date.now() > expiryTime * 1000) {

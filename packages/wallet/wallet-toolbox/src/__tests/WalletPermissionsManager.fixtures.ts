@@ -156,9 +156,9 @@ export const MockUtils = {
       return arr
     } else if (encoding === 'base64') {
       const binaryStr = atob(str)
-      return Array.from(binaryStr, char => char.charCodeAt(0))
+      return Array.from(binaryStr, char => char.codePointAt(0))
     } else if (encoding === 'utf8') {
-      return Array.from(str, char => char.charCodeAt(0))
+      return Array.from(str, char => char.codePointAt(0))
     } else {
       throw new Error('Unsupported encoding: ' + encoding)
     }
@@ -166,12 +166,12 @@ export const MockUtils = {
 
   toUTF8: (arr: number[]) => {
     // Converts an array of numbers to a UTF-8 string.
-    return String.fromCharCode(...arr)
+    return String.fromCodePoint(...arr)
   },
 
   toBase64: (arr: number[]) => {
     // Converts an array of numbers to a Base64 string.
-    const binaryStr = String.fromCharCode(...arr)
+    const binaryStr = String.fromCodePoint(...arr)
     return btoa(binaryStr)
   }
 }

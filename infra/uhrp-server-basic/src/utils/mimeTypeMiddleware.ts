@@ -83,7 +83,7 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
       const expiryTag = output.tags.find(t => t.startsWith('expiry_time_'))
       
       if (contentTypeTag && expiryTag) {
-        const expiryTime = parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+        const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
         
         // Only consider non-expired advertisements
         if (expiryTime > Date.now() / 1000 && expiryTime > maxExpiry) {

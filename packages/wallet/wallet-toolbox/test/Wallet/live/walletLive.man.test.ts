@@ -274,7 +274,7 @@ describe('walletLive test', () => {
   test('6b run liveWallet Monitor once', async () => {
     const liveCtx = ctxs[0]
     await liveCtx.monitor.runOnce()
-    expect(1 === 1)
+    expect(true).toBe(true)
   })
 
   test('6c send a wallet payment from live to your own wallet', async () => {

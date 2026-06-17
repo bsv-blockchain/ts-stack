@@ -34,7 +34,7 @@ function makeMockTx(txid: string, outputs: any[] = [], inputs: any[] = []): MTx 
 
 function makeMockOutput(scriptHex?: string): TransactionOutput {
   const hex = scriptHex || '76a914' // Default to P2PKH prefix if no script provided
-  const scriptArray = hex.match(/.{2}/g)?.map(byte => parseInt(byte, 16)) || [0x76, 0xa9, 0x14]
+  const scriptArray = hex.match(/.{2}/g)?.map(byte => Number.parseInt(byte, 16)) || [0x76, 0xa9, 0x14]
 
   return {
     satoshis: 1,

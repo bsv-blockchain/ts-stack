@@ -860,9 +860,10 @@ describe('MessageBoxClient', () => {
       host: 'https://default.box'
     })
 
+    const DEFAULT_QUOTE_HEADERS: Record<string, string> = { 'x-bsv-auth-identity-key': 'delivery-agent' }
     const makeQuoteResponse = (
       body: unknown,
-      headers: Record<string, string> = { 'x-bsv-auth-identity-key': 'delivery-agent' }
+      headers: Record<string, string> = DEFAULT_QUOTE_HEADERS
     ): Response => new Response(JSON.stringify(body), { status: 200, headers })
 
     it('gets a single-recipient quote from the override host', async () => {

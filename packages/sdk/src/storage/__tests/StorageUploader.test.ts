@@ -376,7 +376,7 @@ describe('StorageUploader — multi-provider behavior', () => {
     })
 
     // All three quotes requested (up to 2 * resilienceLevel = 4 allowed, but we only have 3 hosts).
-    expect(quoteCalls.sort()).toEqual([
+    expect(quoteCalls.sort((a, b) => a.localeCompare(b))).toEqual([
       'https://a.example/quote',
       'https://b.example/quote',
       'https://c.example/quote'
@@ -611,7 +611,7 @@ describe('StorageUploader — multi-provider behavior', () => {
     })
 
     // Only the first batch of 4 quote requests should have been issued.
-    expect(quoteCalls.sort()).toEqual([
+    expect(quoteCalls.sort((a, b) => a.localeCompare(b))).toEqual([
       'https://h1.example/quote',
       'https://h2.example/quote',
       'https://h3.example/quote',
@@ -649,7 +649,7 @@ describe('StorageUploader — multi-provider behavior', () => {
       retentionPeriod: 60
     })
 
-    expect(quoteCalls.sort()).toEqual([
+    expect(quoteCalls.sort((a, b) => a.localeCompare(b))).toEqual([
       'https://h1.example/quote',
       'https://h2.example/quote',
       'https://h3.example/quote',
@@ -696,7 +696,7 @@ describe('StorageUploader — multi-provider behavior', () => {
 
     // First batch queried h1-h4 (4 hosts), second batch queried only h5
     // (1 host, the exact remainder). Hosts h6-h8 are never contacted.
-    expect(quoteCalls.sort()).toEqual([
+    expect(quoteCalls.sort((a, b) => a.localeCompare(b))).toEqual([
       'https://h1.example/quote',
       'https://h2.example/quote',
       'https://h3.example/quote',
@@ -763,7 +763,7 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
 
     const result = await uploader.findFile('uhrp://x')
 
-    expect(calls.sort()).toEqual([
+    expect(calls.sort((a, b) => a.localeCompare(b))).toEqual([
       'https://a.example/find?uhrpUrl=uhrp%3A%2F%2Fx',
       'https://b.example/find?uhrpUrl=uhrp%3A%2F%2Fx',
       'https://c.example/find?uhrpUrl=uhrp%3A%2F%2Fx'
@@ -843,7 +843,7 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     const listing = await uploader.listUploads()
     const byUrl = Object.fromEntries(listing.map((e: any) => [e.uhrpUrl, e]))
 
-    expect(Object.keys(byUrl).sort()).toEqual(['uhrp://one', 'uhrp://shared', 'uhrp://two'])
+    expect(Object.keys(byUrl).sort((a, b) => a.localeCompare(b))).toEqual(['uhrp://one', 'uhrp://shared', 'uhrp://two'])
     expect(byUrl['uhrp://shared'].expiryTime).toBe(300) // longest wins
     expect(byUrl['uhrp://shared'].hostedBy.sort()).toEqual(['https://a.example', 'https://b.example'])
     expect(byUrl['uhrp://one'].hostedBy).toEqual(['https://a.example'])
@@ -1026,7 +1026,7 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
       hostedBy: ['https://a.example', 'https://c.example']
     })
 
-    expect(calls.sort()).toEqual([
+    expect(calls.sort((a, b) => a.localeCompare(b))).toEqual([
       'https://a.example/renew',
       'https://c.example/renew'
     ])

@@ -80,15 +80,15 @@ class MockUser {
 
   getPrivateKeyFromReference (reference: string): PrivateKey {
     if (reference.startsWith('p2p-')) {
-      const p2pIndex = parseInt(reference.split('-')[1])
+      const p2pIndex = Number.parseInt(reference.split('-')[1])
       return this.getExtendedPrivateKey().derive(MockUser.P2P_PATH).deriveChild(p2pIndex).privKey
     }
     if (reference.startsWith('change-')) {
-      const changeIndex = parseInt(reference.split('-')[1])
+      const changeIndex = Number.parseInt(reference.split('-')[1])
       return this.getExtendedPrivateKey().derive(MockUser.CHANGE_PATH).deriveChild(changeIndex).privKey
     }
     if (reference.startsWith('start-')) {
-      const startIndex = parseInt(reference.split('-')[1])
+      const startIndex = Number.parseInt(reference.split('-')[1])
       return this.getExtendedPrivateKey().derive(MockUser.START_PATH).deriveChild(startIndex).privKey
     }
     throw new Error('Unknown reference type' + reference)

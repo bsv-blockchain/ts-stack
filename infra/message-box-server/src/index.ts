@@ -48,9 +48,9 @@ const parsedEnvPort = Number(process.env.HTTP_PORT)
 
 const HTTP_PORT: number = NODE_ENV !== 'development'
   ? 3000
-  : !isNaN(parsedPort) && parsedPort > 0
+  : !Number.isNaN(parsedPort) && parsedPort > 0
     ? parsedPort
-    : !isNaN(parsedEnvPort) && parsedEnvPort > 0
+    : !Number.isNaN(parsedEnvPort) && parsedEnvPort > 0
       ? parsedEnvPort
       : 8080
 
@@ -67,7 +67,8 @@ initializeFirebase()
 const http = createServer(app)
 
 // WebSocket setup (only if enabled)
-let io: AuthSocketServer | null = null
+// Held in a const container so the exported binding is never reassigned.
+const ioRef: { current: AuthSocketServer | null } = { current: null }
 
 /**
  * @function start
@@ -88,7 +89,7 @@ export const start = async (): Promise<void> => {
 
   if (ENABLE_WEBSOCKETS.toLowerCase() === 'true') {
     Logger.log('[WEBSOCKET] Initializing WebSocket support...')
-    io = new AuthSocketServer(http, {
+    ioRef.current = new AuthSocketServer(http, {
       wallet: await getWallet(),
       cors: {
         origin: '*',
@@ -99,7 +100,7 @@ export const start = async (): Promise<void> => {
     // Map to store authenticated identity keys
     const authenticatedSockets = new Map<string, string>()
 
-    io.on('connection', (socket) => {
+    ioRef.current.on('connection', (socket) => {
       Logger.log('[WEBSOCKET] New connection established.')
 
       // Handle immediate authentication if identityKey is available
@@ -270,9 +271,9 @@ export const start = async (): Promise<void> => {
               return
             }
 
-            if (io != null) {
+            if (ioRef.current != null) {
               Logger.log(`[WEBSOCKET] Emitting message to room ${roomId}`)
-              io.emit(`sendMessage-${roomId}`, {
+              ioRef.current.emit(`sendMessage-${roomId}`, {
                 sender: authenticatedSockets.get(socket.id),
                 messageId: message.messageId,
                 body: message.body
@@ -331,8 +332,9 @@ export const start = async (): Promise<void> => {
   }
 }
 
-// Export for testing and CLI use
-export { io, http, HTTP_PORT, ROUTING_PREFIX }
+// Export for testing and CLI use.
+// `ioRef` is a const container; the live WebSocket server is at `ioRef.current`.
+export { ioRef as io, http, HTTP_PORT, ROUTING_PREFIX }
 
 // Only run server if not in test mode
 if (NODE_ENV !== 'test') {

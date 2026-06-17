@@ -65,18 +65,34 @@ export class TeranodeListener {
   private readonly topicCallbacks: TopicCallbacks;
   private readonly config: TeranodeListenerConfig;
   private reconnectionInterval?: NodeJS.Timeout;
+  private readonly startupPromise: Promise<void>;
 
   /**
    * Creates a new TeranodeListener instance.
+   *
+   * Startup is kicked off automatically on construction. The resulting promise
+   * is tracked internally (and exposed via {@link ready}) rather than being
+   * launched as an unhandled async call inside the constructor body.
+   *
    * @param topicCallbacks - Object mapping topic names to callback functions
    * @param config - Optional configuration (uses Teranode mainnet defaults)
    */
   constructor(topicCallbacks: TopicCallbacks, config: TeranodeListenerConfig = {}) {
     this.topicCallbacks = topicCallbacks;
     this.config = config;
-    
-    // Start the listener automatically
-    this.start().catch(console.error);
+
+    // Start the listener automatically, tracking the promise instead of
+    // firing an unhandled async call from the constructor.
+    this.startupPromise = this.start();
+    this.startupPromise.catch(console.error);
+  }
+
+  /**
+   * Resolves once the automatic startup initiated by the constructor has
+   * completed. Rejects if startup failed.
+   */
+  async ready(): Promise<void> {
+    return this.startupPromise;
   }
 
   /**

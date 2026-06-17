@@ -6,7 +6,7 @@ const connectionConfig = {
     password: process.env.DB_PASS!,
     database: process.env.DB_NAME!,
     host: process.env.DB_HOST!,
-    port: parseInt(process.env.DB_PORT!),
+    port: Number.parseInt(process.env.DB_PORT!),
 };
 
 const config: { [key: string]: Knex.Config } = {

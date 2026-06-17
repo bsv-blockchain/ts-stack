@@ -65,7 +65,7 @@ const MOCK_TIMESTAMP_TAG = `btms_timestamp_${new Date('2026-01-15T00:00:00.000Z'
 // Helper to create mock atomic BEEF (simplified for testing)
 function createMockAtomicBEEF (txid: string): number[] {
   // This is a simplified mock - real BEEF would be more complex
-  return Array(100).fill(0)
+  return new Array(100).fill(0)
 }
 
 // Create a mock wallet for testing
@@ -913,7 +913,7 @@ describe('BTMS', () => {
     it('should handle many small UTXOs', () => {
       // UTXOs: 10 x 10 gold = 100 total - need 55
       // Greedy: all same size, selects first 6 (60 >= 55)
-      const utxos = createMockUTXOs(Array(10).fill(10))
+      const utxos = createMockUTXOs(new Array(10).fill(10))
       const result = BTMS.selectUTXOs(utxos, 55)
 
       expect(result.selected.length).toBe(6)

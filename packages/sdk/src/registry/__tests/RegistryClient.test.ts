@@ -82,11 +82,11 @@ jest.mock('../../primitives/index.js', () => {
   return {
     Utils: {
       toArray: jest.fn().mockImplementation((str: string) =>
-        Array.from(str).map((c) => c.charCodeAt(0))
+        Array.from(str).map((c) => c.codePointAt(0))
       ),
       toUTF8: jest.fn().mockImplementation((arr: number[] | string) => {
         if (Array.isArray(arr)) {
-          return arr.map((n) => String.fromCharCode(n)).join('')
+          return arr.map((n) => String.fromCodePoint(n)).join('')
         }
         return arr
       })

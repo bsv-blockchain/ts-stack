@@ -34,36 +34,28 @@ describe('DRBG', () => {
       const entropy = new Array(31).fill(0x01)
       const nonce = new Array(32).fill(0x02)
 
-      expect(() => {
-        new DRBG(entropy, nonce)
-      }).toThrow('Entropy must be exactly 32 bytes (256 bits)')
+      expect(() => new DRBG(entropy, nonce)).toThrow('Entropy must be exactly 32 bytes (256 bits)')
     })
 
     it('throws if entropy is longer than 32 bytes', () => {
       const entropy = new Array(33).fill(0x01)
       const nonce = new Array(32).fill(0x02)
 
-      expect(() => {
-        new DRBG(entropy, nonce)
-      }).toThrow('Entropy must be exactly 32 bytes (256 bits)')
+      expect(() => new DRBG(entropy, nonce)).toThrow('Entropy must be exactly 32 bytes (256 bits)')
     })
 
     it('throws if nonce is shorter than 32 bytes', () => {
       const entropy = new Array(32).fill(0x01)
       const nonce = new Array(31).fill(0x02)
 
-      expect(() => {
-        new DRBG(entropy, nonce)
-      }).toThrow('Nonce must be exactly 32 bytes (256 bits)')
+      expect(() => new DRBG(entropy, nonce)).toThrow('Nonce must be exactly 32 bytes (256 bits)')
     })
 
     it('throws if nonce is longer than 32 bytes', () => {
       const entropy = new Array(32).fill(0x01)
       const nonce = new Array(33).fill(0x02)
 
-      expect(() => {
-        new DRBG(entropy, nonce)
-      }).toThrow('Nonce must be exactly 32 bytes (256 bits)')
+      expect(() => new DRBG(entropy, nonce)).toThrow('Nonce must be exactly 32 bytes (256 bits)')
     })
 
     it('accepts both hex strings and number[] inputs equivalently', () => {

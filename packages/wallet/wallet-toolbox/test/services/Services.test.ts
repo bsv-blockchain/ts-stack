@@ -164,13 +164,9 @@ describe('Wallet services tests', () => {
           undefined,
           'e4154d8ab6993addc9b8705318cc8e971dfc0780e233038ecf44c601229d93ce.1'
         )
-        if (chain === 'main') {
-          expect(us.status).toBe('success')
-          expect(us.isUtxo).toBe(false)
-        } else {
-          expect(us.status).toBe('success')
-          expect(us.isUtxo).toBe(false)
-        }
+        // Behavior is identical for both chains for this invalid outpoint.
+        expect(us.status).toBe('success')
+        expect(us.isUtxo).toBe(false)
       }
     }
   })

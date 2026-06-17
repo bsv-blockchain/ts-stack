@@ -52,7 +52,7 @@ describe('BN.js/Constructor', () => {
     it('should accept base-16 with spaces', () => {
       const num = 'a89c e5af8724 c0a23e0e 0ff77500'
       expect(new BigNumber(num, 16).toString(16)).toEqual(
-        num.replace(/ /g, '')
+        num.replaceAll(' ', '')
       )
     })
 

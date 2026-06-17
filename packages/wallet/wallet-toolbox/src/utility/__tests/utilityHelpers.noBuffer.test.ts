@@ -58,7 +58,7 @@ describe('utilityHelpers.noBuffer tests', () => {
     {
       const r = asUint8Array(a)
       expect(r.length).toBe(4)
-      expect(r.every((v, i) => v === parseInt(a.slice(i * 2, i * 2 + 2), 16))).toBe(true)
+      expect(r.every((v, i) => v === Number.parseInt(a.slice(i * 2, i * 2 + 2), 16))).toBe(true)
     }
     {
       const r = asString(a)

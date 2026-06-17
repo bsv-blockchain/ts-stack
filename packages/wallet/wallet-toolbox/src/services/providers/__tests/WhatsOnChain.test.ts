@@ -96,12 +96,7 @@ describe('whatsonchain tests', () => {
   })
 
   test('5 getTxPropagation testnet', async () => {
-    return
     // throwing internal server error 500 when tested.
-    const count = await wocTest.getTxPropagation('7e5b797b86abd31a654bf296900d6cb14d04ef0811568ff4675494af2d92166b')
-    expect(count > 0)
-
-    expect((await wocTest.getTxPropagation('1'.repeat(64))) === 0)
   })
 
   test('6 getTxPropagation mainnet', async () => {})

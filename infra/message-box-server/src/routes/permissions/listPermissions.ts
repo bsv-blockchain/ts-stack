@@ -137,12 +137,12 @@ export default {
       // Parse and validate query parameters
       const { messageBox, limit: limitStr, offset: offsetStr, createdAtOrder } = req.query
 
-      const limit = limitStr != null ? parseInt(limitStr, 10) : 100
-      const offset = offsetStr != null ? parseInt(offsetStr, 10) : 0
+      const limit = limitStr != null ? Number.parseInt(limitStr, 10) : 100
+      const offset = offsetStr != null ? Number.parseInt(offsetStr, 10) : 0
       const sortOrder = createdAtOrder === 'asc' ? 'asc' : 'desc' // Default to 'desc'
 
       // Validate pagination parameters
-      if (isNaN(limit) || limit < 1 || limit > 1000) {
+      if (Number.isNaN(limit) || limit < 1 || limit > 1000) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_LIMIT',
@@ -150,7 +150,7 @@ export default {
         })
       }
 
-      if (isNaN(offset) || offset < 0) {
+      if (Number.isNaN(offset) || offset < 0) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_OFFSET',
@@ -187,7 +187,7 @@ export default {
       // Get total count for pagination info (before applying limit/offset)
       const countQuery = query.clone().clearSelect().clearOrder().count('* as count')
       const [{ count: totalCount }] = await countQuery
-      const total = parseInt(String(totalCount), 10)
+      const total = Number.parseInt(String(totalCount), 10)
 
       // Apply pagination
       const permissions = await query

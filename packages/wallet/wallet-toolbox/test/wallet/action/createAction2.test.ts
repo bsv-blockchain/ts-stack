@@ -416,7 +416,9 @@ describe('createAction2 nosend transactions', () => {
       const BeefPartyTxids = fundingBeef.txs.map(tx => tx.txid)
       const expectedTxids = ['tx123', 'tx456']
       if (spendingArgs.options?.knownTxids) {
-        expect(spendingArgs.options!.knownTxids?.sort()).toEqual(expectedTxids.sort())
+        expect(spendingArgs.options!.knownTxids?.sort((a, b) => a.localeCompare(b))).toEqual(
+        expectedTxids.sort((a, b) => a.localeCompare(b))
+      )
       }
     }
   })
@@ -461,7 +463,9 @@ describe('createAction2 nosend transactions', () => {
       expect(fundingBeef).toBeDefined()
       const partyBeefTxids = fundingBeef.txs.map(tx => tx.txid)
       const expectedTxids = ['tx123', 'tx456']
-      expect(spendingArgs.options!.knownTxids?.sort()).toEqual(expectedTxids.sort())
+      expect(spendingArgs.options!.knownTxids?.sort((a, b) => a.localeCompare(b))).toEqual(
+        expectedTxids.sort((a, b) => a.localeCompare(b))
+      )
       const additionalSpendArgs: CreateActionArgs = {
         description: 'Extra spend transaction',
         outputs: [
@@ -484,7 +488,9 @@ describe('createAction2 nosend transactions', () => {
       expect(finalBeef).toBeDefined()
       const finalPartyBeefTxids = finalBeef.txs.map(tx => tx.txid)
       const finalExpectedTxids = [...expectedTxids]
-      expect(additionalSpendArgs.options!.knownTxids?.sort()).toEqual(finalExpectedTxids.sort())
+      expect(additionalSpendArgs.options!.knownTxids?.sort((a, b) => a.localeCompare(b))).toEqual(
+        finalExpectedTxids.sort((a, b) => a.localeCompare(b))
+      )
     }
   })
 

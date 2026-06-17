@@ -22,7 +22,7 @@ const { PrivateKey, ProtoWallet, ECIES: ECIESCompat } = await import(
 // ---------------------------------------------------------------------------
 function hexToBytes(hex) {
   const bytes = []
-  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16))
+  for (let i = 0; i < hex.length; i += 2) bytes.push(Number.parseInt(hex.slice(i, i + 2), 16))
   return bytes
 }
 

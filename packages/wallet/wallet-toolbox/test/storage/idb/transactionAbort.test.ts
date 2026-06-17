@@ -93,7 +93,6 @@ describe('idb transactionAbort tests', () => {
           const r12 = await _tu.insertTestProvenTx(storage, '12'.repeat(32), tx)
           const r23 = await _tu.insertTestProvenTx(storage, '23'.repeat(32), tx)
           throw new Error('Test error')
-          return [r12.provenTxId, r23.provenTxId]
         })
         expect(r).toEqual([1, 2])
       } catch (e) {

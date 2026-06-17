@@ -85,13 +85,12 @@ export default function SearchBox() {
         onChange={e => { setQuery(e.target.value); setOpen(true) }}
         onFocus={() => { setOpen(true); loadPagefind() }}
         aria-label="Search documentation"
-        aria-expanded={open && results.length > 0}
       />
       <kbd className={styles.kbd}>⌘K</kbd>
       {open && results.length > 0 && (
         <ul className={styles.dropdown} role="listbox">
           {results.map(r => (
-            <li key={r.url} role="option">
+            <li key={r.url} role="option" aria-selected={false}>
               <a
                 className={styles.result}
                 href={r.url}

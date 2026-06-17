@@ -18,8 +18,8 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
     throw new Error('PRICE_PER_GB_MO is undefined')
   }
 
-  const pricePerGBMonth = parseFloat(PRICE_PER_GB_MO)
-  if (isNaN(pricePerGBMonth)) {
+  const pricePerGBMonth = Number.parseFloat(PRICE_PER_GB_MO)
+  if (Number.isNaN(pricePerGBMonth)) {
     throw new Error('PRICE_PER_GB_MO must be a valid number')
   }
 
@@ -38,7 +38,7 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
     const { data } = await axios.get(
       'https://api.whatsonchain.com/v1/bsv/main/exchangerate'
     )
-    if (typeof data !== 'object' || isNaN(data.rate)) {
+    if (typeof data !== 'object' || Number.isNaN(Number(data.rate))) {
       throw new Error('Invalid rate response')
     }
     exchangeRate = data.rate
