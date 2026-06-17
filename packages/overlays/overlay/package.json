@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "type": "module",
   "description": "BSV Blockchain Overlay Services Engine",
   "main": "dist/cjs/mod.js",
@@ -75,8 +75,8 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@bsv/gasp": "^1.2.3",
-    "@bsv/sdk": "^2.1.4",
+    "@bsv/gasp": "^1.2.4",
+    "@bsv/sdk": "^2.1.5",
     "knex": "^3.2.10"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "chaintracks-server",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "TypeScript Express server wrapping ChaintracksService from @bsv/wallet-toolbox",
   "main": "dist/server.js",
   "type": "commonjs",
@@ -26,7 +26,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@bsv/wallet-toolbox": "^2.1.28",
+    "@bsv/wallet-toolbox": "^2.1.29",
     "body-parser": "^2.2.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
