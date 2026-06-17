@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { PrivateKey } from '@bsv/sdk'
 import { Setup } from '../../Setup'
 import { SetupClient } from '../../SetupClient'
