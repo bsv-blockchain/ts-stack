@@ -27,12 +27,12 @@ describe('StorageIdb tests', () => {
   test('reviewStatus releases outputs reserved by failed transactions', async () => {
     const storage = await makeStorage()
     try {
-      const { userId, basketId, holderTxId } = await seedSpendableOutputHeldByFailedTx(storage)
+      const { userId, basketId, outputId } = await seedSpendableOutputHeldByFailedTx(storage)
 
       const review = await storage.reviewStatus({ agedLimit: new Date(0) })
       const outputs = await storage.findOutputs({ partial: { userId, basketId }, noScript: true })
 
-      expect(review.log).toContain(`released from failed transaction ${holderTxId}`)
+      expect(review.log).toContain(`output ${outputId} updated to spendable because spentBy is failed`)
       expect(outputs).toHaveLength(1)
       expect(outputs[0].spendable).toBe(true)
       expect(outputs[0].spentBy).toBeUndefined()
