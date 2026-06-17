@@ -30,7 +30,11 @@ const listener = new TeranodeListener({
 });
 
 // The listener no longer starts on construction; start it explicitly.
-listener.start().catch((err) => console.error('Failed to start listener:', err));
+try {
+  await listener.start();
+} catch (err) {
+  console.error('Failed to start listener:', err);
+}
 
 console.log('✅ TeranodeListener created and starting...');
 console.log('📡 Connecting to Teranode mainnet...');
