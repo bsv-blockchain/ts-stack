@@ -153,7 +153,7 @@ describe('Wallet services tests', () => {
   })
 
   test('0e getUtxoStatus invalid outpoint', async () => {
-    for (const { chain, wallet, services } of ctxs) {
+    for (const { wallet, services } of ctxs) {
       if (!wallet.services || !services) throw new sdk.WERR_INTERNAL('test requires setup with services')
       {
         const script =

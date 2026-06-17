@@ -271,16 +271,16 @@ export const start = async (): Promise<void> => {
               return
             }
 
-            if (ioRef.current != null) {
-              Logger.log(`[WEBSOCKET] Emitting message to room ${roomId}`)
-              ioRef.current.emit(`sendMessage-${roomId}`, {
-                sender: authenticatedSockets.get(socket.id),
-                messageId: message.messageId,
-                body: message.body
-              })
-            } else {
+            if (ioRef.current === null) {
               Logger.error('[WEBSOCKET ERROR] io is null, cannot emit message.')
+              return
             }
+            Logger.log(`[WEBSOCKET] Emitting message to room ${roomId}`)
+            ioRef.current.emit(`sendMessage-${roomId}`, {
+              sender: authenticatedSockets.get(socket.id),
+              messageId: message.messageId,
+              body: message.body
+            })
           } catch (error) {
             Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler:', error)
             await socket.emit('messageFailed', { reason: 'Unexpected error occurred' })
