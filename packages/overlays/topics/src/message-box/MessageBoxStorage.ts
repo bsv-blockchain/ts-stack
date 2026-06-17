@@ -30,7 +30,7 @@ export class MessageBoxStorage {
    *
    * @param db - An initialized MongoDB `Db` instance.
    */
-  constructor(db: Db) {
+  constructor (db: Db) {
     this.adsCollection = db.collection('messagebox_advertisement')
   }
 
@@ -42,7 +42,7 @@ export class MessageBoxStorage {
    * @param txid - The transaction ID containing the advertisement.
    * @param outputIndex - The index of the output containing the ad in the transaction.
    */
-  async storeRecord(
+  async storeRecord (
     identityKey: string,
     host: string,
     txid: string,
@@ -63,7 +63,7 @@ export class MessageBoxStorage {
    * @param txid - The transaction ID of the ad.
    * @param outputIndex - The index of the ad output to delete.
    */
-  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
     await this.adsCollection.deleteOne({ txid, outputIndex })
   }
 
@@ -75,7 +75,7 @@ export class MessageBoxStorage {
   * @param host - The host to filter by (optional).
   * @returns An array of LookupFormula objects ordered by createdAt desc.
   */
-  async findAdvertisements(identityKey: string, host?: string): Promise<LookupFormula> {
+  async findAdvertisements (identityKey: string, host?: string): Promise<LookupFormula> {
     const filter: MessageBoxQuery = { identityKey }
     if (host !== undefined) {
       filter.host = host
@@ -84,7 +84,7 @@ export class MessageBoxStorage {
     const cursor = this.adsCollection
       .find(filter)
       .project({ txid: 1, outputIndex: 1 })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
 
     const results = await cursor.toArray()
     return results.map(doc => ({
@@ -98,7 +98,7 @@ export class MessageBoxStorage {
    *
    * @returns An array of LookupFormula objects ordered by createdAt desc.
    */
-  async findAll(): Promise<LookupFormula> {
+  async findAll (): Promise<LookupFormula> {
     const cursor = this.adsCollection
       .find({})
       .project({ txid: 1, outputIndex: 1 })
@@ -117,7 +117,7 @@ export class MessageBoxStorage {
    * @param limit - Maximum number of records to return (default: 10).
    * @returns An array of LookupFormula objects ordered by createdAt desc.
    */
-  async findRecent(limit = 10): Promise<LookupFormula> {
+  async findRecent (limit = 10): Promise<LookupFormula> {
     const cursor = this.adsCollection
       .find({})
       .project({ txid: 1, outputIndex: 1 })
@@ -131,4 +131,3 @@ export class MessageBoxStorage {
     }))
   }
 }
-

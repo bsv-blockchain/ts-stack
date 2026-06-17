@@ -4253,6 +4253,7 @@ export class WalletPermissionsManager implements WalletInterface {
         protocolID: requestArgs.protocolID,
         counterparty: requestArgs.counterparty || 'self',
         reason: requestArgs.privilegedReason,
+        seekPermission: requestArgs.seekPermission,
         usageType: 'publicKey'
       })
     }
@@ -4265,6 +4266,7 @@ export class WalletPermissionsManager implements WalletInterface {
         protocolID: [1, 'identity key retrieval'],
         counterparty: 'self',
         reason: requestArgs.privilegedReason,
+        seekPermission: requestArgs.seekPermission,
         usageType: 'identityKey'
       })
     }

@@ -35,11 +35,13 @@
  */
 
 import { expect } from '@jest/globals'
+import { createHash } from 'node:crypto'
 
 export const categories: ReadonlyArray<string> = [
   'gasp-protocol',
   'brc40-user-state',
-  'chaintracks-v2-http'
+  'chaintracks-v2-http',
+  'brc136-basm'
 ]
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ const GASP_CURRENT_VERSION = 1
 
 /** txid pattern: exactly 64 hex characters (upper or lower). */
 const TXID_RE = /^[0-9a-fA-F]{64}$/
+const ZERO_HASH = '0000000000000000000000000000000000000000000000000000000000000000'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -787,6 +790,123 @@ function dispatchChaintracksV2 (
   }
 }
 
+// ── BRC-136 BASM ──────────────────────────────────────────────────────────────
+
+function sha256d(buffer: Buffer): Buffer {
+  const first = createHash('sha256').update(buffer).digest()
+  return createHash('sha256').update(first).digest()
+}
+
+function displayToInternal(hash: string): Buffer {
+  expect(TXID_RE.test(hash)).toBe(true)
+  return Buffer.from(hash, 'hex').reverse()
+}
+
+function internalToDisplay(hash: Buffer): string {
+  return Buffer.from(hash).reverse().toString('hex')
+}
+
+function computeBasmRootForVector(txids: string[]): string {
+  if (txids.length === 0) return ZERO_HASH
+  let layer = txids.map(displayToInternal)
+  if (layer.length === 1) return internalToDisplay(layer[0])
+  while (layer.length > 1) {
+    const next: Buffer[] = []
+    for (let i = 0; i < layer.length; i += 2) {
+      const right = i + 1 < layer.length ? layer[i + 1] : layer[i]
+      next.push(sha256d(Buffer.concat([layer[i], right])))
+    }
+    layer = next
+  }
+  return internalToDisplay(layer[0])
+}
+
+function computeTacForVector(prevTac: string, blockHash: string, basmRoot: string): string {
+  return internalToDisplay(sha256d(Buffer.concat([
+    displayToInternal(prevTac),
+    displayToInternal(blockHash),
+    displayToInternal(basmRoot)
+  ])))
+}
+
+function dispatchBRC136HTTP(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const method = getString(input, 'method')
+  const path = getString(input, 'path')
+  const headers = (input['headers'] ?? {}) as Record<string, string>
+  const expectedStatus = getNumber(expected, 'status')
+
+  expect(method).toBe('POST')
+  expect(path.startsWith('/request')).toBe(true)
+  const requiresTopic = path !== '/requestRawTransactions'
+  if (requiresTopic) {
+    const hasTopic = Object.keys(headers).some(k => k.toLowerCase() === 'x-bsv-topic')
+    expect(hasTopic).toBe(expectedStatus < 400)
+  }
+
+  if (expectedStatus >= 400) {
+    const body = expected['body']
+    expect(body !== undefined).toBe(true)
+    assertErrorEnvelope(body as Record<string, unknown>)
+    return
+  }
+
+  if (expected['body'] !== undefined) {
+    const body = expected['body'] as Record<string, unknown>
+    if (path === '/requestTopicAnchorTip') {
+      expect(typeof body['topic']).toBe('string')
+      expect(typeof body['blockHeight']).toBe('number')
+      expect(typeof body['tac']).toBe('string')
+      expect(TXID_RE.test(body['tac'] as string)).toBe(true)
+    }
+  }
+}
+
+function dispatchBRC136(input: Record<string, unknown>, expected: Record<string, unknown>): void {
+  const method = getString(input, 'method')
+  if (method !== '') {
+    dispatchBRC136HTTP(input, expected)
+    return
+  }
+
+  const channel = getString(input, 'channel')
+  if (channel === 'basm/root') {
+    const cases = input['cases'] as Array<{ name: string, txids: string[] }>
+    const roots = (expected['roots'] ?? {}) as Record<string, string>
+    for (const testCase of cases) {
+      expect(computeBasmRootForVector(testCase.txids)).toBe(roots[testCase.name])
+    }
+    return
+  }
+
+  if (channel === 'basm/tac') {
+    expect(computeTacForVector(
+      getString(input, 'prevTac'),
+      getString(input, 'blockHash'),
+      getString(input, 'basmRoot')
+    )).toBe(expected['tac'])
+    return
+  }
+
+  if (channel === 'basm/rawTransactions') {
+    const msg = (input['message'] ?? {}) as Record<string, unknown>
+    expect(Array.isArray(msg['transactions'])).toBe(true)
+    for (const record of msg['transactions'] as unknown[]) {
+      expect(typeof record).toBe('object')
+      expect(record).not.toBeNull()
+      const tx = record as Record<string, unknown>
+      expect(typeof tx['txid']).toBe('string')
+      expect(TXID_RE.test(tx['txid'] as string)).toBe(true)
+      expect(typeof tx['rawTx']).toBe('string')
+      expect(/^[0-9a-fA-F]+$/.test(tx['rawTx'] as string)).toBe(true)
+    }
+    expect(Array.isArray(msg['missing'])).toBe(true)
+    expect(expected['valid']).toBe(true)
+    return
+  }
+
+  throw new Error(`sync dispatcher: unknown BRC-136 BASM channel '${channel}'`)
+}
+
 // ── Main dispatch entry point ──────────────────────────────────────────────────
 
 export function dispatch (
@@ -800,6 +920,10 @@ export function dispatch (
   }
   if (category === 'chaintracks-v2-http') {
     dispatchChaintracksV2(input, expected)
+    return
+  }
+  if (category === 'brc136-basm') {
+    dispatchBRC136(input, expected)
     return
   }
   if (category !== 'gasp-protocol') {

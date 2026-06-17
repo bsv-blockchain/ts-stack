@@ -8,9 +8,9 @@ class BasketMapLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
-  constructor(public storageManager: BasketMapStorageManager) { }
+  constructor (public storageManager: BasketMapStorageManager) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== 'tm_basketmap') return
@@ -26,18 +26,18 @@ class BasketMapLookupService implements LookupService {
     await this.storageManager.storeRecord(txid, outputIndex, registration)
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_basketmap') return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number) {
+  async outputEvicted (txid: string, outputIndex: number) {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided!')
     }
@@ -56,11 +56,11 @@ class BasketMapLookupService implements LookupService {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'BasketMap Lookup Service: resolve basket names and IDs registered by registry operators.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -74,5 +74,5 @@ class BasketMapLookupService implements LookupService {
   }
 }
 
-function create(db: Db): BasketMapLookupService { return new BasketMapLookupService(new BasketMapStorageManager(db)) }
+function create (db: Db): BasketMapLookupService { return new BasketMapLookupService(new BasketMapStorageManager(db)) }
 export default create

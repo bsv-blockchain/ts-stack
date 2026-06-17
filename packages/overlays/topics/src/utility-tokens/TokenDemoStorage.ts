@@ -5,11 +5,11 @@ export class TokenDemoStorage {
   private readonly records: Collection<TokenDemoRecord>
   private indexInit?: Promise<void>
 
-  constructor(private readonly db: Db) {
+  constructor (private readonly db: Db) {
     this.records = db.collection<TokenDemoRecord>('TokenDemoRecords')
   }
 
-  private ensureIndexes(): Promise<void> {
+  private async ensureIndexes (): Promise<void> {
     if (this.indexInit === undefined) {
       this.indexInit = (async () => {
         await Promise.all([
@@ -18,33 +18,33 @@ export class TokenDemoStorage {
         ])
       })()
     }
-    return this.indexInit
+    return await this.indexInit
   }
 
-  async storeRecord(txid: string, outputIndex: number, details: TokenDemoDetails): Promise<void> {
+  async storeRecord (txid: string, outputIndex: number, details: TokenDemoDetails): Promise<void> {
     await this.ensureIndexes()
     await this.records.insertOne({ txid, outputIndex, ...details, createdAt: new Date() })
   }
 
-  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async findByOutpoint(outpoint: string): Promise<UTXOReference[]> {
+  async findByOutpoint (outpoint: string): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     const [txid, outputIndex] = outpoint.split('.')
-    return this.records
+    return await this.records
       .find({ txid, outputIndex: Number(outputIndex) }, { projection: { txid: 1, outputIndex: 1 } })
       .toArray()
       .then(results => results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex })))
   }
 
-  async findByTokenId(tokenId: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findByTokenId (tokenId: string, limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     if (!tokenId) return []
     const direction = sortOrder === 'asc' ? 1 : -1
-    return this.records
+    return await this.records
       .find({ tokenId }, { projection: { txid: 1, outputIndex: 1, createdAt: 1 } })
       .sort({ createdAt: direction })
       .skip(skip)
@@ -53,10 +53,10 @@ export class TokenDemoStorage {
       .then(results => results.map(r => ({ txid: r.txid, outputIndex: r.outputIndex })))
   }
 
-  async findAll(limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
+  async findAll (limit = 50, skip = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<UTXOReference[]> {
     await this.ensureIndexes()
     const direction = sortOrder === 'asc' ? 1 : -1
-    return this.records
+    return await this.records
       .find({}, { projection: { txid: 1, outputIndex: 1, createdAt: 1 } })
       .sort({ createdAt: direction })
       .skip(skip)

@@ -2,6 +2,10 @@ import { _tu, TestSetup1 } from '../../utils/TestUtilsWalletStorage'
 import { sdk, StorageProvider, StorageProviderOptions, verifyOne } from '../../../src/index.client'
 import { normalizeDate, setLogging, updateTable, verifyValues } from '../../utils/TestUtilsWalletStorage'
 import {
+  expectFailedTransactionOutputStateRepaired,
+  seedFailedTransactionOutputState
+} from '../failedTransactionOutputHelpers'
+import {
   TableProvenTx,
   TableProvenTxReq,
   TableUser,
@@ -994,6 +998,18 @@ describe('idb update tests', () => {
           expect(actualValue).toStrictEqual(value)
         }
       }
+    }
+  })
+
+  test('16_updateTransactionStatus failed releases inputs and neutralizes generated outputs', async () => {
+    for (const { storage } of setups) {
+      const state = await seedFailedTransactionOutputState(storage, 'unsigned')
+
+      await storage.updateTransactionStatus('failed', state.failedTx.transactionId)
+      await expectFailedTransactionOutputStateRepaired(storage, state)
+
+      const txAfter = verifyOne(await storage.findTransactions({ partial: { transactionId: state.failedTx.transactionId } }))
+      expect(txAfter.status).toBe('failed')
     }
   })
 })

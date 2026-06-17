@@ -3,20 +3,20 @@ import { Transaction, PushDrop, Utils } from '@bsv/sdk'
 import { isTokenSignatureCorrectlyLinked } from './isTokenSignatureCorrectlyLinked.js'
 
 export default class UHRPTopicManager implements TopicManager {
-  identifyNeededInputs?: (beef: number[]) => Promise<Array<{ txid: string; outputIndex: number }>>
+  identifyNeededInputs?: (beef: number[]) => Promise<Array<{ txid: string, outputIndex: number }>>
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'Universal Hash Resolution Protocol: manages UHRP content availability advertisements.'
   }
 
-  async getMetaData(): Promise<{ name: string; shortDescription: string; iconURL?: string; version?: string; informationURL?: string }> {
+  async getMetaData (): Promise<{ name: string, shortDescription: string, iconURL?: string, version?: string, informationURL?: string }> {
     return {
       name: 'Universal Hash Resolution Protocol',
       shortDescription: 'Manages UHRP content availability advertisements.'
     }
   }
 
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     try {
       console.log('previous UTXOs', previousCoins.length)
       const outputs: number[] = []

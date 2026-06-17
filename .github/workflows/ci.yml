@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
@@ -62,13 +62,14 @@ jobs:
           fi
 
       - name: Build changed packages
+        # Build the FULL workspace (not just the changed scope): a changed
+        # package's workspace dependencies must have their built dist present
+        # for tsc to resolve them, but those dependencies are not part of the
+        # `...[BASE]` changed+dependents scope. This matches the push-event
+        # build (which already builds everything). Lint/test stay scoped below.
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
-        env:
-          SCOPE_FILTER: ${{ steps.scope.outputs.filter }}
         run: |
-          EXTRA=""
-          if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
-          pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' $EXTRA run build
+          pnpm -r --filter '!@bsv/ts-stack' --filter '!example-paymail' run build
 
       - name: Lint changed packages
         continue-on-error: true
@@ -78,6 +79,17 @@ jobs:
           EXTRA=""
           if [ -n "$SCOPE_FILTER" ]; then EXTRA="--filter $SCOPE_FILTER"; fi
           pnpm -r --filter '!@bsv/ts-stack' $EXTRA run lint --if-present
+
+      - name: Warm MongoDB memory-server binary cache
+        # The mongodb-memory-server tests download+extract the mongod binary on first
+        # use. When that cold start happens under the parallel `pnpm -r run test` load
+        # below, the just-extracted binary can still be open for writing when it is
+        # exec'd, producing `spawn ETXTBSY` and startup timeouts (seen on Node 24).
+        # Pre-extract the binary serially here so the test step reuses a settled cache.
+        continue-on-error: true
+        run: >
+          pnpm --filter @bsv/overlay-topics exec node --input-type=module -e
+          "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
 
       - name: Test changed packages
         # Exclude: workspace root (delegating script) and example-paymail (example package, not production)
@@ -142,7 +154,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -167,7 +179,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24

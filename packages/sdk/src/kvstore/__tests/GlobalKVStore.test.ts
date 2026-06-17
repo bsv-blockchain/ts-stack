@@ -264,6 +264,42 @@ describe('GlobalKVStore', () => {
     it('initializes Historian with kvStoreInterpreter', () => {
       expect(MockHistorian).toHaveBeenCalledWith(kvStoreInterpreter)
     })
+
+    it('builds a default resolver from networkPreset and shares it with the broadcaster', () => {
+      MockLookupResolver.mockClear()
+      MockTopicBroadcaster.mockClear()
+      const store = new GlobalKVStore({ wallet: mockWallet, networkPreset: 'testnet' })
+      expect(store).toBeInstanceOf(GlobalKVStore)
+      expect(MockLookupResolver).toHaveBeenCalledWith({ networkPreset: 'testnet' })
+      // The broadcaster must reuse the same resolver so read lookups and the
+      // broadcaster's SHIP host discovery share one lookup path.
+      const broadcasterConfig = MockTopicBroadcaster.mock.calls[0][1] as { resolver?: unknown }
+      expect(broadcasterConfig.resolver).toBe(mockResolver)
+    })
+
+    it('passes hostOverrides and slapTrackers into the default resolver', () => {
+      MockLookupResolver.mockClear()
+      const hostOverrides = { ls_kvstore: ['https://host.example'] }
+      const slapTrackers = ['https://slap.example']
+      const store = new GlobalKVStore({ wallet: mockWallet, hostOverrides, slapTrackers })
+      expect(store).toBeInstanceOf(GlobalKVStore)
+      expect(MockLookupResolver).toHaveBeenCalledWith({
+        networkPreset: 'mainnet',
+        hostOverrides,
+        slapTrackers,
+      })
+    })
+
+    it('uses an injected lookupResolver verbatim and does not build a default one', () => {
+      MockLookupResolver.mockClear()
+      MockTopicBroadcaster.mockClear()
+      const injected = { query: jest.fn() } as unknown as InstanceType<typeof LookupResolver>
+      const store = new GlobalKVStore({ wallet: mockWallet, lookupResolver: injected })
+      expect(store).toBeInstanceOf(GlobalKVStore)
+      expect(MockLookupResolver).not.toHaveBeenCalled()
+      const broadcasterConfig = MockTopicBroadcaster.mock.calls[0][1] as { resolver?: unknown }
+      expect(broadcasterConfig.resolver).toBe(injected)
+    })
   })
 
   // --------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import { Transaction, PushDrop } from '@bsv/sdk'
 
 export default class UMPTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     try {
       const outputs: number[] = []
       const parsedTransaction = Transaction.fromBEEF(beef)
@@ -69,11 +69,11 @@ export default class UMPTopicManager implements TopicManager {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'UMP Topic Manager: manages CWI-style wallet account descriptors.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

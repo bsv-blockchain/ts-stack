@@ -3,7 +3,7 @@ import { ProtoWallet, PushDrop, Transaction, Utils } from '@bsv/sdk'
 import { kvProtocol } from './types.js'
 
 export default class KVStoreTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     const parsedTransaction = Transaction.fromBEEF(beef)
 
@@ -67,11 +67,11 @@ export default class KVStoreTopicManager implements TopicManager {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'KVStore Topic Manager: admits PushDrop tokens representing KVStore key-value pairs into an overlay.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

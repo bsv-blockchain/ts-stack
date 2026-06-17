@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strictNullChecks": true,
+    "noEmit": true,
+    "types": ["jest", "node"]
+  },
+  "include": ["mod.ts", "src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

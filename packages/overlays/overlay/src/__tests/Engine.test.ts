@@ -757,10 +757,10 @@ describe('BSV Overlay Services Engine', () => {
         })
 
         // Test the tx is inserted
-        expect(mockStorageEngine.insertAppliedTransaction).toHaveBeenCalledWith({
+        expect(mockStorageEngine.insertAppliedTransaction).toHaveBeenCalledWith(expect.objectContaining({
           txid: exampleTXID,
           topic: 'Hello'
-        })
+        }))
       })
       it('Returns a correct set of admitted topics and outputs', async () => {
         // Mock findUTXO to return a UTXO

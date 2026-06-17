@@ -11,9 +11,9 @@ class KVStoreLookupService implements LookupService {
   private static readonly TOPIC = 'tm_kvstore'
   private static readonly SERVICE_ID = 'ls_kvstore'
 
-  constructor(public storageManager: KVStoreStorageManager) { }
+  constructor (public storageManager: KVStoreStorageManager) { }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload mode')
 
     const { txid, outputIndex, topic, lockingScript } = payload
@@ -60,18 +60,18 @@ class KVStoreLookupService implements LookupService {
     }
   }
 
-  async outputSpent(payload: OutputSpent): Promise<void> {
+  async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload mode')
     const { topic, txid, outputIndex } = payload
     if (topic !== KVStoreLookupService.TOPIC) return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+  async lookup (question: LookupQuestion): Promise<LookupFormula> {
     if (question.query === undefined || question.query === null) {
       throw new Error('A valid query must be provided')
     }
@@ -101,16 +101,18 @@ class KVStoreLookupService implements LookupService {
       lookupResults.push({
         txid: results[i].txid,
         outputIndex: results[i].outputIndex,
-        history: query.history ? async (beef: number[], outputIndex: number, currentDepth: number) => {
-          return await this.historySelector(beef, outputIndex, results[i].key, results[i].protocolID)
-        } : undefined
+        history: query.history
+          ? async (beef: number[], outputIndex: number, currentDepth: number) => {
+            return await this.historySelector(beef, outputIndex, results[i].key, results[i].protocolID)
+          }
+          : undefined
       })
     }
 
     return lookupResults
   }
 
-  private validateQuerySelectors(query: KVStoreQuery): void {
+  private validateQuerySelectors (query: KVStoreQuery): void {
     const hasSelector =
       (typeof query.key === 'string' && query.key.length > 0) ||
       (typeof query.controller === 'string' && query.controller.length > 0) ||
@@ -122,7 +124,7 @@ class KVStoreLookupService implements LookupService {
     }
   }
 
-  private async historySelector(beef: number[], outputIndex: number, key?: string, protocolID?: string): Promise<boolean> {
+  private async historySelector (beef: number[], outputIndex: number, key?: string, protocolID?: string): Promise<boolean> {
     try {
       const tx = Transaction.fromBEEF(beef)
       const result = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
@@ -143,11 +145,11 @@ class KVStoreLookupService implements LookupService {
     }
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'KVStore Lookup Service: find KVStore key-value pairs stored on-chain with efficient lookups.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -161,5 +163,5 @@ class KVStoreLookupService implements LookupService {
   }
 }
 
-function create(db: Db): KVStoreLookupService { return new KVStoreLookupService(new KVStoreStorageManager(db)) }
+function create (db: Db): KVStoreLookupService { return new KVStoreLookupService(new KVStoreStorageManager(db)) }
 export default create

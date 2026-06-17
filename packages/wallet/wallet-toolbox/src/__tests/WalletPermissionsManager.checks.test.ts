@@ -101,6 +101,50 @@ describe('WalletPermissionsManager - Permission Checks', () => {
       expect(underlying.encrypt).toHaveBeenCalledTimes(0)
     })
 
+    it('should not prompt for identity-key revelation when seekPermission=false', async () => {
+      manager = new WalletPermissionsManager(underlying, 'admin.com', {})
+      const onProtocolPermissionRequested = jest.fn()
+      manager.bindCallback('onProtocolPermissionRequested', onProtocolPermissionRequested)
+
+      await expect(
+        manager.getPublicKey(
+          {
+            identityKey: true,
+            seekPermission: false
+          },
+          'external-app.com'
+        )
+      ).rejects.toThrow(/seekPermission=false/)
+
+      const activeRequests = (manager as any).activeRequests as Map<string, any>
+      expect(activeRequests.size).toBe(0)
+      expect(onProtocolPermissionRequested).not.toHaveBeenCalled()
+      expect(underlying.getPublicKey).toHaveBeenCalledTimes(0)
+    })
+
+    it('should not prompt for public-key revelation when seekPermission=false', async () => {
+      manager = new WalletPermissionsManager(underlying, 'admin.com', {})
+      const onProtocolPermissionRequested = jest.fn()
+      manager.bindCallback('onProtocolPermissionRequested', onProtocolPermissionRequested)
+
+      await expect(
+        manager.getPublicKey(
+          {
+            protocolID: [1, 'protected-public-key'],
+            keyID: 'loop',
+            counterparty: 'self',
+            seekPermission: false
+          },
+          'external-app.com'
+        )
+      ).rejects.toThrow(/seekPermission=false/)
+
+      const activeRequests = (manager as any).activeRequests as Map<string, any>
+      expect(activeRequests.size).toBe(0)
+      expect(onProtocolPermissionRequested).not.toHaveBeenCalled()
+      expect(underlying.getPublicKey).toHaveBeenCalledTimes(0)
+    })
+
     it('should enforce privileged token if differentiatePrivilegedOperations=true', async () => {
       // By default, differentiatePrivilegedOperations is true.
       manager = new WalletPermissionsManager(underlying, 'admin.com', {

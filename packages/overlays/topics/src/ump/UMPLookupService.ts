@@ -8,11 +8,11 @@ class UMPLookupService implements LookupService {
   readonly spendNotificationMode: SpendNotificationMode = 'none'
   records: Collection<UMPRecord>
 
-  constructor(db: Db) {
+  constructor (db: Db) {
     this.records = db.collection<UMPRecord>('ump')
   }
 
-  async outputAdmittedByTopic(payload: OutputAdmittedByTopic) {
+  async outputAdmittedByTopic (payload: OutputAdmittedByTopic) {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== 'tm_users') return
@@ -50,18 +50,18 @@ class UMPLookupService implements LookupService {
     await this.records.insertOne(record)
   }
 
-  async outputSpent(payload: OutputSpent) {
+  async outputSpent (payload: OutputSpent) {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== 'tm_users') return
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async outputEvicted(txid: string, outputIndex: number) {
+  async outputEvicted (txid: string, outputIndex: number) {
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async lookup({ query }: any): Promise<UTXOReference[]> {
+  async lookup ({ query }: any): Promise<UTXOReference[]> {
     if (!query) throw new Error('Lookup must include a valid query!')
 
     let filter: Record<string, any>
@@ -82,11 +82,11 @@ class UMPLookupService implements LookupService {
     return [{ txid: doc.txid, outputIndex: doc.outputIndex }]
   }
 
-  async getDocumentation(): Promise<string> {
+  async getDocumentation (): Promise<string> {
     return 'UMP Lookup Service: find wallet account descriptors by presentation hash, recovery hash, or outpoint.'
   }
 
-  async getMetaData(): Promise<{
+  async getMetaData (): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -100,5 +100,5 @@ class UMPLookupService implements LookupService {
   }
 }
 
-function create(db: Db): UMPLookupService { return new UMPLookupService(db) }
+function create (db: Db): UMPLookupService { return new UMPLookupService(db) }
 export default create
