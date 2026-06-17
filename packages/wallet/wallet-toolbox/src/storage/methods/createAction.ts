@@ -112,57 +112,71 @@ export async function createAction (
   await preflightInsufficientFundsFastPath(vargs, xinputs, xoutputs, noSendChangeIn, availableChangeCount, feeModel)
   logger?.log('passed insufficient-funds preflight')
 
-  const newTx = await createNewTxRecord(storage, userId, vargs, storageBeef)
-  logger?.log('created new transaction record')
+  let newTx: TableTransaction | undefined
+  try {
+    newTx = await createNewTxRecord(storage, userId, vargs, storageBeef)
+    logger?.log('created new transaction record')
 
-  const ctx: CreateTransactionSdkContext = {
-    xinputs,
-    xoutputs,
-    changeBasket,
-    noSendChangeIn,
-    availableChangeCount,
-    feeModel,
-    transactionId: newTx.transactionId
+    const ctx: CreateTransactionSdkContext = {
+      xinputs,
+      xoutputs,
+      changeBasket,
+      noSendChangeIn,
+      availableChangeCount,
+      feeModel,
+      transactionId: newTx.transactionId
+    }
+
+    const { allocatedChange, changeOutputs, derivationPrefix, maxPossibleSatoshisAdjustment } =
+      await fundNewTransactionSdk(storage, userId, vargs, ctx)
+    logger?.log('funded new transaction')
+
+    if (maxPossibleSatoshisAdjustment != null) {
+      const a = maxPossibleSatoshisAdjustment
+      if (ctx.xoutputs[a.fixedOutputIndex].satoshis !== maxPossibleSatoshis) throw new WERR_INTERNAL()
+      ctx.xoutputs[a.fixedOutputIndex].satoshis = a.satoshis
+      logger?.log('adjusted change outputs to max possible')
+    }
+
+    // The satoshis of the transaction is the satoshis we get back in change minus the satoshis we spend.
+    const satoshis =
+      changeOutputs.reduce((a, e) => a + e.satoshis, 0) - allocatedChange.reduce((a, e) => a + e.satoshis, 0)
+    await storage.updateTransaction(newTx.transactionId, { satoshis })
+
+    const { outputs, changeVouts } = await createNewOutputs(storage, userId, vargs, ctx, changeOutputs)
+    logger?.log('created new output records')
+
+    const inputBeef = await mergeAllocatedChangeBeefs(storage, userId, vargs, allocatedChange, beef)
+    logger?.log('merged allocated change beefs')
+
+    const inputs = await createNewInputs(storage, userId, vargs, ctx, allocatedChange)
+    logger?.log('created new inputs')
+
+    const r: StorageCreateActionResult = {
+      reference: newTx.reference,
+      version: newTx.version!,
+      lockTime: newTx.lockTime!,
+      inputs,
+      outputs,
+      derivationPrefix,
+      inputBeef,
+      noSendChangeOutputVouts: vargs.isNoSend ? changeVouts : undefined
+    }
+
+    logger?.groupEnd()
+    return r
+  } catch (error) {
+    if (newTx?.transactionId != null) {
+      try {
+        await storage.updateTransactionStatus('failed', newTx.transactionId)
+        logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
+      } catch (cleanupError) {
+        logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
+      }
+    }
+    logger?.groupEnd()
+    throw error
   }
-
-  const { allocatedChange, changeOutputs, derivationPrefix, maxPossibleSatoshisAdjustment } =
-    await fundNewTransactionSdk(storage, userId, vargs, ctx)
-  logger?.log('funded new transaction')
-
-  if (maxPossibleSatoshisAdjustment != null) {
-    const a = maxPossibleSatoshisAdjustment
-    if (ctx.xoutputs[a.fixedOutputIndex].satoshis !== maxPossibleSatoshis) throw new WERR_INTERNAL()
-    ctx.xoutputs[a.fixedOutputIndex].satoshis = a.satoshis
-    logger?.log('adjusted change outputs to max possible')
-  }
-
-  // The satoshis of the transaction is the satoshis we get back in change minus the satoshis we spend.
-  const satoshis =
-    changeOutputs.reduce((a, e) => a + e.satoshis, 0) - allocatedChange.reduce((a, e) => a + e.satoshis, 0)
-  await storage.updateTransaction(newTx.transactionId, { satoshis })
-
-  const { outputs, changeVouts } = await createNewOutputs(storage, userId, vargs, ctx, changeOutputs)
-  logger?.log('created new output records')
-
-  const inputBeef = await mergeAllocatedChangeBeefs(storage, userId, vargs, allocatedChange, beef)
-  logger?.log('merged allocated change beefs')
-
-  const inputs = await createNewInputs(storage, userId, vargs, ctx, allocatedChange)
-  logger?.log('created new inputs')
-
-  const r: StorageCreateActionResult = {
-    reference: newTx.reference,
-    version: newTx.version!,
-    lockTime: newTx.lockTime!,
-    inputs,
-    outputs,
-    derivationPrefix,
-    inputBeef,
-    noSendChangeOutputVouts: vargs.isNoSend ? changeVouts : undefined
-  }
-
-  logger?.groupEnd()
-  return r
 }
 
 interface CreateTransactionSdkContext {

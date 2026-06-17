@@ -602,7 +602,7 @@ export abstract class TestUtilsWalletStorage {
     chain?: Chain
   }): Promise<StorageProvider> {
     const fallback = args.databasePrefix
-    const testSlug = (expect.getState().currentTestName || fallback).replace(/[^a-zA-Z0-9_]/g, '_')
+    const testSlug = (expect.getState().currentTestName || fallback).replace(/\W/g, '_')
     const databaseName = `${args.databasePrefix}_${testSlug.slice(-40)}`
     const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
     const storage = new StorageKnex({
@@ -614,6 +614,51 @@ export abstract class TestUtilsWalletStorage {
     await storage.migrate(args.migrationName, '1'.repeat(64))
     await storage.makeAvailable()
     return storage
+  }
+
+  /**
+   * Create the standard `StorageProvider[]` used by storage suites: a fresh
+   * SQLite store plus an optional MySQL store when `RUNMYSQL` is set. Database
+   * names are derived from `expect.getState().currentTestName` so tests in the
+   * same suite never share state. Each store is dropped/migrated/made-available
+   * before returning. Caller owns calling `destroy()` in afterEach.
+   */
+  static async createTestStorages(args: {
+    databasePrefix: string
+    migrationName: string
+    chain?: Chain
+  }): Promise<StorageProvider[]> {
+    const chain = args.chain ?? 'test'
+    const env = _tu.getEnvFlags(chain)
+    const storages: StorageProvider[] = []
+    const testSlug = (expect.getState().currentTestName || args.databasePrefix).replace(/\W/g, '_')
+    const databaseName = `${args.databasePrefix}_${testSlug.slice(-40)}`
+
+    const localSQLiteFile = await _tu.newTmpFile(`${databaseName}.sqlite`, false, false, false)
+    storages.push(
+      new StorageKnex({
+        ...StorageKnex.defaultOptions(),
+        chain,
+        knex: _tu.createLocalSQLite(localSQLiteFile)
+      })
+    )
+
+    if (env.runMySQL) {
+      storages.push(
+        new StorageKnex({
+          ...StorageKnex.defaultOptions(),
+          chain,
+          knex: _tu.createLocalMySQL(`${databaseName}.mysql`)
+        })
+      )
+    }
+
+    for (const storage of storages) {
+      await storage.dropAllData()
+      await storage.migrate(args.migrationName, '1'.repeat(64))
+      await storage.makeAvailable()
+    }
+    return storages
   }
 
   static createLocalSQLite(filename: string): Knex {

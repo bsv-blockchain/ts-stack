@@ -179,11 +179,10 @@ export async function shareReqsWithWorld (
   const readyToSendReqIds = readyToSendReqs.map(r => r.id)
   const transactionIds = readyToSendReqs.map(r => r.notify.transactionIds || []).flat()
 
-  // If isDelayed, this (or a different beef) will have to be rebuilt at the time of sending.
-  await verifyMergedBeef(storage, r, readyToSendReqs, logger)
-
   const batch = txids.length > 1 ? randomBytesBase64(16) : undefined
   if (isDelayed) {
+    // Delayed sends rebuild BEEF when the monitor sends the req. Do not fail a committed
+    // transaction here because the current aggregate BEEF is only a scheduling artifact.
     if (readyToSendReqIds.length > 0) {
       await storage.transaction(async trx => {
         await storage.updateProvenTxReq(readyToSendReqIds, { status: 'unsent', batch }, trx)
@@ -194,6 +193,8 @@ export async function shareReqsWithWorld (
   }
 
   if (readyToSendReqIds.length < 1) return { swr, ndr }
+
+  await verifyMergedBeef(storage, r, readyToSendReqs, logger)
 
   if (batch) {
     for (const req of readyToSendReqs) req.batch = batch
