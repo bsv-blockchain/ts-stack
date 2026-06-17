@@ -3843,6 +3843,22 @@ export class WalletPermissionsManager implements WalletInterface {
     // 7) Parse the signable tx to determine net spend, then gate on spending authorization.
     const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
     const reference = createResult.signableTransaction.reference
+
+    // 7a) SECURITY (GHSA-36f9-7rg5-cpf8) defense-in-depth: confirm every
+    // caller-requested output actually appears in the transaction we are about to
+    // authorize and sign. The locking scripts in the signable transaction
+    // originate from storage; a malicious or compromised remote storage provider
+    // could substitute a recipient script, which would then be signed and
+    // broadcast while this manager's caller/UI still shows the requested
+    // recipient. The signer (buildSignableTransaction) rejects this at the
+    // source; this is an independent check at the permissions layer.
+    try {
+      this.verifyRequestedOutputsPresent(tx, args)
+    } catch (err) {
+      await this.underlying.abortAction({ reference })
+      throw err
+    }
+
     const { netSpent, lineItems } = this.computeNetSpend(tx, args, originalInputDescriptions, originalOutputDescriptions)
 
     // 8) If netSpent > 0, require spending authorization. Abort if denied.
@@ -3949,6 +3965,53 @@ export class WalletPermissionsManager implements WalletInterface {
    * accounting for foreign (originator-provided) inputs and outputs plus the fee.
    * Also builds the line items list for the spending authorization request.
    */
+  /**
+   * Defense-in-depth verification that each caller-requested output (locking
+   * script + amount) is present in the transaction returned for signing.
+   *
+   * The scripts in the signable transaction originate from storage. A malicious
+   * or compromised remote storage provider could substitute a different
+   * recipient script for a caller-specified output. The signer
+   * (buildSignableTransaction) rejects this at the source; this is an
+   * independent check at the permissions layer so the substitution is caught
+   * regardless of how the signable transaction was produced.
+   *
+   * Outputs are matched as a multiset on (lockingScript, satoshis): the
+   * transaction also contains change/commission outputs and the output order is
+   * randomized by default, and a caller may legitimately request the same
+   * script+amount more than once.
+   *
+   * @throws Error if any caller-requested output is absent from the transaction.
+   */
+  private verifyRequestedOutputsPresent (
+    tx: Transaction,
+    args: Parameters<WalletInterface['createAction']>[0]
+  ): void {
+    const requested = args.outputs || []
+    if (requested.length === 0) return
+
+    // All transaction outputs as (script hex, satoshis); each may satisfy at
+    // most one requested output.
+    const available = tx.outputs.map(o => ({
+      script: o.lockingScript.toHex().toLowerCase(),
+      satoshis: o.satoshis,
+      used: false
+    }))
+
+    for (let i = 0; i < requested.length; i++) {
+      const wantScript = (requested[i].lockingScript ?? '').toLowerCase()
+      const wantSats = requested[i].satoshis
+      const match = available.find(a => !a.used && a.script === wantScript && a.satoshis === wantSats)
+      if (match == null) {
+        throw new Error(
+          `The transaction returned for signing does not contain caller-requested output ${i} ` +
+          `(locking script and amount). The recipient may have been substituted by storage.`
+        )
+      }
+      match.used = true
+    }
+  }
+
   private computeNetSpend (
     tx: Transaction,
     args: Parameters<WalletInterface['createAction']>[0],
