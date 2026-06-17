@@ -42,7 +42,7 @@ export async function getMetadata(uhrpUrl: string, uploaderIdentityKey: string, 
     const contentTypeTag = out.tags.find(t => t.startsWith('content_type_'))
     if (!objectIdTag || !expiryTag || !nameTag || !sizeTag || !contentTypeTag) continue
 
-    const expiryNum = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+    const expiryNum = parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
 
     if (expiryNum > maxpiry) {
       maxpiry = expiryNum

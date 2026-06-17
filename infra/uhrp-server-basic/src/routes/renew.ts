@@ -69,7 +69,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
     // Convert to MS to create an ISO string
     const newExpiryTimeSeconds = prevExpiryTime + (additionalMinutes * 60)
 
-    const fileSizeNum = Number.parseInt(size, 10) || 0
+    const fileSizeNum = parseInt(size, 10) || 0
     let amount = 0
     if (fileSizeNum > 0) {
       amount = await getPriceForFile({
@@ -108,7 +108,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       const expiryTag = out.tags.find(t => t.startsWith('expiry_time_'))
       if (!expiryTag) continue
 
-      const expiryNum = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+      const expiryNum = parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
 
       if (expiryNum > maxpiry) {
         maxpiry = expiryNum
