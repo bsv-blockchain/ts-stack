@@ -53,7 +53,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client#readme",
   "dependencies": {
-    "@bsv/sdk": "^2.1.5",
+    "@bsv/sdk": "^2.1.4",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {

@@ -47,7 +47,7 @@
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
   "license": "Open BSV License",
   "dependencies": {
-    "@bsv/sdk": "^2.1.5",
+    "@bsv/sdk": "^2.1.4",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
