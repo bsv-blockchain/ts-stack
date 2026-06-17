@@ -1280,6 +1280,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const row = await this.toDb(trx)<TableOutput>('outputs as o')
       .join('transactions as t', 'o.transactionId', 't.transactionId')
       .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
+      .whereNull('o.spentBy')
       .whereIn('t.status', status)
       .sum({ totalSatoshis: 'o.satoshis' })
       .first()
@@ -1310,6 +1311,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .where('o.userId', userId)
           .where('o.spendable', true)
           .where('o.basketId', basketId)
+          .whereNull('o.spentBy')
           .whereIn('t.status', status)
           .select('o.*')
 

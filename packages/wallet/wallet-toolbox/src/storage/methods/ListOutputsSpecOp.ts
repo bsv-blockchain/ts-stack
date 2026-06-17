@@ -102,6 +102,9 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         specOpTags: string[],
         outputs: TableOutput[]
       ): Promise<TableOutput[]> => {
+        if (specOpTags.includes('release')) {
+          await s.reviewStatus({ agedLimit: new Date(0) })
+        }
         const invalidOutputIds = new Set<number>()
         const services = s.getServices()
         await runWithConcurrency(outputs, INVALID_CHANGE_MAX_CONCURRENCY, async o => {
