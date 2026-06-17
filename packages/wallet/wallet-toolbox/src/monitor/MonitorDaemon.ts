@@ -75,7 +75,7 @@ export class MonitorDaemon {
         a.storageKnexOptions = {
           knex: a.knex,
           chain: a.chain,
-          feeModel: { model: 'sat/kb', value: 1 },
+          feeModel: { model: 'sat/kb', value: 100 },
           commissionSatoshis: 0
         }
       }
