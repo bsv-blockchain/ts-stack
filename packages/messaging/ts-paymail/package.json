@@ -103,7 +103,7 @@
     "Paymail"
   ],
   "dependencies": {
-    "@bsv/sdk": "^2.1.5",
+    "@bsv/sdk": "^2.1.4",
     "@types/jest": "^30.0.0",
     "cross-fetch": "^4.1.0",
     "express": "^5.2.1",
