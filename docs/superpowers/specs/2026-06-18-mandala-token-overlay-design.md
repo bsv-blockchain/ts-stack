@@ -94,8 +94,16 @@ Locking script:
 <0x21 marker> OP_DROP <boundKey> OP_CHECKSIG
 ```
 
-- `boundKey = identityPublicKey.deriveChild(anyone, commitment)` where `anyone` is the
-  private-key constant `1` and `commitment = hash(actionDetails)`.
+- `boundKey` is derived through the wallet, not by raw `deriveChild`:
+  `wallet.getPublicKey({ protocolID, keyID, counterparty: 'anyone' })`, where
+  `keyID = hash(canonicalize(actionDetails))`. `actionDetails` is an arbitrarily complex JSON
+  object describing the admin action (kind, assetId, amount, prior outpoint, etc.).
+- **Canonical form:** `actionDetails` is serialized to a deterministic canonical string before
+  hashing so any party reproduces the identical `keyID`. Default: **RFC 8785 JSON Canonicalization
+  Scheme (JCS)** — strict lexicographic key ordering + canonical scalar encoding. (JSON-LD /
+  URDNA2015 is the alternative if a semantic RDF graph is ever needed; JCS is preferred here as it
+  canonicalizes arbitrary JSON without requiring an `@context`.) The `keyID` is also the
+  `commitment` that anchors the action into the chain.
 - Each administrative transaction spends authorization outpoint *n* and creates outpoint *n+1*,
   forming an immutable linked hash chain in the transaction DAG since genesis.
 
@@ -106,11 +114,19 @@ Action kinds:
 - `recover` — reissue burnt tokens.
 
 Methods:
-- `deriveBoundKey(identityPublicKey, actionDetails)` → boundKey + commitment.
+- `canonicalize(actionDetails)` → canonical string (RFC 8785 JCS).
+- `deriveBoundKey(wallet, protocolID, actionDetails)` →
+  `{ boundKey, keyID }` via `wallet.getPublicKey({ protocolID, keyID, counterparty: 'anyone' })`
+  with `keyID = hash(canonicalize(actionDetails))`.
 - `lock(boundKey)`.
 - genesis/registration builder.
-- `unlock(wallet, ...)` → boundKey signature for `OP_CHECKSIG`.
+- `unlock(wallet, protocolID, actionDetails, ...)` → boundKey signature for `OP_CHECKSIG`
+  (signs with the same `counterparty: 'anyone'` + derived `keyID`).
 - `decode(script)` → `{ boundKey }`; throws on non-admin scripts.
+
+The overlay re-derives `boundKey` from the claimed `actionDetails` (canonicalize → hash → keyID →
+`getPublicKey` with `counterparty: 'anyone'`) and checks it matches the on-chain key, binding the
+action's JSON to the authorization chain.
 
 ## 4. Component 2 — Overlay (`@bsv/overlay-topics`, `src/mandala/`)
 
@@ -152,8 +168,9 @@ the sender as their own counterparty. Plaintext is held only transiently during 
    key for each relevant input/output. This runs for newly-created outputs (admission) **and** for
    the previous coins being spent (re-verify the input linkage at spend time).
 4. **Admin outputs:** validate boundKey `OP_CHECKSIG`, that the tx spends the prior authorization
-   outpoint, that the commitment matches the declared action details, and chain integrity.
-   Issuance/recovery are the authorized supply-changing exceptions.
+   outpoint, and chain integrity. Re-derive `boundKey` from the declared `actionDetails`
+   (`canonicalize` → hash → `keyID` → `getPublicKey({ counterparty: 'anyone' })`) and confirm it
+   matches the on-chain key. Issuance/recovery are the authorized supply-changing exceptions.
 5. **FT transfers:** enforce conservation — Σ input token amounts == Σ output token amounts per
    `assetId` (except under a valid admin issuance/recovery).
 6. **Sanctions screen:** call `ScreeningProvider.isSanctioned` for every derived identity key on
