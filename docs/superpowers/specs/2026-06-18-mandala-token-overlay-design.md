@@ -14,7 +14,7 @@ packages:
   administrative actions).
 - **`@bsv/overlay-topics`** (`packages/overlays/topics`) — a `tm_mandala` topic manager and
   `ls_mandala` lookup service that enforce token conservation, verify off-chain
-  `revealCounterpartyKeyLinkage` data, screen both transfer sides against a sanctions list, and
+  `revealSpecificKeyLinkage` data, screen both transfer sides against a sanctions list, and
   retain linkage data for the regulatory minimum.
 
 The overlay is treated as highly sensitive infrastructure. Identity-linked balances are an
@@ -24,9 +24,12 @@ internal side-effect and are **never** exposed via a public query.
 
 - **Token framework:** BRC-92 Mandala Token Protocol (https://bsv.brc.dev/tokens/0092).
   FT-only in this cut — no NFT variant, no arbitrary PushDrop data fields.
-- **Linkage method:** `revealCounterpartyKeyLinkage` (the root-key counterparty version, not
-  `revealSpecificKeyLinkage`). The SDK already defines `RevealCounterpartyKeyLinkageArgs/Result`
-  in `packages/sdk/src/wallet/Wallet.interfaces.ts`.
+- **Linkage method:** `revealSpecificKeyLinkage` — ties the controlling identity key to the
+  **specific** `protocolID` + `keyID` used to derive each output's key (connecting receiving
+  counterparties to specific keys), not the root-key counterparty version. The SDK defines
+  `RevealSpecificKeyLinkageArgs` / `RevealSpecificKeyLinkageResult` in
+  `packages/sdk/src/wallet/Wallet.interfaces.ts`. The overlay is the `verifier`; the wallet
+  encrypts the linkage to the overlay's public key.
 - **Off-chain transport:** linkage data reaches the overlay via the `offChainValues?: number[]`
   parameter already present on `TopicManager.identifyAdmissibleOutputs` and propagated to the
   lookup service through `OutputAdmittedByTopic` / `OutputSpent`.
@@ -38,13 +41,21 @@ internal side-effect and are **never** exposed via a public query.
 - **Naming:** module dir `src/mandala/`, classes `MandalaTopicManager` + `MandalaLookupService`,
   topic `tm_mandala`, service `ls_mandala`.
 
-### 2.1 Accepted Deviation — Linkage Encryption Deferred
+### 2.1 Linkage Encryption — Store Encrypted-At-Source
 
-The brief calls for core-banking-grade envelope encryption (KMS/HSM) of retained linkage data.
-For this first cut the user has accepted storing linkage data **plaintext** behind a
-`LinkageEncryptor` seam (passthrough implementation). This is a **hard follow-up obligation**, not
-a permanent state — see §8. The seam exists specifically so a real KMS/HSM envelope-encryption
-implementation can be dropped in without touching call sites.
+The `revealSpecificKeyLinkage` response is **already end-to-end encrypted by the wallet to the
+overlay's public key** (`encryptedLinkage` + `encryptedLinkageProof`). The overlay therefore
+stores those ciphertext blobs verbatim — no separate encryption layer or `LinkageEncryptor` seam
+is needed; data is encrypted at rest by construction.
+
+Decryption happens **per-output, only at the moment of verification**, using the overlay's own
+private key (it is the `verifier`):
+
+1. **At admission** — when the output is first created and admitted to the topic.
+2. **At spend** — when a later transaction spends that output (re-verify the input's linkage).
+
+Plaintext linkage is never persisted; it exists only transiently during these two verification
+windows.
 
 ## 3. Component 1 — Script Templates (`@bsv/templates`)
 
@@ -107,8 +118,8 @@ File layout mirrors existing topics (UHRP / Identity):
 
 | File | Responsibility |
 |------|----------------|
-| `types.ts` | `MandalaTokenRecord`, off-chain linkage payload types, `ScreeningProvider`, `LinkageEncryptor` interfaces |
-| `verifyKeyLinkage.ts` | EC point-addition verification of `revealCounterpartyKeyLinkage` data → controlling identity pubkey per input/output |
+| `types.ts` | `MandalaTokenRecord`, off-chain linkage payload types, `ScreeningProvider` interface |
+| `verifyKeyLinkage.ts` | Decrypt (overlay as verifier) + EC point-addition verification of `revealSpecificKeyLinkage` data → controlling identity pubkey per input/output |
 | `MandalaTopicManager.ts` | `TopicManager` implementation (admittance + all enforcement) |
 | `MandalaLookupService.ts` | `LookupService` implementation (persistence + queries) |
 | `MandalaStorageManager.ts` | MongoDB persistence |
@@ -118,10 +129,17 @@ All exported from `packages/overlays/topics/src/index.ts`.
 
 ### 4.1 `verifyKeyLinkage.ts`
 
-Modeled on UHRP's `isTokenSignatureCorrectlyLinked.ts`. Given a `revealCounterpartyKeyLinkage`
-payload, perform elliptic-curve point-addition to confirm which identity public key controls a
-given input or output. Independently verifiable; relies on discrete-log hardness. Change outputs
-use the same path with the sender as their own counterparty.
+Modeled on UHRP's `isTokenSignatureCorrectlyLinked.ts`. Given a `revealSpecificKeyLinkage`
+payload (`encryptedLinkage`, `encryptedLinkageProof`, `prover`, `counterparty`, `protocolID`,
+`keyID`, `proofType`):
+
+1. Decrypt `encryptedLinkage`/`encryptedLinkageProof` using the overlay's private key — the
+   overlay is the `verifier` the wallet encrypted to.
+2. Perform elliptic-curve point-addition to confirm which identity public key controls the given
+   input or output for that specific `protocolID` + `keyID`.
+
+Independently verifiable; relies on discrete-log hardness. Change outputs use the same path with
+the sender as their own counterparty. Plaintext is held only transiently during this call.
 
 ### 4.2 `MandalaTopicManager`
 
@@ -130,8 +148,9 @@ use the same path with the sender as their own counterparty.
 1. Parse transaction outputs; classify each as **FT transfer** (`MandalaToken.decode`), **admin**
    (`MandalaAdmin.decode`), or non-topical.
 2. Parse `offChainValues` → linkage payload (per input and per output).
-3. Verify linkage via `verifyKeyLinkage` → controlling identity public key for each relevant
-   input/output.
+3. Verify linkage via `verifyKeyLinkage` (decrypt-then-EC-verify) → controlling identity public
+   key for each relevant input/output. This runs for newly-created outputs (admission) **and** for
+   the previous coins being spent (re-verify the input linkage at spend time).
 4. **Admin outputs:** validate boundKey `OP_CHECKSIG`, that the tx spends the prior authorization
    outpoint, that the commitment matches the declared action details, and chain integrity.
    Issuance/recovery are the authorized supply-changing exceptions.
@@ -148,7 +167,8 @@ Also implements `identifyNeededInputs` (anchor token history), `getDocumentation
 
 On `outputAdmittedByTopic` / `outputSpent`, persist via `MandalaStorageManager`:
 - token UTXO records (assetId, amount, outpoint, controlling identity key),
-- **retained linkage records** (passed through `LinkageEncryptor`; plaintext for now),
+- **retained linkage records** — the `encryptedLinkage`/`encryptedLinkageProof` ciphertext stored
+  verbatim (encrypted at rest by construction), with `prover`/`protocolID`/`keyID` metadata,
 - internal per-identity-key balances (maintained as outputs are admitted/spent).
 
 `lookup(question)` answers **only** by `assetId` and by outpoint. There is deliberately **no**
@@ -158,8 +178,9 @@ balance-by-identity-key query exposed.
 
 Collections:
 - `tokens` — current UTXO set for token outputs.
-- `linkageRecords` — retained linkage, **no TTL expiry** (must persist ≥5 years; deletion is an
-  out-of-band retention-policy action, not an automatic index).
+- `linkageRecords` — retained **encrypted** linkage ciphertext + metadata, **no TTL expiry**
+  (must persist ≥5 years; deletion is an out-of-band retention-policy action, not an automatic
+  index).
 - `balances` — internal per-identity-key running balances.
 
 ## 5. Injected Dependencies (testable seams)
@@ -169,22 +190,23 @@ interface ScreeningProvider {
   isSanctioned(identityKey: string): Promise<boolean>
 }
 // InMemoryScreeningProvider — list-backed, used in tests.
-
-interface LinkageEncryptor {
-  encrypt(plaintext: number[]): Promise<number[]>
-  decrypt(ciphertext: number[]): Promise<number[]>
-}
-// PassthroughEncryptor — returns input unchanged. TODO: replace with KMS/HSM envelope encryption.
 ```
 
-Both are constructor-injected into the topic manager / lookup service so production wiring swaps
-implementations without code changes.
+`ScreeningProvider` is constructor-injected so production wiring swaps in a real sanctioned-parties
+feed without code changes.
+
+The topic manager also needs the **overlay's verifier key** (a `WalletInterface` / private key) to
+decrypt `revealSpecificKeyLinkage` payloads during verification — injected the same way. In tests
+this is a deterministic local wallet acting as the verifier.
 
 ## 6. Compliance Model
 
 - Screen both sides of every transfer; reject any transaction touching a sanctioned identity key.
-- Retain linkage data and the derived identity public key for ≥5 years.
+- Retain the (encrypted) linkage data and the derived identity public key for ≥5 years.
 - Balances are queryable internally only — never via a public API.
+- The overlay's verifier private key is the single key that can decrypt retained linkage — the
+  acknowledged honeypot. Protecting it (HSM, access controls, audit logging, rotation, compromise
+  migration plan) is operational hardening, tracked in §8.
 
 ## 7. Testing
 
@@ -197,9 +219,10 @@ implementations without code changes.
 
 ## 8. Follow-up Obligations (out of scope for this spec)
 
-1. **Linkage encryption (HARD):** replace `PassthroughEncryptor` with real envelope encryption
-   (KMS/HSM, data-key wrapping, key rotation via Shamir's Secret Sharing, audit logging, key-
-   compromise migration plan). Tracks the brief's core-banking sensitivity requirement.
+1. **Verifier-key protection (HARD):** the overlay's decryption key is the honeypot. Harden with
+   HSM/KMS custody, strict access controls, audit logging, key rotation via Shamir's Secret
+   Sharing, and a key-compromise data-migration plan. (Linkage is already encrypted at rest by the
+   wallet; this protects the one key that can decrypt it.)
 2. Production `ScreeningProvider` backed by a real sanctioned-parties feed.
 3. Operational hardening of the overlay host (physical/logical/operational controls).
 
