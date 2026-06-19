@@ -3,6 +3,7 @@ import {
   AdmissionMode, SpendNotificationMode, OutputAdmittedByTopic, OutputSpent
 } from '@bsv/overlay'
 import { WalletInterface } from '@bsv/sdk'
+import { Db } from 'mongodb'
 import { MandalaToken } from '@bsv/templates'
 import { MandalaStorageManager } from './MandalaStorageManager.js'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
@@ -101,4 +102,11 @@ export class MandalaLookupService implements LookupService {
       shortDescription: 'Mandala token index by assetId/outpoint. No public identity-balance query.'
     }
   }
+}
+
+export function createMandalaLookupService (verifierWallet: WalletInterface) {
+  return (db: Db): MandalaLookupService => new MandalaLookupService({
+    storage: new MandalaStorageManager(db),
+    verifierWallet
+  })
 }

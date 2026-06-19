@@ -105,11 +105,11 @@ export { default as createWalletConfigLookupService } from './walletconfig/Walle
 
 // mandala
 export { MandalaTopicManager } from './mandala/MandalaTopicManager.js'
-export { MandalaLookupService } from './mandala/MandalaLookupService.js'
+export { MandalaLookupService, createMandalaLookupService } from './mandala/MandalaLookupService.js'
 export { MandalaStorageManager } from './mandala/MandalaStorageManager.js'
 export { InMemoryScreeningProvider } from './mandala/types.js'
 export { verifyKeyLinkage } from './mandala/verifyKeyLinkage.js'
 export type {
   ScreeningProvider, SpecificLinkage, MandalaLinkagePayload,
-  MandalaTokenRecord, MandalaLinkageRecord, UTXOReference
+  MandalaTokenRecord, MandalaLinkageRecord
 } from './mandala/types.js'

@@ -29,7 +29,7 @@
     "@bsv/overlay": "^2.0.3",
     "@bsv/overlay-discovery-services": "^2.0.3",
     "@bsv/overlay-express": "^2.3.0",
-    "@bsv/overlay-topics": "^1.0.1",
+    "@bsv/overlay-topics": "workspace:^",
     "@bsv/sdk": "^2.1.4",
     "dotenv": "^17.4.2",
     "mongodb": "^7.2.0",
