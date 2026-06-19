@@ -1,5 +1,5 @@
 import {
-  ScriptTemplate, LockingScript, UnlockingScript, OP, Utils,
+  ScriptTemplate, ScriptTemplateUnlock, LockingScript, UnlockingScript, OP, Utils,
   WalletInterface, WalletProtocol, WalletCounterparty, Transaction, Hash,
   TransactionSignature, PrivateKey
 } from '@bsv/sdk'
@@ -64,10 +64,7 @@ export class MandalaToken implements ScriptTemplate {
     privateKey: PrivateKey,
     signOutputs: 'all' | 'none' | 'single' = 'all',
     anyoneCanPay = false
-  ): {
-      sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-      estimateLength: () => Promise<number>
-    } {
+  ): ScriptTemplateUnlock {
     return {
       sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
         let scope = TransactionSignature.SIGHASH_FORKID
@@ -106,7 +103,7 @@ export class MandalaToken implements ScriptTemplate {
           { op: pubkeyForScript.length, data: pubkeyForScript }
         ])
       },
-      estimateLength: async () => 108
+      estimateLength: async (tx?: Transaction, inputIndex?: number) => 108
     }
   }
 
