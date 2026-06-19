@@ -113,4 +113,79 @@ describe('MandalaTopicManager admin chain', () => {
     const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
     expect(result.outputsToAdmit).toEqual([])
   })
+
+  it('does not let a valid admin output for one asset authorize minting a different asset', async () => {
+    const sender = new ProtoWallet(PrivateKey.fromRandom())
+    const receiver = new ProtoWallet(PrivateKey.fromRandom())
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const issuer = new ProtoWallet(PrivateKey.fromRandom())
+    const adminProto: [number, string] = [2, 'mandala admin']
+
+    const { publicKey: receiverKey } = await receiver.getPublicKey({ identityKey: true })
+    const { publicKey: verifierKey } = await overlay.getPublicKey({ identityKey: true })
+    const { publicKey: derivedKey } = await sender.getPublicKey({ protocolID, keyID, counterparty: receiverKey })
+    const pkh = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
+
+    const assetA = `${'a'.repeat(64)}.0` // minted with no inputs
+    const assetC = `${'c'.repeat(64)}.0` // the admin (register) asset
+
+    const admin = new MandalaAdmin(issuer as any)
+    const registerDetails = { kind: 'register' as const, assetId: assetC }
+    const { boundKey } = await admin.deriveBoundKey(adminProto as any, registerDetails)
+
+    const tx = new Transaction()
+    tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 }) // index 0: unbacked FT
+    tx.addOutput({ lockingScript: admin.lock(boundKey), satoshis: 1 })                       // index 1: valid admin for C
+
+    const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
+    const offChainValues = encodeLinkagePayload({
+      inputs: [],
+      outputs: [{ index: 0, linkage: linkage as any }],
+      admin: [{ index: 1, actionDetails: registerDetails }]
+    } as any)
+
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any })
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
+    expect(result.outputsToAdmit).toEqual([]) // asset A is unauthorized -> whole tx rejected
+  })
+
+  it('admits an authorized issuance that mints exactly the declared amount', async () => {
+    const sender = new ProtoWallet(PrivateKey.fromRandom())
+    const receiver = new ProtoWallet(PrivateKey.fromRandom())
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const issuer = new ProtoWallet(PrivateKey.fromRandom())
+    const adminProto: [number, string] = [2, 'mandala admin']
+
+    const { publicKey: receiverKey } = await receiver.getPublicKey({ identityKey: true })
+    const { publicKey: verifierKey } = await overlay.getPublicKey({ identityKey: true })
+    const { publicKey: derivedKey } = await sender.getPublicKey({ protocolID, keyID, counterparty: receiverKey })
+    const pkh = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
+    const assetA = `${'a'.repeat(64)}.0`
+
+    const admin = new MandalaAdmin(issuer as any)
+    // Prior authorization outpoint (genesis-ish admin output the issue tx will spend).
+    const priorDetails = { kind: 'register' as const, assetId: assetA }
+    const { boundKey: priorBoundKey } = await admin.deriveBoundKey(adminProto as any, priorDetails)
+    const priorTx = new Transaction()
+    priorTx.addOutput({ lockingScript: admin.lock(priorBoundKey), satoshis: 1 })
+
+    const issueDetails = { kind: 'issue' as const, assetId: assetA, amount: 100, priorOutpoint: `${priorTx.id('hex')}.0` }
+    const { boundKey: issueBoundKey } = await admin.deriveBoundKey(adminProto as any, issueDetails)
+
+    const tx = new Transaction()
+    tx.addInput({ sourceTransaction: priorTx, sourceOutputIndex: 0, unlockingScript: new Script(), sequence: 0xffffffff }) // spends prior auth outpoint
+    tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 }) // index 0: minted FT
+    tx.addOutput({ lockingScript: admin.lock(issueBoundKey), satoshis: 1 })                  // index 1: next auth outpoint
+
+    const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
+    const offChainValues = encodeLinkagePayload({
+      inputs: [],
+      outputs: [{ index: 0, linkage: linkage as any }],
+      admin: [{ index: 1, actionDetails: issueDetails }]
+    } as any)
+
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any })
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
+    expect(result.outputsToAdmit).toEqual([0, 1]) // minted FT + next auth outpoint both admitted
+  })
 })

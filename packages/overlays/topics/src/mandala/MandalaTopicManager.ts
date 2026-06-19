@@ -31,7 +31,7 @@ export class MandalaTopicManager implements TopicManager {
 
       // Step 3: Classify outputs into FT outputs and admin outputs
       const ftOutputs: Array<{ index: number, assetId: string, amount: number, pubKeyHash: number[] }> = []
-      let hasVerifiedAdmin = false
+      const authorizedIssuance = new Map<string, number>()
       const adminIndices: number[] = []
       const adminDetails = new Map<number, MandalaActionDetails>()
       for (const a of (payload as any).admin ?? []) adminDetails.set(a.index, a.actionDetails)
@@ -53,7 +53,14 @@ export class MandalaTopicManager implements TopicManager {
                 tx.inputs.some(inp => `${inp.sourceTXID ?? inp.sourceTransaction?.id('hex') ?? ''}.${inp.sourceOutputIndex}` === details.priorOutpoint))
             if (boundKey === decodedAdmin.boundKey && priorOk) {
               adminIndices.push(i)
-              hasVerifiedAdmin = true
+              // Only issue/recover authorize a supply increase, and only for the
+              // specific assetId + amount declared in the (boundKey-bound) action details.
+              if ((details.kind === 'issue' || details.kind === 'recover') && typeof details.assetId === 'string') {
+                authorizedIssuance.set(
+                  details.assetId,
+                  (authorizedIssuance.get(details.assetId) ?? 0) + (details.amount ?? 0)
+                )
+              }
             }
           }
         } catch { /* not admin */ }
@@ -91,7 +98,9 @@ export class MandalaTopicManager implements TopicManager {
       }
       for (const [assetId, outAmt] of outTotals) {
         const inAmt = inTotals.get(assetId) ?? 0
-        if (!hasVerifiedAdmin && outAmt !== inAmt) {
+        const issued = authorizedIssuance.get(assetId) ?? 0
+        // Supply may only grow by an explicitly authorized issuance for THIS assetId.
+        if (outAmt !== inAmt + issued) {
           return { outputsToAdmit: [], coinsToRetain: [] }
         }
       }
