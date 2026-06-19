@@ -3,6 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Native deps (better-sqlite3) compile from source on Alpine (musl, no prebuilt
+# binaries) — needs python3/make/g++.
+RUN apk add --no-cache python3 make g++
+
 # Copy package files first for better layer caching
 COPY package*.json ./
 COPY tsconfig*.json ./
@@ -33,9 +37,13 @@ RUN apk upgrade --no-cache && \
 
 WORKDIR /app
 
-# Copy package files and install production deps only
+# Copy package files and install production deps only.
+# better-sqlite3 compiles from source on Alpine; add the toolchain just for the
+# install, then remove it in the same layer to keep the image slim.
 COPY --chown=root:root --chmod=0444 package*.json ./
-RUN npm ci --omit=dev
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+ && npm ci --omit=dev \
+ && apk del .build-deps
 
 # Copy built output from builder
 COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
