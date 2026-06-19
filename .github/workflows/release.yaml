@@ -169,11 +169,15 @@ jobs:
           # their @bsv/* ranges. Refresh each infra lockfile so the Dockerfile
           # `npm ci` step won't fail with "lockfile doesn't match" on the next
           # infra-release build. --package-lock-only skips node_modules I/O.
+          # --legacy-peer-deps: some infra components (e.g. message-box-server)
+          # carry transitional lint devDeps with peer conflicts (eslint-plugin-react
+          # vs eslint 10); this step only refreshes the lockfile, so accept the
+          # legacy peer resolution rather than fail the release on a dev-only graph.
           for d in infra/*/; do
             [ -f "$d/package.json" ] || continue
             [ -f "$d/package-lock.json" ] || continue
             echo "Refreshing lockfile in $d"
-            (cd "$d" && npm install --package-lock-only --ignore-scripts)
+            (cd "$d" && npm install --package-lock-only --ignore-scripts --legacy-peer-deps)
           done
 
           if git diff --quiet; then
