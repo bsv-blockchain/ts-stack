@@ -1,5 +1,5 @@
 import { TopicManager } from '@bsv/overlay'
-import { AdmittanceInstructions, Transaction, WalletInterface, WalletProtocol } from '@bsv/sdk'
+import { AdmittanceInstructions, LockingScript, Transaction, WalletInterface, WalletProtocol } from '@bsv/sdk'
 import { MandalaToken, MandalaAdmin, MandalaActionDetails } from '@bsv/templates'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
 import { decodeLinkagePayload, ScreeningProvider, SpecificLinkage } from './types.js'
@@ -15,6 +15,22 @@ export interface MandalaTopicManagerDeps {
 interface FtOutput { index: number, assetId: string, amount: number, pubKeyHash: number[] }
 interface AdmittedFt { index: number, assetId: string, amount: number, identityKey: string }
 
+const decodeFtOutput = (ls: LockingScript): { assetId: string, amount: number, pubKeyHash: number[] } | null => {
+  try {
+    return MandalaToken.decode(ls)
+  } catch {
+    return null
+  }
+}
+
+const priorOutpointSpent = (tx: Transaction, details: MandalaActionDetails): boolean => {
+  if (details.kind === 'register') return true
+  if (typeof details.priorOutpoint !== 'string') return false
+  return tx.inputs.some(
+    inp => `${inp.sourceTXID ?? inp.sourceTransaction?.id('hex') ?? ''}.${inp.sourceOutputIndex}` === details.priorOutpoint
+  )
+}
+
 export class MandalaTopicManager implements TopicManager {
   constructor (private readonly deps: MandalaTopicManagerDeps) {}
 
@@ -29,33 +45,43 @@ export class MandalaTopicManager implements TopicManager {
     for (const a of (payload as any).admin ?? []) adminDetails.set(a.index, a.actionDetails)
     for (let i = 0; i < tx.outputs.length; i++) {
       const ls = tx.outputs[i].lockingScript
-      try {
-        const d = MandalaToken.decode(ls)
-        ftOutputs.push({ index: i, ...d })
+      const ft = decodeFtOutput(ls)
+      if (ft != null) {
+        ftOutputs.push({ index: i, ...ft })
         continue
-      } catch { /* not FT */ }
-      try {
-        const decodedAdmin = MandalaAdmin.decode(ls)
-        const details = adminDetails.get(i)
-        if (details != null) {
-          const adminTemplate = new MandalaAdmin(this.deps.adminWallet)
-          const { boundKey } = await adminTemplate.deriveBoundKey(this.deps.adminProtocolID, details)
-          const priorOk = details.kind === 'register' ||
-            (typeof details.priorOutpoint === 'string' &&
-              tx.inputs.some(inp => `${inp.sourceTXID ?? inp.sourceTransaction?.id('hex') ?? ''}.${inp.sourceOutputIndex}` === details.priorOutpoint))
-          if (boundKey === decodedAdmin.boundKey && priorOk) {
-            adminIndices.push(i)
-            if ((details.kind === 'issue' || details.kind === 'recover') && typeof details.assetId === 'string') {
-              authorizedIssuance.set(
-                details.assetId,
-                (authorizedIssuance.get(details.assetId) ?? 0) + (details.amount ?? 0)
-              )
-            }
-          }
-        }
-      } catch { /* not admin */ }
+      }
+      const admin = await this.verifyAdminOutput(tx, ls, adminDetails.get(i))
+      if (!admin.admitted) continue
+      adminIndices.push(i)
+      if (admin.issuance != null) {
+        const { assetId, amount } = admin.issuance
+        authorizedIssuance.set(assetId, (authorizedIssuance.get(assetId) ?? 0) + amount)
+      }
     }
     return { ftOutputs, adminIndices, authorizedIssuance }
+  }
+
+  private async verifyAdminOutput (
+    tx: Transaction,
+    ls: LockingScript,
+    details: MandalaActionDetails | undefined
+  ): Promise<{ admitted: boolean, issuance?: { assetId: string, amount: number } }> {
+    let decodedAdmin
+    try {
+      decodedAdmin = MandalaAdmin.decode(ls)
+    } catch {
+      return { admitted: false }
+    }
+    if (details == null) return { admitted: false }
+    const { boundKey } = await new MandalaAdmin(this.deps.adminWallet)
+      .deriveBoundKey(this.deps.adminProtocolID, details)
+    if (boundKey !== decodedAdmin.boundKey || !priorOutpointSpent(tx, details)) {
+      return { admitted: false }
+    }
+    if ((details.kind === 'issue' || details.kind === 'recover') && typeof details.assetId === 'string') {
+      return { admitted: true, issuance: { assetId: details.assetId, amount: details.amount ?? 0 } }
+    }
+    return { admitted: true }
   }
 
   private async verifyFtOutputs (

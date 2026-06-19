@@ -1,3 +1,15 @@
+---
+id: mandala-overlay-plan
+title: Mandala Token Regulated-Transfer Overlay — Implementation Plan (Plan 2 of 2)
+kind: spec
+domain: overlays
+version: "n/a"
+last_updated: "2026-06-18"
+last_verified: "2026-06-18"
+status: experimental
+tags: [mandala, brc-92, overlay, plan]
+---
+
 # Mandala Token Regulated-Transfer Overlay — Implementation Plan (Plan 2 of 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

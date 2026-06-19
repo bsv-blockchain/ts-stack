@@ -1,3 +1,15 @@
+---
+id: mandala-templates-plan
+title: Mandala Token Script Templates — Implementation Plan (Plan 1 of 2)
+kind: spec
+domain: helpers
+version: "n/a"
+last_updated: "2026-06-18"
+last_verified: "2026-06-18"
+status: experimental
+tags: [mandala, brc-92, templates, plan]
+---
+
 # Mandala Token Script Templates — Implementation Plan (Plan 1 of 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

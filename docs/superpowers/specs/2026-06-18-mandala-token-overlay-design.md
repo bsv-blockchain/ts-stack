@@ -1,3 +1,15 @@
+---
+id: mandala-token-overlay-design
+title: Mandala Token Regulated-Transfer Overlay — Design
+kind: spec
+domain: overlays
+version: "n/a"
+last_updated: "2026-06-18"
+last_verified: "2026-06-18"
+status: experimental
+tags: [mandala, brc-92, overlay, regulated-token]
+---
+
 # Mandala Token Regulated-Transfer Overlay — Design
 
 **Date:** 2026-06-18
