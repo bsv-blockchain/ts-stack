@@ -1,6 +1,6 @@
 {
   "name": "@bsv/authsocket-client",
-  "version": "2.0.3",
+  "version": "2.1.0",
   "publishConfig": {
     "access": "public"
   },
@@ -53,7 +53,6 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client#readme",
   "dependencies": {
-    "@bsv/sdk": "^2.1.6",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
@@ -67,6 +66,15 @@
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
     "webpack": "^5.107.2",
-    "webpack-cli": "^7.0.3"
+    "webpack-cli": "^7.0.3",
+    "@bsv/sdk": "workspace:^"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
   }
 }

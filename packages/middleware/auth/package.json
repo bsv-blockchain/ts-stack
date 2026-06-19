@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Signed, expiry-bound, single-use wallet auth proofs for BSV apps.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -39,9 +39,7 @@
   "author": "BSV Blockchain Association",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {
-    "@bsv/sdk": "workspace:^"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
@@ -51,7 +49,8 @@
     "ts-standard": "^12.0.2",
     "tslib": "^2.8.1",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
   "ts-standard": {
     "project": "tsconfig.eslint.json",
@@ -62,5 +61,13 @@
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth#readme",
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
 }

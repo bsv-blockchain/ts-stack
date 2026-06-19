@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-express",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "type": "module",
   "description": "BSV Blockchain Overlay Express",
   "main": "dist/cjs/mod.js",
@@ -66,13 +66,13 @@
     "ts-standard": "^12.0.2",
     "ts2md": "^0.2.0",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.0.6",
     "@bsv/overlay": "^2.0.4",
     "@bsv/overlay-discovery-services": "^2.0.3",
-    "@bsv/sdk": "^2.1.6",
     "@bsv/wallet-toolbox-client": "^2.1.30",
     "body-parser": "^2.2.2",
     "chalk": "^5.6.2",
@@ -80,5 +80,13 @@
     "knex": "^3.2.10",
     "mongodb": "^7.3.0",
     "uuid": "^14.0.0"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
   }
 }

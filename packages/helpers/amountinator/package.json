@@ -1,6 +1,6 @@
 {
   "name": "@bsv/amountinator",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Currency amount conversion",
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
   "license": "Open BSV License",
@@ -32,10 +32,10 @@
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
-    "@bsv/sdk": "^2.1.6",
     "@bsv/wallet-toolbox-client": "^2.1.30"
   },
   "keywords": [
@@ -44,5 +44,13 @@
     "conversion",
     "satoshis",
     "wallet"
-  ]
+  ],
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
 }

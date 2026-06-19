@@ -1,6 +1,6 @@
 {
   "name": "@bsv/did",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "SD-JWT VC and did:key helpers for BSV SDK identities",
   "publishConfig": {
     "access": "public"
@@ -47,7 +47,6 @@
   "author": "Peer-to-peer Privacy Systems Research, LLC & BSV Association",
   "license": "Open BSV License",
   "dependencies": {
-    "@bsv/sdk": "^2.1.6",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
@@ -58,7 +57,8 @@
     "ts-jest": "^29.4.11",
     "ts-standard": "^12.0.2",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
   "repository": {
     "type": "git",
@@ -68,5 +68,13 @@
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did#readme",
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Canonical BSV overlay topic managers and lookup services",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@bsv/overlay": "^2.0.4",
-    "@bsv/sdk": "^2.1.6",
     "@bsv/templates": "workspace:^",
     "mongodb": "^7.3.0"
   },
@@ -31,7 +30,8 @@
     "mongodb-memory-server": "^11.2.0",
     "ts-jest": "^29.4.11",
     "ts-standard": "^12.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
   "license": "Open BSV",
   "author": "BSV Blockchain Association",
@@ -51,5 +51,13 @@
     "topic-manager",
     "lookup-service",
     "blockchain"
-  ]
+  ],
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
 }
