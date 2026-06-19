@@ -6,6 +6,7 @@ on:
       - '**/v*'        # e.g. packages/sdk/v1.2.3 — single-package release
       - 'release/v*'   # e.g. release/v2026-05-17 — cascade release (multi-package)
       - 'v*'           # monorepo-wide tag (publishes everything changed since origin/main)
+      - '!infra/v*'    # infra/v* tags drive infra-release.yaml (Docker images), not npm publish
   workflow_dispatch:
     inputs:
       mode:
