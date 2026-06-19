@@ -242,6 +242,33 @@ this is a deterministic local wallet acting as the verifier.
    wallet; this protects the one key that can decrypt it.)
 2. Production `ScreeningProvider` backed by a real sanctioned-parties feed.
 3. Operational hardening of the overlay host (physical/logical/operational controls).
+4. **Issuer-side sanctions screening (I3, from whole-branch review):** admin issuance currently
+   screens the FT output recipients but not the issuing identity itself (the admin output exposes a
+   derived `boundKey`, not the issuer identity key). Add the issuer identity key to the admin
+   off-chain payload and screen it, so an OFAC-listed issuer cannot mint. Design §4.2.6 intent.
+5. **Canonical JSON → full RFC 8785 JCS (I1, from whole-branch review):** `MandalaAdmin.canonicalize`
+   is a deterministic JSON subset (recursive key sorting + `JSON.stringify` scalars), not full JCS
+   (no number/Unicode normalization). It is internally consistent (the overlay re-derives with the
+   same function), so it is safe in-system, but a third party implementing literal JCS would compute
+   a different `boundKey`. Either adopt a vetted JCS library or amend this spec to declare the
+   implemented form normative before independent implementers build against it.
+6. **Admin-chain depth:** the overlay verifies one hop (boundKey re-derivation + that the prior
+   authorization outpoint is spent for non-`register` kinds); it does not walk the authorization
+   chain back to genesis. A self-consistent forged `actionDetails` whose `priorOutpoint` points at
+   any spent input the issuer controls passes the one-hop check. Add full chain-to-genesis walking.
+7. **Redeem/burn output mechanics:** conservation currently requires `Σout === Σin + authorizedIssue`
+   per assetId, which admits transfers and authorized issuance but does not model `redeem` (supply
+   reduction) output rules. Define and enforce redeem semantics.
+
+### Deferred minor items (from per-task reviews; triaged non-blocking)
+- `MandalaToken.unlock` lacks an end-to-end `spendTx.verify()` test (signature correct by inspection
+  vs SDK P2PKH); add full-interpreter verification.
+- `MandalaLookupService.outputSpent` does a redundant `findByOutpoint` + `getTokenRow`; collapse to
+  one query.
+- `linkageControlsPubKeyHash` (in `verifyKeyLinkage.ts`) is currently unused by the topic manager
+  (which inlines the byte comparison); either use it for DRY or remove.
+- `MandalaToken.unlock`/`MandalaAdmin.unlock` duplicate ~30 lines of sighash-preimage construction;
+  extract a shared helper.
 
 ## 9. Out of Scope
 
