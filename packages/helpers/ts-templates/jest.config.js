@@ -10,7 +10,9 @@ export default {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {
         module: 'commonjs',
-        moduleResolution: 'bundler'
+        moduleResolution: 'bundler',
+        target: 'es2022',
+        lib: ['es2022']
       }
     }]
   }
