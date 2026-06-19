@@ -70,7 +70,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/did#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2"
+    "@bsv/sdk": "^2.1.6"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

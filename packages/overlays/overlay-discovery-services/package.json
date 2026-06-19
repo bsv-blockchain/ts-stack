@@ -66,12 +66,12 @@
     "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.0.4",
-    "@bsv/wallet-toolbox-client": "^2.1.30",
+    "@bsv/overlay": "^2.1.0",
+    "@bsv/wallet-toolbox-client": "^2.2.0",
     "mongodb": "^7.3.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2"
+    "@bsv/sdk": "^2.1.6"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
