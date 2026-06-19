@@ -67,7 +67,7 @@ export class MandalaAdmin {
     const c = script.chunks
     if (c.length !== 4) throw new Error('not a MandalaAdmin script: wrong chunk count')
     const marker = c[0].data ?? []
-    if (marker.length !== 1 || marker[0] !== MARKER) throw new Error('not a MandalaAdmin script: missing marker')
+    if (c[0].op !== 1 || marker.length !== 1 || marker[0] !== MARKER) throw new Error('not a MandalaAdmin script: missing marker')
     if (c[1].op !== OP.OP_DROP || c[3].op !== OP.OP_CHECKSIG) throw new Error('not a MandalaAdmin script: bad shape')
     const keyData = c[2].data
     if (keyData == null || keyData.length !== 33) throw new Error('not a MandalaAdmin script: bad boundKey')

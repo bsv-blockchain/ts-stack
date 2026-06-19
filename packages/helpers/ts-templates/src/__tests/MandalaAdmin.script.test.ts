@@ -16,4 +16,11 @@ describe('MandalaAdmin lock/decode', () => {
   it('decode throws on non-admin scripts', () => {
     expect(() => MandalaAdmin.decode({ chunks: [{ op: 0x00 }] } as any)).toThrow()
   })
+
+  it('decode rejects a non-minimal (PUSHDATA1) marker encoding', () => {
+    const boundKey = PrivateKey.fromRandom().toPublicKey().toString()
+    const script = new MandalaAdmin({} as any).lock(boundKey)
+    script.chunks[0] = { op: 0x4c, data: [0x21] }
+    expect(() => MandalaAdmin.decode(script)).toThrow()
+  })
 })

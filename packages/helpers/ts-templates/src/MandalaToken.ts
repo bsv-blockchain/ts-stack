@@ -111,7 +111,7 @@ export class MandalaToken implements ScriptTemplate {
     const c = script.chunks
     if (c.length !== 10) throw new Error('not a MandalaToken script: wrong chunk count')
     const marker = c[0].data ?? []
-    if (marker.length !== 1 || marker[0] !== MARKER) throw new Error('not a MandalaToken script: missing marker')
+    if (c[0].op !== 1 || marker.length !== 1 || marker[0] !== MARKER) throw new Error('not a MandalaToken script: missing marker')
     if (c[3].op !== OP.OP_2DROP || c[4].op !== OP.OP_DROP) throw new Error('not a MandalaToken script: bad drops')
     if (c[5].op !== OP.OP_DUP || c[6].op !== OP.OP_HASH160 || c[8].op !== OP.OP_EQUALVERIFY || c[9].op !== OP.OP_CHECKSIG) {
       throw new Error('not a MandalaToken script: bad P2PKH tail')

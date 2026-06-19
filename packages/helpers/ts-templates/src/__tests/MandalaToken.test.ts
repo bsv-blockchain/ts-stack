@@ -34,4 +34,13 @@ describe('MandalaToken lock/decode', () => {
     script.chunks[2] = { op: 0 }
     expect(() => MandalaToken.decode(script)).toThrow()
   })
+
+  it('decode rejects a non-minimal (PUSHDATA1) marker encoding', () => {
+    const assetId = `${'a'.repeat(64)}.0`
+    const pkh = new Array(20).fill(1)
+    const script = new MandalaToken().lock(assetId, 5, pkh)
+    // Re-encode the marker push (chunk 0) as PUSHDATA1 of the same byte.
+    script.chunks[0] = { op: 0x4c, data: [0x21] }
+    expect(() => MandalaToken.decode(script)).toThrow()
+  })
 })
