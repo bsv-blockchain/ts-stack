@@ -1,4 +1,8 @@
-import { ScriptTemplate, LockingScript, UnlockingScript, OP, Transaction } from '@bsv/sdk'
+import {
+  ScriptTemplate, LockingScript, UnlockingScript, OP, Utils,
+  WalletInterface, WalletProtocol, WalletCounterparty, Transaction, Hash,
+  TransactionSignature, PrivateKey
+} from '@bsv/sdk'
 import {
   createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
   encodeAssetId, decodeAssetId, MARKER
@@ -17,6 +21,27 @@ export interface MandalaTokenDecoded {
 }
 
 export class MandalaToken implements ScriptTemplate {
+  wallet?: WalletInterface
+  originator?: string
+
+  constructor (wallet?: WalletInterface, originator?: string) {
+    this.wallet = wallet
+    this.originator = originator
+  }
+
+  async lockBRC29 (
+    assetId: string,
+    amount: number,
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: WalletCounterparty
+  ): Promise<LockingScript> {
+    if (this.wallet == null) throw new Error('lockBRC29 requires a wallet')
+    const { publicKey } = await this.wallet.getPublicKey({ protocolID, keyID, counterparty }, this.originator)
+    const pubKeyHash = Hash.hash160(Utils.toArray(publicKey, 'hex'))
+    return this.lock(assetId, amount, pubKeyHash)
+  }
+
   lock (assetId: string, amount: number, pubKeyHash: number[]): LockingScript {
     if (pubKeyHash.length !== 20) throw new Error('pubKeyHash must be 20 bytes')
     if (!Number.isInteger(amount) || amount < 1) throw new Error('amount must be a positive integer')
@@ -35,11 +60,54 @@ export class MandalaToken implements ScriptTemplate {
     ])
   }
 
-  unlock (): {
-    sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-    estimateLength: () => Promise<number>
-  } {
-    throw new Error('Unlock is not supported for MandalaToken scripts')
+  unlock (
+    privateKey: PrivateKey,
+    signOutputs: 'all' | 'none' | 'single' = 'all',
+    anyoneCanPay = false
+  ): {
+      sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
+      estimateLength: () => Promise<number>
+    } {
+    return {
+      sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
+        let scope = TransactionSignature.SIGHASH_FORKID
+        if (signOutputs === 'all') scope |= TransactionSignature.SIGHASH_ALL
+        else if (signOutputs === 'none') scope |= TransactionSignature.SIGHASH_NONE
+        else if (signOutputs === 'single') scope |= TransactionSignature.SIGHASH_SINGLE
+        if (anyoneCanPay) scope |= TransactionSignature.SIGHASH_ANYONECANPAY
+
+        const input = tx.inputs[inputIndex]
+        const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+        const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
+        if (sourceTXID == null) throw new Error('sourceTXID or sourceTransaction required')
+        if (sourceOutput?.satoshis == null) throw new Error('source satoshis required')
+        if (sourceOutput.lockingScript == null) throw new Error('source lockingScript required')
+
+        const preimage = TransactionSignature.format({
+          sourceTXID,
+          sourceOutputIndex: input.sourceOutputIndex,
+          sourceSatoshis: sourceOutput.satoshis,
+          transactionVersion: tx.version,
+          otherInputs: tx.inputs.filter((_, i) => i !== inputIndex),
+          inputIndex,
+          outputs: tx.outputs,
+          inputSequence: input.sequence ?? 0xffffffff,
+          subscript: sourceOutput.lockingScript,
+          lockTime: tx.lockTime,
+          scope
+        })
+
+        const rawSignature = privateKey.sign(Hash.sha256(preimage))
+        const sig = new TransactionSignature(rawSignature.r, rawSignature.s, scope)
+        const sigForScript = sig.toChecksigFormat()
+        const pubkeyForScript = privateKey.toPublicKey().encode(true) as number[]
+        return new UnlockingScript([
+          { op: sigForScript.length, data: sigForScript },
+          { op: pubkeyForScript.length, data: pubkeyForScript }
+        ])
+      },
+      estimateLength: async () => 108
+    }
   }
 
   static decode (script: LockingScript): MandalaTokenDecoded {
