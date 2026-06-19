@@ -17,18 +17,26 @@
  * Exit code 1 if any violation is found (CI guard).
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { resolve, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 
-const files = execSync(
-  "find packages -name package.json -not -path '*/node_modules/*' -not -path '*/dist/*'",
-  { cwd: ROOT, encoding: 'utf8' }
-).trim().split('\n').filter(Boolean)
+// Walk packages/** with Node's fs (no shell out) collecting package.json paths.
+function findManifests (dir) {
+  const out = []
+  for (const name of readdirSync(dir)) {
+    if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue
+    const full = resolve(dir, name)
+    if (statSync(full).isDirectory()) out.push(...findManifests(full))
+    else if (name === 'package.json') out.push(full)
+  }
+  return out
+}
+
+const files = findManifests(resolve(ROOT, 'packages')).map(f => relative(ROOT, f))
 
 const violations = []
 
