@@ -22,6 +22,11 @@ function error(code: string, description: string): ApiResponse {
   return { status: 'error', code, description }
 }
 
+// Express route params can be typed `string | string[]`; normalise to a single string.
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
+
 // Reverse a hex string's byte order (for converting display hash to internal byte order)
 function reverseHex(hex: string): Buffer {
   const buf = Buffer.from(hex, 'hex')
@@ -74,7 +79,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/header/height/:height - Get header by height
   router.get('/header/height/:height', async (req: Request, res: Response) => {
     try {
-      const height = Number.parseInt(req.params.height, 10)
+      const height = Number.parseInt(firstParam(req.params.height) ?? '', 10)
       if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid height parameter'))
       }
@@ -100,7 +105,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/header/hash/:hash - Get header by hash
   router.get('/header/hash/:hash', async (req: Request, res: Response) => {
     try {
-      const hash = req.params.hash
+      const hash = firstParam(req.params.hash)
       if (!hash || !/^[a-fA-F0-9]{64}$/.test(hash)) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid hash parameter'))
       }
@@ -182,7 +187,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/header/height/:height.bin - Get header by height as 80-byte binary
   router.get('/header/height/:height.bin', async (req: Request, res: Response) => {
     try {
-      const heightStr = req.params.height.replace('.bin', '')
+      const heightStr = (firstParam(req.params.height) ?? '').replace('.bin', '')
       const height = Number.parseInt(heightStr, 10)
       if (Number.isNaN(height) || height < 0) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid height parameter'))
@@ -211,7 +216,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
   // GET /v2/header/hash/:hash.bin - Get header by hash as 80-byte binary
   router.get('/header/hash/:hash.bin', async (req: Request, res: Response) => {
     try {
-      const hash = req.params.hash.replace('.bin', '')
+      const hash = (firstParam(req.params.hash) ?? '').replace('.bin', '')
       if (!hash || !/^[a-fA-F0-9]{64}$/.test(hash)) {
         return res.status(400).json(error('ERR_INVALID_PARAMS', 'Invalid hash parameter'))
       }
