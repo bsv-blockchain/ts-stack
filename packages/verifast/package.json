@@ -1,6 +1,11 @@
 {
   "name": "@bsv/verifast",
   "version": "0.2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/verifast"
+  },
   "type": "module",
   "description": "Optional C++/WASM (BDK) transaction script-verification backend for @bsv/sdk",
   "main": "dist/mod.js",
