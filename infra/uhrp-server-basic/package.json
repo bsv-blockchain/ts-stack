@@ -1,6 +1,6 @@
 {
   "name": "@bsv/uhrp-lite",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "main": "./out/src/index.js",
   "types": "./out/src/index.d.ts",
   "files": [
@@ -21,8 +21,8 @@
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.0.6",
     "@bsv/payment-express-middleware": "^2.0.3",
-    "@bsv/sdk": "^2.1.4",
-    "@bsv/wallet-toolbox-client": "^2.1.28",
+    "@bsv/sdk": "^2.1.6",
+    "@bsv/wallet-toolbox-client": "^2.1.30",
     "axios": "^1.17.0",
     "body-parser": "^2.2.2",
     "dotenv": "^17.4.2",

@@ -75,8 +75,8 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@bsv/gasp": "^1.2.3",
-    "@bsv/sdk": "^2.1.4",
+    "@bsv/gasp": "^1.2.4",
+    "@bsv/sdk": "^2.1.6",
     "knex": "^3.2.10"
   }
 }

@@ -139,8 +139,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0
@@ -164,8 +164,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
     devDependencies:
       '@jest/globals':
         specifier: ^30.4.1
@@ -235,8 +235,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -296,8 +296,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox':
-        specifier: ^2.1.28
-        version: 2.1.28(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.1.30
+        version: 2.1.30(@types/node@25.9.3)(sqlite3@6.0.1)
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -327,11 +327,11 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox':
-        specifier: ^2.1.28
-        version: 2.1.28(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.1.30
+        version: 2.1.30(@types/node@25.9.3)(sqlite3@6.0.1)
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
     devDependencies:
       '@types/jest':
         specifier: ^30.0.0
@@ -359,8 +359,8 @@ importers:
         version: 2.1.3
     devDependencies:
       '@bsv/wallet-toolbox':
-        specifier: ^2.1.28
-        version: 2.1.28(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.1.30
+        version: 2.1.30(@types/node@25.9.3)(sqlite3@6.0.1)
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -827,8 +827,8 @@ importers:
   packages/overlays/btms-backend:
     dependencies:
       '@bsv/overlay':
-        specifier: ^2.0.3
-        version: 2.0.3
+        specifier: ^2.0.4
+        version: 2.0.4
       '@bsv/sdk':
         specifier: 2.1.3
         version: 2.1.3
@@ -898,8 +898,8 @@ importers:
   packages/overlays/overlay:
     dependencies:
       '@bsv/gasp':
-        specifier: ^1.2.3
-        version: 1.2.3
+        specifier: ^1.2.4
+        version: 1.2.4
       '@bsv/sdk':
         specifier: 2.1.3
         version: 2.1.3
@@ -935,14 +935,14 @@ importers:
   packages/overlays/overlay-discovery-services:
     dependencies:
       '@bsv/overlay':
-        specifier: ^2.0.3
-        version: 2.0.3
+        specifier: ^2.0.4
+        version: 2.0.4
       '@bsv/sdk':
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
       mongodb:
         specifier: ^7.3.0
         version: 7.3.0(socks@2.8.7)
@@ -978,8 +978,8 @@ importers:
         specifier: ^2.0.6
         version: 2.0.6
       '@bsv/overlay':
-        specifier: ^2.0.3
-        version: 2.0.3
+        specifier: ^2.0.4
+        version: 2.0.4
       '@bsv/overlay-discovery-services':
         specifier: ^2.0.3
         version: 2.0.3(socks@2.8.7)
@@ -987,8 +987,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1045,8 +1045,8 @@ importers:
   packages/overlays/topics:
     dependencies:
       '@bsv/overlay':
-        specifier: ^2.0.3
-        version: 2.0.3
+        specifier: ^2.0.4
+        version: 2.0.4
       '@bsv/sdk':
         specifier: 2.1.3
         version: 2.1.3
@@ -1201,8 +1201,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.1.28
-        version: 2.1.28
+        specifier: ^2.1.30
+        version: 2.1.30
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
@@ -1367,8 +1367,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox':
-        specifier: ^2.1.28
-        version: 2.1.28(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.1.30
+        version: 2.1.30(@types/node@25.9.3)(sqlite3@6.0.1)
     devDependencies:
       '@types/diff':
         specifier: ^8.0.0
@@ -2218,8 +2218,8 @@ packages:
     peerDependencies:
       '@bsv/sdk': 2.1.3
 
-  '@bsv/gasp@1.2.3':
-    resolution: {integrity: sha512-WvtEw+cVUiEaMaAvGiABNOUVlpn6kBDOVBT4XNjxhr3X1HG+pBEcyPlcDSuq44chuubOC8abKINcHvdQFw0jNQ==}
+  '@bsv/gasp@1.2.4':
+    resolution: {integrity: sha512-0Y2BHlXqDYchOu2se2AcuMcTrJMIziuR8PVH90XVpRVeDlrTvlfcm9yOJgrH5tJcqV828LaJqN9pvISTToV1zQ==}
 
   '@bsv/message-box-client@2.1.2':
     resolution: {integrity: sha512-UCau2/sML+grGED0og7mfxpMYNf31DYViUuS5Kh++XxyKlXOsC0mJWdxSr2nHDWndQuQHrKbcUDoRZjlkHkQyg==}
@@ -2227,8 +2227,8 @@ packages:
   '@bsv/overlay-discovery-services@2.0.3':
     resolution: {integrity: sha512-/arPaPeCu3IRsD1FLgn6tZbeeZE7c4Pv5gJ2ydUjwK7x0uHGev2Y2/83HxC3tSQCOuHK5Jv4dDeLZgjpIZDLDg==}
 
-  '@bsv/overlay@2.0.3':
-    resolution: {integrity: sha512-dM1cJsxpEZakk0PyXtYCXE2ND9pBynl+cM2UFyGtpYXSZ7ZVzjXge3DTeuRvSI6qrnYR00a56brKTiDensw6RQ==}
+  '@bsv/overlay@2.0.4':
+    resolution: {integrity: sha512-1/I+TPIvIsYSlnQxvqrzoqtH3Oyr9pDamIcTlWwB7+NrskDvY80KyBZD7YDCstc8DGXPTE7/rf14/8/GD8kPEg==}
 
   '@bsv/payment-express-middleware@2.0.3':
     resolution: {integrity: sha512-ezhdp9veMg6GSBWMLRonDBTDp2iyguPO9d29LDEqYuPkZznNeTqHvBbTyYmuVwSWkrGNZ9t/tqeiAFb5xXKm4A==}
@@ -2236,11 +2236,11 @@ packages:
   '@bsv/sdk@2.1.3':
     resolution: {integrity: sha512-nmni2Q762/TeWz6MfbHdWRSTwzPV8o5t34789/u8MA+kPNnoZfs/BQOw4c5FtlXYcu3Soxbhup3+02zdrP+drg==}
 
-  '@bsv/wallet-toolbox-client@2.1.28':
-    resolution: {integrity: sha512-kxkQXQxff0xk9IfWjSJW5xq1orlGfoG0ZYG3MFOmGXykMeTruYp++79ESIt0M9xtusMuB78ktaJvcdeuY1T5mg==}
+  '@bsv/wallet-toolbox-client@2.1.30':
+    resolution: {integrity: sha512-PaFXZWHfX8brz0feooGDmNUCi54MzGO0ua010vt3FFLGDKrLeQCR/Tf/nkuBM70gDe/VdDXa+J6HSRPLHNmoIg==}
 
-  '@bsv/wallet-toolbox@2.1.28':
-    resolution: {integrity: sha512-9pkuOVJUQYEUTfn916hYFRedMRXYzlkLDiMmovC+FmezrFzWkITnxsTadhrbI3wCbOhd0aOfqxngqdbJ14GbKw==}
+  '@bsv/wallet-toolbox@2.1.30':
+    resolution: {integrity: sha512-uREWUHoQ8pxfK9VONI5lHlVApBdCsLARsJxPOalCHTBlrpFohAVvGXBE/D1XX8ZfFZD/nRfZiSVPP3v75BiT0w==}
 
   '@chainsafe/as-chacha20poly1305@0.1.0':
     resolution: {integrity: sha512-BpNcL8/lji/GM3+vZ/bgRWqJ1q5kwvTFmGPk7pxm/QQZDbaMI98waOHjEymTjq2JmdD/INdNBFOVSyJofXg7ew==}
@@ -6493,10 +6493,6 @@ packages:
   expr-eval-fork@3.0.3:
     resolution: {integrity: sha512-BhC+hbc5lIVjygr840n5DEkW3MQq7H9o+mc1/N7Z5uIiCFVyESLL5DIE7LNq4CYUNxy+XjA+3jRrL/h0Kt2xcg==}
     engines: {node: '>=16.9.0'}
-
-  express@4.22.1:
-    resolution: {integrity: sha512-F2X8g9P1X7uCPZMA3MVf9wcTqlyNp7IhH5qPCI0izhaOIYXaW9L535tGA3qmjRzpH+bZczqq7hVKxTR4NWnu+g==}
-    engines: {node: '>= 0.10.0'}
 
   express@4.22.2:
     resolution: {integrity: sha512-IuL+Elrou2ZvCFHs18/CIzy2Nzvo25nZ1/D2eIZlz7c+QUayAcYoiM2BthCjs+EBHVpjYjcuLDAiCWgeIX3X1Q==}
@@ -12149,7 +12145,7 @@ snapshots:
     dependencies:
       '@bsv/sdk': 2.1.3
 
-  '@bsv/gasp@1.2.3':
+  '@bsv/gasp@1.2.4':
     dependencies:
       '@bsv/sdk': 2.1.3
 
@@ -12164,9 +12160,9 @@ snapshots:
 
   '@bsv/overlay-discovery-services@2.0.3(socks@2.8.7)':
     dependencies:
-      '@bsv/overlay': 2.0.3
+      '@bsv/overlay': 2.0.4
       '@bsv/sdk': 2.1.3
-      '@bsv/wallet-toolbox-client': 2.1.28
+      '@bsv/wallet-toolbox-client': 2.1.30
       mongodb: 7.3.0(socks@2.8.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-providers'
@@ -12186,9 +12182,9 @@ snapshots:
       - supports-color
       - tedious
 
-  '@bsv/overlay@2.0.3':
+  '@bsv/overlay@2.0.4':
     dependencies:
-      '@bsv/gasp': 1.2.3
+      '@bsv/gasp': 1.2.4
       '@bsv/sdk': 2.1.3
       knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.22.3(@types/node@25.9.3))(sqlite3@6.0.1)
     transitivePeerDependencies:
@@ -12211,19 +12207,19 @@ snapshots:
 
   '@bsv/sdk@2.1.3': {}
 
-  '@bsv/wallet-toolbox-client@2.1.28':
+  '@bsv/wallet-toolbox-client@2.1.30':
     dependencies:
       '@bsv/sdk': 2.1.3
       hash-wasm: 4.12.0
       idb: 8.0.3
 
-  '@bsv/wallet-toolbox@2.1.28(@types/node@25.9.3)(sqlite3@6.0.1)':
+  '@bsv/wallet-toolbox@2.1.30(@types/node@25.9.3)(sqlite3@6.0.1)':
     dependencies:
       '@bsv/auth-express-middleware': 2.0.6
       '@bsv/payment-express-middleware': 2.0.3
       '@bsv/sdk': 2.1.3
       better-sqlite3: 12.10.0
-      express: 4.22.1
+      express: 5.2.1
       hash-wasm: 4.12.0
       idb: 8.0.3
       knex: 3.2.10(better-sqlite3@12.10.0)(mysql2@3.22.3(@types/node@25.9.3))(sqlite3@6.0.1)
@@ -16852,6 +16848,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  eslint-plugin-es@4.1.0(eslint@10.5.0):
+    dependencies:
+      eslint: 10.5.0
+      eslint-utils: 2.1.0
+      regexpp: 3.2.0
+
   eslint-plugin-es@4.1.0(eslint@8.57.1):
     dependencies:
       eslint: 8.57.1
@@ -16918,8 +16920,8 @@ snapshots:
     dependencies:
       builtins: 5.1.0
       eslint: 10.5.0
-      eslint-plugin-es: 4.1.0(eslint@8.57.1)
-      eslint-utils: 3.0.0(eslint@8.57.1)
+      eslint-plugin-es: 4.1.0(eslint@10.5.0)
+      eslint-utils: 3.0.0(eslint@10.5.0)
       ignore: 5.3.2
       is-core-module: 2.16.2
       minimatch: 3.1.5
@@ -17010,6 +17012,11 @@ snapshots:
   eslint-utils@2.1.0:
     dependencies:
       eslint-visitor-keys: 1.3.0
+
+  eslint-utils@3.0.0(eslint@10.5.0):
+    dependencies:
+      eslint: 10.5.0
+      eslint-visitor-keys: 2.1.0
 
   eslint-utils@3.0.0(eslint@8.57.1):
     dependencies:
@@ -17219,42 +17226,6 @@ snapshots:
   exponential-backoff@3.1.3: {}
 
   expr-eval-fork@3.0.3: {}
-
-  express@4.22.1:
-    dependencies:
-      accepts: 1.3.8
-      array-flatten: 1.1.1
-      body-parser: 1.20.5
-      content-disposition: 0.5.4
-      content-type: 1.0.5
-      cookie: 0.7.2
-      cookie-signature: 1.0.7
-      debug: 2.6.9
-      depd: 2.0.0
-      encodeurl: 2.0.0
-      escape-html: 1.0.3
-      etag: 1.8.1
-      finalhandler: 1.3.2
-      fresh: 0.5.2
-      http-errors: 2.0.1
-      merge-descriptors: 1.0.3
-      methods: 1.1.2
-      on-finished: 2.4.1
-      parseurl: 1.3.3
-      path-to-regexp: 0.1.13
-      proxy-addr: 2.0.7
-      qs: 6.15.2
-      range-parser: 1.2.1
-      safe-buffer: 5.2.1
-      send: 0.19.2
-      serve-static: 1.16.3
-      setprototypeof: 1.2.0
-      statuses: 2.0.2
-      type-is: 1.6.18
-      utils-merge: 1.0.1
-      vary: 1.1.2
-    transitivePeerDependencies:
-      - supports-color
 
   express@4.22.2:
     dependencies:
