@@ -53,6 +53,7 @@ export class MandalaToken implements ScriptTemplate {
     }
     const assetId = decodeAssetId(vt(c[1].data))
     const amount = decodeScriptNum(c[2].data ?? [])
+    if (!Number.isInteger(amount) || amount < 1) throw new Error('not a MandalaToken script: bad amount')
     const pubKeyHash = vt(c[7].data)
     if (pubKeyHash.length !== 20) throw new Error('not a MandalaToken script: bad pubKeyHash')
     return { assetId, amount, pubKeyHash }

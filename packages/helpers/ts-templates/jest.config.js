@@ -4,7 +4,7 @@ export default {
   testEnvironment: 'node',
   testPathIgnorePatterns: ['dist/'],
   moduleNameMapper: {
-    '^(.+)\\.js$': '$1'
+    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

@@ -25,4 +25,13 @@ describe('MandalaToken lock/decode', () => {
     expect(() => MandalaToken.decode({ chunks: [{ op: 0x00 }] } as any)).toThrow()
     void broken
   })
+
+  it('decode throws when the amount chunk is empty/zero', () => {
+    const assetId = `${'a'.repeat(64)}.0`
+    const pkh = new Array(20).fill(1)
+    const script = new MandalaToken().lock(assetId, 5, pkh)
+    // Replace the amount push (chunk index 2) with an empty (OP_0) push.
+    script.chunks[2] = { op: 0 }
+    expect(() => MandalaToken.decode(script)).toThrow()
+  })
 })
