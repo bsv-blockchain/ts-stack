@@ -1,4 +1,7 @@
 import { PubKeyHex, WalletProtocol, Utils } from '@bsv/sdk'
+import { MandalaActionDetails } from '@bsv/templates'
+
+export type { MandalaActionDetails }
 
 export interface SpecificLinkage {
   prover: PubKeyHex
@@ -14,6 +17,7 @@ export interface SpecificLinkage {
 export interface MandalaLinkagePayload {
   inputs: Array<{ index: number, linkage: SpecificLinkage }>
   outputs: Array<{ index: number, linkage: SpecificLinkage }>
+  admin?: Array<{ index: number, actionDetails: MandalaActionDetails }>
 }
 
 export interface MandalaTokenRecord {

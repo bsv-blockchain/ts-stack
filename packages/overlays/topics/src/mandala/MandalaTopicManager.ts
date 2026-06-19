@@ -1,6 +1,6 @@
 import { TopicManager } from '@bsv/overlay'
-import { AdmittanceInstructions, Transaction, WalletInterface } from '@bsv/sdk'
-import { MandalaToken, MandalaAdmin } from '@bsv/templates'
+import { AdmittanceInstructions, Transaction, WalletInterface, WalletProtocol } from '@bsv/sdk'
+import { MandalaToken, MandalaAdmin, MandalaActionDetails } from '@bsv/templates'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
 import { decodeLinkagePayload, ScreeningProvider, SpecificLinkage } from './types.js'
 import docs from './MandalaTopicDocs.md.js'
@@ -8,6 +8,8 @@ import docs from './MandalaTopicDocs.md.js'
 export interface MandalaTopicManagerDeps {
   verifierWallet: WalletInterface
   screeningProvider: ScreeningProvider
+  adminWallet: WalletInterface
+  adminProtocolID: WalletProtocol
 }
 
 export class MandalaTopicManager implements TopicManager {
@@ -31,6 +33,8 @@ export class MandalaTopicManager implements TopicManager {
       const ftOutputs: Array<{ index: number, assetId: string, amount: number, pubKeyHash: number[] }> = []
       let hasVerifiedAdmin = false
       const adminIndices: number[] = []
+      const adminDetails = new Map<number, MandalaActionDetails>()
+      for (const a of (payload as any).admin ?? []) adminDetails.set(a.index, a.actionDetails)
       for (let i = 0; i < tx.outputs.length; i++) {
         const ls = tx.outputs[i].lockingScript
         try {
@@ -39,9 +43,19 @@ export class MandalaTopicManager implements TopicManager {
           continue
         } catch { /* not FT */ }
         try {
-          MandalaAdmin.decode(ls)
-          adminIndices.push(i)
-          hasVerifiedAdmin = true
+          const decodedAdmin = MandalaAdmin.decode(ls)
+          const details = adminDetails.get(i)
+          if (details != null) {
+            const adminTemplate = new MandalaAdmin(this.deps.adminWallet)
+            const { boundKey } = await adminTemplate.deriveBoundKey(this.deps.adminProtocolID, details)
+            const priorOk = details.kind === 'register' ||
+              (typeof details.priorOutpoint === 'string' &&
+                tx.inputs.some(inp => `${inp.sourceTXID ?? inp.sourceTransaction?.id('hex') ?? ''}.${inp.sourceOutputIndex}` === details.priorOutpoint))
+            if (boundKey === decodedAdmin.boundKey && priorOk) {
+              adminIndices.push(i)
+              hasVerifiedAdmin = true
+            }
+          }
         } catch { /* not admin */ }
       }
 

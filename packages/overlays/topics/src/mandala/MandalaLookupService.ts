@@ -16,7 +16,7 @@ export interface MandalaLookupDeps {
 
 export class MandalaLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
-  readonly spendNotificationMode: SpendNotificationMode = 'none'
+  readonly spendNotificationMode: SpendNotificationMode = 'script'
 
   constructor (private readonly deps: MandalaLookupDeps) {}
 
@@ -66,6 +66,13 @@ export class MandalaLookupService implements LookupService {
 
   async outputSpent (payload: OutputSpent): Promise<void> {
     if (payload.topic !== 'tm_mandala') return
+    const rows = await this.deps.storage.findByOutpoint(payload.txid, payload.outputIndex)
+    if (rows.length > 0) {
+      const tokenRow = await this.deps.storage.getTokenRow(payload.txid, payload.outputIndex)
+      if (tokenRow != null && tokenRow.identityKey !== '') {
+        await this.deps.storage.adjustBalance(tokenRow.identityKey, -tokenRow.amount)
+      }
+    }
     await this.deps.storage.deleteToken(payload.txid, payload.outputIndex)
   }
 

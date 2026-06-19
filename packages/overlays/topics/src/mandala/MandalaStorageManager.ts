@@ -70,6 +70,11 @@ export class MandalaStorageManager {
       .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
   }
 
+  async getTokenRow (txid: string, outputIndex: number): Promise<MandalaTokenRecord | null> {
+    await this.ensureIndexes()
+    return await this.tokens.findOne({ txid, outputIndex })
+  }
+
   async getBalance (identityKey: string): Promise<number> {
     await this.ensureIndexes()
     const rec = await this.balances.findOne({ identityKey })

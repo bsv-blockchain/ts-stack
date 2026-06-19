@@ -1,6 +1,6 @@
 import { MandalaTopicManager } from '../mandala/MandalaTopicManager.js'
 import { InMemoryScreeningProvider, encodeLinkagePayload } from '../mandala/types.js'
-import { MandalaToken } from '@bsv/templates'
+import { MandalaToken, MandalaAdmin } from '@bsv/templates'
 import { ProtoWallet, PrivateKey, Transaction, Hash, Utils, WalletProtocol, Script } from '@bsv/sdk'
 
 const protocolID: WalletProtocol = [2, 'mandala token']
@@ -32,7 +32,7 @@ async function buildTransfer (opts: { sanctioned?: boolean } = {}) {
 
   const screening = new InMemoryScreeningProvider(opts.sanctioned === true ? [receiverKey] : [])
   return {
-    tm: new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: screening }),
+    tm: new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: screening, adminWallet: overlay as any, adminProtocolID: [2, 'mandala admin'] }),
     beef: tx.toBEEF(),
     offChainValues
   }
@@ -70,7 +70,46 @@ describe('MandalaTopicManager', () => {
     tx.addOutput({ lockingScript: new MandalaToken().lock(assetId, 100, pkh), satoshis: 1 })
     const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
     const offChainValues = encodeLinkagePayload({ inputs: [], outputs: [{ index: 0, linkage: linkage as any }] })
-    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]) })
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: [2, 'mandala admin'] })
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
+    expect(result.outputsToAdmit).toEqual([])
+  })
+})
+
+describe('MandalaTopicManager admin chain', () => {
+  it('admits an issuance whose boundKey re-derives from the declared action details', async () => {
+    const issuer = new ProtoWallet(PrivateKey.fromRandom())
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const adminProto: [number, string] = [2, 'mandala admin']
+
+    const admin = new MandalaAdmin(issuer as any)
+    const actionDetails = { kind: 'register' as const, assetId: `${'c'.repeat(64)}.0` }
+    const { boundKey } = await admin.deriveBoundKey(adminProto as any, actionDetails)
+
+    const tx = new Transaction()
+    tx.addOutput({ lockingScript: admin.lock(boundKey), satoshis: 1 })
+
+    const offChainValues = encodeLinkagePayload({
+      inputs: [], outputs: [], admin: [{ index: 0, actionDetails }]
+    } as any)
+
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto } as any)
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
+    expect(result.outputsToAdmit).toEqual([0])
+  })
+
+  it('rejects an admin output whose action details do not re-derive the boundKey', async () => {
+    const issuer = new ProtoWallet(PrivateKey.fromRandom())
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const adminProto: [number, string] = [2, 'mandala admin']
+    const admin = new MandalaAdmin(issuer as any)
+    const { boundKey } = await admin.deriveBoundKey(adminProto as any, { kind: 'register', assetId: `${'c'.repeat(64)}.0` })
+    const tx = new Transaction()
+    tx.addOutput({ lockingScript: admin.lock(boundKey), satoshis: 1 })
+    const offChainValues = encodeLinkagePayload({
+      inputs: [], outputs: [], admin: [{ index: 0, actionDetails: { kind: 'register', assetId: 'WRONG.0' } }]
+    } as any)
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto } as any)
     const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
     expect(result.outputsToAdmit).toEqual([])
   })

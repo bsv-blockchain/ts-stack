@@ -2,9 +2,9 @@ import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
 import { MandalaLookupService } from '../MandalaLookupService.js'
 import { MandalaStorageManager } from '../MandalaStorageManager.js'
-import { InMemoryScreeningProvider, encodeLinkagePayload } from '../types.js'
+import { encodeLinkagePayload } from '../types.js'
 import { MandalaToken } from '@bsv/templates'
-import { ProtoWallet, PrivateKey, Transaction, Hash, Utils, LockingScript, WalletProtocol } from '@bsv/sdk'
+import { ProtoWallet, PrivateKey, Hash, Utils, WalletProtocol } from '@bsv/sdk'
 
 const protocolID: WalletProtocol = [2, 'mandala token']
 const keyID = 'tkn'
