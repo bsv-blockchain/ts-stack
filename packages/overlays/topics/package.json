@@ -18,8 +18,8 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.0.3",
-    "@bsv/sdk": "^2.1.4",
+    "@bsv/overlay": "^2.0.4",
+    "@bsv/sdk": "^2.1.6",
     "@bsv/templates": "workspace:^",
     "mongodb": "^7.3.0"
   },

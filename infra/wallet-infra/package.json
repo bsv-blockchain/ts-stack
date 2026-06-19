@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wallet-infra",
   "private": true,
-  "version": "2.0.7",
+  "version": "2.0.8",
   "type": "module",
   "description": "UTXO Management Server",
   "author": "BSV Blockchain Association",
@@ -42,8 +42,8 @@
   },
   "dependencies": {
     "@bsv/payment-express-middleware": "^2.0.3",
-    "@bsv/sdk": "^2.1.4",
-    "@bsv/wallet-toolbox": "^2.1.28",
+    "@bsv/sdk": "^2.1.6",
+    "@bsv/wallet-toolbox": "^2.1.30",
     "body-parser": "^2.2.2",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
