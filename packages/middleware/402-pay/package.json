@@ -1,6 +1,6 @@
 {
   "name": "@bsv/402-pay",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "BRC-121 Simple 402 Payments — server middleware and client for BSV micropayments over HTTP",
   "type": "module",
   "main": "dist/index.js",
@@ -45,10 +45,10 @@
   "author": "Deggen <d.kellenschwiler@bsvassociation.org>",
   "license": "SEE LICENSE IN LICENSE",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2"
   },
   "devDependencies": {
-    "@bsv/sdk": "^2.1.6",
+    "@bsv/sdk": "workspace:^",
     "@types/node": "^25.9.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
@@ -56,5 +56,10 @@
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/402-pay#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/402-pay#readme",
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
 }

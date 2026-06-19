@@ -40,6 +40,12 @@ jobs:
         continue-on-error: true
         run: node scripts/check-versions.mjs
 
+      - name: Check @bsv/sdk peer-dependency contract
+        # Blocking. Published packages/** libraries must declare @bsv/sdk as a
+        # peerDependency (wide range), never a regular dependency — duplicate SDK
+        # copies become incompatible nominal types for downstream consumers.
+        run: node scripts/check-sdk-peer.mjs
+
       - name: Determine changed scope
         # On PRs, restrict build/lint/test to packages with changes (plus dependents)
         # via pnpm's `...[BASE]` filter. Push events run the full matrix.

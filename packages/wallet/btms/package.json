@@ -1,6 +1,6 @@
 {
   "name": "@bsv/btms",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "description": "Basic Token Management System - UTXO-based token management for BSV",
   "module": "dist/esm/src/index.js",
@@ -47,13 +47,19 @@
     "ts-jest": "^29.4.11",
     "ts-standard": "^12.0.2",
     "ts2md": "^0.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
-  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms#readme"
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms#readme",
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  }
 }

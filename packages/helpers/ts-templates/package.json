@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "type": "module",
   "description": "BSV Blockchain Script Templates",
   "main": "dist/cjs/mod.js",
@@ -59,9 +59,16 @@
     "ts-jest": "^29.4.11",
     "ts-standard": "^12.0.2",
     "tsconfig-to-dual-package": "^1.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@bsv/sdk": "workspace:^"
   },
-  "dependencies": {
-    "@bsv/sdk": "^2.1.6"
+  "dependencies": {},
+  "peerDependencies": {
+    "@bsv/sdk": "^2"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
   }
 }
