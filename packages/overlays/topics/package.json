@@ -1,6 +1,6 @@
 {
   "name": "@bsv/overlay-topics",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Canonical BSV overlay topic managers and lookup services",
   "type": "module",
   "main": "./dist/index.js",
