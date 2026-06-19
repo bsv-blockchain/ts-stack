@@ -59,6 +59,6 @@ export const decodeAssetId = (bytes: number[]): string => {
   if (bytes.length !== 36) throw new Error('assetId bytes must be exactly 36 bytes')
   const txid = Utils.toHex(bytes.slice(0, 32))
   const v = bytes.slice(32)
-  const vout = v[0] + (v[1] << 8) + (v[2] << 16) + (v[3] << 24)
+  const vout = (v[0] + (v[1] << 8) + (v[2] << 16) + (v[3] << 24)) >>> 0
   return `${txid}.${vout}`
 }
