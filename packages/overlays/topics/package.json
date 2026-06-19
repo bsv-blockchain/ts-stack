@@ -20,6 +20,7 @@
   "dependencies": {
     "@bsv/overlay": "^2.0.3",
     "@bsv/sdk": "^2.1.4",
+    "@bsv/templates": "workspace:*",
     "mongodb": "^7.3.0"
   },
   "devDependencies": {
