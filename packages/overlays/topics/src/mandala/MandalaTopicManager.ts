@@ -75,11 +75,9 @@ export class MandalaTopicManager implements TopicManager {
           inTotals.set(d.assetId, (inTotals.get(d.assetId) ?? 0) + d.amount)
         } catch { /* non-token previous coin */ }
       }
-      // Conservation: only enforce when there are tracked input coins for this asset.
-      // If previousCoins is empty (fresh issuance path), inTotals is empty and no check is needed.
       for (const [assetId, outAmt] of outTotals) {
-        const inAmt = inTotals.get(assetId)
-        if (inAmt !== undefined && !hasVerifiedAdmin && outAmt !== inAmt) {
+        const inAmt = inTotals.get(assetId) ?? 0
+        if (!hasVerifiedAdmin && outAmt !== inAmt) {
           return { outputsToAdmit: [], coinsToRetain: [] }
         }
       }
