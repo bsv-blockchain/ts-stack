@@ -3,11 +3,16 @@ export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testPathIgnorePatterns: ['dist/'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1'
+  },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {
         module: 'commonjs',
-        moduleResolution: 'bundler'
+        moduleResolution: 'bundler',
+        target: 'es2022',
+        lib: ['es2022']
       }
     }]
   }

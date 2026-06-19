@@ -37,7 +37,11 @@ import {
     createWalletConfigLookupService,
     TokenDemoTopicManager,
     createTokenDemoLookupService,
+    MandalaTopicManager,
+    createMandalaLookupService,
+    InMemoryScreeningProvider,
 } from '@bsv/overlay-topics'
+import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
 
 import { config } from 'dotenv'
 import packageJson from '../package.json'
@@ -185,6 +189,18 @@ const main = async () => {
     // TokenDemo
     server.configureTopicManager('tm_tokendemo', new TokenDemoTopicManager())
     server.configureLookupServiceWithMongo('ls_tokendemo', createTokenDemoLookupService)
+
+    // Mandala (BRC-92 regulated token) — verifier/admin wallet derived from the node identity key.
+    // NOTE: production must use an HSM/KMS-custodied verifier key (see spec follow-ups); this local
+    // wiring reuses SERVER_PRIVATE_KEY and an empty in-memory sanctions list.
+    const mandalaWallet = new ProtoWallet(PrivateKey.fromHex(SERVER_PRIVATE_KEY)) as unknown as WalletInterface
+    server.configureTopicManager('tm_mandala', new MandalaTopicManager({
+        verifierWallet: mandalaWallet,
+        screeningProvider: new InMemoryScreeningProvider([]),
+        adminWallet: mandalaWallet,
+        adminProtocolID: [2, 'mandala admin'] as [2, string]
+    }))
+    server.configureLookupServiceWithMongo('ls_mandala', createMandalaLookupService(mandalaWallet))
 
     // For simple local deployments, sync can be disabled.
     server.configureEnableGASPSync(process.env?.GASP_ENABLED === 'true')
