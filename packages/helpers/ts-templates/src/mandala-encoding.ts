@@ -25,7 +25,7 @@ export const encodeScriptNum = (value: number): number[] => {
     result.push(abs & 0xff)
     abs = Math.floor(abs / 256)
   }
-  if ((result[result.length - 1] & 0x80) !== 0) {
+  if ((((result.at(-1)) ?? 0) & 0x80) !== 0) {
     result.push(negative ? 0x80 : 0x00)
   } else if (negative) {
     result[result.length - 1] |= 0x80
@@ -39,7 +39,7 @@ export const decodeScriptNum = (data: number[]): number => {
   for (let i = 0; i < data.length; i++) {
     result += (i === data.length - 1 ? (data[i] & 0x7f) : data[i]) * Math.pow(256, i)
   }
-  if ((data[data.length - 1] & 0x80) !== 0) result = -result
+  if ((((data.at(-1)) ?? 0) & 0x80) !== 0) result = -result
   return result
 }
 

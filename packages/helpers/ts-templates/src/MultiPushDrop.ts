@@ -12,25 +12,12 @@ import {
   Transaction,
   PubKeyHex
 } from '@bsv/sdk'
+import { createMinimallyEncodedScriptChunk } from './mandala-encoding.js'
 
 // Helper to ensure a value is not null or undefined
 function verifyTruthy<T> (v: T | undefined | null, err?: string): T {
   if (v === null || v === undefined) throw new Error(err || 'Value must not be null or undefined')
   return v
-}
-
-// Helper to create minimally encoded script chunks (same as in PushDrop)
-const createMinimallyEncodedScriptChunk = (
-  data: number[]
-): { op: number, data?: number[] } => {
-  if (data.length === 0) return { op: 0 } // OP_0
-  if (data.length === 1 && data[0] === 0) return { op: 0 } // OP_0
-  if (data.length === 1 && data[0] > 0 && data[0] <= 16) return { op: 0x50 + data[0] } // OP_1 to OP_16
-  if (data.length === 1 && data[0] === 0x81) return { op: 0x4f } // OP_1NEGATE
-  if (data.length <= 75) return { op: data.length, data }
-  if (data.length <= 255) return { op: 0x4c, data } // OP_PUSHDATA1
-  if (data.length <= 65535) return { op: 0x4d, data } // OP_PUSHDATA2
-  return { op: 0x4e, data } // OP_PUSHDATA4
 }
 
 /**

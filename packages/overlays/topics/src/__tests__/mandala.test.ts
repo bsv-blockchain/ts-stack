@@ -53,7 +53,7 @@ describe('MandalaTopicManager', () => {
 
   it('does not admit FT outputs lacking valid linkage', async () => {
     const { tm, beef } = await buildTransfer()
-    const result = await tm.identifyAdmissibleOutputs(beef, [0], undefined)
+    const result = await tm.identifyAdmissibleOutputs(beef, [0])
     expect(result.outputsToAdmit).toEqual([])
   })
 

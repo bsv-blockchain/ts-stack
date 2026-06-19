@@ -4,6 +4,7 @@ import {
   TransactionSignature, Signature
 } from '@bsv/sdk'
 import { createMinimallyEncodedScriptChunk, MARKER } from './mandala-encoding.js'
+import { buildSighashPreimage } from './mandala-signing.js'
 
 export type MandalaActionKind = 'register' | 'issue' | 'redeem' | 'recover'
 
@@ -22,7 +23,7 @@ export interface MandalaAdminDecoded {
 const canon = (value: unknown): string => {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return '[' + value.map(canon).join(',') + ']'
-  const keys = Object.keys(value as Record<string, unknown>).sort()
+  const keys = Object.keys(value).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   return '{' + keys.map(k => JSON.stringify(k) + ':' + canon((value as Record<string, unknown>)[k])).join(',') + '}'
 }
 
@@ -70,7 +71,7 @@ export class MandalaAdmin {
     if (c[0].op !== 1 || marker.length !== 1 || marker[0] !== MARKER) throw new Error('not a MandalaAdmin script: missing marker')
     if (c[1].op !== OP.OP_DROP || c[3].op !== OP.OP_CHECKSIG) throw new Error('not a MandalaAdmin script: bad shape')
     const keyData = c[2].data
-    if (keyData == null || keyData.length !== 33) throw new Error('not a MandalaAdmin script: bad boundKey')
+    if (keyData?.length !== 33) throw new Error('not a MandalaAdmin script: bad boundKey')
     return { boundKey: Utils.toHex(keyData) }
   }
 
@@ -82,32 +83,7 @@ export class MandalaAdmin {
   ): ScriptTemplateUnlock {
     return {
       sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
-        let scope = TransactionSignature.SIGHASH_FORKID
-        if (signOutputs === 'all') scope |= TransactionSignature.SIGHASH_ALL
-        else if (signOutputs === 'none') scope |= TransactionSignature.SIGHASH_NONE
-        else if (signOutputs === 'single') scope |= TransactionSignature.SIGHASH_SINGLE
-        if (anyoneCanPay) scope |= TransactionSignature.SIGHASH_ANYONECANPAY
-
-        const input = tx.inputs[inputIndex]
-        const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-        const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
-        if (sourceTXID == null) throw new Error('sourceTXID or sourceTransaction required')
-        if (sourceOutput?.satoshis == null) throw new Error('source satoshis required')
-        if (sourceOutput.lockingScript == null) throw new Error('source lockingScript required')
-
-        const preimage = TransactionSignature.format({
-          sourceTXID,
-          sourceOutputIndex: input.sourceOutputIndex,
-          sourceSatoshis: sourceOutput.satoshis,
-          transactionVersion: tx.version,
-          otherInputs: tx.inputs.filter((_, i) => i !== inputIndex),
-          inputIndex,
-          outputs: tx.outputs,
-          inputSequence: input.sequence ?? 0xffffffff,
-          subscript: sourceOutput.lockingScript,
-          lockTime: tx.lockTime,
-          scope
-        })
+        const { preimage, scope } = buildSighashPreimage(tx, inputIndex, signOutputs, anyoneCanPay)
 
         const keyID = MandalaAdmin.commitment(actionDetails)
         const { signature: bareSignature } = await this.wallet.createSignature({

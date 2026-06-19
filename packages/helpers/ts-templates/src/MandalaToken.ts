@@ -7,6 +7,7 @@ import {
   createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
   encodeAssetId, decodeAssetId, MARKER
 } from './mandala-encoding.js'
+import { buildSighashPreimage } from './mandala-signing.js'
 
 // Local helper since Utils.verifyTruthy is not available in @bsv/sdk
 const vt = <T>(v: T | undefined | null): T => {
@@ -67,32 +68,7 @@ export class MandalaToken implements ScriptTemplate {
   ): ScriptTemplateUnlock {
     return {
       sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
-        let scope = TransactionSignature.SIGHASH_FORKID
-        if (signOutputs === 'all') scope |= TransactionSignature.SIGHASH_ALL
-        else if (signOutputs === 'none') scope |= TransactionSignature.SIGHASH_NONE
-        else if (signOutputs === 'single') scope |= TransactionSignature.SIGHASH_SINGLE
-        if (anyoneCanPay) scope |= TransactionSignature.SIGHASH_ANYONECANPAY
-
-        const input = tx.inputs[inputIndex]
-        const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-        const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
-        if (sourceTXID == null) throw new Error('sourceTXID or sourceTransaction required')
-        if (sourceOutput?.satoshis == null) throw new Error('source satoshis required')
-        if (sourceOutput.lockingScript == null) throw new Error('source lockingScript required')
-
-        const preimage = TransactionSignature.format({
-          sourceTXID,
-          sourceOutputIndex: input.sourceOutputIndex,
-          sourceSatoshis: sourceOutput.satoshis,
-          transactionVersion: tx.version,
-          otherInputs: tx.inputs.filter((_, i) => i !== inputIndex),
-          inputIndex,
-          outputs: tx.outputs,
-          inputSequence: input.sequence ?? 0xffffffff,
-          subscript: sourceOutput.lockingScript,
-          lockTime: tx.lockTime,
-          scope
-        })
+        const { preimage, scope } = buildSighashPreimage(tx, inputIndex, signOutputs, anyoneCanPay)
 
         const rawSignature = privateKey.sign(Hash.sha256(preimage))
         const sig = new TransactionSignature(rawSignature.r, rawSignature.s, scope)

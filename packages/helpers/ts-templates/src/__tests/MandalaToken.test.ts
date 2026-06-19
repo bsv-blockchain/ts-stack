@@ -20,10 +20,7 @@ describe('MandalaToken lock/decode', () => {
   })
 
   it('throws when decoding a non-Mandala script', () => {
-    const p2pkh = new MandalaToken().lock(assetId, 1, pubKeyHash)
-    const broken = new (p2pkh.constructor as any)()
     expect(() => MandalaToken.decode({ chunks: [{ op: 0x00 }] } as any)).toThrow()
-    void broken
   })
 
   it('decode throws when the amount chunk is empty/zero', () => {

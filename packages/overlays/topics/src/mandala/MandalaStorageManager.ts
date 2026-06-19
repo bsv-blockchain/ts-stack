@@ -18,19 +18,17 @@ export class MandalaStorageManager {
   }
 
   private async ensureIndexes (): Promise<void> {
-    if (this.indexInit === undefined) {
-      this.indexInit = (async () => {
-        await Promise.all([
-          this.tokens.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-          this.tokens.createIndex({ assetId: 1 }),
-          this.tokens.createIndex({ identityKey: 1 }),
-          // Deliberately NO TTL index on linkage — retention is >= 5 years.
-          this.linkage.createIndex({ txid: 1, outputIndex: 1 }),
-          this.linkage.createIndex({ identityKey: 1 }),
-          this.balances.createIndex({ identityKey: 1 }, { unique: true })
-        ])
-      })()
-    }
+    this.indexInit ??= (async () => {
+      await Promise.all([
+        this.tokens.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
+        this.tokens.createIndex({ assetId: 1 }),
+        this.tokens.createIndex({ identityKey: 1 }),
+        // Deliberately NO TTL index on linkage — retention is >= 5 years.
+        this.linkage.createIndex({ txid: 1, outputIndex: 1 }),
+        this.linkage.createIndex({ identityKey: 1 }),
+        this.balances.createIndex({ identityKey: 1 }, { unique: true })
+      ])
+    })()
     return await this.indexInit
   }
 
