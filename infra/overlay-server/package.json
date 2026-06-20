@@ -34,5 +34,8 @@
     "dotenv": "^17.4.2",
     "mongodb": "^7.2.0",
     "mysql2": "^3.22.5"
+  },
+  "overrides": {
+    "picomatch": ">=4.0.4"
   }
 }

@@ -17,6 +17,11 @@ FROM node:22-alpine
 
 RUN apk upgrade --no-cache
 
+# Strip npm from the runtime image: the app runs via `node` (see CMD) and
+# node:22-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
+# that we don't need at runtime.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 ARG APP_COMMIT
 ARG APP_VERSION
 ENV APP_COMMIT=${APP_COMMIT} APP_VERSION=${APP_VERSION}

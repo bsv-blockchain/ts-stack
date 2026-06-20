@@ -19,9 +19,14 @@ EXPOSE 8080
 
 RUN npm run build
 
+# Strip npm from the runtime image: node:22-alpine's bundled npm ships its own
+# HIGH-CVE deps (picomatch/undici). The app is started directly with `node`
+# (the "start" script is just `node dist/index.js`), so npm is not needed.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 RUN chown -R node:node /app
 
 USER node
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

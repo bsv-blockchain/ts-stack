@@ -27,6 +27,11 @@ FROM public.ecr.aws/docker/library/node:22-alpine
 # Patch any OS-level CVEs in the base image
 RUN apk upgrade --no-cache
 
+# Strip npm from the runtime image: the app runs via `node` (see CMD) and
+# node:22-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
+# that we don't need at runtime.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 # OCI-compliant labels
 LABEL org.opencontainers.image.title="Wallet Authentication Backend"
 LABEL org.opencontainers.image.description="Multi-factor authentication backend for BSV wallets"

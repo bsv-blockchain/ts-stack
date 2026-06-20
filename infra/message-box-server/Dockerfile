@@ -43,7 +43,8 @@ WORKDIR /app
 COPY --chown=root:root --chmod=0444 package*.json ./
 RUN apk add --no-cache --virtual .build-deps python3 make g++ \
  && npm ci --omit=dev \
- && apk del .build-deps
+ && apk del .build-deps \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy built output from builder
 COPY --from=builder --chown=root:root --chmod=0555 /app/out ./out
