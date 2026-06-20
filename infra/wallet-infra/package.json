@@ -40,6 +40,9 @@
     "ts-node": "^10.9.1",
     "typescript": "^6.0.3"
   },
+  "overrides": {
+    "picomatch": ">=4.0.4"
+  },
   "dependencies": {
     "@bsv/payment-express-middleware": "^2.1.0",
     "@bsv/sdk": "^2.1.6",

@@ -16,6 +16,11 @@ COPY tsconfig.json .
 RUN npm i knex typescript -g && \
     npm run build
 
+# Strip npm from the runtime image: the app runs via `node` (see CMD) and
+# node:22-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
+# that we don't need at runtime.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 # Run as non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser

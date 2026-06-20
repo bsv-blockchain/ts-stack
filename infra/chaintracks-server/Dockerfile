@@ -25,16 +25,21 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# better-sqlite3 native build (see builder stage). Install build tools, run
-# npm ci, then remove the toolchain in the same layer to keep the image slim.
-RUN apk add --no-cache --virtual .build-deps python3 make g++
+# Patch OS openssl libs (CVE-2026-45447) and install better-sqlite3 native build
+# tools (see builder stage). Upgrade and add toolchain in one layer; the toolchain
+# is removed after npm ci below to keep the image slim.
+RUN apk upgrade --no-cache libssl3 libcrypto3 \
+ && apk add --no-cache --virtual .build-deps python3 make g++
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
+# Install production dependencies only. Then strip npm from the runtime image:
+# the app runs via `node` (see CMD) and node:20-alpine's bundled npm ships its
+# own HIGH-CVE deps (tar/glob/minimatch/cross-spawn/undici) that we don't need.
 RUN npm ci --omit=dev \
- && apk del .build-deps
+ && apk del .build-deps \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
