@@ -10,6 +10,7 @@ import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
 import { cdnMimeTypeMiddleware } from './utils/mimeTypeMiddleware'
 import path from 'path'
+import { log } from './logger'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
@@ -149,10 +150,15 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     })
 
     app.listen(HTTP_PORT, () => {
-      console.log('UHRP Storage Server listening on port', HTTP_PORT)
       const idKey = PrivateKey
         .fromString(SERVER_PRIVATE_KEY).toPublicKey().toString()
-      console.log(`UHRP Host IdentityKey: ${idKey}`)
+      log.info(
+        { operation: 'listen', outcome: 'ok', port: HTTP_PORT, identity_key: idKey },
+        'UHRP Storage Server listening'
+      )
     })
 
-  })();
+  })().catch((error) => {
+    log.error({ operation: 'bootstrap', outcome: 'error', err: error }, 'UHRP Storage Server failed to start')
+    process.exit(1)
+  });
