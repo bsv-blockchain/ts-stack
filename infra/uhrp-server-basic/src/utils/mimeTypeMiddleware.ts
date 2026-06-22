@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { getWallet } from './walletSingleton'
 import { Utils } from '@bsv/sdk'
+import { log } from '../logger'
 
 /**
  * Cache to store MIME types for object identifiers to avoid repeated database lookups
@@ -101,7 +102,7 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
 
     return mimeType
   } catch (error) {
-    console.error('Error fetching MIME type from advertisement:', error)
+    log.error({ operation: 'mime.detect', outcome: 'error', source: 'advertisement', err: error }, 'Error fetching MIME type from advertisement')
     return null
   }
 }
@@ -212,7 +213,7 @@ export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: N
       }
     })
   } catch (error) {
-    console.error('Error in CDN MIME type middleware')
+    log.error({ operation: 'mime.middleware', outcome: 'error', err: error }, 'Error in CDN MIME type middleware')
     next()
   }
 }

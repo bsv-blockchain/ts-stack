@@ -6,6 +6,7 @@ import { getWallet } from '../utils/walletSingleton';
 import path from 'path';
 import bodyparser from 'body-parser';
 import { IncomingHttpHeaders } from 'http';
+import { log } from '../logger';
 
 const {
   HOSTING_DOMAIN
@@ -64,7 +65,7 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
   // Create UHRP ad under /cdn
   try {
     if (HOSTING_DOMAIN?.startsWith('localhost')) {
-      console.warn('Not advertising, loalhost')
+      log.warn({ operation: 'advertisement.skip', reason: 'localhost', hosting_domain: HOSTING_DOMAIN }, 'Not advertising on localhost')
       throw new Error('Not advertising in localhost')
     }
     const expiryTime = Math.floor(new Date(req.query.expiry).getTime() / 1000)
@@ -79,7 +80,7 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
     })
     res.status(200).json({ status: 'success' })
   } catch (error) {
-    console.error('Error processing advertisement:', error)
+    log.error({ operation: 'advertisement.process', outcome: 'error', err: error }, 'Error processing advertisement')
     res.status(500).json({
       status: 'error',
       code: 'ERR_INTERNAL',

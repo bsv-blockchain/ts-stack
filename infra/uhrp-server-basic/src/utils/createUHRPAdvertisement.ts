@@ -1,5 +1,6 @@
 import { PushDrop, PrivateKey, Transaction, StorageUtils, Utils, AtomicBEEF, SHIPBroadcaster } from "@bsv/sdk"
 import { getWallet } from "./walletSingleton"
+import { log } from "../logger"
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
@@ -50,7 +51,7 @@ export default async function createUHRPAdvertisement({
     // The content length as VarInt
     new Utils.Writer().writeVarIntNum(contentLength).toArray()
   ]
-  console.log('fields', fields)
+  log.debug({ operation: 'advertisement.build', field_count: fields.length }, 'Built UHRP advertisement fields')
 
   const wallet = await getWallet()
   const pushdrop = new PushDrop(wallet)

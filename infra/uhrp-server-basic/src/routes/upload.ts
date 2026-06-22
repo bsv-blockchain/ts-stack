@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { Utils } from '@bsv/sdk'
 import getPriceForFile from '../utils/getPriceForFile'
 import getUploadURL from '../utils/getUploadURL'
+import { log } from '../logger'
 
 const MIN_HOSTING_MINUTES = process.env.MIN_HOSTING_MINUTES
 
@@ -77,8 +78,8 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
       uploaderIdentityKey: req.auth.identityKey,
       expiryTime: (retentionPeriod * 60) + Math.round(Date.now() / 1000)
     })
-    console.log('upload URL', uploadURL)
-    console.log('requiredHeaders', requiredHeaders)
+    log.info({ operation: 'upload.url_generated', upload_url: uploadURL }, 'Generated upload URL')
+    log.info({ operation: 'upload.headers_generated', required_headers: requiredHeaders }, 'Generated required headers')
 
     return res.status(200).json({
       status: 'success',
@@ -88,7 +89,7 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
       description: 'File can now be uploaded.'
     })
   } catch (error) {
-    console.error('Upload route error:', error)
+    log.error({ operation: 'upload.handle', outcome: 'error', err: error }, 'Upload route error')
     return res.status(500).json({
       status: 'error',
       code: 'ERR_INTERNAL_UPLOAD',

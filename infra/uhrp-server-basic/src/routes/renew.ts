@@ -3,6 +3,7 @@ import getPriceForFile from '../utils/getPriceForFile'
 import { getWallet } from '../utils/walletSingleton'
 import { PushDrop, SHIPBroadcaster, StorageUtils, TopicBroadcaster, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
 import { getMetadata } from '../utils/getMetadata'
+import { log } from '../logger'
 
 const BSV_NETWORK = process.env.BSV_NETWORK as 'mainnet' | 'testnet'
 
@@ -217,7 +218,7 @@ const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => 
       amount
     })
   } catch (error) {
-    console.error('[renewHandler] error:', error)
+    log.error({ operation: 'renew.handle', outcome: 'error', err: error }, 'Error handling renewal')
     return res.status(500).json({
       status: 'error',
       code: 'ERR_INTERNAL_RENEW',
