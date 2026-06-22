@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { log } from '../logger'
 
 const { PRICE_PER_GB_MO } = process.env
 
@@ -44,7 +45,7 @@ const getPriceForFile = async ({ retentionPeriod, fileSize }: PriceCalculationPa
     exchangeRate = data.rate
   } catch (e) {
     exchangeRate = 30
-    console.error('Exchange rate failed, using fallback rate of 30', e)
+    log.error({ operation: 'price.exchange_rate', outcome: 'error', fallback_rate: 30, err: e }, 'Exchange rate failed, using fallback rate')
   }
 
   // Exchange rate is in BSV, convert to satoshis

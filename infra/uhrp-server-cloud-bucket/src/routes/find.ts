@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { Storage } from '@google-cloud/storage'
 import { getWallet } from '../utils/walletSingleton'
 import { getMetadata } from '../utils/getMetadata'
+import { log } from '../logger'
 
 const storage = new Storage()
 const { GCP_BUCKET_NAME } = process.env
@@ -69,7 +70,7 @@ const findHandler = async (req: FindRequest, res: Response<FindResponse>) => {
             }
         })
     } catch (error) {
-        console.error('[findHandler] error:', error)
+        log.error({ operation: 'find.handle', outcome: 'error', err: error }, 'Find handler failed')
         return res.status(500).json({
             status: 'error',
             code: 'ERR_FIND',
