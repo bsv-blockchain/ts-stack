@@ -44,8 +44,9 @@ services:
 
   # ── Shared backing stores ──────────────────────────────────
   mysql:
-    image: mysql:8
-    command: --default-authentication-plugin=mysql_native_password
+    # Pinned to 8.0: `mysql:8` now resolves to 8.4, which removed the
+    # --default-authentication-plugin option (and changes auth defaults).
+    image: mysql:8.0
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
     volumes:
@@ -90,9 +91,11 @@ services:
       NODE_NAME: overlay-local
       NETWORK: main
       SERVER_PRIVATE_KEY: f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18
-      HOSTING_URL: http://overlay.localhost
+      # https + a sub-domain of .localhost passes the advertiser's URI check
+      # (it only rejects the bare host "localhost"). Routing is still plain http via Traefik.
+      HOSTING_URL: https://overlay.localhost
       WALLET_STORAGE_URL: https://store-us-1.bsvb.tech
-      ARC_API_KEY: ""
+      ARC_API_KEY: local-dev
       ADMIN_TOKEN: localadmin
       GASP_ENABLED: "false"
       KNEX_URL: mysql://root:rootpass@mysql:3306/appdb
@@ -127,7 +130,7 @@ services:
       PORT: "8080"
       HOSTING_DOMAIN: http://messagebox.localhost
       SERVER_PRIVATE_KEY: f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18
-      KNEX_DB_CLIENT: mysql
+      KNEX_DB_CLIENT: mysql2
       KNEX_DB_CONNECTION: '{"port":3306,"host":"mysql","user":"root","password":"rootpass","database":"messagebox-backend"}'
       WALLET_STORAGE_URL: https://storage.babbage.systems
 
@@ -152,7 +155,8 @@ services:
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: wab-server
-      NODE_ENV: development
+      # production => knexfile uses mysql2 + DB_* below (development is hardcoded sqlite).
+      NODE_ENV: production
       PORT: "8080"
       DB_CLIENT: mysql2
       DB_HOST: mysql
