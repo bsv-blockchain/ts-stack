@@ -44,7 +44,14 @@ services:
       NODE_NAME: your-overlay-node
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
       GASP_ENABLED: "false"
-    command: ["npm", "run", "start"]
+      # OpenTelemetry — point at any OTLP/HTTP collector. Unset => console exporters.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-overlay-server}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
+      DEPLOY_ENV: ${DEPLOY_ENV:-production}
+    # Direct node invocation with the OTel preload (image has no npm; see Dockerfile).
+    command: ["node", "--require", "./dist/telemetry.js", "dist/index.js"]
 
   janitor:
     image: alpine:latest

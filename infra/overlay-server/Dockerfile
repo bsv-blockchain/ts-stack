@@ -21,12 +21,13 @@ RUN npm run build
 
 # Strip npm from the runtime image: node:22-alpine's bundled npm ships its own
 # HIGH-CVE deps (picomatch/undici). The app is started directly with `node`
-# (the "start" script is just `node dist/index.js`), so npm is not needed.
+# (CMD below preloads telemetry then runs dist/index.js), so npm is not needed.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 RUN chown -R node:node /app
 
 USER node
 
-# Start the application
-CMD ["node", "dist/index.js"]
+# Start the application with the OpenTelemetry bootstrap preloaded so
+# auto-instrumentation patches modules before app code is imported.
+CMD ["node", "--require", "./dist/telemetry.js", "dist/index.js"]
