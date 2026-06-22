@@ -3,6 +3,7 @@ import { getMessaging, type Messaging, type Message } from 'firebase-admin/messa
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import * as path from 'path'
 import dotenv from 'dotenv'
+import { log } from '../utils/logger.js'
 
 dotenv.config()
 
@@ -17,12 +18,12 @@ export function initializeFirebase(): App | null {
   const enableFirebase = process.env.ENABLE_FIREBASE
 
   if (enableFirebase !== 'true') {
-    console.log(`Firebase is disabled (ENABLE_FIREBASE=${enableFirebase ?? 'unset'}). Skipping initialization.`)
+    log.info({ operation: 'firebase.init', enable_firebase: enableFirebase ?? 'unset' }, 'Firebase disabled, skipping initialization')
     return null
   }
 
   if (firebaseApp != null) {
-    console.log('Firebase already initialized')
+    log.info({ operation: 'firebase.init' }, 'Firebase already initialized')
     return firebaseApp
   }
 
@@ -38,17 +39,17 @@ export function initializeFirebase(): App | null {
     let firebaseCredential: any // Will be assigned based on auth method
 
     if (serviceAccountJson != null && serviceAccountJson !== '') {
-      console.log('Using Firebase service account from environment variable')
+      log.info({ operation: 'firebase.init', credential_source: 'env' }, 'Using Firebase service account from environment variable')
       try {
-        console.log('Service account JSON length:', serviceAccountJson.length)
-        console.log('First 100 chars:', serviceAccountJson.substring(0, 100))
+        log.debug({ operation: 'firebase.init', service_account_json_length: serviceAccountJson.length }, 'Service account JSON length')
+        log.debug({ operation: 'firebase.init', service_account_json_prefix: serviceAccountJson.substring(0, 100) }, 'Service account JSON prefix')
 
         // Debug credential functions
-        console.log('cert function:', typeof cert)
-        console.log('applicationDefault function:', typeof applicationDefault)
+        log.debug({ operation: 'firebase.init', cert_function_type: typeof cert }, 'cert function type')
+        log.debug({ operation: 'firebase.init', application_default_function_type: typeof applicationDefault }, 'applicationDefault function type')
 
         const serviceAccount = JSON.parse(serviceAccountJson)
-        console.log('Parsed service account keys:', Object.keys(serviceAccount ?? {}))
+        log.debug({ operation: 'firebase.init', service_account_keys: Object.keys(serviceAccount ?? {}) }, 'Parsed service account keys')
 
         if (serviceAccount == null || typeof serviceAccount !== 'object') {
           throw new Error('Parsed service account is not a valid object')
@@ -59,18 +60,18 @@ export function initializeFirebase(): App | null {
         }
 
         firebaseCredential = cert(serviceAccount)
-        console.log('✅ Firebase credential created successfully')
+        log.info({ operation: 'firebase.init' }, 'Firebase credential created successfully')
       } catch (parseError) {
-        console.error('❌ Firebase service account parsing failed:', parseError)
+        log.error({ operation: 'firebase.init', outcome: 'error', err: parseError }, 'Firebase service account parsing failed')
         throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${(parseError instanceof Error) ? parseError.message : 'Invalid JSON'}`)
       }
     } else if (serviceAccountPath != null && serviceAccountPath !== '') {
-      console.log('Using Firebase service account key file')
+      log.info({ operation: 'firebase.init', credential_source: 'file' }, 'Using Firebase service account key file')
       const absolutePath = path.resolve(process.cwd(), serviceAccountPath)
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       firebaseCredential = cert(require(absolutePath))
     } else {
-      console.log('Using Firebase default credentials')
+      log.info({ operation: 'firebase.init', credential_source: 'default' }, 'Using Firebase default credentials')
       firebaseCredential = applicationDefault()
     }
 
@@ -84,10 +85,10 @@ export function initializeFirebase(): App | null {
       firebaseApp = getApp()
     }
 
-    console.log('✅ Firebase Admin SDK initialized successfully')
+    log.info({ operation: 'firebase.init' }, 'Firebase Admin SDK initialized successfully')
     return firebaseApp
   } catch (error) {
-    console.error('❌ Firebase initialization failed:', error)
+    log.error({ operation: 'firebase.init', outcome: 'error', err: error }, 'Firebase initialization failed')
     throw error
   }
 }
@@ -174,10 +175,10 @@ export async function sendNotification(
     };
 
     const response = await messaging.send(message);
-    console.log("✅ Notification sent successfully:", response);
+    log.info({ operation: 'firebase.send_notification', message_id: response }, 'Notification sent successfully')
     return { success: true, messageId: response };
   } catch (error) {
-    console.error("❌ Failed to send notification:", error);
+    log.error({ operation: 'firebase.send_notification', outcome: 'error', err: error }, 'Failed to send notification')
     throw error;
   }
 }
