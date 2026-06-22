@@ -1,0 +1,27 @@
+// src/scaffold/__tests__/vite.test.ts
+import { describe, expect, test } from '@jest/globals'
+import { viteScaffolder, viteCommand } from '../vite'
+import type { RunCommand } from '../base-scaffolder'
+
+describe('viteCommand', () => {
+  test('npm uses the -- separator before --template, run from the parent dir', () => {
+    expect(viteCommand('npm', '/proj/client', 'react-ts')).toEqual({
+      command: 'npm', args: ['create', 'vite@latest', 'client', '--', '--template', 'react-ts'], cwd: '/proj'
+    })
+  })
+  test('pnpm/yarn/bun omit the -- separator', () => {
+    expect(viteCommand('pnpm', '/proj/client', 'react-ts').args).toEqual(['create', 'vite@latest', 'client', '--template', 'react-ts'])
+    expect(viteCommand('yarn', '/proj/client', 'react-ts').args).toEqual(['create', 'vite', 'client', '--template', 'react-ts'])
+    expect(viteCommand('bun', '/proj/client', 'react-ts').args).toEqual(['create', 'vite@latest', 'client', '--template', 'react-ts'])
+  })
+})
+
+describe('viteScaffolder', () => {
+  test('invokes the injected runCommand with the computed vite command', () => {
+    const calls: Array<{ command: string, args: string[], cwd: string }> = []
+    const fake: RunCommand = (command, args, opts) => { calls.push({ command, args, cwd: opts.cwd }) }
+    viteScaffolder.scaffold({ kind: 'frontend', target: { framework: 'react', variant: 'react-ts' } }, '/proj/client', { packageManager: 'npm', runCommand: fake })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual({ command: 'npm', args: ['create', 'vite@latest', 'client', '--', '--template', 'react-ts'], cwd: '/proj' })
+  })
+})

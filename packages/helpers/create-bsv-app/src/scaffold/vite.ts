@@ -1,0 +1,22 @@
+// src/scaffold/vite.ts
+import { basename, dirname } from 'node:path'
+import type { PackageManager } from '../config/model.js'
+import type { BaseScaffolder } from './base-scaffolder.js'
+
+export function viteCommand (pm: PackageManager, dir: string, variant: string): { command: string, args: string[], cwd: string } {
+  // create-vite scaffolds into a folder named <name> relative to cwd; run from the parent.
+  const name = basename(dir)
+  const cwd = dirname(dir)
+  if (pm === 'npm') return { command: 'npm', args: ['create', 'vite@latest', name, '--', '--template', variant], cwd }
+  if (pm === 'yarn') return { command: 'yarn', args: ['create', 'vite', name, '--template', variant], cwd }
+  // pnpm and bun
+  return { command: pm, args: ['create', 'vite@latest', name, '--template', variant], cwd }
+}
+
+export const viteScaffolder: BaseScaffolder = {
+  scaffold (spec, absDir, opts) {
+    if (spec.kind !== 'frontend') throw new Error('viteScaffolder handles only frontend targets')
+    const { command, args, cwd } = viteCommand(opts.packageManager, absDir, spec.target.variant)
+    opts.runCommand(command, args, { cwd })
+  }
+}
