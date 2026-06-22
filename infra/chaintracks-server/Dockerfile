@@ -55,5 +55,6 @@ USER node
 # 3012 - CDN Server (bulk headers)
 EXPOSE 3011 3012
 
-# Run the application
-CMD ["node", "dist/server.js"]
+# Run the application with the OpenTelemetry bootstrap preloaded so
+# auto-instrumentation patches modules before app code is imported.
+CMD ["node", "--require", "./dist/telemetry.js", "dist/server.js"]

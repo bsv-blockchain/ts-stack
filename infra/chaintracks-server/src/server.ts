@@ -16,6 +16,10 @@ import * as express from 'express'
 import * as bodyParser from 'body-parser'
 import { createV1Routes } from './v1-routes'
 import { createV2Routes } from './v2-routes'
+import { trace, SpanStatusCode } from '@opentelemetry/api'
+import { log } from './logger'
+
+const tracer = trace.getTracer('chaintracks-server')
 
 function resolveBulkHeadersPath(): string {
   const raw = process.env.BULK_HEADERS_PATH || path.join(process.cwd(), 'public', 'headers')
@@ -250,7 +254,7 @@ async function main() {
 
   // Start the API server
   const apiServer = app.listen(port, () => {
-    console.log(`✓ API server running on port ${port}`)
+    log.info({ operation: 'listen', outcome: 'ok', port, chain: `${chain}Net` }, 'API server running')
   })
 
   // Start a separate CDN server for bulk headers if enabled
@@ -385,7 +389,19 @@ async function main() {
   })
 }
 
-main().catch((error) => {
-  console.error('Failed to start server:', error)
-  process.exit(1)
+// Wrap startup in a span so a slow/failed boot is visible in traces.
+tracer.startActiveSpan('chaintracks.bootstrap', async (span) => {
+  const startedAt = Date.now()
+  try {
+    await main()
+    span.setStatus({ code: SpanStatusCode.OK })
+    log.info({ operation: 'bootstrap', outcome: 'ok', duration_ms: Date.now() - startedAt }, 'chaintracks-server started')
+    span.end()
+  } catch (error) {
+    span.recordException(error as Error)
+    span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message })
+    log.error({ operation: 'bootstrap', outcome: 'error', duration_ms: Date.now() - startedAt, err: error }, 'Failed to start server')
+    span.end()
+    process.exit(1)
+  }
 })
