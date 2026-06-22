@@ -97,8 +97,9 @@ async function setupWalletStorageAndMonitor(): Promise<{
     ) {
       chain = BSV_NETWORK as (typeof allowedChains)[number]
     } else if (BSV_NETWORK !== 'test') {
-      console.warn(
-        `Invalid BSV_NETWORK value "${BSV_NETWORK}" provided. Falling back to "test".`
+      log.warn(
+        { operation: 'chain.select', bsv_network: BSV_NETWORK, fallback_chain: 'test' },
+        'Invalid BSV_NETWORK value provided, falling back to test'
       )
     }
 
@@ -205,7 +206,10 @@ async function setupWalletStorageAndMonitor(): Promise<{
       monitor
     }
   } catch (error) {
-    console.error('Error setting up Wallet Storage and Monitor:', error)
+    log.error(
+      { operation: 'wallet_storage.setup', outcome: 'error', err: error },
+      'Error setting up wallet storage and monitor'
+    )
     throw error
   }
 }
