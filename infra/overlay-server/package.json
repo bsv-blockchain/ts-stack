@@ -14,12 +14,12 @@
   },
   "license": "Open BSV",
   "author": "BSV Association",
-  "type": "commonjs",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node --require ./dist/telemetry.js dist/index.js",
-    "dev": "tsx --require ./src/telemetry.ts src/index.ts"
+    "start": "node --import ./dist/telemetry.js dist/index.js",
+    "dev": "tsx src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

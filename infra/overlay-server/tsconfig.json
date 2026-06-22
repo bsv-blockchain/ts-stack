@@ -4,7 +4,8 @@
         "rootDir": "src",
         "sourceMap": true,
         "target": "es2022",
-        "module": "commonjs",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
         "esModuleInterop": true,
         "resolveJsonModule": true,
         "skipLibCheck": true

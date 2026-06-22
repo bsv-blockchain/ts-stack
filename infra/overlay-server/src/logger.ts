@@ -6,10 +6,11 @@
  * the OTLP logs endpoint. Stable keys: service, env, operation, outcome, err.
  */
 import pino from 'pino'
-import * as path from 'node:path'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pkg = require(path.join(process.cwd(), 'package.json')) as { name: string; version: string }
+const require = createRequire(import.meta.url)
+const pkg = require(join(process.cwd(), 'package.json')) as { name: string; version: string }
 
 export const log = pino({
     name: pkg.name,

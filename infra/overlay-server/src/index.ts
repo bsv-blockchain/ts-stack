@@ -45,8 +45,8 @@ import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
 
 import { config } from 'dotenv'
 import { trace, SpanStatusCode } from '@opentelemetry/api'
-import packageJson from '../package.json'
-import { log } from './logger'
+import packageJson from '../package.json' with { type: 'json' }
+import { log } from './logger.js'
 config()
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)

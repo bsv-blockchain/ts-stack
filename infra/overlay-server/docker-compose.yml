@@ -51,7 +51,7 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
       DEPLOY_ENV: ${DEPLOY_ENV:-production}
     # Direct node invocation with the OTel preload (image has no npm; see Dockerfile).
-    command: ["node", "--require", "./dist/telemetry.js", "dist/index.js"]
+    command: ["node", "--import", "./dist/telemetry.js", "dist/index.js"]
 
   janitor:
     image: alpine:latest

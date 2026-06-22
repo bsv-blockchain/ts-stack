@@ -7,16 +7,18 @@
  * process always boots (dev-safe). Runtime (heap/GC/event-loop) metrics are
  * enabled to support memory-leak diagnosis.
  *
- * ESM note: auto-instrumentation can only patch ESM module imports when the
- * import-in-the-middle loader hook is registered before app modules load. We do
- * that with module.register() below; combined with --import this runs before
- * the application entrypoint is imported.
+ * ESM note: we deliberately do NOT register the import-in-the-middle loader
+ * hook (@opentelemetry/instrumentation/hook.mjs). That hook rebuilds the named
+ * exports of CJS packages imported as ESM and drops some of them (e.g.
+ * @bsv/sdk's PushDrop), which crashes the app at import time. The libraries we
+ * actually instrument (http, express, mongodb, mysql2, pino) are pulled in
+ * through CJS dependency chains (overlay-express, wallet-toolbox, authsocket)
+ * and are still patched by require-in-the-middle, so coverage is retained.
  *
  * See docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md.
  */
-import { register, createRequire } from 'node:module'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
-register('@opentelemetry/instrumentation/hook.mjs', import.meta.url)
 
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'

@@ -30,4 +30,4 @@ USER node
 
 # Start the application with the OpenTelemetry bootstrap preloaded so
 # auto-instrumentation patches modules before app code is imported.
-CMD ["node", "--require", "./dist/telemetry.js", "dist/index.js"]
+CMD ["node", "--import", "./dist/telemetry.js", "dist/index.js"]

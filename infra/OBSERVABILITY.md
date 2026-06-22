@@ -17,9 +17,13 @@ are imported.
 | wallet-infra | ESM | `node --import ./out/src/telemetry.js out/src/index.js` |
 | message-box-server | ESM | `node --import ./out/src/telemetry.js out/src/index.js` |
 
-ESM components additionally register the `import-in-the-middle` loader hook
-(`@opentelemetry/instrumentation/hook.mjs`) inside `telemetry.ts` so ESM imports
-are instrumentable.
+ESM components (overlay-server, wallet-infra, message-box-server) deliberately do
+**not** register the `import-in-the-middle` loader hook. That hook rebuilds the
+named exports of CJS packages imported as ESM and drops some of them (e.g.
+`@bsv/sdk`'s `PushDrop`), crashing the app at import time. The libraries we
+actually instrument (http, express, mongodb, mysql2, pino) are loaded through CJS
+dependency chains (overlay-express, wallet-toolbox, authsocket) and remain patched
+by `require-in-the-middle`, so auto-instrumentation coverage is retained.
 
 ## Configuration
 

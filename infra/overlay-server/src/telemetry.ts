@@ -1,14 +1,25 @@
 /**
- * OpenTelemetry bootstrap (CommonJS) — preloaded before app code via
- * `node --require ./dist/telemetry.js`.
+ * OpenTelemetry bootstrap (ESM) — preloaded before app code via
+ * `node --import ./out/src/telemetry.js`.
  *
  * Emits traces, metrics and logs. All wiring is driven by OTEL_* env vars; when
  * OTEL_EXPORTER_OTLP_ENDPOINT is unset we fall back to console exporters so the
  * process always boots (dev-safe). Runtime (heap/GC/event-loop) metrics are
  * enabled to support memory-leak diagnosis.
  *
+ * ESM note: we deliberately do NOT register the import-in-the-middle loader
+ * hook (@opentelemetry/instrumentation/hook.mjs). That hook rebuilds the named
+ * exports of CJS packages imported as ESM and drops some of them (e.g.
+ * @bsv/sdk's PushDrop), which crashes the app at import time. The libraries we
+ * actually instrument (http, express, mongodb, mysql2, pino) are pulled in
+ * through CJS dependency chains (overlay-express, wallet-toolbox, authsocket)
+ * and are still patched by require-in-the-middle, so coverage is retained.
+ *
  * See docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md.
  */
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
+
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
 import { RuntimeNodeInstrumentation } from '@opentelemetry/instrumentation-runtime-node'
@@ -39,12 +50,11 @@ import {
 } from '@opentelemetry/semantic-conventions'
 import { logs, SeverityNumber } from '@opentelemetry/api-logs'
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
-import * as path from 'node:path'
 
 // Resolve the component's package.json relative to the working directory (the
 // app root in every Dockerfile and local run) — robust regardless of build layout.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pkg = require(path.join(process.cwd(), 'package.json')) as { name: string; version: string }
+const require = createRequire(import.meta.url)
+const pkg = require(join(process.cwd(), 'package.json')) as { name: string; version: string }
 
 const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
 const useOtlp = typeof otlpEndpoint === 'string' && otlpEndpoint.length > 0
