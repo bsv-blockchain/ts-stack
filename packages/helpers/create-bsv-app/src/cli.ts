@@ -1,8 +1,12 @@
 import { basename } from 'node:path'
-import type { Framework, Manifest, Selection } from './types.js'
-import { planFiles, writeFiles, aggregateDependencies, type WriteResult } from './engine.js'
-import { manifestFromSelection, writeManifest, readManifest, mergeCapabilityIds } from './manifest.js'
+import type { Framework, Selection } from './types.js'
+import { writeFiles, planPlacement, type WriteResult, type TargetKey } from './engine.js'
+import { manifestFromConfig, writeProjectManifest, readValidManifest, mergeCapabilityIds } from './config/project-manifest.js'
+import type { ProjectManifest } from './config/project-manifest.js'
 import { renderAgentsMd } from './agents-md.js'
+import { selectionToConfig } from './config/bridge.js'
+import type { ProjectConfig } from './config/model.js'
+import { resolveCapabilities } from './registry.js'
 
 export interface CliArgs {
   dir?: string
@@ -15,7 +19,7 @@ export interface CliArgs {
   ui: boolean
 }
 
-export type PromptProvider = (opts: { existing: Manifest | null }) => Promise<Selection>
+export type PromptProvider = (opts: { existing: ProjectManifest | null }) => Promise<Selection>
 
 export function parseArgs (argv: string[]): CliArgs {
   const args: CliArgs = { network: 'test', capabilities: [], yes: false, force: false, ui: false }
@@ -52,12 +56,20 @@ export function parseArgs (argv: string[]): CliArgs {
 export async function run (
   argv: string[],
   prompt?: PromptProvider
-): Promise<{ targetDir: string, dependencies: Record<string, string> } & WriteResult> {
+): Promise<{ targetDir: string, deps: Record<TargetKey, Record<string, string>> } & WriteResult> {
   const args = parseArgs(argv)
   const targetDir = args.dir ?? '.'
-  const existing = readManifest(targetDir)
+  const existing = readValidManifest(targetDir)
 
-  const framework: Framework | undefined = existing?.framework ?? args.framework
+  let lockedFramework: Framework | undefined
+  if (existing !== null) {
+    if (existing.stack.frontend != null) {
+      lockedFramework = 'react'
+    } else if (existing.stack.backend != null) {
+      lockedFramework = 'express'
+    }
+  }
+  const framework: Framework | undefined = lockedFramework ?? args.framework
 
   let selection: Selection
   const isNonInteractive = args.yes && args.capabilities.length > 0 && framework !== undefined
@@ -71,13 +83,20 @@ export async function run (
   } else {
     if (prompt === undefined) throw new Error('interactive run requires a prompt provider')
     const raw = await prompt({ existing })
-    selection = { ...raw, capabilityIds: mergeCapabilityIds([], raw.capabilityIds) }
+    selection = { ...raw, capabilityIds: mergeCapabilityIds(existing?.capabilities ?? [], raw.capabilityIds) }
   }
 
-  const specs = planFiles(selection)
-  const fileResult = writeFiles(specs, targetDir, { force: args.force })
-  writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(selection) }], targetDir, { force: true })
-  writeManifest(targetDir, manifestFromSelection(selection))
+  let config: ProjectConfig = selectionToConfig(selection)
+  if (existing !== null) {
+    config = { ...config, name: existing.name, network: existing.network, stack: existing.stack, bsvDir: existing.bsvDir }
+  }
 
-  return { targetDir, dependencies: aggregateDependencies(selection), ...fileResult }
+  const caps = resolveCapabilities(config.capabilities)
+  const placement = planPlacement(config, caps)
+  const util = writeFiles(placement.utilFiles, targetDir, { force: args.force })
+  writeFiles(placement.glueFiles, targetDir, { force: true })
+  writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
+  writeProjectManifest(targetDir, manifestFromConfig(config))
+
+  return { targetDir, deps: placement.deps, written: util.written, skipped: util.skipped }
 }

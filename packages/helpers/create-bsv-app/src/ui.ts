@@ -1,17 +1,22 @@
 import type { Manifest, Selection } from './types.js'
+import type { ProjectManifest } from './config/project-manifest.js'
 import { listCapabilities, getCapability } from './registry.js'
-import { remainingCapabilityIds, mergeCapabilityIds } from './manifest.js'
+import { mergeCapabilityIds } from './config/project-manifest.js'
 import type { PromptProvider } from './cli.js'
 
 function escHtml (s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+function remainingUiCapabilityIds (existing: Manifest): string[] {
+  return listCapabilities().map(c => c.id).filter(id => !existing.capabilities.includes(id))
+}
+
 export function buildUiHtml (opts: { existing: Manifest | null }): string {
   const { existing } = opts
   const allCaps = listCapabilities()
   const caps = existing != null
-    ? allCaps.filter(c => remainingCapabilityIds(existing).includes(c.id))
+    ? allCaps.filter(c => remainingUiCapabilityIds(existing).includes(c.id))
     : allCaps
 
   const capCheckboxes = caps.map(c => `
@@ -149,7 +154,16 @@ export function parseUiSubmission (body: unknown, existing: Manifest | null): Se
   return { appName, network, framework, capabilityIds }
 }
 
-export async function startUiServer (opts: { existing: Manifest | null }): Promise<{ url: string, selection: Promise<Selection>, close: () => void }> {
+function manifestToLegacy (m: ProjectManifest): Manifest {
+  let framework: 'react' | 'express' = 'express'
+  if (m.stack.frontend != null) {
+    framework = 'react'
+  }
+  return { version: 1, name: m.name, network: m.network, framework, capabilities: [...m.capabilities] }
+}
+
+export async function startUiServer (opts: { existing: ProjectManifest | null }): Promise<{ url: string, selection: Promise<Selection>, close: () => void }> {
+  const legacyExisting: Manifest | null = opts.existing != null ? manifestToLegacy(opts.existing) : null
   const http = await import('node:http')
   let resolveSelection: (s: Selection) => void = () => {}
   const selection = new Promise<Selection>((resolve) => { resolveSelection = resolve })
@@ -158,7 +172,7 @@ export async function startUiServer (opts: { existing: Manifest | null }): Promi
   const server = http.default.createServer((req, res) => {
     const urlPath = req.url ?? '/'
     if (req.method === 'GET' && (urlPath === '/' || urlPath === '/index.html')) {
-      const html = buildUiHtml({ existing: opts.existing })
+      const html = buildUiHtml({ existing: legacyExisting })
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       res.end(html)
       return
@@ -177,7 +191,7 @@ export async function startUiServer (opts: { existing: Manifest | null }): Promi
         }
         let sel: Selection
         try {
-          sel = parseUiSubmission(body, opts.existing)
+          sel = parseUiSubmission(body, legacyExisting)
         } catch (err) {
           res.writeHead(400, { 'Content-Type': 'text/plain' })
           res.end(err instanceof Error ? err.message : 'parse error')

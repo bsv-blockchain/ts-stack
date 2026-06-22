@@ -1,36 +1,25 @@
 // src/agents-md.ts
-import type { GenContext, Selection } from './types.js'
-import { getCapability } from './registry.js'
-import { aggregateDependencies } from './engine.js'
+import type { ProjectConfig } from './config/model.js'
+import { layoutOf } from './config/model.js'
+import type { Capability, CapabilityContext } from './types.js'
+import { planPlacement } from './engine.js'
 
-export function renderAgentsMd (selection: Selection): string {
-  const ctx: GenContext = { appName: selection.appName, network: selection.network, framework: selection.framework }
+function installBlock (label: string, deps: Record<string, string>): string {
+  const names = Object.keys(deps)
+  if (names.length === 0) return ''
+  const ranges = Object.entries(deps).map(([n, r]) => `  ${n}@${r}`).join('\n')
+  const head = label.length > 0 ? `### ${label}\n\n` : ''
+  return `${head}\`\`\`\nnpm install ${names.join(' ')}\n\`\`\`\n\nRequired ranges:\n${ranges}\n\n`
+}
 
-  const header = `# ${selection.appName} — agent guide
+export function renderAgentsMd (config: ProjectConfig, capabilities: Capability[]): string {
+  const layout = layoutOf(config.stack)
+  const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
+  const { deps } = planPlacement(config, capabilities)
 
-Scaffolded by \`create-bsv-app\` for the **${selection.framework}** framework on the **${selection.network}** network. BSV capabilities live under \`src/bsv/\`. Re-run \`npx create-bsv-app\` inside this folder to add more capabilities.
-
-`
-
-  const deps = aggregateDependencies(selection)
-  const depLines = Object.entries(deps).map(([name, range]) => `  ${name}@${range}`).join('\n')
-  const depsSection = `## Install dependencies
-
-\`\`\`
-npm install \\
-${Object.keys(deps).join(' ')}
-\`\`\`
-
-Required ranges:
-${depLines}
-
-`
-
-  const sections = selection.capabilityIds.map(id => {
-    const c = getCapability(id)
-    if (c == null) throw new Error(`unknown capability: ${id}`)
-    return c.agentsSection(ctx).trimEnd()
-  })
-
+  const header = `# ${config.name} — agent guide\n\nScaffolded by \`create-bsv-app\` (layout: **${layout}**, network: **${config.network}**). BSV capabilities live under \`${config.bsvDir}\`. Re-run \`npx create-bsv-app\` inside this folder to add more capabilities.\n\n`
+  let depsSection = '## Install dependencies\n\n'
+  depsSection += layout === 'monorepo' ? installBlock('client/', deps.client) + installBlock('server/', deps.server) : installBlock('', deps.root)
+  const sections = capabilities.map(c => c.agentsSection(ctx).trimEnd())
   return header + depsSection + sections.join('\n\n') + '\n'
 }

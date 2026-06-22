@@ -1,7 +1,7 @@
 import type { PromptProvider } from './cli.js'
 import type { Framework, Selection } from './types.js'
 import { listCapabilities, getCapability } from './registry.js'
-import { remainingCapabilityIds } from './manifest.js'
+import { remainingCapabilityIds } from './config/project-manifest.js'
 import { basename } from 'node:path'
 
 export const interactivePrompt: PromptProvider = async ({ existing }) => {
@@ -19,7 +19,7 @@ export const interactivePrompt: PromptProvider = async ({ existing }) => {
 
   let framework: Framework
   if (existing != null) {
-    framework = existing.framework // locked for an existing project
+    framework = existing.stack.frontend != null ? 'react' : 'express'
   } else {
     const res = await p.select({
       message: 'Framework',
@@ -32,10 +32,11 @@ export const interactivePrompt: PromptProvider = async ({ existing }) => {
     framework = res as Framework
   }
 
+  const allIds = listCapabilities().map(c => c.id)
   const offerable = existing != null
-    ? remainingCapabilityIds(existing)
-    : listCapabilities().map(c => c.id)
-  const options = offerable.map(id => {
+    ? remainingCapabilityIds(existing, allIds)
+    : allIds
+  const options = offerable.map((id: string) => {
     const c = getCapability(id)
     if (c == null) throw new Error(`Unknown capability: ${id}`)
     return { value: id, label: c.title, hint: c.description }
@@ -54,7 +55,7 @@ export const interactivePrompt: PromptProvider = async ({ existing }) => {
     appName,
     network: existing?.network ?? 'test',
     framework,
-    capabilityIds: [...(existing?.capabilities ?? []), ...(picked as string[])]
+    capabilityIds: [...(picked as string[])]
   }
   return selection
 }

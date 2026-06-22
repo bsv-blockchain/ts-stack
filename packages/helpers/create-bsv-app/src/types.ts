@@ -1,4 +1,6 @@
 // src/types.ts
+import type { Network, Stack, Layout } from './config/model.js'
+
 export type Framework = 'express' | 'react'
 
 export interface FileSpec {
@@ -7,10 +9,14 @@ export interface FileSpec {
   content: string
 }
 
-export interface GenContext {
-  appName: string
-  network: 'main' | 'test'
-  framework: Framework
+export type Role = 'shared' | 'client' | 'server'
+
+export interface CapabilityContext {
+  name: string
+  network: Network
+  bsvDir: string
+  stack: Stack
+  layout: Layout
 }
 
 export interface Capability {
@@ -19,11 +25,11 @@ export interface Capability {
   description: string
   /** ids of other capabilities that must also be installed */
   requires?: string[]
-  /** frameworks for which this capability emits dedicated files (beyond shared utils) */
-  frameworks: Framework[]
-  files: (ctx: GenContext) => FileSpec[]
-  npmDependencies: (ctx: GenContext) => Record<string, string>
-  agentsSection: (ctx: GenContext) => string
+  roles: Role[]
+  files: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
+  glue?: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
+  npmDependencies: (ctx: CapabilityContext) => Partial<Record<Role, Record<string, string>>>
+  agentsSection: (ctx: CapabilityContext) => string
 }
 
 export interface Selection {

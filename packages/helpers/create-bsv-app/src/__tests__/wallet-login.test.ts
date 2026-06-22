@@ -1,54 +1,59 @@
 // src/__tests__/wallet-login.test.ts
 import { describe, expect, test } from '@jest/globals'
 import { walletLogin } from '../capabilities/wallet-login'
+import type { CapabilityContext } from '../types'
 
-const base = { appName: 'demo', network: 'test' as const }
+const ctx: CapabilityContext = {
+  name: 'demo',
+  network: 'test',
+  bsvDir: 'src/bsv',
+  stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+  layout: 'frontend-only'
+}
 
 describe('wallet-login capability', () => {
-  test('always emits the shared agnostic auth util', () => {
-    for (const framework of ['express', 'react'] as const) {
-      const paths = walletLogin.files({ ...base, framework }).map(f => f.path)
-      expect(paths).toContain('src/bsv/auth.ts')
-    }
+  test('roles are shared, client, server', () => {
+    expect(walletLogin.roles).toEqual(['shared', 'client', 'server'])
   })
 
-  test('the shared util is built on the @bsv/auth abstraction', () => {
-    const authFile = walletLogin.files({ ...base, framework: 'express' }).find(f => f.path === 'src/bsv/auth.ts')
+  test('shared files includes auth.ts built on @bsv/auth', () => {
+    const roleFiles = walletLogin.files(ctx)
+    const shared = roleFiles.shared ?? []
+    const authFile = shared.find(f => f.path === 'auth.ts')
     expect(authFile).toBeDefined()
-    const util = authFile?.content ?? ''
-    expect(util).toContain("from '@bsv/auth'")
-    expect(util).toContain('AuthProofClient')
-    expect(util).toContain('AuthProofServer')
+    expect(authFile?.content).toContain("from '@bsv/auth'")
+    expect(authFile?.content).toContain('AuthProofClient')
+    expect(authFile?.content).toContain('AuthProofServer')
   })
 
-  test('express framework adds an Express login route', () => {
-    const expressFiles = walletLogin.files({ ...base, framework: 'express' })
-    const paths = expressFiles.map(f => f.path)
-    expect(paths).toContain('src/bsv/loginRoute.ts')
-    const routeFile = expressFiles.find(f => f.path === 'src/bsv/loginRoute.ts')
-    expect(routeFile).toBeDefined()
-    expect(routeFile?.content).toContain('verifyLoginProof')
-  })
-
-  test('react framework adds a hook built on @bsv/wallet-relay', () => {
-    const files = walletLogin.files({ ...base, framework: 'react' })
-    const hook = files.find(f => f.path === 'src/bsv/useWalletLogin.tsx')
+  test('client files includes useWalletLogin.tsx built on @bsv/wallet-relay', () => {
+    const roleFiles = walletLogin.files(ctx)
+    const client = roleFiles.client ?? []
+    const hook = client.find(f => f.path === 'useWalletLogin.tsx')
     expect(hook).toBeDefined()
     expect(hook?.content).toContain("from '@bsv/wallet-relay/react'")
     expect(hook?.content).toContain('useWalletRelayClient')
   })
 
-  test('npmDependencies vary by framework and always include @bsv/auth', () => {
-    expect(walletLogin.npmDependencies({ ...base, framework: 'express' })).toHaveProperty('@bsv/auth')
-    expect(walletLogin.npmDependencies({ ...base, framework: 'express' })).toHaveProperty('express')
-    expect(walletLogin.npmDependencies({ ...base, framework: 'react' })).toHaveProperty('@bsv/wallet-relay')
-    expect(walletLogin.npmDependencies({ ...base, framework: 'react' })).toHaveProperty('react')
+  test('server files includes loginRoute.ts', () => {
+    const roleFiles = walletLogin.files(ctx)
+    const server = roleFiles.server ?? []
+    const route = server.find(f => f.path === 'loginRoute.ts')
+    expect(route).toBeDefined()
+    expect(route?.content).toContain('verifyLoginProof')
   })
 
-  test('agentsSection names the abstraction lib and the emitted files', () => {
-    const md = walletLogin.agentsSection({ ...base, framework: 'react' })
+  test('npmDependencies has @bsv/auth in shared, @bsv/wallet-relay in client', () => {
+    const deps = walletLogin.npmDependencies(ctx)
+    expect(deps.shared).toHaveProperty('@bsv/auth')
+    expect(deps.client).toHaveProperty('@bsv/wallet-relay')
+    expect(deps.server).toHaveProperty('express')
+  })
+
+  test('agentsSection mentions @bsv/auth and wallet-login', () => {
+    const md = walletLogin.agentsSection(ctx)
     expect(md).toContain('@bsv/auth')
-    expect(md).toContain('src/bsv/auth.ts')
+    expect(md).toContain('wallet-login')
     expect(md).toContain('useWalletLogin')
   })
 })

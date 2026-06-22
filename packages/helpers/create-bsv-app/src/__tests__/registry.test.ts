@@ -11,7 +11,7 @@ describe('capability registry', () => {
     const c = getCapability('wallet-login')
     expect(c).toBeDefined()
     expect(c?.title.length).toBeGreaterThan(0)
-    expect(Array.isArray(c?.frameworks)).toBe(true)
+    expect(Array.isArray(c?.roles)).toBe(true)
     expect(typeof c?.files).toBe('function')
     expect(typeof c?.npmDependencies).toBe('function')
     expect(typeof c?.agentsSection).toBe('function')

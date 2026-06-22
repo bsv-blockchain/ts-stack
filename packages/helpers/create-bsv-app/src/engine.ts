@@ -1,51 +1,68 @@
 // src/engine.ts
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { FileSpec, GenContext, Selection } from './types.js'
-import { getCapability } from './registry.js'
+import type { FileSpec, Capability, CapabilityContext, Role } from './types.js'
+import type { ProjectConfig, Layout } from './config/model.js'
+import { layoutOf } from './config/model.js'
 
-function ctxOf (selection: Selection): GenContext {
-  return { appName: selection.appName, network: selection.network, framework: selection.framework }
+export type TargetKey = 'root' | 'client' | 'server'
+export interface PlacementResult {
+  utilFiles: FileSpec[]
+  glueFiles: FileSpec[]
+  deps: Record<TargetKey, Record<string, string>>
 }
 
-function expandIds (ids: string[]): string[] {
-  const out: string[] = []
-  const visit = (id: string): void => {
-    const c = getCapability(id)
-    if (c == null) throw new Error(`unknown capability: ${id}`)
-    for (const dep of c.requires ?? []) visit(dep)
-    if (!out.includes(id)) out.push(id)
+const ROLES: Role[] = ['shared', 'client', 'server']
+const targetRoot = (t: TargetKey): string => (t === 'root' ? '' : t)
+
+function roleTargetsFor (layout: Layout): Record<Role, TargetKey[]> {
+  switch (layout) {
+    case 'frontend-only': return { shared: ['root'], client: ['root'], server: [] }
+    case 'backend-only': return { shared: ['root'], client: [], server: ['root'] }
+    case 'monorepo': return { shared: ['client', 'server'], client: ['client'], server: ['server'] }
+    default: return { shared: [], client: [], server: [] }
   }
-  for (const id of ids) visit(id)
-  return out
 }
 
-export function planFiles (selection: Selection): FileSpec[] {
-  const ctx = ctxOf(selection)
-  const byPath = new Map<string, FileSpec>()
-  for (const id of expandIds(selection.capabilityIds)) {
-    const cap = getCapability(id)
-    if (cap == null) throw new Error(`unknown capability: ${id}`)
-    for (const spec of cap.files(ctx)) {
-      const existing = byPath.get(spec.path)
-      if (existing != null && existing.content !== spec.content) {
-        throw new Error(`file conflict at ${spec.path} between capabilities`)
+const joinRel = (...parts: string[]): string => parts.filter(p => p.length > 0).join('/')
+
+export function planPlacement (config: ProjectConfig, capabilities: Capability[]): PlacementResult {
+  const layout = layoutOf(config.stack)
+  const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
+  const roleTargets = roleTargetsFor(layout)
+  const utilByPath = new Map<string, FileSpec>()
+  const glueByPath = new Map<string, FileSpec>()
+  const deps: Record<TargetKey, Record<string, string>> = { root: {}, client: {}, server: {} }
+
+  const add = (map: Map<string, FileSpec>, path: string, content: string): void => {
+    const existing = map.get(path)
+    if (existing != null && existing.content !== content) throw new Error(`file conflict at ${path} between capabilities`)
+    map.set(path, { path, content })
+  }
+
+  for (const cap of capabilities) {
+    const roleFiles = cap.files(ctx)
+    const roleDeps = cap.npmDependencies(ctx)
+    for (const role of ROLES) {
+      const targets = roleTargets[role]
+      if (targets.length === 0) continue
+      const files = roleFiles[role] ?? []
+      const rdeps = roleDeps[role] ?? {}
+      for (const t of targets) {
+        for (const f of files) add(utilByPath, joinRel(targetRoot(t), config.bsvDir, f.path), f.content)
+        Object.assign(deps[t], rdeps)
       }
-      byPath.set(spec.path, spec)
+    }
+    if (config.glue && cap.glue != null) {
+      const glue = cap.glue(ctx)
+      for (const role of ROLES) {
+        for (const t of roleTargets[role]) {
+          for (const f of glue[role] ?? []) add(glueByPath, joinRel(targetRoot(t), f.path), f.content)
+        }
+      }
     }
   }
-  return [...byPath.values()]
-}
-
-export function aggregateDependencies (selection: Selection): Record<string, string> {
-  const ctx = ctxOf(selection)
-  const deps: Record<string, string> = {}
-  for (const id of expandIds(selection.capabilityIds)) {
-    const cap = getCapability(id)
-    if (cap == null) throw new Error(`unknown capability: ${id}`)
-    Object.assign(deps, cap.npmDependencies(ctx))
-  }
-  return deps
+  return { utilFiles: [...utilByPath.values()], glueFiles: [...glueByPath.values()], deps }
 }
 
 export interface WriteResult { written: string[], skipped: string[] }
