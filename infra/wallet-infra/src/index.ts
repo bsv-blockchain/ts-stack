@@ -15,9 +15,13 @@ const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
 import { spawn } from 'node:child_process'
 import packageJson from '../package.json' with { type: 'json' }
+import { trace, SpanStatusCode } from '@opentelemetry/api'
+import { log } from './logger.js'
 
 import * as dotenv from 'dotenv'
 dotenv.config()
+
+const tracer = trace.getTracer(packageJson.name, packageJson.version)
 
 // Load environment variables
 const {
@@ -206,30 +210,45 @@ async function setupWalletStorageAndMonitor(): Promise<{
   }
 }
 
-// Start the server
-try {
-  const context = await setupWalletStorageAndMonitor()
-  console.log(
-    'wallet-toolbox v' +
-      String(packageJson.dependencies['@bsv/wallet-toolbox']).replace(
-        /^[~^]/,
-        ''
-      )
-  )
-  console.log(JSON.stringify(context.settings, null, 2))
+// Start the server. Wrap startup in a span so a slow/failed boot is visible in
+// traces, and emit structured timed events.
+await tracer.startActiveSpan('wallet-infra.bootstrap', async (span) => {
+  const startedAt = Date.now()
+  try {
+    const walletToolboxVersion = String(
+      packageJson.dependencies['@bsv/wallet-toolbox']
+    ).replace(/^[~^]/, '')
+    const context = await setupWalletStorageAndMonitor()
+    log.info(
+      { operation: 'storage.setup', wallet_toolbox_version: walletToolboxVersion, network: BSV_NETWORK },
+      'wallet storage and monitor configured'
+    )
+    log.debug({ operation: 'storage.setup', settings: context.settings }, 'storage settings')
 
-  context.server.start()
-  console.log('wallet-toolbox StorageServer started')
+    context.server.start()
+    log.info({ operation: 'storage_server.start', outcome: 'ok' }, 'StorageServer started')
 
-  await context.monitor.startTasks()
-  console.log('wallet-toolbox Monitor started')
+    await context.monitor.startTasks()
+    log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
 
-  // Conditionally start nginx
-  if (ENABLE_NGINX === 'true') {
-    console.log('Spawning nginx...')
-    spawn('/usr/sbin/nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
-    console.log('nginx is up!')
+    // Conditionally start nginx
+    if (ENABLE_NGINX === 'true') {
+      spawn('/usr/sbin/nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
+      log.info({ operation: 'nginx.spawn', outcome: 'ok' }, 'nginx started')
+    }
+
+    const duration_ms = Date.now() - startedAt
+    span.setAttribute('bsv.network', String(BSV_NETWORK))
+    span.setAttribute('nginx.enabled', ENABLE_NGINX === 'true')
+    span.setStatus({ code: SpanStatusCode.OK })
+    log.info({ operation: 'bootstrap', outcome: 'ok', duration_ms }, 'wallet-infra started')
+  } catch (error) {
+    const duration_ms = Date.now() - startedAt
+    span.recordException(error as Error)
+    span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message })
+    log.error({ operation: 'bootstrap', outcome: 'error', duration_ms, err: error }, 'wallet-infra failed to start')
+    process.exitCode = 1
+  } finally {
+    span.end()
   }
-} catch (error) {
-  console.error('Error starting server:', error)
-}
+})
