@@ -30,9 +30,9 @@ async function ensureBulkHeadersDir(bulkHeadersPath: string): Promise<void> {
   try {
     const fs = await import('node:fs/promises')
     await fs.mkdir(bulkHeadersPath, { recursive: true })
-    console.log(`✓ Bulk headers directory ready`)
+    log.info({ operation: 'bulk_headers.dir_ensure', outcome: 'ok', bulk_headers_path: bulkHeadersPath }, 'Bulk headers directory ready')
   } catch (error) {
-    console.error(`❌ Failed to create bulk headers directory: ${error}`)
+    log.error({ operation: 'bulk_headers.dir_ensure', outcome: 'error', bulk_headers_path: bulkHeadersPath, err: error }, 'Failed to create bulk headers directory')
     throw error
   }
 }
@@ -58,15 +58,26 @@ async function main() {
 
   const bulkHeadersAutoExportInterval = Number.parseInt(process.env.BULK_HEADERS_AUTO_EXPORT_INTERVAL || '240000000', 10) // Default: 400 blocks around 67 hours
 
-  console.log(`Starting ChaintracksService with custom configuration`)
-  console.log(`Chain: ${chain}Net`)
-  console.log(`Port: ${port}`)
-  console.log(`WhatsOnChain API Key: ${whatsonchainApiKey ? '✓ Configured' : '✗ Not configured'}`)
-  console.log(`Bulk Headers CDN: ${enableBulkHeadersCDN ? '✓ Enabled' : '✗ Disabled'}`)
+  log.info(
+    {
+      operation: 'config.summary',
+      chain: `${chain}Net`,
+      port,
+      whatsonchain_api_key_configured: Boolean(whatsonchainApiKey),
+      bulk_headers_cdn_enabled: enableBulkHeadersCDN,
+    },
+    'Starting ChaintracksService with custom configuration'
+  )
   if (enableBulkHeadersCDN) {
-    console.log(`CDN Port: ${cdnPort}`)
-    console.log(`CDN Host URL: ${cdnHostUrl}`)
-    console.log(`Bulk Headers Path: ${bulkHeadersPath}`)
+    log.info(
+      {
+        operation: 'config.cdn',
+        cdn_port: cdnPort,
+        cdn_host_url: cdnHostUrl,
+        bulk_headers_path: bulkHeadersPath,
+      },
+      'Bulk headers CDN configuration'
+    )
     await ensureBulkHeadersDir(bulkHeadersPath)
   }
 
@@ -101,8 +112,7 @@ async function main() {
     if (cdnIngestor?.localCachePath !== undefined) {
       // Override the local cache path to use our bulk headers export directory
       cdnIngestor.localCachePath = bulkHeadersPath
-      console.log(`✓ Configured CDN ingestor to use local path: ${bulkHeadersPath}`)
-      console.log(`  → Ingestor will check filesystem first, then fallback to remote CDN`)
+      log.info({ operation: 'cdn.ingestor_configure', outcome: 'ok', local_cache_path: bulkHeadersPath }, 'Configured CDN ingestor to use local path; filesystem checked first, then remote CDN')
     }
   }
 
@@ -116,34 +126,47 @@ async function main() {
   // Function to export bulk headers
   const exportBulkHeaders = async () => {
     if (!enableBulkHeadersCDN) {
-      console.log('⏭️  Bulk headers CDN is disabled, skipping export')
+      log.info({ operation: 'headers.export', outcome: 'skipped', reason: 'cdn_disabled' }, 'Bulk headers CDN is disabled, skipping export')
       return
     }
 
     if (isExporting) {
-      console.log('⏭️  Export already in progress, skipping')
+      log.info({ operation: 'headers.export', outcome: 'skipped', reason: 'in_progress' }, 'Export already in progress, skipping')
       return
     }
 
     try {
       isExporting = true
-      console.log('\n🔍 Checking if export is needed...')
+      log.info({ operation: 'headers.export' }, 'Checking if export is needed')
 
       const currentHeight = await chaintracks.currentHeight()
-      console.log(`   Current height: ${currentHeight}`)
-      console.log(`   Last exported height: ${lastExportedHeight}`)
 
       // Check if we've crossed a 100k boundary
       const currentMilestone = Math.floor(currentHeight / 100000)
       const lastMilestone = Math.floor(lastExportedHeight / 100000)
-      console.log(`   Current milestone: ${currentMilestone}, Last milestone: ${lastMilestone}`)
 
       const shouldExport = currentMilestone > lastMilestone || lastExportedHeight === 0
-      console.log(`   Should export: ${shouldExport}`)
+      log.info(
+        {
+          operation: 'headers.export',
+          current_height: currentHeight,
+          last_exported_height: lastExportedHeight,
+          current_milestone: currentMilestone,
+          last_milestone: lastMilestone,
+          should_export: shouldExport,
+        },
+        'Evaluated export need'
+      )
 
       if (shouldExport) {
-        console.log(`\n📤 Exporting bulk headers to ${bulkHeadersPath}...`)
-        console.log(`   Source URL (rootFolder in JSON): ${bulkHeadersSourceUrl}`)
+        log.info(
+          {
+            operation: 'headers.export',
+            bulk_headers_path: bulkHeadersPath,
+            source_url: bulkHeadersSourceUrl,
+          },
+          'Exporting bulk headers'
+        )
 
         await chaintracks.exportBulkHeaders(
           bulkHeadersPath,
@@ -154,27 +177,29 @@ async function main() {
         )
 
         lastExportedHeight = currentHeight
-        console.log(`✓ Bulk headers exported successfully`)
-        console.log(`   Files should now be available at: ${bulkHeadersPath}`)
-        console.log(`   Download URL: ${bulkHeadersSourceUrl}/${chain}NetBlockHeaders.json`)
+        log.info(
+          {
+            operation: 'headers.export',
+            outcome: 'ok',
+            bulk_headers_path: bulkHeadersPath,
+            download_url: `${bulkHeadersSourceUrl}/${chain}NetBlockHeaders.json`,
+          },
+          'Bulk headers exported successfully'
+        )
 
         // List files to verify
         const fs = await import('node:fs/promises')
         try {
           const files = await fs.readdir(bulkHeadersPath)
-          console.log(`   Found ${files.length} files: ${files.join(', ')}`)
+          log.info({ operation: 'headers.export', file_count: files.length, files }, 'Listed exported files')
         } catch (e) {
-          console.log(`   Could not list files: ${e}`)
+          log.warn({ operation: 'headers.export', outcome: 'error', err: e }, 'Could not list files')
         }
       } else {
-        console.log('⏭️  No export needed (no 100k boundary crossed)')
+        log.info({ operation: 'headers.export', outcome: 'skipped', reason: 'no_boundary_crossed' }, 'No export needed')
       }
     } catch (error) {
-      console.error('❌ Error exporting bulk headers:', error)
-      if (error instanceof Error) {
-        console.error('   Error message:', error.message)
-        console.error('   Stack trace:', error.stack)
-      }
+      log.error({ operation: 'headers.export', outcome: 'error', err: error }, 'Error exporting bulk headers')
     } finally {
       isExporting = false
     }
@@ -184,15 +209,20 @@ async function main() {
   // This allows you to react to new blocks in real-time
   const headerSubscriptionId = await chaintracks.subscribeHeaders(
     async (header: BlockHeader) => {
-      console.log(`📦 New block header received:`)
-      console.log(`   Height: ${header.height}`)
-      console.log(`   Hash: ${header.hash}`)
-      console.log(`   Timestamp: ${new Date(header.time * 1000).toISOString()}`)
+      log.info(
+        {
+          operation: 'header.received',
+          height: header.height,
+          hash: header.hash,
+          timestamp: new Date(header.time * 1000).toISOString(),
+        },
+        'New block header received'
+      )
 
       // Check if we should export headers (non-blocking)
       if (enableBulkHeadersCDN) {
         exportBulkHeaders().catch(err =>
-          console.error('Background export error:', err)
+          log.error({ operation: 'headers.export', outcome: 'error', context: 'background', err }, 'Background export error')
         )
       }
     }
@@ -202,18 +232,23 @@ async function main() {
   // Important for handling chain reorgs properly
   const reorgSubscriptionId = await chaintracks.subscribeReorgs(
     async (depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivated?: BlockHeader[]) => {
-      console.log(`🔄 Blockchain reorganization detected!`)
-      console.log(`   Reorg depth: ${depth} blocks`)
-      console.log(`   Old tip: ${oldTip.hash} (height ${oldTip.height})`)
-      console.log(`   New tip: ${newTip.hash} (height ${newTip.height})`)
-      if (deactivated && deactivated.length > 0) {
-        console.log(`   Deactivated blocks: ${deactivated.map(h => h.hash).join(', ')}`)
-      }
+      log.info(
+        {
+          operation: 'reorg.detected',
+          reorg_depth: depth,
+          old_tip_hash: oldTip.hash,
+          old_tip_height: oldTip.height,
+          new_tip_hash: newTip.hash,
+          new_tip_height: newTip.height,
+          deactivated_hashes: deactivated && deactivated.length > 0 ? deactivated.map(h => h.hash) : [],
+        },
+        'Blockchain reorganization detected'
+      )
     }
   )
 
-  console.log(`✓ Subscribed to header events (ID: ${headerSubscriptionId})`)
-  console.log(`✓ Subscribed to reorg events (ID: ${reorgSubscriptionId})`)
+  log.info({ operation: 'subscribe.headers', outcome: 'ok', subscription_id: headerSubscriptionId }, 'Subscribed to header events')
+  log.info({ operation: 'subscribe.reorgs', outcome: 'ok', subscription_id: reorgSubscriptionId }, 'Subscribed to reorg events')
 
   // Create custom Services instance
   // This allows configuring which BSV network services to use
@@ -285,14 +320,21 @@ async function main() {
     }))
 
     cdnServer = cdnApp.listen(cdnPort, () => {
-      console.log(`✓ Bulk Headers CDN server running on port ${cdnPort}`)
-      console.log(`  Access files at: http://localhost:${cdnPort}/mainNetBlockHeaders.json`)
+      log.info(
+        {
+          operation: 'cdn.listen',
+          outcome: 'ok',
+          cdn_port: cdnPort,
+          access_url: `http://localhost:${cdnPort}/mainNetBlockHeaders.json`,
+        },
+        'Bulk Headers CDN server running'
+      )
     })
   }
 
   // Perform initial export if CDN is enabled
   if (enableBulkHeadersCDN) {
-    console.log('\n🔄 Performing initial bulk headers export...')
+    log.info({ operation: 'headers.export', context: 'initial' }, 'Performing initial bulk headers export')
     await exportBulkHeaders()
   }
 
@@ -301,78 +343,86 @@ async function main() {
   if (enableBulkHeadersCDN) {
     exportInterval = setInterval(() => {
       exportBulkHeaders().catch(err =>
-        console.error('Periodic export error:', err)
+        log.error({ operation: 'headers.export', outcome: 'error', context: 'periodic', err }, 'Periodic export error')
       )
     }, bulkHeadersAutoExportInterval)
   }
 
-  console.log(`\n✓ Chaintracks API server is running on port ${port}`)
-  console.log('\nV1 Endpoints (original API):')
-  console.log(`  GET  http://localhost:${port}/getChain - Get chain name`)
-  console.log(`  GET  http://localhost:${port}/getInfo - Get detailed service info`)
-  console.log(`  GET  http://localhost:${port}/getPresentHeight - Get current height`)
-  console.log(`  GET  http://localhost:${port}/findChainTipHashHex - Get chain tip hash`)
-  console.log(`  GET  http://localhost:${port}/findChainTipHeaderHex - Get chain tip header`)
-  console.log(`  GET  http://localhost:${port}/findHeaderHexForHeight?height=N - Get header by height`)
-  console.log(`  GET  http://localhost:${port}/findHeaderHexForBlockHash?hash=X - Get header by hash`)
-  console.log(`  GET  http://localhost:${port}/getHeaders?height=N&count=M - Get multiple headers`)
-  console.log(`  POST http://localhost:${port}/addHeaderHex - Submit new header`)
-  console.log('\nV2 Endpoints (RESTful API):')
-  console.log(`  GET  http://localhost:${port}/v2/network - Get chain name`)
-  console.log(`  GET  http://localhost:${port}/v2/tip - Get chain tip header`)
-  console.log(`  GET  http://localhost:${port}/v2/header/height/:height - Get header by height`)
-  console.log(`  GET  http://localhost:${port}/v2/header/hash/:hash - Get header by hash`)
-  console.log(`  GET  http://localhost:${port}/v2/headers?height=N&count=M - Get multiple headers (binary)`)
-  if (enableBulkHeadersCDN) {
-    console.log(`\nCDN Endpoints (port ${cdnPort}):`)
-    console.log(`  GET  http://localhost:${cdnPort}/${chain}NetBlockHeaders.json - Bulk headers metadata`)
-    console.log(`  GET  http://localhost:${cdnPort}/*.headers - Bulk header files`)
-  }
-  console.log('Press Ctrl+C to stop the server')
+  log.info(
+    {
+      operation: 'server.ready',
+      outcome: 'ok',
+      port,
+      cdn_enabled: enableBulkHeadersCDN,
+      cdn_port: enableBulkHeadersCDN ? cdnPort : undefined,
+      v1_endpoints: [
+        'GET /getChain',
+        'GET /getInfo',
+        'GET /getPresentHeight',
+        'GET /findChainTipHashHex',
+        'GET /findChainTipHeaderHex',
+        'GET /findHeaderHexForHeight?height=N',
+        'GET /findHeaderHexForBlockHash?hash=X',
+        'GET /getHeaders?height=N&count=M',
+        'POST /addHeaderHex',
+      ],
+      v2_endpoints: [
+        'GET /v2/network',
+        'GET /v2/tip',
+        'GET /v2/header/height/:height',
+        'GET /v2/header/hash/:hash',
+        'GET /v2/headers?height=N&count=M',
+      ],
+      cdn_endpoints: enableBulkHeadersCDN
+        ? [`GET /${chain}NetBlockHeaders.json`, 'GET /*.headers']
+        : undefined,
+    },
+    'Chaintracks API server is running'
+  )
 
   // Enhanced shutdown with cleanup
   const shutdown = async (signal: string) => {
-    console.log(`\n${signal} received, shutting down gracefully...`)
+    log.info({ operation: 'shutdown', signal }, 'Signal received, shutting down gracefully')
     try {
       // Stop periodic export if running
       if (exportInterval) {
         clearInterval(exportInterval)
-        console.log('Stopped periodic export timer')
+        log.info({ operation: 'shutdown.export_timer', outcome: 'ok' }, 'Stopped periodic export timer')
       }
 
       // Stop CDN server if running
       if (cdnServer) {
-        console.log('Stopping CDN server...')
+        log.info({ operation: 'shutdown.cdn_server' }, 'Stopping CDN server')
         await new Promise<void>((resolve) => {
           cdnServer.close(() => {
-            console.log('✓ CDN server stopped')
+            log.info({ operation: 'shutdown.cdn_server', outcome: 'ok' }, 'CDN server stopped')
             resolve()
           })
         })
       }
 
       // Unsubscribe from events
-      console.log('Unsubscribing from events...')
+      log.info({ operation: 'shutdown.unsubscribe' }, 'Unsubscribing from events')
       await chaintracks.unsubscribe(headerSubscriptionId)
       await chaintracks.unsubscribe(reorgSubscriptionId)
 
       // Stop the API server
-      console.log('Stopping API server...')
+      log.info({ operation: 'shutdown.api_server' }, 'Stopping API server')
       await new Promise<void>((resolve) => {
         apiServer.close(() => {
-          console.log('✓ API server stopped')
+          log.info({ operation: 'shutdown.api_server', outcome: 'ok' }, 'API server stopped')
           resolve()
         })
       })
 
       // Stop chaintracks
-      console.log('Stopping chaintracks...')
+      log.info({ operation: 'shutdown.chaintracks' }, 'Stopping chaintracks')
       await chaintracks.destroy()
 
-      console.log('✓ All servers stopped successfully')
+      log.info({ operation: 'shutdown', outcome: 'ok' }, 'All servers stopped successfully')
       process.exit(0)
     } catch (error) {
-      console.error('Error during shutdown:', error)
+      log.error({ operation: 'shutdown', outcome: 'error', err: error }, 'Error during shutdown')
       process.exit(1)
     }
   }
@@ -380,11 +430,11 @@ async function main() {
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
   process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error)
+    log.error({ operation: 'uncaught_exception', outcome: 'error', err: error }, 'Uncaught Exception')
     shutdown('uncaughtException')
   })
   process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+    log.error({ operation: 'unhandled_rejection', outcome: 'error', err: reason, promise }, 'Unhandled Rejection')
     shutdown('unhandledRejection')
   })
 }
