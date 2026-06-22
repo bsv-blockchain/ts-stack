@@ -1,13 +1,13 @@
 /**
- * OpenTelemetry bootstrap — preloaded before app code via `node --require ./dist/telemetry.js`.
+ * OpenTelemetry bootstrap (CommonJS) — preloaded before app code via
+ * `node --require ./dist/telemetry.js`.
  *
  * Emits traces, metrics and logs. All wiring is driven by OTEL_* env vars; when
  * OTEL_EXPORTER_OTLP_ENDPOINT is unset we fall back to console exporters so the
  * process always boots (dev-safe). Runtime (heap/GC/event-loop) metrics are
  * enabled to support memory-leak diagnosis.
  *
- * This file is intentionally self-contained and identical across infra
- * components (see docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md).
+ * See docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md.
  */
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
@@ -39,9 +39,12 @@ import {
 } from '@opentelemetry/semantic-conventions'
 import { logs, SeverityNumber } from '@opentelemetry/api-logs'
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
+import * as path from 'node:path'
 
+// Resolve the component's package.json relative to the working directory (the
+// app root in every Dockerfile and local run) — robust regardless of build layout.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const pkg = require('../package.json') as { name: string; version: string }
+const pkg = require(path.join(process.cwd(), 'package.json')) as { name: string; version: string }
 
 const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
 const useOtlp = typeof otlpEndpoint === 'string' && otlpEndpoint.length > 0
@@ -85,10 +88,8 @@ const sdk = new NodeSDK({
     logRecordProcessors: [logRecordProcessor],
     instrumentations: [
         getNodeAutoInstrumentations({
-            // Filesystem spans are pure noise for these servers.
             '@opentelemetry/instrumentation-fs': { enabled: false },
         }),
-        // Heap / GC / event-loop lag — the primary memory-leak signal.
         new RuntimeNodeInstrumentation(),
     ],
 })
@@ -100,8 +101,7 @@ const rawInfo = console.info.bind(console)
 const rawError = console.error.bind(console)
 
 // Bridge stray console.* calls into OTel logs so nothing is lost while code is
-// migrated to the structured (pino) logger. Trace context is attached
-// automatically by the logs SDK.
+// migrated to the structured (pino) logger.
 const logger = logs.getLogger(pkg.name, pkg.version)
 const SEVERITY: Record<string, SeverityNumber> = {
     debug: SeverityNumber.DEBUG,
@@ -134,11 +134,15 @@ for (const method of ['debug', 'info', 'log', 'warn', 'error'] as const) {
     }
 }
 
-const shutdown = (signal: string) => {
+// Flush telemetry on shutdown. Only force-exit if the app registered no handler
+// of its own for this signal — otherwise we let the app's shutdown drive exit.
+const shutdown = (signal: NodeJS.Signals) => {
     sdk.shutdown()
-        .then(() => rawInfo(`[otel] shutdown complete (${signal})`))
+        .then(() => rawInfo(`[otel] flushed (${signal})`))
         .catch((err: unknown) => rawError('[otel] shutdown error', err))
-        .finally(() => process.exit(0))
+        .finally(() => {
+            if (process.listeners(signal).length <= 1) process.exit(0)
+        })
 }
-process.once('SIGTERM', () => shutdown('SIGTERM'))
-process.once('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

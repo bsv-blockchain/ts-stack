@@ -142,11 +142,15 @@ for (const method of ['debug', 'info', 'log', 'warn', 'error'] as const) {
     }
 }
 
-const shutdown = (signal: string) => {
+// Flush telemetry on shutdown. Only force-exit if the app registered no handler
+// of its own for this signal — otherwise we let the app's shutdown drive exit.
+const shutdown = (signal: NodeJS.Signals) => {
     sdk.shutdown()
-        .then(() => rawInfo(`[otel] shutdown complete (${signal})`))
+        .then(() => rawInfo(`[otel] flushed (${signal})`))
         .catch((err: unknown) => rawError('[otel] shutdown error', err))
-        .finally(() => process.exit(0))
+        .finally(() => {
+            if (process.listeners(signal).length <= 1) process.exit(0)
+        })
 }
-process.once('SIGTERM', () => shutdown('SIGTERM'))
-process.once('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

@@ -1,26 +1,24 @@
 /**
  * Structured application logger (pino).
  *
- * Emits leveled JSON with stable field names so logs are queryable across infra
- * components and correlate to traces: @opentelemetry/instrumentation-pino (loaded
- * by telemetry.ts) injects trace_id/span_id into every record, and the records
- * are shipped to the OTLP logs endpoint.
- *
- * Stable keys: service, env, operation, outcome ('ok'|'error'), duration_ms,
- * plus err. Domain keys are namespaced per call site.
+ * Leveled JSON with stable field names, correlated to traces via
+ * @opentelemetry/instrumentation-pino (loaded by telemetry.ts) and shipped to
+ * the OTLP logs endpoint. Stable keys: service, env, operation, outcome, err.
  */
 import pino from 'pino'
-import packageJson from '../package.json'
+import * as path from 'node:path'
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pkg = require(path.join(process.cwd(), 'package.json')) as { name: string; version: string }
 
 export const log = pino({
-    name: packageJson.name,
+    name: pkg.name,
     level: process.env.LOG_LEVEL ?? 'info',
     base: {
-        service: process.env.OTEL_SERVICE_NAME ?? packageJson.name,
+        service: process.env.OTEL_SERVICE_NAME ?? pkg.name,
         env: process.env.DEPLOY_ENV ?? process.env.NODE_ENV ?? 'development',
     },
     formatters: {
-        // Emit `level` as its text name (info/warn/error) rather than a number.
         level: (label) => ({ level: label }),
     },
 })

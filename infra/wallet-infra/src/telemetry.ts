@@ -14,7 +14,8 @@
  *
  * See docs/superpowers/specs/2026-06-22-infra-opentelemetry-design.md.
  */
-import { register } from 'node:module'
+import { register, createRequire } from 'node:module'
+import { join } from 'node:path'
 register('@opentelemetry/instrumentation/hook.mjs', import.meta.url)
 
 import { NodeSDK } from '@opentelemetry/sdk-node'
@@ -47,7 +48,11 @@ import {
 } from '@opentelemetry/semantic-conventions'
 import { logs, SeverityNumber } from '@opentelemetry/api-logs'
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api'
-import pkg from '../package.json' with { type: 'json' }
+
+// Resolve the component's package.json relative to the working directory (the
+// app root in every Dockerfile and local run) — robust regardless of build layout.
+const require = createRequire(import.meta.url)
+const pkg = require(join(process.cwd(), 'package.json')) as { name: string; version: string }
 
 const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
 const useOtlp = typeof otlpEndpoint === 'string' && otlpEndpoint.length > 0
@@ -137,11 +142,15 @@ for (const method of ['debug', 'info', 'log', 'warn', 'error'] as const) {
     }
 }
 
-const shutdown = (signal: string) => {
+// Flush telemetry on shutdown. Only force-exit if the app registered no handler
+// of its own for this signal — otherwise we let the app's shutdown drive exit.
+const shutdown = (signal: NodeJS.Signals) => {
     sdk.shutdown()
-        .then(() => rawInfo(`[otel] shutdown complete (${signal})`))
+        .then(() => rawInfo(`[otel] flushed (${signal})`))
         .catch((err: unknown) => rawError('[otel] shutdown error', err))
-        .finally(() => process.exit(0))
+        .finally(() => {
+            if (process.listeners(signal).length <= 1) process.exit(0)
+        })
 }
-process.once('SIGTERM', () => shutdown('SIGTERM'))
-process.once('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
