@@ -7,6 +7,7 @@
 
 import { Request, Response } from "express";
 import { UserService } from "../services/UserService";
+import { log } from "../logger";
 const COMMISSION_FEE = process.env.COMMISSION_FEE
 
 export class FaucetController {
@@ -59,7 +60,7 @@ export class FaucetController {
                 }
             });
         } catch (error: any) {
-            console.error(error);
+            log.error({ operation: 'controller.faucet.request', err: error, outcome: 'error' }, 'requestFaucet failed');
             res.status(500).json({ message: error.message });
         }
     }

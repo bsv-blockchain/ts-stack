@@ -9,6 +9,7 @@ import { Setup } from "@bsv/wallet-toolbox";
 import { db } from "../db/knex";
 import { User, AuthMethodEntity, PaymentEntity } from "../types";
 import { Curve, Random, RPuzzle, Utils } from '@bsv/sdk'
+import { log } from "../logger";
 
 //temp solution 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY
@@ -233,7 +234,7 @@ export class UserService {
                     acceptDelayedBroadcast: false
                 }
             })
-            console.log('Funding txid created!', txid)
+            log.info({ operation: 'service.user.faucet_funding', txid }, 'Funding txid created')
 
             // For demonstration, we pretend the "paymentData" is a simple JSON with a "txid"
             const [paymentId] = await db("payments").insert(

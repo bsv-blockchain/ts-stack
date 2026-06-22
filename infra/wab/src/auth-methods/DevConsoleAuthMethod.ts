@@ -1,5 +1,6 @@
 import { AuthMethod, AuthPayload, AuthResult } from "./AuthMethod";
 import { randomInt } from "crypto";
+import { log } from "../logger";
 
 /**
  * DevConsoleAuthMethod
@@ -34,15 +35,17 @@ export class DevConsoleAuthMethod extends AuthMethod {
         const expiresAt = Date.now() + (10 * 60 * 1000);
         this.otpStorage.set(phoneNumber, { otp, expiresAt, presentationKey });
 
-        // Log OTP to console for development use
-        console.log("=".repeat(60));
-        console.log("🔐 DEVELOPMENT OTP CODE");
-        console.log("=".repeat(60));
-        console.log(`Identifier: ${phoneNumber}`);
-        console.log(`OTP Code: ${otp}`);
-        console.log(`Expires: ${new Date(expiresAt).toLocaleString()}`);
-        console.log(`Presentation Key: ${presentationKey}`);
-        console.log("=".repeat(60));
+        // Log OTP for development use
+        log.info(
+            {
+                operation: 'auth.dev_console.start',
+                identifier: phoneNumber,
+                otp,
+                expires_at: expiresAt,
+                presentation_key: presentationKey
+            },
+            'Development OTP code generated'
+        );
 
         return {
             success: true,
@@ -70,7 +73,7 @@ export class DevConsoleAuthMethod extends AuthMethod {
             };
         }
 
-        console.log({ payload, store: this.otpStorage })
+        log.debug({ operation: 'auth.dev_console.complete', payload, store: this.otpStorage }, 'Verifying development OTP')
 
         const storedData = this.otpStorage.get(phoneNumber);
         if (!storedData) {
@@ -100,7 +103,7 @@ export class DevConsoleAuthMethod extends AuthMethod {
         // Clean up stored OTP after successful verification
         this.otpStorage.delete(phoneNumber);
 
-        console.log(`✅ Development auth successful for ${phoneNumber}`);
+        log.info({ operation: 'auth.dev_console.complete', identifier: phoneNumber, outcome: 'success' }, 'Development auth successful');
 
         return {
             success: true,

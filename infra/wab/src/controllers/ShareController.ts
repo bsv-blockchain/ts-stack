@@ -11,6 +11,7 @@ import { ShareService } from "../services/ShareService";
 import { AuthMethod } from "../auth-methods/AuthMethod";
 import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
 import { DevConsoleAuthMethod } from "../auth-methods/DevConsoleAuthMethod";
+import { log } from "../logger";
 
 // Singleton for dev auth method
 const dev = new DevConsoleAuthMethod();
@@ -131,7 +132,7 @@ export class ShareController {
                 userId: user.id
             });
         } catch (error: any) {
-            console.error("[ShareController] storeShare error:", error);
+            log.error({ operation: 'controller.share.store', err: error, outcome: 'error' }, 'storeShare failed');
             res.status(500).json({
                 success: false,
                 message: error.message
@@ -212,7 +213,7 @@ export class ShareController {
                 message: "Share retrieved successfully"
             });
         } catch (error: any) {
-            console.error("[ShareController] retrieveShare error:", error);
+            log.error({ operation: 'controller.share.retrieve', err: error, outcome: 'error' }, 'retrieveShare failed');
             res.status(500).json({
                 success: false,
                 message: error.message
@@ -295,7 +296,7 @@ export class ShareController {
                 shareVersion: updated.shareVersion
             });
         } catch (error: any) {
-            console.error("[ShareController] updateShare error:", error);
+            log.error({ operation: 'controller.share.update', err: error, outcome: 'error' }, 'updateShare failed');
             res.status(500).json({
                 success: false,
                 message: error.message
@@ -369,7 +370,7 @@ export class ShareController {
                 message: "Account and all associated data deleted successfully."
             });
         } catch (error: any) {
-            console.error("[ShareController] deleteUser error:", error);
+            log.error({ operation: 'controller.share.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
             res.status(500).json({
                 success: false,
                 message: error.message

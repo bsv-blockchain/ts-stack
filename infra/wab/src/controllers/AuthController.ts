@@ -9,6 +9,7 @@ import { UserService } from "../services/UserService";
 import { AuthMethod } from "../auth-methods/AuthMethod";
 import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
 import { DevConsoleAuthMethod } from "../auth-methods/DevConsoleAuthMethod";
+import { log } from "../logger";
 
 // Singleton instance to maintain state between requests, given dev only in memory use.
 const dev = new DevConsoleAuthMethod()
@@ -53,7 +54,7 @@ export class AuthController {
             const result = await authMethod.startAuth(presentationKey, payload);
             res.json(result);
         } catch (error: any) {
-            console.error(error);
+            log.error({ operation: 'controller.auth.start', err: error, outcome: 'error' }, 'startAuth failed');
             res.status(500).json({ message: error.message });
         }
     }
@@ -93,7 +94,7 @@ export class AuthController {
                 message: result.message
             });
         } catch (error: any) {
-            console.error(error);
+            log.error({ operation: 'controller.auth.complete', err: error, outcome: 'error' }, 'completeAuth failed');
             res.status(500).json({ message: error.message });
         }
     }
