@@ -58,5 +58,6 @@ EXPOSE 8080
 
 USER node
 
-# Start command
-CMD ["node", "dist/server.js"]
+# Start command — preload the OpenTelemetry bootstrap so auto-instrumentation
+# patches modules before app code is imported.
+CMD ["node", "--require", "./dist/telemetry.js", "dist/server.js"]
