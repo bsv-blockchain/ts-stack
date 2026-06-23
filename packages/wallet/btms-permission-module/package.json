@@ -24,9 +24,9 @@
   "author": "BSV Blockchain Association",
   "license": "Open BSV",
   "peerDependencies": {
-    "@bsv/btms": "workspace:^",
-    "@bsv/sdk": "workspace:^",
-    "@bsv/wallet-toolbox-client": "workspace:^"
+    "@bsv/btms": "^1",
+    "@bsv/sdk": "^2",
+    "@bsv/wallet-toolbox-client": "^2"
   },
   "devDependencies": {
     "@bsv/btms": "workspace:^",

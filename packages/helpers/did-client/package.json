@@ -74,7 +74,7 @@
     "decentralized-identifier"
   ],
   "peerDependencies": {
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "^2"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

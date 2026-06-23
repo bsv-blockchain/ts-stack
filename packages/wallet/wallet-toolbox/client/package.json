@@ -25,7 +25,7 @@
     "idb": "^8.0.2"
   },
   "peerDependencies": {
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "^2"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

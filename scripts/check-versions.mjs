@@ -28,12 +28,12 @@ for (const pkg of pkgList) {
 }
 
 function parseVersion (version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
+  const match = version.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?/)
   if (!match) return null
   return {
     major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3])
+    minor: Number(match[2] ?? 0),
+    patch: Number(match[3] ?? 0)
   }
 }
 

@@ -51,7 +51,7 @@
     "@bsv/sdk": "workspace:^"
   },
   "peerDependencies": {
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "^2"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"

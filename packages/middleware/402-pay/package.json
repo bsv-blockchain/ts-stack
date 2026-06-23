@@ -45,7 +45,7 @@
   "author": "Deggen <d.kellenschwiler@bsvassociation.org>",
   "license": "SEE LICENSE IN LICENSE",
   "peerDependencies": {
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "^2"
   },
   "devDependencies": {
     "@bsv/sdk": "workspace:^",

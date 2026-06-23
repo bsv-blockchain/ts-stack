@@ -71,7 +71,7 @@
     "mongodb": "^7.3.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "workspace:^"
+    "@bsv/sdk": "^2"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

@@ -4,9 +4,13 @@
  *
  * Reads all workspace package.json files, builds a map of
  * { packageName → currentVersion }, then rewrites every cross-package
- * dependency reference (dependencies, devDependencies, peerDependencies)
- * to `workspace:^` so local and CI installs link unpublished workspace
- * packages. pnpm rewrites those ranges to `^X.Y.Z` at publish time.
+ * install-time dependency reference (dependencies, devDependencies, and
+ * optionalDependencies) to `workspace:^` so local and CI installs link
+ * unpublished workspace packages. pnpm rewrites those ranges to `^X.Y.Z` at
+ * publish time.
+ *
+ * Peer dependencies are consumer-facing compatibility contracts, so they stay
+ * as broad semver ranges instead of workspace links.
  *
  * Also walks ./infra/* package.json files (which are NOT in the pnpm
  * workspace) and rewrites their @bsv/* dependency ranges to track the
@@ -58,7 +62,7 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
   const pkg = JSON.parse(raw)
   let changed = false
 
-  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
     if (!pkg[field]) continue
     for (const [dep, range] of Object.entries(pkg[field])) {
       const ws = workspaceMap[dep]
@@ -70,6 +74,21 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
       if (range !== target) {
         console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
         pkg[field][dep] = target
+        changed = true
+        totalChanges++
+      }
+    }
+  }
+
+  if (pkg.peerDependencies) {
+    for (const [dep, range] of Object.entries(pkg.peerDependencies)) {
+      const ws = workspaceMap[dep]
+      if (!ws) continue
+      const major = String(ws.version).split('.')[0]
+      const target = major ? `^${major}` : `^${ws.version}`
+      if (range !== target && (range.startsWith('workspace:') || !range.startsWith('^'))) {
+        console.log(`  ${pkg.name}: ${dep} peer ${range} → ${target}`)
+        pkg.peerDependencies[dep] = target
         changed = true
         totalChanges++
       }
