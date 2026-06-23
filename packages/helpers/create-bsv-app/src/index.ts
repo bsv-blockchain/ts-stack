@@ -1,21 +1,15 @@
 #!/usr/bin/env node
-import { run, parseArgs } from './cli.js'
-import { interactivePrompt } from './prompts.js'
-import { uiPrompt } from './ui.js'
+import { run } from './cli.js'
+import { interactiveConfigPrompt } from './prompts.js'
 
-const args = parseArgs(process.argv.slice(2))
-const provider = args.ui ? uiPrompt : interactivePrompt
-
-run(process.argv.slice(2), provider)
+run(process.argv.slice(2), interactiveConfigPrompt)
   .then((res) => {
-    console.log(`\nInstalled into ${res.targetDir}: ${res.written.length} file(s), ${res.skipped.length} skipped.`)
-    for (const [target, deps] of Object.entries(res.deps)) {
-      const names = Object.keys(deps)
-      if (names.length > 0) console.log(`\nAdd these dependencies${target === 'root' ? '' : ` (${target}/)`}:\n  npm install ${names.join(' ')}`)
+    const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
+    console.log(`\n${verb} ${res.targetDir} (${res.written.length} BSV file(s) written).`)
+    for (const [target, d] of Object.entries(res.deps)) {
+      const names = Object.keys(d)
+      if (names.length > 0) console.log(`\nAdd deps${target === 'root' ? '' : ` (${target}/)`}:\n  npm install ${names.join(' ')}`)
     }
     console.log('\nSee AGENTS.md for wiring + how to extend.')
   })
-  .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err)
-    process.exit(1)
-  })
+  .catch((err) => { console.error(err instanceof Error ? err.message : err); process.exit(1) })

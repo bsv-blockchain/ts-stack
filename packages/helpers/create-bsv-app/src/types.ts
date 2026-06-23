@@ -1,8 +1,6 @@
 // src/types.ts
 import type { Network, Stack, Layout } from './config/model.js'
 
-export type Framework = 'express' | 'react'
-
 export interface FileSpec {
   /** Relative POSIX path within the target project */
   path: string
@@ -30,19 +28,4 @@ export interface Capability {
   glue?: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
   npmDependencies: (ctx: CapabilityContext) => Partial<Record<Role, Record<string, string>>>
   agentsSection: (ctx: CapabilityContext) => string
-}
-
-export interface Selection {
-  appName: string
-  network: 'main' | 'test'
-  framework: Framework
-  capabilityIds: string[]
-}
-
-export interface Manifest {
-  version: 1
-  name: string
-  network: 'main' | 'test'
-  framework: Framework
-  capabilities: string[]
 }

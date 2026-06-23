@@ -1,51 +1,59 @@
-import { basename } from 'node:path'
-import type { Framework, Selection } from './types.js'
-import { writeFiles, planPlacement, type WriteResult, type TargetKey } from './engine.js'
-import { manifestFromConfig, writeProjectManifest, readValidManifest, mergeCapabilityIds } from './config/project-manifest.js'
-import type { ProjectManifest } from './config/project-manifest.js'
-import { renderAgentsMd } from './agents-md.js'
-import { selectionToConfig } from './config/bridge.js'
-import type { ProjectConfig } from './config/model.js'
+import type { ProjectConfig, PackageManager } from './config/model.js'
+import type { TargetKey, WriteResult } from './engine.js'
+import { writeFiles, planPlacement } from './engine.js'
 import { resolveCapabilities } from './registry.js'
+import { renderAgentsMd } from './agents-md.js'
+import { manifestFromConfig, writeProjectManifest, readValidManifest } from './config/project-manifest.js'
+import { resolveConfigFromFile } from './config/file.js'
+import { resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
+import { scaffoldNewProject } from './scaffold/new-project.js'
+import type { RunCommand } from './scaffold/base-scaffolder.js'
+import type { ConfigProvider } from './prompts.js'
 
-export interface CliArgs {
-  dir?: string
-  name?: string
-  network: 'main' | 'test'
-  framework?: Framework
-  capabilities: string[]
-  yes: boolean
-  force: boolean
-  ui: boolean
-}
-
-export type PromptProvider = (opts: { existing: ProjectManifest | null }) => Promise<Selection>
+export interface CliArgs { dir?: string, file?: string, yes: boolean, force: boolean, draft: ConfigDraft }
 
 export function parseArgs (argv: string[]): CliArgs {
-  const args: CliArgs = { network: 'test', capabilities: [], yes: false, force: false, ui: false }
+  const args: CliArgs = { yes: false, force: false, draft: {} }
+  const next = (i: number): [string | undefined, number] => [argv[i + 1], i + 1]
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--dir') {
-      i += 1
-      args.dir = argv[i]
-    } else if (a === '--name') {
-      i += 1
-      args.name = argv[i]
-    } else if (a === '--network') {
-      i += 1
-      args.network = argv[i] === 'main' ? 'main' : 'test'
-    } else if (a === '--framework') {
-      i += 1
-      args.framework = argv[i] === 'react' ? 'react' : 'express'
-    } else if (a === '--capabilities') {
-      i += 1
-      args.capabilities = (argv[i] ?? '').split(',').filter(Boolean)
+      [args.dir, i] = next(i)
+    } else if (a === '--file') {
+      [args.file, i] = next(i)
     } else if (a === '--yes') {
       args.yes = true
     } else if (a === '--force') {
       args.force = true
-    } else if (a === '--ui') {
-      args.ui = true
+    } else if (a === '--glue') {
+      args.draft.glue = true
+    } else if (a === '--mode') {
+      const [v, j] = next(i); i = j
+      args.draft.mode = v === 'add' ? 'add' : 'new'
+    } else if (a === '--name') {
+      const [v, j] = next(i); i = j
+      args.draft.name = v
+    } else if (a === '--frontend') {
+      const [v, j] = next(i); i = j
+      args.draft.frontend = v === 'react' ? 'react' : 'none'
+    } else if (a === '--backend') {
+      const [v, j] = next(i); i = j
+      args.draft.backend = v === 'express' ? 'express' : 'none'
+    } else if (a === '--variant') {
+      const [v, j] = next(i); i = j
+      args.draft.frontendVariant = v
+    } else if (a === '--bsv-dir') {
+      const [v, j] = next(i); i = j
+      args.draft.bsvDir = v
+    } else if (a === '--capabilities') {
+      const [v, j] = next(i); i = j
+      args.draft.capabilities = (v ?? '').split(',').filter(Boolean)
+    } else if (a === '--package-manager') {
+      const [v, j] = next(i); i = j
+      args.draft.packageManager = ['npm', 'pnpm', 'yarn', 'bun'].includes(v ?? '') ? v as PackageManager : undefined
+    } else if (a === '--network') {
+      const [v, j] = next(i); i = j
+      args.draft.network = v === 'main' ? 'main' : 'test'
     } else if (args.dir === undefined && !a.startsWith('--')) {
       args.dir = a
     }
@@ -53,50 +61,45 @@ export function parseArgs (argv: string[]): CliArgs {
   return args
 }
 
-export async function run (
-  argv: string[],
-  prompt?: PromptProvider
-): Promise<{ targetDir: string, deps: Record<TargetKey, Record<string, string>> } & WriteResult> {
-  const args = parseArgs(argv)
-  const targetDir = args.dir ?? '.'
-  const existing = readValidManifest(targetDir)
-
-  let lockedFramework: Framework | undefined
-  if (existing !== null) {
-    if (existing.stack.frontend != null) {
-      lockedFramework = 'react'
-    } else if (existing.stack.backend != null) {
-      lockedFramework = 'express'
-    }
-  }
-  const framework: Framework | undefined = lockedFramework ?? args.framework
-
-  let selection: Selection
-  const isNonInteractive = args.yes && args.capabilities.length > 0 && framework !== undefined
-  if (isNonInteractive) {
-    selection = {
-      appName: args.name ?? existing?.name ?? basename(targetDir),
-      network: existing?.network ?? args.network,
-      framework,
-      capabilityIds: mergeCapabilityIds(existing?.capabilities ?? [], args.capabilities)
-    }
-  } else {
-    if (prompt === undefined) throw new Error('interactive run requires a prompt provider')
-    const raw = await prompt({ existing })
-    selection = { ...raw, capabilityIds: mergeCapabilityIds(existing?.capabilities ?? [], raw.capabilityIds) }
-  }
-
-  let config: ProjectConfig = selectionToConfig(selection)
-  if (existing !== null) {
-    config = { ...config, name: existing.name, network: existing.network, stack: existing.stack, bsvDir: existing.bsvDir }
-  }
-
+export function addCapabilities (
+  config: ProjectConfig,
+  targetDir: string,
+  opts: { force: boolean }
+): { deps: Record<TargetKey, Record<string, string>> } & WriteResult {
   const caps = resolveCapabilities(config.capabilities)
   const placement = planPlacement(config, caps)
-  const util = writeFiles(placement.utilFiles, targetDir, { force: args.force })
+  const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
   writeFiles(placement.glueFiles, targetDir, { force: true })
   writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
   writeProjectManifest(targetDir, manifestFromConfig(config))
+  return { deps: placement.deps, written: util.written, skipped: util.skipped }
+}
 
-  return { targetDir, deps: placement.deps, written: util.written, skipped: util.skipped }
+export async function run (
+  argv: string[],
+  provider?: ConfigProvider,
+  deps?: { runCommand?: RunCommand }
+): Promise<{ targetDir: string, deps: Record<TargetKey, Record<string, string>> } & WriteResult> {
+  const args = parseArgs(argv)
+  const targetDir = args.dir ?? '.'
+
+  let config: ProjectConfig
+  if (args.file !== undefined) {
+    config = resolveConfigFromFile(args.file)
+  } else {
+    const existing = readValidManifest(targetDir)
+    if (args.yes) {
+      config = resolveDraft(seedDraft(existing, args.draft))
+    } else {
+      if (provider === undefined) throw new Error('interactive run requires a config provider')
+      config = await provider({ existing, flags: args.draft })
+    }
+  }
+
+  if (config.mode === 'new') {
+    const r = scaffoldNewProject(config, targetDir, { runCommand: deps?.runCommand })
+    return { targetDir, deps: r.deps, written: r.written, skipped: [] }
+  }
+  const r = addCapabilities(config, targetDir, { force: args.force })
+  return { targetDir, deps: r.deps, written: r.written, skipped: r.skipped }
 }

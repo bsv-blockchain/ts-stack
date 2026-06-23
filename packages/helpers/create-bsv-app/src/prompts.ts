@@ -1,61 +1,54 @@
-import type { PromptProvider } from './cli.js'
-import type { Framework, Selection } from './types.js'
-import { listCapabilities, getCapability } from './registry.js'
-import { remainingCapabilityIds } from './config/project-manifest.js'
-import { basename } from 'node:path'
+import { listCapabilities } from './registry.js'
+import { remainingCapabilityIds, mergeCapabilityIds } from './config/project-manifest.js'
+import type { ProjectManifest } from './config/project-manifest.js'
+import { configSchema, isFieldVisible } from './config/schema.js'
+import type { ConfigField, FieldOption } from './config/schema.js'
+import { seedDraft, resolveDraft } from './config/draft.js'
+import type { ConfigDraft } from './config/draft.js'
+import type { ProjectConfig } from './config/model.js'
 
-export const interactivePrompt: PromptProvider = async ({ existing }) => {
-  const p = await import('@clack/prompts') // lazy: keeps Jest (CJS) from loading ESM-only clack
+export type Ask = (field: ConfigField, options: FieldOption[]) => Promise<unknown>
+export type ConfigProvider = (ctx: { existing: ProjectManifest | null, flags: ConfigDraft }) => Promise<ProjectConfig>
 
+function optionsFor (field: ConfigField, existing: ProjectManifest | null): FieldOption[] {
+  if (field.key === 'capabilities') {
+    const all = listCapabilities()
+    const ids = existing != null ? remainingCapabilityIds(existing, all.map(c => c.id)) : all.map(c => c.id)
+    return all.filter(c => ids.includes(c.id)).map(c => ({ value: c.id, label: c.title, hint: c.description }))
+  }
+  return field.options ?? []
+}
+
+export async function runPrompts (ctx: { existing: ProjectManifest | null, flags: ConfigDraft }, ask: Ask): Promise<ProjectConfig> {
+  const draft: ConfigDraft = seedDraft(ctx.existing, ctx.flags)
+  for (const section of configSchema) {
+    for (const field of section.fields) {
+      if (field.key !== 'capabilities' && (draft as Record<string, unknown>)[field.key] !== undefined) continue // set by flags/seed
+      if (!isFieldVisible(field, draft as Record<string, unknown>)) continue
+      const value = await ask(field, optionsFor(field, ctx.existing))
+      if (field.key === 'capabilities') {
+        (draft as Record<string, unknown>).capabilities = mergeCapabilityIds((draft.capabilities as string[]) ?? [], value as string[])
+      } else {
+        (draft as Record<string, unknown>)[field.key] = value
+      }
+    }
+  }
+  return resolveDraft(draft)
+}
+
+export const interactiveConfigPrompt: ConfigProvider = async (ctx) => {
+  const p = await import('@clack/prompts') // lazy: keep clack out of the Jest transform
   p.intro('create-bsv-app')
-
-  const appName: string = existing != null
-    ? existing.name
-    : await (async () => {
-      const res = await p.text({ message: 'Project name', placeholder: basename(process.cwd()) })
-      if (p.isCancel(res)) { p.cancel('Cancelled'); process.exit(1) }
-      return (typeof res === 'string' && res.length > 0) ? res : basename(process.cwd())
-    })()
-
-  let framework: Framework
-  if (existing != null) {
-    framework = existing.stack.frontend != null ? 'react' : 'express'
-  } else {
-    const res = await p.select({
-      message: 'Framework',
-      options: [
-        { value: 'express', label: 'Express (server)' },
-        { value: 'react', label: 'React (browser)' }
-      ]
-    })
+  const ask: Ask = async (field, options) => {
+    let res: unknown
+    if (field.type === 'text') res = await p.text({ message: field.label, placeholder: typeof field.default === 'string' ? field.default : undefined })
+    else if (field.type === 'toggle') res = await p.confirm({ message: field.label, initialValue: field.default === true })
+    else if (field.type === 'multiselect') res = await p.multiselect({ message: field.label, options, required: false })
+    else res = await p.select({ message: field.label, options })
     if (p.isCancel(res)) { p.cancel('Cancelled'); process.exit(1) }
-    framework = res as Framework
+    return res
   }
-
-  const allIds = listCapabilities().map(c => c.id)
-  const offerable = existing != null
-    ? remainingCapabilityIds(existing, allIds)
-    : allIds
-  const options = offerable.map((id: string) => {
-    const c = getCapability(id)
-    if (c == null) throw new Error(`Unknown capability: ${id}`)
-    return { value: id, label: c.title, hint: c.description }
-  })
-
-  const picked = await p.multiselect({
-    message: existing != null ? 'Add capabilities' : 'Select capabilities',
-    options,
-    required: existing == null
-  })
-  if (p.isCancel(picked)) { p.cancel('Cancelled'); process.exit(1) }
-
-  p.outro('Generating…')
-
-  const selection: Selection = {
-    appName,
-    network: existing?.network ?? 'test',
-    framework,
-    capabilityIds: [...(picked as string[])]
-  }
-  return selection
+  const config = await runPrompts(ctx, ask)
+  p.outro('Done')
+  return config
 }
