@@ -25,7 +25,7 @@ const tracer = trace.getTracer(packageJson.name, packageJson.version)
 
 // Load environment variables
 const {
-  BSV_NETWORK = 'test',
+  BSV_NETWORK = 'main',
   ENABLE_NGINX = 'true',
   HTTP_PORT = 8081, // Must be 8081 if ENABLE_NGINX 'true',
   SERVER_PRIVATE_KEY,
@@ -88,18 +88,18 @@ async function setupWalletStorageAndMonitor(): Promise<{
     }
     const knex = makeKnex(knexConfig)
 
-    // Select chain from BSV_NETWORK: "main", "test", "teratest", or "mock" (defaults to "test")
+    // Select chain from BSV_NETWORK: "main", "test", "teratest", or "mock" (defaults to "main")
     const allowedChains = ['main', 'test', 'teratest', 'mock'] as const
-    let chain: (typeof allowedChains)[number] = 'test'
+    let chain: (typeof allowedChains)[number] = 'main'
     if (
       typeof BSV_NETWORK === 'string' &&
       allowedChains.includes(BSV_NETWORK as any)
     ) {
       chain = BSV_NETWORK as (typeof allowedChains)[number]
-    } else if (BSV_NETWORK !== 'test') {
+    } else if (BSV_NETWORK !== 'main') {
       log.warn(
-        { operation: 'chain.select', bsv_network: BSV_NETWORK, fallback_chain: 'test' },
-        'Invalid BSV_NETWORK value provided, falling back to test'
+        { operation: 'chain.select', bsv_network: BSV_NETWORK, fallback_chain: 'main' },
+        'Invalid BSV_NETWORK value provided, falling back to main'
       )
     }
 

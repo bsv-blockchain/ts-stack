@@ -14,7 +14,7 @@ services:
       # e.g. add a named volume for node_modules or rely on "npm install" inside container.
     environment:
       NODE_ENV: development
-      BSV_NETWORK: "mock"
+      BSV_NETWORK: "main"
       FEE_MODEL: "{\"model\":\"sat/kb\",\"value\":100}"
       COMMISSION_FEE: 0
       HTTP_PORT: "8080"
