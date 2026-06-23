@@ -17,6 +17,7 @@ import * as Utils from '../primitives/utils.js'
 import { OriginatorDomainNameStringUnder250Bytes, WalletInterface } from '../wallet/Wallet.interfaces.js'
 
 const AUTH_VERSION = '0.1'
+const INITIAL_RESPONSE_TIMEOUT_MS = 30000
 const BufferCtor =
   typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
@@ -394,8 +395,14 @@ export class Peer {
       requestedCertificates: this.certificatesToRequest
     }
 
-    await this.transport.send(initialRequest)
-    return await this.waitForInitialResponse(sessionNonce)
+    const initialResponse = this.waitForInitialResponse(sessionNonce)
+    try {
+      await this.transport.send(initialRequest)
+    } catch (error) {
+      initialResponse.catch(() => {})
+      throw error
+    }
+    return await initialResponse
   }
 
   /**
@@ -407,8 +414,16 @@ export class Peer {
   private async waitForInitialResponse (
     sessionNonce: string
   ): Promise<string> {
-    return await new Promise(resolve => {
-      const callbackID = this.listenForInitialResponse(sessionNonce, nonce => {
+    return await new Promise((resolve, reject) => {
+      let callbackID: number
+      const timer = setTimeout(() => {
+        this.stopListeningForInitialResponses(callbackID)
+        reject(new Error(`Timed out waiting for initial auth response for session ${sessionNonce}`))
+      }, INITIAL_RESPONSE_TIMEOUT_MS)
+      ;(timer as any).unref?.()
+
+      callbackID = this.listenForInitialResponse(sessionNonce, nonce => {
+        clearTimeout(timer)
         this.stopListeningForInitialResponses(callbackID)
         resolve(nonce)
       })
