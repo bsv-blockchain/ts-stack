@@ -9,8 +9,8 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
-    "@google-cloud/storage": "^7.19.0",
-    "axios": "^1.17.0",
+    "@google-cloud/storage": "^7.21.0",
+    "axios": "^1.18.0",
     "uhrp-url": "^0.1.3"
   }
 }
