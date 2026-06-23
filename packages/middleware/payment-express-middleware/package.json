@@ -68,7 +68,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.7"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

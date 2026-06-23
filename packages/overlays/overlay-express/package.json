@@ -72,8 +72,8 @@
   "dependencies": {
     "@bsv/auth-express-middleware": "^2.1.0",
     "@bsv/overlay": "^2.1.0",
-    "@bsv/overlay-discovery-services": "^2.1.0",
-    "@bsv/wallet-toolbox-client": "^2.2.0",
+    "@bsv/overlay-discovery-services": "^2.1.1",
+    "@bsv/wallet-toolbox-client": "^2.2.1",
     "body-parser": "^2.2.2",
     "chalk": "^5.6.2",
     "express": "^5.2.1",
@@ -82,7 +82,7 @@
     "uuid": "^14.0.0"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.7"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

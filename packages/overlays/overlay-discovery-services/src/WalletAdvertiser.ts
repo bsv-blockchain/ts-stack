@@ -91,10 +91,21 @@ export class WalletAdvertiser implements Advertiser {
       }
     }))
 
-    const tx = await this.wallet.createAction({
-      outputs,
-      description: 'SHIP/SLAP Advertisement Issuance'
-    })
+    let tx
+    try {
+      tx = await this.wallet.createAction({
+        outputs,
+        description: 'SHIP/SLAP Advertisement Issuance'
+      })
+    } catch (error) {
+      const protocols = [...new Set(adsData.map(ad => ad.protocol))].join('/')
+      const names = adsData.map(ad => ad.topicOrServiceName).join(', ')
+      const wrapped = new Error(
+        `Unable to create ${protocols} advertisement transaction for ${names}. The advertiser wallet must have spendable funds before advertisements can be issued.`
+      )
+      ;(wrapped as any).cause = error
+      throw wrapped
+    }
 
     if (tx.tx === undefined) {
       throw new Error('createAction did not return a transaction')

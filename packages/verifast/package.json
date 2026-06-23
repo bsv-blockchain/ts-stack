@@ -41,7 +41,7 @@
     "@bsv/sdk": "workspace:^"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.7"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

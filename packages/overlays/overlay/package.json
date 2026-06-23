@@ -80,7 +80,7 @@
     "knex": "^3.2.10"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.7"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

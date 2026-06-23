@@ -656,18 +656,29 @@ export class AuthFetch {
     }, this.originator)
     const lockingScript = new P2PKH().lock(PublicKey.fromString(derivedPublicKey).toAddress()).toHex()
 
-    const { tx } = await this.wallet.createAction({
-      description: `Payment for request to ${new URL(url).origin}`,
-      outputs: [{
-        satoshis: satoshisRequired,
-        lockingScript,
-        customInstructions: JSON.stringify({ derivationPrefix, derivationSuffix, payee: serverIdentityKey }),
-        outputDescription: 'HTTP request payment'
-      }],
-      options: {
-        randomizeOutputs: false
-      }
-    }, this.originator)
+    const requestOrigin = new URL(url).origin
+    let paymentAction
+    try {
+      paymentAction = await this.wallet.createAction({
+        description: `Payment for request to ${requestOrigin}`,
+        outputs: [{
+          satoshis: satoshisRequired,
+          lockingScript,
+          customInstructions: JSON.stringify({ derivationPrefix, derivationSuffix, payee: serverIdentityKey }),
+          outputDescription: 'HTTP request payment'
+        }],
+        options: {
+          randomizeOutputs: false
+        }
+      }, this.originator)
+    } catch (error) {
+      const wrapped = new Error(
+        `Unable to create ${satoshisRequired} satoshi payment for ${requestOrigin}. The wallet must have spendable funds before paid requests can be completed.`
+      )
+      ;(wrapped as any).cause = error
+      throw wrapped
+    }
+    const { tx } = paymentAction
 
     const { publicKey: clientIdentityKey } = await this.wallet.getPublicKey({ identityKey: true }, this.originator)
 
@@ -772,11 +783,10 @@ export class AuthFetch {
       request: context.requestSummary,
       payment: {
         satoshis: context.satoshisRequired,
-        transactionBase64: context.transactionBase64,
         derivationPrefix: context.derivationPrefix,
-        derivationSuffix: context.derivationSuffix,
         serverIdentityKey: context.serverIdentityKey,
-        clientIdentityKey: context.clientIdentityKey
+        clientIdentityKey: context.clientIdentityKey,
+        transactionBytes: Utils.toArray(context.transactionBase64, 'utf8').length
       },
       attempts: {
         used: context.attempts,
@@ -846,11 +856,10 @@ export class AuthFetch {
       request: context.requestSummary,
       payment: {
         satoshis: context.satoshisRequired,
-        transactionBase64: context.transactionBase64,
         derivationPrefix: context.derivationPrefix,
-        derivationSuffix: context.derivationSuffix,
         serverIdentityKey: context.serverIdentityKey,
-        clientIdentityKey: context.clientIdentityKey
+        clientIdentityKey: context.clientIdentityKey,
+        transactionBytes: Utils.toArray(context.transactionBase64, 'utf8').length
       },
       attempts: {
         used: context.attempts,

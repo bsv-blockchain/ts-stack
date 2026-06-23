@@ -63,7 +63,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth#readme",
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.6"
+    "@bsv/sdk": "^2.1.7"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
