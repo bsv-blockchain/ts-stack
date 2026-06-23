@@ -142,7 +142,9 @@ export async function restoreInputsToSpendable (
  * and merge rules are added to the arguments passed to the storage layer.
  *
  * The existing transaction's `status` determines what the merge path does next:
- *  - `'unproven'` or `'completed'`: outputs are merged into the existing record. The transaction status is left as-is.
+ *  - `'unproven'`, `'completed'`, or `'sending'`: outputs are merged into the existing record. The transaction status is left as-is.
+ *    The `'sending'` case covers a transaction this wallet already signed and handed to broadcast processing, but
+ *    whose proven_tx_req has not yet been advanced by the normal monitor/posting flow.
  *  - `'nosend'`: an ambiguous case. The transaction was created with `noSend: true` and may have been externally
  *    broadcast, may be sitting in a sendWith chain, or may be stuck mid-flight. The merge path treats the
  *    `internalizeAction` call as explicit authorization to advance the lifecycle. Specifically: `transactions.status`
@@ -322,7 +324,7 @@ class InternalizeActionContext {
         partial: { userId: this.userId, txid: this.txid }
       })
     )
-    if ((this.etx != null) && this.etx.status !== 'completed' && this.etx.status !== 'unproven' && this.etx.status !== 'nosend') {
+    if ((this.etx != null) && this.etx.status !== 'completed' && this.etx.status !== 'unproven' && this.etx.status !== 'sending' && this.etx.status !== 'nosend') {
       throw new WERR_INVALID_PARAMETER(
         'tx',
         `target transaction of internalizeAction has invalid status ${this.etx.status}.`
