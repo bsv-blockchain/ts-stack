@@ -4,6 +4,9 @@
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.mobile.js",
   "types": "./out/src/index.mobile.d.ts",
+  "scripts": {
+    "build": "cd .. && pnpm exec tsc -b tsconfig.mobile.json"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",

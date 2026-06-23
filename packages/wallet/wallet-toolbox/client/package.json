@@ -4,6 +4,9 @@
   "description": "Client only Wallet Storage",
   "main": "./out/src/index.client.js",
   "types": "./out/src/index.client.d.ts",
+  "scripts": {
+    "build": "cd .. && pnpm exec tsc -b tsconfig.client.json"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
