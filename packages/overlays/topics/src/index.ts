@@ -103,6 +103,12 @@ export type { WalletConfigRegistration, WalletConfigRecord, WalletConfigQuery } 
 export { default as WalletConfigTopicManager } from './walletconfig/WalletConfigTopicManager.js'
 export { default as createWalletConfigLookupService } from './walletconfig/WalletConfigLookupService.js'
 
+// stas (classic STAS / P2STAS)
+export { StasTopicManager } from './stas/StasTopicManager.js'
+export { StasLookupService, createStasLookupService } from './stas/StasLookupService.js'
+export { StasStorageManager } from './stas/StasStorageManager.js'
+export type { StasTokenRecord, StasQuery, UTXOReference as StasUTXOReference } from './stas/types.js'
+
 // mandala
 export { MandalaTopicManager } from './mandala/MandalaTopicManager.js'
 export { MandalaLookupService, createMandalaLookupService } from './mandala/MandalaLookupService.js'

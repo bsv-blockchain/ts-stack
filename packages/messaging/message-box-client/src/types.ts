@@ -267,6 +267,68 @@ export interface IncomingPaymentRequest {
   expiresAt: number
 }
 
+/**
+ * A token transfer carried in a token message box (the token analog of
+ * PaymentToken). The derivation values let the recipient's wallet re-derive
+ * the owner key and take custody; protocol/assetId/amount route it to the
+ * right TokenSettlementAdapter on the receiving side.
+ */
+export interface TokenToken {
+  protocol: string
+  assetId: string
+  /** Token units as a string (bigint-safe). */
+  amount: string
+  customInstructions: { derivationPrefix: Base64String, derivationSuffix: Base64String }
+  transaction: AtomicBEEF
+  outputIndex?: number
+}
+
+/** An incoming token received via MessageBox (token analog of IncomingPayment). */
+export interface IncomingToken {
+  messageId: string
+  sender: string
+  token: TokenToken
+}
+
+/** A new token-transfer request (token analog of PaymentRequestNew). */
+export interface TokenRequestNew extends PaymentRequestBase {
+  protocol: string
+  assetId: string
+  /** Token units requested, as a string. */
+  amount: string
+  description: string
+  expiresAt: number
+  requestProof: string
+  cancelled?: false
+}
+
+export interface TokenRequestCancellation extends PaymentRequestBase {
+  cancelled: true
+  requestProof: string
+}
+
+export type TokenRequestMessage = TokenRequestNew | TokenRequestCancellation
+
+export interface TokenRequestResponse {
+  requestId: string
+  status: 'sent' | 'declined'
+  protocol?: string
+  assetId?: string
+  amountSent?: string
+  note?: string
+}
+
+export interface IncomingTokenRequest {
+  messageId: string
+  sender: string
+  requestId: string
+  protocol: string
+  assetId: string
+  amount: string
+  description: string
+  expiresAt: number
+}
+
 /** Default minimum satoshis for payment request filtering. */
 export const DEFAULT_PAYMENT_REQUEST_MIN_AMOUNT = 1000
 /** Default maximum satoshis for payment request filtering. */

@@ -9,3 +9,5 @@ export type {
   MandalaAdminDecoded, MandalaActionDetails, MandalaActionKind,
   MandalaAdminLockParams, MandalaAdminUnlockParams, AssetMetadata
 } from './src/MandalaAdmin.js'
+export { StasToken } from './src/StasToken.js'
+export type { StasTokenDecoded } from './src/StasToken.js'
