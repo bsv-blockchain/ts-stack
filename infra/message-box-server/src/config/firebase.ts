@@ -42,7 +42,6 @@ export function initializeFirebase(): App | null {
       log.info({ operation: 'firebase.init', credential_source: 'env' }, 'Using Firebase service account from environment variable')
       try {
         log.debug({ operation: 'firebase.init', service_account_json_length: serviceAccountJson.length }, 'Service account JSON length')
-        log.debug({ operation: 'firebase.init', service_account_json_prefix: serviceAccountJson.substring(0, 100) }, 'Service account JSON prefix')
 
         // Debug credential functions
         log.debug({ operation: 'firebase.init', cert_function_type: typeof cert }, 'cert function type')

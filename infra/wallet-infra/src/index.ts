@@ -98,7 +98,11 @@ async function setupWalletStorageAndMonitor(): Promise<{
       chain = BSV_NETWORK as (typeof allowedChains)[number]
     } else if (BSV_NETWORK !== 'main') {
       log.warn(
-        { operation: 'chain.select', bsv_network: BSV_NETWORK, fallback_chain: 'main' },
+        {
+          operation: 'chain.select',
+          bsv_network: BSV_NETWORK,
+          fallback_chain: 'main'
+        },
         'Invalid BSV_NETWORK value provided, falling back to main'
       )
     }
@@ -216,7 +220,7 @@ async function setupWalletStorageAndMonitor(): Promise<{
 
 // Start the server. Wrap startup in a span so a slow/failed boot is visible in
 // traces, and emit structured timed events.
-await tracer.startActiveSpan('wallet-infra.bootstrap', async (span) => {
+await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
   const startedAt = Date.now()
   try {
     const walletToolboxVersion = String(
@@ -224,13 +228,23 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async (span) => {
     ).replace(/^[~^]/, '')
     const context = await setupWalletStorageAndMonitor()
     log.info(
-      { operation: 'storage.setup', wallet_toolbox_version: walletToolboxVersion, network: BSV_NETWORK },
+      {
+        operation: 'storage.setup',
+        wallet_toolbox_version: walletToolboxVersion,
+        network: BSV_NETWORK
+      },
       'wallet storage and monitor configured'
     )
-    log.debug({ operation: 'storage.setup', settings: context.settings }, 'storage settings')
+    log.debug(
+      { operation: 'storage.setup', settings: context.settings },
+      'storage settings'
+    )
 
     context.server.start()
-    log.info({ operation: 'storage_server.start', outcome: 'ok' }, 'StorageServer started')
+    log.info(
+      { operation: 'storage_server.start', outcome: 'ok' },
+      'StorageServer started'
+    )
 
     await context.monitor.startTasks()
     log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
@@ -245,12 +259,21 @@ await tracer.startActiveSpan('wallet-infra.bootstrap', async (span) => {
     span.setAttribute('bsv.network', String(BSV_NETWORK))
     span.setAttribute('nginx.enabled', ENABLE_NGINX === 'true')
     span.setStatus({ code: SpanStatusCode.OK })
-    log.info({ operation: 'bootstrap', outcome: 'ok', duration_ms }, 'wallet-infra started')
+    log.info(
+      { operation: 'bootstrap', outcome: 'ok', duration_ms },
+      'wallet-infra started'
+    )
   } catch (error) {
     const duration_ms = Date.now() - startedAt
     span.recordException(error as Error)
-    span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message })
-    log.error({ operation: 'bootstrap', outcome: 'error', duration_ms, err: error }, 'wallet-infra failed to start')
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: (error as Error).message
+    })
+    log.error(
+      { operation: 'bootstrap', outcome: 'error', duration_ms, err: error },
+      'wallet-infra failed to start'
+    )
     process.exitCode = 1
   } finally {
     span.end()

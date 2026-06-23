@@ -94,7 +94,7 @@ const sdk = new NodeSDK({
     ],
 })
 
-sdk.start()
+sdk.start().catch(err => console.error('[otel] SDK start failed:', err))
 
 // Capture clean console refs before patching, for telemetry's own messages.
 const rawInfo = console.info.bind(console)

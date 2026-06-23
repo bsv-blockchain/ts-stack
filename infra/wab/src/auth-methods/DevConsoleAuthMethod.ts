@@ -40,7 +40,6 @@ export class DevConsoleAuthMethod extends AuthMethod {
             {
                 operation: 'auth.dev_console.start',
                 identifier: phoneNumber,
-                otp,
                 expires_at: expiresAt,
                 presentation_key: presentationKey
             },

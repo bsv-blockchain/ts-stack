@@ -48,7 +48,7 @@ curl -H 'Host: chaintracks.localhost' http://127.0.0.1/
 ## Notes / caveats
 
 - Keys and passwords in the compose file are **throwaway local-dev values only**.
-- `wallet-infra` runs with `BSV_NETWORK=mock` (no external chain services needed).
+- `wallet-infra` runs with `BSV_NETWORK=main` (connects to mainnet by default).
 - `overlay-server`, `wab`, and `uhrp-server-basic` reach out to external BSV
   services (wallet storage, ARC) at runtime; some operations need network access
   or real backends to fully succeed. Routing + telemetry still work regardless.

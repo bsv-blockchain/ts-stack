@@ -78,7 +78,7 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
       uploaderIdentityKey: req.auth.identityKey,
       expiryTime: (retentionPeriod * 60) + Math.round(Date.now() / 1000)
     })
-    log.info({ operation: 'upload.url_issued', upload_url: uploadURL, required_headers: requiredHeaders }, 'Issued upload URL')
+    log.info({ operation: 'upload.url_issued', object_id: objectIdentifier, header_count: Object.keys(requiredHeaders ?? {}).length }, 'Upload URL issued')
 
     return res.status(200).json({
       status: 'success',

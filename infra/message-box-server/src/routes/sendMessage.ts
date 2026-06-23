@@ -204,7 +204,7 @@ export default {
 
     try {
       const { message, payment } = req.body
-      log.info({ operation: 'message.send', message, payment }, 'Received message send request')
+      log.info({ operation: 'message.send', message_box: message?.messageBox, has_payment: payment != null }, 'Received message send request')
 
       if (message == null) {
         Logger.error('[ERROR] No message provided in request body!')
@@ -379,8 +379,7 @@ export default {
 
         // ---------- Build per-recipient outputs ----------
         const recipientSideOutputs = payment.outputs.slice(deliveryFeeOnce > 0 ? 1 : 0)
-        log.info({ operation: 'message.send', recipient_side_outputs: recipientSideOutputs }, 'Recipient side outputs')
-        log.info({ operation: 'message.send', all_outputs: payment.outputs }, 'All payment outputs')
+        log.info({ operation: 'message.send', recipient_output_count: recipientSideOutputs.length, total_output_count: payment.outputs.length }, 'Payment outputs')
 
         const feeRecipients = feeRows.filter(f => f.recipientFee > 0).map(f => f.recipient)
 

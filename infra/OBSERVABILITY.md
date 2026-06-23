@@ -9,7 +9,7 @@ are imported.
 
 | Component | Module | Preload |
 |---|---|---|
-| overlay-server | CJS | `node --require ./dist/telemetry.js dist/index.js` |
+| overlay-server | ESM | `node --import ./dist/telemetry.js dist/index.js` |
 | chaintracks-server | CJS | `node --require ./dist/telemetry.js dist/server.js` |
 | wab | CJS | `node --require ./dist/telemetry.js dist/server.js` |
 | uhrp-server-cloud-bucket | CJS | `node --require ./out/src/telemetry.js … out/src/index.js` |

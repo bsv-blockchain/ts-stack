@@ -17,13 +17,20 @@ async function startServer() {
         try {
             await migrateLatest();
             log.info({ operation: "migrate", outcome: "ok" }, "migrations applied");
-            app.listen(PORT, () => {
+            const server = app.listen(PORT, () => {
                 span.setStatus({ code: SpanStatusCode.OK });
                 log.info(
                     { operation: "listen", outcome: "ok", port: PORT, duration_ms: Date.now() - startedAt },
                     "WAB server running"
                 );
                 span.end();
+            });
+            server.on('error', (err: Error) => {
+                span.recordException(err);
+                span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+                log.error({ operation: "listen", outcome: "error", err }, "Server failed to bind");
+                span.end();
+                process.exit(1);
             });
         } catch (err) {
             span.recordException(err as Error);
