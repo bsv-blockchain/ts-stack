@@ -43,6 +43,18 @@ export const decodeScriptNum = (data: number[]): number => {
   return result
 }
 
+// Reads a Bitcoin script number from a chunk that may be either a data push or a
+// minimally-encoded small-integer opcode. createMinimallyEncodedScriptChunk
+// collapses 0, -1 and 1..16 to OP_0 / OP_1NEGATE / OP_1..OP_16 (no data bytes),
+// so a decoder that only reads chunk.data would mis-read those as 0. This reads
+// both encodings symmetrically.
+export const decodeScriptNumChunk = (chunk: { op: number, data?: number[] }): number => {
+  if (chunk.op === 0) return 0 // OP_0 / OP_FALSE
+  if (chunk.op === 0x4f) return -1 // OP_1NEGATE
+  if (chunk.op >= 0x51 && chunk.op <= 0x60) return chunk.op - 0x50 // OP_1..OP_16
+  return decodeScriptNum(chunk.data ?? [])
+}
+
 export const encodeAssetId = (assetId: string): number[] => {
   const dot = assetId.lastIndexOf('.')
   if (dot === -1) throw new Error('assetId must be "<txid>.<vout>"')

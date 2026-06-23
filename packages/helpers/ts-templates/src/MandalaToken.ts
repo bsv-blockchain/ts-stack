@@ -4,7 +4,7 @@ import {
   TransactionSignature, PrivateKey
 } from '@bsv/sdk'
 import {
-  createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
+  createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNumChunk,
   encodeAssetId, decodeAssetId, MARKER
 } from './mandala-encoding.js'
 import { buildSighashPreimage } from './mandala-signing.js'
@@ -93,7 +93,7 @@ export class MandalaToken implements ScriptTemplate {
       throw new Error('not a MandalaToken script: bad P2PKH tail')
     }
     const assetId = decodeAssetId(vt(c[1].data))
-    const amount = decodeScriptNum(c[2].data ?? [])
+    const amount = decodeScriptNumChunk(c[2])
     if (!Number.isInteger(amount) || amount < 1) throw new Error('not a MandalaToken script: bad amount')
     const pubKeyHash = vt(c[7].data)
     if (pubKeyHash.length !== 20) throw new Error('not a MandalaToken script: bad pubKeyHash')
