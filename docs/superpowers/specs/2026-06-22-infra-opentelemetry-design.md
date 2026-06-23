@@ -1,3 +1,19 @@
+---
+id: infra-opentelemetry-design
+title: Infra OpenTelemetry & Structured Logging — Design
+kind: spec
+domain: infra
+version: 1.0.0
+last_updated: "2026-06-22"
+last_verified: "2026-06-22"
+status: experimental
+tags:
+  - opentelemetry
+  - observability
+  - infra
+  - logging
+---
+
 # Infra OpenTelemetry & Structured Logging — Design
 
 **Date:** 2026-06-22
