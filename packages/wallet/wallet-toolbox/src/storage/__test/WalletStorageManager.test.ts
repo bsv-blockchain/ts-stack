@@ -269,6 +269,73 @@ describe('WalletStorageManager tests', () => {
       expect(result).toBeTruthy()
     }
   })
+
+  test('3_internalize same-wallet payment while transaction is sending', async () => {
+    for (const { wallet, activeStorage, identityKey, userId } of ctxs) {
+      const outputSatoshis = 5
+      const derivationPrefix = Buffer.from('same-wallet-invoice').toString('base64')
+      const derivationSuffix = Buffer.from('utxo-0').toString('base64')
+      const brc29ProtocolID: bsv.WalletProtocol = [2, '3241645161d8']
+      const derivedPublicKey = wallet.keyDeriver.derivePublicKey(
+        brc29ProtocolID,
+        `${derivationPrefix} ${derivationSuffix}`,
+        identityKey
+      )
+
+      const cr = await wallet.createAction({
+        description: 'same-wallet payment pending send',
+        outputs: [
+          {
+            satoshis: outputSatoshis,
+            lockingScript: new bsv.P2PKH().lock(derivedPublicKey.toAddress()).toHex(),
+            outputDescription: 'pay same wallet'
+          }
+        ],
+        options: {
+          returnTXIDOnly: false,
+          randomizeOutputs: false,
+          signAndProcess: true,
+          noSend: true
+        }
+      })
+      expect(cr.tx).toBeTruthy()
+      expect(cr.txid).toBeTruthy()
+      if (cr.tx == null || cr.txid == null) throw new Error('createAction did not return a signed transaction')
+
+      const existingTx = (await activeStorage.findTransactions({
+        partial: { userId, txid: cr.txid }
+      }))[0]
+      expect(existingTx).toBeTruthy()
+      await activeStorage.updateTransaction(existingTx.transactionId, { status: 'sending' })
+
+      const ir = await activeStorage.internalizeAction(
+        { userId, identityKey },
+        {
+          tx: cr.tx,
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'wallet payment',
+              paymentRemittance: {
+                derivationPrefix,
+                derivationSuffix,
+                senderIdentityKey: identityKey
+              }
+            }
+          ],
+          description: 'received same-wallet payment before monitor completion'
+        }
+      )
+
+      expect(ir.accepted).toBe(true)
+      expect(ir.isMerge).toBe(true)
+
+      const updatedTx = (await activeStorage.findTransactions({
+        partial: { transactionId: existingTx.transactionId }
+      }))[0]
+      expect(updatedTx.status).toBe('sending')
+    }
+  })
 })
 function logger (s: string) {
   process.stdout.write(`${s}\n`)
