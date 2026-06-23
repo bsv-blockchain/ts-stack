@@ -1,11 +1,21 @@
 import {
-  encodeScriptNum, decodeScriptNum, encodeAssetId, decodeAssetId, MARKER
+  createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
+  decodeScriptNumChunk, encodeAssetId, decodeAssetId, MARKER
 } from '../mandala-encoding'
 
 describe('mandala-encoding', () => {
   it('round-trips small and large script numbers', () => {
     for (const n of [0, 1, 16, 127, 128, 255, 256, 1000, 0x7fffffff]) {
       expect(decodeScriptNum(encodeScriptNum(n))).toBe(n)
+    }
+  })
+
+  it('decodeScriptNumChunk reads both OP_N opcodes and data pushes', () => {
+    // -1, 0 and 1..16 collapse to opcodes with no data; decodeScriptNumChunk
+    // must recover them, and still read larger data-push amounts.
+    for (const n of [-1, 0, 1, 2, 15, 16, 17, 100, 1000, 0x7fffffff]) {
+      const chunk = createMinimallyEncodedScriptChunk(encodeScriptNum(n))
+      expect(decodeScriptNumChunk(chunk)).toBe(n)
     }
   })
 

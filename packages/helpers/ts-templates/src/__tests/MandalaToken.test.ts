@@ -13,6 +13,22 @@ describe('MandalaToken lock/decode', () => {
     expect(decoded.pubKeyHash).toEqual(pubKeyHash)
   })
 
+  // Regression: amounts 1..16 are minimally encoded as OP_1..OP_16 opcodes (no
+  // data bytes) by createMinimallyEncodedScriptChunk. decode must read those
+  // back, not mis-read them as 0 and reject the script as a bad amount.
+  it('round-trips small amounts encoded as OP_N opcodes (1..16)', () => {
+    for (let amount = 1; amount <= 16; amount++) {
+      const script = new MandalaToken().lock(assetId, amount, pubKeyHash)
+      const decoded = MandalaToken.decode(script)
+      expect(decoded.amount).toBe(amount)
+    }
+  })
+
+  it('round-trips the boundary amount 17 (first data-push encoding)', () => {
+    const decoded = MandalaToken.decode(new MandalaToken().lock(assetId, 17, pubKeyHash))
+    expect(decoded.amount).toBe(17)
+  })
+
   it('produces a P2PKH tail (OP_DUP OP_HASH160 ... OP_EQUALVERIFY OP_CHECKSIG)', () => {
     const script = new MandalaToken().lock(assetId, 1, pubKeyHash)
     const ops = script.chunks.map(c => c.op)
