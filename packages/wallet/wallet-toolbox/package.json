@@ -25,7 +25,7 @@
     "BRC100"
   ],
   "scripts": {
-    "test": "npm run build && jest --testPathIgnorePatterns=man.test.ts",
+    "test": "npm run build && jest --runInBand --testPathIgnorePatterns=man.test.ts",
     "test:watch": "npm run build && jest --testPathIgnorePatterns=man.test.ts --watch",
     "test:coverage": "npm run build && jest --testPathIgnorePatterns=man.test.ts --coverage",
     "lint": "ts-standard --fix src/**/*.ts",
