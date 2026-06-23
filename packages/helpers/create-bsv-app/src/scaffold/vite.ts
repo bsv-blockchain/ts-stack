@@ -7,10 +7,11 @@ export function viteCommand (pm: PackageManager, dir: string, variant: string): 
   // create-vite scaffolds into a folder named <name> relative to cwd; run from the parent.
   const name = basename(dir)
   const cwd = dirname(dir)
-  if (pm === 'npm') return { command: 'npm', args: ['create', 'vite@latest', name, '--', '--template', variant], cwd }
-  if (pm === 'yarn') return { command: 'yarn', args: ['create', 'vite', name, '--template', variant], cwd }
+  // --eslint: use ESLint instead of create-vite's default Oxlint for React templates.
+  if (pm === 'npm') return { command: 'npm', args: ['create', 'vite@latest', name, '--', '--template', variant, '--eslint'], cwd }
+  if (pm === 'yarn') return { command: 'yarn', args: ['create', 'vite', name, '--template', variant, '--eslint'], cwd }
   // pnpm and bun
-  return { command: pm, args: ['create', 'vite@latest', name, '--template', variant], cwd }
+  return { command: pm, args: ['create', 'vite@latest', name, '--template', variant, '--eslint'], cwd }
 }
 
 export const viteScaffolder: BaseScaffolder = {

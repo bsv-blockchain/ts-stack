@@ -1,19 +1,17 @@
 import type { ProjectConfig, PackageManager } from './config/model.js'
-import type { TargetKey, WriteResult } from './engine.js'
-import { writeFiles, planPlacement } from './engine.js'
-import { resolveCapabilities } from './registry.js'
-import { renderAgentsMd } from './agents-md.js'
-import { manifestFromConfig, writeProjectManifest, readValidManifest } from './config/project-manifest.js'
+import { readValidManifest, type ProjectManifest } from './config/project-manifest.js'
 import { resolveConfigFromFile } from './config/file.js'
 import { resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
-import { scaffoldNewProject } from './scaffold/new-project.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import type { ConfigProvider } from './prompts.js'
+import { applyConfig, type RunResult } from './pipeline.js'
 
-export interface CliArgs { dir?: string, file?: string, yes: boolean, force: boolean, draft: ConfigDraft }
+export type StartUi = (opts: { existing: ProjectManifest | null, targetDir: string, runCommand?: RunCommand }) => Promise<RunResult>
+
+export interface CliArgs { dir?: string, file?: string, yes: boolean, force: boolean, ui: boolean, draft: ConfigDraft }
 
 export function parseArgs (argv: string[]): CliArgs {
-  const args: CliArgs = { yes: false, force: false, draft: {} }
+  const args: CliArgs = { yes: false, force: false, ui: false, draft: {} }
   const next = (i: number): [string | undefined, number] => [argv[i + 1], i + 1]
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -25,6 +23,8 @@ export function parseArgs (argv: string[]): CliArgs {
       args.yes = true
     } else if (a === '--force') {
       args.force = true
+    } else if (a === '--ui') {
+      args.ui = true
     } else if (a === '--glue') {
       args.draft.glue = true
     } else if (a === '--mode') {
@@ -61,27 +61,19 @@ export function parseArgs (argv: string[]): CliArgs {
   return args
 }
 
-export function addCapabilities (
-  config: ProjectConfig,
-  targetDir: string,
-  opts: { force: boolean }
-): { deps: Record<TargetKey, Record<string, string>> } & WriteResult {
-  const caps = resolveCapabilities(config.capabilities)
-  const placement = planPlacement(config, caps)
-  const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
-  writeFiles(placement.glueFiles, targetDir, { force: true })
-  writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
-  writeProjectManifest(targetDir, manifestFromConfig(config))
-  return { deps: placement.deps, written: util.written, skipped: util.skipped }
-}
-
 export async function run (
   argv: string[],
   provider?: ConfigProvider,
-  deps?: { runCommand?: RunCommand }
-): Promise<{ targetDir: string, deps: Record<TargetKey, Record<string, string>> } & WriteResult> {
+  deps?: { runCommand?: RunCommand, startUi?: StartUi }
+): Promise<RunResult> {
   const args = parseArgs(argv)
   const targetDir = args.dir ?? '.'
+
+  if (args.ui) {
+    const existing = readValidManifest(targetDir)
+    const startUi = deps?.startUi ?? (async (o: { existing: ProjectManifest | null, targetDir: string, runCommand?: RunCommand }) => { return await (await import('./ui/ui-server.js')).runUi(o) })
+    return await startUi({ existing, targetDir, runCommand: deps?.runCommand })
+  }
 
   let config: ProjectConfig
   if (args.file !== undefined) {
@@ -96,10 +88,5 @@ export async function run (
     }
   }
 
-  if (config.mode === 'new') {
-    const r = scaffoldNewProject(config, targetDir, { runCommand: deps?.runCommand })
-    return { targetDir, deps: r.deps, written: r.written, skipped: [] }
-  }
-  const r = addCapabilities(config, targetDir, { force: args.force })
-  return { targetDir, deps: r.deps, written: r.written, skipped: r.skipped }
+  return applyConfig(config, targetDir, { runCommand: deps?.runCommand, force: args.force })
 }

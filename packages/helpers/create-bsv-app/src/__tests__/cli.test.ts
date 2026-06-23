@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseArgs, run } from '../cli'
 import type { RunCommand } from '../scaffold/base-scaffolder'
+import type { RunResult } from '../pipeline'
 
 let dir: string
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cba-cli-')) })
@@ -55,6 +56,13 @@ describe('parseArgs', () => {
   test('positional arg sets dir', () => {
     const a = parseArgs(['myproject'])
     expect(a.dir).toBe('myproject')
+  })
+
+  test('--ui sets ui:true', () => {
+    expect(parseArgs(['--ui']).ui).toBe(true)
+  })
+  test('ui defaults to false', () => {
+    expect(parseArgs([]).ui).toBe(false)
   })
 })
 
@@ -163,6 +171,19 @@ describe('run interactive (no --yes)', () => {
     })
     const res = await run(['--dir', dir], provider, { runCommand: fake })
     expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(res.written).toContain('src/bsv/auth.ts')
+  })
+})
+
+describe('run --ui', () => {
+  test('delegates to the injected startUi with existing + targetDir and returns its result', async () => {
+    const seen: Array<{ targetDir: string }> = []
+    const stub = async (o: { existing: unknown, targetDir: string, runCommand?: unknown }): Promise<RunResult> => {
+      seen.push({ targetDir: o.targetDir })
+      return { targetDir: o.targetDir, deps: { root: {}, client: {}, server: {} }, written: ['src/bsv/auth.ts'], skipped: [] }
+    }
+    const res = await run(['--dir', dir, '--ui'], undefined, { startUi: stub })
+    expect(seen).toEqual([{ targetDir: dir }])
     expect(res.written).toContain('src/bsv/auth.ts')
   })
 })

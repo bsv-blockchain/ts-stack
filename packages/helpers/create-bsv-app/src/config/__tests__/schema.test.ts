@@ -1,6 +1,6 @@
 // src/config/__tests__/schema.test.ts
 import { describe, expect, test } from '@jest/globals'
-import { configSchema, isFieldVisible, visibleFields } from '../schema'
+import { configSchema, isFieldVisible, visibleFields, evaluateWhen } from '../schema'
 import type { ConfigField } from '../schema'
 
 function field (key: string): ConfigField {
@@ -10,6 +10,20 @@ function field (key: string): ConfigField {
   }
   throw new Error(`field not found: ${key}`)
 }
+
+describe('evaluateWhen', () => {
+  test('undefined when is always visible', () => {
+    expect(evaluateWhen(undefined, {})).toBe(true)
+  })
+  test('all entries must match (AND)', () => {
+    expect(evaluateWhen({ mode: 'new', frontend: 'react' }, { mode: 'new', frontend: 'react' })).toBe(true)
+    expect(evaluateWhen({ mode: 'new', frontend: 'react' }, { mode: 'new', frontend: 'none' })).toBe(false)
+    expect(evaluateWhen({ mode: 'new' }, { mode: 'add' })).toBe(false)
+  })
+  test('missing draft key fails the condition', () => {
+    expect(evaluateWhen({ mode: 'new' }, {})).toBe(false)
+  })
+})
 
 describe('config schema', () => {
   test('has the expected sections', () => {
@@ -21,11 +35,16 @@ describe('config schema', () => {
     expect(configSchema[0].fields.map(f => f.key)).toContain('mode')
   })
 
+  test('when conditions are declarative objects', () => {
+    expect(field('frontend').when).toEqual({ mode: 'new' })
+    expect(field('frontendVariant').when).toEqual({ mode: 'new', frontend: 'react' })
+    expect(field('capabilities').when).toBeUndefined()
+  })
+
   test('new-only fields are hidden in add mode', () => {
-    const f = (k: string): ConfigField => configSchema.flatMap(s => s.fields).find(x => x.key === k) ?? (() => { throw new Error(`field not found: ${k}`) })()
-    expect(isFieldVisible(f('frontend'), { mode: 'add' })).toBe(false)
-    expect(isFieldVisible(f('frontend'), { mode: 'new' })).toBe(true)
-    expect(isFieldVisible(f('capabilities'), { mode: 'add' })).toBe(true)
+    expect(isFieldVisible(field('frontend'), { mode: 'add' })).toBe(false)
+    expect(isFieldVisible(field('frontend'), { mode: 'new' })).toBe(true)
+    expect(isFieldVisible(field('capabilities'), { mode: 'add' })).toBe(true)
   })
 
   test('frontendVariant is hidden unless mode is new and frontend is react', () => {

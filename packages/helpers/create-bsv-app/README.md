@@ -8,11 +8,12 @@ Scaffold BSV-enabled apps, or add BSV capabilities to an existing project — wi
 npx create-bsv-app
 ```
 
-Every run resolves a single `ProjectConfig` and feeds it through one pipeline. There are three ways ("doors") to produce that config — they differ only in *how* the config is gathered:
+Every run resolves a single `ProjectConfig` and feeds it through one pipeline. There are four ways ("doors") to produce that config — they differ only in *how* the config is gathered:
 
 1. **Interactive CLI** — `npx create-bsv-app` with no `--yes` prompts you through the schema (mode, stack, capabilities, …).
 2. **Flags** — pass everything on the command line and add `--yes` to skip prompts entirely.
 3. **`--file <config.json>`** — supply a complete config as JSON and skip prompts. Best for automation and AI agents.
+4. **`--ui`** — `npx create-bsv-app --ui` opens a local page (sectioned accordions over the same schema). Fill it in, press **Generate**, and the project is scaffolded by the same pipeline; the page also shows the equivalent command. The server is local-only (`127.0.0.1`), single-use, and closes once the project is generated.
 
 ## Modes
 
@@ -41,6 +42,7 @@ When you don't pass `--mode`, the tool infers it: if a `bsv-scaffold.json` manif
 | `--package-manager <npm\|pnpm\|yarn\|bun>` | new | Package manager for the base generator + workspace files (default `npm`). |
 | `--network <main\|test>` | new | BSV network the capabilities target (default `test`). |
 | `--glue` | both | Also emit optional "glue" files (e.g. example wiring) for the capabilities. |
+| `--ui` | both | Open the HTML accordion page in a browser and scaffold on Generate (local single-use server). |
 
 A frontend + backend together produce a **monorepo** layout (`client/` + `server/` with workspace files); a single target scaffolds at the root. Shared capability files are placed into each target that needs them.
 
@@ -92,6 +94,14 @@ npx create-bsv-app --dir my-app --file config.json
 ```
 
 Unspecified fields fall back to defaults (`dir`→`.`, `bsvDir`→`src/bsv`, `glue`→`false`, `packageManager`→`npm`, `network`→`test`). A `new` config must declare at least a frontend or a backend.
+
+## Using `--ui`
+
+```bash
+npx create-bsv-app --ui --dir my-app
+```
+
+Starts a local server on `127.0.0.1`, opens your browser, and renders the config as accordions. New vs. add mode and the offered capabilities follow the target directory's existing `bsv-scaffold.json` exactly as the CLI prompt does. Press **Generate** to scaffold; the page also displays the equivalent `npx create-bsv-app …` command for scripting/reproducibility.
 
 ### Resulting manifest (`bsv-scaffold.json`)
 
