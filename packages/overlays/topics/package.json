@@ -18,7 +18,7 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
-    "@bsv/overlay": "^2.1.0",
+    "@bsv/overlay": "workspace:^",
     "@bsv/templates": "workspace:^",
     "mongodb": "^7.3.0"
   },
@@ -53,7 +53,7 @@
     "blockchain"
   ],
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.7"
+    "@bsv/sdk": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

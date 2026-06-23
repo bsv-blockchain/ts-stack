@@ -53,7 +53,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates#readme",
   "devDependencies": {
-    "@bsv/wallet-toolbox": "^2.2.1",
+    "@bsv/wallet-toolbox": "workspace:^",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
@@ -64,7 +64,7 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.7"
+    "@bsv/sdk": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

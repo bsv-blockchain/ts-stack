@@ -5,7 +5,8 @@
  * Reads all workspace package.json files, builds a map of
  * { packageName → currentVersion }, then rewrites every cross-package
  * dependency reference (dependencies, devDependencies, peerDependencies)
- * so that they point at the current workspace version.
+ * to `workspace:^` so local and CI installs link unpublished workspace
+ * packages. pnpm rewrites those ranges to `^X.Y.Z` at publish time.
  *
  * Also walks ./infra/* package.json files (which are NOT in the pnpm
  * workspace) and rewrites their @bsv/* dependency ranges to track the
@@ -62,18 +63,11 @@ for (const [, { path: pkgPath }] of Object.entries(workspaceMap)) {
     for (const [dep, range] of Object.entries(pkg[field])) {
       const ws = workspaceMap[dep]
       if (!ws) continue
-      const target = `^${ws.version}`
-      // `workspace:^` is the canonical form for cross-workspace deps in this repo —
-      // publishes as `^X.Y.Z` so downstream installs dedupe. `workspace:*` publishes
-      // as an exact pin and causes duplicate-install bugs; rewrite it to `workspace:^`.
-      if (range === 'workspace:*') {
-        console.log(`  ${pkg.name}: ${dep} workspace:* → workspace:^`)
-        pkg[field][dep] = 'workspace:^'
-        changed = true
-        totalChanges++
-        continue
-      }
-      if (range !== target && range !== 'workspace:^') {
+      // `workspace:^` is the canonical source-tree form for cross-workspace deps
+      // in this repo. pnpm rewrites it to `^X.Y.Z` during publish, while local
+      // and CI installs keep linking the unpublished workspace package.
+      const target = 'workspace:^'
+      if (range !== target) {
         console.log(`  ${pkg.name}: ${dep} ${range} → ${target}`)
         pkg[field][dep] = target
         changed = true

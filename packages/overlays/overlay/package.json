@@ -76,11 +76,11 @@
     "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
-    "@bsv/gasp": "^1.3.0",
+    "@bsv/gasp": "workspace:^",
     "knex": "^3.2.10"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.7"
+    "@bsv/sdk": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

@@ -150,9 +150,9 @@ jobs:
       - name: Wait for npm registry propagation
         run: sleep 300
 
-      # After publish, the workspace's `^X.Y.Z` cross-references for *downstream* packages
-      # that we didn't bump still point at old versions. sync-versions rewrites them to the
-      # newly-published versions and opens a PR with the diff + lockfile update. The PR is
+      # After publish, sync-versions keeps source-tree package references on
+      # `workspace:^` so future PR installs use unpublished workspace packages,
+      # then refreshes the lockfiles and infra semver consumers. The PR is
       # idempotent — re-running the workflow updates the existing branch in place.
       - name: Sync published workspace versions
         id: sync-versions
@@ -167,7 +167,7 @@ jobs:
 
           # Infra components are NOT in the pnpm workspace — each has its own
           # npm package-lock.json that goes stale when sync-versions rewrites
-          # their @bsv/* ranges. Refresh each infra lockfile so the Dockerfile
+          # their registry-installed @bsv/* ranges. Refresh each infra lockfile so the Dockerfile
           # `npm ci` step won't fail with "lockfile doesn't match" on the next
           # infra-release build. --package-lock-only skips node_modules I/O.
           # Peer-aware (no --legacy-peer-deps): @bsv/* libraries declare @bsv/sdk

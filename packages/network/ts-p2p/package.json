@@ -60,7 +60,7 @@
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.7"
+    "@bsv/sdk": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {
