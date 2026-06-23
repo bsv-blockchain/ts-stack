@@ -7,7 +7,7 @@
     "id": { "type": "string", "description": "Stable slug, never changes" },
     "title": { "type": "string" },
     "kind": { "type": "string", "enum": ["package", "infra", "spec", "guide", "conformance", "reference", "meta"] },
-    "domain": { "type": ["string", "null"], "enum": ["sdk", "wallet", "network", "overlays", "messaging", "middleware", "helpers", null] },
+    "domain": { "type": ["string", "null"], "enum": ["sdk", "wallet", "network", "overlays", "messaging", "middleware", "helpers", "infra", null] },
     "version": { "type": "string" },
     "source_repo": { "type": "string" },
     "source_commit": { "type": "string" },
