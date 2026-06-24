@@ -21,7 +21,10 @@ export function createDefaultWalletServicesOptions (
   deploymentId ||= `wallet-toolbox-${randomBytesHex(16)}`
 
   // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
-  const chaintracksUrl = `https://${chain}net-chaintracks.babbage.systems`
+  const chaintracksUrl =
+    chain === 'ttn'
+      ? 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/'
+      : `https://${chain}net-chaintracks.babbage.systems`
   // The mainnet endpoint is always used since these are fiat exchange rates,
   // independent of the chain being used.
   const chaintracksFiatExchangeRatesUrl = 'https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates'
@@ -81,8 +84,8 @@ export function arcDefaultUrl (chain: Chain): string {
       return 'https://arc.taal.com'
     case 'test':
       return 'https://arc-test.taal.com'
-    case 'teratest':
-      return 'https://arc-teratest.taal.com'
+    case 'ttn':
+      return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/'
     case 'mock':
       return ''
   }

@@ -64,7 +64,7 @@ export class Services implements WalletServices {
     this.chain = typeof optionsOrChain === 'string' ? optionsOrChain : optionsOrChain.chain
 
     if (this.chain === 'mock') {
-      throw new WERR_INVALID_PARAMETER('chain', '\'main\', \'test\', or \'teratest\'. Use MockServices for \'mock\' chain.')
+      throw new WERR_INVALID_PARAMETER('chain', '\'main\', \'test\', or \'ttn\'. Use MockServices for \'mock\' chain.')
     }
 
     this.options = typeof optionsOrChain === 'string' ? Services.createDefaultOptions(this.chain) : optionsOrChain
