@@ -5,6 +5,7 @@ import { resolveCapabilities } from './registry.js'
 import { renderAgentsMd } from './agents-md.js'
 import { manifestFromConfig, writeProjectManifest, MANIFEST_FILE } from './config/project-manifest.js'
 import { scaffoldNewProject } from './scaffold/new-project.js'
+import { applyCapabilityDeps } from './scaffold/package-json.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 
 export interface RunResult {
@@ -25,6 +26,7 @@ export function addCapabilities (
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
   const agents = writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
   writeProjectManifest(targetDir, manifestFromConfig(config))
+  applyCapabilityDeps(targetDir, placement.deps)
   return { deps: placement.deps, written: [...util.written, ...glue.written, ...agents.written, MANIFEST_FILE], skipped: util.skipped }
 }
 

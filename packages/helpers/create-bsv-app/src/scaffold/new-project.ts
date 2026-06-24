@@ -10,6 +10,7 @@ import { manifestFromConfig, writeProjectManifest, MANIFEST_FILE } from '../conf
 import { scaffolderFor, type RunCommand } from './base-scaffolder.js'
 import { defaultRunCommand } from './run-command.js'
 import { workspaceFiles } from './workspace.js'
+import { applyCapabilityDeps } from './package-json.js'
 import type { CapabilityContext } from '../types.js'
 
 function ensureEmpty (dir: string): void {
@@ -63,6 +64,7 @@ export function scaffoldNewProject (
 
   writeProjectManifest(targetDir, { ...manifestFromConfig(config), capabilities: caps.map(c => c.id) })
   written.push(MANIFEST_FILE)
+  applyCapabilityDeps(targetDir, placement.deps)
 
   return { written, deps: placement.deps }
 }

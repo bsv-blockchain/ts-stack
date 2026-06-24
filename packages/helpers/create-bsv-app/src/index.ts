@@ -8,7 +8,10 @@ run(process.argv.slice(2), interactiveConfigPrompt)
     console.log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
     for (const [target, d] of Object.entries(res.deps)) {
       const names = Object.keys(d)
-      if (names.length > 0) console.log(`\nAdd deps${target === 'root' ? '' : ` (${target}/)`}:\n  npm install ${names.join(' ')}`)
+      if (names.length > 0) {
+        const cmd = target === 'root' ? 'npm i' : `cd ${target} && npm i`
+        console.log(`\nInstall deps${target === 'root' ? '' : ` (${target}/)`}:\n  ${cmd}`)
+      }
     }
     console.log('\nSee AGENTS.md for wiring + how to extend.')
   })

@@ -9,7 +9,8 @@ function installBlock (label: string, deps: Record<string, string>): string {
   if (names.length === 0) return ''
   const ranges = Object.entries(deps).map(([n, r]) => `  ${n}@${r}`).join('\n')
   const head = label.length > 0 ? `### ${label}\n\n` : ''
-  return `${head}\`\`\`\nnpm install ${names.join(' ')}\n\`\`\`\n\nRequired ranges:\n${ranges}\n\n`
+  const cmd = label.length > 0 ? `cd ${label.replace(/\/$/, '')} && npm i` : 'npm i'
+  return `${head}Dependencies are already in \`package.json\` — just install:\n\n\`\`\`\n${cmd}\n\`\`\`\n\nIncluded:\n${ranges}\n\n`
 }
 
 export function renderAgentsMd (config: ProjectConfig, capabilities: Capability[]): string {
