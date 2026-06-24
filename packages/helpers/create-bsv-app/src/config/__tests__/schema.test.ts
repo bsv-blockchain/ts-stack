@@ -65,3 +65,22 @@ describe('config schema', () => {
     expect(visibleFields(stack, { mode: 'new', frontend: 'react' }).map(f => f.key)).toContain('frontendVariant')
   })
 })
+
+describe('schema ui/desc hints', () => {
+  test('sections carry a desc string', () => {
+    for (const s of configSchema) expect(typeof s.desc).toBe('string')
+  })
+  test('mode/frontend/network fields are segmented; type stays select', () => {
+    const f = (k: string): ConfigField => configSchema.flatMap(s => s.fields).find(x => x.key === k) ?? (() => { throw new Error(k) })()
+    for (const k of ['mode', 'frontend', 'network']) {
+      expect(f(k).ui).toBe('segmented')
+      expect(f(k).type).toBe('select')
+    }
+  })
+  test('hints do not affect visibility logic', () => {
+    const frontend = configSchema.flatMap(s => s.fields).find(x => x.key === 'frontend')
+    if (frontend === undefined) throw new Error('no frontend field')
+    expect(isFieldVisible(frontend, { mode: 'new' })).toBe(true)
+    expect(isFieldVisible(frontend, { mode: 'add' })).toBe(false)
+  })
+})

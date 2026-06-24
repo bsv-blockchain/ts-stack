@@ -1,13 +1,18 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { serializeSchema, buildPage } from './ui-page.js'
 import { openBrowser as defaultOpenBrowser } from './open-browser.js'
 import { applyConfig, type RunResult } from '../pipeline.js'
 import { resolveDraft, seedDraft, type ConfigDraft } from '../config/draft.js'
 import { ConfigError } from '../config/validate.js'
 import type { ProjectManifest } from '../config/project-manifest.js'
+import { MANIFEST_FILE } from '../config/project-manifest.js'
 import type { RunCommand } from '../scaffold/base-scaffolder.js'
-import { listCapabilities } from '../registry.js'
+import { listCapabilities, resolveCapabilities } from '../registry.js'
+import { planPlacement } from '../engine.js'
+import { layoutOf } from '../config/model.js'
 
 export interface UiServer { url: string, done: Promise<RunResult>, close: () => void }
 
@@ -56,6 +61,37 @@ export async function startUiServer (
         } catch (err) {
           const status = err instanceof ConfigError ? 400 : 500
           sendJson(res, status, { error: err instanceof Error ? err.message : String(err) })
+          return
+        }
+      }
+      if (req.method === 'POST' && req.url === '/plan') {
+        try {
+          const draft = JSON.parse(await readBody(req)) as ConfigDraft
+          const config = resolveDraft(seedDraft(existing, draft))
+          const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
+          const placement = planPlacement(config, caps)
+          const rawPaths: string[] = [...placement.utilFiles, ...placement.glueFiles].map(f => f.path)
+          rawPaths.push('AGENTS.md', MANIFEST_FILE)
+          if (config.mode === 'new' && config.glue) {
+            const layout = layoutOf(config.stack)
+            if (layout === 'frontend-only' || layout === 'monorepo') {
+              const prefix = layout === 'monorepo' ? 'client/' : ''
+              const ctx = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
+              for (const cap of caps) {
+                if (cap.clientEntry != null) rawPaths.push(prefix + cap.clientEntry(ctx).path)
+              }
+            }
+          }
+          const seen = new Set<string>()
+          const dedupedPaths: string[] = []
+          for (const p of rawPaths) {
+            if (!seen.has(p)) { seen.add(p); dedupedPaths.push(p) }
+          }
+          const files = dedupedPaths.map(p => ({ path: p, status: existsSync(join(targetDir, p)) ? 'edit' as const : 'new' as const }))
+          sendJson(res, 200, { files })
+          return
+        } catch (err) {
+          sendJson(res, 200, { files: [], error: err instanceof Error ? err.message : String(err) })
           return
         }
       }

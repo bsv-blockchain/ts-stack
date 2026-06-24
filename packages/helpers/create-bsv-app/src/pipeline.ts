@@ -3,7 +3,7 @@ import type { TargetKey, WriteResult } from './engine.js'
 import { writeFiles, planPlacement } from './engine.js'
 import { resolveCapabilities } from './registry.js'
 import { renderAgentsMd } from './agents-md.js'
-import { manifestFromConfig, writeProjectManifest } from './config/project-manifest.js'
+import { manifestFromConfig, writeProjectManifest, MANIFEST_FILE } from './config/project-manifest.js'
 import { scaffoldNewProject } from './scaffold/new-project.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 
@@ -22,10 +22,10 @@ export function addCapabilities (
   const caps = resolveCapabilities(config.capabilities, { expandRequires: false })
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
-  writeFiles(placement.glueFiles, targetDir, { force: true })
-  writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
+  const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
+  const agents = writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
   writeProjectManifest(targetDir, manifestFromConfig(config))
-  return { deps: placement.deps, written: util.written, skipped: util.skipped }
+  return { deps: placement.deps, written: [...util.written, ...glue.written, ...agents.written, MANIFEST_FILE], skipped: util.skipped }
 }
 
 export function applyConfig (

@@ -5,7 +5,7 @@ import { interactiveConfigPrompt } from './prompts.js'
 run(process.argv.slice(2), interactiveConfigPrompt)
   .then((res) => {
     const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
-    console.log(`\n${verb} ${res.targetDir} (${res.written.length} BSV file(s) written).`)
+    console.log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
     for (const [target, d] of Object.entries(res.deps)) {
       const names = Object.keys(d)
       if (names.length > 0) console.log(`\nAdd deps${target === 'root' ? '' : ` (${target}/)`}:\n  npm install ${names.join(' ')}`)

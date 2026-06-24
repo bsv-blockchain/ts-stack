@@ -57,3 +57,22 @@ test('applyConfig add-mode with force:false preserves an existing util file', ()
   expect(res.written).not.toContain('src/bsv/useWalletLogin.tsx')
   expect(readFileSync(join(dir, 'src', 'bsv', 'useWalletLogin.tsx'), 'utf8')).toBe('// SENTINEL')
 })
+
+test('applyConfig new-mode written includes AGENTS.md, manifest, and main.tsx (matches /plan)', () => {
+  const calls: string[][] = []
+  const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+  const glueConfig: ProjectConfig = { ...newConfig, glue: true }
+  const res = applyConfig(glueConfig, dir, { runCommand: fake })
+  expect(res.written).toContain('src/bsv/auth.ts')
+  expect(res.written).toContain('AGENTS.md')
+  expect(res.written).toContain('bsv-scaffold.json')
+  expect(res.written).toContain('src/main.tsx') // clientEntry, new+glue+frontend-only
+})
+
+test('applyConfig add-mode written includes AGENTS.md and manifest', () => {
+  const addConfig: ProjectConfig = { ...newConfig, mode: 'add' }
+  const noop: RunCommand = () => {}
+  const res = applyConfig(addConfig, dir, { runCommand: noop, force: false })
+  expect(res.written).toContain('AGENTS.md')
+  expect(res.written).toContain('bsv-scaffold.json')
+})

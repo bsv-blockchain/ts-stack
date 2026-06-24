@@ -45,19 +45,27 @@ describe('serializeSchema', () => {
     const variant = schema.flatMap(s => s.fields).find(f => f.key === 'frontendVariant')
     expect(variant?.when).toEqual({ mode: 'new', frontend: 'react' })
   })
+
+  test('serializeSchema still excludes the defaultSelected base in new mode and carries ui/desc', () => {
+    const schema = serializeSchema(null)
+    const caps = schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')
+    expect(caps?.options?.map(o => o.value)).not.toContain('wallet-connect')
+    expect(schema.find(s => s.id === 'mode')?.desc).toEqual(expect.any(String))
+    expect(schema.flatMap(s => s.fields).find(f => f.key === 'frontend')?.ui).toBe('segmented')
+  })
 })
 
 describe('buildPage', () => {
-  test('inlines the schema + seed and renders shell markers', () => {
-    const schema = serializeSchema(null)
-    const html = buildPage({ schema, seed: { mode: 'new' } })
+  test('buildPage is self-contained (no external src/href) and inlines schema/seed', () => {
+    const html = buildPage({ schema: serializeSchema(null), seed: { mode: 'new' }, included: [{ label: 'wallet-connect' }] })
     expect(html).toContain('<!doctype html>')
     expect(html).toContain('window.__SCHEMA__')
     expect(html).toContain('window.__SEED__')
-    expect(html).toContain(JSON.stringify(schema))
-    expect(html).toContain('create-bsv-app')
-    expect(html).toContain('id="generate"')
-    expect(html).toContain('id="command"')
+    expect(html).not.toMatch(/<script[^>]+src=/)
+    expect(html).not.toMatch(/<link[^>]+href=/) // external font dropped
+    expect(html).toContain('id="formWrap"') // new wizard DOM
+    expect(html).toContain('id="rail"')
+    expect(html).toContain('window.__INCLUDED__')
   })
 
   test('embeds capability labels and is self-contained (no external src/href)', () => {
@@ -67,19 +75,25 @@ describe('buildPage', () => {
     expect(html).not.toMatch(/<link[^>]+href=/)
   })
 
-  test('renders "Always included" banner when included list is provided', () => {
+  test('renders "Always included" chips when included list is provided', () => {
     const schema = serializeSchema(null)
     const html = buildPage({ schema, seed: { mode: 'new' }, included: [{ label: 'Wallet connect' }] })
     expect(html).toContain('Always included')
     expect(html).toContain('Wallet connect')
-    expect(html).toContain('class="included"')
+    expect(html).toContain('window.__INCLUDED__')
   })
 
-  test('no banner when included is empty or omitted', () => {
+  test('no banner when included is empty or omitted — __INCLUDED__ still emitted as []', () => {
     const schema = serializeSchema(null)
     const htmlNoArg = buildPage({ schema, seed: { mode: 'new' } })
     const htmlEmpty = buildPage({ schema, seed: { mode: 'new' }, included: [] })
-    expect(htmlNoArg).not.toContain('class="included"')
-    expect(htmlEmpty).not.toContain('class="included"')
+    // __INCLUDED__ always emitted for JS; old class="included" banner is gone
+    expect(htmlNoArg).toContain('window.__INCLUDED__')
+    expect(htmlEmpty).toContain('window.__INCLUDED__')
+  })
+
+  test('impact panel is captioned as BSV-files-only', () => {
+    const html = buildPage({ schema: serializeSchema(null), seed: { mode: 'new' }, included: [{ label: 'Wallet connect' }] })
+    expect(html).toContain('scaffolded separately')
   })
 })

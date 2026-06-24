@@ -111,6 +111,58 @@ test('runUi opens the browser then resolves after the simulated submit', async (
   expect(result.written).toContain('src/bsv/auth.ts')
 })
 
+test('POST /plan returns the real BSV files create-bsv-app would write (new mode)', async () => {
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const srvUrl: string = srv.url
+    const res = await fetch(srvUrl + '/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react', capabilities: ['wallet-login'] })
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    const paths = data.files.map((f: { path: string }) => f.path)
+    expect(paths).toContain('src/bsv/auth.ts')
+    expect(paths).toContain('src/bsv/WalletContext.tsx')
+    expect(paths).toContain('AGENTS.md')
+    expect(data.files.every((f: { status: string }) => f.status === 'new')).toBe(true)
+  } finally { srv.close() }
+})
+
+test('POST /plan marks an existing file as edit', async () => {
+  mkdirSync(join(dir, 'src', 'bsv'), { recursive: true })
+  writeFileSync(join(dir, 'src', 'bsv', 'auth.ts'), '// existing', 'utf8')
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const srvUrl: string = srv.url
+    const res = await fetch(srvUrl + '/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react', capabilities: ['wallet-login'] })
+    })
+    const data = await res.json()
+    const auth = data.files.find((f: { path: string }) => f.path === 'src/bsv/auth.ts')
+    expect(auth.status).toBe('edit')
+  } finally { srv.close() }
+})
+
+test('POST /plan returns { files: [], error } for an invalid draft', async () => {
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const srvUrl: string = srv.url
+    const res = await fetch(srvUrl + '/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'none', backend: 'none' })
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.files).toEqual([])
+    expect(typeof data.error).toBe('string')
+  } finally { srv.close() }
+})
+
 test('POST /generate add-mode does NOT overwrite existing capability files (force=false)', async () => {
   const existing: ProjectManifest = {
     version: 1,

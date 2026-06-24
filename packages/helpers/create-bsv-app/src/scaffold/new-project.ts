@@ -6,7 +6,7 @@ import { layoutOf } from '../config/model.js'
 import { planPlacement, writeFiles, type TargetKey } from '../engine.js'
 import { resolveCapabilities } from '../registry.js'
 import { renderAgentsMd } from '../agents-md.js'
-import { manifestFromConfig, writeProjectManifest } from '../config/project-manifest.js'
+import { manifestFromConfig, writeProjectManifest, MANIFEST_FILE } from '../config/project-manifest.js'
 import { scaffolderFor, type RunCommand } from './base-scaffolder.js'
 import { defaultRunCommand } from './run-command.js'
 import { workspaceFiles } from './workspace.js'
@@ -46,19 +46,23 @@ export function scaffoldNewProject (
   const caps = resolveCapabilities(config.capabilities)
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: false })
-  writeFiles(placement.glueFiles, targetDir, { force: true })
-  writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
+  const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
+  const agents = writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
+  const written: string[] = [...util.written, ...glue.written, ...agents.written]
 
   if (config.glue && (layout === 'frontend-only' || layout === 'monorepo')) {
     const clientDir = layout === 'monorepo' ? join(targetDir, 'client') : targetDir
+    const prefix = layout === 'monorepo' ? 'client/' : ''
     const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
     for (const cap of caps) {
       if (cap.clientEntry == null) continue
-      writeFiles([cap.clientEntry(ctx)], clientDir, { force: true })
+      const r = writeFiles([cap.clientEntry(ctx)], clientDir, { force: true })
+      written.push(...r.written.map(p => prefix + p))
     }
   }
 
   writeProjectManifest(targetDir, { ...manifestFromConfig(config), capabilities: caps.map(c => c.id) })
+  written.push(MANIFEST_FILE)
 
-  return { written: util.written, deps: placement.deps }
+  return { written, deps: placement.deps }
 }
