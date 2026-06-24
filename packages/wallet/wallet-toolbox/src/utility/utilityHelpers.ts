@@ -13,7 +13,7 @@ export function toWalletNetwork (chain: Chain): WalletNetwork {
     case 'main':
       return 'mainnet'
     case 'test':
-    case 'teratest':
+    case 'ttn':
     case 'mock':
       return 'testnet'
   }
@@ -29,7 +29,7 @@ export function toLookupNetworkPreset (chain: Chain): 'mainnet' | 'testnet' | 'l
       return 'mainnet'
     case 'test':
       return 'testnet'
-    case 'teratest':
+    case 'ttn':
     case 'mock':
       return 'local'
   }
