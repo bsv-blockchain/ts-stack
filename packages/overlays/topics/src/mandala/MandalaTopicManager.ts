@@ -81,6 +81,14 @@ export class MandalaTopicManager implements TopicManager {
     if ((details.kind === 'issue' || details.kind === 'recover') && typeof details.assetId === 'string') {
       return { admitted: true, issuance: { assetId: details.assetId, amount: details.amount ?? 0 } }
     }
+    // A redeem authorizes destruction of `amount` units, i.e. a negative supply
+    // delta. Without this, conservation (outAmt === inAmt + issued) rejects any
+    // partial redeem, since the burned FT inputs are counted in inAmt but the
+    // only output is the change (gathered - amount). Crediting -amount here makes
+    // outAmt === gathered + (-amount) hold for partial burns.
+    if (details.kind === 'redeem' && typeof details.assetId === 'string') {
+      return { admitted: true, issuance: { assetId: details.assetId, amount: -(details.amount ?? 0) } }
+    }
     return { admitted: true }
   }
 

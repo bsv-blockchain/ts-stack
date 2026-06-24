@@ -490,7 +490,7 @@ export function genesisHeader (chain: Chain): BlockHeader {
         hash: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
       }
     case 'test':
-    case 'teratest':
+    case 'ttn':
       return {
         version: 1,
         previousHash: '0000000000000000000000000000000000000000000000000000000000000000',

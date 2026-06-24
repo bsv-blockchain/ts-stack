@@ -30,7 +30,8 @@ function toArrayBuffer(bytes: number[]): ArrayBuffer {
 
 /**
  * Replace the global `fetch` with a jest mock that returns the given bytes.
- * HTTPWalletWire.transmitToWallet calls the *global* fetch, not this.httpClient.
+ * With the default constructor, `this.httpClient` is bound to the global `fetch`
+ * at construction time, so replacing `global.fetch` before constructing works.
  */
 function mockGlobalFetch(responseBytes: number[]): jest.Mock {
   const mock = jest.fn().mockResolvedValue({
@@ -79,7 +80,7 @@ describe('HTTPWalletWire – constructor', () => {
     expect(wire.originator).toBeUndefined()
   })
 
-  it('stores a custom httpClient (even though transmitToWallet uses global fetch)', () => {
+  it('stores a custom httpClient', () => {
     const mockFetch = jest.fn()
     const wire = new HTTPWalletWire(
       'example.com',
@@ -269,5 +270,31 @@ describe('HTTPWalletWire – call-name routing', () => {
 
     const [url] = mockFetch.mock.calls[0] as [string]
     expect(url).toBe(`http://localhost:3301/${callName}`)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// transmitToWallet – httpClient injection (BRC-103 / custom transport)
+// ---------------------------------------------------------------------------
+
+describe('HTTPWalletWire – httpClient injection', () => {
+  it('uses the injected httpClient instead of the global fetch', async () => {
+    const globalMock = jest.fn() // must NOT be called
+    global.fetch = globalMock
+    const injected = jest.fn().mockResolvedValue({
+      arrayBuffer: () => Promise.resolve(toArrayBuffer([])),
+    } as unknown as Response)
+
+    const wire = new HTTPWalletWire(
+      undefined,
+      'http://localhost:3301',
+      injected as unknown as typeof fetch
+    )
+    await wire.transmitToWallet(buildFrame('getVersion'))
+
+    expect(injected).toHaveBeenCalledTimes(1)
+    expect(globalMock).not.toHaveBeenCalled()
+    const [url] = injected.mock.calls[0] as [string]
+    expect(url).toBe('http://localhost:3301/getVersion')
   })
 })

@@ -18,7 +18,9 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
  * and merge rules are added to the arguments passed to the storage layer.
  *
  * The existing transaction's `status` determines what the merge path does next:
- *  - `'unproven'` or `'completed'`: outputs are merged; status is left as-is.
+ *  - `'unproven'`, `'completed'`, or `'sending'`: outputs are merged; status is left as-is.
+ *    The `'sending'` case covers a transaction this wallet already signed and handed to broadcast processing, but
+ *    whose proven_tx_req has not yet been advanced by the normal monitor/posting flow.
  *  - `'nosend'`: the `internalizeAction` call is treated as explicit authorization to advance the lifecycle.
  *    `transactions.status` is promoted to `'completed'` (BUMP-bearing BEEF) or `'unproven'` (otherwise), and the
  *    `proven_tx_req` is moved out of `'nosend'` so Monitor's proof-fetching flow can finalize it. See storage-layer

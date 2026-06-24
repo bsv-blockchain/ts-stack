@@ -162,6 +162,17 @@ jobs:
           git fetch origin main
           git switch --force-create "$SYNC_BRANCH" origin/main
 
+          # `git switch -C` does NOT discard uncommitted working-tree changes.
+          # The publish step above runs each package's publish lifecycle, and
+          # wallet-toolbox's `prepublish` (syncVersions.js) rewrites
+          # client/package.json + mobile/package.json to the parent version and
+          # leaves those edits uncommitted. Carried across the switch, they make
+          # `pnpm sync-versions` read a version that was never published and
+          # rewrite consumers to an unresolvable range (ERR_PNPM_NO_MATCHING_VERSION).
+          # Hard-reset + clean so sync-versions operates only on committed main.
+          git reset --hard origin/main
+          git clean -fd
+
           pnpm sync-versions
           pnpm install --lockfile-only
 

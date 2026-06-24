@@ -37,7 +37,7 @@ export default class HTTPWalletWire implements WalletWire {
       originator = Utils.toUTF8(originatorBytes)
     }
     const payload = messageReader.read()
-    const response = await fetch(`${this.baseUrl}/${callName}`, {
+    const response = await this.httpClient(`${this.baseUrl}/${callName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/octet-stream',

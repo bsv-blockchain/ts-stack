@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "type": "module",
   "description": "BSV Blockchain Script Templates",
   "main": "dist/cjs/mod.js",
@@ -53,7 +53,7 @@
   },
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates#readme",
   "devDependencies": {
-    "@bsv/wallet-toolbox": "^2.2.0",
+    "@bsv/wallet-toolbox": "^2.3.2",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
