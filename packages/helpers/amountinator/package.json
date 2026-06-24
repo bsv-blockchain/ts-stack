@@ -36,7 +36,7 @@
     "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
-    "@bsv/wallet-toolbox-client": "^2.2.0"
+    "@bsv/wallet-toolbox-client": "^2.3.2"
   },
   "keywords": [
     "bsv",

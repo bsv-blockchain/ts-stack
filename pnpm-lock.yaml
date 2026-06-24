@@ -136,8 +136,8 @@ importers:
   packages/helpers/amountinator:
     dependencies:
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
     devDependencies:
       '@bsv/sdk':
         specifier: 2.1.3
@@ -161,8 +161,8 @@ importers:
   packages/helpers/bsv-wallet-helper:
     dependencies:
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
     devDependencies:
       '@bsv/sdk':
         specifier: 2.1.3
@@ -232,8 +232,8 @@ importers:
   packages/helpers/did-client:
     dependencies:
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
     devDependencies:
       '@bsv/sdk':
         specifier: 2.1.3
@@ -293,8 +293,8 @@ importers:
   packages/helpers/fund-wallet:
     dependencies:
       '@bsv/wallet-toolbox':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -324,11 +324,11 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0(@bsv/sdk@2.1.3)
       '@bsv/wallet-toolbox':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
     devDependencies:
       '@bsv/sdk':
         specifier: 2.1.3
@@ -358,8 +358,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
@@ -935,8 +935,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0(@bsv/sdk@2.1.3)
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
       mongodb:
         specifier: ^7.3.0
         version: 7.3.0(socks@2.8.7)
@@ -981,8 +981,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0(@bsv/sdk@2.1.3)(socks@2.8.7)
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1196,8 +1196,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox-client':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)
       '@types/node':
         specifier: ^25.9.3
         version: 25.9.3
@@ -1362,8 +1362,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3
       '@bsv/wallet-toolbox':
-        specifier: ^2.2.0
-        version: 2.2.0(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
+        specifier: ^2.3.2
+        version: 2.3.2(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)
     devDependencies:
       '@types/diff':
         specifier: ^8.0.0
@@ -2247,13 +2247,13 @@ packages:
   '@bsv/sdk@2.1.3':
     resolution: {integrity: sha512-nmni2Q762/TeWz6MfbHdWRSTwzPV8o5t34789/u8MA+kPNnoZfs/BQOw4c5FtlXYcu3Soxbhup3+02zdrP+drg==}
 
-  '@bsv/wallet-toolbox-client@2.2.0':
-    resolution: {integrity: sha512-j8LoN8VGvO9Rh//+x/nXnjL6mKTaFdcBFLK+UDt+sAkmkkcVAhXbS/2wNqmGzD/dqxamv+gVtVFd6fm7uqjcWQ==}
+  '@bsv/wallet-toolbox-client@2.3.2':
+    resolution: {integrity: sha512-0WUXdQ0dLgYbsvnsUe/HAdfv8rUrJ9WyV2JYPoEGhQkDQNjoWe7nhwrvcm6dhizONfjIPL1YSMdk1eQVsdxXmw==}
     peerDependencies:
       '@bsv/sdk': 2.1.3
 
-  '@bsv/wallet-toolbox@2.2.0':
-    resolution: {integrity: sha512-HGCXQALHe9oXnxxvoD5AoKg4LB87UJ2c/k6zpmITswDIr3/b8DT5/FfjuHRgg/qY7c30c9x5d5ZfAZSBB4JPnA==}
+  '@bsv/wallet-toolbox@2.3.2':
+    resolution: {integrity: sha512-MZTENl5s59kubfsHcFB48Qdjz/WgqatBYANQgDYDwjTTb4VjnCIjFWNX1MAujJIGq1rj1hfHro8LWR/LmIckNw==}
     peerDependencies:
       '@bsv/sdk': 2.1.3
 
@@ -12177,7 +12177,7 @@ snapshots:
     dependencies:
       '@bsv/overlay': 2.1.0(@bsv/sdk@2.1.3)
       '@bsv/sdk': 2.1.3
-      '@bsv/wallet-toolbox-client': 2.2.0(@bsv/sdk@2.1.3)
+      '@bsv/wallet-toolbox-client': 2.3.2(@bsv/sdk@2.1.3)
       mongodb: 7.3.0(socks@2.8.7)
     transitivePeerDependencies:
       - '@aws-sdk/credential-providers'
@@ -12222,13 +12222,13 @@ snapshots:
 
   '@bsv/sdk@2.1.3': {}
 
-  '@bsv/wallet-toolbox-client@2.2.0(@bsv/sdk@2.1.3)':
+  '@bsv/wallet-toolbox-client@2.3.2(@bsv/sdk@2.1.3)':
     dependencies:
       '@bsv/sdk': 2.1.3
       hash-wasm: 4.12.0
       idb: 8.0.3
 
-  '@bsv/wallet-toolbox@2.2.0(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)':
+  '@bsv/wallet-toolbox@2.3.2(@bsv/sdk@2.1.3)(@types/node@25.9.3)(sqlite3@6.0.1)':
     dependencies:
       '@bsv/auth-express-middleware': 2.1.0(@bsv/sdk@2.1.3)
       '@bsv/payment-express-middleware': 2.1.0(@bsv/sdk@2.1.3)
