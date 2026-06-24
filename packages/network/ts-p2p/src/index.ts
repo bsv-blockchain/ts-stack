@@ -3,7 +3,8 @@ import { tcp } from '@libp2p/tcp';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
-import { kadDHT } from '@libp2p/kad-dht';import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+import { kadDHT } from '@libp2p/kad-dht';
+import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 
 import { preSharedKey } from '@libp2p/pnet';
 import { pubsubPeerDiscovery } from '@libp2p/pubsub-peer-discovery';
@@ -151,7 +152,10 @@ export class TeranodeListener {
           fallbackToFloodsub: true,
           floodPublish: true,
           doPX: true,
-        }),
+          // Cast: gossipsub's GossipSubComponents factory type drifted from the
+          // createLibp2p service-factory component type after libp2p bumps (#222).
+          // Runtime is unaffected; realign package types to remove this.
+        }) as any,
         identify: identify(),
         ping: ping(),
       },
@@ -386,7 +390,10 @@ export async function startSubscriber(config: SubscriberConfig = {}): Promise<vo
         fallbackToFloodsub: true,
         floodPublish: true,
         doPX: true,
-      }),
+        // Cast: gossipsub's GossipSubComponents factory type drifted from the
+        // createLibp2p service-factory component type after libp2p bumps (#222).
+        // Runtime is unaffected; realign package types to remove this.
+      }) as any,
       identify: identify(),
       ping: ping(),
     },
