@@ -35,7 +35,8 @@ Fluent transaction builder and wallet-compatible script templates for BSV. Provi
   - `.unlock(params: OrdLockUnlockParams): UnlockingTemplate`
 
 ### Utilities
-- `makeWallet(chain, storageURL, privateKeyHex): Promise<WalletInterface>` — Create BRC-100 wallet from private key
+- `makeWallet(chain, storageURL, privateKeyHex): Promise<WalletInterface>` — Create live BRC-100 wallet from private key (network-backed, use for explicit integration tests only)
+- `makeMockWallet(privateKey): Promise<WalletInterface>` — Create hermetic in-memory mock wallet (ProtoWallet, no network; for unit tests)
 - `calculatePreimage(tx, inputIndex, prevOutScript): Promise<number[]>` — Compute signature preimage
 - `addOpReturnData(script: LockingScript, data: string[]): LockingScript` — Append OP_RETURN metadata
 - `getDerivation(wallet, protocolID, keyID, counterparty): Promise<DerivationResult>` — Derive BRC-29 key

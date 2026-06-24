@@ -1,4 +1,4 @@
-export { makeWallet } from './mockWallet.js'
+export { makeWallet, makeMockWallet } from './mockWallet.js'
 export { calculatePreimage } from './createPreimage.js'
 export { addOpReturnData } from './opreturn.js'
 export { getDerivation, getAddress } from './derivation.js'

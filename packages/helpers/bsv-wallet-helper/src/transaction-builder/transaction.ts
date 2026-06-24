@@ -8,9 +8,6 @@ import { WalletDerivationParams } from '../types/wallet'
 import { getDerivation } from '../utils'
 import { addOpReturnData } from '../utils/opreturn'
 import { DEFAULT_SAT_PER_KB } from '../utils/constants'
-
-/** Address string, wallet derivation params, or undefined (BRC-29 auto-derive). */
-type AddressOrParams = string | WalletDerivationParams | undefined
 import {
   BuildParams,
   InputConfig,
@@ -26,6 +23,9 @@ import {
   AddOrdLockInputParams,
   AddCustomInputParams
 } from './types'
+
+/** Address string, wallet derivation params, or undefined (BRC-29 auto-derive). */
+type AddressOrParams = string | WalletDerivationParams | undefined
 
 export function isHexPublicKey (value: string): boolean {
   return /^[0-9a-fA-F]+$/.test(value) && (value.length === 66 || value.length === 130)
@@ -856,7 +856,6 @@ export class TransactionBuilder {
 
     // Process each input
     for (const config of this.inputs) {
-
       let unlockingScriptTemplate
 
       // Process based on input type

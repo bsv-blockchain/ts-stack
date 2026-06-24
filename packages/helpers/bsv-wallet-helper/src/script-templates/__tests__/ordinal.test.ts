@@ -8,14 +8,10 @@ import {
   WalletCounterparty
 } from '@bsv/sdk';
 import OrdP2PKH, { Inscription, MAP } from '../ordinal';
-import { makeWallet } from '../../utils/mockWallet';
-
-// Test storage URL for wallet (can be any URL for testing)
-const storageURL = 'https://store-us-1.bsvb.tech';
+import { makeMockWallet } from '../../utils/mockWallet';
 
 // Transaction.fee() with no args resolves to the SDK's LivePolicy, which fetches the live ARC
-// policy endpoint. Intercept just that URL with a deterministic 100 sat/kb stub; fall through
-// to the real fetch for everything else (e.g. the wallet storage server).
+// policy endpoint. Intercept just that URL with a deterministic 100 sat/kb stub.
 const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
@@ -141,7 +137,7 @@ describe('OrdP2PKH locking script', () => {
   describe('lock with BRC-100 wallet', () => {
     test('should create a valid ordinal locking script using wallet', async () => {
       const privateKey = new PrivateKey(6);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const ordP2pkh = new OrdP2PKH(wallet);
       const lockingScript = await ordP2pkh.lock({
@@ -162,7 +158,7 @@ describe('OrdP2PKH locking script', () => {
 
     test('should create ordinal with inscription using wallet', async () => {
       const privateKey = new PrivateKey(7);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const inscription: Inscription = {
         dataB64: Buffer.from('Wallet inscription').toString('base64'),
@@ -187,7 +183,7 @@ describe('OrdP2PKH locking script', () => {
 
     test('should create the same locking script as direct public key', async () => {
       const privateKey = new PrivateKey(8);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const protocolID = [2, 'p2pkh'] as WalletProtocol;
       const keyID = '0';
@@ -226,8 +222,8 @@ describe('OrdP2PKH unlocking and transaction verification', () => {
     // Generate deterministic test key
     const userPriv = new PrivateKey(100);
 
-    // Create wallet
-    const userWallet = await makeWallet('test', storageURL, userPriv.toHex());
+    // Create mock wallet (hermetic, no network)
+    const userWallet = await makeMockWallet(userPriv);
 
     const protocolID = [2, 'p2pkh'] as WalletProtocol;
     const keyID = '0';
@@ -305,7 +301,7 @@ describe('OrdP2PKH unlocking and transaction verification', () => {
 
   test('should correctly estimate unlocking script length', async () => {
     const userPriv = new PrivateKey(103);
-    const userWallet = await makeWallet('test', storageURL, userPriv.toHex());
+    const userWallet = await makeMockWallet(userPriv);
 
     const protocolID = [2, 'p2pkh'] as WalletProtocol;
     const keyID = '0';

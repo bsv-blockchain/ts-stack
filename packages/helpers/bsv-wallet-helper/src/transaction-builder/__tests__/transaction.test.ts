@@ -14,8 +14,9 @@ import {
 import { TransactionBuilder, isHexPublicKey } from '../transaction';
 import P2PKH from '../../script-templates/p2pkh';
 import OrdP2PKH from '../../script-templates/ordinal';
+import { makeMockWallet } from '../../utils/mockWallet';
 
-// Test storage URL for test wallets
+// Dummy URL kept only to match original call sites for the local wrapper (value ignored)
 const storageURL = "https://store-us-1.bsvb.tech";
 
 const makeWallet = async (
@@ -24,15 +25,13 @@ const makeWallet = async (
   privateKeyHex: string
 ): Promise<WalletInterface> => {
   const privateKey = new PrivateKey(privateKeyHex, 'hex')
+  const wallet = await makeMockWallet(privateKey)
 
-  return {
-    // Most tests overwrite createAction with their own jest mocks.
-    createAction: jest.fn(),
-    signAction: jest.fn(),
-    getPublicKey: async () => ({
-      publicKey: privateKey.toPublicKey().toString()
-    })
-  } as unknown as WalletInterface
+  // Most tests overwrite createAction with their own jest mocks.
+  // Attach stubs to the ProtoWallet-derived instance (methods live on prototype so we assign directly)
+  ;(wallet as any).createAction = jest.fn()
+  ;(wallet as any).signAction = jest.fn()
+  return wallet
 }
 
 describe('TransactionTemplate', () => {
