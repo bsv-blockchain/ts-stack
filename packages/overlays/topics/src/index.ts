@@ -115,6 +115,12 @@ export { Bsv21LookupService, createBsv21LookupService } from './bsv21/Bsv21Looku
 export { Bsv21StorageManager } from './bsv21/Bsv21StorageManager.js'
 export type { Bsv21TokenRecord, Bsv21Query, UTXOReference as Bsv21UTXOReference } from './bsv21/types.js'
 
+// dstas (Divisible STAS / STAS 3.0)
+export { DstasTopicManager } from './dstas/DstasTopicManager.js'
+export { DstasLookupService, createDstasLookupService } from './dstas/DstasLookupService.js'
+export { DstasStorageManager } from './dstas/DstasStorageManager.js'
+export type { DstasTokenRecord, DstasQuery, UTXOReference as DstasUTXOReference } from './dstas/types.js'
+
 // mandala
 export { MandalaTopicManager } from './mandala/MandalaTopicManager.js'
 export { MandalaLookupService, createMandalaLookupService } from './mandala/MandalaLookupService.js'
