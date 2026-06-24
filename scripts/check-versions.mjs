@@ -10,7 +10,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { resolve, dirname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
@@ -90,9 +90,49 @@ for (const pkg of pkgList) {
   }
 }
 
-if (stale === 0) {
+// Nested-package version lockstep.
+//
+// Some workspace packages are alternate entrypoints that live INSIDE another
+// package's directory (e.g. wallet-toolbox/client and wallet-toolbox/mobile
+// share the wallet-toolbox build and are published as @bsv/wallet-toolbox-client
+// / -mobile). They must carry the SAME version as their enclosing package: the
+// release publishes by committed version, so if a subpackage lags its parent it
+// silently fails to publish, and `sync-versions` then rewrites consumers to a
+// range that was never published (ERR_PNPM_NO_MATCHING_VERSION). Enforce here so
+// a version bump that forgets the subpackages fails in CI, not at release time.
+const located = pkgList.filter(p => p.name && p.version && p.path)
+let mismatched = 0
+
+const isPrivate = (pkgPath) => {
+  try {
+    return JSON.parse(readFileSync(resolve(pkgPath, 'package.json'), 'utf-8')).private === true
+  } catch {
+    return false
+  }
+}
+
+for (const child of located) {
+  // Only publishable subpackages need lockstep — private nested packages
+  // (e.g. example apps under a library's docs/) are never published.
+  if (isPrivate(child.path)) continue
+  // Closest enclosing workspace package (longest matching ancestor path).
+  let parent = null
+  for (const cand of located) {
+    if (cand === child) continue
+    if (!child.path.startsWith(cand.path + sep)) continue
+    if (!parent || cand.path.length > parent.path.length) parent = cand
+  }
+  if (!parent) continue
+  if (child.version !== parent.version) {
+    console.log(`VERSION MISMATCH  ${child.name}@${child.version}  must match enclosing  ${parent.name}@${parent.version}`)
+    mismatched++
+  }
+}
+
+if (stale === 0 && mismatched === 0) {
   console.log('All cross-package version references up to date.')
 } else {
-  console.error(`\n${stale} stale references. Run: node scripts/sync-versions.mjs`)
+  if (stale > 0) console.error(`\n${stale} stale references. Run: node scripts/sync-versions.mjs`)
+  if (mismatched > 0) console.error(`\n${mismatched} nested package(s) out of lockstep with their enclosing package. Bump them to match.`)
   process.exit(1)
 }
