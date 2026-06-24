@@ -23,7 +23,8 @@ describe.skip('internalizeAction tests', () => {
     }
   })
 
-  // Check:  'unproven' or 'completed' status. Any other status is an error.
+  // Check:  'unproven', 'completed', or 'sending' status for merge (status left as-is). 'nosend' advances lifecycle.
+  // Any other status is an error.
   // When the transaction already exists, the description is updated. The isOutgoing sense is not changed.
 
   test.skip('1_default real wallet data', async () => {
