@@ -4,6 +4,7 @@ import { createDefaultWalletServicesOptions } from './createDefaultWalletService
 import { WhatsOnChain } from './providers/WhatsOnChain'
 import { updateChaintracksFiatExchangeRates, updateExchangeratesapi } from './providers/exchangeRates'
 import { ARC } from './providers/ARC'
+import { Arcade } from './providers/Arcade'
 import { Bitails } from './providers/Bitails'
 import { getBeefForTxid } from './providers/getBeefForTxid'
 import {
@@ -48,6 +49,8 @@ export class Services implements WalletServices {
   whatsonchain: WhatsOnChain
   arcTaal: ARC
   arcGorillaPool?: ARC
+  /** Primary Arcade (bsv-blockchain/arcade) broadcaster, when `options.arcadeUrl` is set. */
+  arcade?: Arcade
   bitails?: Bitails
 
   getMerklePathServices: ServiceCollection<GetMerklePathService>
@@ -75,6 +78,9 @@ export class Services implements WalletServices {
     if (this.options.arcGorillaPoolUrl != null && this.options.arcGorillaPoolUrl !== '') {
       this.arcGorillaPool = new ARC(this.options.arcGorillaPoolUrl, this.options.arcGorillaPoolConfig, 'arcGorillaPool')
     }
+    if (this.options.arcadeUrl != null && this.options.arcadeUrl !== '') {
+      this.arcade = new Arcade(this.options.arcadeUrl, this.options.arcadeConfig, 'arcade')
+    }
 
     const hasBitails = this.chain === 'main' || this.chain === 'test'
 
@@ -82,8 +88,15 @@ export class Services implements WalletServices {
       this.bitails = new Bitails(this.chain, { apiKey: this.options.bitailsApiKey })
     }
 
-    // prettier-ignore
     this.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath')
+    // Arcade first when configured: for txs it broadcast it can return the proof directly; for
+    // anything else it reports no proof and the collection falls through to WhatsOnChain/Bitails.
+    if (this.arcade != null) {
+      // prettier-ignore
+      this.getMerklePathServices.add({ name: 'Arcade', service: this.arcade.getMerklePath.bind(this.arcade) })
+    }
+    // prettier-ignore
+    this.getMerklePathServices
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getMerklePath.bind(this.whatsonchain) })
     if (hasBitails && (this.bitails != null)) {
       this.getMerklePathServices.add({ name: 'Bitails', service: this.bitails.getMerklePath.bind(this.bitails) })
@@ -94,6 +107,12 @@ export class Services implements WalletServices {
       .add({ name: 'WhatsOnChain', service: this.whatsonchain.getRawTxResult.bind(this.whatsonchain) })
 
     this.postBeefServices = new ServiceCollection<PostBeefService>('postBeef')
+    // Arcade is registered first so it is the primary broadcaster; ARC providers below
+    // act as fallback under the default 'UntilSuccess' postBeefMode.
+    if (this.arcade != null) {
+      // prettier-ignore
+      this.postBeefServices.add({ name: 'ArcadeBeef', service: this.arcade.postBeef.bind(this.arcade) })
+    }
     if (this.arcGorillaPool != null) {
       // prettier-ignore
       this.postBeefServices.add({ name: 'GorillaPoolArcBeef', service: this.arcGorillaPool.postBeef.bind(this.arcGorillaPool) })

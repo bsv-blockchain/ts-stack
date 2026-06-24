@@ -12,7 +12,20 @@ export function createDefaultWalletServicesOptions (
   gorillaPoolArcApiKey?: string,
   bitailsApiKey?: string,
   deploymentId?: string,
-  chaintracks?: ChaintracksClientApi
+  chaintracks?: ChaintracksClientApi,
+  /**
+   * Optional Arcade endpoint. When provided (or when a default exists for the chain via
+   * `arcadeDefaultUrl`), Arcade is registered as the primary broadcaster ahead of ARC.
+   * Pass an empty string to explicitly disable the per-chain default.
+   */
+  arcadeUrl?: string,
+  /** Server-level API key (Bearer) for the Arcade endpoint, if it requires auth. */
+  arcadeApiKey?: string,
+  /**
+   * Stable SSE callback token. Must match the Monitor's `callbackToken` so Arcade routes
+   * each broadcast transaction's status events to this wallet's `/events` subscription.
+   */
+  arcadeCallbackToken?: string
 ): WalletServicesOptions {
   if (chain === 'mock') {
     throw new Error('createDefaultWalletServicesOptions does not support \'mock\' chain. Use MockServices directly.')
@@ -75,7 +88,43 @@ export function createDefaultWalletServicesOptions (
     },
     bitailsApiKey
   }
+
+  // Arcade (bsv-blockchain/arcade) primary broadcaster.
+  // Opt-in: enabled only when an explicit `arcadeUrl` is provided. Callers can pass
+  // `arcadeDefaultUrl(chain)` to use the known per-chain endpoint. Kept opt-in (rather
+  // than defaulted on) so existing consumers' broadcaster set is unchanged until the
+  // Arcade path has been validated end-to-end; flipping the default is a one-line change.
+  const resolvedArcadeUrl = arcadeUrl
+  if (resolvedArcadeUrl != null && resolvedArcadeUrl !== '') {
+    o.arcadeUrl = resolvedArcadeUrl
+    o.arcadeConfig = {
+      apiKey: arcadeApiKey ?? undefined,
+      deploymentId,
+      // SSE (pull) flow: token scopes the /events subscription; no webhook callbackUrl
+      // (Arcade rejects private/loopback URLs). Must match Monitor.options.callbackToken.
+      callbackToken: arcadeCallbackToken ?? arcCallbackToken ?? undefined
+    }
+  }
+
   return o
+}
+
+/**
+ * Default Arcade (bsv-blockchain/arcade) endpoint per chain.
+ * Returns undefined when no public default is known for the chain (e.g. testnet not yet deployed).
+ */
+export function arcadeDefaultUrl (chain: Chain): string | undefined {
+  switch (chain) {
+    case 'main':
+      return 'https://arcade-v2-us-1.bsvblockchain.tech'
+    case 'ttn':
+      return 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
+    case 'test':
+      // No public testnet Arcade endpoint deployed yet.
+      return undefined
+    case 'mock':
+      return undefined
+  }
 }
 
 export function arcDefaultUrl (chain: Chain): string {
