@@ -42,6 +42,7 @@ When you don't pass `--mode`, the tool infers it: if a `bsv-scaffold.json` manif
 | `--package-manager <npm\|pnpm\|yarn\|bun>` | new | Package manager for the base generator + workspace files (default `npm`). |
 | `--network <main\|test>` | new | BSV network the capabilities target (default `test`). |
 | `--glue` | both | Also emit optional "glue" files (e.g. example wiring) for the capabilities. |
+| `--no-glue` | new | Skip auto-wiring the wallet providers into the app entry (`main.tsx`); you mount `<WalletProviders>` yourself. The context/helper files are still generated. |
 | `--ui` | both | Open the HTML accordion page in a browser and scaffold on Generate (local single-use server). |
 
 A frontend + backend together produce a **monorepo** layout (`client/` + `server/` with workspace files); a single target scaffolds at the root. Shared capability files are placed into each target that needs them.
@@ -50,7 +51,11 @@ A frontend + backend together produce a **monorepo** layout (`client/` + `server
 
 | id | Description |
 | --- | --- |
-| `wallet-login` | Cryptographically secure login against any BRC-100 wallet, via the BSV auth helpers. |
+| `wallet-connect` | Base (auto-selected for new projects): connect any BRC-100 wallet — desktop or mobile/relay — and use it app-wide via React context, plus the `@bsv/auth` proof primitive. |
+| `wallet-login` | Passwordless login — a signed proof (`action: 'login'`) verified server-side. Builds on `wallet-connect`. |
+| `signed-requests` | Per-call authentication — sign API requests bound to a route + body; verify with a framework-agnostic function. Builds on `wallet-connect`. |
+
+New projects include `wallet-connect` by default (with the React contexts always generated); pass `--no-glue` to skip the automatic `main.tsx` provider wiring and mount `<WalletProviders>` yourself.
 
 ## Examples
 

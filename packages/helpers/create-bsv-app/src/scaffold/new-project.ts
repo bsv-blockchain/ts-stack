@@ -10,6 +10,7 @@ import { manifestFromConfig, writeProjectManifest } from '../config/project-mani
 import { scaffolderFor, type RunCommand } from './base-scaffolder.js'
 import { defaultRunCommand } from './run-command.js'
 import { workspaceFiles } from './workspace.js'
+import type { CapabilityContext } from '../types.js'
 
 function ensureEmpty (dir: string): void {
   if (existsSync(dir) && readdirSync(dir).length > 0) {
@@ -47,7 +48,17 @@ export function scaffoldNewProject (
   const util = writeFiles(placement.utilFiles, targetDir, { force: false })
   writeFiles(placement.glueFiles, targetDir, { force: true })
   writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
-  writeProjectManifest(targetDir, manifestFromConfig(config))
+
+  if (config.glue && (layout === 'frontend-only' || layout === 'monorepo')) {
+    const clientDir = layout === 'monorepo' ? join(targetDir, 'client') : targetDir
+    const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
+    for (const cap of caps) {
+      if (cap.clientEntry == null) continue
+      writeFiles([cap.clientEntry(ctx)], clientDir, { force: true })
+    }
+  }
+
+  writeProjectManifest(targetDir, { ...manifestFromConfig(config), capabilities: caps.map(c => c.id) })
 
   return { written: util.written, deps: placement.deps }
 }

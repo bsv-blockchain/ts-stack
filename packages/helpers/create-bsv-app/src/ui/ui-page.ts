@@ -5,7 +5,10 @@ import type { ConfigDraft } from '../config/draft.js'
 
 export function serializeSchema (existing: ProjectManifest | null): ConfigSchema {
   const allIds = listCapabilities().map(c => c.id)
-  const offerable = existing !== null ? remainingCapabilityIds(existing, allIds) : allIds
+  const defaultIds = listCapabilities().filter(c => c.defaultSelected === true).map(c => c.id)
+  const offerable = existing !== null
+    ? remainingCapabilityIds(existing, allIds)
+    : allIds.filter(id => !defaultIds.includes(id))
   return configSchema.map(section => ({
     ...section,
     fields: section.fields.map(field => {
@@ -130,8 +133,11 @@ document.getElementById('copy').onclick = () => navigator.clipboard.writeText(bu
 refresh()
 `
 
-export function buildPage (opts: { schema: ConfigSchema, seed: ConfigDraft }): string {
+export function buildPage (opts: { schema: ConfigSchema, seed: ConfigDraft, included?: Array<{ label: string }> }): string {
   const data = `window.__SCHEMA__ = ${JSON.stringify(opts.schema)};\nwindow.__SEED__ = ${JSON.stringify(opts.seed)};`
+  const includedBanner = (opts.included != null && opts.included.length > 0)
+    ? `<p class="included">Always included: ${opts.included.map(c => c.label).join(', ')}</p>`
+    : ''
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -150,6 +156,7 @@ legend { font-weight: 600; padding: 0 6px; }
 input[type=text], select { width: 100%; padding: 6px 8px; border: 1px solid #8886; border-radius: 6px; background: transparent; color: inherit; }
 .multi { display: grid; gap: 4px; }
 .opt { font-weight: 400; display: flex; align-items: center; gap: 6px; }
+.included { font-size: 13px; opacity: .8; margin: 4px 0 12px; }
 footer { position: fixed; left: 0; right: 0; bottom: 0; background: Canvas; border-top: 1px solid #8884; padding: 12px 16px; }
 .bar { max-width: 720px; margin: 0 auto; display: flex; gap: 8px; align-items: center; }
 #command { flex: 1; font-family: ui-monospace, monospace; font-size: 12px; overflow-x: auto; white-space: nowrap; padding: 8px; border: 1px solid #8884; border-radius: 6px; }
@@ -162,6 +169,7 @@ button { padding: 8px 14px; border-radius: 6px; border: 1px solid #8886; cursor:
 <body>
 <div id="app">
   <h1>create-bsv-app</h1>
+  ${includedBanner}
   <div id="form"></div>
   <p id="error"></p>
 </div>

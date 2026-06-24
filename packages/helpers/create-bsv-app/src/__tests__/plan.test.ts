@@ -1,6 +1,7 @@
 // src/__tests__/plan.test.ts
 import { describe, expect, test } from '@jest/globals'
 import { planPlacement } from '../engine'
+import { walletConnect } from '../capabilities/wallet-connect'
 import { walletLogin } from '../capabilities/wallet-login'
 import type { ProjectConfig } from '../config/model'
 
@@ -10,7 +11,7 @@ const frontendConfig: ProjectConfig = {
   dir: '.',
   stack: { frontend: { framework: 'react', variant: 'react-ts' } },
   bsvDir: 'src/bsv',
-  capabilities: ['wallet-login'],
+  capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
   packageManager: 'npm',
   network: 'test'
@@ -22,29 +23,32 @@ const backendConfig: ProjectConfig = {
   dir: '.',
   stack: { backend: { framework: 'express' } },
   bsvDir: 'src/bsv',
-  capabilities: ['wallet-login'],
+  capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
   packageManager: 'npm',
   network: 'test'
 }
 
+// wallet-login requires wallet-connect; pass both (as resolveCapabilities would return in expand mode)
+const bothCaps = [walletConnect, walletLogin]
+
 describe('planPlacement', () => {
   test('frontend-only: shared + client files placed at root bsvDir, no server files', () => {
-    const result = planPlacement(frontendConfig, [walletLogin])
+    const result = planPlacement(frontendConfig, bothCaps)
     const paths = result.utilFiles.map(f => f.path)
     expect(paths).toContain('src/bsv/auth.ts')
     expect(paths).toContain('src/bsv/useWalletLogin.tsx')
     expect(paths).not.toContain('src/bsv/loginRoute.ts')
   })
 
-  test('frontend-only: deps.root has @bsv/auth and @bsv/wallet-relay', () => {
-    const result = planPlacement(frontendConfig, [walletLogin])
+  test('frontend-only: deps.root has @bsv/auth and @bsv/sdk', () => {
+    const result = planPlacement(frontendConfig, bothCaps)
     expect(result.deps.root).toHaveProperty('@bsv/auth')
-    expect(result.deps.root).toHaveProperty('@bsv/wallet-relay')
+    expect(result.deps.root).toHaveProperty('@bsv/sdk')
   })
 
   test('backend-only: shared + server files placed at root bsvDir, no client files', () => {
-    const result = planPlacement(backendConfig, [walletLogin])
+    const result = planPlacement(backendConfig, bothCaps)
     const paths = result.utilFiles.map(f => f.path)
     expect(paths).toContain('src/bsv/auth.ts')
     expect(paths).toContain('src/bsv/loginRoute.ts')

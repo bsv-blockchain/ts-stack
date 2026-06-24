@@ -27,6 +27,8 @@ export function parseArgs (argv: string[]): CliArgs {
       args.ui = true
     } else if (a === '--glue') {
       args.draft.glue = true
+    } else if (a === '--no-glue') {
+      args.draft.glue = false
     } else if (a === '--mode') {
       const [v, j] = next(i); i = j
       args.draft.mode = v === 'add' ? 'add' : 'new'

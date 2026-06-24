@@ -13,8 +13,8 @@ describe('resolveConfig', () => {
       dir: '.',
       stack: { frontend: { framework: 'react', variant: 'react-ts' } },
       bsvDir: 'src/bsv',
-      capabilities: [],
-      glue: false,
+      capabilities: ['wallet-connect'],
+      glue: true,
       packageManager: 'npm',
       network: 'test'
     })
@@ -37,9 +37,10 @@ describe('resolveConfig', () => {
       .toThrow(/unknown capability: nope/i)
   })
 
-  test('dedupes capabilities and accepts known ones', () => {
+  test('dedupes capabilities and accepts known ones (new mode floor adds wallet-connect)', () => {
     const c = resolveConfig({ name: 'x', stack: { backend: { framework: 'express' } }, capabilities: ['wallet-login', 'wallet-login'] })
-    expect(c.capabilities).toEqual(['wallet-login'])
+    // new-mode floor appends wallet-connect after dedup; wallet-login itself is deduped to one entry
+    expect(c.capabilities).toEqual(['wallet-login', 'wallet-connect'])
   })
 
   test('rejects an unsafe bsvDir', () => {
@@ -85,5 +86,38 @@ describe('resolveConfig - more branches', () => {
 
   test('formatConfigError returns string for non-Error', () => {
     expect(formatConfigError('plain')).toBe('plain')
+  })
+})
+
+const base = { mode: 'new', name: 'demo', stack: { frontend: { framework: 'react', variant: 'react-ts' } } }
+
+describe('resolveConfig glue default', () => {
+  test('glue defaults to true when unspecified', () => {
+    expect(resolveConfig({ ...base }).glue).toBe(true)
+  })
+  test('glue is false only when explicitly false', () => {
+    expect(resolveConfig({ ...base, glue: false }).glue).toBe(false)
+  })
+  test('glue true stays true', () => {
+    expect(resolveConfig({ ...base, glue: true }).glue).toBe(true)
+  })
+})
+
+describe('resolveConfig new-mode capability floor', () => {
+  test('new mode with no capabilities still includes the defaultSelected baseline', () => {
+    const c = resolveConfig({ mode: 'new', name: 'demo', stack: { frontend: { framework: 'react', variant: 'react-ts' } } })
+    expect(c.capabilities).toContain('wallet-connect')
+  })
+  test('new mode with explicitly empty capabilities still gets the baseline', () => {
+    const c = resolveConfig({ mode: 'new', name: 'demo', stack: { backend: { framework: 'express' } }, capabilities: [] })
+    expect(c.capabilities).toContain('wallet-connect')
+  })
+  test('add mode does NOT apply the floor (no auto-add)', () => {
+    const c = resolveConfig({ mode: 'add', name: 'demo', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: [] })
+    expect(c.capabilities).toEqual([])
+  })
+  test('new mode does not duplicate an already-listed baseline', () => {
+    const c = resolveConfig({ mode: 'new', name: 'demo', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: ['wallet-connect'] })
+    expect(c.capabilities.filter(id => id === 'wallet-connect')).toHaveLength(1)
   })
 })

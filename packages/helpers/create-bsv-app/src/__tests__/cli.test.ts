@@ -64,10 +64,33 @@ describe('parseArgs', () => {
   test('ui defaults to false', () => {
     expect(parseArgs([]).ui).toBe(false)
   })
+  test('--no-glue sets draft.glue=false', () => {
+    expect(parseArgs(['--no-glue']).draft.glue).toBe(false)
+  })
 })
 
 describe('run --yes new (flags)', () => {
-  test('scaffolds new react project with wallet-login via fake runCommand', async () => {
+  test('scaffolds new react project with wallet-connect via fake runCommand', async () => {
+    const calls: string[][] = []
+    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    const res = await run(
+      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--frontend', 'react', '--capabilities', 'wallet-connect', '--yes'],
+      undefined,
+      { runCommand: fake }
+    )
+    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(res.written).toContain('src/bsv/auth.ts')
+    expect(res.written).toContain('src/bsv/walletAcquisition.ts')
+    expect(res.deps.root).toHaveProperty('@bsv/sdk')
+    expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true)
+    const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.version).toBe(1)
+    expect(manifest.stack.frontend.framework).toBe('react')
+    expect(manifest.capabilities).toContain('wallet-connect')
+  })
+
+  // Item 1: new-mode with --capabilities wallet-login expands requires → wallet-connect + wallet-login
+  test('new-mode --capabilities wallet-login pre-seeds wallet-connect (requires expansion)', async () => {
     const calls: string[][] = []
     const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
     const res = await run(
@@ -76,24 +99,40 @@ describe('run --yes new (flags)', () => {
       { runCommand: fake }
     )
     expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    // auth.ts comes from wallet-connect (expanded from wallet-login requires)
     expect(res.written).toContain('src/bsv/auth.ts')
+    // wallet-login client file
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
-    expect(res.deps.root).toHaveProperty('@bsv/wallet-relay')
-    expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true)
     const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.version).toBe(1)
-    expect(manifest.stack.frontend.framework).toBe('react')
-    expect(manifest.capabilities).toEqual(['wallet-login'])
+    // seedDraft pre-selects defaultSelected caps (wallet-connect), so both end up in manifest
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+  })
+})
+
+describe('run --yes new --no-glue with a variant', () => {
+  test('emits the contexts (so the hook compiles) but skips the main.tsx wiring', async () => {
+    const fake: RunCommand = () => {}
+    const res = await run(
+      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--frontend', 'react', '--capabilities', 'wallet-login', '--no-glue', '--yes'],
+      undefined,
+      { runCommand: fake }
+    )
+    // contexts are core files now → present even with --no-glue, so useWalletLogin's import resolves
+    expect(res.written).toContain('src/bsv/WalletContext.tsx')
+    expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
+    expect(res.written).toContain('src/bsv/auth.ts')
+    // main.tsx wiring (clientEntry) is suppressed by --no-glue; vite is faked so it isn't created at all
+    expect(existsSync(join(dir, 'src/main.tsx'))).toBe(false)
   })
 })
 
 describe('run --yes add (existing manifest)', () => {
-  test('adds wallet-login to existing express project (no runCommand called)', async () => {
-    // First: scaffold new express project
+  test('adds wallet-connect to existing express project (no runCommand called)', async () => {
+    // First: scaffold new express project with wallet-connect
     const newCalls: string[][] = []
     const fake: RunCommand = () => { newCalls.push([]) }
     await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'myapp', '--backend', 'express', '--capabilities', 'wallet-login', '--yes'],
+      ['--dir', dir, '--mode', 'new', '--name', 'myapp', '--backend', 'express', '--capabilities', 'wallet-connect', '--yes'],
       undefined,
       { runCommand: fake }
     )
@@ -104,7 +143,7 @@ describe('run --yes add (existing manifest)', () => {
     const addCalls: string[][] = []
     const fakeAdd: RunCommand = () => { addCalls.push([]); throw new Error('runCommand should not be called in add mode') }
     await run(
-      ['--dir', dir, '--capabilities', 'wallet-login', '--yes'],
+      ['--dir', dir, '--capabilities', 'wallet-connect', '--yes'],
       undefined,
       { runCommand: fakeAdd }
     )
@@ -112,6 +151,30 @@ describe('run --yes add (existing manifest)', () => {
     // written may be 0 (files already exist, skipped) but AGENTS.md always written
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true)
     expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(true)
+  })
+
+  // Item 2: add-mode with wallet-login — expandRequires:false — must NOT pull wallet-connect
+  test('add-mode wallet-login installs exactly wallet-login files; does NOT auto-pull wallet-connect', async () => {
+    // Use a subdirectory within dir so beforeEach/afterEach handles cleanup
+    const addDir = join(dir, 'add-only')
+    const fake: RunCommand = () => {}
+    // Use --file add-mode with only wallet-login (no wallet-connect in the config)
+    const cfgPath = join(dir, 'config.json')
+    writeFileSync(cfgPath, JSON.stringify({
+      mode: 'add',
+      name: 'addtest',
+      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+      capabilities: ['wallet-login']
+    }), 'utf8')
+    const res = await run(['--dir', addDir, '--file', cfgPath], undefined, { runCommand: fake })
+    // wallet-login is placed (its own client file)
+    expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
+    const manifest = JSON.parse(readFileSync(join(addDir, 'bsv-scaffold.json'), 'utf8'))
+    // ONLY wallet-login in manifest (add-mode does not expand requires)
+    expect(manifest.capabilities).toEqual(['wallet-login'])
+    // wallet-connect's files must NOT be placed (expandRequires:false in add-mode)
+    expect(res.written).not.toContain('src/bsv/walletAcquisition.ts')
+    expect(res.written).not.toContain('src/bsv/WalletContext.tsx')
   })
 })
 
@@ -129,12 +192,30 @@ describe('run --file (direct manifest door)', () => {
     }), 'utf8')
     const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: fake })
     expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    // new-mode expands requires: wallet-login → wallet-connect + wallet-login, auth.ts from wallet-connect
     expect(res.written).toContain('src/bsv/auth.ts')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-login'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
   })
 
-  test('add-mode config file places only (no runCommand called)', async () => {
+  test('new-mode config with zero capabilities still scaffolds the wallet-connect baseline', async () => {
+    const fake: RunCommand = () => {}
+    const cfgPath = join(dir, 'cfg.json')
+    const target = join(dir, 'app0')
+    writeFileSync(cfgPath, JSON.stringify({
+      mode: 'new',
+      name: 'zero',
+      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+      capabilities: []
+    }), 'utf8')
+    const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: fake })
+    expect(res.written).toContain('src/bsv/auth.ts')
+    expect(res.written).toContain('src/bsv/WalletContext.tsx')
+    const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.capabilities).toEqual(['wallet-connect'])
+  })
+
+  test('add-mode config file places wallet-login files only (no auth.ts, expandRequires:false)', async () => {
     const fakeAdd: RunCommand = () => { throw new Error('runCommand should not be called in add mode') }
     const cfgPath = join(dir, 'config.json')
     writeFileSync(cfgPath, JSON.stringify({
@@ -144,7 +225,10 @@ describe('run --file (direct manifest door)', () => {
       capabilities: ['wallet-login']
     }), 'utf8')
     const res = await run(['--dir', dir, '--file', cfgPath], undefined, { runCommand: fakeAdd })
-    expect(res.written).toContain('src/bsv/auth.ts')
+    // wallet-login in add-mode: no auth.ts (that's wallet-connect's file)
+    expect(res.written).not.toContain('src/bsv/auth.ts')
+    // wallet-login's own client file is placed
+    expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true)
     expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(true)
   })
@@ -171,6 +255,7 @@ describe('run interactive (no --yes)', () => {
     })
     const res = await run(['--dir', dir], provider, { runCommand: fake })
     expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    // new-mode expands requires: wallet-login → wallet-connect + wallet-login, so auth.ts is placed
     expect(res.written).toContain('src/bsv/auth.ts')
   })
 })

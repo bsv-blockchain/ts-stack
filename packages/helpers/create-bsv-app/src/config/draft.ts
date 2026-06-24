@@ -3,6 +3,7 @@ import type { ProjectConfig, PackageManager, Network } from './model.js'
 import type { ProjectManifest } from './project-manifest.js'
 import { mergeCapabilityIds } from './project-manifest.js'
 import { resolveConfig } from './validate.js'
+import { listCapabilities } from '../registry.js'
 
 export interface ConfigDraft {
   mode?: 'new' | 'add'
@@ -53,5 +54,7 @@ export function seedDraft (existing: ProjectManifest | null, flags: ConfigDraft)
       capabilities: mergeCapabilityIds(existing.capabilities, flags.capabilities ?? [])
     }
   }
-  return { ...flags, mode: 'new' }
+  const defaults = listCapabilities().filter(c => c.defaultSelected === true).map(c => c.id)
+  const capabilities = mergeCapabilityIds(defaults, flags.capabilities ?? [])
+  return { ...flags, mode: 'new', capabilities }
 }

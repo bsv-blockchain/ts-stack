@@ -1,6 +1,6 @@
 // src/config/validate.ts
 import type { ProjectConfig, PackageManager, Network, Mode, Stack } from './model.js'
-import { getCapability } from '../registry.js'
+import { getCapability, listCapabilities } from '../registry.js'
 
 export class ConfigError extends Error {
   constructor (message: string) {
@@ -69,7 +69,15 @@ export function resolveConfig (input: unknown): ProjectConfig {
     if (!capabilities.includes(c)) capabilities.push(c)
   }
 
-  const glue = raw.glue === true
+  // new-mode floor: a new project always gets at least the defaultSelected baseline (e.g. wallet-connect),
+  // even when the config names zero capabilities. add mode has no floor.
+  if (mode === 'new') {
+    for (const c of listCapabilities()) {
+      if (c.defaultSelected === true && !capabilities.includes(c.id)) capabilities.push(c.id)
+    }
+  }
+
+  const glue = raw.glue !== false
 
   const packageManager: PackageManager = PACKAGE_MANAGERS.includes(raw.packageManager as PackageManager)
     ? raw.packageManager as PackageManager

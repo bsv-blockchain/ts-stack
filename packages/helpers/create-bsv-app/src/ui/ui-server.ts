@@ -7,6 +7,7 @@ import { resolveDraft, seedDraft, type ConfigDraft } from '../config/draft.js'
 import { ConfigError } from '../config/validate.js'
 import type { ProjectManifest } from '../config/project-manifest.js'
 import type { RunCommand } from '../scaffold/base-scaffolder.js'
+import { listCapabilities } from '../registry.js'
 
 export interface UiServer { url: string, done: Promise<RunResult>, close: () => void }
 
@@ -25,7 +26,10 @@ export async function startUiServer (
   opts: { existing: ProjectManifest | null, targetDir: string, deps?: { runCommand?: RunCommand } }
 ): Promise<UiServer> {
   const { existing, targetDir } = opts
-  const html = buildPage({ schema: serializeSchema(existing), seed: seedDraft(existing, {}) })
+  const included = existing === null
+    ? listCapabilities().filter(c => c.defaultSelected === true).map(c => ({ label: c.title }))
+    : []
+  const html = buildPage({ schema: serializeSchema(existing), seed: seedDraft(existing, {}), included })
 
   let resolveDone: (r: RunResult) => void = () => {}
   const done = new Promise<RunResult>((resolve) => { resolveDone = resolve })

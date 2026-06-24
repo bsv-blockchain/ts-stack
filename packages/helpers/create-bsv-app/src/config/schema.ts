@@ -50,7 +50,7 @@ export const configSchema: ConfigSchema = [
     fields: [
       { key: 'bsvDir', label: 'BSV helpers directory', type: 'text', default: 'src/bsv', when: { mode: 'new' } },
       { key: 'capabilities', label: 'Capabilities', type: 'multiselect', options: capabilityOptions() },
-      { key: 'glue', label: 'Generate integration (glue) files', type: 'toggle', default: false, when: { mode: 'new' } }
+      { key: 'glue', label: 'Auto-wire wallet providers into the app entry (main.tsx)', type: 'toggle', default: true, when: { mode: 'new' } }
     ]
   },
   {

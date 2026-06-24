@@ -19,7 +19,7 @@ export function addCapabilities (
   targetDir: string,
   opts: { force: boolean }
 ): { deps: Record<TargetKey, Record<string, string>> } & WriteResult {
-  const caps = resolveCapabilities(config.capabilities)
+  const caps = resolveCapabilities(config.capabilities, { expandRequires: false })
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
   writeFiles(placement.glueFiles, targetDir, { force: true })

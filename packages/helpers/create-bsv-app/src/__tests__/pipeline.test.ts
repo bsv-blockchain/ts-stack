@@ -27,16 +27,21 @@ test('applyConfig new-mode scaffolds via runCommand and reports skipped=[]', () 
   const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
   const res = applyConfig(newConfig, dir, { runCommand: fake })
   expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+  // new-mode expands requires: wallet-login → wallet-connect + wallet-login, so auth.ts comes from wallet-connect
   expect(res.written).toContain('src/bsv/auth.ts')
   expect(res.skipped).toEqual([])
   expect(existsSync(join(dir, 'bsv-scaffold.json'))).toBe(true)
 })
 
-test('applyConfig add-mode places only (no runCommand) and writes manifest', () => {
+test('applyConfig add-mode places only wallet-login files (no auth.ts, expandRequires:false)', () => {
+  // add-mode does NOT expand requires, so only wallet-login's own files are placed
   const addConfig: ProjectConfig = { ...newConfig, mode: 'add' }
   const boom: RunCommand = () => { throw new Error('must not run a command in add mode') }
   const res = applyConfig(addConfig, dir, { runCommand: boom, force: false })
-  expect(res.written).toContain('src/bsv/auth.ts')
+  // wallet-login has no shared/auth.ts — that lives in wallet-connect
+  expect(res.written).not.toContain('src/bsv/auth.ts')
+  // wallet-login client file is placed
+  expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
   const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
   expect(manifest.capabilities).toEqual(['wallet-login'])
 })
@@ -44,11 +49,11 @@ test('applyConfig add-mode places only (no runCommand) and writes manifest', () 
 test('applyConfig add-mode with force:false preserves an existing util file', () => {
   const addConfig: ProjectConfig = { ...newConfig, mode: 'add' }
   const noop: RunCommand = () => {}
-  // pre-create the util file with sentinel content
+  // pre-create the useWalletLogin.tsx with sentinel content
   mkdirSync(join(dir, 'src', 'bsv'), { recursive: true })
-  writeFileSync(join(dir, 'src', 'bsv', 'auth.ts'), '// SENTINEL', 'utf8')
+  writeFileSync(join(dir, 'src', 'bsv', 'useWalletLogin.tsx'), '// SENTINEL', 'utf8')
   const res = applyConfig(addConfig, dir, { runCommand: noop, force: false })
-  expect(res.skipped).toContain('src/bsv/auth.ts')
-  expect(res.written).not.toContain('src/bsv/auth.ts')
-  expect(readFileSync(join(dir, 'src', 'bsv', 'auth.ts'), 'utf8')).toBe('// SENTINEL')
+  expect(res.skipped).toContain('src/bsv/useWalletLogin.tsx')
+  expect(res.written).not.toContain('src/bsv/useWalletLogin.tsx')
+  expect(readFileSync(join(dir, 'src', 'bsv', 'useWalletLogin.tsx'), 'utf8')).toBe('// SENTINEL')
 })

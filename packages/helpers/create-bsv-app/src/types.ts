@@ -24,8 +24,12 @@ export interface Capability {
   /** ids of other capabilities that must also be installed */
   requires?: string[]
   roles: Role[]
+  /** Pre-selected in NEW-project mode (not auto-selected in add mode). */
+  defaultSelected?: boolean
   files: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
   glue?: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
+  /** New-mode only: overwrite the client entry (e.g. src/main.tsx) to mount providers. */
+  clientEntry?: (ctx: CapabilityContext) => FileSpec
   npmDependencies: (ctx: CapabilityContext) => Partial<Record<Role, Record<string, string>>>
   agentsSection: (ctx: CapabilityContext) => string
 }
