@@ -308,6 +308,16 @@ describe('WalletStorageManager tests', () => {
       expect(existingTx).toBeTruthy()
       await activeStorage.updateTransaction(existingTx.transactionId, { status: 'sending' })
 
+      // Mock chaintracker responses for AtomicBEEF validation to avoid flakiness from
+      // live chaintracks endpoints. This test exercises the 'sending' merge path for a
+      // same-wallet internalize before monitor completion; it is not testing proof validity
+      // (createAction + other tests cover BEEF construction/validation).
+      activeStorage.setServices({
+        getChainTracker: async () => ({
+          isValidRootForHeight: async (_root: string, _height: number) => true
+        })
+      } as any)
+
       const ir = await activeStorage.internalizeAction(
         { userId, identityKey },
         {
