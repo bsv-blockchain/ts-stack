@@ -11,3 +11,5 @@ export type {
 } from './src/MandalaAdmin.js'
 export { StasToken } from './src/StasToken.js'
 export type { StasTokenDecoded } from './src/StasToken.js'
+export { Bsv21Token } from './src/Bsv21Token.js'
+export type { Bsv21TokenDecoded } from './src/Bsv21Token.js'

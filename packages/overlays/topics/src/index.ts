@@ -109,6 +109,12 @@ export { StasLookupService, createStasLookupService } from './stas/StasLookupSer
 export { StasStorageManager } from './stas/StasStorageManager.js'
 export type { StasTokenRecord, StasQuery, UTXOReference as StasUTXOReference } from './stas/types.js'
 
+// bsv21 (1Sat fungible tokens)
+export { Bsv21TopicManager } from './bsv21/Bsv21TopicManager.js'
+export { Bsv21LookupService, createBsv21LookupService } from './bsv21/Bsv21LookupService.js'
+export { Bsv21StorageManager } from './bsv21/Bsv21StorageManager.js'
+export type { Bsv21TokenRecord, Bsv21Query, UTXOReference as Bsv21UTXOReference } from './bsv21/types.js'
+
 // mandala
 export { MandalaTopicManager } from './mandala/MandalaTopicManager.js'
 export { MandalaLookupService, createMandalaLookupService } from './mandala/MandalaLookupService.js'
