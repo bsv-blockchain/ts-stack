@@ -188,4 +188,48 @@ describe('MandalaTopicManager admin chain', () => {
     const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
     expect(result.outputsToAdmit).toEqual([0, 1]) // minted FT + next auth outpoint both admitted
   })
+
+  it('admits a partial redeem: burns part of a holding, keeps change, conservation holds', async () => {
+    const sender = new ProtoWallet(PrivateKey.fromRandom())
+    const receiver = new ProtoWallet(PrivateKey.fromRandom())
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const issuer = new ProtoWallet(PrivateKey.fromRandom())
+    const adminProto: [number, string] = [2, 'mandala admin']
+
+    const { publicKey: receiverKey } = await receiver.getPublicKey({ identityKey: true })
+    const { publicKey: verifierKey } = await overlay.getPublicKey({ identityKey: true })
+    const { publicKey: derivedKey } = await sender.getPublicKey({ protocolID, keyID, counterparty: receiverKey })
+    const pkh = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
+    const assetA = `${'a'.repeat(64)}.0`
+
+    const admin = new MandalaAdmin(issuer as any)
+
+    // Prior admin-auth outpoint the redeem spends.
+    const priorDetails = { kind: 'issue' as const, assetId: assetA, amount: 100, priorOutpoint: `${'b'.repeat(64)}.0` }
+    const { boundKey: priorBoundKey } = await admin.deriveBoundKey(adminProto as any, priorDetails)
+    const adminPriorTx = new Transaction()
+    adminPriorTx.addOutput({ lockingScript: admin.lock(priorBoundKey), satoshis: 1 })
+
+    // Prior FT coin of 100 that gets partially burned.
+    const ftPriorTx = new Transaction()
+    ftPriorTx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 })
+
+    const redeemDetails = { kind: 'redeem' as const, assetId: assetA, amount: 30, priorOutpoint: `${adminPriorTx.id('hex')}.0` }
+    const { boundKey: redeemBoundKey } = await admin.deriveBoundKey(adminProto as any, redeemDetails)
+
+    const tx = new Transaction()
+    tx.addInput({ sourceTransaction: ftPriorTx, sourceOutputIndex: 0, unlockingScript: new Script(), sequence: 0xffffffff })   // input 0: FT 100 (previous coin)
+    tx.addInput({ sourceTransaction: adminPriorTx, sourceOutputIndex: 0, unlockingScript: new Script(), sequence: 0xffffffff }) // input 1: prior admin auth
+    tx.addOutput({ lockingScript: admin.lock(redeemBoundKey), satoshis: 1 })            // index 0: redeem admin auth
+    tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 70, pkh), satoshis: 1 }) // index 1: FT change 70
+
+    const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
+    const offChainValues = encodeLinkagePayload({
+      inputs: [], outputs: [{ index: 1, linkage: linkage as any }], admin: [{ index: 0, actionDetails: redeemDetails }]
+    } as any)
+
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any })
+    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [0], offChainValues)
+    expect(result.outputsToAdmit).toEqual([0, 1]) // redeem auth + FT change both admitted; 70 === 100 - 30
+  })
 })
