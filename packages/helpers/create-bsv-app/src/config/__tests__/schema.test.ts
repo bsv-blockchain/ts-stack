@@ -70,9 +70,9 @@ describe('schema ui/desc hints', () => {
   test('sections carry a desc string', () => {
     for (const s of configSchema) expect(typeof s.desc).toBe('string')
   })
-  test('mode/frontend/network fields are segmented; type stays select', () => {
+  test('mode/frontend/backend/network fields are segmented; type stays select', () => {
     const f = (k: string): ConfigField => configSchema.flatMap(s => s.fields).find(x => x.key === k) ?? (() => { throw new Error(k) })()
-    for (const k of ['mode', 'frontend', 'network']) {
+    for (const k of ['mode', 'frontend', 'backend', 'network']) {
       expect(f(k).ui).toBe('segmented')
       expect(f(k).type).toBe('select')
     }

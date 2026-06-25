@@ -52,6 +52,10 @@ describe('serializeSchema', () => {
     expect(caps?.options?.map(o => o.value)).not.toContain('wallet-connect')
     expect(schema.find(s => s.id === 'mode')?.desc).toEqual(expect.any(String))
     expect(schema.flatMap(s => s.fields).find(f => f.key === 'frontend')?.ui).toBe('segmented')
+    // backend is its own segmented selector, independent of frontend (backend-only is selectable)
+    const backend = schema.flatMap(s => s.fields).find(f => f.key === 'backend')
+    expect(backend?.ui).toBe('segmented')
+    expect(backend?.when).toEqual({ mode: 'new' }) // not gated on frontend
   })
 })
 

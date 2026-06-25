@@ -45,7 +45,7 @@ export const configSchema: ConfigSchema = [
     fields: [
       { key: 'frontend', label: 'Frontend', type: 'select', ui: 'segmented', default: 'none', options: [{ value: 'none', label: 'None' }, { value: 'react', label: 'React (Vite)' }], when: { mode: 'new' } },
       { key: 'frontendVariant', label: 'React variant', type: 'select', default: 'react-ts', options: [{ value: 'react-ts', label: 'React + TypeScript' }], when: { mode: 'new', frontend: 'react' } },
-      { key: 'backend', label: 'Backend', type: 'select', default: 'none', options: [{ value: 'none', label: 'None' }, { value: 'express', label: 'Express (TypeScript)' }], when: { mode: 'new' } }
+      { key: 'backend', label: 'Backend', type: 'select', ui: 'segmented', default: 'none', options: [{ value: 'none', label: 'None' }, { value: 'express', label: 'Express (TypeScript)' }], when: { mode: 'new' } }
     ]
   },
   {

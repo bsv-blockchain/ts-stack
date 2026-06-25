@@ -36,16 +36,17 @@ export function WalletLogin () {
     } catch (e) { step('✗ ' + String(e)); setError(String(e)) }
   }
   return (
-    <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
-      <p><Link to="/">← Back to home</Link></p>
+    <main className="bsv-page">
+      <Link className="bsv-back" to="/">← Back to home</Link>
       <h1>Login</h1>
+      <p>Prove your identity to the server with your wallet — no password.</p>
       <ConnectWallet />
-      {connected && <button onClick={() => { void login() }}>Login with wallet</button>}
-      {result != null && <p>Logged in as <code>{result.slice(0, 16)}…</code></p>}
-      {error != null && <p style={{ color: 'crimson' }}>{error}</p>}
+      {connected && <button className="bsv-btn" onClick={() => { void login() }}>Login with wallet</button>}
+      {result != null && <p>✓ Logged in as <code>{result.slice(0, 16)}…</code></p>}
+      {error != null && <p className="bsv-err">{error}</p>}
       {/* --- demo activity log (safe to delete) --- */}
       {log.length > 0 && (
-        <ol style={{ marginTop: 16, paddingLeft: 20, fontFamily: 'monospace', fontSize: 13, color: '#555' }}>
+        <ol className="bsv-log">
           {log.map((m, i) => <li key={i}>{m}</li>)}
         </ol>
       )}

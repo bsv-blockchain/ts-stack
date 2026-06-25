@@ -90,13 +90,13 @@ import { useWallet } from './WalletContext.js'
 export function Home () {
   const { connected } = useWallet()
   return (
-    <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
+    <main className="bsv-page">
       <h1>BSV app</h1>
       <p>Connect a wallet to get started, then try the installed demos.</p>
       <ConnectWallet />
       {connected && (
-        <nav style={{ marginTop: 24, display: 'grid', gap: 8 }}>
-          <h2 style={{ fontSize: 16 }}>Demos</h2>
+        <nav className="bsv-nav">
+          <h2 className="bsv-label">Demos</h2>
           {/*{{home.links}}*/}
         </nav>
       )}

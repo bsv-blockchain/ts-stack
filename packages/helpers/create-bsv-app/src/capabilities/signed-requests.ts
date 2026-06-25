@@ -63,16 +63,17 @@ export function SignedRequestDemo () {
     } catch (e) { step('✗ ' + String(e)); setError(String(e)) }
   }
   return (
-    <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
-      <p><Link to="/">← Back to home</Link></p>
+    <main className="bsv-page">
+      <Link className="bsv-back" to="/">← Back to home</Link>
       <h1>Signed Request Demo</h1>
+      <p>Authenticate a single API call: sign the request with your wallet, verify it server-side.</p>
       <ConnectWallet />
-      {connected && <button onClick={() => { void send() }}>Send signed echo</button>}
-      {result != null && <pre>{JSON.stringify(result, null, 2)}</pre>}
-      {error != null && <p style={{ color: 'crimson' }}>{error}</p>}
+      {connected && <button className="bsv-btn" onClick={() => { void send() }}>Send signed echo</button>}
+      {result != null && <pre className="bsv-result">{JSON.stringify(result, null, 2)}</pre>}
+      {error != null && <p className="bsv-err">{error}</p>}
       {/* --- demo activity log (safe to delete) --- */}
       {log.length > 0 && (
-        <ol style={{ marginTop: 16, paddingLeft: 20, fontFamily: 'monospace', fontSize: 13, color: '#555' }}>
+        <ol className="bsv-log">
           {log.map((m, i) => <li key={i}>{m}</li>)}
         </ol>
       )}

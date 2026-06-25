@@ -26,6 +26,14 @@ describe('wallet-connect', () => {
     expect(paths).toContain('WalletContext.tsx')
     expect(paths).toContain('WalletProviders.tsx')
   })
+  test('ships a shared bsv.css theme (accent #2196F3) imported by WalletProviders', () => {
+    const client = walletConnect.files(ctx).client ?? []
+    const css = client.find(f => f.path === 'bsv.css')
+    expect(css?.content).toContain('--bsv-accent: #2196F3')
+    expect(css?.content).toContain('.bsv-page')
+    const providers = client.find(f => f.path === 'WalletProviders.tsx')
+    expect(providers?.content).toContain("import './bsv.css'")
+  })
   test('client ships serverIdentity helper that fetches the baseline /api/identity route', () => {
     const client = walletConnect.files(ctx).client ?? []
     const helper = client.find(f => f.path === 'serverIdentity.ts')
