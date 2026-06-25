@@ -13,6 +13,7 @@ import { Response } from 'express'
 import knexConfig from '../../knexfile.js'
 import * as knexLib from 'knex'
 import { AuthRequest } from '@bsv/auth-express-middleware'
+import { log } from '../utils/logger.js'
 
 // Load the appropriate Knex configuration based on the environment
 const { NODE_ENV = 'development' } = process.env
@@ -200,7 +201,7 @@ export default {
         messages: formattedMessages
       })
     } catch (e) {
-      console.error(e)
+      log.error({ operation: 'messages.list', outcome: 'error', err: e }, 'Failed to list messages')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL_ERROR',

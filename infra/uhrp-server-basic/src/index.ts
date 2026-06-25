@@ -10,6 +10,7 @@ import getPriceForFile from './utils/getPriceForFile'
 import { getMetadata } from './utils/getMetadata'
 import { cdnMimeTypeMiddleware } from './utils/mimeTypeMiddleware'
 import path from 'path'
+import { log } from './logger'
 
 const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY as string
 const HTTP_PORT = process.env.HTTP_PORT || 8080
@@ -39,10 +40,10 @@ app.use(
 app.use(bodyparser.json({ limit: '1gb', type: 'application/json' }))
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log('Incoming request')
+  log.info({ operation: 'request.in', method: req.method, path: req.path }, 'Incoming request')
   const originalJson = res.json.bind(res)
   res.json = (json: any) => {
-    console.log('Outgoing JSON response')
+    log.info({ operation: 'response.out', status_code: res.statusCode }, 'Outgoing JSON response')
     return originalJson(json)
   }
   next()
@@ -56,7 +57,7 @@ const postAuthRoutes = Object.values(routes.postAuth);
 
 // Cycle through pre-auth routes
 preAuthRoutes.filter(route => (route as any).unsecured).forEach((route) => {
-  console.log(`adding pre-auth route ${route.path}`)
+  log.info({ operation: 'route.register', phase: 'pre_auth_unsecured', route_path: route.path, route_type: route.type }, 'adding route')
   // If we need middleware for a route, attach it
   if ((route as any).middleware) {
     app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](
@@ -71,7 +72,7 @@ preAuthRoutes.filter(route => (route as any).unsecured).forEach((route) => {
 
 // Secured pre-auth routes are added next
 preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
-  console.log(`adding route ${route.path}`)
+  log.info({ operation: 'route.register', phase: 'pre_auth_secured', route_path: route.path, route_type: route.type }, 'adding route')
   // If we need middleware for a route, attach it
   if ((route as any).middleware) {
     app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](
@@ -126,7 +127,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
 
     // Secured, post-auth routes are added
     postAuthRoutes.forEach((route) => {
-      console.log(`adding post-auth route ${route.path}`)
+      log.info({ operation: 'route.register', phase: 'post_auth', route_path: route.path, route_type: route.type }, 'adding route')
       // If we need middleware for a route, attach it
       if ((route as any).middleware) {
         app[route.type as 'get' | 'put' | 'post' | 'patch' | 'delete'](
@@ -140,7 +141,7 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     })
 
     app.use((req, res) => {
-      console.log('Route not found')
+      log.info({ operation: 'route.not_found', method: req.method, path: req.path }, 'Route not found')
       res.status(404).json({
         status: 'error',
         code: 'ERR_ROUTE_NOT_FOUND',
@@ -149,10 +150,15 @@ preAuthRoutes.filter(route => !(route as any).unsecured).forEach((route) => {
     })
 
     app.listen(HTTP_PORT, () => {
-      console.log('UHRP Storage Server listening on port', HTTP_PORT)
       const idKey = PrivateKey
         .fromString(SERVER_PRIVATE_KEY).toPublicKey().toString()
-      console.log(`UHRP Host IdentityKey: ${idKey}`)
+      log.info(
+        { operation: 'listen', outcome: 'ok', port: HTTP_PORT, identity_key: idKey },
+        'UHRP Storage Server listening'
+      )
     })
 
-  })();
+  })().catch((error) => {
+    log.error({ operation: 'bootstrap', outcome: 'error', err: error }, 'UHRP Storage Server failed to start')
+    process.exit(1)
+  });

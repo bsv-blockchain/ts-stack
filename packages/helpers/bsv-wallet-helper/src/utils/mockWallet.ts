@@ -1,12 +1,17 @@
 /**
  * Wallet creation utilities for BSV blockchain
  * Based on BSV wallet-toolbox-client
+ *
+ * Note: makeWallet creates a live network-backed wallet (for integration tests).
+ * For hermetic unit tests, use makeMockWallet (based on ProtoWallet, no network).
  */
 
 import {
   PrivateKey,
   KeyDeriver,
-  WalletClient
+  WalletClient,
+  ProtoWallet,
+  WalletInterface
 } from '@bsv/sdk'
 import { WalletStorageManager, Services, Wallet, StorageClient, WalletSigner } from '@bsv/wallet-toolbox-client'
 
@@ -71,4 +76,26 @@ export function createTestPrivateKey (): PrivateKey {
  */
 export function createTestPrivateKeyFromSeed (seed: number): PrivateKey {
   return new PrivateKey(seed)
+}
+
+/**
+ * Creates a local mock wallet using SDK's ProtoWallet.
+ *
+ * This implements getPublicKey() and createSignature() using local key derivation
+ * and signing. No network calls are made. Ideal for unit tests of P2PKH, OrdP2PKH,
+ * OrdLock, getAddress etc.
+ *
+ * Counterparty 'self' and protocol/keyID derivation is handled consistently between
+ * getPublicKey and createSignature.
+ *
+ * @param privateKey - A PrivateKey instance, or hex string, or numeric seed
+ * @returns WalletInterface-compatible mock (sync construction, returned as Promise for API compat)
+ */
+export async function makeMockWallet (privateKey: PrivateKey | string | number): Promise<WalletInterface> {
+  const rootKey = privateKey instanceof PrivateKey
+    ? privateKey
+    : new PrivateKey(privateKey)
+  const proto = new ProtoWallet(rootKey)
+  // Cast: ProtoWallet provides the cryptographic surface required by the script templates
+  return proto as unknown as WalletInterface
 }

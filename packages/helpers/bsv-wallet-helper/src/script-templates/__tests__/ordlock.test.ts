@@ -1,9 +1,7 @@
 import { describe, expect, test } from '@jest/globals'
 import { PrivateKey, Transaction, Script } from '@bsv/sdk'
 import OrdLock from '../ordlock'
-import { makeWallet } from '../../utils/mockWallet'
-
-const storageURL = 'https://store-us-1.bsvb.tech'
+import { makeMockWallet } from '../../utils/mockWallet'
 
 describe('OrdLock script template', () => {
   test('lock should create a script containing ord envelope and OP_RETURN metadata', async () => {
@@ -26,7 +24,7 @@ describe('OrdLock script template', () => {
 
   test('cancel unlock should produce unlocking script ending with OP_1', async () => {
     const priv = new PrivateKey(42)
-    const wallet = await makeWallet('test', storageURL, priv.toHex())
+    const wallet = await makeMockWallet(priv)
 
     const ordLock = new OrdLock(wallet)
     const unlock = ordLock.cancelUnlock({

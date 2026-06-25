@@ -15,13 +15,17 @@ const { knex: makeKnex } = knexPkg
 import type { Knex } from 'knex'
 import { spawn } from 'node:child_process'
 import packageJson from '../package.json' with { type: 'json' }
+import { trace, SpanStatusCode } from '@opentelemetry/api'
+import { log } from './logger.js'
 
 import * as dotenv from 'dotenv'
 dotenv.config()
 
+const tracer = trace.getTracer(packageJson.name, packageJson.version)
+
 // Load environment variables
 const {
-  BSV_NETWORK = 'test',
+  BSV_NETWORK = 'main',
   ENABLE_NGINX = 'true',
   HTTP_PORT = 8081, // Must be 8081 if ENABLE_NGINX 'true',
   SERVER_PRIVATE_KEY,
@@ -84,17 +88,22 @@ async function setupWalletStorageAndMonitor(): Promise<{
     }
     const knex = makeKnex(knexConfig)
 
-    // Select chain from BSV_NETWORK: "main", "test", "teratest", or "mock" (defaults to "test")
-    const allowedChains = ['main', 'test', 'teratest', 'mock'] as const
-    let chain: (typeof allowedChains)[number] = 'test'
+    // Select chain from BSV_NETWORK: "main", "test", "ttn" (TeraTestNet), or "mock" (defaults to "main")
+    const allowedChains = ['main', 'test', 'ttn', 'mock'] as const
+    let chain: (typeof allowedChains)[number] = 'main'
     if (
       typeof BSV_NETWORK === 'string' &&
       allowedChains.includes(BSV_NETWORK as any)
     ) {
       chain = BSV_NETWORK as (typeof allowedChains)[number]
-    } else if (BSV_NETWORK !== 'test') {
-      console.warn(
-        `Invalid BSV_NETWORK value "${BSV_NETWORK}" provided. Falling back to "test".`
+    } else if (BSV_NETWORK !== 'main') {
+      log.warn(
+        {
+          operation: 'chain.select',
+          bsv_network: BSV_NETWORK,
+          fallback_chain: 'main'
+        },
+        'Invalid BSV_NETWORK value provided, falling back to main'
       )
     }
 
@@ -201,35 +210,72 @@ async function setupWalletStorageAndMonitor(): Promise<{
       monitor
     }
   } catch (error) {
-    console.error('Error setting up Wallet Storage and Monitor:', error)
+    log.error(
+      { operation: 'wallet_storage.setup', outcome: 'error', err: error },
+      'Error setting up wallet storage and monitor'
+    )
     throw error
   }
 }
 
-// Start the server
-try {
-  const context = await setupWalletStorageAndMonitor()
-  console.log(
-    'wallet-toolbox v' +
-      String(packageJson.dependencies['@bsv/wallet-toolbox']).replace(
-        /^[~^]/,
-        ''
-      )
-  )
-  console.log(JSON.stringify(context.settings, null, 2))
+// Start the server. Wrap startup in a span so a slow/failed boot is visible in
+// traces, and emit structured timed events.
+await tracer.startActiveSpan('wallet-infra.bootstrap', async span => {
+  const startedAt = Date.now()
+  try {
+    const walletToolboxVersion = String(
+      packageJson.dependencies['@bsv/wallet-toolbox']
+    ).replace(/^[~^]/, '')
+    const context = await setupWalletStorageAndMonitor()
+    log.info(
+      {
+        operation: 'storage.setup',
+        wallet_toolbox_version: walletToolboxVersion,
+        network: BSV_NETWORK
+      },
+      'wallet storage and monitor configured'
+    )
+    log.debug(
+      { operation: 'storage.setup', settings: context.settings },
+      'storage settings'
+    )
 
-  context.server.start()
-  console.log('wallet-toolbox StorageServer started')
+    context.server.start()
+    log.info(
+      { operation: 'storage_server.start', outcome: 'ok' },
+      'StorageServer started'
+    )
 
-  await context.monitor.startTasks()
-  console.log('wallet-toolbox Monitor started')
+    await context.monitor.startTasks()
+    log.info({ operation: 'monitor.start', outcome: 'ok' }, 'Monitor started')
 
-  // Conditionally start nginx
-  if (ENABLE_NGINX === 'true') {
-    console.log('Spawning nginx...')
-    spawn('/usr/sbin/nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
-    console.log('nginx is up!')
+    // Conditionally start nginx
+    if (ENABLE_NGINX === 'true') {
+      spawn('/usr/sbin/nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
+      log.info({ operation: 'nginx.spawn', outcome: 'ok' }, 'nginx started')
+    }
+
+    const duration_ms = Date.now() - startedAt
+    span.setAttribute('bsv.network', String(BSV_NETWORK))
+    span.setAttribute('nginx.enabled', ENABLE_NGINX === 'true')
+    span.setStatus({ code: SpanStatusCode.OK })
+    log.info(
+      { operation: 'bootstrap', outcome: 'ok', duration_ms },
+      'wallet-infra started'
+    )
+  } catch (error) {
+    const duration_ms = Date.now() - startedAt
+    span.recordException(error as Error)
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: (error as Error).message
+    })
+    log.error(
+      { operation: 'bootstrap', outcome: 'error', duration_ms, err: error },
+      'wallet-infra failed to start'
+    )
+    process.exitCode = 1
+  } finally {
+    span.end()
   }
-} catch (error) {
-  console.error('Error starting server:', error)
-}
+})

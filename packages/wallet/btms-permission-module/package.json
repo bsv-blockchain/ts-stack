@@ -32,7 +32,7 @@
     "@bsv/btms": "^1.1.0",
     "@bsv/sdk": "workspace:^",
     "@bsv/wallet-toolbox-client": "^2.3.2",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.0.0",
     "typescript": "^6.0.3"
   },
   "repository": {

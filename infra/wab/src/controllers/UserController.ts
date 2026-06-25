@@ -7,6 +7,7 @@
 
 import { Request, Response } from "express";
 import { UserService } from "../services/UserService";
+import { log } from "../logger";
 
 export class UserController {
     /**
@@ -28,7 +29,7 @@ export class UserController {
             const authMethods = await UserService.getAuthMethodsByUserId(user.id);
             res.json({ authMethods });
         } catch (error: any) {
-            console.error(error);
+            log.error({ operation: 'controller.user.list_linked_methods', err: error, outcome: 'error' }, 'listLinkedMethods failed');
             res.status(500).json({ message: error.message });
         }
     }
@@ -59,7 +60,7 @@ export class UserController {
             await UserService.deleteAuthMethodById(method.id);
             res.json({ success: true, message: "Auth Method unlinked." });
         } catch (error: any) {
-            console.error(error);
+            log.error({ operation: 'controller.user.unlink_method', err: error, outcome: 'error' }, 'unlinkMethod failed');
             res.status(500).json({ message: error.message });
         }
     }
@@ -83,7 +84,7 @@ export class UserController {
             await UserService.deleteUserByPresentationKey(user.presentationKey);
             res.json({ success: true, message: "User (and all linked data) deleted." });
         } catch (error: any) {
-            console.error(error);
+            log.error({ operation: 'controller.user.delete_user', err: error, outcome: 'error' }, 'deleteUser failed');
             res.status(500).json({ message: error.message });
         }
     }

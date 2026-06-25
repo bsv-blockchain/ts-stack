@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { PublicKey } from '@bsv/sdk'
-import { Logger } from '../../utils/logger.js'
+import { Logger, log } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { getRecipientFee, getServerDeliveryFee } from '../../utils/messagePermissions.js'
 
@@ -52,7 +52,7 @@ export default {
   func: async (req: GetQuoteRequest, res: Response): Promise<Response> => {
     try {
       Logger.log('[DEBUG] Processing message quote request')
-      console.log('[DEBUG] Processing message quote request')
+      log.debug({ operation: 'permissions.quote' }, 'Processing message quote request')
 
       // Validate authentication (the caller is the SENDER)
       const sender = req.auth?.identityKey

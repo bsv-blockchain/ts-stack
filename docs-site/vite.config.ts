@@ -317,13 +317,18 @@ export default defineConfig({
         providerImportSource: '@mdx-js/react',
       }),
     },
-    react({ include: /\.(jsx|tsx|js|ts)$/ }),
+    react({ include: /\.(mdx?|jsx?|tsx?)$/ }),
   ],
   resolve: {
     alias: {
       '@docs': resolve(__dirname, '../docs'),
       '@': resolve(__dirname, 'src'),
       '@mdx-js/react': resolve(__dirname, 'node_modules/@mdx-js/react/index.js'),
+      // MDX compiles repo-level docs/*.md into JSX that imports react/jsx-runtime.
+      // Those files live outside docs-site's node_modules tree, so the bundler
+      // cannot resolve the runtime relative to them. Pin it explicitly.
+      'react/jsx-runtime': resolve(__dirname, 'node_modules/react/jsx-runtime.js'),
+      'react/jsx-dev-runtime': resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js'),
     },
   },
   server: {

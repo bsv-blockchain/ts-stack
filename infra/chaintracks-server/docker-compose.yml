@@ -51,6 +51,13 @@ services:
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
+      # OpenTelemetry — point at any OTLP/HTTP collector. Unset => console exporters.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS:-}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-chaintracks-server}
+      - OTEL_RESOURCE_ATTRIBUTES=${OTEL_RESOURCE_ATTRIBUTES:-}
+      - DEPLOY_ENV=${DEPLOY_ENV:-production}
+
     volumes:
       # Persist bulk headers across container restarts
       - bulk-headers:/app/public/headers

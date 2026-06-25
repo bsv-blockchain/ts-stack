@@ -28,7 +28,7 @@ import {
   PubKeyHex,
   PublicKey,
 } from '@bsv/sdk'
-import { Logger } from '../utils/logger.js'
+import { Logger, log } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { sendFCMNotification } from '../utils/sendFCMNotification.js'
 import { getRecipientFee, getServerDeliveryFee, shouldUseFCMDelivery } from '../utils/messagePermissions.js'
@@ -204,7 +204,7 @@ export default {
 
     try {
       const { message, payment } = req.body
-      console.log('Received message send request from:', message, payment)
+      log.info({ operation: 'message.send', message_box: message?.messageBox, has_payment: payment != null }, 'Received message send request')
 
       if (message == null) {
         Logger.error('[ERROR] No message provided in request body!')
@@ -379,8 +379,7 @@ export default {
 
         // ---------- Build per-recipient outputs ----------
         const recipientSideOutputs = payment.outputs.slice(deliveryFeeOnce > 0 ? 1 : 0)
-        console.log('Recipient side outputs:', recipientSideOutputs)
-        console.log('All outputs: ', payment.outputs)
+        log.info({ operation: 'message.send', recipient_output_count: recipientSideOutputs.length, total_output_count: payment.outputs.length }, 'Payment outputs')
 
         const feeRecipients = feeRows.filter(f => f.recipientFee > 0).map(f => f.recipient)
 

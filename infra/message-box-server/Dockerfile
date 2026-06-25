@@ -58,5 +58,6 @@ EXPOSE 8080
 
 USER node
 
-# Start the app
-CMD [ "node", "out/src/index.js" ]
+# Start the app with the OpenTelemetry bootstrap preloaded (ESM --import) so
+# auto-instrumentation patches modules before they are imported.
+CMD [ "node", "--import", "./out/src/telemetry.js", "out/src/index.js" ]

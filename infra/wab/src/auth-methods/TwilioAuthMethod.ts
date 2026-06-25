@@ -1,5 +1,6 @@
 import { AuthMethod, AuthPayload, AuthResult } from "./AuthMethod";
 import twilio from "twilio";
+import { log } from "../logger";
 
 // Example admin phone number for testing
 const ADMIN_PHONE_NUMBERS = [
@@ -57,7 +58,7 @@ export class TwilioAuthMethod extends AuthMethod {
                 };
             }
         } catch (error: any) {
-            console.error("[TwilioAuthMethod] Error validating phone number:", error);
+            log.error({ operation: 'auth.twilio.validate_phone', err: error, outcome: 'error' }, 'Error validating phone number');
             return {
                 success: false,
                 message: "Failed to validate phone number for verification."
@@ -77,7 +78,7 @@ export class TwilioAuthMethod extends AuthMethod {
                 message: `Verification code sent to ${phoneNumber}.`
             };
         } catch (error: any) {
-            console.error("[TwilioAuthMethod] Error in startAuth:", error);
+            log.error({ operation: 'auth.twilio.start', err: error, outcome: 'error' }, 'Error starting Twilio phone verification');
             return {
                 success: false,
                 message: error.message || "Failed to start Twilio phone verification."
@@ -134,7 +135,7 @@ export class TwilioAuthMethod extends AuthMethod {
                 };
             }
         } catch (error: any) {
-            console.error("[TwilioAuthMethod] Error in completeAuth:", error);
+            log.error({ operation: 'auth.twilio.complete', err: error, outcome: 'error' }, 'Error completing Twilio phone verification');
             return {
                 success: false,
                 message: error.message || "Failed to complete Twilio phone verification."

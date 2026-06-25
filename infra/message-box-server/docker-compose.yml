@@ -9,7 +9,7 @@ services:
     ports:
       - "8080:8080"
       - 9229:9229
-    command: node --inspect=0.0.0.0 ./out/src/index.js
+    command: node --inspect=0.0.0.0 --import ./out/src/telemetry.js ./out/src/index.js
     environment:
       HOSTING_DOMAIN: 'http://localhost:8080'
       PORT: 8080
@@ -18,6 +18,12 @@ services:
       KNEX_DB_CONNECTION: '{"port":3306,"host":"backend-mysql","user":"root","password":"test","database":"messagebox-backend"}'
       NODE_ENV: development
       WALLET_STORAGE_URL: 'https://storage.babbage.systems'
+      # OpenTelemetry — point at any OTLP/HTTP collector. Unset => console exporters.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-message-box-server}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
+      DEPLOY_ENV: ${DEPLOY_ENV:-development}
     depends_on:
       backend-mysql:
         condition: service_healthy

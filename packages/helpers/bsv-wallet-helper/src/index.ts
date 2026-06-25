@@ -54,6 +54,7 @@ export { type WalletDerivationParams } from './types/index.js'
 // Utilities
 export {
   makeWallet,
+  makeMockWallet,
   calculatePreimage,
   addOpReturnData,
   getDerivation,

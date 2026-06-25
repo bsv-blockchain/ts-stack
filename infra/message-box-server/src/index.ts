@@ -21,7 +21,8 @@ import { app, appReady, getWallet, knex } from './app.js'
 import { spawn } from 'child_process'
 import { createServer } from 'http'
 import { PublicKey } from '@bsv/sdk'
-import { Logger } from './utils/logger.js'
+import { Logger, log } from './utils/logger.js'
+import { trace, SpanStatusCode } from '@opentelemetry/api'
 import { AuthSocketServer } from '@bsv/authsocket'
 import * as crypto from 'crypto'
 import { initializeFirebase } from './config/firebase.js'
@@ -338,25 +339,28 @@ export { ioRef as io, http, HTTP_PORT, ROUTING_PREFIX }
 
 // Only run server if not in test mode
 if (NODE_ENV !== 'test') {
+  const tracer = trace.getTracer('@bsv/messagebox-server')
   http.listen(HTTP_PORT, () => {
-    Logger.log('MessageBox listening on port', HTTP_PORT)
-
-      // if (
-      //   NODE_ENV !== 'development' &&
-      //   process.env.SKIP_NGINX !== 'true'
-      // ) {
-      //   spawn('nginx', [], { stdio: ['inherit', 'inherit', 'inherit'] })
-      // }
+    log.info({ operation: 'listen', outcome: 'ok', port: HTTP_PORT }, 'MessageBox listening')
 
       // Run DB migrations immediately, no delay needed with container healthchecks
-      ; (async () => {
-        await knex.migrate.latest()
-      })().catch((error) => {
-        Logger.error('[STARTUP ERROR]', error)
+      ; tracer.startActiveSpan('messagebox.migrate', async (span) => {
+        const startedAt = Date.now()
+        try {
+          await knex.migrate.latest()
+          span.setStatus({ code: SpanStatusCode.OK })
+          log.info({ operation: 'migrate', outcome: 'ok', duration_ms: Date.now() - startedAt }, 'migrations applied')
+        } catch (error) {
+          span.recordException(error as Error)
+          span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message })
+          log.error({ operation: 'migrate', outcome: 'error', err: error }, '[STARTUP ERROR] migrations failed')
+        } finally {
+          span.end()
+        }
       })
   })
 
   start().catch(error => {
-    Logger.error('[SERVER INIT ERROR]', error)
+    log.error({ operation: 'server.init', outcome: 'error', err: error }, '[SERVER INIT ERROR]')
   })
 }

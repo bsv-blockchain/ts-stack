@@ -1,9 +1,6 @@
 import { PrivateKey } from '@bsv/sdk';
 import { getAddress, getDerivation } from '../derivation';
-import { makeWallet } from '../mockWallet';
-
-// Test storage URL for test wallets
-const storageURL = "https://store-us-1.bsvb.tech";
+import { makeMockWallet } from '../mockWallet';
 
 describe('getDerivation', () => {
   test('should generate a derivation with protocolID and keyID', () => {
@@ -31,7 +28,7 @@ describe('getAddress', () => {
 
     test('should throw error when amount is less than 1', async () => {
       const privateKey = new PrivateKey(1);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       await expect(getAddress(wallet, 0)).rejects.toThrow('Amount must be greater than 0');
       await expect(getAddress(wallet, -1)).rejects.toThrow('Amount must be greater than 0');
@@ -41,7 +38,7 @@ describe('getAddress', () => {
   describe('single address generation', () => {
     test('should generate 1 address by default', async () => {
       const privateKey = new PrivateKey(2);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet);
 
@@ -56,7 +53,7 @@ describe('getAddress', () => {
 
     test('should generate valid BSV address', async () => {
       const privateKey = new PrivateKey(3);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet, 1);
 
@@ -66,7 +63,7 @@ describe('getAddress', () => {
 
     test('should generate walletParams with correct format', async () => {
       const privateKey = new PrivateKey(4);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet, 1);
 
@@ -81,7 +78,7 @@ describe('getAddress', () => {
   describe('multiple address generation', () => {
     test('should generate exact number of addresses requested', async () => {
       const privateKey = new PrivateKey(5);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet, 5);
 
@@ -98,7 +95,7 @@ describe('getAddress', () => {
 
     test('should generate unique addresses', async () => {
       const privateKey = new PrivateKey(6);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet, 10);
 
@@ -109,7 +106,7 @@ describe('getAddress', () => {
 
     test('should generate unique keyIDs', async () => {
       const privateKey = new PrivateKey(7);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet, 10);
 
@@ -120,7 +117,7 @@ describe('getAddress', () => {
 
     test('should handle large batch generation', async () => {
       const privateKey = new PrivateKey(8);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const results = await getAddress(wallet, 20);
 
@@ -162,7 +159,7 @@ describe('getAddress', () => {
   describe('parallel execution', () => {
     test('should execute requests in parallel for efficiency', async () => {
       const privateKey = new PrivateKey(9);
-      const wallet = await makeWallet('test', storageURL, privateKey.toHex());
+      const wallet = await makeMockWallet(privateKey);
 
       const startTime = Date.now();
       const results = await getAddress(wallet, 5);

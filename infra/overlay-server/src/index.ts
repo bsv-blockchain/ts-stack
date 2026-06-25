@@ -44,8 +44,12 @@ import {
 import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
 
 import { config } from 'dotenv'
-import packageJson from '../package.json'
+import { trace, SpanStatusCode } from '@opentelemetry/api'
+import packageJson from '../package.json' with { type: 'json' }
+import { log } from './logger.js'
 config()
+
+const tracer = trace.getTracer(packageJson.name, packageJson.version)
 
 // Reads a required environment variable, failing fast with a clear message if it is missing.
 const requireEnv = (name: string): string => {
@@ -220,4 +224,23 @@ const main = async () => {
 }
 
 // Happy hacking :)
-main()
+// Wrap startup in a span so a slow/failed boot is visible in traces, and emit
+// structured ready/fatal events with timing.
+tracer.startActiveSpan('overlay.bootstrap', async (span) => {
+    const startedAt = Date.now()
+    try {
+        await main()
+        const duration_ms = Date.now() - startedAt
+        span.setAttribute('node.name', process.env.NODE_NAME ?? 'unknown')
+        span.setStatus({ code: SpanStatusCode.OK })
+        log.info({ operation: 'bootstrap', outcome: 'ok', duration_ms }, 'overlay-server started')
+    } catch (err) {
+        const duration_ms = Date.now() - startedAt
+        span.recordException(err as Error)
+        span.setStatus({ code: SpanStatusCode.ERROR, message: (err as Error).message })
+        log.error({ operation: 'bootstrap', outcome: 'error', duration_ms, err }, 'overlay-server failed to start')
+        process.exitCode = 1
+    } finally {
+        span.end()
+    }
+})

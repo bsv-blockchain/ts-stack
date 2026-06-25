@@ -2,6 +2,7 @@ import { Storage } from '@google-cloud/storage'
 import { Request, Response } from 'express'
 import { getWallet } from '../utils/walletSingleton'
 import { Utils } from '@bsv/sdk'
+import { log } from '../logger'
 
 interface ListRequest extends Request {
   auth: {
@@ -77,7 +78,7 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
       uploads: result
     })
   } catch (error) {
-    console.error('[list] error:', error)
+    log.error({ operation: 'list.handle', outcome: 'error', err: error }, 'List handler failed')
     return res.status(500).json({
       status: 'error',
       code: 'ERR_LIST',

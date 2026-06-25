@@ -6,6 +6,7 @@
 
 import { Router, Request, Response } from 'express'
 import { Chaintracks } from '@bsv/wallet-toolbox'
+import { log } from './logger'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -56,7 +57,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       const network = chaintracks.chain
       res.json(success(network))
     } catch (err) {
-      console.error('Failed to get network:', err)
+      log.error({ operation: 'v2.get_network', outcome: 'error', err }, 'Failed to get network')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get network'))
     }
   })
@@ -71,7 +72,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       }
       res.json(success(header))
     } catch (err) {
-      console.error('Failed to get chain tip:', err)
+      log.error({ operation: 'v2.get_tip', outcome: 'error', err }, 'Failed to get chain tip')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip'))
     }
   })
@@ -97,7 +98,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       }
       res.json(success(header))
     } catch (err) {
-      console.error('Failed to get header:', err)
+      log.error({ operation: 'v2.get_header_by_height', outcome: 'error', err }, 'Failed to get header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -124,7 +125,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
 
       res.json(success(header))
     } catch (err) {
-      console.error('Failed to get header:', err)
+      log.error({ operation: 'v2.get_header_by_hash', outcome: 'error', err }, 'Failed to get header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -160,7 +161,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('Content-Type', 'application/octet-stream')
       res.send(Buffer.concat(buffers))
     } catch (err) {
-      console.error('Failed to get headers:', err)
+      log.error({ operation: 'v2.get_headers', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
   })
@@ -179,7 +180,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
-      console.error('Failed to get chain tip:', err)
+      log.error({ operation: 'v2.get_tip_bin', outcome: 'error', err }, 'Failed to get chain tip')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip'))
     }
   })
@@ -208,7 +209,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
-      console.error('Failed to get header:', err)
+      log.error({ operation: 'v2.get_header_by_height_bin', outcome: 'error', err }, 'Failed to get header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -237,7 +238,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Block-Height', String(header.height))
       res.send(headerToBytes(header))
     } catch (err) {
-      console.error('Failed to get header:', err)
+      log.error({ operation: 'v2.get_header_by_hash_bin', outcome: 'error', err }, 'Failed to get header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -277,7 +278,7 @@ export function createV2Routes(chaintracks: Chaintracks): Router {
       res.set('X-Header-Count', String(headerCount))
       res.send(Buffer.concat(buffers))
     } catch (err) {
-      console.error('Failed to get headers:', err)
+      log.error({ operation: 'v2.get_headers_bin', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
   })

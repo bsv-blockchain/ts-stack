@@ -1,4 +1,5 @@
 import { Storage } from '@google-cloud/storage'
+import { log } from '../logger'
 
 const { NODE_ENV, GCP_BUCKET_NAME, GCP_PROJECT_ID, GCP_STORAGE_CREDS } = process.env
 
@@ -15,7 +16,7 @@ interface UploadResponse {
 }
 
 const devUploadFunction = (): Promise<UploadResponse> => {
-  console.log('[DEV] Returning pretend upload URL http://localhost:8080/upload')
+  log.info({ operation: 'upload_url.dev', upload_url: 'http://localhost:8080/upload' }, 'Returning pretend upload URL')
   return Promise.resolve({ uploadURL: 'http://localhost:8080/upload', requiredHeaders: {} })
 }
 

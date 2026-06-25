@@ -25,4 +25,6 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 USER appuser
 
-CMD [ "node", "out/src/index.js"]
+# Preload the OpenTelemetry bootstrap (ESM --import) before app code so
+# auto-instrumentation patches modules before they are imported.
+CMD [ "node", "--import", "./out/src/telemetry.js", "out/src/index.js"]

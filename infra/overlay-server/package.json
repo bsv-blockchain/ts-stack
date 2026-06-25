@@ -14,15 +14,15 @@
   },
   "license": "Open BSV",
   "author": "BSV Association",
-  "type": "commonjs",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node --import ./dist/telemetry.js dist/index.js",
     "dev": "tsx src/index.ts"
   },
   "devDependencies": {
-    "@types/node": "^25.9.2",
+    "@types/node": "^26.0.0",
     "typescript": "^6.0.3"
   },
   "dependencies": {
@@ -31,9 +31,23 @@
     "@bsv/overlay-express": "^2.4.0",
     "@bsv/overlay-topics": "^1.2.1",
     "@bsv/sdk": "^2.1.6",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.219.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.77.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.219.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.219.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
+    "@opentelemetry/instrumentation-runtime-node": "^0.32.0",
+    "@opentelemetry/resources": "^2.8.0",
+    "@opentelemetry/sdk-logs": "^0.219.0",
+    "@opentelemetry/sdk-metrics": "^2.8.0",
+    "@opentelemetry/sdk-node": "^0.219.0",
+    "@opentelemetry/sdk-trace-base": "^2.8.0",
+    "@opentelemetry/semantic-conventions": "^1.41.1",
     "dotenv": "^17.4.2",
     "mongodb": "^7.2.0",
-    "mysql2": "^3.22.5"
+    "mysql2": "^3.22.5",
+    "pino": "^10.3.1"
   },
   "overrides": {
     "picomatch": ">=4.0.4"

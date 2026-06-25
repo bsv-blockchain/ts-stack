@@ -10,6 +10,7 @@ import { randomBytes } from "crypto";
 import { UserService } from "../services/UserService";
 import { AuthMethod } from "../auth-methods/AuthMethod";
 import { TwilioAuthMethod } from "../auth-methods/TwilioAuthMethod";
+import { log } from "../logger";
 
 // Simple in-memory rate limiting
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
@@ -88,7 +89,7 @@ export class AccountDeletionController {
         const result = await authMethod.startAuth(deletionKey, payload);
         if (!result.success) {
           // SMS sending failed - still return generic message to avoid enumeration
-          console.error("Failed to send OTP for deletion:", result.message);
+          log.error({ operation: 'controller.account_deletion.request', reason: result.message, outcome: 'error' }, 'Failed to send OTP for deletion');
         }
       }
       // If no user exists, we do nothing (no SMS sent)
@@ -101,7 +102,7 @@ export class AccountDeletionController {
         message: "If an account exists with this authentication method, a verification code has been sent."
       });
     } catch (error: any) {
-      console.error(error);
+      log.error({ operation: 'controller.account_deletion.request', err: error, outcome: 'error' }, 'requestDeletion failed');
       res.status(500).json({ message: error.message });
     }
   }
@@ -153,7 +154,7 @@ export class AccountDeletionController {
         message: "Account successfully deleted. You can now sign up again if desired."
       });
     } catch (error: any) {
-      console.error(error);
+      log.error({ operation: 'controller.account_deletion.complete', err: error, outcome: 'error' }, 'completeDeletion failed');
       res.status(500).json({ message: error.message });
     }
   }

@@ -37,4 +37,6 @@ USER node
 
 EXPOSE 8080
 
-CMD ["node", "--max-http-header-size=512000", "out/src/index.js"]
+# Preload the OpenTelemetry bootstrap so auto-instrumentation patches modules
+# before app code is imported.
+CMD ["node", "--require", "./out/src/telemetry.js", "--max-http-header-size=512000", "out/src/index.js"]

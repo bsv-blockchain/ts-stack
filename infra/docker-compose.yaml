@@ -1,0 +1,183 @@
+# Unified local stack for the BSV infra components.
+#
+#   docker compose -f infra/docker-compose.yaml up --build
+#
+# Traefik fronts everything on :80 and routes by hostname:
+#   http://overlay.localhost       -> overlay-server
+#   http://wallet.localhost        -> wallet-infra
+#   http://messagebox.localhost    -> message-box-server
+#   http://chaintracks.localhost   -> chaintracks-server
+#   http://wab.localhost           -> wab
+#   http://uhrp.localhost          -> uhrp-server-basic
+#   http://traefik.localhost:8080  -> Traefik dashboard
+#
+# Chromium/Firefox resolve *.localhost to 127.0.0.1 automatically. Safari/curl on
+# macOS do not — add the hosts in infra/LOCAL_STACK.md to /etc/hosts.
+#
+# Throwaway keys/passwords below are for LOCAL DEV ONLY. Point telemetry at your
+# collector with OTEL_EXPORTER_OTLP_ENDPOINT (unset => console exporters).
+
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
+  DEPLOY_ENV: ${DEPLOY_ENV:-development}
+
+services:
+  # ── Reverse proxy / router ─────────────────────────────────
+  traefik:
+    image: traefik:v3.5
+    # File provider (not docker): the local daemon rejects Traefik's docker API
+    # calls with a bare 400, so routes are declared in local/traefik/dynamic.yml
+    # and point at each service's Docker-network DNS name.
+    command:
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "80:80"
+      - "8080:8080"   # Traefik dashboard (http://localhost:8080)
+    volumes:
+      - ./local/traefik:/etc/traefik/dynamic:ro
+
+  # ── Shared backing stores ──────────────────────────────────
+  mysql:
+    # Pinned to 8.0: `mysql:8` now resolves to 8.4, which removed the
+    # --default-authentication-plugin option (and changes auth defaults).
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./local/mysql-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3307:3306"   # host:3307 to avoid clashing with a local mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  mongo:
+    image: mongo:6
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpass
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── Application components ─────────────────────────────────
+  overlay-server:
+    build: ./overlay-server
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: overlay-server
+      NODE_NAME: overlay-local
+      NETWORK: main
+      SERVER_PRIVATE_KEY: f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18
+      # https + a sub-domain of .localhost passes the advertiser's URI check
+      # (it only rejects the bare host "localhost"). Routing is still plain http via Traefik.
+      HOSTING_URL: https://overlay.localhost
+      WALLET_STORAGE_URL: https://store-us-1.bsvb.tech
+      ARC_API_KEY: local-dev
+      ADMIN_TOKEN: localadmin
+      GASP_ENABLED: "false"
+      KNEX_URL: mysql://root:rootpass@mysql:3306/appdb
+      MONGO_URL: mongodb://root:rootpass@mongo:27017
+
+  wallet-infra:
+    build: ./wallet-infra
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: wallet-infra
+      NODE_ENV: development
+      BSV_NETWORK: main
+      ENABLE_NGINX: "false"
+      HTTP_PORT: "8080"
+      SERVER_PRIVATE_KEY: bffe0d7a3f7effce2b3511323c6cca1df1649e41a336a8b603194d53287ad285
+      FEE_MODEL: '{"model":"sat/kb","value":100}'
+      COMMISSION_FEE: "0"
+      KNEX_DB_CONNECTION: '{"host":"mysql","user":"root","password":"rootpass","database":"wallet_storage","port":3306}'
+
+  message-box-server:
+    build: ./message-box-server
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: message-box-server
+      NODE_ENV: development
+      PORT: "8080"
+      HOSTING_DOMAIN: http://messagebox.localhost
+      SERVER_PRIVATE_KEY: f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18
+      KNEX_DB_CLIENT: mysql2
+      KNEX_DB_CONNECTION: '{"port":3306,"host":"mysql","user":"root","password":"rootpass","database":"messagebox-backend"}'
+      WALLET_STORAGE_URL: https://storage.babbage.systems
+
+  chaintracks-server:
+    build: ./chaintracks-server
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: chaintracks-server
+      CHAIN: main
+      PORT: "3011"
+      ENABLE_BULK_HEADERS_CDN: "false"
+      # Remote CDN headers are downloaded FROM here; required by the bulk
+      # ingestor even when this node isn't hosting its own CDN.
+      SOURCE_CDN_URL: https://chaintracks-cdn-us-1.bsvb.tech/blockheaders/
+      WHATSONCHAIN_API_KEY: ""
+
+  wab:
+    build: ./wab
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: wab-server
+      # production => knexfile uses mysql2 + DB_* below (development is hardcoded sqlite).
+      NODE_ENV: production
+      PORT: "8080"
+      DB_CLIENT: mysql2
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASS: rootpass
+      DB_NAME: app
+      DEV_CONSOLE_AUTH_METHOD_ENABLED: "true"
+      SERVER_PRIVATE_KEY: f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18
+      STORAGE_URL: https://store-us-1.bsvb.tech
+
+  uhrp-server-basic:
+    build: ./uhrp-server-basic
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: uhrp-server-basic
+      NODE_ENV: development
+      HTTP_PORT: "8080"
+      SERVER_PRIVATE_KEY: f8b4b466417e3fede5f95cb0651fb6371c3c9c0753a3e15c1c30155461d03c18
+      WALLET_STORAGE_URL: https://store-us-1.bsvb.tech
+
+volumes:
+  mysql_data:
+  mongo_data:

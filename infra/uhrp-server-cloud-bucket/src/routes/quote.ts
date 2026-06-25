@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import getPriceForFile from '../utils/getPriceForFile'
+import { log } from '../logger'
 
 const {
   MIN_HOSTING_MINUTES
@@ -78,7 +79,7 @@ const quoteHandler = async (req: QuoteRequest, res: Response<QuoteResponse>) => 
     const satPrice = await getPriceForFile({ fileSize, retentionPeriod })
     return res.status(200).json({ quote: satPrice })
   } catch (e) {
-    console.error(e)
+    log.error({ operation: 'quote.handle', outcome: 'error', err: e }, 'Quote handler failed')
     return res.status(500).json({
       status: 'error',
       code: 'ERR_INTERNAL',

@@ -1,0 +1,55 @@
+# Traefik dynamic config (file provider). Routes hostnames to each component via
+# its Docker-network DNS name. Used instead of the docker provider because the
+# local daemon rejects Traefik's docker API calls with a bare 400.
+http:
+  routers:
+    overlay:
+      rule: "Host(`overlay.localhost`)"
+      entryPoints: [web]
+      service: overlay
+    wallet:
+      rule: "Host(`wallet.localhost`)"
+      entryPoints: [web]
+      service: wallet
+    messagebox:
+      rule: "Host(`messagebox.localhost`)"
+      entryPoints: [web]
+      service: messagebox
+    chaintracks:
+      rule: "Host(`chaintracks.localhost`)"
+      entryPoints: [web]
+      service: chaintracks
+    wab:
+      rule: "Host(`wab.localhost`)"
+      entryPoints: [web]
+      service: wab
+    uhrp:
+      rule: "Host(`uhrp.localhost`)"
+      entryPoints: [web]
+      service: uhrp
+
+  services:
+    overlay:
+      loadBalancer:
+        servers:
+          - url: "http://overlay-server:8080"
+    wallet:
+      loadBalancer:
+        servers:
+          - url: "http://wallet-infra:8080"
+    messagebox:
+      loadBalancer:
+        servers:
+          - url: "http://message-box-server:8080"
+    chaintracks:
+      loadBalancer:
+        servers:
+          - url: "http://chaintracks-server:3011"
+    wab:
+      loadBalancer:
+        servers:
+          - url: "http://wab:8080"
+    uhrp:
+      loadBalancer:
+        servers:
+          - url: "http://uhrp-server-basic:8080"

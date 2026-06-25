@@ -2,6 +2,7 @@ import { Storage } from '@google-cloud/storage';
 import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
 import { StorageUtils } from '@bsv/sdk';
+import { log } from '../logger';
 
 const {
   ADMIN_TOKEN,
@@ -59,7 +60,7 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
 
     res.status(200).json({ status: 'success' })
   } catch (error) {
-    console.error('Error processing advertisement:', error)
+    log.error({ operation: 'advertise.handle', outcome: 'error', err: error }, 'Error processing advertisement')
     res.status(500).json({
       status: 'error',
       code: 'ERR_INTERNAL',

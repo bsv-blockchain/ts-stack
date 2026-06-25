@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { getMetadata } from '../utils/getMetadata'
+import { log } from '../logger'
 
 interface FindRequest extends Request {
     auth: {
@@ -71,7 +72,7 @@ const findHandler = async (req: FindRequest, res: Response<FindResponse>) => {
             }
         })
     } catch (error) {
-        console.error('[findHandler] error:', error)
+        log.error({ operation: 'find.handle', outcome: 'error', err: error }, 'Error retrieving file metadata')
         return res.status(500).json({
             status: 'error',
             code: 'ERR_FIND',

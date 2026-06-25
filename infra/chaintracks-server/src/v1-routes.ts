@@ -6,6 +6,7 @@
 
 import { Router, Request, Response } from 'express'
 import { Chaintracks, Services } from '@bsv/wallet-toolbox'
+import { log } from './logger'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -37,7 +38,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
     try {
       res.json(success(chain))
     } catch (err) {
-      console.error('Failed to get chain:', err)
+      log.error({ operation: 'v1.get_chain', outcome: 'error', err }, 'Failed to get chain')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain'))
     }
   })
@@ -49,7 +50,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const info = await chaintracks.getInfo()
       res.json(success(info))
     } catch (err) {
-      console.error('Failed to get info:', err)
+      log.error({ operation: 'v1.get_info', outcome: 'error', err }, 'Failed to get info')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get info'))
     }
   })
@@ -61,7 +62,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const height = await chaintracks.getPresentHeight()
       res.json(success(height))
     } catch (err) {
-      console.error('Failed to get present height:', err)
+      log.error({ operation: 'v1.get_present_height', outcome: 'error', err }, 'Failed to get present height')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get present height'))
     }
   })
@@ -76,7 +77,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(hash))
     } catch (err) {
-      console.error('Failed to get chain tip hash:', err)
+      log.error({ operation: 'v1.find_chain_tip_hash', outcome: 'error', err }, 'Failed to get chain tip hash')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip hash'))
     }
   })
@@ -91,7 +92,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(header))
     } catch (err) {
-      console.error('Failed to get chain tip header:', err)
+      log.error({ operation: 'v1.find_chain_tip_header', outcome: 'error', err }, 'Failed to get chain tip header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get chain tip header'))
     }
   })
@@ -117,7 +118,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       }
       res.json(success(header))
     } catch (err) {
-      console.error('Failed to get header:', err)
+      log.error({ operation: 'v1.find_header_for_height', outcome: 'error', err }, 'Failed to get header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -144,7 +145,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(header))
     } catch (err) {
-      console.error('Failed to get header:', err)
+      log.error({ operation: 'v1.find_header_for_block_hash', outcome: 'error', err }, 'Failed to get header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get header'))
     }
   })
@@ -189,7 +190,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(hexString))
     } catch (err) {
-      console.error('Failed to get headers:', err)
+      log.error({ operation: 'v1.get_headers', outcome: 'error', err }, 'Failed to get headers')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get headers'))
     }
   })
@@ -214,7 +215,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
 
       res.json(success(true))
     } catch (err) {
-      console.error('Failed to add header:', err)
+      log.error({ operation: 'v1.add_header', outcome: 'error', err }, 'Failed to add header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to add header'))
     }
   })
@@ -228,7 +229,7 @@ export function createV1Routes(options: V1RoutesOptions): Router {
       const rates = await services.getFiatExchangeRate('USD')
       res.json(success(rates))
     } catch (err) {
-      console.error('Failed to get exchange rates:', err)
+      log.error({ operation: 'v1.get_fiat_exchange_rates', outcome: 'error', err }, 'Failed to get exchange rates')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to get exchange rates'))
     }
   })
