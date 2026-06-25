@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { run } from './cli.js'
 import { interactiveConfigPrompt } from './prompts.js'
+import { formatConfigError } from './config/validate.js'
 
 run(process.argv.slice(2), interactiveConfigPrompt)
   .then((res) => {
@@ -15,4 +16,4 @@ run(process.argv.slice(2), interactiveConfigPrompt)
     }
     console.log('\nSee AGENTS.md for wiring + how to extend.')
   })
-  .catch((err) => { console.error(err instanceof Error ? err.message : err); process.exit(1) })
+  .catch((err) => { console.error(formatConfigError(err)); process.exit(1) })
