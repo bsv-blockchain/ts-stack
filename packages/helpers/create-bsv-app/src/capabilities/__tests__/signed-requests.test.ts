@@ -42,4 +42,14 @@ describe('signed-requests (variant)', () => {
     expect(builder.app.routes).toContainEqual({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: './bsv/SignedRequestDemo', label: 'Signed request demo' })
     expect(builder.server.routes.join()).toContain('verifySignedRequest')
   })
+  test('demo page renders a removable step-by-step activity log', () => {
+    const page = (signedRequests.files(ctx).client ?? []).find(f => f.path === 'SignedRequestDemo.tsx')
+    expect(page?.content).toContain('demo activity log (safe to delete)')
+    expect(page?.content).toContain('Signing a request proof')
+  })
+  test('agentsSection has the How it works / Future integrations structure', () => {
+    const md = signedRequests.agentsSection(ctx)
+    expect(md).toContain('### How it works')
+    expect(md).toContain('### Future integrations')
+  })
 })

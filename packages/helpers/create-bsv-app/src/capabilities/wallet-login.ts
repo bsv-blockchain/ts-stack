@@ -14,17 +14,26 @@ export function WalletLogin () {
   const { wallet, connected, identityKey } = useWallet()
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // --- demo activity log (safe to delete) ---
+  const [log, setLog] = useState<string[]>([])
+  const step = (m: string): void => setLog(l => [...l, m])
+  // --- end demo activity log ---
   const login = async () => {
-    setError(null)
+    setError(null); setResult(null); setLog([])
     if (wallet == null) return
     try {
+      step('Fetching the server identity (GET /api/identity)…')
       const counterparty = await getServerIdentity()
+      step('Server identity: ' + counterparty.slice(0, 16) + '…')
+      step('Signing a login proof with your wallet (action: login)…')
       const proof = await createAuthProof(wallet, { counterparty, action: 'login' })
+      step('POST /api/login — sending the proof to the server')
       const res = await fetch(API_BASE_URL + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof) })
-      if (!res.ok) { setError('login failed: ' + String(res.status)); return }
+      if (!res.ok) { step('✗ Server rejected the proof (' + String(res.status) + ')'); setError('login failed: ' + String(res.status)); return }
       const data = await res.json()
+      step('✓ Proof valid — the server trusts this identity')
       setResult(data.identityKey ?? identityKey)
-    } catch (e) { setError(String(e)) }
+    } catch (e) { step('✗ ' + String(e)); setError(String(e)) }
   }
   return (
     <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
@@ -34,6 +43,13 @@ export function WalletLogin () {
       {connected && <button onClick={() => { void login() }}>Login with wallet</button>}
       {result != null && <p>Logged in as <code>{result.slice(0, 16)}…</code></p>}
       {error != null && <p style={{ color: 'crimson' }}>{error}</p>}
+      {/* --- demo activity log (safe to delete) --- */}
+      {log.length > 0 && (
+        <ol style={{ marginTop: 16, paddingLeft: 20, fontFamily: 'monospace', fontSize: 13, color: '#555' }}>
+          {log.map((m, i) => <li key={i}>{m}</li>)}
+        </ol>
+      )}
+      {/* --- end demo activity log --- */}
     </main>
   )
 }
@@ -87,19 +103,34 @@ export function loginRoute (serverWallet: { verifySignature: (args: any) => Prom
 function agentsSection (_ctx: CapabilityContext): string {
   return `## wallet-login
 
-Passwordless login = a signed proof with \`action: 'login'\` over the base \`auth.ts\` primitive.
+Passwordless login: the connected wallet signs a proof with \`action: 'login'\`, the server verifies it, and you get a trusted \`identityKey\` — no password, no shared secret.
 
-- \`WalletLogin.tsx\` (client page) — full login UI at \`/login\`. Works out of the box: the server's identity key (the proof \`counterparty\`) is fetched from \`GET /api/identity\` via \`getServerIdentity()\`.
-- \`useWalletLogin.tsx\` (client hook) — \`const { login } = useWalletLogin()\`; use directly if you want a custom UI. Pass \`{ serverIdentityKey }\` only to pin a specific key instead of auto-fetching.
-- \`loginRoute.ts\` (server) — Express handler; mounted at \`app.post('/api/login', loginRoute(serverWallet))\` (serverWallet = a \`ProtoWallet\`).
+### How it works
+- The client fetches the server's identity key (\`GET /api/identity\`) to use as the proof \`counterparty\`, signs a login proof with the wallet, and POSTs it to \`/api/login\`.
+- The server verifies the signature with its \`serverWallet\` and consumes a single-use nonce (replay protection), then trusts the \`identityKey\` the proof was signed by.
+- That verified \`identityKey\` is the whole BSV-specific step. What you do next — issue a session, create a user — is your app's call (see *Future integrations*). The demo page renders each step so you can watch the exchange.
 
-### Environment (all in \`bsv/config.ts\`)
-- Client (\`client/src/bsv/config.ts\`): \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`). The counterparty itself needs nothing set — \`getServerIdentity()\` resolves it from \`GET /api/identity\`.
-- Server (\`server/src/bsv/config.ts\`): \`SERVER_PRIVATE_KEY\` (\`serverWallet\`'s key; random dev fallback), \`PORT\`, and \`CLIENT_ORIGIN\` (CORS allow-origin for the browser client).
+### How it's used
+- \`WalletLogin.tsx\` (client page) — login UI at \`/login\`; resolves the counterparty via \`getServerIdentity()\` and shows a step-by-step activity log of the exchange.
+- \`useWalletLogin.tsx\` (client hook) — \`const { login } = useWalletLogin()\` for a custom UI; pass \`{ serverIdentityKey }\` to pin a key instead of auto-fetching.
+- \`loginRoute.ts\` (server) — \`app.post('/api/login', loginRoute(serverWallet))\`; verifies the proof and returns \`{ identityKey }\`.
 
-### Extend
-- Swap the in-memory nonce store for Redis/DB in production.
-- Issue your own JWT/session keyed by \`identityKey\` after verify (a future \`--jwt\` option will scaffold this).
+### Environment (in \`bsv/config.ts\`)
+- Client: \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`).
+- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (CORS allow-origin).
+
+### Future integrations — turn login into a session
+After \`/api/login\` verifies the proof you hold a trusted \`identityKey\`; mint a session from it however your app prefers. A minimal JWT example with \`jose\` (read a secret from env, like \`serverWallet\` does its key):
+\`\`\`ts
+import { SignJWT, jwtVerify } from 'jose'
+const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-only-secret')
+// in loginRoute, once the proof verifies:
+const token = await new SignJWT({ sub: result.identityKey }).setProtectedHeader({ alg: 'HS256' }).setExpirationTime('7d').sign(secret)
+res.cookie('session', token, { httpOnly: true, sameSite: 'lax' }) // or return it for a bearer header
+// guard a route: const { payload } = await jwtVerify(token, secret) // payload.sub === identityKey
+\`\`\`
+- Swap the in-memory nonce store in \`loginRoute.ts\` for Redis/DB in production.
+- Persist a user record keyed by \`identityKey\` on first login.
 `
 }
 

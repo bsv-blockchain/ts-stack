@@ -47,13 +47,20 @@ export function SignedRequestDemo () {
   const { signedFetch, connected } = useSignedRequest()
   const [result, setResult] = useState<unknown>(null)
   const [error, setError] = useState<string | null>(null)
+  // --- demo activity log (safe to delete) ---
+  const [log, setLog] = useState<string[]>([])
+  const step = (m: string): void => setLog(l => [...l, m])
+  // --- end demo activity log ---
   const send = async () => {
-    setError(null)
+    setError(null); setResult(null); setLog([])
     try {
+      step('Signing a request proof (action: echo) bound to the body…')
+      step('POST /api/echo — sending { proof, body }')
       const res = await signedFetch('/api/echo', { action: 'echo', body: { hello: 'world' } })
-      if (!res.ok) { setError('request failed: ' + String(res.status)); return }
+      if (!res.ok) { step('✗ Server rejected the request (' + String(res.status) + ')'); setError('request failed: ' + String(res.status)); return }
+      step('✓ Signature valid — server processed the request')
       setResult(await res.json())
-    } catch (e) { setError(String(e)) }
+    } catch (e) { step('✗ ' + String(e)); setError(String(e)) }
   }
   return (
     <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
@@ -63,6 +70,13 @@ export function SignedRequestDemo () {
       {connected && <button onClick={() => { void send() }}>Send signed echo</button>}
       {result != null && <pre>{JSON.stringify(result, null, 2)}</pre>}
       {error != null && <p style={{ color: 'crimson' }}>{error}</p>}
+      {/* --- demo activity log (safe to delete) --- */}
+      {log.length > 0 && (
+        <ol style={{ marginTop: 16, paddingLeft: 20, fontFamily: 'monospace', fontSize: 13, color: '#555' }}>
+          {log.map((m, i) => <li key={i}>{m}</li>)}
+        </ol>
+      )}
+      {/* --- end demo activity log --- */}
     </main>
   )
 }
@@ -85,11 +99,22 @@ export async function verifySignedRequest (
 function agentsSection (_ctx: CapabilityContext): string {
   return `## signed-requests
 
-Authenticate individual API calls: sign a proof bound to a route (\`action\`) + request \`body\`. Same primitive as login, with a body — single round-trip, no handshake, framework-agnostic server side.
+Authenticate individual API calls: sign a proof bound to a route (\`action\`) + request \`body\`, send it with the request, verify it server-side. Same proof primitive as login, plus a body — one round-trip, no handshake, framework-agnostic.
 
-- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. The server's identity key (proof \`counterparty\`) is auto-fetched from \`GET /api/identity\`; pass \`useSignedRequest(serverIdentityKey)\` to pin a specific one.
-- \`SignedRequestDemo.tsx\` (client page) — interactive demo at \`/signed-demo\`; connects wallet then sends a signed echo to \`/api/echo\` and shows the JSON result. Works with no manual key config.
-- \`verifySignedRequest.ts\` (server) — plain \`verifySignedRequest(serverWallet, proof, { action, body }, consumeNonce)\`; call it from any backend (Express/Next/Fastify) before trusting \`identityKey\`.
+### How it works
+- For each call the client signs a proof over \`{ counterparty: serverIdentity, action, body }\` and sends \`{ proof, body }\` to the route.
+- The server re-derives the same binding and verifies the signature (and a single-use nonce) before trusting the caller's \`identityKey\`. Because the proof is bound to the exact action + body, it can't be replayed against another route or with a tampered payload.
+- It's stateless — there's no session; every request carries its own authentication. The demo page narrates the steps and shows the server's JSON reply.
+
+### How it's used
+- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. Counterparty auto-fetched; pass \`useSignedRequest(serverIdentityKey)\` to pin it.
+- \`SignedRequestDemo.tsx\` (client page) — interactive demo at \`/signed-demo\`: connect, send a signed echo to \`/api/echo\`, watch the steps + JSON result.
+- \`verifySignedRequest.ts\` (server) — \`verifySignedRequest(serverWallet, proof, { action, body }, consumeNonce)\`; call it from any backend (Express/Next/Fastify) before trusting \`identityKey\`.
+
+### Future integrations
+- Back the \`consumeNonce\` callback with Redis/DB so replay protection holds across processes and restarts.
+- Gate real endpoints: verify, then authorize the \`identityKey\` (allow-list, roles, ownership checks).
+- Bind extra context into the \`body\` (timestamps, resource ids) for tighter, per-resource authentication.
 `
 }
 

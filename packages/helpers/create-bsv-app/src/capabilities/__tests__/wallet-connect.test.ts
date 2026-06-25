@@ -67,4 +67,10 @@ describe('wallet-connect', () => {
     const wc = (walletConnect.files({ name: 'd', network: 'test', bsvDir: 'src/bsv', stack: {}, layout: 'frontend-only' } as any).client ?? []).find(f => f.path === 'WalletContext.tsx')
     for (const s of ['connect', 'connectMobile', 'cancel', 'status']) expect(wc?.content).toContain(s)
   })
+  test('agentsSection has the How it works / How it\'s used / Future integrations structure', () => {
+    const md = walletConnect.agentsSection(ctx)
+    expect(md).toContain('### How it works')
+    expect(md).toContain("### How it's used")
+    expect(md).toContain('### Future integrations')
+  })
 })

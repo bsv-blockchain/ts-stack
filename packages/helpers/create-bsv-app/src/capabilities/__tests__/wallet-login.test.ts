@@ -47,4 +47,17 @@ describe('wallet-login', () => {
     expect(b.server.routes.join()).toContain('/api/login')
     expect(b.server.imports.join()).toContain('loginRoute')
   })
+  test('login page renders a removable step-by-step activity log', () => {
+    const page = (walletLogin.files(ctx).client ?? []).find(f => f.path === 'WalletLogin.tsx')
+    expect(page?.content).toContain('demo activity log (safe to delete)')
+    expect(page?.content).toContain('Signing a login proof')
+    expect(page?.content).toContain('the server trusts this identity')
+  })
+  test('agentsSection has the How it works / How it\'s used / Future integrations structure + JWT session sketch', () => {
+    const md = walletLogin.agentsSection(ctx)
+    expect(md).toContain('### How it works')
+    expect(md).toContain("### How it's used")
+    expect(md).toContain('### Future integrations')
+    expect(md).toContain('SignJWT') // the going-further JWT snippet
+  })
 })

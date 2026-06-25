@@ -205,15 +205,26 @@ export function ConnectWallet () {
 function agentsSection (_ctx: CapabilityContext): string {
   return `## wallet-connect (base)
 
-Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) or mobile/relay (\`@bsv/wallet-relay\`) — and expose it app-wide via a connect state machine.
+Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) or mobile/relay (\`@bsv/wallet-relay\`) — use it app-wide, and sign/verify the \`@bsv/auth\` proofs that \`wallet-login\` and \`signed-requests\` build on.
 
-- \`auth.ts\` (shared) — \`createAuthProof(wallet, { counterparty, action, body? })\` + \`verifyAuthProof(serverWallet, proof, { action, body? }, consumeNonce)\`. The proof primitive both \`wallet-login\` and \`signed-requests\` build on.
-- \`config.ts\` (client) — centralized client env. \`API_BASE_URL\` (from \`VITE_API_URL\`, default \`http://localhost:3000\`) is the server API base every fetch helper uses; set \`VITE_API_URL\` in \`client/.env\` for production.
-- \`serverIdentity.ts\` (client) — \`getServerIdentity()\` fetches the server's identity public key from the baseline \`GET /api/identity\` route (and caches it). It's the proof \`counterparty\`, so nothing has to be hard-coded client-side.
+### How it works
+- Connecting is a small state machine: it tries the desktop/extension wallet first; if none is found it opens a modal to pair a mobile wallet over a relay (QR) or install a desktop one. The connected wallet lives in React context, reachable anywhere via \`useWallet()\`.
+- The proof primitive (\`auth.ts\`) uses the wallet to sign a message bound to \`{ counterparty, action, body? }\` and verifies it server-side (BRC-103). That's identity (and request auth) without passwords or shared secrets.
+- The server publishes its own identity key at \`GET /api/identity\`; the client fetches it (\`getServerIdentity()\`) to use as the proof \`counterparty\`, so no key is hard-coded anywhere.
+
+### How it's used
+- \`auth.ts\` (shared) — \`createAuthProof(wallet, { counterparty, action, body? })\` and \`verifyAuthProof(serverWallet, proof, { action, body? }, consumeNonce)\`.
+- \`config.ts\` (client) — \`API_BASE_URL\` (from \`VITE_API_URL\`, default \`http://localhost:3000\`); the server base every fetch helper targets.
+- \`serverIdentity.ts\` (client) — \`getServerIdentity()\` fetches + caches the server's identity key from \`GET /api/identity\`.
 - \`walletAcquisition.ts\` (client) — \`connectDesktopWallet()\`.
-- \`WalletConnectionContext.tsx\` / \`WalletContext.tsx\` / \`WalletProviders.tsx\` (client) — relay session + wallet state; consume the wallet anywhere via \`useWallet()\`.
-- \`ConnectWallet.tsx\` (client) — button + modal (mobile QR / install link). Driven by the connect state machine: desktop-first, relay fallback.
-- New projects (glue on): \`src/main.tsx\` wraps \`<App/>\` in \`<WalletProviders>\`, and a generated \`Home.tsx\` (the demo hub) links to each installed capability's page once a wallet connects. With \`--no-glue\` or add mode: wrap your root with \`<WalletProviders>\` yourself and build your own home.
+- \`WalletConnectionContext.tsx\` / \`WalletContext.tsx\` / \`WalletProviders.tsx\` (client) — relay session + wallet state; consume via \`useWallet()\`.
+- \`ConnectWallet.tsx\` (client) — the connect button + desktop-fail modal.
+- New projects (glue on): \`src/main.tsx\` wraps \`<App/>\` in \`<WalletProviders>\`, and a generated \`Home.tsx\` hub links to each installed capability's page once a wallet connects. With \`--no-glue\` / add mode: wrap your root in \`<WalletProviders>\` and build your own home.
+
+### Future integrations
+- Persist the connection across reloads (re-probe the desktop wallet / restore the relay session on load).
+- Reuse the proof primitive for any action beyond login — bind a proof to any \`{ action, body }\` (that's exactly what \`signed-requests\` does).
+- Layer identity certificates (BRC-52/103) on top of the raw identity key when you need verified attributes, not just a public key.
 `
 }
 
