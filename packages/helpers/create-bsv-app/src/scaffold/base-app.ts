@@ -43,27 +43,77 @@ export default function App () {
 `
 
 export const SERVER_TEMPLATE = `import express from 'express'
+import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
+import { SERVER_PRIVATE_KEY, PORT, CLIENT_ORIGIN } from './bsv/config.js'
 /*{{server.imports}}*/
 
 const app = express()
+app.use(cors({ origin: CLIENT_ORIGIN })) // allow the browser client (different dev origin) to call the API
 app.use(express.json())
 
-// Verify-only server wallet (set SERVER_PRIVATE_KEY in .env). Used by capability routes.
-const serverWallet = new ProtoWallet(PrivateKey.fromString(process.env.SERVER_PRIVATE_KEY ?? PrivateKey.fromRandom().toString()))
+// Verify-only server wallet. All config (incl. SERVER_PRIVATE_KEY) lives in bsv/config.ts.
+const serverWallet = new ProtoWallet(PrivateKey.fromString(SERVER_PRIVATE_KEY))
 
 app.get('/health', (_req, res) => { res.json({ status: 'ok' }) })
+
+// The server's identity public key. Clients fetch this and use it as the proof
+// \`counterparty\` (login / signed requests) — no need to hard-code a key anywhere.
+app.get('/api/identity', async (_req, res) => {
+  const { publicKey } = await serverWallet.getPublicKey({ identityKey: true })
+  res.json({ identityKey: publicKey })
+})
 /*{{server.routes}}*/
 
-const PORT = Number(process.env.PORT ?? 3000)
 app.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`) })
 `
 
-// Build the wrapped-app JSX: opens in push order, <App />, closes reversed.
+// Baseline server config — every env the server reads, in one place.
+export const SERVER_CONFIG = `// Centralized server configuration, read from the environment.
+import { PrivateKey } from '@bsv/sdk'
+
+// Server wallet key. Set SERVER_PRIVATE_KEY for a stable identity; a random key is
+// used as a dev fallback (the server's identity then changes on every restart).
+export const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY ?? PrivateKey.fromRandom().toString()
+
+export const PORT = Number(process.env.PORT ?? 3000)
+
+// Browser origin allowed by CORS — your client's dev URL by default.
+export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
+`
+
+// Default home: connect a wallet, then link out to each installed capability's demo page.
+export const HOME_TEMPLATE = `import { ConnectWallet } from './ConnectWallet.js'
+import { useWallet } from './WalletContext.js'
+/*{{home.imports}}*/
+
+export function Home () {
+  const { connected } = useWallet()
+  return (
+    <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
+      <h1>BSV app</h1>
+      <p>Connect a wallet to get started, then try the installed demos.</p>
+      <ConnectWallet />
+      {connected && (
+        <nav style={{ marginTop: 24, display: 'grid', gap: 8 }}>
+          <h2 style={{ fontSize: 16 }}>Demos</h2>
+          {/*{{home.links}}*/}
+        </nav>
+      )}
+    </main>
+  )
+}
+`
+
+// Build the wrapped-app JSX: opens in push order, <App />, closes reversed — each
+// nesting level indented +2 (the marker's own column is added on top by assembleBaseFile).
 function wrappedApp (wraps: Array<{ open: string, close: string }>): string {
-  const opens = wraps.map(w => w.open).join('\n')
-  const closes = wraps.map(w => w.close).reverse().join('\n')
-  return [opens, '<App />', closes].filter(s => s.length > 0).join('\n')
+  if (wraps.length === 0) return '<App />'
+  const lines: string[] = []
+  wraps.forEach((w, i) => lines.push('  '.repeat(i) + w.open))
+  lines.push('  '.repeat(wraps.length) + '<App />')
+  for (let i = wraps.length - 1; i >= 0; i--) lines.push('  '.repeat(i) + wraps[i].close)
+  return lines.join('\n')
 }
 
 // Render route descriptors → named imports + <Route> JSX (scaffolder owns the JSX).
@@ -75,20 +125,42 @@ export function routeJsx (routes: RouteDef[]): string {
   return routes.map(r => `<Route path="${r.path}" element={<${r.component} />} />`).join('\n')
 }
 
+// Home demo-hub links, one per capability route (label falls back to the path).
+function homeLinks (routes: RouteDef[]): string {
+  if (routes.length === 0) return '<p>No capability demos installed.</p>'
+  return routes.map(r => `<Link to="${r.path}">${r.label ?? r.path} →</Link>`).join('\n')
+}
+
 export function assembleBaseFile (template: string, b: BaseBuilder, ctx: CapabilityContext): string {
   let out = template
-  const sub = (marker: string, value: string): void => { out = out.split(marker).join(value) }
+  // Replace each marker, indenting every line after the first to the marker's own
+  // column so multi-line insertions (wraps, routes, links) stay aligned.
+  const sub = (marker: string, value: string): void => {
+    let idx = out.indexOf(marker)
+    while (idx !== -1) {
+      const lineStart = out.lastIndexOf('\n', idx) + 1
+      const indent = out.slice(lineStart, idx)
+      const indented = /^[ \t]*$/.test(indent) ? value.split('\n').join('\n' + indent) : value
+      out = out.slice(0, idx) + indented + out.slice(idx + marker.length)
+      idx = out.indexOf(marker, idx + indented.length)
+    }
+  }
   // app imports = explicit imports + one generated import per route descriptor
   const appImports = [...b.app.imports, routeImports(b.app.routes)].filter(s => s.length > 0).join('\n')
-  // The default Home page (baked into APP_TEMPLATE) lives under bsvDir like every other glue file.
+  // Generated base files (Home, server entry) live at <target>/src/ but import glue from bsvDir.
   sub("'./bsv/Home'", `'${bsvImport(ctx, 'Home')}'`)
+  sub("'./bsv/config.js'", `'${bsvImport(ctx, 'config.js')}'`)
   sub('/*{{main.imports}}*/', b.main.imports.join('\n'))
   sub('{/*{{main.app}}*/}', wrappedApp(b.main.wraps))
   sub('/*{{app.imports}}*/', appImports)
   sub('{/*{{app.routes}}*/}', routeJsx(b.app.routes))
   sub('/*{{server.imports}}*/', b.server.imports.join('\n'))
   sub('/*{{server.routes}}*/', b.server.routes.join('\n'))
-  return out.replace(/\n{3,}/g, '\n\n') // tidy blank lines from removed markers
+  sub('/*{{home.imports}}*/', b.app.routes.length > 0 ? "import { Link } from 'react-router-dom'" : '')
+  sub('{/*{{home.links}}*/}', homeLinks(b.app.routes))
+  return out
+    .replace(/[ \t]+$/gm, '') // drop trailing whitespace left by removed markers
+    .replace(/\n{3,}/g, '\n\n') // collapse blank-line runs
 }
 
 export function assembleAndWrite (
@@ -108,9 +180,11 @@ export function assembleAndWrite (
   if (dirs.clientDir != null) {
     write(dirs.clientDir, 'src/main.tsx', assembleBaseFile(MAIN_TEMPLATE, builder, ctx), result.client)
     write(dirs.clientDir, 'src/App.tsx', assembleBaseFile(APP_TEMPLATE, builder, ctx), result.client)
+    write(dirs.clientDir, `${ctx.bsvDir}/Home.tsx`, assembleBaseFile(HOME_TEMPLATE, builder, ctx), result.client)
   }
   if (dirs.serverDir != null) {
     write(dirs.serverDir, 'src/index.ts', assembleBaseFile(SERVER_TEMPLATE, builder, ctx), result.server)
+    write(dirs.serverDir, `${ctx.bsvDir}/config.ts`, SERVER_CONFIG, result.server)
   }
   return result
 }

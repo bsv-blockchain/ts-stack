@@ -17,7 +17,13 @@ export interface CapabilityContext {
   layout: Layout
 }
 
-export interface RouteDef { path: string, component: string, importPath: string }
+export interface RouteDef {
+  path: string
+  component: string
+  importPath: string
+  /** Human label for the Home demo hub (falls back to the path). */
+  label?: string
+}
 
 export interface BaseBuilder {
   main: { imports: string[], wraps: Array<{ open: string, close: string }> }

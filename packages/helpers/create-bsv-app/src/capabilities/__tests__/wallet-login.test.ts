@@ -24,6 +24,15 @@ describe('wallet-login', () => {
     expect(hook?.content).toContain('createAuthProof')
     expect(hook?.content).toContain("'login'")
   })
+  test('counterparty is auto-resolved (no hard-coded SERVER_IDENTITY_KEY placeholder)', () => {
+    const client = walletLogin.files(ctx).client ?? []
+    const page = client.find(f => f.path === 'WalletLogin.tsx')
+    const hook = client.find(f => f.path === 'useWalletLogin.tsx')
+    expect(page?.content).toContain('getServerIdentity')
+    expect(page?.content).not.toContain("SERVER_IDENTITY_KEY = ''")
+    expect(hook?.content).toContain('getServerIdentity')
+    expect(hook?.content).toContain('serverIdentityKey?: string') // now optional
+  })
   test('server route verifies via the shared auth helper', () => {
     const server = walletLogin.files(ctx).server ?? []
     const route = server.find(f => f.path === 'loginRoute.ts')
@@ -34,7 +43,7 @@ describe('wallet-login', () => {
     expect((walletLogin.files(ctx).client ?? []).map(f => f.path)).toContain('WalletLogin.tsx')
     const b = newBuilder()
     walletLogin.baseEdits?.({ builder: b, ctx })
-    expect(b.app.routes).toContainEqual({ path: '/login', component: 'WalletLogin', importPath: './bsv/WalletLogin' })
+    expect(b.app.routes).toContainEqual({ path: '/login', component: 'WalletLogin', importPath: './bsv/WalletLogin', label: 'Wallet login' })
     expect(b.server.routes.join()).toContain('/api/login')
     expect(b.server.imports.join()).toContain('loginRoute')
   })

@@ -26,6 +26,13 @@ describe('wallet-connect', () => {
     expect(paths).toContain('WalletContext.tsx')
     expect(paths).toContain('WalletProviders.tsx')
   })
+  test('client ships serverIdentity helper that fetches the baseline /api/identity route', () => {
+    const client = walletConnect.files(ctx).client ?? []
+    const helper = client.find(f => f.path === 'serverIdentity.ts')
+    expect(helper).toBeDefined()
+    expect(helper?.content).toContain('export async function getServerIdentity')
+    expect(helper?.content).toContain('/api/identity')
+  })
   test('glue is undefined (contexts moved to core files)', () => {
     expect(walletConnect.glue).toBeUndefined()
   })
@@ -42,10 +49,11 @@ describe('wallet-connect', () => {
     expect(Object.keys(client)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'react']))
     expect(Object.keys(client)).not.toContain('@bsv/sdk')
   })
-  test('wallet-connect provides ConnectWallet + Home and only main.* baseEdits', () => {
+  test('wallet-connect provides ConnectWallet + client config and only main.* baseEdits (Home is a generated base file)', () => {
     const ctx2 = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } }, layout: 'frontend-only' as const }
     const client = (walletConnect.files(ctx2).client ?? []).map(f => f.path)
-    expect(client).toEqual(expect.arrayContaining(['ConnectWallet.tsx', 'Home.tsx', 'WalletContext.tsx']))
+    expect(client).toEqual(expect.arrayContaining(['ConnectWallet.tsx', 'config.ts', 'WalletContext.tsx']))
+    expect(client).not.toContain('Home.tsx') // Home is assembled from HOME_TEMPLATE, not a capability file
     const b = newBuilder()
     walletConnect.baseEdits?.({ builder: b, ctx: ctx2 })
     expect(b.main.wraps).toEqual([{ open: '<WalletProviders>', close: '</WalletProviders>' }])

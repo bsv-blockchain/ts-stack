@@ -27,10 +27,19 @@ describe('signed-requests (variant)', () => {
     const paths = client.map(f => f.path)
     expect(paths).toContain('SignedRequestDemo.tsx')
   })
+  test('counterparty auto-resolves: hook serverIdentityKey is optional, demo needs no key', () => {
+    const client = signedRequests.files(ctx).client ?? []
+    const hook = client.find(f => f.path === 'useSignedRequest.ts')
+    const demo = client.find(f => f.path === 'SignedRequestDemo.tsx')
+    expect(hook?.content).toContain('getServerIdentity')
+    expect(hook?.content).toContain('serverIdentityKey?: string')
+    expect(demo?.content).toContain('useSignedRequest()')
+    expect(demo?.content).not.toContain("SERVER_IDENTITY_KEY = ''")
+  })
   test('baseEdits adds route descriptor and server verify route', () => {
     const builder = newBuilder()
     signedRequests.baseEdits?.({ builder, ctx })
-    expect(builder.app.routes).toContainEqual({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: './bsv/SignedRequestDemo' })
+    expect(builder.app.routes).toContainEqual({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: './bsv/SignedRequestDemo', label: 'Signed request demo' })
     expect(builder.server.routes.join()).toContain('verifySignedRequest')
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseArgs, run } from '../cli'
@@ -213,6 +213,39 @@ describe('run --file (direct manifest door)', () => {
     expect(res.written).toContain('src/bsv/WalletContext.tsx')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
     expect(manifest.capabilities).toEqual(['wallet-connect'])
+  })
+
+  test('new-mode scaffolds normally when the dir holds only a manifest (reproduce-from-manifest)', async () => {
+    // Drop just a bsv-scaffold.json into the target and scaffold a NEW project from it.
+    const target = join(dir, 'reproduce')
+    mkdirSync(target, { recursive: true })
+    const manifestPath = join(target, 'bsv-scaffold.json')
+    writeFileSync(manifestPath, JSON.stringify({
+      version: 1,
+      name: 'reproduced',
+      network: 'test',
+      stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-connect', 'wallet-login']
+    }), 'utf8')
+    const calls: string[][] = []
+    const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
+    // A lone manifest must NOT trip the empty-dir guard; new mode runs the base generator.
+    const res = await run(['--dir', target, '--file', manifestPath], undefined, { runCommand: fake })
+    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(res.written).toContain('src/bsv/auth.ts')
+    // the existing manifest is rewritten (regenerated from the config)
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+  })
+
+  test('new-mode still errors when the dir holds non-manifest files', async () => {
+    const target = join(dir, 'dirty')
+    mkdirSync(target, { recursive: true })
+    writeFileSync(join(target, 'README.md'), '# pre-existing', 'utf8')
+    const cfgPath = join(dir, 'c.json')
+    writeFileSync(cfgPath, JSON.stringify({ mode: 'new', name: 'x', stack: { frontend: { framework: 'react', variant: 'react-ts' } } }), 'utf8')
+    await expect(run(['--dir', target, '--file', cfgPath], undefined, { runCommand: () => {} })).rejects.toThrow(/not empty/i)
   })
 
   test('add-mode config file places wallet-login files only (no auth.ts, expandRequires:false)', async () => {

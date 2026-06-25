@@ -10,8 +10,8 @@ function files (name: string): FileSpec[] {
     private: true,
     type: 'module',
     scripts: { dev: 'tsx watch src/index.ts', build: 'tsc', start: 'node dist/index.js' },
-    dependencies: { express: '^5.0.0' },
-    devDependencies: { '@types/express': '^5.0.0', tsx: '^4.19.0', typescript: '^6.0.3' }
+    dependencies: { express: '^5.0.0', cors: '^2.8.5' },
+    devDependencies: { '@types/express': '^5.0.0', '@types/cors': '^2.8.17', tsx: '^4.19.0', typescript: '^6.0.3' }
   }
   const tsconfig = {
     compilerOptions: {

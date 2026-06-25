@@ -14,8 +14,16 @@ import type { CapabilityContext } from '../types.js'
 import { assembleAndWrite } from './base-app.js'
 
 function ensureEmpty (dir: string): void {
-  if (existsSync(dir) && readdirSync(dir).length > 0) {
-    throw new Error(`target directory is not empty: ${dir} — new projects scaffold into an empty directory`)
+  if (!existsSync(dir)) return
+  // A lone bsv-scaffold.json is fine — it's the spec a new project can be reproduced from;
+  // it gets rewritten at the end. Any other pre-existing file blocks a new scaffold.
+  const blocking = readdirSync(dir).filter(e => e !== MANIFEST_FILE)
+  if (blocking.length > 0) {
+    throw new Error(
+      `target directory is not empty: ${dir} — new projects scaffold into an empty directory ` +
+      `(a lone ${MANIFEST_FILE} is allowed). To extend an existing project, run in add mode ` +
+      '("mode": "add" / --mode add); to scaffold fresh, clear the directory or target an empty --dir.'
+    )
   }
 }
 

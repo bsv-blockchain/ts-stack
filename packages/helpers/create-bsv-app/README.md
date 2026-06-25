@@ -59,14 +59,25 @@ A frontend + backend together produce a **monorepo** layout: `client/` and `serv
 
 New projects include `wallet-connect` by default (with the React contexts always generated); pass `--no-glue` to skip the automatic base-file wiring (the generated `AGENTS.md` then lists the snippets to paste). In `add` mode the base files are never touched — `AGENTS.md` always carries the manual wiring snippets.
 
-#### Server environment
+#### Configuration & environment
 
-Capabilities with a server route (`wallet-login`, `signed-requests`) make the server entry initialise a verify-only `serverWallet` from `process.env.SERVER_PRIVATE_KEY`. For local dev a random key is used as a fallback, but set a stable key in `.env` so identities verify consistently:
+Each target keeps its environment in a single `bsv/config.ts` instead of scattering `process.env` / `import.meta.env` reads (or hard-coded keys) across files:
+
+- **`client/src/bsv/config.ts`** — `API_BASE_URL` (from `VITE_API_URL`, default `http://localhost:3000`). Every client fetch helper (`getServerIdentity`, login, signed requests) targets it. Vite loads `VITE_`-prefixed vars from `client/.env`; set `VITE_API_URL` when the client is served from a different origin than the API in production.
+- **`server/src/bsv/config.ts`** — `SERVER_PRIVATE_KEY` (the verify-only `serverWallet`'s key; a random dev fallback is used if unset, so the server's identity changes per restart — set it for a stable identity), `PORT`, and `CLIENT_ORIGIN` (the browser origin allowed by CORS, default `http://localhost:5173`).
 
 ```bash
-# server/.env
+# server/.env (loaded by your process manager / node --env-file)
 SERVER_PRIVATE_KEY=<your-private-key>
+# client/.env (Vite) — only needed if the API isn't at http://localhost:3000
+VITE_API_URL=https://api.example.com
 ```
+
+Because the dev client (`:5173`) and server (`:3000`) are different origins, the server enables **CORS** for `CLIENT_ORIGIN` so the demos work on `npm run dev` with no extra setup.
+
+#### Home demo hub
+
+In a new glued project, the generated `Home` page shows the connect flow; once a wallet connects it lists every installed capability's demo page (e.g. *Wallet login*, *Signed request demo*), and each demo page has a “← Back to home” link.
 
 ## Examples
 

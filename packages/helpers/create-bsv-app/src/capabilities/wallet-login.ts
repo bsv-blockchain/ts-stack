@@ -3,11 +3,12 @@ import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
 import { bsvImport } from '../scaffold/base-app.js'
 
 const WALLET_LOGIN_PAGE = `import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ConnectWallet } from './ConnectWallet.js'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-
-const SERVER_IDENTITY_KEY = '' // set to your server's identity key
+import { getServerIdentity } from './serverIdentity.js'
+import { API_BASE_URL } from './config.js'
 
 export function WalletLogin () {
   const { wallet, connected, identityKey } = useWallet()
@@ -17,8 +18,9 @@ export function WalletLogin () {
     setError(null)
     if (wallet == null) return
     try {
-      const proof = await createAuthProof(wallet, { counterparty: SERVER_IDENTITY_KEY, action: 'login' })
-      const res = await fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof) })
+      const counterparty = await getServerIdentity()
+      const proof = await createAuthProof(wallet, { counterparty, action: 'login' })
+      const res = await fetch(API_BASE_URL + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof) })
       if (!res.ok) { setError('login failed: ' + String(res.status)); return }
       const data = await res.json()
       setResult(data.identityKey ?? identityKey)
@@ -26,6 +28,7 @@ export function WalletLogin () {
   }
   return (
     <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
+      <p><Link to="/">← Back to home</Link></p>
       <h1>Login</h1>
       <ConnectWallet />
       {connected && <button onClick={() => { void login() }}>Login with wallet</button>}
@@ -40,15 +43,19 @@ const HOOK = `// Wallet login: prove identity with the connected wallet, then PO
 import { useCallback } from 'react'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
+import { getServerIdentity } from './serverIdentity.js'
+import { API_BASE_URL } from './config.js'
 
-export interface UseWalletLoginOptions { serverIdentityKey: string, loginEndpoint?: string }
+// serverIdentityKey is optional: when omitted it's fetched from GET /api/identity.
+export interface UseWalletLoginOptions { serverIdentityKey?: string, loginEndpoint?: string }
 
-export function useWalletLogin (opts: UseWalletLoginOptions) {
+export function useWalletLogin (opts: UseWalletLoginOptions = {}) {
   const { wallet, identityKey } = useWallet()
   const login = useCallback(async (): Promise<{ identityKey: string }> => {
     if (wallet === null) throw new Error('connect a wallet first (initializeWallet / relay)')
-    const proof = await createAuthProof(wallet, { counterparty: opts.serverIdentityKey, action: 'login' })
-    const res = await fetch(opts.loginEndpoint ?? '/api/login', {
+    const counterparty = opts.serverIdentityKey ?? await getServerIdentity()
+    const proof = await createAuthProof(wallet, { counterparty, action: 'login' })
+    const res = await fetch(API_BASE_URL + (opts.loginEndpoint ?? '/api/login'), {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof)
     })
     if (!res.ok) throw new Error('login failed: ' + String(res.status))
@@ -82,13 +89,13 @@ function agentsSection (_ctx: CapabilityContext): string {
 
 Passwordless login = a signed proof with \`action: 'login'\` over the base \`auth.ts\` primitive.
 
-- \`WalletLogin.tsx\` (client page) — full login UI at \`/login\`; set \`SERVER_IDENTITY_KEY\` to your server's identity key.
-- \`useWalletLogin.tsx\` (client hook) — \`const { login } = useWalletLogin({ serverIdentityKey })\`; use directly if you want a custom UI.
+- \`WalletLogin.tsx\` (client page) — full login UI at \`/login\`. Works out of the box: the server's identity key (the proof \`counterparty\`) is fetched from \`GET /api/identity\` via \`getServerIdentity()\`.
+- \`useWalletLogin.tsx\` (client hook) — \`const { login } = useWalletLogin()\`; use directly if you want a custom UI. Pass \`{ serverIdentityKey }\` only to pin a specific key instead of auto-fetching.
 - \`loginRoute.ts\` (server) — Express handler; mounted at \`app.post('/api/login', loginRoute(serverWallet))\` (serverWallet = a \`ProtoWallet\`).
 
-### Environment
-- Client: set \`SERVER_IDENTITY_KEY\` in \`WalletLogin.tsx\` (or inject via env) to your server's identity key.
-- Server: set \`SERVER_PRIVATE_KEY\` in \`.env\` — the base server template initialises \`serverWallet\` from this variable.
+### Environment (all in \`bsv/config.ts\`)
+- Client (\`client/src/bsv/config.ts\`): \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`). The counterparty itself needs nothing set — \`getServerIdentity()\` resolves it from \`GET /api/identity\`.
+- Server (\`server/src/bsv/config.ts\`): \`SERVER_PRIVATE_KEY\` (\`serverWallet\`'s key; random dev fallback), \`PORT\`, and \`CLIENT_ORIGIN\` (CORS allow-origin for the browser client).
 
 ### Extend
 - Swap the in-memory nonce store for Redis/DB in production.
@@ -110,7 +117,7 @@ export const walletLogin: Capability = {
     server: [{ path: 'loginRoute.ts', content: ROUTE }]
   }),
   baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
-    builder.app.routes.push({ path: '/login', component: 'WalletLogin', importPath: bsvImport(ctx, 'WalletLogin') })
+    builder.app.routes.push({ path: '/login', component: 'WalletLogin', importPath: bsvImport(ctx, 'WalletLogin'), label: 'Wallet login' })
     builder.server.imports.push(`import { loginRoute } from '${bsvImport(ctx, 'loginRoute.js')}'`)
     builder.server.routes.push("app.post('/api/login', loginRoute(serverWallet))")
   },

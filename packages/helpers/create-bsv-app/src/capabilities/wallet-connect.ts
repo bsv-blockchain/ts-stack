@@ -39,6 +39,29 @@ export async function connectDesktopWallet (): Promise<{ wallet: WalletInterface
 }
 `
 
+const CLIENT_CONFIG = `// Centralized client configuration. Vite loads VITE_-prefixed vars from client/.env.
+// Base URL of the server API. Defaults to the dev server; set VITE_API_URL in production
+// (or whenever the client is served from a different origin than the API).
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+`
+
+const SERVER_IDENTITY = `// Fetch the server's identity public key (its wallet's identityKey) once, and cache it.
+// Used as the proof \`counterparty\` for login / signed requests — the server exposes it
+// at GET /api/identity (baseline route), so no key needs to be hard-coded client-side.
+import { API_BASE_URL } from './config.js'
+
+let cached: string | null = null
+
+export async function getServerIdentity (endpoint = '/api/identity'): Promise<string> {
+  if (cached !== null) return cached
+  const res = await fetch(API_BASE_URL + endpoint)
+  if (!res.ok) throw new Error('failed to fetch server identity: ' + String(res.status))
+  const { identityKey } = await res.json() as { identityKey: string }
+  cached = identityKey
+  return identityKey
+}
+`
+
 const RELAY_CONTEXT = `// Relay-session context: wraps @bsv/wallet-relay's hook so a single relay client
 // (mobile QR / remote wallet) lives above the router. Port/extend from your app as needed.
 import { createContext, useContext, type ReactNode } from 'react'
@@ -179,35 +202,18 @@ export function ConnectWallet () {
 }
 `
 
-const HOME = `// Default home: shows the connect flow + links to any capability routes.
-import { Link } from 'react-router-dom'
-import { ConnectWallet } from './ConnectWallet.js'
-import { useWallet } from './WalletContext.js'
-
-export function Home () {
-  const { connected } = useWallet()
-  return (
-    <main style={{ maxWidth: 640, margin: '40px auto', fontFamily: 'system-ui' }}>
-      <h1>BSV app</h1>
-      <p>Scaffolded by create-bsv-app. Connect a wallet to get started.</p>
-      <ConnectWallet />
-      {connected && <p><Link to="/login">Go to login →</Link></p>}
-    </main>
-  )
-}
-`
-
 function agentsSection (_ctx: CapabilityContext): string {
   return `## wallet-connect (base)
 
 Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) or mobile/relay (\`@bsv/wallet-relay\`) — and expose it app-wide via a connect state machine.
 
 - \`auth.ts\` (shared) — \`createAuthProof(wallet, { counterparty, action, body? })\` + \`verifyAuthProof(serverWallet, proof, { action, body? }, consumeNonce)\`. The proof primitive both \`wallet-login\` and \`signed-requests\` build on.
+- \`config.ts\` (client) — centralized client env. \`API_BASE_URL\` (from \`VITE_API_URL\`, default \`http://localhost:3000\`) is the server API base every fetch helper uses; set \`VITE_API_URL\` in \`client/.env\` for production.
+- \`serverIdentity.ts\` (client) — \`getServerIdentity()\` fetches the server's identity public key from the baseline \`GET /api/identity\` route (and caches it). It's the proof \`counterparty\`, so nothing has to be hard-coded client-side.
 - \`walletAcquisition.ts\` (client) — \`connectDesktopWallet()\`.
 - \`WalletConnectionContext.tsx\` / \`WalletContext.tsx\` / \`WalletProviders.tsx\` (client) — relay session + wallet state; consume the wallet anywhere via \`useWallet()\`.
 - \`ConnectWallet.tsx\` (client) — button + modal (mobile QR / install link). Driven by the connect state machine: desktop-first, relay fallback.
-- \`Home.tsx\` (client) — default home page with \`<ConnectWallet />\`. Capability variants add their own routes on top.
-- New projects (glue on): \`src/main.tsx\` is wired to wrap \`<App/>\` in \`<WalletProviders>\` via \`baseEdits\`. With \`--no-glue\` or add mode: wrap your root with \`<WalletProviders>\` yourself.
+- New projects (glue on): \`src/main.tsx\` wraps \`<App/>\` in \`<WalletProviders>\`, and a generated \`Home.tsx\` (the demo hub) links to each installed capability's page once a wallet connects. With \`--no-glue\` or add mode: wrap your root with \`<WalletProviders>\` yourself and build your own home.
 `
 }
 
@@ -221,11 +227,12 @@ export const walletConnect: Capability = {
     shared: [{ path: 'auth.ts', content: AUTH_UTIL }],
     client: [
       { path: 'walletAcquisition.ts', content: ACQUISITION },
+      { path: 'serverIdentity.ts', content: SERVER_IDENTITY },
       { path: 'WalletConnectionContext.tsx', content: RELAY_CONTEXT },
       { path: 'WalletContext.tsx', content: WALLET_CONTEXT },
       { path: 'WalletProviders.tsx', content: PROVIDERS },
       { path: 'ConnectWallet.tsx', content: CONNECT_WALLET },
-      { path: 'Home.tsx', content: HOME }
+      { path: 'config.ts', content: CLIENT_CONFIG }
     ]
   }),
   baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {

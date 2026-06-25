@@ -65,18 +65,50 @@ describe('assembleAndWrite', () => {
   const cap = (edit: (b: any) => void): any => ({ id: 'm', roles: [], files: () => ({}), npmDependencies: () => ({}), agentsSection: () => '', baseEdits: ({ builder }: any) => edit(builder) })
   const ctx = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: {}, layout: 'monorepo' as const }
 
-  test('writes main.tsx + App.tsx to clientDir and index.ts to serverDir', () => {
+  test('writes main.tsx + App.tsx + Home to clientDir and index.ts + config to serverDir', () => {
     const caps = [cap((b: any) => {
       b.main.wraps.push({ open: '<W>', close: '</W>' })
-      b.app.routes.push({ path: '/x', component: 'X', importPath: './bsv/X' })
+      b.app.routes.push({ path: '/x', component: 'X', importPath: './bsv/X', label: 'X demo' })
       b.server.routes.push('app.get("/y", h)')
     })]
     const r = assembleAndWrite(caps, ctx, { clientDir: join(dir, 'client'), serverDir: join(dir, 'server') })
     const appTsx = readFileSync(join(dir, 'client/src/App.tsx'), 'utf8')
     expect(appTsx).toContain('<Route path="/x" element={<X />} />') // generated from the descriptor
     expect(appTsx).toContain("import { X } from './bsv/X'") // import generated too
-    expect(readFileSync(join(dir, 'server/src/index.ts'), 'utf8')).toContain('app.get("/y", h)')
-    expect(r.client).toEqual(expect.arrayContaining(['src/main.tsx', 'src/App.tsx']))
-    expect(r.server).toEqual(['src/index.ts'])
+    const serverIndex = readFileSync(join(dir, 'server/src/index.ts'), 'utf8')
+    expect(serverIndex).toContain('app.get("/y", h)')
+    // baseline identity route so clients never hard-code the server's key
+    expect(serverIndex).toContain("app.get('/api/identity'")
+    expect(serverIndex).toContain('getPublicKey({ identityKey: true })')
+    expect(serverIndex).toContain('cors({ origin: CLIENT_ORIGIN })')
+    // generated Home hub links to each capability route by its label
+    const home = readFileSync(join(dir, 'client/src/bsv/Home.tsx'), 'utf8')
+    expect(home).toContain('<Link to="/x">X demo →</Link>')
+    expect(home).toContain("import { Link } from 'react-router-dom'")
+    // server config centralizes env reads
+    const cfg = readFileSync(join(dir, 'server/src/bsv/config.ts'), 'utf8')
+    expect(cfg).toContain('SERVER_PRIVATE_KEY')
+    expect(cfg).toContain('CLIENT_ORIGIN')
+    expect(r.client).toEqual(expect.arrayContaining(['src/main.tsx', 'src/App.tsx', 'src/bsv/Home.tsx']))
+    expect(r.server).toEqual(['src/index.ts', 'src/bsv/config.ts'])
+  })
+
+  test('multi-line insertions are indented to the marker column (main.tsx wrap, nested)', () => {
+    const caps = [cap((b: any) => {
+      b.main.imports.push("import { P } from './bsv/P'")
+      b.main.wraps.push({ open: '<P>', close: '</P>' })
+    })]
+    assembleAndWrite(caps, ctx, { clientDir: join(dir, 'client') })
+    const mainTsx = readFileSync(join(dir, 'client/src/main.tsx'), 'utf8')
+    // <P> at the marker's 4-space column, <App /> nested at 6, no column-0 ragged lines
+    expect(mainTsx).toContain('    <P>\n      <App />\n    </P>')
+    expect(mainTsx).not.toMatch(/^<App \/>/m)
+  })
+
+  test('empty home links render a friendly message and omit the unused Link import', () => {
+    assembleAndWrite([], ctx, { clientDir: join(dir, 'client') })
+    const home = readFileSync(join(dir, 'client/src/bsv/Home.tsx'), 'utf8')
+    expect(home).toContain('No capability demos installed.')
+    expect(home).not.toContain('import { Link }')
   })
 })
