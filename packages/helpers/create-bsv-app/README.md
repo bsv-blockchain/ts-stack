@@ -2,6 +2,8 @@
 
 Scaffold BSV-enabled apps, or add BSV capabilities to an existing project — without writing key- or transaction-handling code yourself. The tool delegates base-project creation to the official generators (e.g. Vite for React, a lean Express skeleton for the server) and layers in **capabilities**: small, role-aware utility files built on the BSV abstraction libraries, plus an `AGENTS.md` contract describing how to use them.
 
+A new project runs end-to-end on `npm run dev` straight away: the base `main.tsx`/`App.tsx`/server entry are **wired automatically** so you get a working wallet flow — a desktop-wallet-first connect that, on failure, opens a modal offering *Connect with a mobile wallet* (relay QR) or *Install a desktop wallet* ([desktop.bsvb.tech](https://desktop.bsvb.tech)) — plus a routed `/login` page once you add `wallet-login`. Routing uses `react-router-dom`; the `Home` page exposes the connect button and each capability contributes its own page + route.
+
 ## One command
 
 ```bash
@@ -39,13 +41,13 @@ When you don't pass `--mode`, the tool infers it: if a `bsv-scaffold.json` manif
 | `--variant <string>` | new | Frontend template variant (default `react-ts`). |
 | `--bsv-dir <path>` | both | Where capability files are written (default `src/bsv`). |
 | `--capabilities <a,b,c>` | both | Comma-separated capability ids to install. |
-| `--package-manager <npm\|pnpm\|yarn\|bun>` | new | Package manager for the base generator + workspace files (default `npm`). |
+| `--package-manager <npm\|pnpm\|yarn\|bun>` | new | Package manager for the base generators (default `npm`). |
 | `--network <main\|test>` | new | BSV network the capabilities target (default `test`). |
 | `--glue` | both | Also emit optional "glue" files (e.g. example wiring) for the capabilities. |
-| `--no-glue` | new | Skip auto-wiring the wallet providers into the app entry (`main.tsx`); you mount `<WalletProviders>` yourself. The context/helper files are still generated. |
+| `--no-glue` | new | Skip auto-wiring the base files (`main.tsx` provider wrap, `App.tsx` routes, server routes). The context/helper/page files are still generated, and `AGENTS.md` prints the exact wiring snippets to paste yourself. |
 | `--ui` | both | Open the HTML accordion page in a browser and scaffold on Generate (local single-use server). |
 
-A frontend + backend together produce a **monorepo** layout (`client/` + `server/` with workspace files); a single target scaffolds at the root. Shared capability files are placed into each target that needs them.
+A frontend + backend together produce a **monorepo** layout: `client/` and `server/` are **independent packages** — each has its own `package.json`, `node_modules`, and lockfile, with no root workspace stitching them together. Install and run each app in its own directory (`cd client && npm i`, `cd server && npm i`); neither can resolve the other's dependencies, and each deploys on its own. A single target scaffolds at the root. Shared capability files are duplicated into each target that needs them.
 
 ### Capabilities
 
@@ -55,7 +57,16 @@ A frontend + backend together produce a **monorepo** layout (`client/` + `server
 | `wallet-login` | Passwordless login — a signed proof (`action: 'login'`) verified server-side. Builds on `wallet-connect`. |
 | `signed-requests` | Per-call authentication — sign API requests bound to a route + body; verify with a framework-agnostic function. Builds on `wallet-connect`. |
 
-New projects include `wallet-connect` by default (with the React contexts always generated); pass `--no-glue` to skip the automatic `main.tsx` provider wiring and mount `<WalletProviders>` yourself.
+New projects include `wallet-connect` by default (with the React contexts always generated); pass `--no-glue` to skip the automatic base-file wiring (the generated `AGENTS.md` then lists the snippets to paste). In `add` mode the base files are never touched — `AGENTS.md` always carries the manual wiring snippets.
+
+#### Server environment
+
+Capabilities with a server route (`wallet-login`, `signed-requests`) make the server entry initialise a verify-only `serverWallet` from `process.env.SERVER_PRIVATE_KEY`. For local dev a random key is used as a fallback, but set a stable key in `.env` so identities verify consistently:
+
+```bash
+# server/.env
+SERVER_PRIVATE_KEY=<your-private-key>
+```
 
 ## Examples
 

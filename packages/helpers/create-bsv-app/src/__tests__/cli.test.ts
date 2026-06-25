@@ -121,7 +121,7 @@ describe('run --yes new --no-glue with a variant', () => {
     expect(res.written).toContain('src/bsv/WalletContext.tsx')
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     expect(res.written).toContain('src/bsv/auth.ts')
-    // main.tsx wiring (clientEntry) is suppressed by --no-glue; vite is faked so it isn't created at all
+    // main.tsx assembly is suppressed by --no-glue; vite is faked so it isn't created at all
     expect(existsSync(join(dir, 'src/main.tsx'))).toBe(false)
   })
 })

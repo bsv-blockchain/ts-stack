@@ -9,9 +9,9 @@ import { renderAgentsMd } from '../agents-md.js'
 import { manifestFromConfig, writeProjectManifest, MANIFEST_FILE } from '../config/project-manifest.js'
 import { scaffolderFor, type RunCommand } from './base-scaffolder.js'
 import { defaultRunCommand } from './run-command.js'
-import { workspaceFiles } from './workspace.js'
 import { applyCapabilityDeps } from './package-json.js'
 import type { CapabilityContext } from '../types.js'
+import { assembleAndWrite } from './base-app.js'
 
 function ensureEmpty (dir: string): void {
   if (existsSync(dir) && readdirSync(dir).length > 0) {
@@ -35,9 +35,11 @@ export function scaffoldNewProject (
   const be = config.stack.backend
 
   if (layout === 'monorepo') {
+    // Independent packages: client/ and server/ are standalone (own package.json,
+    // node_modules, lockfile) — no root workspace, so neither app can resolve the
+    // other's deps and each is deployable on its own.
     if (fe != null) scaffolderFor('react').scaffold({ kind: 'frontend', target: fe }, join(targetDir, 'client'), { packageManager: pm, runCommand })
     if (be != null) scaffolderFor('express').scaffold({ kind: 'backend', target: be }, join(targetDir, 'server'), { packageManager: pm, runCommand })
-    writeFiles(workspaceFiles(config.name, pm), targetDir, { force: false })
   } else if (fe != null) {
     scaffolderFor('react').scaffold({ kind: 'frontend', target: fe }, targetDir, { packageManager: pm, runCommand })
   } else if (be != null) {
@@ -51,15 +53,14 @@ export function scaffoldNewProject (
   const agents = writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
   const written: string[] = [...util.written, ...glue.written, ...agents.written]
 
-  if (config.glue && (layout === 'frontend-only' || layout === 'monorepo')) {
-    const clientDir = layout === 'monorepo' ? join(targetDir, 'client') : targetDir
-    const prefix = layout === 'monorepo' ? 'client/' : ''
+  if (config.glue && layout !== 'none') {
     const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
-    for (const cap of caps) {
-      if (cap.clientEntry == null) continue
-      const r = writeFiles([cap.clientEntry(ctx)], clientDir, { force: true })
-      written.push(...r.written.map(p => prefix + p))
-    }
+    const clientDir = layout === 'monorepo' ? join(targetDir, 'client') : (layout === 'frontend-only' ? targetDir : undefined)
+    const serverDir = layout === 'monorepo' ? join(targetDir, 'server') : (layout === 'backend-only' ? targetDir : undefined)
+    const r = assembleAndWrite(caps, ctx, { clientDir, serverDir })
+    const cp = layout === 'monorepo' ? 'client/' : ''
+    const sp = layout === 'monorepo' ? 'server/' : ''
+    written.push(...r.client.map(p => cp + p), ...r.server.map(p => sp + p))
   }
 
   writeProjectManifest(targetDir, { ...manifestFromConfig(config), capabilities: caps.map(c => c.id) })

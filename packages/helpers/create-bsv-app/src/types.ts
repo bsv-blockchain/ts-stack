@@ -17,6 +17,14 @@ export interface CapabilityContext {
   layout: Layout
 }
 
+export interface RouteDef { path: string, component: string, importPath: string }
+
+export interface BaseBuilder {
+  main: { imports: string[], wraps: Array<{ open: string, close: string }> }
+  app: { imports: string[], routes: RouteDef[] }
+  server: { imports: string[], routes: string[] }
+}
+
 export interface Capability {
   id: string
   title: string
@@ -28,8 +36,7 @@ export interface Capability {
   defaultSelected?: boolean
   files: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
   glue?: (ctx: CapabilityContext) => Partial<Record<Role, FileSpec[]>>
-  /** New-mode only: overwrite the client entry (e.g. src/main.tsx) to mount providers. */
-  clientEntry?: (ctx: CapabilityContext) => FileSpec
+  baseEdits?: (args: { builder: BaseBuilder, ctx: CapabilityContext }) => void
   npmDependencies: (ctx: CapabilityContext) => Partial<Record<Role, Record<string, string>>>
   agentsSection: (ctx: CapabilityContext) => string
 }

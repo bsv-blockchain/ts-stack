@@ -75,11 +75,12 @@ export async function startUiServer (
           if (config.mode === 'new' && config.glue) {
             const layout = layoutOf(config.stack)
             if (layout === 'frontend-only' || layout === 'monorepo') {
-              const prefix = layout === 'monorepo' ? 'client/' : ''
-              const ctx = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
-              for (const cap of caps) {
-                if (cap.clientEntry != null) rawPaths.push(prefix + cap.clientEntry(ctx).path)
-              }
+              const cp = layout === 'monorepo' ? 'client/' : ''
+              rawPaths.push(cp + 'src/main.tsx', cp + 'src/App.tsx')
+            }
+            if (layout === 'monorepo' || layout === 'backend-only') {
+              const sp = layout === 'monorepo' ? 'server/' : ''
+              rawPaths.push(sp + 'src/index.ts')
             }
           }
           const seen = new Set<string>()

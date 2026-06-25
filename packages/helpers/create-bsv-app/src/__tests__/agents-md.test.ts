@@ -49,4 +49,34 @@ describe('renderAgentsMd', () => {
     }
     expect(() => renderAgentsMd(config, [capX, capY])).toThrow(/file conflict/i)
   })
+
+  test('add-mode: wiring section shows route JSX and server route snippet to paste', () => {
+    const md = renderAgentsMd(config, [walletConnect, walletLogin])
+    // Should include a Wiring (manual) heading
+    expect(md).toContain('Wiring')
+    // App.tsx route import generated from the route descriptor
+    expect(md).toContain("import { WalletLogin } from './bsv/WalletLogin'")
+    // Route JSX generated from the route descriptor
+    expect(md).toContain('<Route path="/login" element={<WalletLogin />} />')
+    // Server route snippet
+    expect(md).toContain("app.post('/api/login', loginRoute(serverWallet))")
+    // SERVER_PRIVATE_KEY note because there is a server route
+    expect(md).toContain('SERVER_PRIVATE_KEY')
+    expect(md).toContain('.env')
+  })
+
+  test('new+glue: wiring section says wired automatically, no snippet dump', () => {
+    const newGlueConfig: ProjectConfig = {
+      ...config,
+      mode: 'new',
+      glue: true
+    }
+    const md = renderAgentsMd(newGlueConfig, [walletConnect, walletLogin])
+    // Should say wired automatically
+    expect(md).toContain('wired automatically')
+    // Should NOT contain the route JSX snippet in a fenced code block
+    expect(md).not.toContain('<Route path="/login" element={<WalletLogin />} />')
+    // Should NOT dump the server/src/index.ts wiring block
+    expect(md).not.toContain('### `server/src/index.ts`')
+  })
 })

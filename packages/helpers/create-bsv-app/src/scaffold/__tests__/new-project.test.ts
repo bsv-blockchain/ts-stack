@@ -36,7 +36,7 @@ describe('scaffoldNewProject', () => {
     expect(existsSync(join(dir, 'src/bsv/loginRoute.ts'))).toBe(true)
   })
 
-  test('monorepo: client/ (vite) + server/ (skeleton) + workspace + duplicated shared', () => {
+  test('monorepo: client/ (vite) + server/ (skeleton) + duplicated shared, independent packages (no root workspace)', () => {
     const dir = join(base, 'full')
     const fake: RunCommand = () => {}
     scaffoldNewProject(cfg({ stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } } }), dir, { runCommand: fake })
@@ -44,13 +44,42 @@ describe('scaffoldNewProject', () => {
     expect(existsSync(join(dir, 'client/src/bsv/auth.ts'))).toBe(true)
     expect(existsSync(join(dir, 'server/src/bsv/auth.ts'))).toBe(true) // shared duplicated
     expect(existsSync(join(dir, 'server/src/bsv/loginRoute.ts'))).toBe(true)
-    const root = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-    expect(root.workspaces).toEqual(['client', 'server'])
+    // Independent packages: no root package.json / workspace stitching them together.
+    expect(existsSync(join(dir, 'package.json'))).toBe(false)
+    expect(existsSync(join(dir, 'pnpm-workspace.yaml'))).toBe(false)
   })
 
   test('throws on a non-empty target dir', () => {
     const dir = join(base, 'taken')
     mkdirSync(dir); writeFileSync(join(dir, 'x.txt'), 'hi')
     expect(() => scaffoldNewProject(cfg({ stack: { backend: { framework: 'express' } } }), dir, { runCommand: () => {} })).toThrow(/not empty/i)
+  })
+
+  test('new-mode monorepo with wallet-connect assembles main.tsx, App.tsx, index.ts via assembleAndWrite', () => {
+    const dir = join(base, 'wallet')
+    const fake: RunCommand = () => {}
+    const result = scaffoldNewProject(cfg({
+      stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } },
+      capabilities: ['wallet-connect'],
+      glue: true
+    }), dir, { runCommand: fake })
+
+    // main.tsx wraps <App /> in <WalletProviders>
+    const mainTsx = readFileSync(join(dir, 'client/src/main.tsx'), 'utf8')
+    expect(mainTsx).toContain('<WalletProviders>')
+
+    // App.tsx contains the Home route
+    const appTsx = readFileSync(join(dir, 'client/src/App.tsx'), 'utf8')
+    expect(appTsx).toContain('<Home')
+
+    // server index.ts contains serverWallet and /health
+    const indexTs = readFileSync(join(dir, 'server/src/index.ts'), 'utf8')
+    expect(indexTs).toContain('serverWallet')
+    expect(indexTs).toContain('/health')
+
+    // written list includes the assembled files
+    expect(result.written).toContain('client/src/main.tsx')
+    expect(result.written).toContain('client/src/App.tsx')
+    expect(result.written).toContain('server/src/index.ts')
   })
 })

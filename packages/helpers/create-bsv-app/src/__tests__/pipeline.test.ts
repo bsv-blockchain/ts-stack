@@ -66,7 +66,7 @@ test('applyConfig new-mode written includes AGENTS.md, manifest, and main.tsx (m
   expect(res.written).toContain('src/bsv/auth.ts')
   expect(res.written).toContain('AGENTS.md')
   expect(res.written).toContain('bsv-scaffold.json')
-  expect(res.written).toContain('src/main.tsx') // clientEntry, new+glue+frontend-only
+  expect(res.written).toContain('src/main.tsx') // assembleAndWrite, new+glue+frontend-only
 })
 
 test('applyConfig add-mode written includes AGENTS.md and manifest', () => {

@@ -74,15 +74,16 @@ describe('planPlacement — monorepo', () => {
     expect(paths).not.toContain('src/bsv/useWalletLogin.tsx')
   })
 
-  test('deps.client has @bsv/auth and @bsv/sdk (from wallet-connect shared + client roles)', () => {
+  test('deps.client has @bsv/auth and @bsv/sdk (from wallet-connect shared role)', () => {
     const result = planPlacement(monorepoConfig, bothCaps)
     expect(result.deps.client).toHaveProperty('@bsv/auth')
     expect(result.deps.client).toHaveProperty('@bsv/sdk')
   })
 
-  test('deps.server has @bsv/auth and express (from wallet-connect shared + wallet-login server roles)', () => {
+  test('deps.server has @bsv/auth, @bsv/sdk and express (wallet-connect shared + wallet-login server)', () => {
     const result = planPlacement(monorepoConfig, bothCaps)
     expect(result.deps.server).toHaveProperty('@bsv/auth')
+    expect(result.deps.server).toHaveProperty('@bsv/sdk')
     expect(result.deps.server).toHaveProperty('express')
   })
 

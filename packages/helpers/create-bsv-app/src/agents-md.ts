@@ -3,6 +3,7 @@ import type { ProjectConfig } from './config/model.js'
 import { layoutOf } from './config/model.js'
 import type { Capability, CapabilityContext } from './types.js'
 import { planPlacement } from './engine.js'
+import { newBuilder, routeImports, routeJsx } from './scaffold/base-app.js'
 
 function installBlock (label: string, deps: Record<string, string>): string {
   const names = Object.keys(deps)
@@ -13,6 +14,63 @@ function installBlock (label: string, deps: Record<string, string>): string {
   return `${head}Dependencies are already in \`package.json\` — just install:\n\n\`\`\`\n${cmd}\n\`\`\`\n\nIncluded:\n${ranges}\n\n`
 }
 
+function wiringSection (config: ProjectConfig, capabilities: Capability[], ctx: CapabilityContext): string {
+  const builder = newBuilder()
+  for (const cap of capabilities) cap.baseEdits?.({ builder, ctx })
+
+  const isManual = config.mode !== 'new' || !config.glue
+
+  if (!isManual) {
+    return '## Wiring\n\nBase files (`main.tsx`, `App.tsx`, `server`) were wired automatically.\n'
+  }
+
+  const blocks: string[] = []
+
+  // main.tsx: imports + wrap
+  if (builder.main.imports.length > 0 || builder.main.wraps.length > 0) {
+    const lines: string[] = []
+    if (builder.main.imports.length > 0) {
+      lines.push(builder.main.imports.join('\n'))
+    }
+    if (builder.main.wraps.length > 0) {
+      const opens = builder.main.wraps.map(w => w.open).join('\n')
+      const closes = builder.main.wraps.map(w => w.close).reverse().join('\n')
+      lines.push(`// Wrap <App /> in src/main.tsx:\n${opens}\n<App />\n${closes}`)
+    }
+    blocks.push(`### \`src/main.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``)
+  }
+
+  // App.tsx: route imports + <Route> JSX
+  if (builder.app.routes.length > 0 || builder.app.imports.length > 0) {
+    const lines: string[] = []
+    const allImports = [...builder.app.imports]
+    const generatedImports = routeImports(builder.app.routes)
+    if (generatedImports.length > 0) allImports.push(generatedImports)
+    if (allImports.length > 0) lines.push(allImports.join('\n'))
+    const jsx = routeJsx(builder.app.routes)
+    if (jsx.length > 0) lines.push(`// Add inside <Routes> in src/App.tsx:\n${jsx}`)
+    blocks.push(`### \`src/App.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``)
+  }
+
+  // server/src/index.ts: imports + routes
+  if (builder.server.imports.length > 0 || builder.server.routes.length > 0) {
+    const lines: string[] = []
+    if (builder.server.imports.length > 0) lines.push(builder.server.imports.join('\n'))
+    if (builder.server.routes.length > 0) lines.push(`// Add after app setup in server/src/index.ts:\n${builder.server.routes.join('\n')}`)
+    blocks.push(`### \`server/src/index.ts\`\n\n\`\`\`ts\n${lines.join('\n')}\n\`\`\``)
+  }
+
+  if (blocks.length === 0) return ''
+
+  let out = `## Wiring (manual)\n\nAdd-mode or \`--no-glue\`: paste these snippets into the relevant base files.\n\n${blocks.join('\n\n')}\n`
+
+  if (builder.server.routes.length > 0) {
+    out += '\n> **`SERVER_PRIVATE_KEY`** — add to `.env`: the server template initialises `serverWallet` from this variable (e.g. `SERVER_PRIVATE_KEY=<your-private-key>`).\n'
+  }
+
+  return out
+}
+
 export function renderAgentsMd (config: ProjectConfig, capabilities: Capability[]): string {
   const layout = layoutOf(config.stack)
   const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
@@ -21,6 +79,7 @@ export function renderAgentsMd (config: ProjectConfig, capabilities: Capability[
   const header = `# ${config.name} — agent guide\n\nScaffolded by \`create-bsv-app\` (layout: **${layout}**, network: **${config.network}**). BSV capabilities live under \`${config.bsvDir}\`. Re-run \`npx create-bsv-app\` inside this folder to add more capabilities.\n\n`
   let depsSection = '## Install dependencies\n\n'
   depsSection += layout === 'monorepo' ? installBlock('client/', deps.client) + installBlock('server/', deps.server) : installBlock('', deps.root)
+  const wiring = wiringSection(config, capabilities, ctx)
   const sections = capabilities.map(c => c.agentsSection(ctx).trimEnd())
-  return header + depsSection + sections.join('\n\n') + '\n'
+  return header + depsSection + (wiring.length > 0 ? wiring + '\n' : '') + sections.join('\n\n') + '\n'
 }

@@ -5,10 +5,9 @@ import { walletLogin } from '../capabilities/wallet-login'
 const ctx = { name: 'demo', network: 'test' as const, bsvDir: 'src/bsv', stack: {}, layout: 'monorepo' as const }
 
 describe('wallet-login (variant)', () => {
-  test('requires wallet-connect; no glue/clientEntry/defaultSelected', () => {
+  test('requires wallet-connect; no glue/defaultSelected', () => {
     expect(walletLogin.requires).toEqual(['wallet-connect'])
     expect(walletLogin.glue).toBeUndefined()
-    expect(walletLogin.clientEntry).toBeUndefined()
     expect(walletLogin.defaultSelected).toBeUndefined()
     expect(walletLogin.roles).toEqual(['client', 'server'])
   })
