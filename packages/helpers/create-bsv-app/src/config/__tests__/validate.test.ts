@@ -80,6 +80,23 @@ describe('resolveConfig - more branches', () => {
     expect(c.mode).toBe('add')
   })
 
+  test('overrideMode wins over the config\'s own mode field', () => {
+    // file says add, caller forces add→new: floor applies, so wallet-connect is added
+    const c = resolveConfig({ mode: 'add', name: 'x', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: [] }, { overrideMode: 'new' })
+    expect(c.mode).toBe('new')
+    expect(c.capabilities).toContain('wallet-connect') // new-mode floor ran for the effective mode
+  })
+
+  test('overrideMode new still enforces new-mode validation (needs a target)', () => {
+    expect(() => resolveConfig({ mode: 'add', name: 'x' }, { overrideMode: 'new' })).toThrow(/frontend or a backend/i)
+  })
+
+  test('overrideMode add skips the floor even when the file said new', () => {
+    const c = resolveConfig({ mode: 'new', name: 'x', stack: { backend: { framework: 'express' } }, capabilities: ['wallet-login'] }, { overrideMode: 'add' })
+    expect(c.mode).toBe('add')
+    expect(c.capabilities).toEqual(['wallet-login']) // no floor in add mode
+  })
+
   test('formatConfigError returns message for plain Error', () => {
     expect(formatConfigError(new Error('boom'))).toBe('boom')
   })

@@ -13,15 +13,18 @@ import { applyCapabilityDeps } from './package-json.js'
 import type { CapabilityContext } from '../types.js'
 import { assembleAndWrite } from './base-app.js'
 
+// Entries that don't count against an "empty" target dir:
+// - .git: a fresh `git init` (or cloned empty repo) is a common pre-scaffold step.
+// - bsv-scaffold.json: the spec a new project can be reproduced from; rewritten at the end.
+const IGNORED_WHEN_EMPTY = new Set(['.git', MANIFEST_FILE])
+
 function ensureEmpty (dir: string): void {
   if (!existsSync(dir)) return
-  // A lone bsv-scaffold.json is fine — it's the spec a new project can be reproduced from;
-  // it gets rewritten at the end. Any other pre-existing file blocks a new scaffold.
-  const blocking = readdirSync(dir).filter(e => e !== MANIFEST_FILE)
+  const blocking = readdirSync(dir).filter(e => !IGNORED_WHEN_EMPTY.has(e))
   if (blocking.length > 0) {
     throw new Error(
       `target directory is not empty: ${dir} — new projects scaffold into an empty directory ` +
-      `(a lone ${MANIFEST_FILE} is allowed). To extend an existing project, run in add mode ` +
+      `(an existing .git or ${MANIFEST_FILE} is allowed). To extend an existing project, run in add mode ` +
       '("mode": "add" / --mode add); to scaffold fresh, clear the directory or target an empty --dir.'
     )
   }

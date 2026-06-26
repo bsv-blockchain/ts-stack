@@ -42,10 +42,13 @@ export function validBsvDir (dir: string): boolean {
   return !dir.split(/[/\\]/).includes('..')
 }
 
-export function resolveConfig (input: unknown): ProjectConfig {
+export function resolveConfig (input: unknown, opts: { overrideMode?: Mode } = {}): ProjectConfig {
   const raw = asObject(input, 'config')
 
-  const mode: Mode = raw.mode === 'add' ? 'add' : 'new'
+  // An explicit caller override (e.g. the --mode flag on the --file door) wins over the
+  // config's own "mode" field. Resolved here so the new-mode floor + validation below
+  // run against the effective mode.
+  const mode: Mode = opts.overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
 
   const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   if (name.length === 0) throw new ConfigError('name is required')

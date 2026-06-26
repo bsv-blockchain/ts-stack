@@ -79,7 +79,8 @@ export async function run (
 
   let config: ProjectConfig
   if (args.file !== undefined) {
-    config = resolveConfigFromFile(args.file)
+    // The file is the source of truth, but an explicit --mode flag overrides its "mode".
+    config = resolveConfigFromFile(args.file, { overrideMode: args.draft.mode })
   } else {
     const existing = readValidManifest(targetDir)
     if (args.yes) {

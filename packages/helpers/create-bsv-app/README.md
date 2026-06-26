@@ -122,6 +122,15 @@ npx create-bsv-app --dir my-app --file config.json
 
 Unspecified fields fall back to defaults (`dir`→`.`, `bsvDir`→`src/bsv`, `glue`→`false`, `packageManager`→`npm`, `network`→`test`). A `new` config must declare at least a frontend or a backend.
 
+**Mode with `--file`.** The file is the source of truth, so its `"mode"` field decides new vs. add — set `"mode": "add"` to add capabilities to an existing project via a config file. A `--mode` flag passed alongside `--file` **overrides** the file's mode (resolved through the same validation, so the new-mode baseline still applies). Handy with a saved manifest:
+
+```bash
+npx create-bsv-app --dir my-app --file bsv-scaffold.json              # reproduce: mode defaults to new
+npx create-bsv-app --dir my-app --file bsv-scaffold.json --mode add   # re-apply the recorded capabilities (add)
+```
+
+(For a quick interactive add you don't need `--file` at all — just re-run `npx create-bsv-app` inside a project that already has a `bsv-scaffold.json`; see *Re-running* below.)
+
 ## Using `--ui`
 
 ```bash

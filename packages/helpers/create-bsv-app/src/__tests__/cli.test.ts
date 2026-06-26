@@ -248,6 +248,32 @@ describe('run --file (direct manifest door)', () => {
     await expect(run(['--dir', target, '--file', cfgPath], undefined, { runCommand: () => {} })).rejects.toThrow(/not empty/i)
   })
 
+  test('new-mode scaffolds into a freshly git-init-ed dir (a lone .git does not count as non-empty)', async () => {
+    const target = join(dir, 'gitfirst')
+    mkdirSync(join(target, '.git'), { recursive: true }) // simulate `git init`
+    writeFileSync(join(target, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf8')
+    const cfgPath = join(dir, 'g.json')
+    writeFileSync(cfgPath, JSON.stringify({ mode: 'new', name: 'g', stack: { backend: { framework: 'express' } } }), 'utf8')
+    const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: () => {} })
+    expect(res.written).toContain('bsv-scaffold.json') // scaffolded, no "not empty" error
+    expect(existsSync(join(target, '.git', 'HEAD'))).toBe(true) // .git left untouched
+  })
+
+  test('--mode add overrides a file whose mode is new (runs add, no base generator)', async () => {
+    const fakeAdd: RunCommand = () => { throw new Error('runCommand should not run in add mode') }
+    const cfgPath = join(dir, 'newish.json')
+    // file declares mode:new + a frontend, but --mode add must override → add path
+    writeFileSync(cfgPath, JSON.stringify({
+      mode: 'new', name: 'ov', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: ['wallet-login']
+    }), 'utf8')
+    const res = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'], undefined, { runCommand: fakeAdd })
+    // add mode: only wallet-login's own files, no wallet-connect floor pulled in
+    expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
+    expect(res.written).not.toContain('src/bsv/auth.ts')
+    const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.capabilities).toEqual(['wallet-login'])
+  })
+
   test('add-mode config file places wallet-login files only (no auth.ts, expandRequires:false)', async () => {
     const fakeAdd: RunCommand = () => { throw new Error('runCommand should not be called in add mode') }
     const cfgPath = join(dir, 'config.json')

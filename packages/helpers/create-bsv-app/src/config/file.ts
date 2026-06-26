@@ -1,9 +1,9 @@
 // src/config/file.ts
 import { readFileSync, existsSync } from 'node:fs'
-import type { ProjectConfig } from './model.js'
+import type { ProjectConfig, Mode } from './model.js'
 import { resolveConfig, ConfigError } from './validate.js'
 
-export function resolveConfigFromFile (path: string): ProjectConfig {
+export function resolveConfigFromFile (path: string, opts: { overrideMode?: Mode } = {}): ProjectConfig {
   if (!existsSync(path)) throw new ConfigError(`config file not found: ${path}`)
   let text: string
   try {
@@ -17,5 +17,5 @@ export function resolveConfigFromFile (path: string): ProjectConfig {
   } catch {
     throw new ConfigError(`invalid JSON in ${path}`)
   }
-  return resolveConfig(parsed)
+  return resolveConfig(parsed, opts)
 }
