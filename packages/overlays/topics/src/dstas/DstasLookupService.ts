@@ -48,11 +48,12 @@ export class DstasLookupService implements LookupService {
 
   async lookup (question: LookupQuestion): Promise<LookupFormula> {
     const query = ((question as any).query ?? {}) as DstasQuery
+    const frozen = typeof query.frozen === 'boolean' ? query.frozen : undefined
     if (typeof query.tokenId === 'string') {
-      return await this.deps.storage.findByTokenId(query.tokenId)
+      return await this.deps.storage.findByTokenId(query.tokenId, frozen)
     }
     if (typeof query.ownerHash160 === 'string') {
-      return await this.deps.storage.findByOwner(query.ownerHash160)
+      return await this.deps.storage.findByOwner(query.ownerHash160, frozen)
     }
     if (typeof query.txid === 'string' && typeof query.outputIndex === 'number') {
       return await this.deps.storage.findByOutpoint(query.txid, query.outputIndex)

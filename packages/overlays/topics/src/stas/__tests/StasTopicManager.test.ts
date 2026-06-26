@@ -1,5 +1,7 @@
 import { StasTopicManager } from '../StasTopicManager'
 import { LockingScript, Transaction, UnlockingScript } from '@bsv/sdk'
+import { StasToken } from '@bsv/templates'
+import { allowlistIssuerPolicy } from '../../admission/issuerPolicy'
 
 // Synthetic classic STAS locking script: 76a914 <owner> 88ac69 <engine> 6a <flags> <symbol>
 function stasScript (ownerHex: string, symbol = 'TEST'): LockingScript {
@@ -52,5 +54,25 @@ describe('StasTopicManager', () => {
     tx.addOutput({ lockingScript: LockingScript.fromHex(`76a914${OWNER_A}88ac`), satoshis: 1000 }) // plain P2PKH
     const admitted = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(admitted.outputsToAdmit).toEqual([])
+  })
+
+  describe('issuer policy', () => {
+    const ASSET_ID = StasToken.decode(stasScript(OWNER_A)).assetId
+
+    it('rejects an issuance whose assetId is not in the allowlist', async () => {
+      const gated = new StasTopicManager(allowlistIssuerPolicy([]))
+      const tx = new Transaction()
+      tx.addOutput({ lockingScript: stasScript(OWNER_A), satoshis: 1000 })
+      const admitted = await gated.identifyAdmissibleOutputs(tx.toBEEF(), [])
+      expect(admitted.outputsToAdmit).toEqual([])
+    })
+
+    it('admits an issuance whose assetId is in the allowlist', async () => {
+      const gated = new StasTopicManager(allowlistIssuerPolicy([ASSET_ID]))
+      const tx = new Transaction()
+      tx.addOutput({ lockingScript: stasScript(OWNER_A), satoshis: 1000 })
+      const admitted = await gated.identifyAdmissibleOutputs(tx.toBEEF(), [])
+      expect(admitted.outputsToAdmit).toEqual([0])
+    })
   })
 })

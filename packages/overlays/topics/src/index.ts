@@ -103,6 +103,10 @@ export type { WalletConfigRegistration, WalletConfigRecord, WalletConfigQuery } 
 export { default as WalletConfigTopicManager } from './walletconfig/WalletConfigTopicManager.js'
 export { default as createWalletConfigLookupService } from './walletconfig/WalletConfigLookupService.js'
 
+// token issuer-authority policy (shared by stas / bsv21 / dstas topic managers)
+export type { TokenIssuerPolicy } from './admission/issuerPolicy.js'
+export { allowlistIssuerPolicy } from './admission/issuerPolicy.js'
+
 // stas (classic STAS / P2STAS)
 export { StasTopicManager } from './stas/StasTopicManager.js'
 export { StasLookupService, createStasLookupService } from './stas/StasLookupService.js'

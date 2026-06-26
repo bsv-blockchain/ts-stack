@@ -1,5 +1,6 @@
 import { Bsv21TopicManager } from '../Bsv21TopicManager'
 import { LockingScript, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
+import { allowlistIssuerPolicy } from '../../admission/issuerPolicy'
 
 const OWNER_A = 'ab'.repeat(20)
 const OWNER_B = 'cd'.repeat(20)
@@ -61,5 +62,24 @@ describe('Bsv21TopicManager', () => {
     tx.addOutput({ lockingScript: LockingScript.fromHex(`76a914${OWNER_A}88ac`), satoshis: 1 })
     const admitted = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
     expect(admitted.outputsToAdmit).toEqual([])
+  })
+
+  describe('issuer policy', () => {
+    it('rejects a mint whose tokenId is not in the allowlist', async () => {
+      const gated = new Bsv21TopicManager(allowlistIssuerPolicy([]))
+      const tx = new Transaction()
+      tx.addOutput({ lockingScript: bsv21Script({ p: 'bsv-20', op: 'deploy+mint', amt: '1000', dec: '0' }), satoshis: 1 })
+      const admitted = await gated.identifyAdmissibleOutputs(tx.toBEEF(), [])
+      expect(admitted.outputsToAdmit).toEqual([])
+    })
+
+    it('admits a mint whose tokenId (outpoint) is in the allowlist', async () => {
+      const tx = new Transaction()
+      tx.addOutput({ lockingScript: bsv21Script({ p: 'bsv-20', op: 'deploy+mint', amt: '1000', dec: '0' }), satoshis: 1 })
+      const tokenId = `${tx.id('hex')}_0`
+      const gated = new Bsv21TopicManager(allowlistIssuerPolicy([tokenId]))
+      const admitted = await gated.identifyAdmissibleOutputs(tx.toBEEF(), [])
+      expect(admitted.outputsToAdmit).toEqual([0])
+    })
   })
 })

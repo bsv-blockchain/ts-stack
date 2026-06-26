@@ -1,6 +1,7 @@
 import { TopicManager } from '@bsv/overlay'
 import { AdmittanceInstructions, Transaction } from '@bsv/sdk'
 import { Bsv21Token } from '@bsv/templates'
+import { TokenIssuerPolicy } from '../admission/issuerPolicy.js'
 import docs from './Bsv21TopicDocs.md.js'
 
 interface Bsv21Output { index: number, tokenId: string, amount: bigint }
@@ -10,14 +11,18 @@ interface Bsv21Output { index: number, tokenId: string, amount: bigint }
  *
  * Admissibility is structural: each output is decoded against the BSV-21
  * ord-envelope shape, and the transaction is admitted only when per-tokenId
- * value conservation holds on the divisible bigint amounts. A `deploy+mint`
- * output (no prior input of that tokenId) is treated as issuance and admitted;
- * a transaction that would inflate a token is rejected in full.
+ * value conservation holds on the divisible bigint amounts. A transaction that
+ * would inflate a token is rejected in full.
  *
  * tokenId resolution: a transfer output names its id in the JSON; a mint
- * output's id IS its own outpoint (`<txid>_<vout>`).
+ * output's id IS its own outpoint (`<txid>_<vout>`). A mint is therefore an
+ * issuance (its tokenId never appears as an input); the optional
+ * {@link TokenIssuerPolicy} gates which mints are indexed — note the gated
+ * value is the mint's outpoint-based tokenId. Omitted, all mints are admitted.
  */
 export class Bsv21TopicManager implements TopicManager {
+  constructor (private readonly issuerPolicy: TokenIssuerPolicy = {}) {}
+
   private outputTokenId (decoded: { id: string, isMint: boolean }, txid: string, index: number): string {
     return decoded.isMint || decoded.id === '' ? `${txid}_${index}` : decoded.id
   }
@@ -63,6 +68,20 @@ export class Bsv21TopicManager implements TopicManager {
     return true
   }
 
+  /**
+   * Drop mint (issuance) outputs the issuer policy rejects. A BSV-21 output is a
+   * mint when no input carries its tokenId; transfers are untouched. With no
+   * policy, every mint passes (permissionless default).
+   */
+  private applyIssuerPolicy (outputs: Bsv21Output[], inTotals: Map<string, bigint>): Bsv21Output[] {
+    const allow = this.issuerPolicy.allowIssuance
+    if (allow === undefined) return outputs
+    return outputs.filter(o => {
+      const isIssuance = (inTotals.get(o.tokenId) ?? 0n) === 0n
+      return !isIssuance || allow(o.tokenId)
+    })
+  }
+
   async identifyAdmissibleOutputs (
     beef: number[],
     previousCoins: number[]
@@ -77,8 +96,9 @@ export class Bsv21TopicManager implements TopicManager {
         return { outputsToAdmit: [], coinsToRetain: [] }
       }
 
+      const admissible = this.applyIssuerPolicy(outputs, inTotals)
       return {
-        outputsToAdmit: outputs.map(o => o.index).sort((a, b) => a - b),
+        outputsToAdmit: admissible.map(o => o.index).sort((a, b) => a - b),
         coinsToRetain: previousCoins
       }
     } catch (error) {
