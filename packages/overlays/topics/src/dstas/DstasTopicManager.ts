@@ -1,6 +1,7 @@
 import { TopicManager } from '@bsv/overlay'
 import { AdmittanceInstructions, Transaction } from '@bsv/sdk'
 import { DstasToken } from '@bsv/templates'
+import { TokenIssuerPolicy } from '../admission/issuerPolicy.js'
 import docs from './DstasTopicDocs.md.js'
 
 interface DstasOutput { index: number, tokenId: string, amount: number }
@@ -14,12 +15,19 @@ interface DstasOutput { index: number, tokenId: string, amount: number }
  * conservation holds. DSTAS is satoshi-denominated, so the token amount is the
  * output's satoshi value.
  *
- * Deliberate simplifications (matching the STAS overlay): no freeze/confiscation
- * authority verification and no off-chain dependency — a tx with no DSTAS inputs
- * for a tokenId is treated as issuance and admitted; a tx that would inflate a
- * token is rejected in full.
+ * Trust model. Transfer correctness (owner signature, conservation, and the
+ * freeze rule that a frozen input cannot be spent under a normal transfer) is
+ * enforced by Bitcoin Script and verified by miners — the overlay only ever
+ * sees SPV-valid transactions, so it does not re-enforce it (protocol study §6).
+ * Frozen UTXOs are real on-chain state and stay indexed (discoverable); the
+ * lookup service surfaces the frozen flag. The one thing Script does NOT
+ * constrain is issuance: minting is permissionless, so any output can claim any
+ * protoID. The optional {@link TokenIssuerPolicy} gates which issuances are
+ * indexed; omitted, the overlay stays permissionless (admits all issuances).
  */
 export class DstasTopicManager implements TopicManager {
+  constructor (private readonly issuerPolicy: TokenIssuerPolicy = {}) {}
+
   private decodeOutputs (tx: Transaction): DstasOutput[] {
     const outputs: DstasOutput[] = []
     for (let i = 0; i < tx.outputs.length; i++) {
@@ -58,6 +66,20 @@ export class DstasTopicManager implements TopicManager {
     return true
   }
 
+  /**
+   * Drop issuance outputs the issuer policy rejects. An output is an issuance
+   * when no input carries its tokenId (`inAmt === 0`); transfers are untouched.
+   * With no policy, every issuance passes (permissionless default).
+   */
+  private applyIssuerPolicy (outputs: DstasOutput[], inTotals: Map<string, number>): DstasOutput[] {
+    const allow = this.issuerPolicy.allowIssuance
+    if (allow === undefined) return outputs
+    return outputs.filter(o => {
+      const isIssuance = (inTotals.get(o.tokenId) ?? 0) === 0
+      return !isIssuance || allow(o.tokenId)
+    })
+  }
+
   async identifyAdmissibleOutputs (
     beef: number[],
     previousCoins: number[]
@@ -72,8 +94,9 @@ export class DstasTopicManager implements TopicManager {
         return { outputsToAdmit: [], coinsToRetain: [] }
       }
 
+      const admissible = this.applyIssuerPolicy(outputs, inTotals)
       return {
-        outputsToAdmit: outputs.map(o => o.index).sort((a, b) => a - b),
+        outputsToAdmit: admissible.map(o => o.index).sort((a, b) => a - b),
         coinsToRetain: previousCoins
       }
     } catch (error) {

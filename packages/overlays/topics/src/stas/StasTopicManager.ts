@@ -1,6 +1,7 @@
 import { TopicManager } from '@bsv/overlay'
 import { AdmittanceInstructions, Transaction } from '@bsv/sdk'
 import { StasToken } from '@bsv/templates'
+import { TokenIssuerPolicy } from '../admission/issuerPolicy.js'
 import docs from './StasTopicDocs.md.js'
 
 interface StasOutput { index: number, assetId: string, amount: number, ownerHash160: string }
@@ -15,12 +16,17 @@ interface StasOutput { index: number, assetId: string, amount: number, ownerHash
  *
  * Deliberate simplifications vs. tm_mandala (no off-chain dependency):
  *  - no key-linkage verification, no sanctions screening;
- *  - a tx with no STAS inputs for an asset is treated as issuance and admitted
- *    (mint authority is not verified on-chain in this version);
  *  - a tx that would inflate a token (outputs > inputs for an asset that has
  *    inputs) is rejected in full.
+ *
+ * Mint authority is not verifiable on-chain (minting is permissionless). An
+ * output with no input of its assetId is an issuance; the optional
+ * {@link TokenIssuerPolicy} gates which issuances are indexed. Omitted, the
+ * overlay stays permissionless (admits all issuances) — the prior behaviour.
  */
 export class StasTopicManager implements TopicManager {
+  constructor (private readonly issuerPolicy: TokenIssuerPolicy = {}) {}
+
   private decodeStasOutputs (tx: Transaction): StasOutput[] {
     const outputs: StasOutput[] = []
     for (let i = 0; i < tx.outputs.length; i++) {
@@ -59,6 +65,20 @@ export class StasTopicManager implements TopicManager {
     return true
   }
 
+  /**
+   * Drop issuance outputs the issuer policy rejects. An output is an issuance
+   * when no input carries its assetId; transfers are untouched. With no policy,
+   * every issuance passes (permissionless default).
+   */
+  private applyIssuerPolicy (outputs: StasOutput[], inTotals: Map<string, number>): StasOutput[] {
+    const allow = this.issuerPolicy.allowIssuance
+    if (allow === undefined) return outputs
+    return outputs.filter(o => {
+      const isIssuance = (inTotals.get(o.assetId) ?? 0) === 0
+      return !isIssuance || allow(o.assetId)
+    })
+  }
+
   async identifyAdmissibleOutputs (
     beef: number[],
     previousCoins: number[]
@@ -73,8 +93,9 @@ export class StasTopicManager implements TopicManager {
         return { outputsToAdmit: [], coinsToRetain: [] }
       }
 
+      const admissible = this.applyIssuerPolicy(stasOutputs, inTotals)
       return {
-        outputsToAdmit: stasOutputs.map(o => o.index).sort((a, b) => a - b),
+        outputsToAdmit: admissible.map(o => o.index).sort((a, b) => a - b),
         coinsToRetain: previousCoins
       }
     } catch (error) {
