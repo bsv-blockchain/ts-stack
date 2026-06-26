@@ -1,7 +1,7 @@
 {
   "name": "@bsv/messagebox-server",
   "private": true,
-  "version": "1.1.11",
+  "version": "1.1.12",
   "main": "./out/src/index.js",
   "type": "module",
   "scripts": {
