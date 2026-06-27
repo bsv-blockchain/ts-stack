@@ -184,11 +184,16 @@ that observed the reorg. The engine reconciles this automatically.
 
 ### Chaintracks is the reorg authority
 
-Reorg detection is **not** reinvented here. The production chain tracker is
-Arcade, which wraps go-chaintracks; its reorg SSE is the source of truth:
+Reorg detection is **not** reinvented here. The production chain tracker should
+be a go-chaintracks compatible service. Arcade exposes go-chaintracks under
+`/chaintracks/v2`, and a standalone go-chaintracks deployment may expose the same
+API at `/v2`:
 
-- **`GET /v2/reorg/stream`** emits `data: <JSON>\n\n` frames (no `event:`/`id:`
-  lines; `: keepalive` comments between events). Each frame is a `ReorgEvent`:
+- **Arcade-mounted Chaintracks:** `GET /chaintracks/v2/reorg/stream`
+- **Standalone go-chaintracks:** `GET /v2/reorg/stream`
+
+The stream emits `data: <JSON>\n\n` frames (no `event:`/`id:` lines;
+`: keepalive` comments between events). Each frame is a `ReorgEvent`:
 
   ```jsonc
   {
@@ -199,8 +204,8 @@ Arcade, which wraps go-chaintracks; its reorg SSE is the source of truth:
   }
   ```
 
-- The same go-chaintracks service answers the merkle-root checks
-  (`isValidRootForHeight`) the engine already trusts for all SPV verification.
+- The same go-chaintracks-compatible service answers the merkle-root checks
+  (`isValidRootForHeight`) the engine already trusts for SPV verification.
 
 `packages/overlays/overlay-express/src/ReorgStream.ts` consumes this stream and
 maps each event to the engine: `orphanedHashes` → blocks to reconcile,
@@ -246,20 +251,53 @@ Reorg recovery and lookup-layer removal are independent and do not interfere:
 - Reorg demotion touches only the admitted set (proven → unproven) via the chain
   tracker; it never consults the ban list or lookup index.
 
-A demoted transaction follows the engine's existing unproven lifecycle: if it is
-re-mined, Arcade/ARC re-notifies `/arc-ingest` → `handleNewMerkleProof` re-proves
-it at its new height and the anchor includes it again; if it is never re-mined,
-`evictUnprovenTransactions` removes it after the threshold. The "we received it"
-record survives until one of those resolves.
+A demoted transaction follows the engine's unproven lifecycle. The preferred
+maintenance path is refresh-before-evict:
+
+1. If the transaction is re-mined and a provider calls `/arc-ingest` with a
+   proof, `handleNewMerkleProof` re-proves it at its new height and the anchor
+   includes it again.
+2. If no callback arrives, `refreshUnprovenTransactionProofs` asks configured
+   proof providers such as Arcade for a fresh proof.
+3. `maintainUnprovenTransactions` refreshes proofs first, then calls
+   `evictUnprovenTransactions` for rows that are still unproven past the
+   configured threshold.
+
+The "we received it" record survives until a proof, a terminal provider
+invalidation, or age-based eviction resolves it.
+
+### Provider invalidation and double spends
+
+Provider callbacks can also report terminal rejection. When `/arc-ingest`
+classifies a callback as double spend or another terminal invalid outcome, the
+Express layer evicts the applied transaction immediately through
+`Engine.evictAppliedTransaction`. This removes the transaction from the admitted
+set and notifies lookup services through their `outputEvicted` path. It is more
+important to stop serving rejected data than to wait for the normal unproven
+eviction threshold.
 
 ### Configuration
 
 ```ts
-server.configureReorgStream('https://arcade.example/v2/reorg/stream', 3)
+server.configureChaintracks('https://arcade.example', {
+  apiPrefix: '/chaintracks/v2',
+  reorgStream: true,
+  scanDepth: 3
+})
+
+server.configureEnableBASMSync(true)
+server.configureUnprovenMaintenance({
+  thresholdBlocks: 144,
+  intervalMs: 60 * 60 * 1000
+})
 ```
 
-- `reorgStreamUrl` — when set, the SSE adapter reconciles reorgs in real time.
-- `reorgScanDepth` — sweep depth from tip (default `3`).
+- `apiPrefix` — `/chaintracks/v2` for Arcade-mounted Chaintracks; `/v2` for many
+  standalone go-chaintracks deployments.
+- `reorgStream` — when enabled, the SSE adapter reconciles reorgs in real time.
+- `scanDepth` — sweep depth from tip (default `3`).
+- `thresholdBlocks` — how old an unproven row must be before maintenance tries
+  proof refresh and eviction.
 - The block poll (`basmBlockPollIntervalMs`) runs the sweep as a fallback even
   when no stream is configured.
 
@@ -281,5 +319,9 @@ token, yet can still prove it was received and admitted.
    `firstSeenHeight` retained) and the affected `topic_block_anchors` rows now
    carry the canonical block hashes with a recomputed `tac`.
 5. Confirm `TAC(topic, tip)` reconverges with peers that observed the same reorg.
-6. If the orphaned transaction is re-mined, confirm `/arc-ingest` re-proves it and
-   the anchor re-includes it; otherwise confirm it is eventually evicted as unproven.
+6. If the orphaned transaction is re-mined, confirm `/arc-ingest` or
+   `refreshUnprovenTransactionProofs` re-proves it and the anchor re-includes it.
+   Otherwise confirm `maintainUnprovenTransactions` eventually evicts it as
+   unproven.
+7. If a provider reports a double spend, confirm the applied transaction is
+   evicted immediately and lookup services no longer return it.

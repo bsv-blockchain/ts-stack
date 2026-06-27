@@ -3,8 +3,8 @@ id: infra-wallet-infra
 title: "Wallet Infrastructure Services"
 kind: infra
 version: "2.0.4"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-06-27"
+last_verified: "2026-06-27"
 review_cadence_days: 30
 status: stable
 tags: [wallet, utxo-storage, json-rpc, brc-100, storage-server]
@@ -33,7 +33,7 @@ Clients connect with identity-based auth headers, manage UTXOs, baskets, labels,
 | Type | Requirement |
 |------|-------------|
 | Database | MySQL 8.0 via Knex + mysql2 driver (other Knex-supported DBs can be substituted) |
-| External services | Taal or ARC (optional, for blockchain data and transaction broadcasting) |
+| External services | Arc/Taal-compatible services for transaction broadcasting and proof lookup; optional Arcade/Chaintracks support through wallet-toolbox service options |
 | ts-stack packages | @bsv/wallet-toolbox, @bsv/sdk, @bsv/auth-express-middleware, @bsv/payment-express-middleware |
 
 ## HTTP endpoints
@@ -55,13 +55,19 @@ None; HTTP JSON-RPC only.
 | NODE_ENV | No | `development` or `production` |
 | HTTP_PORT | No | Express server port (default: 8081, use 8081 if nginx enabled on 8080) |
 | ENABLE_NGINX | No | Set to `'true'` to start nginx reverse proxy on port 8080 (default: false) |
-| BSV_NETWORK | No | Target blockchain network (`main`, `test`, or `regtest`) |
+| BSV_NETWORK | No | Target blockchain network (`main`, `test`, `ttn`, or `mock`) |
 | SERVER_PRIVATE_KEY | Yes | 256-bit hex private key for server identity |
 | KNEX_DB_CONNECTION | Yes | Knex database connection JSON string (e.g., `{"port":3306,"host":"mysql","user":"root","password":"rootPass","database":"wallet_storage"}`) |
 | COMMISSION_FEE | No | Optional commission fee in satoshis per request (default: 0) |
 | COMMISSION_PUBLIC_KEY | No | Public key to receive commission payments (if COMMISSION_FEE > 0) |
 | FEE_MODEL | No | Fee calculation model as JSON (default: `{"model":"sat/kb","value":1}`) |
-| TAAL_API_KEY | No | API key for Taal blockchain data service (optional) |
+| TAAL_API_KEY | No | API key used by the default Arc/Taal service configuration (optional) |
+
+The reference `infra/wallet-infra` entrypoint currently wires only the default
+wallet-toolbox `Services.createDefaultOptions(chain)` path, plus `TAAL_API_KEY`
+when supplied. The wallet-toolbox package itself also supports Arcade-first /
+Arc-fallback service options, callback tokens, and Chaintracks event integration,
+but those extra env vars are not yet exposed by this reference infra wrapper.
 
 ## Run locally
 
@@ -118,12 +124,42 @@ Dockerfile uses multi-stage build (Node 22 builder → production). Optional ngi
 
 Auto-run on startup via Knex. Creates tables: outputs, baskets, labels, certificates, metadata with indexes on identity_key, output_hash, blockchain_height for query performance.
 
+## Wallet monitor behavior
+
+The process starts both the JSON-RPC storage server and a wallet-toolbox
+`Monitor`:
+
+1. `Monitor.createDefaultWalletMonitorOptions(chain, storage, services)` builds
+   the monitor options for real networks.
+2. `monitor.addDefaultTasks()` installs the default task set.
+3. `monitor.startTasks()` runs the background task loop after the storage server
+   starts.
+
+The default task set handles:
+
+- sending queued transactions;
+- checking for delayed Merkle proofs;
+- failing abandoned requests;
+- reviewing proven transactions and double-spend state;
+- purging completed, spent, and failed records after the configured age windows.
+
+For `mock`, the reference server uses `MockServices` with shorter task timing so
+local integration tests complete quickly.
+
 ## Health checks
 
-No explicit health endpoint. Monitor:
-- MySQL connectivity and query latency
-- JSON-RPC endpoint responds to method calls (e.g., walletUtxoStorage_getHeight)
-- Database indexes present and functional
+There is no dedicated HTTP health endpoint in this reference wrapper. Monitor:
+
+- MySQL connectivity and query latency.
+- JSON-RPC endpoint responds to method calls, such as
+  `walletUtxoStorage_getHeight`.
+- Monitor startup emits `monitor.start` with `outcome=ok`.
+- Repeated monitor task failures, especially send/proof/double-spend review
+  failures.
+- Database indexes are present and functional.
+
+If this component is deployed behind nginx, also check the nginx listener and the
+upstream app port (`HTTP_PORT`, default `8081`).
 
 ## Spec conformance
 
@@ -136,7 +172,11 @@ No explicit health endpoint. Monitor:
 
 - BSV wallet clients use this via @bsv/wallet-toolbox WalletClient
 - Storage implementation extends @bsv/wallet-toolbox base classes
-- Integrates with Taal or ARC for fee estimation and transaction submission
+- Integrates with Arc/Taal-compatible providers for fee estimation, transaction
+  submission, and proof acquisition. Newer wallet-toolbox service options can
+  configure Arcade as the primary broadcaster with Arc fallback, but the
+  reference infra wrapper needs explicit env wiring before operators can enable
+  that without code changes.
 - Optional payment middleware charges per-call or per-route via BRC-100
 - Advertises wallet storage service capability to overlay network
 
@@ -150,6 +190,13 @@ No explicit health endpoint. Monitor:
 - Migrations auto-run: schema changes apply on startup; use Knex CLI for manual migration control if needed
 - Optional nginx: ENABLE_NGINX=true adds another layer; ensure port 8080 available and firewall open
 - Commission fees: COMMISSION_FEE enforcement requires COMMISSION_PUBLIC_KEY; mismatched config silently skips fee collection
+- Provider concentration: with only `TAAL_API_KEY` wired by the reference wrapper,
+  production deployments can become too dependent on one provider. Prefer
+  exposing Arcade and Chaintracks options in infra before relying on this wrapper
+  for resilient mainnet/TeraTestnet operations.
+- Monitor liveness: the storage server and monitor run in the same process. A
+  crash in monitor startup fails the process, which is good for visibility but
+  requires process supervision and alerting.
 
 ## Source
 

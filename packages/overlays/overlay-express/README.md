@@ -11,6 +11,9 @@ An opinionated but configurable Overlay Services deployment system:
 - Uses common Knex/SQL and Mongo databases across all services for efficiency
 - Supports SHIP, SLAP, and GASP sync out of the box (or it can be disabled)
 - Supports Arc callbacks natively for production (or disable it for simplicity during local development)
+- Supports Arcade-first broadcast/proof lookup, Arc fallback broadcast,
+  Chaintracks header validation, BASM reorg streaming, and active
+  monitor-driven maintenance
 
 ## Example Usage
 
@@ -55,6 +58,31 @@ const main = async () => {
     // For simple local deployments, sync can be disabled.
     server.configureEnableGASPSync(false)
 
+    // Production deployments should configure at least one transaction
+    // propagation provider. Arcade can be used as the primary provider with Arc
+    // as a fallback. The callback token is optional, but recommended when
+    // exposing /arc-ingest publicly.
+    server.configureArcade(process.env.ARCADE_URL!, {
+      apiKey: process.env.ARCADE_API_KEY,
+      deploymentId: process.env.ARCADE_DEPLOYMENT_ID,
+      chaintracksApiPrefix: '/chaintracks/v2'
+    })
+    if (process.env.ARC_API_KEY) {
+      server.configureArcApiKey(process.env.ARC_API_KEY)
+    }
+    if (process.env.ARC_CALLBACK_TOKEN) {
+      server.configureArcCallbackToken(process.env.ARC_CALLBACK_TOKEN)
+    }
+
+    // Chaintracks-compatible services provide block headers for BASM and can
+    // stream reorg notifications. Arcade exposes go-chaintracks under
+    // /chaintracks/v2.
+    server.configureChaintracks(process.env.CHAINTRACKS_URL ?? process.env.ARCADE_URL!, {
+      apiPrefix: '/chaintracks/v2',
+      reorgStream: true,
+      scanDepth: 3
+    })
+
     // Lastly, configure the engine and start the server!
     await server.configureEngine()
     await server.start()
@@ -82,9 +110,84 @@ server.configureEngineParams({
 })
 ```
 
+`throwOnBroadcastFailure` should remain `true` for most production overlays. With
+provider-chain broadcast configured, this means a transaction is not committed to
+overlay state unless at least one provider accepts it or returns an already-known
+success. Set it to `false` only for deliberate offline/dev workflows where local
+overlay admission may proceed without current network propagation.
+
+### Transaction Propagation Providers
+
+Overlay Express can compose multiple transaction propagation and proof sources:
+
+```typescript
+server.configureArcade('https://arcade-v2-us-1.bsvblockchain.tech', {
+  apiKey: process.env.ARCADE_API_KEY,
+  deploymentId: 'my-overlay-node',
+  chaintracksApiPrefix: '/chaintracks/v2'
+})
+
+server.configureArcApiKey(process.env.ARC_API_KEY!)
+server.configureArcCallbackToken(process.env.ARC_CALLBACK_TOKEN!)
+
+server.configureChaintracks('https://arcade-v2-us-1.bsvblockchain.tech', {
+  apiPrefix: '/chaintracks/v2',
+  reorgStream: true,
+  scanDepth: 3
+})
+```
+
+- `configureArcade` registers Arcade as the first-choice broadcaster and proof
+  lookup provider.
+- `configureArcApiKey` registers the standard Arc broadcaster as fallback.
+- `configureArcCallbackToken` requires inbound `/arc-ingest` callbacks to present
+  the expected token.
+- `configureChaintracks` configures a go-chaintracks compatible service for block
+  header lookup, BASM anchor header resolution, and optional reorg SSE.
+
+Provider callbacks posted to `/arc-ingest` are classified as successful proof,
+terminal invalidation, double spend, or transient status. Double-spend and other
+terminal invalid statuses remove the affected transaction from the admitted
+overlay state so the lookup layer does not keep serving data that the network has
+rejected.
+
+### BASM And Unproven Maintenance
+
+BASM is opt-in because it requires direct proofs and block header resolution:
+
+```typescript
+server.configureEnableBASMSync(true)
+server.configureBASMBlockPollInterval(10 * 60 * 1000)
+server.configureUnprovenMaintenance({
+  intervalMs: 60 * 60 * 1000,
+  thresholdBlocks: 144
+})
+```
+
+When configured, unproven maintenance first tries the configured proof providers
+for transactions that remain unproven past the threshold. Only transactions that
+still cannot be proven are evicted. Operators can also run this manually through
+the admin endpoints documented below.
+
 ### Admin-Protected Endpoints
 
-We also now provide admin-protected endpoints for certain advanced operations like manually syncing advertisements or triggering GASP sync. These endpoints require a Bearer token. You can supply a custom token in the constructor of `OverlayExpress`, or retrieve the auto-generated token by calling `server.getAdminToken()`. You can then include this token as a Bearer token in the `Authorization` header of requests to the `/admin/syncAdvertisements` and `/admin/startGASPSync` endpoints.
+We also provide admin-protected endpoints for advanced operations like manually
+syncing advertisements, triggering GASP/BASM sync, running unproven maintenance,
+evicting specific outpoints, and running the janitor. These endpoints require a
+Bearer token. You can supply a custom token in the constructor of
+`OverlayExpress`, or retrieve the auto-generated token by calling
+`server.getAdminToken()`.
+
+Common admin endpoints:
+
+- `POST /admin/syncAdvertisements`
+- `POST /admin/startGASPSync`
+- `POST /admin/startBASMSync`
+- `POST /admin/refreshUnprovenProofs`
+- `POST /admin/evictUnproven`
+- `POST /admin/maintainUnproven`
+- `POST /admin/evictOutpoint`
+- `POST /admin/janitor`
 
 ### Health Endpoints
 
@@ -118,7 +221,12 @@ The janitor service also understands the richer `/health` response format, so ex
 
 ### Overlay Monitor
 
-`OverlayMonitor` provides a reusable worker for monitoring Overlay Express lookup behavior. It posts configured `/lookup` probes to any Overlay Express deployment, measures response size, parses returned BEEF, and reports whether responsive output transactions have direct Merkle proofs or are being served with deeper proof ancestry.
+`OverlayMonitor` provides a reusable worker for monitoring Overlay Express lookup
+behavior and, when configured with an admin token, running maintenance actions.
+It posts configured `/lookup` probes to any Overlay Express deployment, measures
+response size, parses returned BEEF, and reports whether responsive output
+transactions have direct Merkle proofs or are being served with deeper proof
+ancestry.
 
 This is intended to be run by deployments as a long-running monitor process or by cluster scheduling. It is not tied to a specific deployment platform.
 
@@ -138,7 +246,15 @@ const monitor = new OverlayMonitor({
           query: { topic: 'tm_example' },
           maxOutputs: 20
         }
-      ]
+      ],
+      adminToken: process.env.OVERLAY_ADMIN_TOKEN,
+      maintenance: {
+        startBASMSync: true,
+        maintainUnproven: {
+          thresholdBlocks: 144
+        },
+        janitor: true
+      }
     }
   ],
   onReport: async report => {
@@ -148,6 +264,9 @@ const monitor = new OverlayMonitor({
 
 monitor.start()
 ```
+
+Maintenance requests are reported alongside lookup probes so operators can alert
+on failed maintenance separately from lookup/proof-shape warnings.
 
 ## License
 
