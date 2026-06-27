@@ -1,5 +1,5 @@
-import { MerklePath } from '@bsv/sdk'
 import { ProvenTxReqTerminalStatus } from '../../sdk/types'
+import { EntityProvenTx } from '../../storage/schema/entities'
 import { EntityProvenTxReq } from '../../storage/schema/entities/EntityProvenTxReq'
 import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient'
 import { Monitor } from '../Monitor'
@@ -28,9 +28,9 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       return
     }
 
-    const arcUrl = (this.monitor.services as Services).options?.arcUrl
-    if (!arcUrl) {
-      console.log('[TaskArcadeSSE] no arcUrl configured — SSE disabled')
+    const arcadeUrl = (this.monitor.services as Services).options?.arcadeUrl
+    if (!arcadeUrl) {
+      console.log('[TaskArcadeSSE] no arcadeUrl configured — SSE disabled')
       return
     }
 
@@ -48,14 +48,14 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       console.log(`[TaskArcadeSSE] failed to load lastEventId: ${e}`)
     }
 
-    const arcApiKey = (this.monitor.services as Services).options?.arcConfig?.apiKey
+    const arcadeApiKey = (this.monitor.services as Services).options?.arcadeConfig?.apiKey
 
-    console.log(`[TaskArcadeSSE] setting up — arcUrl=${arcUrl} token=${callbackToken.substring(0, 8)}...`)
+    console.log(`[TaskArcadeSSE] setting up — arcadeUrl=${arcadeUrl} token=${callbackToken.substring(0, 8)}...`)
 
     this.sseClient = new ArcSSEClient({
-      baseUrl: arcUrl,
+      baseUrl: arcadeUrl,
       callbackToken,
-      arcApiKey,
+      arcApiKey: arcadeApiKey,
       lastEventId,
       EventSourceClass,
       onEvent: event => {
@@ -144,8 +144,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         case 'IMMUTABLE': {
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
-          // Fetch proof directly from Arcade and complete the transaction
-          log += await this.fetchProofFromArcade(req)
+          log += await this.fetchProofFromServices(req)
           break
         }
 
@@ -189,53 +188,30 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   }
 
   /**
-   * Fetch the merklePath from Arcade's GET /tx/{txid} endpoint and
-   * create a ProvenTx record, completing the transaction.
+   * Complete a MINED/IMMUTABLE status by using the configured proof providers.
+   * Arcade is first when configured, but the shared provider path validates the
+   * proof against the wallet chaintracker before a ProvenTx is persisted.
    */
-  private async fetchProofFromArcade (req: EntityProvenTxReq): Promise<string> {
-    const arcUrl = (this.monitor.services as Services).options?.arcUrl
+  private async fetchProofFromServices (req: EntityProvenTxReq): Promise<string> {
     const txid = req.txid
-    let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from Arcade\n`
+    let log = `  req ${req.id} MINED/IMMUTABLE — fetching proof from configured services\n`
 
     try {
-      const fetchHeaders: Record<string, string> = {}
-      const apiKey = (this.monitor.services as Services).options?.arcConfig?.apiKey
-      if (apiKey) {
-        fetchHeaders.Authorization = `Bearer ${apiKey}`
-      }
-      const response = await fetch(`${arcUrl}/tx/${txid}`, { headers: fetchHeaders })
-      if (!response.ok) {
-        log += `    Arcade GET /tx/${txid} returned ${response.status}\n`
+      const proof = await this.monitor.services.getMerklePath(txid)
+      const ptx = await EntityProvenTx.fromReq(
+        req,
+        proof,
+        false,
+        this.monitor.options.maxRebroadcastAttempts ?? 0
+      )
+      if (ptx == null) {
+        log += `    No validated merkle proof available from ${proof.name ?? 'configured services'}\n`
         return log
       }
 
-      const data = await response.json()
-      console.log(`[TaskArcadeSSE] GET /tx/${txid}:`, JSON.stringify(data))
-
-      if (!data.merklePath) {
-        log += `    No merklePath in response (status=${data.txStatus})\n`
-        return log
-      }
-
-      // Parse the merklePath hex from Arcade
-      const merklePath = MerklePath.fromHex(data.merklePath)
-      const merkleRoot = merklePath.computeRoot(txid)
-
-      // Find the leaf to get the tx index
-      const leaf = merklePath.path[0].find(l => l.txid === true && l.hash === txid)
-      if (leaf == null) {
-        log += '    merklePath does not contain leaf for txid\n'
-        return log
-      }
-
-      const blockHash = data.blockHash || ''
-      const height = data.blockHeight || merklePath.blockHeight
-
-      // Persist via merkle proof data
-
-      // Persist via the same path as TaskCheckForProofs
       await req.refreshFromStorage(this.storage)
       const { provenTxReqId, status, attempts, history } = req.toApi()
+      const { index, height, blockHash, merklePath, merkleRoot } = ptx.toApi()
       const r = await this.storage.runAsStorageProvider(async sp => {
         return await sp.updateProvenTxReqWithNewProvenTx({
           provenTxReqId,
@@ -243,10 +219,10 @@ export class TaskArcadeSSE extends WalletMonitorTask {
           txid,
           attempts,
           history,
-          index: leaf.offset,
+          index,
           height,
           blockHash,
-          merklePath: merklePath.toBinary(),
+          merklePath,
           merkleRoot
         })
       })
@@ -257,14 +233,14 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
       this.monitor.callOnProvenTransaction({
         txid,
-        txIndex: leaf.offset,
+        txIndex: index,
         blockHeight: height,
         blockHash,
-        merklePath: merklePath.toBinary(),
+        merklePath,
         merkleRoot
       })
 
-      log += `    proved at height ${height}, index ${leaf.offset} => ${r.status}\n`
+      log += `    proved by ${proof.name ?? 'configured services'} at height ${height}, index ${index} => ${r.status}\n`
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       log += `    error fetching proof: ${msg}\n`
