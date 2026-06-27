@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [2.1.1 - 2026-06-27](#211---2026-06-27)
 - [0.6.0 - 2025-12-17](#060---2025-12-17)
 - [0.5.4 - 2025-12-16](#054---2025-12-16)
 - [0.5.3 - 2025-11-11](#053---2025-11-11)
@@ -20,14 +21,10 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- Added BASM unproven transaction maintenance helpers that refresh proofs before
-  evicting rows that remain unproven past the configured block threshold.
-- Added applied-transaction eviction support for provider-confirmed terminal
-  invalidation such as double spends.
+- (Include new features or significant user-visible enhancements here.)
 
 ### Changed
-- Reorg and unproven lifecycle documentation now describes refresh-before-evict
-  maintenance and provider invalidation behavior.
+- (Detail modifications that are non-breaking but relevant to the end-users.)
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)
@@ -42,6 +39,21 @@ All notable changes to this project will be documented in this file. The format 
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
 
 ---
+
+## [2.1.1] - 2026-06-27
+
+### Added
+- Added BASM unproven transaction maintenance helpers that refresh proofs before
+  evicting rows that remain unproven past the configured block threshold.
+- Added applied-transaction eviction support for provider-confirmed terminal
+  invalidation such as double spends.
+
+### Changed
+- Reorg and unproven lifecycle documentation now describes refresh-before-evict
+  maintenance and provider invalidation behavior.
+
+---
+
 ## [0.6.0] - 2025-12-17
 
 ### Fixed
