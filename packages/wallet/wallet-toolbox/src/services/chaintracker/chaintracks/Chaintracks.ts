@@ -162,7 +162,8 @@ export class Chaintracks implements ChaintracksManagementApi {
       for (const liveIn of this.liveIngestors) await liveIn.setStorage(this.storage, this.log)
 
       // Start all live ingestors to push new headers onto liveHeaders... each long running.
-      for (const liveIngestor of this.liveIngestors) this.promises.push(liveIngestor.startListening(this.liveHeaders))
+      this.stopMainThread = false
+      for (const liveIngestor of this.liveIngestors) this.promises.push(this.runLiveIngestor(liveIngestor))
 
       // Start mai loop to shift out liveHeaders...once sync'd, will set `available` true.
       this.promises.push(this.mainThreadShiftLiveHeaders())
@@ -198,6 +199,33 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   async listening (): Promise<void> {
     return await this.makeAvailable()
+  }
+
+  private async runLiveIngestor (liveIngestor: LiveIngestorApi): Promise<void> {
+    let restartCount = 0
+    const name = liveIngestor.constructor.name
+
+    while (!this.stopMainThread) {
+      try {
+        await liveIngestor.startListening(this.liveHeaders)
+        if (this.stopMainThread) return
+        restartCount++
+        const waitMsecs = this.liveIngestorRestartWaitMsecs(restartCount)
+        this.log(`Live ingestor ${name} stopped unexpectedly restart=${restartCount} retryMsecs=${waitMsecs}`)
+        await wait(waitMsecs)
+      } catch (error_: unknown) {
+        if (this.stopMainThread) return
+        restartCount++
+        const e = WalletError.fromUnknown(error_)
+        const waitMsecs = this.liveIngestorRestartWaitMsecs(restartCount)
+        this.log(`Live ingestor ${name} failed restart=${restartCount} retryMsecs=${waitMsecs}: ${e.stack ?? e.message}`)
+        await wait(waitMsecs)
+      }
+    }
+  }
+
+  private liveIngestorRestartWaitMsecs (restartCount: number): number {
+    return Math.min(1000 * Math.min(2 ** Math.max(restartCount - 1, 0), 60), 60000)
   }
 
   async isListening (): Promise<boolean> {

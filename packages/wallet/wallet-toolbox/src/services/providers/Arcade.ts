@@ -21,7 +21,7 @@ import { ReqHistoryNote } from '../../sdk/types'
 import { WalletError } from '../../sdk/WalletError'
 // Shared wire-contract types only (no behavior coupling): Arcade is ARC-compatible on the
 // configuration and `getTxData` response shape, so it reuses those interfaces.
-import { ArcConfig, ArcMinerGetTxData } from './ARC'
+import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
 
 function defaultDeploymentId (): string {
   return `ts-sdk-${Utils.toHex(Random(16))}`
@@ -153,7 +153,7 @@ export class Arcade {
         r.data = extraInfo != null && extraInfo !== '' ? `${txStatus} ${extraInfo}` : `${txStatus}`
         if (r.txid !== txid) r.data += ` txid altered from ${r.txid} to ${txid}`
         r.txid = txid
-        if (txStatus === 'DOUBLE_SPEND_ATTEMPTED' || txStatus === 'SEEN_IN_ORPHAN_MEMPOOL') {
+        if (isArcDoubleSpendTxStatus(txStatus)) {
           r.status = 'error'
           r.doubleSpend = true
           r.competingTxs = competingTxs
@@ -168,11 +168,9 @@ export class Arcade {
         r.serviceError = true
       } else {
         r.status = 'error'
-        // Arcade returns HTTP 400 for a terminal REJECTED (invalid) transaction — surface it as
-        // an invalid-transaction status error (serviceError=false) so cross-provider aggregation
-        // only marks the tx invalidTx when no provider succeeds. 5xx / unknown remain transient
-        // service errors so the request retries and falls through to the remaining providers.
-        r.serviceError = response.status !== 400
+        // Arcade returns HTTP 400 for terminal validation errors — surface those as
+        // invalid-transaction status errors while keeping rate limits, batch limits,
+        // 5xx/backpressure and unknown failures as service errors.
         const n: ReqHistoryNote = {
           ...nn(),
           ...nne(),
@@ -182,9 +180,15 @@ export class Arcade {
         const ed: PostTxResultForTxidError = {}
         r.data = ed
         const st = typeof response.status
+        let status: number | undefined
         if (st === 'number' || st === 'string') {
           n.status = response.status
           ed.status = response.status.toString()
+          if (typeof response.status === 'number') status = response.status
+          else {
+            const parsed = Number(response.status)
+            if (Number.isFinite(parsed)) status = parsed
+          }
         } else {
           n.status = st
           ed.status = 'ERR_UNKNOWN'
@@ -201,6 +205,7 @@ export class Arcade {
             n.detail = ed.detail
           }
         }
+        r.serviceError = isArcServiceErrorStatus(status, ed.detail)
         r.notes!.push(n)
       }
     } catch (error_: unknown) {
