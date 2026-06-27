@@ -60,6 +60,41 @@ const requireEnv = (name: string): string => {
     return value
 }
 
+const optionalEnv = (name: string): string | undefined => {
+    const value = process.env[name]
+    return value === undefined || value === '' ? undefined : value
+}
+
+const boolEnv = (name: string, defaultValue: boolean): boolean => {
+    const value = optionalEnv(name)
+    if (value === undefined) return defaultValue
+    return value === 'true' || value === '1' || value === 'yes'
+}
+
+const numberEnv = (name: string): number | undefined => {
+    const value = optionalEnv(name)
+    if (value === undefined) return undefined
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) {
+        throw new Error(`${name} must be a finite number, got: ${value}`)
+    }
+    return parsed
+}
+
+type OverlayProviderConfigMethods = OverlayExpress & {
+    configureArcade?: (url: string, config?: {
+        apiKey?: string
+        deploymentId?: string
+        chaintracksApiPrefix?: string
+    }) => void
+    configureChaintracks?: (url: string, config?: {
+        apiPrefix?: string
+        reorgStream?: boolean
+        scanDepth?: number
+    }) => void
+    configureUnprovenMaintenance?: (config: { intervalMs?: number, thresholdBlocks?: number }) => void
+}
+
 // Hi there! Let's configure Overlay Express!
 const main = async () => {
     // Validate required configuration up front so misconfiguration fails fast.
@@ -67,7 +102,13 @@ const main = async () => {
     const SERVER_PRIVATE_KEY = requireEnv('SERVER_PRIVATE_KEY')
     const HOSTING_URL = requireEnv('HOSTING_URL')
     const WALLET_STORAGE_URL = requireEnv('WALLET_STORAGE_URL')
-    const ARC_API_KEY = requireEnv('ARC_API_KEY')
+    const ARC_API_KEY = optionalEnv('ARC_API_KEY')
+    const ARC_CALLBACK_TOKEN = optionalEnv('ARC_CALLBACK_TOKEN')
+    const ARCADE_URL = optionalEnv('ARCADE_URL')
+    const ARCADE_API_KEY = optionalEnv('ARCADE_API_KEY')
+    const ARCADE_DEPLOYMENT_ID = optionalEnv('ARCADE_DEPLOYMENT_ID')
+    const CHAINTRACKS_URL = optionalEnv('CHAINTRACKS_URL')
+    const CHAINTRACKS_API_PREFIX = optionalEnv('CHAINTRACKS_API_PREFIX') ?? '/chaintracks/v2'
     const KNEX_URL = requireEnv('KNEX_URL')
     const MONGO_URL = requireEnv('MONGO_URL')
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN // optional: a random token is generated if unset
@@ -75,6 +116,9 @@ const main = async () => {
     const NETWORK = requireEnv('NETWORK')
     if (NETWORK !== 'main' && NETWORK !== 'test') {
         throw new Error(`NETWORK must be "main" or "test", got: ${NETWORK}`)
+    }
+    if (ARC_API_KEY === undefined && ARCADE_URL === undefined) {
+        throw new Error('Configure at least one transaction propagation provider: ARC_API_KEY or ARCADE_URL')
     }
 
     // We'll make a new server for our overlay node.
@@ -92,6 +136,7 @@ const main = async () => {
         // Provide an adminToken to enable the admin API
         ADMIN_TOKEN
     )
+    const providerServer = server as OverlayProviderConfigMethods
 
     const wa = new WalletAdvertiser(
         NETWORK,
@@ -103,11 +148,59 @@ const main = async () => {
     await wa.init()
 
     server.configureEngineParams({
-        advertiser: wa
+        advertiser: wa,
+        throwOnBroadcastFailure: boolEnv('THROW_ON_BROADCAST_FAIL', true)
     })
 
-    // Set the ARC API key
-    server.configureArcApiKey(ARC_API_KEY)
+    server.configureNetwork(NETWORK)
+
+    if (ARC_CALLBACK_TOKEN !== undefined) {
+        server.configureArcCallbackToken(ARC_CALLBACK_TOKEN)
+    }
+
+    if (ARCADE_URL !== undefined) {
+        if (typeof providerServer.configureArcade !== 'function') {
+            throw new Error('ARCADE_URL requires an @bsv/overlay-express version with configureArcade support')
+        }
+        providerServer.configureArcade(ARCADE_URL, {
+            apiKey: ARCADE_API_KEY,
+            deploymentId: ARCADE_DEPLOYMENT_ID,
+            chaintracksApiPrefix: CHAINTRACKS_API_PREFIX
+        })
+    }
+
+    if (ARC_API_KEY !== undefined) {
+        server.configureArcApiKey(ARC_API_KEY)
+    }
+
+    const chaintracksUrl = CHAINTRACKS_URL ?? (boolEnv('USE_ARCADE_CHAINTRACKS', ARCADE_URL !== undefined) ? ARCADE_URL : undefined)
+    if (chaintracksUrl !== undefined) {
+        if (typeof providerServer.configureChaintracks !== 'function') {
+            throw new Error('CHAINTRACKS_URL/USE_ARCADE_CHAINTRACKS requires an @bsv/overlay-express version with configureChaintracks support')
+        }
+        providerServer.configureChaintracks(chaintracksUrl, {
+            apiPrefix: CHAINTRACKS_API_PREFIX,
+            reorgStream: boolEnv('BASM_REORG_STREAM_ENABLED', true),
+            scanDepth: numberEnv('BASM_REORG_SCAN_DEPTH')
+        })
+    }
+
+    server.configureEnableBASMSync(boolEnv('BASM_ENABLED', false))
+    const basmBlockPollIntervalMs = numberEnv('BASM_BLOCK_POLL_INTERVAL_MS')
+    if (basmBlockPollIntervalMs !== undefined) {
+        server.configureBASMBlockPollInterval(basmBlockPollIntervalMs)
+    }
+    const unprovenMaintenanceIntervalMs = numberEnv('UNPROVEN_MAINTENANCE_INTERVAL_MS') ?? 0
+    const unprovenEvictionBlocks = numberEnv('UNPROVEN_EVICTION_BLOCKS')
+    if (unprovenMaintenanceIntervalMs > 0 || unprovenEvictionBlocks !== undefined) {
+        if (typeof providerServer.configureUnprovenMaintenance !== 'function') {
+            throw new Error('Unproven maintenance configuration requires an @bsv/overlay-express version with configureUnprovenMaintenance support')
+        }
+        providerServer.configureUnprovenMaintenance({
+            intervalMs: unprovenMaintenanceIntervalMs,
+            thresholdBlocks: unprovenEvictionBlocks
+        })
+    }
 
     // Decide what port you want the server to listen on.
     server.configurePort(8080)

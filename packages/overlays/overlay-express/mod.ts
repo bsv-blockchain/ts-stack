@@ -30,3 +30,18 @@ export {
   type OverlayMonitorThresholds,
   type OverlayMonitorWarning
 } from './src/OverlayMonitor.js'
+export {
+  ArcadeProvider,
+  isTerminalArcStatus,
+  type ArcadeMerkleProof,
+  type ArcadeProviderConfig
+} from './src/ArcadeProvider.js'
+export {
+  ProviderChainBroadcaster,
+  type NamedBroadcaster
+} from './src/ProviderChainBroadcaster.js'
+export {
+  ChaintracksProvider,
+  type ChaintracksHeader,
+  type ChaintracksProviderConfig
+} from './src/ChaintracksProvider.js'
