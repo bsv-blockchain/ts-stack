@@ -84,6 +84,7 @@ describe('OverlayMonitor', () => {
     }))
     expect(report.summary.targetCount).toBe(1)
     expect(report.summary.probeCount).toBe(1)
+    expect(report.summary.maintenanceActionCount).toBe(0)
     expect(report.summary.outputsMissingSubjectProof).toBe(1)
   })
 
@@ -150,6 +151,79 @@ describe('OverlayMonitor', () => {
     }))
     expect(report.summary.anchorProbeCount).toBe(1)
     expect(report.anchorResults[0].warnings).toHaveLength(0)
+  })
+
+  it('runs configured admin maintenance actions', async () => {
+    const fetchImpl = jest.fn<typeof fetch>(async (url) => {
+      if (String(url).endsWith('/admin/maintainUnproven')) {
+        return new Response(JSON.stringify({ status: 'success', data: { evictedTransactions: 1 } }), { status: 200 })
+      }
+      if (String(url).endsWith('/admin/startBASMSync')) {
+        return new Response(JSON.stringify({ status: 'success', data: { synced: true } }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ status: 'success' }), { status: 200 })
+    })
+    const monitor = new OverlayMonitor({
+      targets: [
+        {
+          name: 'maintained-overlay',
+          baseUrl: 'https://overlay.example',
+          probes: [],
+          maintenance: {
+            adminToken: 'admin-secret',
+            startBASMSync: true,
+            maintainUnproven: {
+              topics: ['tm_a', 'tm_b'],
+              thresholdBlocks: 12
+            }
+          }
+        }
+      ],
+      fetchImpl
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(fetchImpl).toHaveBeenCalledWith('https://overlay.example/admin/startBASMSync', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer admin-secret' }),
+      body: JSON.stringify({})
+    }))
+    expect(fetchImpl).toHaveBeenCalledWith('https://overlay.example/admin/maintainUnproven', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer admin-secret' }),
+      body: JSON.stringify({ topic: 'tm_a', thresholdBlocks: 12 })
+    }))
+    expect(fetchImpl).toHaveBeenCalledWith('https://overlay.example/admin/maintainUnproven', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ topic: 'tm_b', thresholdBlocks: 12 })
+    }))
+    expect(report.maintenanceResults).toHaveLength(3)
+    expect(report.summary.maintenanceActionCount).toBe(3)
+    expect(report.summary.failedMaintenanceActionCount).toBe(0)
+  })
+
+  it('reports failed admin maintenance separately from probe failures', async () => {
+    const fetchImpl = jest.fn<typeof fetch>(async () => new Response(JSON.stringify({ message: 'Forbidden' }), { status: 403 }))
+    const monitor = new OverlayMonitor({
+      targets: [
+        {
+          name: 'maintained-overlay',
+          baseUrl: 'https://overlay.example',
+          probes: [],
+          maintenance: {
+            maintainUnproven: true
+          }
+        }
+      ],
+      fetchImpl
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(report.summary.failedProbeCount).toBe(0)
+    expect(report.summary.failedMaintenanceActionCount).toBe(1)
+    expect(report.maintenanceResults[0].error).toBe('Forbidden')
   })
 
   it('aborts a probe that exceeds the configured timeout', async () => {

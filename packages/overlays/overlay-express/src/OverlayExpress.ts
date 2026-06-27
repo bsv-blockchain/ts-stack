@@ -1604,6 +1604,14 @@ export default class OverlayExpress {
                 topic: typeof topic === 'string' ? topic : undefined,
                 reason: `${txStatus ?? ''} ${extraInfo ?? ''}`.trim()
               })
+              this.logger.warn({
+                operation: 'overlay.provider_callback',
+                outcome: 'terminal_evicted',
+                txid,
+                txStatus,
+                competingTxs,
+                report
+              })
               return res.status(200).json({
                 status: 'success',
                 message: 'Terminal transaction status processed',
@@ -1619,6 +1627,12 @@ export default class OverlayExpress {
             }
             const merklePath = MerklePath.fromHex(merklePathHex)
             await engine.handleNewMerkleProof(txid, merklePath, blockHeight)
+            this.logger.log({
+              operation: 'overlay.provider_callback',
+              outcome: 'proof_ingested',
+              txid,
+              blockHeight
+            })
             return res.status(200).json({ status: 'success', message: 'Transaction status updated' })
           } catch (error) {
             console.error(chalk.red('Error in /arc-ingest:'), error)
@@ -2182,6 +2196,7 @@ export default class OverlayExpress {
         topic: typeof topic === 'string' ? topic : undefined,
         thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
       })
+      this.logger.log({ operation: 'overlay.unproven_eviction', outcome: 'ok', report })
       return { status: 'success', message: 'Unproven eviction completed', data: report }
     }, checkAdminAuth as any)
 
@@ -2196,6 +2211,7 @@ export default class OverlayExpress {
         thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
         proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
       })
+      this.logger.log({ operation: 'overlay.unproven_proof_refresh', outcome: 'ok', report })
       return { status: 'success', message: 'Unproven proof refresh completed', data: report }
     }, checkAdminAuth as any)
 
@@ -2209,6 +2225,7 @@ export default class OverlayExpress {
         thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
         proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
       })
+      this.logger.log({ operation: 'overlay.unproven_maintenance', outcome: 'ok', report })
       return { status: 'success', message: 'Unproven maintenance completed', data: report }
     }, checkAdminAuth as any)
 

@@ -22,11 +22,23 @@ export interface OverlayAnchorProbe {
   maxTipLagBlocks?: number
 }
 
+export interface OverlayMaintenanceConfig {
+  adminToken?: string
+  headers?: Record<string, string>
+  maintainUnproven?: boolean | {
+    topics?: string[]
+    thresholdBlocks?: number
+  }
+  startBASMSync?: boolean
+  janitor?: boolean
+}
+
 export interface OverlayMonitorTarget {
   name: string
   baseUrl: string
   probes: OverlayLookupProbe[]
   anchorProbes?: OverlayAnchorProbe[]
+  maintenance?: OverlayMaintenanceConfig
   headers?: Record<string, string>
 }
 
@@ -105,17 +117,33 @@ export interface OverlayAnchorProbeResult {
   error?: string
 }
 
+export interface OverlayMaintenanceResult {
+  target: string
+  url: string
+  operation: 'maintain-unproven' | 'start-basm-sync' | 'janitor'
+  topic?: string
+  status: number
+  ok: boolean
+  responseBytes: number
+  durationMs: number
+  data?: unknown
+  error?: string
+}
+
 export interface OverlayMonitorReport {
   startedAt: Date
   completedAt: Date
   durationMs: number
   results: OverlayLookupProbeResult[]
   anchorResults: OverlayAnchorProbeResult[]
+  maintenanceResults: OverlayMaintenanceResult[]
   summary: {
     targetCount: number
     probeCount: number
     anchorProbeCount: number
+    maintenanceActionCount: number
     failedProbeCount: number
+    failedMaintenanceActionCount: number
     responseBytes: number
     outputCount: number
     analyzedOutputCount: number
@@ -182,6 +210,7 @@ export class OverlayMonitor {
     const startedAt = this.now()
     const results: OverlayLookupProbeResult[] = []
     const anchorResults: OverlayAnchorProbeResult[] = []
+    const maintenanceResults: OverlayMaintenanceResult[] = []
 
     for (const target of this.targets) {
       for (const probe of target.probes) {
@@ -190,6 +219,7 @@ export class OverlayMonitor {
       for (const probe of target.anchorProbes ?? []) {
         anchorResults.push(await this.runAnchorProbe(target, probe))
       }
+      maintenanceResults.push(...await this.runMaintenance(target))
     }
 
     const completedAt = this.now()
@@ -199,7 +229,8 @@ export class OverlayMonitor {
       durationMs: completedAt.getTime() - startedAt.getTime(),
       results,
       anchorResults,
-      summary: summarize(results, anchorResults, this.targets.length)
+      maintenanceResults,
+      summary: summarize(results, anchorResults, maintenanceResults, this.targets.length)
     }
 
     await this.onReport?.(report)
@@ -377,6 +408,117 @@ export class OverlayMonitor {
       clearTimeout(timeout)
     }
   }
+
+  private async runMaintenance(target: OverlayMonitorTarget): Promise<OverlayMaintenanceResult[]> {
+    const maintenance = target.maintenance
+    if (maintenance === undefined) return []
+
+    const results: OverlayMaintenanceResult[] = []
+    if (maintenance.startBASMSync === true) {
+      results.push(await this.runMaintenanceRequest(target, maintenance, 'start-basm-sync', '/admin/startBASMSync', {}))
+    }
+    if (maintenance.maintainUnproven !== undefined && maintenance.maintainUnproven !== false) {
+      const config = maintenance.maintainUnproven === true ? {} : maintenance.maintainUnproven
+      const topics = config.topics !== undefined && config.topics.length > 0 ? config.topics : [undefined]
+      for (const topic of topics) {
+        results.push(await this.runMaintenanceRequest(
+          target,
+          maintenance,
+          'maintain-unproven',
+          '/admin/maintainUnproven',
+          {
+            topic,
+            thresholdBlocks: config.thresholdBlocks
+          }
+        ))
+      }
+    }
+    if (maintenance.janitor === true) {
+      results.push(await this.runMaintenanceRequest(target, maintenance, 'janitor', '/admin/janitor', {}))
+    }
+    return results
+  }
+
+  private async runMaintenanceRequest(
+    target: OverlayMonitorTarget,
+    maintenance: OverlayMaintenanceConfig,
+    operation: OverlayMaintenanceResult['operation'],
+    path: string,
+    body: { topic?: string, thresholdBlocks?: number }
+  ): Promise<OverlayMaintenanceResult> {
+    const startedAt = this.now()
+    const url = new URL(path, target.baseUrl).toString()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
+
+    try {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...target.headers,
+        ...maintenance.headers
+      }
+      if (maintenance.adminToken !== undefined && maintenance.adminToken !== '') {
+        headers.Authorization = `Bearer ${maintenance.adminToken}`
+      }
+      const response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(stripUndefined(body)),
+        signal: controller.signal
+      })
+      const text = await response.text()
+      const responseBytes = new TextEncoder().encode(text).length
+      const completedAt = this.now()
+      let parsed: unknown
+      try {
+        parsed = text.length === 0 ? {} : JSON.parse(text)
+      } catch (error) {
+        return {
+          target: target.name,
+          url,
+          operation,
+          topic: body.topic,
+          status: response.status,
+          ok: false,
+          responseBytes,
+          durationMs: completedAt.getTime() - startedAt.getTime(),
+          error: error instanceof Error ? error.message : 'Invalid JSON response'
+        }
+      }
+      return {
+        target: target.name,
+        url,
+        operation,
+        topic: body.topic,
+        status: response.status,
+        ok: response.ok,
+        responseBytes,
+        durationMs: completedAt.getTime() - startedAt.getTime(),
+        data: parsed,
+        error: response.ok ? undefined : readErrorMessage(parsed)
+      }
+    } catch (error) {
+      const completedAt = this.now()
+      const fallbackMessage = error instanceof Error ? error.message : 'Maintenance request failed'
+      const message = controller.signal.aborted
+        ? `Maintenance request timed out after ${this.timeoutMs}ms`
+        : fallbackMessage
+      return {
+        target: target.name,
+        url,
+        operation,
+        topic: body.topic,
+        status: 0,
+        ok: false,
+        responseBytes: 0,
+        durationMs: completedAt.getTime() - startedAt.getTime(),
+        error: message
+      }
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
 }
 
 export function analyzeOverlayAnchorTip(options: {
@@ -540,15 +682,23 @@ function makeFailedAnchorResult(options: {
   }
 }
 
-function summarize (results: OverlayLookupProbeResult[], anchorResults: OverlayAnchorProbeResult[], targetCount: number): OverlayMonitorReport['summary'] {
+function summarize (
+  results: OverlayLookupProbeResult[],
+  anchorResults: OverlayAnchorProbeResult[],
+  maintenanceResults: OverlayMaintenanceResult[],
+  targetCount: number
+): OverlayMonitorReport['summary'] {
   return {
     targetCount,
     probeCount: results.length,
     anchorProbeCount: anchorResults.length,
+    maintenanceActionCount: maintenanceResults.length,
     failedProbeCount: results.filter(result => !result.ok || result.error !== undefined).length +
       anchorResults.filter(result => !result.ok || result.error !== undefined).length,
+    failedMaintenanceActionCount: maintenanceResults.filter(result => !result.ok || result.error !== undefined).length,
     responseBytes: results.reduce((sum, result) => sum + result.responseBytes, 0) +
-      anchorResults.reduce((sum, result) => sum + result.responseBytes, 0),
+      anchorResults.reduce((sum, result) => sum + result.responseBytes, 0) +
+      maintenanceResults.reduce((sum, result) => sum + result.responseBytes, 0),
     outputCount: results.reduce((sum, result) => sum + result.outputCount, 0),
     analyzedOutputCount: results.reduce((sum, result) => sum + result.analyzedOutputCount, 0),
     outputsMissingSubjectProof: results.reduce((sum, result) => {
@@ -557,6 +707,16 @@ function summarize (results: OverlayLookupProbeResult[], anchorResults: OverlayA
     warningCount: results.reduce((sum, result) => sum + result.warnings.length, 0) +
       anchorResults.reduce((sum, result) => sum + result.warnings.length, 0)
   }
+}
+
+function stripUndefined<T extends Record<string, unknown>>(value: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
+}
+
+function readErrorMessage(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined
+  const message = (body as { message?: unknown }).message
+  return typeof message === 'string' ? message : undefined
 }
 
 function extractOutputs (body: unknown): Array<Record<string, unknown>> {

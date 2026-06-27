@@ -81,6 +81,47 @@ const numberEnv = (name: string): number | undefined => {
     return parsed
 }
 
+const overlayLogArgs = (args: unknown[]): { message: string, fields: Record<string, unknown> } => {
+    const [first, ...rest] = args
+    if (typeof first === 'string') {
+        return {
+            message: first,
+            fields: rest.length > 0 ? { operation: 'overlay', args: rest } : { operation: 'overlay' }
+        }
+    }
+    return {
+        message: 'overlay log',
+        fields: {
+            operation: 'overlay',
+            event: first,
+            args: rest
+        }
+    }
+}
+
+const overlayLogger = {
+    log: (...args: unknown[]) => {
+        const entry = overlayLogArgs(args)
+        log.info(entry.fields, entry.message)
+    },
+    info: (...args: unknown[]) => {
+        const entry = overlayLogArgs(args)
+        log.info(entry.fields, entry.message)
+    },
+    warn: (...args: unknown[]) => {
+        const entry = overlayLogArgs(args)
+        log.warn(entry.fields, entry.message)
+    },
+    error: (...args: unknown[]) => {
+        const entry = overlayLogArgs(args)
+        log.error(entry.fields, entry.message)
+    },
+    debug: (...args: unknown[]) => {
+        const entry = overlayLogArgs(args)
+        log.debug(entry.fields, entry.message)
+    }
+}
+
 type OverlayProviderConfigMethods = OverlayExpress & {
     configureArcade?: (url: string, config?: {
         apiKey?: string
@@ -137,6 +178,7 @@ const main = async () => {
         ADMIN_TOKEN
     )
     const providerServer = server as OverlayProviderConfigMethods
+    server.configureLogger(overlayLogger as unknown as typeof console)
 
     const wa = new WalletAdvertiser(
         NETWORK,
@@ -201,6 +243,26 @@ const main = async () => {
             thresholdBlocks: unprovenEvictionBlocks
         })
     }
+
+    server.configureHealth({
+        contextProvider: () => ({
+            providers: {
+                arc: ARC_API_KEY !== undefined,
+                arcade: ARCADE_URL !== undefined,
+                chaintracks: chaintracksUrl !== undefined,
+            },
+            broadcast: {
+                throwOnBroadcastFailure: boolEnv('THROW_ON_BROADCAST_FAIL', true),
+            },
+            basm: {
+                enabled: boolEnv('BASM_ENABLED', false),
+                reorgStreamEnabled: boolEnv('BASM_REORG_STREAM_ENABLED', true),
+                blockPollIntervalMs: basmBlockPollIntervalMs,
+                unprovenMaintenanceIntervalMs,
+                unprovenEvictionBlocks,
+            },
+        }),
+    })
 
     // Decide what port you want the server to listen on.
     server.configurePort(8080)
