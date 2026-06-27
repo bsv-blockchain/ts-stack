@@ -328,12 +328,36 @@ export interface ReviewActionResult {
 }
 
 export interface SignableTransaction {
+  /**
+   * AtomicBEEF-encoded transaction bytes (BRC-95). The envelope carries the
+   * unsigned transaction plus every input's `sourceTransaction` chain so a
+   * caller can complete signing without a separate parent-fetch round-trip.
+   *
+   * Parse with `Transaction.fromAtomicBEEF(tx)`. Treating these bytes as raw
+   * tx binary (e.g. `Transaction.fromBinary(tx)`) will fail or produce a
+   * transaction with empty `sourceTransaction` on every input.
+   */
   tx: AtomicBEEF
   reference: Base64String
 }
 
 export interface CreateActionResult {
   txid?: TXIDHexString
+  /**
+   * AtomicBEEF-encoded transaction bytes (BRC-95), produced by the wallet's
+   * `createAction` / `signAction` methods (`wallet-toolbox`
+   * `signer/methods/createAction.ts:66` and `signer/methods/signAction.ts:35`,
+   * both invoking `beef.toBinaryAtomic(txid)`). The envelope carries the
+   * broadcast transaction plus every input's `sourceTransaction` chain — a
+   * subsequent broadcaster does not need to re-fetch parents to construct EF
+   * or BEEF wire format.
+   *
+   * Parse with `Transaction.fromAtomicBEEF(tx)`. Treating these bytes as raw
+   * tx binary (e.g. `Transaction.fromBinary(tx)`) will fail or produce a
+   * transaction with empty `sourceTransaction` on every input.
+   *
+   * Absent when `options.returnTXIDOnly === true`.
+   */
   tx?: AtomicBEEF
   noSendChange?: OutpointString[]
   sendWithResults?: SendWithResult[]
