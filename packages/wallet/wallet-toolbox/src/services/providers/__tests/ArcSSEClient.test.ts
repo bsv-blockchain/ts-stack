@@ -16,7 +16,7 @@ class FakeEventSource {
   }
 
   addEventListener (type: string, fn: (event: any) => void): void {
-    if (!this.listeners[type]) this.listeners[type] = []
+    if (this.listeners[type] == null) this.listeners[type] = []
     this.listeners[type].push(fn)
   }
 
@@ -115,6 +115,15 @@ describe('ArcSSEClient', () => {
       client.connect()
       client.connect()
       expect(FakeEventSource.instances.length).toBe(1)
+    })
+
+    test('does not log callbackToken while connecting', () => {
+      const logSpy = jest.spyOn(console, 'log')
+      const { client } = makeClient()
+      client.connect()
+      const logged = logSpy.mock.calls.map(call => call.join(' ')).join('\n')
+      expect(logged).toContain('callbackToken=<redacted>')
+      expect(logged).not.toContain('tok-abc123')
     })
 
     test('open event sets connected state (no crash)', () => {

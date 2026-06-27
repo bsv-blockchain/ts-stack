@@ -23,34 +23,33 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
   override async asyncSetup (): Promise<void> {
     const callbackToken = this.monitor.options.callbackToken
-    if (!callbackToken) {
-      console.log('[TaskArcadeSSE] no callbackToken configured — SSE disabled')
+    if (callbackToken == null || callbackToken === '') {
+      await this.logSetupEvent('no callbackToken configured; SSE disabled')
       return
     }
 
     const arcadeUrl = (this.monitor.services as Services).options?.arcadeUrl
-    if (!arcadeUrl) {
-      console.log('[TaskArcadeSSE] no arcadeUrl configured — SSE disabled')
+    if (arcadeUrl == null || arcadeUrl === '') {
+      await this.logSetupEvent('no arcadeUrl configured; SSE disabled')
       return
     }
 
     const EventSourceClass = this.monitor.options.EventSourceClass
-    if (!EventSourceClass) {
-      console.log('[TaskArcadeSSE] no EventSourceClass provided — SSE disabled')
+    if (EventSourceClass == null) {
+      await this.logSetupEvent('no EventSourceClass provided; SSE disabled')
       return
     }
 
     let lastEventId: string | undefined
     try {
       lastEventId = await this.monitor.options.loadLastSSEEventId?.()
-      console.log(`[TaskArcadeSSE] loaded persisted lastEventId: ${lastEventId ?? '(none)'}`)
     } catch (e) {
-      console.log(`[TaskArcadeSSE] failed to load lastEventId: ${e}`)
+      await this.logSetupEvent(`failed to load lastEventId: ${stringifyError(e)}`)
     }
 
     const arcadeApiKey = (this.monitor.services as Services).options?.arcadeConfig?.apiKey
 
-    console.log(`[TaskArcadeSSE] setting up — arcadeUrl=${arcadeUrl} token=${callbackToken.substring(0, 8)}...`)
+    await this.logSetupEvent(`setting up SSE for arcadeUrl=${arcadeUrl}; lastEventId=${lastEventId ?? '(none)'}`)
 
     this.sseClient = new ArcSSEClient({
       baseUrl: arcadeUrl,
@@ -62,16 +61,24 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         this.pendingEvents.push(event)
       },
       onError: err => {
-        console.log(`[TaskArcadeSSE] error: ${err.message}`)
+        void this.logSetupEvent(`SSE error: ${err.message}`)
       },
       onLastEventIdChanged: (id: string) => {
         this.monitor.options.saveLastSSEEventId?.(id).catch(e => {
-          console.log(`[TaskArcadeSSE] failed to persist lastEventId: ${e}`)
+          void this.logSetupEvent(`failed to persist lastEventId: ${stringifyError(e)}`)
         })
       }
     })
 
     this.sseClient.connect()
+  }
+
+  private async logSetupEvent (details: string): Promise<void> {
+    try {
+      await this.monitor.logEvent(this.name, details)
+    } catch {
+      // Setup diagnostics must not become a new monitor startup failure path.
+    }
   }
 
   trigger (_nowMsecsSinceEpoch: number): { run: boolean } {
@@ -250,4 +257,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
     return log
   }
+}
+
+function stringifyError (error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

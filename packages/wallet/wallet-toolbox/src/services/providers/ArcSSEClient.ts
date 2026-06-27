@@ -41,6 +41,7 @@ export class ArcSSEClient {
   private _lastEventId: string | undefined
   private es: any = null
   private readonly url: string
+  private readonly displayUrl: string
   private connected = false
   private connecting = false
 
@@ -51,6 +52,7 @@ export class ArcSSEClient {
       base = base.slice(0, -1)
     }
     this.url = `${base}/events?callbackToken=${encodeURIComponent(options.callbackToken)}`
+    this.displayUrl = `${base}/events?callbackToken=<redacted>`
   }
 
   get lastEventId (): string | undefined {
@@ -61,7 +63,7 @@ export class ArcSSEClient {
    * Open the SSE connection. Events will be dispatched via onEvent as they arrive.
    */
   connect (): void {
-    if (this.es) {
+    if (this.es != null) {
       console.log(`${TAG} already connected`)
       return
     }
@@ -69,13 +71,13 @@ export class ArcSSEClient {
     this.connecting = true
     const ESClass = this.options.EventSourceClass
     const headers: Record<string, string> = {
-      'Last-Event-ID': this._lastEventId || '0'
+      'Last-Event-ID': this._lastEventId ?? '0'
     }
-    if (this.options.arcApiKey) {
+    if (this.options.arcApiKey != null && this.options.arcApiKey !== '') {
       headers.Authorization = `Bearer ${this.options.arcApiKey}`
     }
 
-    console.log(`${TAG} connecting to ${this.url} (Last-Event-ID: ${headers['Last-Event-ID']})`)
+    console.log(`${TAG} connecting to ${this.displayUrl} (Last-Event-ID: ${headers['Last-Event-ID']})`)
 
     this.es = new ESClass(this.url, {
       headers,
@@ -94,7 +96,7 @@ export class ArcSSEClient {
         const data: ArcSSEEvent = JSON.parse(event.data)
         console.log(`${TAG} event: txid=${data.txid} status=${data.txStatus}`)
 
-        if (event.lastEventId) {
+        if (typeof event.lastEventId === 'string' && event.lastEventId !== '') {
           this._lastEventId = event.lastEventId
           this.options.onLastEventIdChanged?.(event.lastEventId)
         }
@@ -109,13 +111,14 @@ export class ArcSSEClient {
       console.log(`${TAG} error:`, JSON.stringify(event))
       this.connected = false
       this.connecting = false
-      this.options.onError?.(new Error(event.message || 'SSE error'))
+      const message = typeof event.message === 'string' && event.message !== '' ? event.message : 'SSE error'
+      this.options.onError?.(new Error(message))
     })
   }
 
   /** Close the connection and clean up */
   close (): void {
-    if (this.es) {
+    if (this.es != null) {
       console.log(`${TAG} closing`)
       this.es.close()
       this.es = null
@@ -130,9 +133,9 @@ export class ArcSSEClient {
    * Returns immediately — events arrive asynchronously via onEvent callback.
    */
   async fetchEvents (): Promise<number> {
-    if (!this.es && !this.connecting) {
+    if (this.es == null && !this.connecting) {
       this.connect()
-    } else if (this.es && !this.connected && !this.connecting) {
+    } else if (this.es != null && !this.connected && !this.connecting) {
       // Connection exists but failed — reconnect
       this.close()
       this.connect()

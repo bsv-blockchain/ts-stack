@@ -17,7 +17,7 @@ class FakeEventSource {
   }
 
   addEventListener (type: string, fn: (e: any) => void): void {
-    if (!this.listeners[type]) this.listeners[type] = []
+    if (this.listeners[type] == null) this.listeners[type] = []
     this.listeners[type].push(fn)
   }
 
@@ -97,6 +97,7 @@ function makeMonitor (
     },
     chain: 'test',
     storage,
+    logEvent: jest.fn().mockResolvedValue(undefined),
     callOnTransactionStatusChanged: jest.fn(),
     callOnProvenTransaction: jest.fn()
   }
@@ -149,7 +150,7 @@ describe('TaskArcadeSSE', () => {
     test('passes loadLastSSEEventId result as lastEventId to client', async () => {
       const task = new TaskArcadeSSE(makeMonitor({ loadLastSSEEventId: async () => '77' }))
       await task.asyncSetup()
-      expect(task.sseClient!.lastEventId).toBe('77')
+      expect(task.sseClient?.lastEventId).toBe('77')
     })
 
     test('continues setup when loadLastSSEEventId throws', async () => {
