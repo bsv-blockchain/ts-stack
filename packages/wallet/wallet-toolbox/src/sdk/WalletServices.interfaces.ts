@@ -1,11 +1,14 @@
 import {
-  ArcConfig,
   Beef,
   Transaction as BsvTransaction,
   ChainTracker,
   MerklePath,
   WalletLoggerInterface
 } from '@bsv/sdk'
+// ArcConfig is sourced from the local ARC provider (a superset of the @bsv/sdk ArcConfig
+// adding `deployment` and `apiPrefix` for Arcade support). Type-only import avoids a
+// runtime circular dependency with the ARC provider module.
+import type { ArcConfig } from '../services/providers/ARC'
 import { Chain, ReqHistoryNote } from './types'
 import { WalletError } from './WalletError'
 import { TableOutput } from '../storage/schema/tables/TableOutput'
@@ -323,6 +326,27 @@ export interface WalletServicesOptions {
    * callbackToken Default is undefined.
    */
   arcGorillaPoolConfig?: ArcConfig
+  /**
+   * Optional bsv-blockchain/arcade endpoint to use as the primary transaction broadcaster.
+   *
+   * When set, an Arcade broadcaster is registered ahead of the ARC providers (Arcade-first,
+   * ARC fallback) and the Monitor's SSE/proof task (`TaskArcadeSSE`) targets this URL.
+   *
+   * Default is undefined (Arcade disabled; ARC providers used as before).
+   * mainnet:   `https://arcade-v2-us-1.bsvblockchain.tech`
+   * teratest:  `https://arcade-v2-ttn-us-1.bsvblockchain.tech`
+   */
+  arcadeUrl?: string
+  /**
+   * Arcade service configuration options (used to construct the `Arcade` broadcaster).
+   *
+   * `callbackToken` must equal the Monitor's `callbackToken` so Arcade routes each
+   * submitted transaction's status events to this wallet's SSE subscription.
+   *
+   * `callbackUrl` should be left undefined for the SSE (pull) flow — Arcade rejects
+   * private/loopback webhook URLs.
+   */
+  arcadeConfig?: ArcConfig
 }
 
 export interface GetStatusForTxidsResult {
