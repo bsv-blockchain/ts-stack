@@ -2,6 +2,10 @@ import { MandalaTopicManager } from '../mandala/MandalaTopicManager.js'
 import { InMemoryScreeningProvider, encodeLinkagePayload } from '../mandala/types.js'
 import { MandalaToken, MandalaAdmin } from '@bsv/templates'
 import { ProtoWallet, PrivateKey, Transaction, Hash, Utils, WalletProtocol, Script } from '@bsv/sdk'
+import { MandalaStorageManager } from '../mandala/MandalaStorageManager.js'
+import { MandalaLookupService } from '../mandala/MandalaLookupService.js'
+import { MongoMemoryServer } from 'mongodb-memory-server'
+import { MongoClient } from 'mongodb'
 
 const protocolID: WalletProtocol = [2, 'mandala token']
 const keyID = 'tkn'
@@ -218,5 +222,40 @@ describe('MandalaTopicManager admin chain', () => {
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any })
     const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [0], offChainValues)
     expect(result.outputsToAdmit).toEqual([0, 1]) // redeem auth + FT change both admitted; 70 === 100 - 30
+  })
+})
+
+describe('MandalaLookupService metadata', () => {
+  let mongod: MongoMemoryServer, client: MongoClient, ls: MandalaLookupService, storage: MandalaStorageManager
+  const overlay = new ProtoWallet(PrivateKey.fromRandom())
+  const txid = 'd'.repeat(64)
+
+  beforeAll(async () => {
+    mongod = await MongoMemoryServer.create()
+    client = new MongoClient(mongod.getUri()); await client.connect()
+    storage = new MandalaStorageManager(client.db('test'))
+    ls = new MandalaLookupService({ storage, verifierWallet: overlay as any })
+  })
+  afterAll(async () => { await client.close(); await mongod.stop() })
+
+  it('indexes an admin output with publicData and serves it by assetId', async () => {
+    const lock = await MandalaAdmin.lock({ wallet: overlay as any, data: { kind: 'register' }, publicData: { label: 'Gold' } })
+    await ls.outputAdmittedByTopic({ mode: 'locking-script', topic: 'tm_mandala', txid, outputIndex: 0, lockingScript: lock } as any)
+    const formula = await ls.lookup({ service: 'ls_mandala', query: { metadataAssetId: `${txid}.0` } } as any)
+    expect(formula).toEqual([{ txid, outputIndex: 0 }])
+  })
+
+  it('keeps metadata on spend but removes it on evict', async () => {
+    await ls.outputSpent({ topic: 'tm_mandala', txid, outputIndex: 0 } as any)
+    expect(await ls.lookup({ service: 'ls_mandala', query: { metadataAssetId: `${txid}.0` } } as any)).toEqual([{ txid, outputIndex: 0 }])
+    await ls.outputEvicted(txid, 0)
+    expect(await ls.lookup({ service: 'ls_mandala', query: { metadataAssetId: `${txid}.0` } } as any)).toEqual([])
+  })
+
+  it('does not index an admin output without publicData', async () => {
+    const lock = await MandalaAdmin.lock({ wallet: overlay as any, data: { kind: 'register' } })
+    const t2 = 'e'.repeat(64)
+    await ls.outputAdmittedByTopic({ mode: 'locking-script', topic: 'tm_mandala', txid: t2, outputIndex: 0, lockingScript: lock } as any)
+    expect(await ls.lookup({ service: 'ls_mandala', query: { metadataAssetId: `${t2}.0` } } as any)).toEqual([])
   })
 })
