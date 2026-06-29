@@ -1,6 +1,6 @@
 {
   "name": "chaintracks-server",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "TypeScript Express server wrapping ChaintracksService from @bsv/wallet-toolbox",
   "main": "dist/server.js",
   "type": "commonjs",
@@ -26,7 +26,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@bsv/wallet-toolbox": "^2.3.2",
+    "@bsv/wallet-toolbox": "^2.3.3",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.219.0",
     "@opentelemetry/auto-instrumentations-node": "^0.77.0",

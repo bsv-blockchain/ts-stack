@@ -33,7 +33,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@bsv/wallet-toolbox-client": "^2.3.2"
+    "@bsv/wallet-toolbox-client": "^2.3.3"
   },
   "devDependencies": {
     "@jest/globals": "^30.4.1",

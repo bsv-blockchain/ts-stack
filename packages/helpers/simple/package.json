@@ -46,8 +46,8 @@
   "license": "MIT",
   "dependencies": {
     "@bsv/message-box-client": "^2.2.0",
-    "@bsv/wallet-toolbox": "^2.3.2",
-    "@bsv/wallet-toolbox-client": "^2.3.2"
+    "@bsv/wallet-toolbox": "^2.3.3",
+    "@bsv/wallet-toolbox-client": "^2.3.3"
   },
   "overrides": {
     "minimatch": "^10.2.1"

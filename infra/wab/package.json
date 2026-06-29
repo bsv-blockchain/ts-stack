@@ -1,7 +1,7 @@
 {
   "name": "@bsv/wab-server",
   "private": true,
-  "version": "1.4.8",
+  "version": "1.4.9",
   "description": "Wallet Authentication Backend (WAB) server",
   "main": "dist/server.js",
   "scripts": {
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@bsv/sdk": "^2.1.6",
-    "@bsv/wallet-toolbox": "^2.3.2",
+    "@bsv/wallet-toolbox": "^2.3.3",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.219.0",
     "@opentelemetry/auto-instrumentations-node": "^0.77.0",
