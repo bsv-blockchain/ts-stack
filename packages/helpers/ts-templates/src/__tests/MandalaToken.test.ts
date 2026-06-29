@@ -50,7 +50,7 @@ describe('MandalaToken lock/decode', () => {
 
   it('has no identifier prefix (8 chunks, leads with the assetId push)', () => {
     const script = new MandalaToken().lock(assetId, 1, pubKeyHash)
-    expect(script.chunks.length).toBe(8)
+    expect(script.chunks).toHaveLength(8)
     expect(script.chunks[0].data?.length).toBe(36) // assetId bytes, not a marker
   })
 })
