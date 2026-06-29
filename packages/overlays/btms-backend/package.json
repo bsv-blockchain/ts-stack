@@ -36,7 +36,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.0.1",
     "jest": "^30.4.2",
     "mongodb-memory-server": "^11.2.0",
     "ts-jest": "^29.4.11",
@@ -49,7 +49,7 @@
   "dependencies": {
     "@bsv/overlay": "^2.1.1",
     "@bsv/sdk": "^2.1.6",
-    "mongodb": "^7.3.0"
+    "mongodb": "^7.4.0"
   },
   "repository": {
     "type": "git",
