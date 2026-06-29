@@ -4,6 +4,9 @@ import {
   TransactionSignature, Signature
 } from '@bsv/sdk'
 import { buildSighashPreimage } from './mandala-signing.js'
+import { createMinimallyEncodedScriptChunk } from './mandala-encoding.js'
+
+export interface AssetMetadata { label: string, ticker?: string, decimals?: number, [k: string]: unknown }
 
 export type MandalaActionKind = 'register' | 'issue' | 'redeem' | 'recover'
 
@@ -17,6 +20,7 @@ export interface MandalaActionDetails {
 
 export interface MandalaAdminDecoded {
   pubKeyHash: number[]
+  publicData?: Record<string, unknown>
 }
 
 export interface MandalaAdminLockParams {
@@ -24,6 +28,7 @@ export interface MandalaAdminLockParams {
   data: MandalaActionDetails
   counterparty?: WalletCounterparty
   originator?: string
+  publicData?: Record<string, unknown>
 }
 
 export interface MandalaAdminUnlockParams extends MandalaAdminLockParams {
@@ -64,28 +69,47 @@ export class MandalaAdmin {
   // is symmetric; for a transfer it is the new admin's child key. The matching
   // private key is recovered by unlock() via createSignature({ counterparty }).
   static async lock (params: MandalaAdminLockParams): Promise<LockingScript> {
-    const { wallet, data, counterparty = 'self', originator } = params
+    const { wallet, data, counterparty = 'self', originator, publicData } = params
     const keyID = MandalaAdmin.commitment(data)
     const { publicKey } = await wallet.getPublicKey({ protocolID: ADMIN_PROTOCOL, keyID, counterparty }, originator)
     const pubKeyHash = Hash.hash160(Utils.toArray(publicKey, 'hex'))
-    return new LockingScript([
+    const p2pkh = [
       { op: OP.OP_DUP },
       { op: OP.OP_HASH160 },
       { op: pubKeyHash.length, data: pubKeyHash },
       { op: OP.OP_EQUALVERIFY },
       { op: OP.OP_CHECKSIG }
+    ]
+    if (publicData == null) return new LockingScript(p2pkh)
+    // Public metadata: pushed then dropped — purely informational, no spend effect.
+    const blob = Utils.toArray(JSON.stringify(publicData), 'utf8')
+    return new LockingScript([
+      createMinimallyEncodedScriptChunk(blob),
+      { op: OP.OP_DROP },
+      ...p2pkh
     ])
   }
 
   static decode (script: LockingScript): MandalaAdminDecoded {
     const c = script.chunks
-    if (c.length !== 5) throw new Error('not a MandalaAdmin script: wrong chunk count')
-    if (c[0].op !== OP.OP_DUP || c[1].op !== OP.OP_HASH160 || c[3].op !== OP.OP_EQUALVERIFY || c[4].op !== OP.OP_CHECKSIG) {
+    // Optional <push JSON> OP_DROP metadata prefix (7 chunks) vs plain P2PKH (5).
+    let publicData: Record<string, unknown> | undefined
+    let p2pkh = c
+    if (c.length === 7) {
+      if (c[1].op !== OP.OP_DROP) throw new Error('not a MandalaAdmin script: bad publicData prefix')
+      const data = c[0].data
+      if (data == null) throw new Error('not a MandalaAdmin script: empty publicData push')
+      publicData = JSON.parse(Utils.toUTF8(data))
+      p2pkh = c.slice(2)
+    } else if (c.length !== 5) {
+      throw new Error('not a MandalaAdmin script: wrong chunk count')
+    }
+    if (p2pkh[0].op !== OP.OP_DUP || p2pkh[1].op !== OP.OP_HASH160 || p2pkh[3].op !== OP.OP_EQUALVERIFY || p2pkh[4].op !== OP.OP_CHECKSIG) {
       throw new Error('not a MandalaAdmin script: bad P2PKH shape')
     }
-    const pubKeyHash = c[2].data
+    const pubKeyHash = p2pkh[2].data
     if (pubKeyHash?.length !== 20) throw new Error('not a MandalaAdmin script: bad pubKeyHash')
-    return { pubKeyHash }
+    return { pubKeyHash, publicData }
   }
 
   static unlock (params: MandalaAdminUnlockParams): ScriptTemplateUnlock {
