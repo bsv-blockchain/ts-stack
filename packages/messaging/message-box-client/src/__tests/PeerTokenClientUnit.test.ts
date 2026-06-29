@@ -73,6 +73,20 @@ describe('PeerTokenClient Unit Tests', () => {
         client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
       ).rejects.toThrow(/frozen UTXO/)
     })
+
+    it('surfaces the broadcast txid from the artifact', async () => {
+      ;(adapter.buildTokenSettlement as jest.Mock).mockResolvedValue({
+        action: 'settle', artifact: { ...ARTIFACT, txid: 'cd'.repeat(32) }
+      } as never)
+      const token = await client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
+      expect(token.txid).toBe('cd'.repeat(32))
+    })
+
+    it('passes dryRun through to the adapter context', async () => {
+      await client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' }, true)
+      const ctx = (adapter.buildTokenSettlement as jest.Mock).mock.calls[0][1] as { dryRun?: boolean }
+      expect(ctx.dryRun).toBe(true)
+    })
   })
 
   describe('sendToken', () => {
@@ -84,6 +98,12 @@ describe('PeerTokenClient Unit Tests', () => {
       expect(arg.messageBox).toBe(STANDARD_TOKEN_MESSAGEBOX)
       expect(arg.recipient).toBe(recipient)
       expect(JSON.parse(arg.body)).toMatchObject({ protocol: 'stas', assetId: 'TEST', amount: '1000' })
+    })
+
+    it('returns the sent token', async () => {
+      jest.spyOn(client, 'sendMessage' as any).mockResolvedValue(undefined as never)
+      const token = await client.sendToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
+      expect(token).toMatchObject({ protocol: 'stas', assetId: 'TEST', amount: '1000' })
     })
 
     it('throws on a missing recipient', async () => {
@@ -103,8 +123,19 @@ describe('PeerTokenClient Unit Tests', () => {
       }
       const result = await client.acceptToken(incoming)
       expect(adapter.acceptTokenSettlement).toHaveBeenCalledTimes(1)
-      expect(ackSpy).toHaveBeenCalledWith({ messageIds: ['msg-1'] })
+      expect(ackSpy).toHaveBeenCalledWith(expect.objectContaining({ messageIds: ['msg-1'] }))
       expect(result).toMatchObject({ receiptData: { internalizeResult: 'ok' } })
+    })
+  })
+
+  describe('listIncomingTokens', () => {
+    it('reads via listMessagesLite (mainnet bypass) with the configured host', async () => {
+      const liteSpy = jest.spyOn(client, 'listMessagesLite' as any).mockResolvedValue([] as never)
+      await client.listIncomingTokens()
+      expect(liteSpy).toHaveBeenCalledWith(expect.objectContaining({
+        messageBox: STANDARD_TOKEN_MESSAGEBOX,
+        host: 'https://message-box-us-1.bsvb.tech'
+      }))
     })
   })
 })
