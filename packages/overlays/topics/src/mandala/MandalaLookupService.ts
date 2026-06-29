@@ -4,7 +4,7 @@ import {
 } from '@bsv/overlay'
 import { WalletInterface } from '@bsv/sdk'
 import { Db } from 'mongodb'
-import { MandalaToken } from '@bsv/templates'
+import { MandalaToken, MandalaAdmin } from '@bsv/templates'
 import { MandalaStorageManager } from './MandalaStorageManager.js'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
 import { decodeLinkagePayload } from './types.js'
@@ -28,7 +28,19 @@ export class MandalaLookupService implements LookupService {
     try {
       decoded = MandalaToken.decode(payload.lockingScript)
     } catch {
-      return // admin or non-token output: nothing to index
+      // Not an FT. If it is an admin output carrying publicData, index it as metadata
+      // keyed by its own outpoint (= assetId). Anchored on-chain; served by assetId.
+      try {
+        const admin = MandalaAdmin.decode(payload.lockingScript)
+        if (admin.publicData != null) {
+          await this.deps.storage.storeMetadata({
+            txid: payload.txid,
+            outputIndex: payload.outputIndex,
+            assetId: `${payload.txid}.${payload.outputIndex}`
+          })
+        }
+      } catch { /* not a mandala admin output */ }
+      return
     }
     // Resolve controlling identity from the matching off-chain linkage.
     let identityKey = ''
@@ -79,10 +91,14 @@ export class MandalaLookupService implements LookupService {
 
   async outputEvicted (txid: string, outputIndex: number): Promise<void> {
     await this.deps.storage.deleteToken(txid, outputIndex)
+    await this.deps.storage.deleteMetadata(txid, outputIndex)
   }
 
   async lookup (question: LookupQuestion): Promise<LookupFormula> {
     const query = (question as any).query ?? {}
+    if (typeof query.metadataAssetId === 'string') {
+      return await this.deps.storage.findMetadataByAssetId(query.metadataAssetId)
+    }
     if (typeof query.assetId === 'string') {
       return await this.deps.storage.findByAssetId(query.assetId)
     }
