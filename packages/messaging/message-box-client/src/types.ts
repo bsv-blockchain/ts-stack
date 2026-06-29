@@ -281,6 +281,8 @@ export interface TokenToken {
   customInstructions: { derivationPrefix: Base64String, derivationSuffix: Base64String }
   transaction: AtomicBEEF
   outputIndex?: number
+  /** Broadcast txid of the transfer, surfaced by the adapter (explorer links). */
+  txid?: string
 }
 
 /** An incoming token received via MessageBox (token analog of IncomingPayment). */

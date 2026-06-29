@@ -33,6 +33,8 @@ export interface TokenSettlementArtifact {
   /** Token units as a string (bigint-safe); for classic STAS this equals satoshis. */
   amount: string
   outputIndex: number
+  /** Broadcast txid of the transfer (set by adapters after a live send). */
+  txid?: string
 }
 
 export interface AdapterLogger {
@@ -45,6 +47,11 @@ export interface TokenAdapterContext {
   wallet: WalletInterface
   originator?: string
   logger?: AdapterLogger
+  /**
+   * When true, the adapter derives + validates the settlement only and does NOT
+   * touch the chain (no signing, no broadcast) — for rehearsal / mainnet safety.
+   */
+  dryRun?: boolean
 }
 
 export interface BuildTokenSettlementArgs {

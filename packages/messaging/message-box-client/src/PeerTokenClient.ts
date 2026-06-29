@@ -64,12 +64,20 @@ export class PeerTokenClient extends MessageBoxClient {
   private readonly peerTokenWalletClient: WalletInterface
   private readonly messageBox: string
   private readonly adapters: Map<string, TokenSettlementAdapter>
+  /**
+   * The configured MessageBox host, threaded explicitly through every token
+   * transport call. On mainnet the `ls_messagebox` overlay (SLAP) has no
+   * advertised hosts, so overlay-resolving calls fail; passing the host
+   * directly (and using listMessagesLite for reads) bypasses that lookup.
+   */
+  private readonly tokenHost?: string
 
   constructor (config: PeerTokenClientConfig) {
     const { messageBoxHost = 'https://message-box-us-1.bsvb.tech', walletClient, enableLogging = false, originator } = config
     super({ host: messageBoxHost, walletClient, enableLogging, originator })
 
     this.messageBox = config.messageBox ?? STANDARD_TOKEN_MESSAGEBOX
+    this.tokenHost = messageBoxHost
     this.peerTokenWalletClient = walletClient
     this.originator = originator
     this.adapters = new Map(config.adapters.map(a => [a.protocol, a]))
@@ -83,19 +91,20 @@ export class PeerTokenClient extends MessageBoxClient {
     return adapter
   }
 
-  private get adapterContext (): TokenAdapterContext {
-    return { wallet: this.peerTokenWalletClient, originator: this.originator, logger: Logger }
+  private adapterContext (dryRun = false): TokenAdapterContext {
+    return { wallet: this.peerTokenWalletClient, originator: this.originator, logger: Logger, dryRun }
   }
 
   /**
    * Builds a transferable token artifact for a recipient by delegating to the
-   * adapter for the requested protocol.
+   * adapter for the requested protocol. With `dryRun`, the adapter derives and
+   * validates only — no signing, no broadcast (mainnet rehearsal).
    */
-  async createTokenToken (params: SendTokenParams): Promise<TokenToken> {
+  async createTokenToken (params: SendTokenParams, dryRun = false): Promise<TokenToken> {
     const adapter = this.adapterFor(params.protocol)
     const result = await adapter.buildTokenSettlement(
       { recipient: params.recipient, source: params.source, amount: params.amount },
-      this.adapterContext
+      this.adapterContext(dryRun)
     )
     if (result.action === 'terminate') {
       throw new Error(result.termination.message)
@@ -107,12 +116,13 @@ export class PeerTokenClient extends MessageBoxClient {
       amount: artifact.amount,
       customInstructions: artifact.customInstructions,
       transaction: artifact.transaction,
-      outputIndex: artifact.outputIndex
+      outputIndex: artifact.outputIndex,
+      txid: artifact.txid
     }
   }
 
-  /** Sends a token to a recipient over HTTP. */
-  async sendToken (params: SendTokenParams, hostOverride?: string): Promise<void> {
+  /** Sends a token to a recipient over HTTP. Returns the sent token (incl. txid). */
+  async sendToken (params: SendTokenParams, hostOverride?: string): Promise<TokenToken> {
     if (params.recipient == null || params.recipient.trim() === '') {
       throw new Error('Invalid token transfer: recipient is required')
     }
@@ -121,26 +131,29 @@ export class PeerTokenClient extends MessageBoxClient {
       recipient: params.recipient,
       messageBox: this.messageBox,
       body: JSON.stringify(token)
-    }, hostOverride)
+    }, hostOverride ?? this.tokenHost)
+    return token
   }
 
-  /** Sends a token over WebSocket, falling back to HTTP if the socket fails. */
-  async sendLiveToken (params: SendTokenParams, overrideHost?: string): Promise<void> {
+  /** Sends a token over WebSocket, falling back to HTTP if the socket fails. Returns the sent token. */
+  async sendLiveToken (params: SendTokenParams, overrideHost?: string): Promise<TokenToken> {
     const token = await this.createTokenToken(params)
+    const host = overrideHost ?? this.tokenHost
     try {
       await this.sendLiveMessage({
         recipient: params.recipient,
         messageBox: this.messageBox,
         body: JSON.stringify(token)
-      }, overrideHost)
+      }, host)
     } catch (err) {
       Logger.warn('[PT CLIENT] sendLiveMessage failed, falling back to HTTP:', err)
       await this.sendMessage({
         recipient: params.recipient,
         messageBox: this.messageBox,
         body: JSON.stringify(token)
-      }, overrideHost)
+      }, host)
     }
+    return token
   }
 
   /** Listens for incoming tokens in real time over WebSocket. */
@@ -153,7 +166,7 @@ export class PeerTokenClient extends MessageBoxClient {
   }): Promise<void> {
     await this.listenForLiveMessages({
       messageBox: this.messageBox,
-      overrideHost,
+      overrideHost: overrideHost ?? this.tokenHost,
       onMessage: (message: PeerMessage) => {
         const token = safeParse<TokenToken>(message.body)
         if (token == null) return
@@ -181,12 +194,12 @@ export class PeerTokenClient extends MessageBoxClient {
             outputIndex: incoming.token.outputIndex ?? 0
           }
         },
-        this.adapterContext
+        this.adapterContext()
       )
       if (result.action === 'terminate') {
         throw new Error(result.termination.message)
       }
-      await this.acknowledgeMessage({ messageIds: [incoming.messageId] })
+      await this.acknowledgeMessage({ messageIds: [incoming.messageId], host: this.tokenHost })
       return { incoming, receiptData: result.receiptData }
     } catch (error) {
       Logger.error(`[PT CLIENT] Error accepting token: ${String(error)}`)
@@ -196,7 +209,9 @@ export class PeerTokenClient extends MessageBoxClient {
 
   /** Lists pending incoming tokens from the token message box. */
   async listIncomingTokens (overrideHost?: string): Promise<IncomingToken[]> {
-    const messages = await this.listMessages({ messageBox: this.messageBox, host: overrideHost })
+    // listMessagesLite talks to the host directly and skips overlay (SLAP)
+    // resolution, which has no advertised ls_messagebox hosts on mainnet.
+    const messages = await this.listMessagesLite({ messageBox: this.messageBox, host: overrideHost ?? this.tokenHost })
     return messages.map((msg: any) => {
       const token = safeParse<TokenToken>(msg.body)
       if (token == null) return null
@@ -241,7 +256,7 @@ export class PeerTokenClient extends MessageBoxClient {
       recipient: params.recipient,
       messageBox: TOKEN_REQUESTS_MESSAGEBOX,
       body: JSON.stringify(body)
-    }, hostOverride)
+    }, hostOverride ?? this.tokenHost)
 
     return { requestId, requestProof }
   }
@@ -289,7 +304,7 @@ export class PeerTokenClient extends MessageBoxClient {
       protocol: request.protocol,
       source,
       amount: request.amount
-    }, hostOverride)
+    }, hostOverride ?? this.tokenHost)
 
     const response: TokenRequestResponse = {
       requestId: request.requestId,
@@ -304,9 +319,9 @@ export class PeerTokenClient extends MessageBoxClient {
       recipient: request.sender,
       messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
       body: JSON.stringify(response)
-    }, hostOverride)
+    }, hostOverride ?? this.tokenHost)
 
-    await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride })
+    await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride ?? this.tokenHost })
   }
 
   /** Declines an incoming token request and acknowledges it. */
@@ -324,8 +339,8 @@ export class PeerTokenClient extends MessageBoxClient {
       recipient: request.sender,
       messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
       body: JSON.stringify(response)
-    }, hostOverride)
-    await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride })
+    }, hostOverride ?? this.tokenHost)
+    await this.acknowledgeMessage({ messageIds: [request.messageId], host: hostOverride ?? this.tokenHost })
   }
 
   /** Cancels a previously sent token request. */
@@ -344,12 +359,12 @@ export class PeerTokenClient extends MessageBoxClient {
       recipient: params.recipient,
       messageBox: TOKEN_REQUESTS_MESSAGEBOX,
       body: JSON.stringify(body)
-    }, hostOverride)
+    }, hostOverride ?? this.tokenHost)
   }
 
   /** Lists responses to token requests this client has sent. */
   async listTokenRequestResponses (hostOverride?: string): Promise<TokenRequestResponse[]> {
-    const messages = await this.listMessages({ messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX, host: hostOverride })
+    const messages = await this.listMessagesLite({ messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX, host: hostOverride ?? this.tokenHost })
     return messages.map((msg: any) => safeParse<TokenRequestResponse>(msg.body))
       .filter((r): r is TokenRequestResponse => r != null)
   }
