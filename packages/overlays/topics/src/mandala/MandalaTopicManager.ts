@@ -1,5 +1,5 @@
 import { TopicManager } from '@bsv/overlay'
-import { AdmittanceInstructions, LockingScript, Transaction, WalletInterface, WalletProtocol } from '@bsv/sdk'
+import { AdmittanceInstructions, Hash, LockingScript, Transaction, Utils, WalletInterface, WalletProtocol } from '@bsv/sdk'
 import { MandalaToken, MandalaAdmin, MandalaActionDetails } from '@bsv/templates'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
 import { decodeLinkagePayload, ScreeningProvider, SpecificLinkage } from './types.js'
@@ -73,9 +73,19 @@ export class MandalaTopicManager implements TopicManager {
       return { admitted: false }
     }
     if (details == null) return { admitted: false }
-    const { boundKey } = await new MandalaAdmin(this.deps.adminWallet)
-      .deriveBoundKey(this.deps.adminProtocolID, details)
-    if (boundKey !== decodedAdmin.boundKey || !priorOutpointSpent(tx, details)) {
+    // The admin output is a P2PKH; re-derive the locking key with the admin wallet
+    // and compare its hash160 to the on-chain pubKeyHash. counterparty defaults to
+    // 'self' (self-locked auth); a transferred auth carries the grantee in details.
+    const counterparty = typeof details.counterparty === 'string' ? details.counterparty : 'self'
+    const { publicKey } = await this.deps.adminWallet.getPublicKey({
+      protocolID: this.deps.adminProtocolID,
+      keyID: MandalaAdmin.commitment(details),
+      counterparty
+    })
+    const expected = Hash.hash160(Utils.toArray(publicKey, 'hex'))
+    const pkhMatches = expected.length === decodedAdmin.pubKeyHash.length &&
+      expected.every((b, i) => b === decodedAdmin.pubKeyHash[i])
+    if (!pkhMatches || !priorOutpointSpent(tx, details)) {
       return { admitted: false }
     }
     if ((details.kind === 'issue' || details.kind === 'recover') && typeof details.assetId === 'string') {
