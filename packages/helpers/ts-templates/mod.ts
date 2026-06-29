@@ -7,5 +7,5 @@ export type { MandalaTokenDecoded } from './src/MandalaToken.js'
 export { MandalaAdmin, ADMIN_PROTOCOL } from './src/MandalaAdmin.js'
 export type {
   MandalaAdminDecoded, MandalaActionDetails, MandalaActionKind,
-  MandalaAdminLockParams, MandalaAdminUnlockParams
+  MandalaAdminLockParams, MandalaAdminUnlockParams, AssetMetadata
 } from './src/MandalaAdmin.js'
