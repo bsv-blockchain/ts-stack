@@ -1595,6 +1595,135 @@ export class Engine {
     }
   }
 
+  async refreshUnprovenTransactionProofs(options: {
+    topic?: string
+    thresholdBlocks?: number
+    proofProvider: (txid: string) => Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined>
+  }): Promise<{
+      cutoffHeight: number
+      candidates: number
+      refreshedTransactions: number
+      missingProofs: number
+      failedProofs: number
+      failures: Array<{ txid: string, error: string }>
+    }> {
+    if (typeof this.storage.findUnprovenAppliedTransactions !== 'function') {
+      throw new TypeError('Storage does not support unproven transaction lookup')
+    }
+    if (this.chainTracker === 'scripts only') {
+      throw new Error('Unproven proof refresh requires a ChainTracker to determine block age')
+    }
+
+    const thresholdBlocks = options.thresholdBlocks ?? this.unprovenEvictionBlocks
+    const currentHeight = await this.chainTracker.currentHeight()
+    const cutoffHeight = currentHeight - thresholdBlocks
+    const candidates = await this.storage.findUnprovenAppliedTransactions(cutoffHeight, options.topic)
+    const txids = [...new Set(candidates.map(candidate => candidate.txid))]
+    let refreshedTransactions = 0
+    let missingProofs = 0
+    let failedProofs = 0
+    const failures: Array<{ txid: string, error: string }> = []
+
+    for (const txid of txids) {
+      try {
+        const proof = await options.proofProvider(txid)
+        if (proof === undefined) {
+          missingProofs++
+          continue
+        }
+        await this.handleNewMerkleProof(txid, proof.merklePath, proof.blockHeight)
+        refreshedTransactions++
+      } catch (error) {
+        failedProofs++
+        failures.push({
+          txid,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+
+    return {
+      cutoffHeight,
+      candidates: candidates.length,
+      refreshedTransactions,
+      missingProofs,
+      failedProofs,
+      failures
+    }
+  }
+
+  async maintainUnprovenTransactions(options: {
+    topic?: string
+    thresholdBlocks?: number
+    proofProvider: (txid: string) => Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined>
+  }): Promise<{
+      refresh: {
+        cutoffHeight: number
+        candidates: number
+        refreshedTransactions: number
+        missingProofs: number
+        failedProofs: number
+        failures: Array<{ txid: string, error: string }>
+      }
+      eviction: {
+        cutoffHeight: number
+        candidates: number
+        evictedTransactions: number
+        evictedOutputs: number
+      }
+    }> {
+    const refresh = await this.refreshUnprovenTransactionProofs(options)
+    const eviction = await this.evictUnprovenTransactions({
+      topic: options.topic,
+      thresholdBlocks: options.thresholdBlocks
+    })
+    return { refresh, eviction }
+  }
+
+  async evictAppliedTransaction(txid: string, options: {
+    topic?: string
+    reason?: string
+  } = {}): Promise<{
+      txid: string
+      reason?: string
+      evictedTransactions: number
+      evictedOutputs: number
+    }> {
+    if (typeof this.storage.deleteAppliedTransaction !== 'function') {
+      throw new TypeError('Storage does not support applied transaction eviction')
+    }
+
+    const outputs = await this.storage.findOutputsForTransaction(txid)
+    const filtered = options.topic === undefined
+      ? outputs
+      : outputs.filter(output => output.topic === options.topic)
+    const topics = [...new Set(filtered.map(output => output.topic))]
+    let evictedOutputs = 0
+
+    for (const output of filtered) {
+      for (const service of Object.values(this.lookupServices)) {
+        try {
+          await service.outputEvicted(output.txid, output.outputIndex)
+        } catch (error) {
+          this.logger.debug(`outputEvicted notification failed for ${output.txid}.${output.outputIndex}: ${error}`)
+        }
+      }
+      await this.storage.deleteOutput(output.txid, output.outputIndex, output.topic)
+      evictedOutputs++
+    }
+
+    for (const topic of topics) {
+      await this.storage.deleteAppliedTransaction(txid, topic)
+    }
+
+    return {
+      txid,
+      reason: options.reason,
+      evictedTransactions: topics.length,
+      evictedOutputs
+    }
+  }
+
   /**
    * Given a GASP request, create an initial response.
    *

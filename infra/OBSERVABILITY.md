@@ -76,6 +76,30 @@ import { log } from './logger'
 log.info({ operation: 'listen', outcome: 'ok', port }, 'server listening')
 ```
 
+### Overlay operation names
+
+Overlay deployments should preserve these `operation` names because they map to
+operator alerts and dashboards:
+
+| Operation | Emitted by | Notes |
+|---|---|---|
+| `overlay.provider_callback` | Overlay Express `/arc-ingest` | Provider callback accepted, rejected, or classified as terminal/double-spend. Alert on repeated `outcome=error`. |
+| `overlay.unproven_proof_refresh` | `/admin/refreshUnprovenProofs` | Manual or monitor-triggered proof refresh for old unproven rows. |
+| `overlay.unproven_eviction` | `/admin/evictUnproven` | Eviction-only cleanup for stale unproven rows. |
+| `overlay.unproven_maintenance` | `/admin/maintainUnproven` | Refresh-before-evict maintenance. This is the preferred operational path. |
+| `overlay.health` / HTTP health spans | health routes | Use readiness failures and provider context to detect bad deployment wiring. |
+
+Alerting should distinguish transient provider failures from terminal provider
+classification. Terminal double-spend or invalid callbacks are expected to evict
+the transaction and should be visible as a domain event, while repeated callback
+processing errors mean the overlay may not be ingesting proofs or rejection
+signals.
+
+Wallet infrastructure uses the same convention. The important startup operations
+are `wallet_storage.setup`, `storage.setup`, `storage_server.start`, and
+`monitor.start`; task-specific wallet monitor details are also persisted as
+monitor events in storage.
+
 ## Notes
 
 - Telemetry shutdown flushes the SDK on `SIGTERM`/`SIGINT` and only force-exits

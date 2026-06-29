@@ -34,6 +34,54 @@ function defaultDeploymentId (): string {
   return `ts-sdk-${Utils.toHex(Random(16))}`
 }
 
+const arcAcceptedTxStatuses = new Set([
+  'RECEIVED',
+  'SENT_TO_NETWORK',
+  'ANNOUNCED_TO_NETWORK',
+  'ACCEPTED_BY_NETWORK',
+  'SEEN_ON_NETWORK',
+  'STORED',
+  'MINED',
+  'IMMUTABLE'
+])
+
+const arcDoubleSpendTxStatuses = new Set([
+  'DOUBLE_SPEND_ATTEMPTED',
+  'SEEN_IN_ORPHAN_MEMPOOL'
+])
+
+const arcInvalidTxStatuses = new Set([
+  'INVALID',
+  'MALFORMED',
+  'REJECTED'
+])
+
+export function isArcAcceptedTxStatus (txStatus: string | undefined): boolean {
+  return txStatus != null && arcAcceptedTxStatuses.has(txStatus)
+}
+
+export function isArcDoubleSpendTxStatus (txStatus: string | undefined): boolean {
+  return txStatus != null && arcDoubleSpendTxStatuses.has(txStatus)
+}
+
+export function isArcInvalidTxStatus (txStatus: string | undefined): boolean {
+  return txStatus != null && arcInvalidTxStatuses.has(txStatus)
+}
+
+export function isArcServiceErrorStatus (status: number | undefined, detail?: string): boolean {
+  if (status == null) return true
+  if (status === 408 || status === 429 || status === 476 || status >= 500) return true
+  if (detail == null) return false
+  const d = detail.toLowerCase()
+  return d.includes('maximum batch size') ||
+    d.includes('too many requests') ||
+    d.includes('rate limit') ||
+    d.includes('timeout') ||
+    d.includes('temporarily') ||
+    d.includes('backpressure') ||
+    d.includes('unavailable')
+}
+
 /**
  * Represents an ARC transaction broadcaster.
  */
@@ -166,7 +214,7 @@ export class ARC {
         r.data = `${txStatus} ${extraInfo}`
         if (r.txid !== txid) r.data += ` txid altered from ${r.txid} to ${txid}`
         r.txid = txid
-        if (txStatus === 'DOUBLE_SPEND_ATTEMPTED' || txStatus === 'SEEN_IN_ORPHAN_MEMPOOL') {
+        if (isArcDoubleSpendTxStatus(txStatus)) {
           r.status = 'error'
           r.doubleSpend = true
           r.competingTxs = competingTxs
@@ -181,8 +229,6 @@ export class ARC {
         r.serviceError = true
       } else {
         r.status = 'error'
-        // Treat unknown errors as service errors
-        r.serviceError = true
         const n: ReqHistoryNote = {
           ...nn(),
           ...nne(),
@@ -192,9 +238,15 @@ export class ARC {
         const ed: PostTxResultForTxidError = {}
         r.data = ed
         const st = typeof response.status
+        let status: number | undefined
         if (st === 'number' || st === 'string') {
           n.status = response.status
           ed.status = response.status.toString()
+          if (typeof response.status === 'number') status = response.status
+          else {
+            const parsed = Number(response.status)
+            if (Number.isFinite(parsed)) status = parsed
+          }
         } else {
           n.status = st
           ed.status = 'ERR_UNKNOWN'
@@ -211,6 +263,7 @@ export class ARC {
             n.detail = ed.detail
           }
         }
+        r.serviceError = isArcServiceErrorStatus(status, ed.detail)
         r.notes!.push(n)
       }
     } catch (error_: unknown) {
@@ -281,7 +334,7 @@ export class ARC {
           txid,
           returnedTxid: dr.txid
         })
-      } else if (dr.txStatus === 'SEEN_ON_NETWORK' || dr.txStatus === 'STORED') {
+      } else if (isArcAcceptedTxStatus(dr.txStatus)) {
         tr.data = dr.txStatus
         tr.notes!.push({
           ...nn(),
@@ -292,6 +345,12 @@ export class ARC {
       } else {
         tr.status = 'error'
         tr.data = dr
+        tr.serviceError = !isArcInvalidTxStatus(dr.txStatus)
+        if (isArcDoubleSpendTxStatus(dr.txStatus)) {
+          tr.doubleSpend = true
+          tr.competingTxs = dr.competingTxs ?? undefined
+          tr.serviceError = undefined
+        }
         tr.notes!.push({
           ...nn(),
           what: 'postBeefGetTxDataError',

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [2.4.1](#241-2026-06-27)
 - [2.3.0](#230-2026-05-28)
 - [0.7.11](#0711-2025-08-13)
 
@@ -27,6 +28,25 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
+
+---
+
+## [2.4.1] - 2026-06-27
+
+### Added
+- Added Arcade-first transaction propagation and proof lookup, with standard Arc
+  broadcast as fallback when both providers are configured.
+- Added go-chaintracks-compatible Chaintracks configuration for header lookup and
+  BASM reorg SSE; Arcade-mounted Chaintracks defaults to `/chaintracks/v2`.
+- Added active `OverlayMonitor` maintenance actions for BASM sync, unproven
+  refresh-before-evict, and janitor runs.
+- Added admin endpoints for proof refresh and unproven transaction maintenance.
+
+### Changed
+- Provider callbacks now classify terminal invalid and double-spend outcomes so
+  rejected transactions can be evicted from admitted overlay state.
+- Production overlay-server wiring now defaults to strict broadcast admission
+  (`throwOnBroadcastFailure=true`) unless explicitly overridden.
 
 ---
 

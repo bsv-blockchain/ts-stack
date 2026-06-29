@@ -1,7 +1,7 @@
 {
   "name": "@bsv/overlay-express-examples",
   "private": true,
-  "version": "2.1.13",
+  "version": "2.1.14",
   "description": "Run the overlay infrastructure for distributed applications.",
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server#readme",
   "bugs": {

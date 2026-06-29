@@ -167,6 +167,70 @@ describe('BSV Overlay Services Engine', () => {
     }
   })
 
+  it('refreshes old unproven transaction proofs before eviction', async () => {
+    const storage = {
+      ...mockStorageEngine,
+      findUnprovenAppliedTransactions: jest.fn(async () => [
+        {
+          txid: exampleTXID,
+          topic: 'Hello',
+          firstSeenHeight: 799000,
+          outputs: [{ txid: exampleTXID, outputIndex: 0 }]
+        }
+      ])
+    }
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      { ls_helloworld: mockLookupService },
+      storage,
+      mockChainTracker,
+      'https://example.com'
+    )
+    const merklePath = {} as any
+    ;(engine as any).handleNewMerkleProof = jest.fn(async () => undefined)
+
+    const report = await engine.refreshUnprovenTransactionProofs({
+      thresholdBlocks: 144,
+      proofProvider: jest.fn(async () => ({ merklePath, blockHeight: 799900 }))
+    })
+
+    expect(report.refreshedTransactions).toBe(1)
+    expect(report.missingProofs).toBe(0)
+    expect((engine as any).handleNewMerkleProof).toHaveBeenCalledWith(exampleTXID, merklePath, 799900)
+  })
+
+  it('evicts provider-invalidated applied transactions', async () => {
+    const deleteAppliedTransaction = jest.fn(async () => undefined)
+    const deleteOutput = jest.fn(async () => undefined)
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      { ls_helloworld: mockLookupService },
+      {
+        ...mockStorageEngine,
+        findOutputsForTransaction: jest.fn(async () => [
+          {
+            ...mockOutput,
+            topic: 'Hello'
+          }
+        ]),
+        deleteOutput,
+        deleteAppliedTransaction
+      },
+      mockChainTracker,
+      'https://example.com'
+    )
+
+    const report = await engine.evictAppliedTransaction(exampleTXID, {
+      reason: 'DOUBLE_SPEND_ATTEMPTED'
+    })
+
+    expect(report.evictedTransactions).toBe(1)
+    expect(report.evictedOutputs).toBe(1)
+    expect(mockLookupService.outputEvicted).toHaveBeenCalledWith(exampleTXID, 0)
+    expect(deleteOutput).toHaveBeenCalledWith(exampleTXID, 0, 'Hello')
+    expect(deleteAppliedTransaction).toHaveBeenCalledWith(exampleTXID, 'Hello')
+  })
+
   it('Uses SHIP sync configuration by default if no syncConfiguration was provided', () => {
     const engine = new Engine(
       { tm_helloworld: mockTopicManager },

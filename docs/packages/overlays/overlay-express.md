@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: "@bsv/overlay-express"
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-06-27"
+last_verified: "2026-06-27"
 status: stable
 tags: ["overlay", "express", "http"]
 ---
@@ -54,6 +54,9 @@ await server.start()
 - **Web UI** — Auto-generated documentation and service explorer
 - **BanService** — Optional output banning by txid.outputIndex
 - **JanitorService** — Health validation for SHIP/SLAP peer hosts
+- **Provider chain** — Arcade-first broadcast/proof lookup with Arc fallback
+- **Chaintracks integration** — Header resolution and reorg SSE for BASM
+- **OverlayMonitor** — Lookup probes plus optional admin maintenance actions
 
 ## Common patterns
 
@@ -115,10 +118,53 @@ server.configureEngineParams({
 })
 
 server.configureEnableGASPSync(true)
+server.configureArcade(process.env.ARCADE_URL!, {
+  apiKey: process.env.ARCADE_API_KEY,
+  deploymentId: process.env.ARCADE_DEPLOYMENT_ID
+})
+server.configureArcApiKey(process.env.ARC_API_KEY!)
+server.configureChaintracks(process.env.CHAINTRACKS_URL ?? process.env.ARCADE_URL!, {
+  apiPrefix: '/chaintracks/v2',
+  reorgStream: true,
+  scanDepth: 3
+})
+server.configureEnableBASMSync(true)
+server.configureUnprovenMaintenance({
+  thresholdBlocks: 144,
+  intervalMs: 60 * 60 * 1000
+})
 server.configureWebUI({
   host: 'https://example.com',
   primaryColor: '#ff0000'
 })
+```
+
+### Monitor an overlay deployment
+
+```typescript
+import { OverlayMonitor } from '@bsv/overlay-express'
+
+const monitor = new OverlayMonitor({
+  intervalMs: 60 * 60 * 1000,
+  targets: [{
+    name: 'production-overlay',
+    baseUrl: 'https://overlay.example',
+    adminToken: process.env.ADMIN_TOKEN,
+    probes: [{
+      name: 'protomap',
+      service: 'ls_protomap',
+      query: { topic: 'tm_protomap' },
+      maxOutputs: 50
+    }],
+    maintenance: {
+      startBASMSync: true,
+      maintainUnproven: { thresholdBlocks: 144 },
+      janitor: true
+    }
+  }]
+})
+
+monitor.start()
 ```
 
 ## Key concepts
@@ -130,6 +176,10 @@ server.configureWebUI({
 - **Knex vs MongoDB** — Knex for SQL (global application storage), MongoDB for per-service indices
 - **Health endpoints** — Follow Kubernetes liveness/readiness probe patterns
 - **JanitorService** — Periodically validates SHIP/SLAP hosts; revokes failing entries
+- **Provider callbacks** — `/arc-ingest` accepts Arc/Arcade callback notifications,
+  applies proofs, and evicts terminal invalid or double-spent transactions
+- **Unproven maintenance** — Proof refresh runs before eviction so mined
+  transactions can recover before stale unproven rows are removed
 
 ## When to use this
 
@@ -150,7 +200,8 @@ server.configureWebUI({
 - Implements BSV Overlay protocol with SHIP/SLAP peer discovery
 - Supports Graph Aware Sync Protocol (GASP) for historical sync
 - Health endpoints follow Kubernetes liveness/readiness probe patterns
-- Optional Arc callback integration for proof-of-inclusion on mainnet
+- Optional Arc and Arcade callback integration for proof-of-inclusion on mainnet
+- Chaintracks-compatible header and reorg handling for BRC-136 BASM
 
 ## Common pitfalls
 
@@ -159,6 +210,10 @@ server.configureWebUI({
 3. **Health check criticality** — Mark as `critical: true` only for mandatory dependencies; failures block `/health/ready`
 4. **GASP sync overhead** — Disabling sync useful for dev but loses peer synchronization
 5. **BanService persistence** — Bans not persisted if MongoDB goes down; transient storage only
+6. **Strict broadcast** — Keep `throwOnBroadcastFailure: true` for production so
+   provider outages do not create local-only overlay state.
+7. **BASM dependencies** — BASM should use a Chaintracks-compatible chain tracker;
+   Arcade exposes this under `/chaintracks/v2`.
 
 ## Related packages
 

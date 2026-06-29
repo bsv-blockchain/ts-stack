@@ -36,7 +36,7 @@ export function createDefaultWalletServicesOptions (
   // const chaintracksUrl = `https://npm-registry.babbage.systems:${chain === 'main' ? 8084 : 8083}`
   const chaintracksUrl =
     chain === 'ttn'
-      ? 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/'
+      ? 'https://arcade-v2-ttn-us-1.bsvblockchain.tech/chaintracks/v1'
       : `https://${chain}net-chaintracks.babbage.systems`
   // The mainnet endpoint is always used since these are fiat exchange rates,
   // independent of the chain being used.

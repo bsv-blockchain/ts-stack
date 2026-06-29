@@ -28,8 +28,6 @@ import { BlockHeader, WalletServices } from '../sdk/WalletServices.interfaces'
 import { Services } from '../services/Services'
 import { ChaintracksClientApi } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
 
-import { Chaintracks } from '../services/chaintracker/chaintracks/Chaintracks'
-
 export type MonitorStorage = WalletStorageManager
 export type MonitorStartupTaskMode = 'none' | 'default' | 'multiuser' | 'alltoother'
 
@@ -42,7 +40,7 @@ export interface MonitorOptions {
 
   chaintracks: ChaintracksClientApi
 
-  chaintracksWithEvents?: Chaintracks
+  chaintracksWithEvents?: ChaintracksClientApi
 
   startupTaskMode?: MonitorStartupTaskMode
 
@@ -101,7 +99,7 @@ export class Monitor {
     chain: Chain,
     storage: MonitorStorage,
     services?: Services,
-    chaintracks?: Chaintracks,
+    chaintracks?: ChaintracksClientApi,
     startupTaskMode: MonitorStartupTaskMode = 'none'
   ): MonitorOptions {
     services ??= new Services(chain)
@@ -128,7 +126,7 @@ export class Monitor {
   chain: Chain
   storage: MonitorStorage
   chaintracks: ChaintracksClientApi
-  chaintracksWithEvents?: Chaintracks
+  chaintracksWithEvents?: ChaintracksClientApi
   reorgSubscriptionPromise?: Promise<string>
   headersSubscriptionPromise?: Promise<string>
   onTransactionBroadcasted?: (broadcastResult: ReviewActionResult) => Promise<void>
@@ -288,7 +286,8 @@ export class Monitor {
       new TaskReviewStatus(this),
       new TaskReorg(this),
       new TaskReviewDoubleSpends(this),
-      new TaskReviewProvenTxs(this)
+      new TaskReviewProvenTxs(this),
+      new TaskArcadeSSE(this)
     )
     this._otherTasks.push(
       new TaskPurge(this, this.defaultPurgeParams),

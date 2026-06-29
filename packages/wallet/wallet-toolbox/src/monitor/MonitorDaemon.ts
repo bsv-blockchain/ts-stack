@@ -11,7 +11,7 @@ import { Monitor, MonitorStartupTaskMode } from './Monitor'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { wait } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
-import { Chaintracks } from '../services/chaintracker/chaintracks/Chaintracks'
+import { ChaintracksClientApi } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
 dotenv.config()
 
 export interface MonitorDaemonSetup {
@@ -26,7 +26,7 @@ export interface MonitorDaemonSetup {
   servicesOptions?: WalletServicesOptions
   services?: Services
   monitor?: Monitor
-  chaintracks?: Chaintracks
+  chaintracks?: ChaintracksClientApi
   startupTaskMode?: MonitorStartupTaskMode
 }
 

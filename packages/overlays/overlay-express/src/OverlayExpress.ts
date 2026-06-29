@@ -42,6 +42,9 @@ import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoverySto
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
+import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
+import { ProviderChainBroadcaster, type NamedBroadcaster } from './ProviderChainBroadcaster.js'
+import { ChaintracksProvider } from './ChaintracksProvider.js'
 
 /**
  * Knex database migration.
@@ -107,6 +110,7 @@ export interface EngineConfig {
   unprovenEvictionBlocks?: number
   reorgStreamUrl?: string
   reorgScanDepth?: number
+  unprovenMaintenanceIntervalMs?: number
 }
 
 export type HealthStatus = 'ok' | 'degraded' | 'error'
@@ -169,6 +173,17 @@ interface BASMCapableEngine extends Engine {
   startBASMSync: () => Promise<any>
   advanceTopicAnchorChains: (toHeight?: number) => Promise<void>
   evictUnprovenTransactions: (options?: { topic?: string, thresholdBlocks?: number }) => Promise<any>
+  refreshUnprovenTransactionProofs: (options: {
+    topic?: string
+    thresholdBlocks?: number
+    proofProvider: (txid: string) => Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined>
+  }) => Promise<any>
+  maintainUnprovenTransactions: (options: {
+    topic?: string
+    thresholdBlocks?: number
+    proofProvider: (txid: string) => Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined>
+  }) => Promise<any>
+  evictAppliedTransaction: (txid: string, options?: { topic?: string, reason?: string }) => Promise<any>
   handleReorg: (input: ReorgHandlerInput) => Promise<any>
   revalidateRecentAnchors: (depth?: number) => Promise<any>
 }
@@ -235,6 +250,12 @@ export default class OverlayExpress {
   // Handle for the BASM block-poll timer so it can be stopped.
   private basmBlockPollTimer?: ReturnType<typeof setInterval>
 
+  // How often (ms) to refresh proofs for old unproven rows and then evict rows
+  // that still have no proof. Set to 0 to disable background maintenance.
+  unprovenMaintenanceIntervalMs: number = 0
+
+  private unprovenMaintenanceTimer?: ReturnType<typeof setInterval>
+
   // Optional go-chaintracks (Arcade) reorg SSE URL (e.g. `<base>/v2/reorg/stream`).
   // When set, reorgs are reconciled in real time; the block poll also runs a
   // revalidation sweep as a fallback / reconnect catch-up.
@@ -254,6 +275,15 @@ export default class OverlayExpress {
 
   // Optional ARC callback token for /arc-ingest notifications
   arcCallbackToken: string | undefined = undefined
+
+  // Optional Arcade URL/API key used for propagation, proof refresh, and
+  // go-chaintracks header/reorg access when available.
+  arcadeUrl: string | undefined = undefined
+  arcadeApiKey: string | undefined = undefined
+  arcadeDeploymentId: string | undefined = undefined
+  arcadeChaintracksApiPrefix: string = '/chaintracks/v2'
+
+  private arcadeProvider?: ArcadeProvider
 
   // Verbose request logging
   verboseRequestLogging: boolean = false
@@ -448,6 +478,50 @@ export default class OverlayExpress {
   }
 
   /**
+   * Configures Arcade for first-choice transaction propagation and proof lookup.
+   */
+  configureArcade (url: string, config: {
+    apiKey?: string
+    deploymentId?: string
+    chaintracksApiPrefix?: string
+  } = {}): void {
+    this.arcadeUrl = url
+    this.arcadeApiKey = config.apiKey
+    this.arcadeDeploymentId = config.deploymentId
+    if (config.chaintracksApiPrefix !== undefined) {
+      this.arcadeChaintracksApiPrefix = config.chaintracksApiPrefix
+    }
+    this.logger.log(chalk.blue('Arcade provider has been configured.'))
+  }
+
+  /**
+   * Configures a go-chaintracks compatible service for header validation and
+   * BASM reorg streaming. Arcade exposes this at `/chaintracks/v2`.
+   */
+  configureChaintracks (url: string, config: {
+    apiPrefix?: string
+    reorgStream?: boolean
+    scanDepth?: number
+  } = {}): void {
+    const apiPrefix = config.apiPrefix ?? '/chaintracks/v2'
+    const client = new ChaintracksProvider(url, { apiPrefix })
+    this.configureChainTracker(client)
+    this.configureTopicAnchorHeaderResolver(async blockHeight => {
+      const header = await client.findHeaderForHeight(blockHeight)
+      if (header === undefined) return undefined
+      return {
+        blockHeight,
+        blockHash: header.hash,
+        merkleRoot: header.merkleRoot
+      }
+    })
+    if (config.reorgStream !== false) {
+      this.configureReorgStream(client.reorgStreamUrl(), config.scanDepth)
+    }
+    this.logger.log(chalk.blue('go-chaintracks provider has been configured.'))
+  }
+
+  /**
    * Enables or disables GASP synchronization (high-level setting).
    * This is a broad toggle that can be overridden or customized through syncConfiguration.
    * @param enable - true to enable, false to disable
@@ -496,6 +570,20 @@ export default class OverlayExpress {
       this.unprovenEvictionBlocks = config.thresholdBlocks
     }
     this.logger.log(chalk.blue('Unproven transaction eviction has been configured.'))
+  }
+
+  /**
+   * Configures periodic unproven maintenance. Each run first tries configured
+   * proof providers, then evicts rows that are still unproven past the threshold.
+   */
+  configureUnprovenMaintenance (config: { intervalMs?: number, thresholdBlocks?: number }): void {
+    if (config.intervalMs !== undefined) {
+      this.unprovenMaintenanceIntervalMs = config.intervalMs
+    }
+    if (config.thresholdBlocks !== undefined) {
+      this.unprovenEvictionBlocks = config.thresholdBlocks
+    }
+    this.logger.log(chalk.blue('Unproven transaction maintenance has been configured.'))
   }
 
   /**
@@ -677,7 +765,7 @@ export default class OverlayExpress {
       syncConfig,
       this.engineConfig.logTime ?? false,
       this.engineConfig.logPrefix ?? '[OVERLAY_ENGINE] ',
-      this.engineConfig.throwOnBroadcastFailure ?? false,
+      this.engineConfig.throwOnBroadcastFailure ?? true,
       this.engineConfig.overlayBroadcastFacilitator ?? new HTTPSOverlayBroadcastFacilitator(),
       this.logger,
       this.engineConfig.suppressDefaultSyncAdvertisements ?? true,
@@ -721,15 +809,85 @@ export default class OverlayExpress {
     return syncConfig
   }
 
-  /** Build the ARC broadcaster if an API key is configured. */
+  /** Build the configured transaction propagation provider chain. */
   private buildBroadcaster (): Broadcaster | undefined {
-    if (typeof this.arcApiKey !== 'string') return undefined
-    const arcUrl = this.network === 'test' ? 'https://arc-test.taal.com' : 'https://arc.taal.com'
-    return new ARC(arcUrl, {
-      apiKey: this.arcApiKey,
+    const providers: NamedBroadcaster[] = []
+    const callbackUrl = `https://${this.advertisableFQDN}/arc-ingest`
+
+    if (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0) {
+      this.arcadeProvider = new ArcadeProvider(this.arcadeUrl, {
+        apiKey: this.arcadeApiKey,
+        callbackUrl,
+        callbackToken: this.arcCallbackToken,
+        deploymentId: this.arcadeDeploymentId
+      })
+      providers.push({
+        name: 'Arcade',
+        broadcaster: this.arcadeProvider
+      })
+    } else {
+      this.arcadeProvider = undefined
+    }
+
+    if (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) {
+      const arcUrl = this.network === 'test' ? 'https://arc-test.taal.com' : 'https://arc.taal.com'
+      providers.push({
+        name: 'ARC',
+        broadcaster: new ARC(arcUrl, {
+          apiKey: this.arcApiKey,
+          callbackUrl,
+          callbackToken: this.arcCallbackToken
+        })
+      })
+    }
+
+    if (providers.length === 0) return undefined
+    if (providers.length === 1) return providers[0].broadcaster
+    return new ProviderChainBroadcaster(providers)
+  }
+
+  private ensureArcadeProvider (): ArcadeProvider | undefined {
+    if (this.arcadeProvider !== undefined) return this.arcadeProvider
+    if (typeof this.arcadeUrl !== 'string' || this.arcadeUrl.length === 0) return undefined
+    this.arcadeProvider = new ArcadeProvider(this.arcadeUrl, {
+      apiKey: this.arcadeApiKey,
       callbackUrl: `https://${this.advertisableFQDN}/arc-ingest`,
-      callbackToken: this.arcCallbackToken
+      callbackToken: this.arcCallbackToken,
+      deploymentId: this.arcadeDeploymentId
     })
+    return this.arcadeProvider
+  }
+
+  private async fetchArcadeProof (txid: string): Promise<ArcadeMerkleProof | undefined> {
+    const provider = this.ensureArcadeProvider()
+    if (provider === undefined) return undefined
+    const proof = await provider.fetchMerkleProof(txid)
+    if (proof === undefined) return undefined
+    const chainTracker = this.engineConfig.chainTracker ?? this.chainTracker
+    if (chainTracker === 'scripts only') {
+      throw new Error('Cannot validate Arcade proof with scripts-only chain tracker')
+    }
+    const blockHeight = proof.blockHeight ?? proof.merklePath.blockHeight
+    if (blockHeight === undefined) {
+      throw new Error(`Arcade proof for ${txid} did not include a block height`)
+    }
+    const valid = await chainTracker.isValidRootForHeight(proof.merkleRoot, blockHeight)
+    if (!valid) {
+      throw new Error(`Arcade proof for ${txid} did not match the chain tracker at height ${blockHeight}`)
+    }
+    return {
+      ...proof,
+      blockHeight
+    }
+  }
+
+  private async fetchConfiguredMerkleProof (txid: string): Promise<{ merklePath: MerklePath, blockHeight?: number } | undefined> {
+    const proof = await this.fetchArcadeProof(txid)
+    if (proof === undefined) return undefined
+    return {
+      merklePath: proof.merklePath,
+      blockHeight: proof.blockHeight
+    }
   }
 
   /** Build the BASM block header resolver. */
@@ -1417,8 +1575,11 @@ export default class OverlayExpress {
       })
     })
 
-    // ARC ingest route (only if we have an ARC API key)
-    if (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) {
+    // ARC/Arcade ingest route (only if a provider is configured)
+    if (
+      (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) ||
+      (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
+    ) {
       this.app.post('/arc-ingest', (req, res) => {
         ; (async () => {
           try {
@@ -1434,9 +1595,44 @@ export default class OverlayExpress {
                 return res.status(401).json({ status: 'error', message: 'Unauthorized callback' })
               }
             }
-            const { txid, merklePath: merklePathHex, blockHeight } = req.body
+            const { txid, merklePath: merklePathHex, blockHeight, txStatus, extraInfo, competingTxs, topic } = req.body
+            if (typeof txid !== 'string' || txid === '') {
+              throw new TypeError('Provider callback is missing txid')
+            }
+            if (isTerminalArcStatus(txStatus, extraInfo)) {
+              const report = await (engine as BASMCapableEngine).evictAppliedTransaction(txid, {
+                topic: typeof topic === 'string' ? topic : undefined,
+                reason: `${txStatus ?? ''} ${extraInfo ?? ''}`.trim()
+              })
+              this.logger.warn({
+                operation: 'overlay.provider_callback',
+                outcome: 'terminal_evicted',
+                txid,
+                txStatus,
+                competingTxs,
+                report
+              })
+              return res.status(200).json({
+                status: 'success',
+                message: 'Terminal transaction status processed',
+                data: {
+                  ...report,
+                  txStatus,
+                  competingTxs
+                }
+              })
+            }
+            if (typeof merklePathHex !== 'string' || merklePathHex === '') {
+              return res.status(202).json({ status: 'success', message: 'Transaction status received without proof' })
+            }
             const merklePath = MerklePath.fromHex(merklePathHex)
             await engine.handleNewMerkleProof(txid, merklePath, blockHeight)
+            this.logger.log({
+              operation: 'overlay.provider_callback',
+              outcome: 'proof_ingested',
+              txid,
+              blockHeight
+            })
             return res.status(200).json({ status: 'success', message: 'Transaction status updated' })
           } catch (error) {
             console.error(chalk.red('Error in /arc-ingest:'), error)
@@ -1453,7 +1649,7 @@ export default class OverlayExpress {
         })
       })
     } else {
-      this.logger.warn(chalk.yellow('Disabling ARC because no ARC API key was provided.'))
+      this.logger.warn(chalk.yellow('Disabling ARC/Arcade ingest because no provider was configured.'))
     }
 
     // GASP sync routes if enabled
@@ -2000,7 +2196,37 @@ export default class OverlayExpress {
         topic: typeof topic === 'string' ? topic : undefined,
         thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined
       })
+      this.logger.log({ operation: 'overlay.unproven_eviction', outcome: 'ok', report })
       return { status: 'success', message: 'Unproven eviction completed', data: report }
+    }, checkAdminAuth as any)
+
+    /**
+     * Admin route to refresh proofs for expired unproven topic transactions
+     * using the configured proof providers.
+     */
+    registerJsonRoute('/admin/refreshUnprovenProofs', async req => {
+      const { topic, thresholdBlocks } = req.body ?? {}
+      const report = await basmEngine.refreshUnprovenTransactionProofs({
+        topic: typeof topic === 'string' ? topic : undefined,
+        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
+        proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
+      })
+      this.logger.log({ operation: 'overlay.unproven_proof_refresh', outcome: 'ok', report })
+      return { status: 'success', message: 'Unproven proof refresh completed', data: report }
+    }, checkAdminAuth as any)
+
+    /**
+     * Admin route to refresh proofs first, then evict rows that remain unproven.
+     */
+    registerJsonRoute('/admin/maintainUnproven', async req => {
+      const { topic, thresholdBlocks } = req.body ?? {}
+      const report = await basmEngine.maintainUnprovenTransactions({
+        topic: typeof topic === 'string' ? topic : undefined,
+        thresholdBlocks: typeof thresholdBlocks === 'number' ? thresholdBlocks : undefined,
+        proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
+      })
+      this.logger.log({ operation: 'overlay.unproven_maintenance', outcome: 'ok', report })
+      return { status: 'success', message: 'Unproven maintenance completed', data: report }
     }, checkAdminAuth as any)
 
     /**
@@ -2118,6 +2344,7 @@ export default class OverlayExpress {
 
     await this.runGaspStartupSync()
     await this.runBasmStartupSync()
+    this.startUnprovenMaintenance()
   }
 
   /** Attempt a GASP sync at startup when enabled. */
@@ -2204,5 +2431,26 @@ export default class OverlayExpress {
     } catch (e) {
       console.error(chalk.red('Failed to revalidate BASM anchors'), e)
     }
+  }
+
+  private startUnprovenMaintenance (): void {
+    const intervalMs = this.engineConfig.unprovenMaintenanceIntervalMs ?? this.unprovenMaintenanceIntervalMs
+    if (intervalMs <= 0) return
+    const run = (): void => {
+      void (async () => {
+        try {
+          const report = await (this.engine as BASMCapableEngine | undefined)?.maintainUnprovenTransactions({
+            thresholdBlocks: this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks,
+            proofProvider: async txid => await this.fetchConfiguredMerkleProof(txid)
+          })
+          this.logger.log(chalk.green('Unproven transaction maintenance complete'), report)
+        } catch (e) {
+          console.error(chalk.red('Failed to maintain unproven transactions'), e)
+        }
+      })()
+    }
+    run()
+    this.unprovenMaintenanceTimer = setInterval(run, intervalMs)
+    this.unprovenMaintenanceTimer.unref?.()
   }
 }

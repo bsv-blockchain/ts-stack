@@ -1,5 +1,6 @@
 import { TaskArcadeSSE } from '../TaskArcSSE'
 import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
+import { EntityProvenTx } from '../../../storage/schema/entities'
 
 // ── Fake EventSource ─────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ class FakeEventSource {
   }
 
   addEventListener (type: string, fn: (e: any) => void): void {
-    if (!this.listeners[type]) this.listeners[type] = []
+    if (this.listeners[type] == null) this.listeners[type] = []
     this.listeners[type].push(fn)
   }
 
@@ -51,7 +52,12 @@ function makeReqApi (status: string, txid = 'txid1'): any {
 function makeStorageWithReqs (reqApis: any[]): any {
   const sp = {
     updateProvenTxReqDynamics: jest.fn().mockResolvedValue(undefined),
-    updateTransactionsStatus: jest.fn().mockResolvedValue(undefined)
+    updateTransactionsStatus: jest.fn().mockResolvedValue(undefined),
+    updateProvenTxReqWithNewProvenTx: jest.fn().mockResolvedValue({
+      status: 'completed',
+      history: '{}',
+      provenTxId: 123
+    })
   }
   return {
     isStorageProvider: jest.fn().mockReturnValue(false),
@@ -68,11 +74,12 @@ function makeEmptyStorage (): any {
 function makeMonitor (
   overrides: {
     callbackToken?: string | null
-    arcUrl?: string
+    arcadeUrl?: string
     EventSourceClass?: any
     loadLastSSEEventId?: () => Promise<string | undefined>
     saveLastSSEEventId?: (id: string) => Promise<void>
     storageOverride?: any
+    servicesOverride?: any
   } = {}
 ): any {
   const storage = overrides.storageOverride ?? makeEmptyStorage()
@@ -84,11 +91,13 @@ function makeMonitor (
       loadLastSSEEventId: overrides.loadLastSSEEventId,
       saveLastSSEEventId: overrides.saveLastSSEEventId
     },
-    services: {
-      options: { arcUrl: overrides.arcUrl ?? 'https://arc.example.com' }
+    services: overrides.servicesOverride ?? {
+      options: { arcadeUrl: overrides.arcadeUrl ?? 'https://arcade.example.com' },
+      getMerklePath: jest.fn()
     },
     chain: 'test',
     storage,
+    logEvent: jest.fn().mockResolvedValue(undefined),
     callOnTransactionStatusChanged: jest.fn(),
     callOnProvenTransaction: jest.fn()
   }
@@ -122,9 +131,9 @@ describe('TaskArcadeSSE', () => {
       expect(FakeEventSource.instances.length).toBe(0)
     })
 
-    test('skips setup when arcUrl is absent', async () => {
-      const monitor = makeMonitor({ arcUrl: '' })
-      monitor.services.options.arcUrl = ''
+    test('skips setup when arcadeUrl is absent', async () => {
+      const monitor = makeMonitor({ arcadeUrl: '' })
+      monitor.services.options.arcadeUrl = ''
       const task = new TaskArcadeSSE(monitor)
       await task.asyncSetup()
       expect(task.sseClient).toBeNull()
@@ -141,7 +150,7 @@ describe('TaskArcadeSSE', () => {
     test('passes loadLastSSEEventId result as lastEventId to client', async () => {
       const task = new TaskArcadeSSE(makeMonitor({ loadLastSSEEventId: async () => '77' }))
       await task.asyncSetup()
-      expect(task.sseClient!.lastEventId).toBe('77')
+      expect(task.sseClient?.lastEventId).toBe('77')
     })
 
     test('continues setup when loadLastSSEEventId throws', async () => {
@@ -270,6 +279,46 @@ describe('TaskArcadeSSE', () => {
         const { log } = await runWithStatus('MINED', s)
         expect(log).toContain(`already terminal: ${s}`)
       }
+    })
+
+    test('MINED uses configured proof services and stores validated proof', async () => {
+      const reqApi = makeReqApi('unmined')
+      const storage = makeStorageWithReqs([reqApi])
+      const proof = { name: 'Arcade' } as any
+      const getMerklePath = jest.fn().mockResolvedValue(proof)
+      const fromReq = jest.spyOn(EntityProvenTx, 'fromReq').mockResolvedValue({
+        toApi: () => ({
+          index: 7,
+          height: 99,
+          blockHash: 'blockhash',
+          merklePath: [1, 2, 3],
+          merkleRoot: 'merkleroot'
+        })
+      } as any)
+      const monitor = makeMonitor({
+        storageOverride: storage,
+        servicesOverride: {
+          options: { arcadeUrl: 'https://arcade.example.com' },
+          getMerklePath
+        }
+      })
+      const task = new TaskArcadeSSE(monitor)
+      await task.asyncSetup()
+
+      FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({ txid: reqApi.txid, txStatus: 'MINED', timestamp: '' })
+      })
+      const log = await task.runTask()
+
+      expect(getMerklePath).toHaveBeenCalledWith(reqApi.txid)
+      expect(fromReq).toHaveBeenCalledWith(expect.anything(), proof, false, expect.any(Number))
+      expect(storage.runAsStorageProvider).toHaveBeenCalled()
+      expect(monitor.callOnProvenTransaction).toHaveBeenCalledWith(expect.objectContaining({
+        txid: reqApi.txid,
+        txIndex: 7,
+        blockHeight: 99
+      }))
+      expect(log).toContain('proved by Arcade')
     })
   })
 

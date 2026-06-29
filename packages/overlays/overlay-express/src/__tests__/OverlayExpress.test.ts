@@ -672,6 +672,12 @@ describe('OverlayExpress', () => {
         syncAdvertisements: jest.fn().mockResolvedValue(undefined),
         // @ts-expect-error - Mock return values
         startGASPSync: jest.fn().mockResolvedValue(undefined),
+        // @ts-expect-error - Mock return values
+        refreshUnprovenTransactionProofs: jest.fn().mockResolvedValue({}),
+        // @ts-expect-error - Mock return values
+        maintainUnprovenTransactions: jest.fn().mockResolvedValue({}),
+        // @ts-expect-error - Mock return values
+        evictAppliedTransaction: jest.fn().mockResolvedValue({ evictedTransactions: 1, evictedOutputs: 1 }),
         lookupServices: {},
         advertiser: {
           // @ts-expect-error - Mock return values
@@ -881,6 +887,11 @@ describe('OverlayExpress', () => {
       }
       // Flush the async IIFE inside the /arc-ingest handler.
       const flush = async (): Promise<void> => { await new Promise(resolve => setImmediate(resolve)) }
+      const proofCallbackBody = {
+        txid: '11'.repeat(32),
+        merklePath: '00',
+        blockHeight: 800000
+      }
 
       const captureArcIngestHandler = async (): Promise<any> => {
         const postSpy = jest.spyOn(instance.app, 'post')
@@ -924,7 +935,7 @@ describe('OverlayExpress', () => {
         const handler = await captureArcIngestHandler()
         const res = mockRes()
 
-        handler({ headers: { authorization: 'Bearer secret-token' }, body: {} }, res)
+        handler({ headers: { authorization: 'Bearer secret-token' }, body: proofCallbackBody }, res)
         await flush()
 
         expect(res.status).not.toHaveBeenCalledWith(401)
@@ -937,7 +948,7 @@ describe('OverlayExpress', () => {
         const handler = await captureArcIngestHandler()
         const res = mockRes()
 
-        handler({ headers: { 'x-callback-token': 'secret-token' }, body: {} }, res)
+        handler({ headers: { 'x-callback-token': 'secret-token' }, body: proofCallbackBody }, res)
         await flush()
 
         expect(res.status).not.toHaveBeenCalledWith(401)
@@ -949,11 +960,34 @@ describe('OverlayExpress', () => {
         const handler = await captureArcIngestHandler()
         const res = mockRes()
 
-        handler({ headers: {}, body: {} }, res)
+        handler({ headers: {}, body: proofCallbackBody }, res)
         await flush()
 
         expect(res.status).not.toHaveBeenCalledWith(401)
         expect(mockEngine.handleNewMerkleProof).toHaveBeenCalled()
+      })
+
+      it('evicts a transaction when a provider reports a terminal double-spend status', async () => {
+        instance.configureArcApiKey('test-arc-key')
+        instance.configureArcCallbackToken('secret-token')
+        const handler = await captureArcIngestHandler()
+        const res = mockRes()
+
+        handler({
+          headers: { authorization: 'Bearer secret-token' },
+          body: {
+            txid: '11'.repeat(32),
+            txStatus: 'DOUBLE_SPEND_ATTEMPTED',
+            competingTxs: ['22'.repeat(32)]
+          }
+        }, res)
+        await flush()
+
+        expect(mockEngine.evictAppliedTransaction).toHaveBeenCalledWith('11'.repeat(32), {
+          topic: undefined,
+          reason: 'DOUBLE_SPEND_ATTEMPTED'
+        })
+        expect(mockEngine.handleNewMerkleProof).not.toHaveBeenCalled()
       })
     })
 

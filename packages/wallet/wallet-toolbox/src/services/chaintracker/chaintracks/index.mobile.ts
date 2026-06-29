@@ -11,6 +11,7 @@ export * from './Api/BlockHeaderApi'
 
 export * from './Chaintracks'
 export * from './ChaintracksServiceClient'
+export * from './GoChaintracksServiceClient'
 
 export * from './Ingest/BulkIngestorBase'
 export * from './Ingest/LiveIngestorBase'
@@ -19,6 +20,7 @@ export * from './Ingest/BulkIngestorCDN'
 export * from './Ingest/BulkIngestorCDNBabbage'
 export * from './Ingest/BulkIngestorWhatsOnChainCdn'
 export * from './Ingest/LiveIngestorWhatsOnChainPoll'
+export * from './Ingest/LiveIngestorChaintracksSSE'
 export * from './Ingest/WhatsOnChainServices'
 
 export * from './Storage/BulkStorageBase'

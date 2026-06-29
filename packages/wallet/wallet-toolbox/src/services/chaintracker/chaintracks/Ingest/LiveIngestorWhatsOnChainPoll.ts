@@ -7,6 +7,7 @@ import {
   WocGetHeadersHeader,
   wocGetHeadersHeaderToBlockHeader
 } from './WhatsOnChainServices'
+import { ChaintracksFetchError } from '../util/ChaintracksFetch'
 
 export interface LiveIngestorWhatsOnChainOptions extends LiveIngestorBaseOptions, WhatsOnChainServicesOptions {
   /**
@@ -40,6 +41,14 @@ export interface LiveIngestorWhatsOnChainOptions extends LiveIngestorBaseOptions
    * How long chainInfo is considered still valid before updating (msecs).
    */
   chainInfoMsecs: number
+  /**
+   * Initial delay before retrying a failed polling request.
+   */
+  retryWait?: number
+  /**
+   * Maximum delay before retrying repeated failed polling requests.
+   */
+  retryWaitMax?: number
 }
 
 /**
@@ -50,18 +59,24 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
     const options: LiveIngestorWhatsOnChainOptions = {
       ...WhatsOnChainServices.createWhatsOnChainServicesOptions(chain),
       ...LiveIngestorBase.createLiveIngestorBaseOptions(chain),
-      idleWait: 100000
+      idleWait: 100000,
+      retryWait: 5000,
+      retryWaitMax: 120000
     }
     return options
   }
 
   idleWait: number
+  retryWait: number
+  retryWaitMax: number
   woc: WhatsOnChainServices
   done: boolean = false
 
   constructor (options: LiveIngestorWhatsOnChainOptions) {
     super(options)
-    this.idleWait = options.idleWait || 100000
+    this.idleWait = options.idleWait ?? 100000
+    this.retryWait = options.retryWait ?? 5000
+    this.retryWaitMax = options.retryWaitMax ?? 120000
     this.woc = new WhatsOnChainServices(options)
   }
 
@@ -73,9 +88,20 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
   async startListening (liveHeaders: BlockHeader[]): Promise<void> {
     this.done = false
     let lastHeaders: WocGetHeadersHeader[] = []
+    let failureCount = 0
 
     while (!this.done) {
-      const headers = await this.woc.getHeaders()
+      let headers: WocGetHeadersHeader[]
+      try {
+        headers = await this.woc.getHeaders()
+        failureCount = 0
+      } catch (error: unknown) {
+        failureCount++
+        const retryMsecs = this.getRetryWaitMsecs(error, failureCount)
+        this.log(`LiveIngestorWhatsOnChainPoll getHeaders failed attempt=${failureCount} retryMsecs=${retryMsecs} error=${this.errorMessage(error)}`)
+        await this.waitUnlessStopped(retryMsecs)
+        continue
+      }
 
       const newHeaders = headers.filter(h => !lastHeaders.some(lh => lh.hash === h.hash))
 
@@ -86,12 +112,32 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
 
       lastHeaders = headers
 
-      for (let sec = 0; sec < 60 && !this.done; sec++) {
-        // Only wait a second at a time so we notice `done` sooner...
-        await wait(1000)
-      }
+      await this.waitUnlessStopped(60 * 1000)
     }
     this.log('LiveIngestorWhatsOnChainPoll stopped')
+  }
+
+  private getRetryWaitMsecs (error: unknown, failureCount: number): number {
+    if (error instanceof ChaintracksFetchError && error.retryAfterMsecs != null) {
+      return Math.min(Math.max(error.retryAfterMsecs, 0), this.retryWaitMax)
+    }
+    const multiplier = Math.min(2 ** (failureCount - 1), 16)
+    return Math.min(this.retryWait * multiplier, this.retryWaitMax)
+  }
+
+  private errorMessage (error: unknown): string {
+    if (error instanceof ChaintracksFetchError) return `${error.status} ${error.statusText}: ${error.message}`
+    if (error instanceof Error) return error.message
+    return String(error)
+  }
+
+  private async waitUnlessStopped (msecs: number): Promise<void> {
+    let remaining = msecs
+    while (remaining > 0 && !this.done) {
+      const chunk = Math.min(1000, remaining)
+      await wait(chunk)
+      remaining -= chunk
+    }
   }
 
   stopListening (): void {

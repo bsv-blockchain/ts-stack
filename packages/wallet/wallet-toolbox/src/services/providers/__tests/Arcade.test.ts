@@ -6,6 +6,7 @@ import {
   P2PKH,
   PrivateKey,
   Beef,
+  BEEF_V1,
   MerklePath,
   UnlockingScript
 } from '@bsv/sdk'
@@ -38,6 +39,20 @@ function mockHttpClient (
       if (typeof response === 'function') {
         response() // throw to simulate a network error
       }
+      return response as HttpClientResponse<D>
+    }
+  }
+}
+
+function mockHttpClientSequence (
+  responses: Array<Partial<HttpClientResponse<unknown>>>,
+  captured: CapturedRequest[]
+): HttpClient {
+  return {
+    async request<D> (url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+      captured.push({ url, options })
+      const response = responses.shift()
+      if (response == null) throw new Error('No scripted HTTP response')
       return response as HttpClientResponse<D>
     }
   }
@@ -124,13 +139,53 @@ describe('Arcade broadcaster', () => {
       expect(r.serviceError).toBe(true)
     })
 
-    test('standard ARC keeps legacy behavior: HTTP 400 → serviceError=true', async () => {
+    test('standard ARC HTTP validation error → status error treated as invalidTx (serviceError=false)', async () => {
       const captured: CapturedRequest[] = []
-      const http = mockHttpClient({ ok: false, status: 400, statusText: 'Bad Request', data: { detail: 'bad' } }, captured)
+      const http = mockHttpClient({ ok: false, status: 464, statusText: 'Invalid Inputs', data: { detail: 'script evaluation failed' } }, captured)
+      const arc = new ARC('https://arc.example', { httpClient: http })
+      const r = await arc.postRawTx(RAW_TX)
+      expect(r.status).toBe('error')
+      expect(r.serviceError).toBe(false)
+    })
+
+    test('standard ARC HTTP 476 batch limit → transient serviceError=true', async () => {
+      const captured: CapturedRequest[] = []
+      const http = mockHttpClient({ ok: false, status: 476, statusText: 'Maximum batch size exceeded', data: { detail: 'Maximum batch size exceeded' } }, captured)
       const arc = new ARC('https://arc.example', { httpClient: http })
       const r = await arc.postRawTx(RAW_TX)
       expect(r.status).toBe('error')
       expect(r.serviceError).toBe(true)
+    })
+
+    test.each([
+      'RECEIVED',
+      'SENT_TO_NETWORK',
+      'ANNOUNCED_TO_NETWORK',
+      'ACCEPTED_BY_NETWORK',
+      'SEEN_ON_NETWORK',
+      'STORED',
+      'MINED',
+      'IMMUTABLE'
+    ])('standard ARC postBeef accepts extra txid status %s', async txStatus => {
+      const captured: CapturedRequest[] = []
+      const primaryTxid = '22'.repeat(32)
+      const extraTxid = '11'.repeat(32)
+      const beef = {
+        version: BEEF_V1,
+        txs: [],
+        toHex: () => RAW_TX
+      } as unknown as Beef
+      const http = mockHttpClientSequence([
+        { ok: true, status: 200, statusText: 'OK', data: { txid: primaryTxid, extraInfo: '', txStatus: 'SEEN_ON_NETWORK' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: extraTxid, txStatus } }
+      ], captured)
+      const arc = new ARC('https://arc.example', { httpClient: http })
+
+      const r = await arc.postBeef(beef, [extraTxid, primaryTxid])
+
+      expect(r.status).toBe('success')
+      expect(r.txidResults.find(t => t.txid === extraTxid)?.status).toBe('success')
+      expect(captured[1].url).toBe(`https://arc.example/v1/tx/${extraTxid}`)
     })
   })
 

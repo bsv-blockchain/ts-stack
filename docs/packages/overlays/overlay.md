@@ -5,8 +5,8 @@ kind: package
 domain: overlays
 npm: "@bsv/overlay"
 version: "1.0.0"
-last_updated: "2026-04-28"
-last_verified: "2026-04-28"
+last_updated: "2026-06-27"
+last_verified: "2026-06-27"
 status: stable
 tags: ["overlay", "framework"]
 ---
@@ -68,6 +68,8 @@ const result = await engine.lookup({
 - **BEEF/STEAK encoding** — Transaction encoding (BEEF = Background Evaluation Extended Format / BRC-62; STEAK = engine response format)
 - **GASP Integration** — Syncs with other overlay services using Graph Aware Sync Protocol
 - **SHIP/SLAP support** — Built-in peer discovery protocols
+- **BASM support** — BRC-136 topic anchors, TAC computation, reorg reconciliation,
+  proof refresh, and unproven transaction maintenance
 
 ## Common patterns
 
@@ -140,6 +142,31 @@ const storage = new KnexStorage(knex)
 // Run the standard KnexStorageMigrations before first use.
 ```
 
+### Maintaining BASM and unproven transactions
+
+BASM-capable deployments need a chain tracker that can validate Merkle roots and
+resolve canonical block headers. The Engine exposes maintenance operations used
+by Overlay Express and monitor processes:
+
+```typescript
+await engine.startBASMSync()
+
+await engine.refreshUnprovenTransactionProofs({
+  thresholdBlocks: 144,
+  proofProvider: async txid => await lookupProof(txid)
+})
+
+await engine.maintainUnprovenTransactions({
+  thresholdBlocks: 144,
+  proofProvider: async txid => await lookupProof(txid)
+})
+```
+
+`maintainUnprovenTransactions` first tries to prove old unproven rows, then
+evicts rows that remain unproven past the configured threshold. Provider-level
+terminal invalidation can also call `evictAppliedTransaction` so double-spent or
+invalid transactions stop appearing in lookup results immediately.
+
 ## Key concepts
 
 - **TopicManager** — Validates which outputs are admissible to the overlay based on protocol rules
@@ -148,6 +175,10 @@ const storage = new KnexStorage(knex)
 - **SpendNotificationMode** — How lookup service is notified when a UTXO is spent (`'none'`, `'txid'`, `'script'`, or `'whole-tx'`)
 - **Storage** — Abstracted persistence layer; Knex implementation handles SQL migrations automatically
 - **GASP** — Graph Aware Sync Protocol for inter-service synchronization
+- **BASM** — Block-anchored synchronization model for proving topic state against
+  canonical block headers
+- **Unproven lifecycle** — Transactions can enter as unproven, be proved later by
+  callbacks or proof providers, or be evicted after the configured age threshold
 
 ## When to use this
 
@@ -167,6 +198,7 @@ const storage = new KnexStorage(knex)
 - Implements BSV Overlay protocol for UTXO tracking
 - Supports SHIP (Service Host Interconnect Protocol) and SLAP (Service Lookup Availability Protocol) for peer discovery
 - Integrates Graph Aware Sync Protocol (GASP) for historical synchronization with other overlay nodes
+- Supports BRC-136 BASM primitives for topic anchors and chain reorg handling
 
 ## Common pitfalls
 
@@ -175,6 +207,10 @@ const storage = new KnexStorage(knex)
 3. **Knex migrations** — Custom storage implementations must handle schema creation; KnexStorage provides standard migrations
 4. **GASP sync context** — SHIP/SLAP topics have special handling for peer discovery configuration
 5. **Chain validation** — If chainTracker is 'scripts only', SPV proofs are not validated; unsafe for production
+6. **Unproven cleanup** — Eviction should normally be refresh-before-evict so
+   delayed proofs have a chance to land before state is removed.
+7. **Double spends** — Provider-confirmed double spends should be treated as
+   terminal and evicted from admitted overlay state immediately.
 
 ## Related packages
 
