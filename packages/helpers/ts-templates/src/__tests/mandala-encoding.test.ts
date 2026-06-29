@@ -1,6 +1,6 @@
 import {
   createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNum,
-  decodeScriptNumChunk, encodeAssetId, decodeAssetId, MARKER
+  decodeScriptNumChunk, encodeAssetId, decodeAssetId
 } from '../mandala-encoding'
 
 describe('mandala-encoding', () => {
@@ -34,9 +34,5 @@ describe('mandala-encoding', () => {
   it('round-trips an assetId with a high-bit vout (>= 2^31)', () => {
     const assetId = `${'a'.repeat(64)}.4294967295`
     expect(decodeAssetId(encodeAssetId(assetId))).toBe(assetId)
-  })
-
-  it('exposes the ! marker', () => {
-    expect(MARKER).toBe(0x21)
   })
 })

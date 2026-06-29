@@ -82,12 +82,10 @@ describe('MandalaTopicManager admin chain', () => {
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const adminProto: [number, string] = [2, 'mandala admin']
 
-    const admin = new MandalaAdmin(issuer as any)
     const actionDetails = { kind: 'register' as const, assetId: `${'c'.repeat(64)}.0` }
-    const { boundKey } = await admin.deriveBoundKey(adminProto as any, actionDetails)
 
     const tx = new Transaction()
-    tx.addOutput({ lockingScript: admin.lock(boundKey), satoshis: 1 })
+    tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: actionDetails }), satoshis: 1 })
 
     const offChainValues = encodeLinkagePayload({
       inputs: [], outputs: [], admin: [{ index: 0, actionDetails }]
@@ -102,10 +100,8 @@ describe('MandalaTopicManager admin chain', () => {
     const issuer = new ProtoWallet(PrivateKey.fromRandom())
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const adminProto: [number, string] = [2, 'mandala admin']
-    const admin = new MandalaAdmin(issuer as any)
-    const { boundKey } = await admin.deriveBoundKey(adminProto as any, { kind: 'register', assetId: `${'c'.repeat(64)}.0` })
     const tx = new Transaction()
-    tx.addOutput({ lockingScript: admin.lock(boundKey), satoshis: 1 })
+    tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: { kind: 'register', assetId: `${'c'.repeat(64)}.0` } }), satoshis: 1 })
     const offChainValues = encodeLinkagePayload({
       inputs: [], outputs: [], admin: [{ index: 0, actionDetails: { kind: 'register', assetId: 'WRONG.0' } }]
     } as any)
@@ -129,13 +125,11 @@ describe('MandalaTopicManager admin chain', () => {
     const assetA = `${'a'.repeat(64)}.0` // minted with no inputs
     const assetC = `${'c'.repeat(64)}.0` // the admin (register) asset
 
-    const admin = new MandalaAdmin(issuer as any)
     const registerDetails = { kind: 'register' as const, assetId: assetC }
-    const { boundKey } = await admin.deriveBoundKey(adminProto as any, registerDetails)
 
     const tx = new Transaction()
     tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 }) // index 0: unbacked FT
-    tx.addOutput({ lockingScript: admin.lock(boundKey), satoshis: 1 })                       // index 1: valid admin for C
+    tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: registerDetails }), satoshis: 1 }) // index 1: valid admin for C
 
     const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
     const offChainValues = encodeLinkagePayload({
@@ -162,20 +156,17 @@ describe('MandalaTopicManager admin chain', () => {
     const pkh = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
     const assetA = `${'a'.repeat(64)}.0`
 
-    const admin = new MandalaAdmin(issuer as any)
     // Prior authorization outpoint (genesis-ish admin output the issue tx will spend).
     const priorDetails = { kind: 'register' as const, assetId: assetA }
-    const { boundKey: priorBoundKey } = await admin.deriveBoundKey(adminProto as any, priorDetails)
     const priorTx = new Transaction()
-    priorTx.addOutput({ lockingScript: admin.lock(priorBoundKey), satoshis: 1 })
+    priorTx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: priorDetails }), satoshis: 1 })
 
     const issueDetails = { kind: 'issue' as const, assetId: assetA, amount: 100, priorOutpoint: `${priorTx.id('hex')}.0` }
-    const { boundKey: issueBoundKey } = await admin.deriveBoundKey(adminProto as any, issueDetails)
 
     const tx = new Transaction()
     tx.addInput({ sourceTransaction: priorTx, sourceOutputIndex: 0, unlockingScript: new Script(), sequence: 0xffffffff }) // spends prior auth outpoint
     tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 }) // index 0: minted FT
-    tx.addOutput({ lockingScript: admin.lock(issueBoundKey), satoshis: 1 })                  // index 1: next auth outpoint
+    tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: issueDetails }), satoshis: 1 }) // index 1: next auth outpoint
 
     const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
     const offChainValues = encodeLinkagePayload({
@@ -202,25 +193,21 @@ describe('MandalaTopicManager admin chain', () => {
     const pkh = Hash.hash160(Utils.toArray(derivedKey, 'hex'))
     const assetA = `${'a'.repeat(64)}.0`
 
-    const admin = new MandalaAdmin(issuer as any)
-
     // Prior admin-auth outpoint the redeem spends.
     const priorDetails = { kind: 'issue' as const, assetId: assetA, amount: 100, priorOutpoint: `${'b'.repeat(64)}.0` }
-    const { boundKey: priorBoundKey } = await admin.deriveBoundKey(adminProto as any, priorDetails)
     const adminPriorTx = new Transaction()
-    adminPriorTx.addOutput({ lockingScript: admin.lock(priorBoundKey), satoshis: 1 })
+    adminPriorTx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: priorDetails }), satoshis: 1 })
 
     // Prior FT coin of 100 that gets partially burned.
     const ftPriorTx = new Transaction()
     ftPriorTx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 100, pkh), satoshis: 1 })
 
     const redeemDetails = { kind: 'redeem' as const, assetId: assetA, amount: 30, priorOutpoint: `${adminPriorTx.id('hex')}.0` }
-    const { boundKey: redeemBoundKey } = await admin.deriveBoundKey(adminProto as any, redeemDetails)
 
     const tx = new Transaction()
     tx.addInput({ sourceTransaction: ftPriorTx, sourceOutputIndex: 0, unlockingScript: new Script(), sequence: 0xffffffff })   // input 0: FT 100 (previous coin)
     tx.addInput({ sourceTransaction: adminPriorTx, sourceOutputIndex: 0, unlockingScript: new Script(), sequence: 0xffffffff }) // input 1: prior admin auth
-    tx.addOutput({ lockingScript: admin.lock(redeemBoundKey), satoshis: 1 })            // index 0: redeem admin auth
+    tx.addOutput({ lockingScript: await MandalaAdmin.lock({ wallet: issuer as any, data: redeemDetails }), satoshis: 1 })            // index 0: redeem admin auth
     tx.addOutput({ lockingScript: new MandalaToken().lock(assetA, 70, pkh), satoshis: 1 }) // index 1: FT change 70
 
     const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })

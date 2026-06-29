@@ -1,26 +1,30 @@
 import { MandalaAdmin } from '../MandalaAdmin.js'
-import { PrivateKey, OP } from '@bsv/sdk'
+import { ProtoWallet, PrivateKey, OP } from '@bsv/sdk'
 
 describe('MandalaAdmin lock/decode', () => {
-  it('round-trips the boundKey and has the ! OP_DROP <key> OP_CHECKSIG shape', () => {
-    const boundKey = PrivateKey.fromRandom().toPublicKey().toString()
-    const admin = new MandalaAdmin({} as any)
-    const script = admin.lock(boundKey)
+  const wallet = new ProtoWallet(PrivateKey.fromRandom())
+  const data = { kind: 'register', assetId: `${'a'.repeat(64)}.0` } as const
+
+  it('builds a standard P2PKH script (OP_DUP OP_HASH160 <20> OP_EQUALVERIFY OP_CHECKSIG)', async () => {
+    const script = await MandalaAdmin.lock({ wallet: wallet as any, data })
     const ops = script.chunks.map(c => c.op)
-    expect(script.chunks[0].data).toEqual([0x21])
-    expect(ops[1]).toBe(OP.OP_DROP)
-    expect(ops[3]).toBe(OP.OP_CHECKSIG)
-    expect(MandalaAdmin.decode(script).boundKey).toBe(boundKey)
+    expect(ops).toEqual([OP.OP_DUP, OP.OP_HASH160, 20, OP.OP_EQUALVERIFY, OP.OP_CHECKSIG])
+    expect(script.chunks[2].data?.length).toBe(20)
+  })
+
+  it('decode returns the pubKeyHash', async () => {
+    const script = await MandalaAdmin.lock({ wallet: wallet as any, data })
+    const decoded = MandalaAdmin.decode(script)
+    expect(decoded.pubKeyHash).toEqual(script.chunks[2].data)
   })
 
   it('decode throws on non-admin scripts', () => {
     expect(() => MandalaAdmin.decode({ chunks: [{ op: 0x00 }] } as any)).toThrow()
   })
 
-  it('decode rejects a non-minimal (PUSHDATA1) marker encoding', () => {
-    const boundKey = PrivateKey.fromRandom().toPublicKey().toString()
-    const script = new MandalaAdmin({} as any).lock(boundKey)
-    script.chunks[0] = { op: 0x4c, data: [0x21] }
+  it('decode throws when the hash push is not 20 bytes', async () => {
+    const script = await MandalaAdmin.lock({ wallet: wallet as any, data })
+    script.chunks[2] = { op: 19, data: new Array(19).fill(1) }
     expect(() => MandalaAdmin.decode(script)).toThrow()
   })
 })

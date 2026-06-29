@@ -1,7 +1,5 @@
 import { Utils } from '@bsv/sdk'
 
-export const MARKER = 0x21
-
 export const createMinimallyEncodedScriptChunk = (
   data: number[]
 ): { op: number, data?: number[] } => {

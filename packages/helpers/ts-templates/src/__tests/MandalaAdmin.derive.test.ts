@@ -1,4 +1,4 @@
-import { MandalaAdmin } from '../MandalaAdmin.js'
+import { MandalaAdmin, ADMIN_PROTOCOL } from '../MandalaAdmin.js'
 
 describe('MandalaAdmin canonicalize/commitment', () => {
   it('is insensitive to key ordering', () => {
@@ -18,17 +18,15 @@ describe('MandalaAdmin canonicalize/commitment', () => {
     expect(c).toBe(MandalaAdmin.commitment({ assetId: 'x.0', kind: 'register' } as any))
   })
 
-  it('derives a boundKey via getPublicKey with counterparty anyone', async () => {
+  it('locks the output to keyID = commitment(data) with counterparty self by default', async () => {
     const calls: any[] = []
     const wallet: any = {
       getPublicKey: async (args: any) => { calls.push(args); return { publicKey: '02' + 'a'.repeat(64) } }
     }
-    const admin = new MandalaAdmin(wallet)
-    const details = { kind: 'issue', assetId: 'x.0', amount: 10 } as const
-    const { boundKey, keyID } = await admin.deriveBoundKey([2, 'mandala admin'], details)
-    expect(boundKey).toBe('02' + 'a'.repeat(64))
-    expect(keyID).toBe(MandalaAdmin.commitment(details))
-    expect(calls[0].counterparty).toBe('anyone')
-    expect(calls[0].keyID).toBe(keyID)
+    const data = { kind: 'issue', assetId: 'x.0', amount: 10 } as const
+    await MandalaAdmin.lock({ wallet, data })
+    expect(calls[0].protocolID).toEqual(ADMIN_PROTOCOL)
+    expect(calls[0].keyID).toBe(MandalaAdmin.commitment(data))
+    expect(calls[0].counterparty).toBe('self')
   })
 })

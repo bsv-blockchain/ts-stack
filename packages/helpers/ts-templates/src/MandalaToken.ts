@@ -5,7 +5,7 @@ import {
 } from '@bsv/sdk'
 import {
   createMinimallyEncodedScriptChunk, encodeScriptNum, decodeScriptNumChunk,
-  encodeAssetId, decodeAssetId, MARKER
+  encodeAssetId, decodeAssetId
 } from './mandala-encoding.js'
 import { buildSighashPreimage } from './mandala-signing.js'
 
@@ -47,12 +47,12 @@ export class MandalaToken implements ScriptTemplate {
     if (pubKeyHash.length !== 20) throw new Error('pubKeyHash must be 20 bytes')
     if (!Number.isInteger(amount) || amount < 1) throw new Error('amount must be a positive integer')
     const assetIdBytes = encodeAssetId(assetId)
+    // assetId + amount are pushed then dropped by a single OP_2DROP; the tail is
+    // a standard P2PKH. No identifier prefix — outputs are classified off-chain.
     return new LockingScript([
-      createMinimallyEncodedScriptChunk([MARKER]),
       createMinimallyEncodedScriptChunk(assetIdBytes),
       createMinimallyEncodedScriptChunk(encodeScriptNum(amount)),
       { op: OP.OP_2DROP },
-      { op: OP.OP_DROP },
       { op: OP.OP_DUP },
       { op: OP.OP_HASH160 },
       { op: pubKeyHash.length, data: pubKeyHash },
@@ -85,17 +85,15 @@ export class MandalaToken implements ScriptTemplate {
 
   static decode (script: LockingScript): MandalaTokenDecoded {
     const c = script.chunks
-    if (c.length !== 10) throw new Error('not a MandalaToken script: wrong chunk count')
-    const marker = c[0].data ?? []
-    if (c[0].op !== 1 || marker.length !== 1 || marker[0] !== MARKER) throw new Error('not a MandalaToken script: missing marker')
-    if (c[3].op !== OP.OP_2DROP || c[4].op !== OP.OP_DROP) throw new Error('not a MandalaToken script: bad drops')
-    if (c[5].op !== OP.OP_DUP || c[6].op !== OP.OP_HASH160 || c[8].op !== OP.OP_EQUALVERIFY || c[9].op !== OP.OP_CHECKSIG) {
+    if (c.length !== 8) throw new Error('not a MandalaToken script: wrong chunk count')
+    if (c[2].op !== OP.OP_2DROP) throw new Error('not a MandalaToken script: bad drops')
+    if (c[3].op !== OP.OP_DUP || c[4].op !== OP.OP_HASH160 || c[6].op !== OP.OP_EQUALVERIFY || c[7].op !== OP.OP_CHECKSIG) {
       throw new Error('not a MandalaToken script: bad P2PKH tail')
     }
-    const assetId = decodeAssetId(vt(c[1].data))
-    const amount = decodeScriptNumChunk(c[2])
+    const assetId = decodeAssetId(vt(c[0].data))
+    const amount = decodeScriptNumChunk(c[1])
     if (!Number.isInteger(amount) || amount < 1) throw new Error('not a MandalaToken script: bad amount')
-    const pubKeyHash = vt(c[7].data)
+    const pubKeyHash = vt(c[5].data)
     if (pubKeyHash.length !== 20) throw new Error('not a MandalaToken script: bad pubKeyHash')
     return { assetId, amount, pubKeyHash }
   }
