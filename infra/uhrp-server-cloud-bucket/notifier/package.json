@@ -10,7 +10,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
-    "axios": "^1.18.0",
+    "axios": "^1.18.1",
     "uhrp-url": "^0.1.3"
   }
 }
