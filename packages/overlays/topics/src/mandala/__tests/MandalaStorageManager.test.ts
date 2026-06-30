@@ -1,6 +1,7 @@
 import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient, Db } from 'mongodb'
 import { MandalaStorageManager } from '../MandalaStorageManager.js'
+import { defaultAssetState } from '../AssetStateReducer.js'
 
 describe('MandalaStorageManager', () => {
   let mongo: MongoMemoryServer
@@ -45,5 +46,46 @@ describe('MandalaStorageManager', () => {
     })
     const indexes = await db.collection('mandalaLinkageRecords').indexes()
     expect(indexes.some(i => 'expireAfterSeconds' in i)).toBe(false)
+  })
+})
+
+describe('MandalaStorageManager admin state + history', () => {
+  let mongo: MongoMemoryServer
+  let client: MongoClient
+  let db: Db
+
+  beforeAll(async () => {
+    mongo = await MongoMemoryServer.create()
+    client = new MongoClient(mongo.getUri())
+    await client.connect()
+    db = client.db('mandala_admin_test')
+  })
+  afterAll(async () => { await client.close(); await mongo.stop() })
+  beforeEach(async () => { await db.dropDatabase() })
+
+  it('getAssetState returns defaults when absent, then round-trips putAssetState', async () => {
+    const mgr = new MandalaStorageManager(db) // db from the existing harness
+    expect(await mgr.getAssetState('x.0')).toEqual(defaultAssetState('x.0'))
+    const next = { ...defaultAssetState('x.0'), isPaused: true, blockedIdentities: ['02aa'] }
+    await mgr.putAssetState(next)
+    expect(await mgr.getAssetState('x.0')).toEqual(next)
+  })
+
+  it('nextAdmitSeq is monotonic', async () => {
+    const mgr = new MandalaStorageManager(db)
+    const a = await mgr.nextAdmitSeq()
+    const b = await mgr.nextAdmitSeq()
+    expect(b).toBe(a + 1)
+  })
+
+  it('admin history is returned ordered by (height, offset, admitSeq)', async () => {
+    const mgr = new MandalaStorageManager(db)
+    const base = { assetId: 'a.0', outputIndex: 1, actionDetails: { kind: 'pause' as const, assetId: 'a.0' }, createdAt: new Date() }
+    await mgr.appendAdminHistory({ ...base, txid: 't3', height: 100, offset: 2, admitSeq: 5 })
+    await mgr.appendAdminHistory({ ...base, txid: 't1', height: 100, offset: 1, admitSeq: 9 })
+    await mgr.appendAdminHistory({ ...base, txid: 't4', height: Number.MAX_SAFE_INTEGER, offset: 0, admitSeq: 3 })
+    await mgr.appendAdminHistory({ ...base, txid: 't2', height: 99, offset: 9, admitSeq: 1 })
+    const got = (await mgr.findAdminHistoryByAssetId('a.0')).map(e => e.txid)
+    expect(got).toEqual(['t2', 't1', 't3', 't4'])
   })
 })
