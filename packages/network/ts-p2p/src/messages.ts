@@ -186,8 +186,10 @@ for (let i = 0; i < alphabet.length; i++) B64[alphabet[i]] = i
 
 /** Decode a base64 string to Uint8Array without depending on Buffer or atob. */
 function base64ToBytes(b64: string): Uint8Array {
-  // Strip padding
-  const clean = b64.replace(/=+$/, '')
+  // Strip trailing '=' padding (plain scan, no backtracking-prone regex)
+  let end = b64.length
+  while (end > 0 && b64[end - 1] === '=') end--
+  const clean = b64.slice(0, end)
   const len = (clean.length * 3) >>> 2
   const out = new Uint8Array(len)
   let pos = 0
