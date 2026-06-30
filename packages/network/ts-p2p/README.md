@@ -70,6 +70,27 @@ await listener.start();
 console.log('Listener started and waiting for messages...');
 ```
 
+### Decoding messages
+
+By default, callbacks receive the raw GossipSub bytes (`Uint8Array`). Pass `decodeMessages: true` to have the listener decode the two-layer JSON wire format for you. Callbacks then receive a typed `DecodedMessage` (the sender name plus a typed payload):
+
+```typescript
+import { TeranodeListener, type BlockMessage, type DecodedMessage } from '@bsv/teranode-listener';
+
+const listener = new TeranodeListener(
+  {
+    'bitcoin/mainnet-block': (msg: DecodedMessage<BlockMessage>, topic, from) => {
+      console.log(`Block #${msg.payload.Height} (${msg.payload.Hash}) from ${msg.sender}`);
+    }
+  },
+  { decodeMessages: true }
+);
+
+await listener.start();
+```
+
+The exported `decodeMessage()` / `tryDecodeMessage()` helpers can also be used to decode a message manually. Frames that are not valid JSON (e.g. libp2p control frames) are skipped when `decodeMessages` is on.
+
 ### Function-Based API
 
 Alternatively, you can use the original function-based API:
