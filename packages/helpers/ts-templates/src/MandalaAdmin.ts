@@ -8,13 +8,25 @@ import { createMinimallyEncodedScriptChunk } from './mandala-encoding.js'
 
 export interface AssetMetadata { label: string, ticker?: string, decimals?: number, [k: string]: unknown }
 
-export type MandalaActionKind = 'register' | 'issue' | 'redeem' | 'recover'
+export type MandalaActionKind =
+  | 'register' | 'issue' | 'redeem' | 'recover'
+  | 'pause' | 'unpause'
+  | 'blockIdentity' | 'unblockIdentity'
+  | 'allowIdentity' | 'unallowIdentity'
+  | 'setAccessMode'
+  | 'freezeOutput' | 'unfreezeOutput'
+  | 'reissue'
 
 export interface MandalaActionDetails {
   kind: MandalaActionKind
   assetId?: string
   amount?: number
   priorOutpoint?: string
+  identityKey?: string
+  outpoint?: string
+  recipient?: string
+  mode?: 'denylist' | 'allowlist'
+  bankRef?: string
   [k: string]: unknown
 }
 
