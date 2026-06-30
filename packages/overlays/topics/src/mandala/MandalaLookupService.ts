@@ -109,8 +109,11 @@ export class MandalaLookupService implements LookupService {
       assetId, txid, outputIndex, height, offset, admitSeq, actionDetails: details, createdAt: new Date()
     })
     const ctx: FoldContext = {}
-    if (details.kind === 'register' && admin.publicData != null && typeof (admin.publicData as any).issuer === 'string') {
-      ctx.issuer = (admin.publicData as any).issuer
+    // Source the issuer from the persisted actionDetails (same as rebuildState),
+    // not from publicData, so a live admit and a later rebuild agree. Only
+    // actionDetails is persisted in AdminHistoryEntry; publicData is not.
+    if (details.kind === 'register' && typeof details.issuer === 'string') {
+      ctx.issuer = details.issuer
     }
     if (details.kind === 'freezeOutput' && typeof details.outpoint === 'string') {
       const [ftxid, fvoutStr] = details.outpoint.split('.')
@@ -167,9 +170,16 @@ export class MandalaLookupService implements LookupService {
       return await this.deps.storage.findMetadataByAssetId(query.metadataAssetId)
     }
     if (typeof query.assetStateAssetId === 'string') {
+      // LookupFormula is strictly Array<{ txid, outputIndex, ... }> with no freeform
+      // object variant, so admin-state/history rows can only be returned through this
+      // double cast. It is load-bearing for the build; the disable keeps
+      // `ts-standard --fix` from stripping it under a strictNullChecks-on config (which
+      // would break the build in Task 7 / CI).
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       return await this.deps.storage.findStateByAssetId(query.assetStateAssetId) as unknown as LookupFormula
     }
     if (typeof query.adminHistoryAssetId === 'string') {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       return await this.deps.storage.findAdminHistoryByAssetId(query.adminHistoryAssetId) as unknown as LookupFormula
     }
     if (typeof query.assetId === 'string') {
