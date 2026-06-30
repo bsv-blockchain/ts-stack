@@ -60,14 +60,19 @@ export const encodeAssetId = (assetId: string): number[] => {
   const vout = Number(assetId.slice(dot + 1))
   if (txid.length !== 64) throw new Error('assetId txid must be 32 bytes (64 hex chars)')
   if (!Number.isInteger(vout) || vout < 0) throw new Error('assetId vout must be a non-negative integer')
-  const txidBytes = Utils.toArray(txid, 'hex')
+  // On-chain assetId bytes use outpoint format: the txid in internal (hash) byte
+  // order — i.e. the display hex reversed (tx.hash() vs tx.id('hex')) — followed by
+  // the 4-byte little-endian vout. This lets a contract compare the embedded assetId
+  // directly against the genesis transaction's outpoint as it appears in the tx.
+  const txidBytes = Utils.toArray(txid, 'hex').reverse()
   const voutBytes = [vout & 0xff, (vout >> 8) & 0xff, (vout >> 16) & 0xff, (vout >> 24) & 0xff]
   return [...txidBytes, ...voutBytes]
 }
 
 export const decodeAssetId = (bytes: number[]): string => {
   if (bytes.length !== 36) throw new Error('assetId bytes must be exactly 36 bytes')
-  const txid = Utils.toHex(bytes.slice(0, 32))
+  // Reverse the internal (hash) byte order back to display txid hex.
+  const txid = Utils.toHex(bytes.slice(0, 32).reverse())
   const v = bytes.slice(32)
   const vout = (v[0] + (v[1] << 8) + (v[2] << 16) + (v[3] << 24)) >>> 0
   return `${txid}.${vout}`

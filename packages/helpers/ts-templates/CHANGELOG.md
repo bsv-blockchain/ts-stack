@@ -13,7 +13,13 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
-- (Detail modifications that are non-breaking but relevant to the end-users.)
+- **MandalaToken assetId on-chain encoding (breaking on-chain format):** `encodeAssetId`
+  now writes the txid in outpoint (internal/reversed, `tx.hash()`) byte order followed
+  by the 4-byte little-endian vout, matching how an outpoint appears in a transaction.
+  `decodeAssetId` reverses it back, so the `"<txid>.<vout>"` display string is
+  unchanged. This lets smart contracts compare a token's embedded assetId directly
+  against the genesis transaction's outpoint. Tokens minted under the previous
+  (non-reversed) encoding will not decode to the same assetId.
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)
