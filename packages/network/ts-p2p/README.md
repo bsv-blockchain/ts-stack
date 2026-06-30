@@ -421,16 +421,30 @@ npm install
 npm run build
 ```
 
+### Testing
+
+This package uses [Jest](https://jestjs.io/) with `ts-jest`. Run the suite with:
+
+```bash
+npm test
+```
+
+The tests exercise the message decoder (`decodeMessage` / `tryDecodeMessage`) end to end, building real two-layer wire frames and decoding them back: the PascalCase (block) and snake_case (node_status) payload shapes, multi-byte UTF-8, every base64 padding length, and the malformed / non-JSON frame paths.
+
 ### Project Structure
 
 ```
 ts-p2p/
 ├── src/
-│   └── index.ts          # Main library code
+│   ├── index.ts          # Main library and listener
+│   └── messages.ts       # Wire-format types and decoder
+├── test/
+│   └── messages.test.ts  # Decoder test suite
 ├── dist/                 # Compiled JavaScript output
+├── jest.config.js        # Jest (ts-jest) configuration
 ├── package.json          # Package configuration
 ├── tsconfig.json         # TypeScript configuration
-└── README.md            # This file
+└── README.md             # This file
 ```
 
 ### Dependencies
