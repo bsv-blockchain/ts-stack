@@ -181,25 +181,82 @@ export class MandalaTopicManager implements TopicManager {
   // here are: (1) frozen/evicted input spend (ALL txs); (2) pause and (3) access
   // mode (peer transfers only, admin actions exempt); plus the reissue guards.
   // Returns false to reject the whole tx.
+  private ftInputAssetId (i: { sourceTransaction?: Transaction, sourceOutputIndex: number }): string | null {
+    const src = i.sourceTransaction?.outputs[i.sourceOutputIndex]
+    if (src == null) return null
+    try {
+      return MandalaToken.decode(src.lockingScript).assetId
+    } catch {
+      return null
+    }
+  }
+
+  // Gate 3 (access mode) rejection test — peer transfers only. Denylist rejects if
+  // any party is blocked; allowlist rejects if any party is not allowed.
+  private accessModeRejects (state: AssetAdminState, parties: string[]): boolean {
+    return state.accessMode === 'denylist'
+      ? parties.some(k => state.blockedIdentities.includes(k))
+      : parties.some(k => !state.allowedIdentities.includes(k))
+  }
+
+  // reissue guards: target outpoint must be frozen (a), the minted amount must
+  // match the frozen row (b), and the tx must carry zero FT inputs of asset X (c).
+  private reissueGuardFails (
+    state: AssetAdminState,
+    tx: Transaction,
+    assetId: string,
+    adminAction: MandalaActionDetails
+  ): boolean {
+    const op = typeof adminAction.outpoint === 'string' ? adminAction.outpoint : ''
+    const ref = state.frozenOutpoints.find(f => f.outpoint === op)
+    if (ref == null) return true // (a)
+    if (ref.amount !== adminAction.amount) return true // (b)
+    if (tx.inputs.some(i => this.ftInputAssetId(i) === assetId)) return true // (c)
+    return false
+  }
+
+  private async assetGatePasses (
+    assetId: string,
+    tx: Transaction,
+    admittedFt: AdmittedFt[],
+    adminAssetKinds: Map<string, MandalaActionDetails>,
+    inputOutpoints: string[],
+    resolveSenders: () => Promise<string[]>
+  ): Promise<boolean> {
+    const state = await this.deps.stateStore.getAssetState(assetId)
+    const frozen = new Set<string>([...state.frozenOutpoints.map(f => f.outpoint), ...state.evictedOutpoints])
+
+    // Gate 1: frozen/evicted input spend — applies to ALL txs (blocks
+    // recover/redeem of a frozen coin too; only unfreeze/reissue resolve it).
+    if (inputOutpoints.some(op => frozen.has(op))) return false
+
+    const adminAction = adminAssetKinds.get(assetId)
+    const isAdmin = adminAction != null
+
+    // Gate 2: paused — peer transfers only; admin actions on X remain admitted.
+    if (state.isPaused && !isAdmin) return false
+
+    // Gate 3: access mode — peer transfers only, admin actions exempt.
+    if (!isAdmin) {
+      const recipients = admittedFt.filter(f => f.assetId === assetId).map(f => f.identityKey)
+      const parties = [...recipients, ...await resolveSenders()].filter(k => k !== state.issuerIdentityKey)
+      if (this.accessModeRejects(state, parties)) return false
+    }
+
+    if (adminAction?.kind === 'reissue' && this.reissueGuardFails(state, tx, assetId, adminAction)) return false
+
+    return true
+  }
+
   private async controlGate (
     tx: Transaction,
     admittedFt: AdmittedFt[],
     adminAssetKinds: Map<string, MandalaActionDetails>,
     payload: ReturnType<typeof decodeLinkagePayload>
   ): Promise<boolean> {
-    const ftInputAssetId = (i: { sourceTransaction?: Transaction, sourceOutputIndex: number }): string | null => {
-      const src = i.sourceTransaction?.outputs[i.sourceOutputIndex]
-      if (src == null) return null
-      try {
-        return MandalaToken.decode(src.lockingScript).assetId
-      } catch {
-        return null
-      }
-    }
-
     const assets = new Set<string>(admittedFt.map(f => f.assetId))
     for (const ci of tx.inputs) {
-      const id = ftInputAssetId(ci)
+      const id = this.ftInputAssetId(ci)
       if (id != null) assets.add(id)
     }
 
@@ -222,38 +279,8 @@ export class MandalaTopicManager implements TopicManager {
     }
 
     for (const assetId of assets) {
-      const state = await this.deps.stateStore.getAssetState(assetId)
-      const frozen = new Set<string>([...state.frozenOutpoints.map(f => f.outpoint), ...state.evictedOutpoints])
-
-      // Gate 1: frozen/evicted input spend — applies to ALL txs (blocks
-      // recover/redeem of a frozen coin too; only unfreeze/reissue resolve it).
-      if (inputOutpoints.some(op => frozen.has(op))) return false
-
-      const adminAction = adminAssetKinds.get(assetId)
-      const isAdmin = adminAction != null
-
-      // Gate 2: paused — peer transfers only; admin actions on X remain admitted.
-      if (state.isPaused && !isAdmin) return false
-
-      // Gate 3: access mode — peer transfers only, admin actions exempt.
-      if (!isAdmin) {
-        const recipients = admittedFt.filter(f => f.assetId === assetId).map(f => f.identityKey)
-        const parties = [...recipients, ...await resolveSenders()].filter(k => k !== state.issuerIdentityKey)
-        if (state.accessMode === 'denylist') {
-          if (parties.some(k => state.blockedIdentities.includes(k))) return false
-        } else {
-          if (parties.some(k => !state.allowedIdentities.includes(k))) return false
-        }
-      }
-
-      // reissue guards: target outpoint must be frozen (a), the minted amount must
-      // match the frozen row (b), and the tx must carry zero FT inputs of asset X (c).
-      if (adminAction?.kind === 'reissue') {
-        const op = typeof adminAction.outpoint === 'string' ? adminAction.outpoint : ''
-        const ref = state.frozenOutpoints.find(f => f.outpoint === op)
-        if (ref == null) return false // (a)
-        if (ref.amount !== adminAction.amount) return false // (b)
-        if (tx.inputs.some(i => ftInputAssetId(i) === assetId)) return false // (c)
+      if (!(await this.assetGatePasses(assetId, tx, admittedFt, adminAssetKinds, inputOutpoints, resolveSenders))) {
+        return false
       }
     }
     return true
