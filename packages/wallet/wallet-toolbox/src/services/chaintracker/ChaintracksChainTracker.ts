@@ -3,12 +3,12 @@ import { ChaintracksServiceClient } from './chaintracks/ChaintracksServiceClient
 import { Chain } from '../../sdk/types'
 import { WalletError } from '../../sdk/WalletError'
 import { wait } from '../../utility/utilityHelpers'
-import { WERR_INTERNAL } from '../../sdk/WERR_errors'
 import { BlockHeader } from '../../sdk/WalletServices.interfaces'
 import { ChaintracksClientApi } from './chaintracks/Api/ChaintracksClientApi'
 
 export interface ChaintracksChainTrackerOptions {
   maxRetries?: number
+  retryDelayMs?: number
 }
 
 export class ChaintracksChainTracker implements ChainTracker {
@@ -36,7 +36,8 @@ export class ChaintracksChainTracker implements ChainTracker {
 
     let header: BlockHeader | undefined
 
-    const retries = this.options.maxRetries || 3
+    const retries = Math.max(1, this.options.maxRetries ?? 6)
+    const retryDelayMs = this.options.retryDelayMs ?? 250
 
     let error: WalletError | undefined
 
@@ -45,20 +46,22 @@ export class ChaintracksChainTracker implements ChainTracker {
         header = await this.chaintracks.findHeaderForHeight(height)
 
         if (header == null) {
-          return false
+          if (tryCount >= retries) return false
+          await wait(retryDelayMs)
+          continue
         }
 
         break
       } catch (error_: unknown) {
         error = WalletError.fromUnknown(error_)
-        if (tryCount > retries) {
+        if (tryCount >= retries) {
           throw error
         }
-        await wait(1000)
+        await wait(retryDelayMs)
       }
     }
 
-    if (header == null) throw new WERR_INTERNAL('no header should have returned false or thrown an error.')
+    if (header == null) return false
 
     this.cache[height] = header.merkleRoot
 
