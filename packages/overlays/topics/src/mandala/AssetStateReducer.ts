@@ -1,4 +1,4 @@
-import { MandalaActionDetails } from '@bsv/templates'
+import { MandalaActionDetails, MandalaActionKind } from '@bsv/templates'
 
 export interface FrozenRef { outpoint: string, amount: number, owner: string }
 
@@ -35,51 +35,43 @@ export const defaultAssetState = (assetId: string): AssetAdminState => ({
 const addUnique = (xs: string[], x: string): string[] => xs.includes(x) ? xs : [...xs, x]
 const remove = (xs: string[], x: string): string[] => xs.filter(v => v !== x)
 
+type Handler = (s: AssetAdminState, d: MandalaActionDetails, ctx: FoldContext) => void
+
+// Per-kind handlers mutate the COPY `s` and reassign array fields to NEW arrays,
+// never mutating the input state or its arrays. issue/redeem/recover and unknown
+// kinds have no handler: no control-state change.
+const HANDLERS: Partial<Record<MandalaActionKind, Handler>> = {
+  register: (s, _d, ctx) => { if (typeof ctx.issuer === 'string') s.issuerIdentityKey = ctx.issuer },
+  pause: (s) => { s.isPaused = true },
+  unpause: (s) => { s.isPaused = false },
+  blockIdentity: (s, d) => { if (typeof d.identityKey === 'string') s.blockedIdentities = addUnique(s.blockedIdentities, d.identityKey) },
+  unblockIdentity: (s, d) => { if (typeof d.identityKey === 'string') s.blockedIdentities = remove(s.blockedIdentities, d.identityKey) },
+  allowIdentity: (s, d) => { if (typeof d.identityKey === 'string') s.allowedIdentities = addUnique(s.allowedIdentities, d.identityKey) },
+  unallowIdentity: (s, d) => { if (typeof d.identityKey === 'string') s.allowedIdentities = remove(s.allowedIdentities, d.identityKey) },
+  setAccessMode: (s, d) => { if (d.mode === 'denylist' || d.mode === 'allowlist') s.accessMode = d.mode },
+  freezeOutput: (s, d, ctx) => {
+    if (typeof d.outpoint === 'string') {
+      s.frozenOutpoints = [
+        ...s.frozenOutpoints.filter(f => f.outpoint !== d.outpoint),
+        { outpoint: d.outpoint, amount: ctx.frozenAmount ?? 0, owner: ctx.frozenOwner ?? '' }
+      ]
+    }
+  },
+  unfreezeOutput: (s, d) => { if (typeof d.outpoint === 'string') s.frozenOutpoints = s.frozenOutpoints.filter(f => f.outpoint !== d.outpoint) },
+  reissue: (s, d) => {
+    if (typeof d.outpoint === 'string') {
+      s.frozenOutpoints = s.frozenOutpoints.filter(f => f.outpoint !== d.outpoint)
+      s.evictedOutpoints = addUnique(s.evictedOutpoints, d.outpoint)
+    }
+  }
+}
+
 export function foldAction (
   state: AssetAdminState,
   details: MandalaActionDetails,
   ctx: FoldContext = {}
 ): AssetAdminState {
   const s = { ...state }
-  switch (details.kind) {
-    case 'register':
-      if (typeof ctx.issuer === 'string') s.issuerIdentityKey = ctx.issuer
-      return s
-    case 'pause': s.isPaused = true; return s
-    case 'unpause': s.isPaused = false; return s
-    case 'blockIdentity':
-      if (typeof details.identityKey === 'string') s.blockedIdentities = addUnique(s.blockedIdentities, details.identityKey)
-      return s
-    case 'unblockIdentity':
-      if (typeof details.identityKey === 'string') s.blockedIdentities = remove(s.blockedIdentities, details.identityKey)
-      return s
-    case 'allowIdentity':
-      if (typeof details.identityKey === 'string') s.allowedIdentities = addUnique(s.allowedIdentities, details.identityKey)
-      return s
-    case 'unallowIdentity':
-      if (typeof details.identityKey === 'string') s.allowedIdentities = remove(s.allowedIdentities, details.identityKey)
-      return s
-    case 'setAccessMode':
-      if (details.mode === 'denylist' || details.mode === 'allowlist') s.accessMode = details.mode
-      return s
-    case 'freezeOutput':
-      if (typeof details.outpoint === 'string') {
-        s.frozenOutpoints = [
-          ...s.frozenOutpoints.filter(f => f.outpoint !== details.outpoint),
-          { outpoint: details.outpoint, amount: ctx.frozenAmount ?? 0, owner: ctx.frozenOwner ?? '' }
-        ]
-      }
-      return s
-    case 'unfreezeOutput':
-      if (typeof details.outpoint === 'string') s.frozenOutpoints = s.frozenOutpoints.filter(f => f.outpoint !== details.outpoint)
-      return s
-    case 'reissue':
-      if (typeof details.outpoint === 'string') {
-        s.frozenOutpoints = s.frozenOutpoints.filter(f => f.outpoint !== details.outpoint)
-        s.evictedOutpoints = addUnique(s.evictedOutpoints, details.outpoint)
-      }
-      return s
-    default:
-      return s // issue/redeem/recover and unknown kinds: no control-state change
-  }
+  HANDLERS[details.kind]?.(s, details, ctx)
+  return s
 }

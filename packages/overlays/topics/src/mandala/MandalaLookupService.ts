@@ -96,9 +96,9 @@ export class MandalaLookupService implements LookupService {
       })
     }
     // Fold the action into AssetAdminState + record ordered history.
-    const parsed = offChainValues != null
-      ? decodeLinkagePayload(offChainValues)
-      : { inputs: [], outputs: [], admin: [] as any[] }
+    const parsed = offChainValues == null
+      ? { inputs: [], outputs: [], admin: [] as any[] }
+      : decodeLinkagePayload(offChainValues)
     const entry = (parsed.admin ?? []).find((a) => a.index === outputIndex)
     if (entry == null) return
     const details = entry.actionDetails
