@@ -72,8 +72,11 @@ export class MandalaStorageManager {
 
   async findByAssetId (assetId: string): Promise<UTXOReference[]> {
     await this.ensureIndexes()
-    return await this.tokens.find({ assetId })
+    const state = await this.getAssetState(assetId)
+    const evicted = new Set(state.evictedOutpoints)
+    const rows = await this.tokens.find({ assetId })
       .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
+    return rows.filter(r => !evicted.has(`${r.txid}.${r.outputIndex}`))
   }
 
   async findByOutpoint (txid: string, outputIndex: number): Promise<UTXOReference[]> {

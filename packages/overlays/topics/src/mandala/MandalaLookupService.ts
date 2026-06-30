@@ -2,12 +2,14 @@ import {
   LookupService, LookupQuestion, LookupFormula,
   AdmissionMode, SpendNotificationMode, OutputAdmittedByTopic, OutputSpent
 } from '@bsv/overlay'
-import { WalletInterface } from '@bsv/sdk'
+import { WalletInterface, Transaction, LockingScript } from '@bsv/sdk'
 import { Db } from 'mongodb'
 import { MandalaToken, MandalaAdmin } from '@bsv/templates'
 import { MandalaStorageManager } from './MandalaStorageManager.js'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
 import { decodeLinkagePayload } from './types.js'
+import { foldAction, defaultAssetState, AssetAdminState, FoldContext } from './AssetStateReducer.js'
+import { txOrdering } from './ordering.js'
 import docs from './MandalaLookupDocs.md.js'
 
 export interface MandalaLookupDeps {
@@ -16,30 +18,24 @@ export interface MandalaLookupDeps {
 }
 
 export class MandalaLookupService implements LookupService {
-  readonly admissionMode: AdmissionMode = 'locking-script'
+  readonly admissionMode: AdmissionMode = 'whole-tx'
   readonly spendNotificationMode: SpendNotificationMode = 'script'
 
   constructor (private readonly deps: MandalaLookupDeps) {}
 
   async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
-    if (payload.mode !== 'locking-script') return
+    if (payload.mode !== 'whole-tx') return
     if (payload.topic !== 'tm_mandala') return
+    const tx = Transaction.fromBEEF(payload.atomicBEEF)
+    const txid = tx.id('hex')
+    const ls = tx.outputs[payload.outputIndex].lockingScript
     let decoded
     try {
-      decoded = MandalaToken.decode(payload.lockingScript)
+      decoded = MandalaToken.decode(ls)
     } catch {
-      // Not an FT. If it is an admin output carrying publicData, index it as metadata
-      // keyed by its own outpoint (= assetId). Anchored on-chain; served by assetId.
-      try {
-        const admin = MandalaAdmin.decode(payload.lockingScript)
-        if (admin.publicData != null) {
-          await this.deps.storage.storeMetadata({
-            txid: payload.txid,
-            outputIndex: payload.outputIndex,
-            assetId: `${payload.txid}.${payload.outputIndex}`
-          })
-        }
-      } catch { /* not a mandala admin output */ }
+      // Not an FT. It may be an admin output: index its publicData as metadata
+      // (register) and/or fold its action into the asset's admin state + history.
+      await this.indexAdminOutput(tx, txid, payload.outputIndex, ls, payload.offChainValues)
       return
     }
     // Resolve controlling identity from the matching off-chain linkage.
@@ -56,7 +52,7 @@ export class MandalaLookupService implements LookupService {
     }
     const now = new Date()
     await this.deps.storage.storeToken({
-      txid: payload.txid,
+      txid,
       outputIndex: payload.outputIndex,
       assetId: decoded.assetId,
       amount: decoded.amount,
@@ -67,7 +63,7 @@ export class MandalaLookupService implements LookupService {
       await this.deps.storage.adjustBalance(identityKey, decoded.amount)
       if (matchedLinkage != null) {
         await this.deps.storage.storeLinkage({
-          txid: payload.txid,
+          txid,
           outputIndex: payload.outputIndex,
           identityKey,
           linkage: matchedLinkage,
@@ -75,6 +71,77 @@ export class MandalaLookupService implements LookupService {
         })
       }
     }
+  }
+
+  private async indexAdminOutput (
+    tx: Transaction,
+    txid: string,
+    outputIndex: number,
+    ls: LockingScript,
+    offChainValues?: number[]
+  ): Promise<void> {
+    let admin
+    try {
+      admin = MandalaAdmin.decode(ls)
+    } catch {
+      return // not a mandala admin output
+    }
+    // Existing metadata behaviour: register's publicData is anchored on-chain and
+    // served by its own outpoint (= assetId).
+    if (admin.publicData != null) {
+      await this.deps.storage.storeMetadata({
+        txid,
+        outputIndex,
+        assetId: `${txid}.${outputIndex}`
+      })
+    }
+    // Fold the action into AssetAdminState + record ordered history.
+    const parsed = offChainValues != null
+      ? decodeLinkagePayload(offChainValues)
+      : { inputs: [], outputs: [], admin: [] as any[] }
+    const entry = (parsed.admin ?? []).find((a) => a.index === outputIndex)
+    if (entry == null) return
+    const details = entry.actionDetails
+    const assetId = typeof details.assetId === 'string' && details.assetId !== '' ? details.assetId : `${txid}.${outputIndex}`
+    const { height, offset } = txOrdering(tx)
+    const admitSeq = await this.deps.storage.nextAdmitSeq()
+    await this.deps.storage.appendAdminHistory({
+      assetId, txid, outputIndex, height, offset, admitSeq, actionDetails: details, createdAt: new Date()
+    })
+    const ctx: FoldContext = {}
+    if (details.kind === 'register' && admin.publicData != null && typeof (admin.publicData as any).issuer === 'string') {
+      ctx.issuer = (admin.publicData as any).issuer
+    }
+    if (details.kind === 'freezeOutput' && typeof details.outpoint === 'string') {
+      const [ftxid, fvoutStr] = details.outpoint.split('.')
+      const row = await this.deps.storage.getTokenRow(ftxid, Number(fvoutStr))
+      if (row != null) { ctx.frozenAmount = row.amount; ctx.frozenOwner = row.identityKey }
+    }
+    const prev = await this.deps.storage.getAssetState(assetId)
+    const next = foldAction(prev, details, ctx)
+    next.lastProcessedHeight = height
+    next.lastProcessedOffset = offset
+    next.lastAdmitSeq = admitSeq
+    await this.deps.storage.putAssetState(next)
+  }
+
+  async rebuildState (assetId: string): Promise<AssetAdminState> {
+    const history = await this.deps.storage.findAdminHistoryByAssetId(assetId)
+    let state = defaultAssetState(assetId)
+    for (const e of history) {
+      const ctx: FoldContext = {}
+      if (e.actionDetails.kind === 'freezeOutput' && typeof e.actionDetails.outpoint === 'string') {
+        const [ft, fv] = e.actionDetails.outpoint.split('.')
+        const row = await this.deps.storage.getTokenRow(ft, Number(fv))
+        if (row != null) { ctx.frozenAmount = row.amount; ctx.frozenOwner = row.identityKey }
+      }
+      if (e.actionDetails.kind === 'register' && typeof (e.actionDetails as any).issuer === 'string') {
+        ctx.issuer = (e.actionDetails as any).issuer
+      }
+      state = foldAction(state, e.actionDetails, ctx)
+    }
+    await this.deps.storage.putAssetState(state)
+    return state
   }
 
   async outputSpent (payload: OutputSpent): Promise<void> {
@@ -99,6 +166,12 @@ export class MandalaLookupService implements LookupService {
     if (typeof query.metadataAssetId === 'string') {
       return await this.deps.storage.findMetadataByAssetId(query.metadataAssetId)
     }
+    if (typeof query.assetStateAssetId === 'string') {
+      return await this.deps.storage.findStateByAssetId(query.assetStateAssetId) as unknown as LookupFormula
+    }
+    if (typeof query.adminHistoryAssetId === 'string') {
+      return await this.deps.storage.findAdminHistoryByAssetId(query.adminHistoryAssetId) as unknown as LookupFormula
+    }
     if (typeof query.assetId === 'string') {
       return await this.deps.storage.findByAssetId(query.assetId)
     }
@@ -120,9 +193,9 @@ export class MandalaLookupService implements LookupService {
   }
 }
 
-export function createMandalaLookupService (verifierWallet: WalletInterface) {
+export function createMandalaLookupService (verifierWallet: WalletInterface, storage?: MandalaStorageManager) {
   return (db: Db): MandalaLookupService => new MandalaLookupService({
-    storage: new MandalaStorageManager(db),
+    storage: storage ?? new MandalaStorageManager(db),
     verifierWallet
   })
 }

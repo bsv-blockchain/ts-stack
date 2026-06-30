@@ -228,7 +228,19 @@ describe('MandalaTopicManager admin chain', () => {
 describe('MandalaLookupService metadata', () => {
   let mongod: MongoMemoryServer, client: MongoClient, ls: MandalaLookupService, storage: MandalaStorageManager
   const overlay = new ProtoWallet(PrivateKey.fromRandom())
-  const txid = 'd'.repeat(64)
+
+  // In whole-tx admission mode the lookup service decodes the admitted output
+  // from the atomic BEEF, so fixtures must be real transactions. txid is derived
+  // from the tx rather than supplied, so we capture it from the built fixture.
+  const txWithAdminLock = (lock: any): Transaction => {
+    const source = new Transaction()
+    source.addOutput({ satoshis: 1000, lockingScript: new MandalaToken().lock(`${'f'.repeat(64)}.0`, 1, Hash.hash160(Utils.toArray('00', 'hex'))) })
+    const tx = new Transaction()
+    tx.addInput({ sourceTransaction: source, sourceOutputIndex: 0, sequence: 0xffffffff, unlockingScript: new Script() })
+    tx.addOutput({ satoshis: 1, lockingScript: lock })
+    return tx
+  }
+  let txid: string
 
   beforeAll(async () => {
     mongod = await MongoMemoryServer.create()
@@ -240,7 +252,9 @@ describe('MandalaLookupService metadata', () => {
 
   it('indexes an admin output with publicData and serves it by assetId', async () => {
     const lock = await MandalaAdmin.lock({ wallet: overlay as any, data: { kind: 'register' }, publicData: { label: 'Gold' } })
-    await ls.outputAdmittedByTopic({ mode: 'locking-script', topic: 'tm_mandala', txid, outputIndex: 0, lockingScript: lock } as any)
+    const tx = txWithAdminLock(lock)
+    txid = tx.id('hex')
+    await ls.outputAdmittedByTopic({ mode: 'whole-tx', topic: 'tm_mandala', outputIndex: 0, atomicBEEF: tx.toAtomicBEEF() } as any)
     const formula = await ls.lookup({ service: 'ls_mandala', query: { metadataAssetId: `${txid}.0` } } as any)
     expect(formula).toEqual([{ txid, outputIndex: 0 }])
   })
@@ -254,8 +268,9 @@ describe('MandalaLookupService metadata', () => {
 
   it('does not index an admin output without publicData', async () => {
     const lock = await MandalaAdmin.lock({ wallet: overlay as any, data: { kind: 'register' } })
-    const t2 = 'e'.repeat(64)
-    await ls.outputAdmittedByTopic({ mode: 'locking-script', topic: 'tm_mandala', txid: t2, outputIndex: 0, lockingScript: lock } as any)
+    const tx = txWithAdminLock(lock)
+    const t2 = tx.id('hex')
+    await ls.outputAdmittedByTopic({ mode: 'whole-tx', topic: 'tm_mandala', outputIndex: 0, atomicBEEF: tx.toAtomicBEEF() } as any)
     expect(await ls.lookup({ service: 'ls_mandala', query: { metadataAssetId: `${t2}.0` } } as any)).toEqual([])
   })
 })
