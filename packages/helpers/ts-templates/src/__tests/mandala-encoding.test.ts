@@ -40,7 +40,7 @@ describe('mandala-encoding', () => {
     // Distinct first/last bytes so reversal is observable.
     const txid = '11' + 'aa'.repeat(30) + '22' // 32 bytes: 0x11 .. 0x22
     const bytes = encodeAssetId(`${txid}.1`)
-    expect(bytes[0]).toBe(0x22)  // display last byte → first on-chain (reversed)
+    expect(bytes[0]).toBe(0x22) // display last byte → first on-chain (reversed)
     expect(bytes[31]).toBe(0x11) // display first byte → last on-chain
     expect(bytes.slice(32)).toEqual([1, 0, 0, 0]) // vout little-endian
   })
