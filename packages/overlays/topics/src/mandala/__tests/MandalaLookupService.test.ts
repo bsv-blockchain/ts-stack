@@ -95,6 +95,40 @@ describe('MandalaLookupService', () => {
     expect(hist[0].actionDetails.kind).toBe('pause')
   })
 
+  it('folds register issuer from actionDetails on admit and rebuildState yields the same issuer', async () => {
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const adminWallet = new ProtoWallet(PrivateKey.fromRandom())
+    const issuer = '02issuer' + 'a'.repeat(58)
+    // The issuer lives ONLY in the register actionDetails (the persisted source).
+    // publicData carries metadata but deliberately NOT the issuer, so a path that
+    // sources issuer from publicData would produce '' (the bug Fix 1 closes).
+    const registerDetails = { kind: 'register', label: 'USD Coin', ticker: 'USDC', decimals: 2, issuer }
+    const adminLockingScript = await MandalaAdmin.lock({
+      wallet: adminWallet as any,
+      data: registerDetails as any,
+      publicData: { label: 'USD Coin', ticker: 'USDC', decimals: 2 }
+    })
+    const REG_TX = txWithOutput(adminLockingScript)
+    const REG_TXID = REG_TX.id('hex')
+    const assetId = `${REG_TXID}.0`
+
+    const storage = new MandalaStorageManager(db)
+    const svc = new MandalaLookupService({ storage, verifierWallet: overlay as any })
+    const payload = encodeLinkagePayload({ inputs: [], outputs: [], admin: [{ index: 0, actionDetails: registerDetails as any }] })
+    await svc.outputAdmittedByTopic({
+      mode: 'whole-tx', topic: 'tm_mandala', txid: REG_TXID, outputIndex: 0,
+      atomicBEEF: REG_TX.toAtomicBEEF(), offChainValues: payload
+    } as any)
+
+    // Live admit captured the issuer (sourced from persisted actionDetails).
+    const liveState = await storage.findStateByAssetId(assetId)
+    expect(liveState[0].issuerIdentityKey).toBe(issuer)
+
+    // Rebuild from persisted history must yield the SAME issuer.
+    const rebuilt = await svc.rebuildState(assetId)
+    expect(rebuilt.issuerIdentityKey).toBe(issuer)
+  })
+
   it('rebuildState folds history deterministically regardless of insert order', async () => {
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const storage = new MandalaStorageManager(db)
