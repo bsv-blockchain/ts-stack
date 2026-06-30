@@ -2,6 +2,18 @@ import { PubKeyHex, WalletProtocol, Utils } from '@bsv/sdk'
 import { MandalaActionDetails } from '@bsv/templates'
 
 export type { MandalaActionDetails }
+export type { AssetAdminState, FrozenRef } from './AssetStateReducer.js'
+
+export interface AdminHistoryEntry {
+  assetId: string
+  txid: string
+  outputIndex: number
+  height: number
+  offset: number
+  admitSeq: number
+  actionDetails: MandalaActionDetails
+  createdAt: Date
+}
 
 export interface SpecificLinkage {
   prover: PubKeyHex

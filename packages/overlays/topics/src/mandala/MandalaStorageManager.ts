@@ -1,7 +1,8 @@
 import { Collection, Db } from 'mongodb'
 import {
-  MandalaTokenRecord, MandalaLinkageRecord, UTXOReference
+  MandalaTokenRecord, MandalaLinkageRecord, UTXOReference, AssetAdminState, AdminHistoryEntry
 } from './types.js'
+import { defaultAssetState } from './AssetStateReducer.js'
 
 interface BalanceRecord { identityKey: string, balance: number }
 interface MetadataRecord { txid: string, outputIndex: number, assetId: string }
@@ -11,6 +12,9 @@ export class MandalaStorageManager {
   private readonly linkage: Collection<MandalaLinkageRecord>
   private readonly balances: Collection<BalanceRecord>
   private readonly metadata: Collection<MetadataRecord>
+  private readonly assetStates: Collection<AssetAdminState>
+  private readonly adminHistory: Collection<AdminHistoryEntry>
+  private readonly counters: Collection<{ _id: string, seq: number }>
   private indexInit?: Promise<void>
 
   constructor (private readonly db: Db) {
@@ -18,6 +22,9 @@ export class MandalaStorageManager {
     this.linkage = db.collection<MandalaLinkageRecord>('mandalaLinkageRecords')
     this.balances = db.collection<BalanceRecord>('mandalaBalances')
     this.metadata = db.collection<MetadataRecord>('mandalaMetadata')
+    this.assetStates = db.collection<AssetAdminState>('mandalaAssetStates')
+    this.adminHistory = db.collection<AdminHistoryEntry>('mandalaAdminHistory')
+    this.counters = db.collection<{ _id: string, seq: number }>('mandalaCounters')
   }
 
   private async ensureIndexes (): Promise<void> {
@@ -31,7 +38,9 @@ export class MandalaStorageManager {
         this.linkage.createIndex({ identityKey: 1 }),
         this.balances.createIndex({ identityKey: 1 }, { unique: true }),
         this.metadata.createIndex({ txid: 1, outputIndex: 1 }, { unique: true }),
-        this.metadata.createIndex({ assetId: 1 })
+        this.metadata.createIndex({ assetId: 1 }),
+        this.assetStates.createIndex({ assetId: 1 }, { unique: true }),
+        this.adminHistory.createIndex({ assetId: 1, height: 1, offset: 1, admitSeq: 1 })
       ])
     })()
     return await this.indexInit
@@ -102,5 +111,41 @@ export class MandalaStorageManager {
   async deleteMetadata (txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.metadata.deleteOne({ txid, outputIndex })
+  }
+
+  async getAssetState (assetId: string): Promise<AssetAdminState> {
+    await this.ensureIndexes()
+    const doc = await this.assetStates.findOne({ assetId }, { projection: { _id: 0 } })
+    return doc ?? defaultAssetState(assetId)
+  }
+
+  async putAssetState (state: AssetAdminState): Promise<void> {
+    await this.ensureIndexes()
+    await this.assetStates.updateOne({ assetId: state.assetId }, { $set: state }, { upsert: true })
+  }
+
+  async appendAdminHistory (entry: AdminHistoryEntry): Promise<void> {
+    await this.ensureIndexes()
+    await this.adminHistory.insertOne(entry)
+  }
+
+  async findAdminHistoryByAssetId (assetId: string): Promise<AdminHistoryEntry[]> {
+    await this.ensureIndexes()
+    return await this.adminHistory.find({ assetId }, { projection: { _id: 0 } })
+      .sort({ height: 1, offset: 1, admitSeq: 1 }).toArray()
+  }
+
+  async nextAdmitSeq (): Promise<number> {
+    await this.ensureIndexes()
+    const r = await this.counters.findOneAndUpdate(
+      { _id: 'admitSeq' }, { $inc: { seq: 1 } },
+      { upsert: true, returnDocument: 'after' }
+    )
+    return (r as { seq: number } | null)?.seq ?? 1
+  }
+
+  async findStateByAssetId (assetId: string): Promise<AssetAdminState[]> {
+    const s = await this.getAssetState(assetId)
+    return [s]
   }
 }
