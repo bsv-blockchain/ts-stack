@@ -2,7 +2,8 @@ import { TopicManager } from '@bsv/overlay'
 import { AdmittanceInstructions, Hash, LockingScript, Transaction, Utils, WalletInterface, WalletProtocol } from '@bsv/sdk'
 import { MandalaToken, MandalaAdmin, MandalaActionDetails } from '@bsv/templates'
 import { verifyKeyLinkage } from './verifyKeyLinkage.js'
-import { decodeLinkagePayload, ScreeningProvider, SpecificLinkage } from './types.js'
+import { decodeLinkagePayload, ScreeningProvider, SpecificLinkage, MandalaTokenRecord } from './types.js'
+import { AssetAdminState } from './AssetStateReducer.js'
 import docs from './MandalaTopicDocs.md.js'
 
 export interface MandalaTopicManagerDeps {
@@ -10,6 +11,10 @@ export interface MandalaTopicManagerDeps {
   screeningProvider: ScreeningProvider
   adminWallet: WalletInterface
   adminProtocolID: WalletProtocol
+  stateStore: {
+    getAssetState: (assetId: string) => Promise<AssetAdminState>
+    getTokenRow: (txid: string, outputIndex: number) => Promise<MandalaTokenRecord | null>
+  }
 }
 
 interface FtOutput { index: number, assetId: string, amount: number, pubKeyHash: number[] }
@@ -88,7 +93,7 @@ export class MandalaTopicManager implements TopicManager {
     if (!pkhMatches || !priorOutpointSpent(tx, details)) {
       return { admitted: false }
     }
-    if ((details.kind === 'issue' || details.kind === 'recover') && typeof details.assetId === 'string') {
+    if ((details.kind === 'issue' || details.kind === 'recover' || details.kind === 'reissue') && typeof details.assetId === 'string') {
       return { admitted: true, issuance: { assetId: details.assetId, amount: details.amount ?? 0 } }
     }
     // A redeem authorizes destruction of `amount` units, i.e. a negative supply
@@ -162,6 +167,91 @@ export class MandalaTopicManager implements TopicManager {
     return false
   }
 
+  // Per-asset control gate. A tx is an "issuer admin action for asset X" iff it
+  // carries a verified admin output whose actionDetails.assetId === X (collected
+  // into adminAssetKinds); otherwise its movement of X is a "peer transfer".
+  // Sanctions screening stays separate (anySanctioned) and universal — the gates
+  // here are: (1) frozen/evicted input spend (ALL txs); (2) pause and (3) access
+  // mode (peer transfers only, admin actions exempt); plus the reissue guards.
+  // Returns false to reject the whole tx.
+  private async controlGate (
+    tx: Transaction,
+    admittedFt: AdmittedFt[],
+    adminAssetKinds: Map<string, MandalaActionDetails>,
+    payload: ReturnType<typeof decodeLinkagePayload>
+  ): Promise<boolean> {
+    const ftInputAssetId = (i: { sourceTransaction?: Transaction, sourceOutputIndex: number }): string | null => {
+      const src = i.sourceTransaction?.outputs[i.sourceOutputIndex]
+      if (src == null) return null
+      try {
+        return MandalaToken.decode(src.lockingScript).assetId
+      } catch {
+        return null
+      }
+    }
+
+    const assets = new Set<string>(admittedFt.map(f => f.assetId))
+    for (const ci of tx.inputs) {
+      const id = ftInputAssetId(ci)
+      if (id != null) assets.add(id)
+    }
+
+    const inputOutpoints = tx.inputs.map(
+      i => `${i.sourceTXID ?? i.sourceTransaction?.id('hex') ?? ''}.${i.sourceOutputIndex}`
+    )
+
+    // Senders are derived once (shared across assets) from the input linkages.
+    let senders: string[] | null = null
+    const resolveSenders = async (): Promise<string[]> => {
+      if (senders != null) return senders
+      const out: string[] = []
+      for (const inp of payload.inputs) {
+        try {
+          out.push((await verifyKeyLinkage(inp.linkage, this.deps.verifierWallet)).identityKey)
+        } catch { /* unverifiable input linkage — not counted as a party */ }
+      }
+      senders = out
+      return out
+    }
+
+    for (const assetId of assets) {
+      const state = await this.deps.stateStore.getAssetState(assetId)
+      const frozen = new Set<string>([...state.frozenOutpoints.map(f => f.outpoint), ...state.evictedOutpoints])
+
+      // Gate 1: frozen/evicted input spend — applies to ALL txs (blocks
+      // recover/redeem of a frozen coin too; only unfreeze/reissue resolve it).
+      if (inputOutpoints.some(op => frozen.has(op))) return false
+
+      const adminAction = adminAssetKinds.get(assetId)
+      const isAdmin = adminAction != null
+
+      // Gate 2: paused — peer transfers only; admin actions on X remain admitted.
+      if (state.isPaused && !isAdmin) return false
+
+      // Gate 3: access mode — peer transfers only, admin actions exempt.
+      if (!isAdmin) {
+        const recipients = admittedFt.filter(f => f.assetId === assetId).map(f => f.identityKey)
+        const parties = [...recipients, ...await resolveSenders()].filter(k => k !== state.issuerIdentityKey)
+        if (state.accessMode === 'denylist') {
+          if (parties.some(k => state.blockedIdentities.includes(k))) return false
+        } else {
+          if (parties.some(k => !state.allowedIdentities.includes(k))) return false
+        }
+      }
+
+      // reissue guards: target outpoint must be frozen (a), the minted amount must
+      // match the frozen row (b), and the tx must carry zero FT inputs of asset X (c).
+      if (adminAction?.kind === 'reissue') {
+        const op = typeof adminAction.outpoint === 'string' ? adminAction.outpoint : ''
+        const ref = state.frozenOutpoints.find(f => f.outpoint === op)
+        if (ref == null) return false // (a)
+        if (ref.amount !== adminAction.amount) return false // (b)
+        if (tx.inputs.some(i => ftInputAssetId(i) === assetId)) return false // (c)
+      }
+    }
+    return true
+  }
+
   async identifyAdmissibleOutputs (
     beef: number[],
     previousCoins: number[],
@@ -184,6 +274,14 @@ export class MandalaTopicManager implements TopicManager {
       }
 
       if (await this.anySanctioned(admittedFt, payload)) {
+        return { outputsToAdmit: [], coinsToRetain: [] }
+      }
+
+      const adminAssetKinds = new Map<string, MandalaActionDetails>()
+      for (const a of (payload as { admin?: Array<{ index: number, actionDetails: MandalaActionDetails }> }).admin ?? []) {
+        if (typeof a.actionDetails?.assetId === 'string') adminAssetKinds.set(a.actionDetails.assetId, a.actionDetails)
+      }
+      if (!(await this.controlGate(tx, admittedFt, adminAssetKinds, payload))) {
         return { outputsToAdmit: [], coinsToRetain: [] }
       }
 
