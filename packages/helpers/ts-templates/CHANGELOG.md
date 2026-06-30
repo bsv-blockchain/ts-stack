@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. The format 
 ## Table of Contents
 
 - [Unreleased](#unreleased)
+- [1.8.0 - 2026-06-30](#180---2026-06-30)
 - [1.0.0 - YYYY-MM-DD](#100---yyyy-mm-dd)
 
 ## [Unreleased]
@@ -13,13 +14,7 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
-- **MandalaToken assetId on-chain encoding (breaking on-chain format):** `encodeAssetId`
-  now writes the txid in outpoint (internal/reversed, `tx.hash()`) byte order followed
-  by the 4-byte little-endian vout, matching how an outpoint appears in a transaction.
-  `decodeAssetId` reverses it back, so the `"<txid>.<vout>"` display string is
-  unchanged. This lets smart contracts compare a token's embedded assetId directly
-  against the genesis transaction's outpoint. Tokens minted under the previous
-  (non-reversed) encoding will not decode to the same assetId.
+- (Include changes here.)
 
 ### Deprecated
 - (List features that are in the process of being phased out or replaced.)
@@ -32,6 +27,24 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 - (Notify of any improvements related to security vulnerabilities or potential risks.)
+
+---
+
+## [1.8.0] - 2026-06-30
+
+### Added
+- **Stablecoin admin action kinds in `MandalaActionKind`:** new values `pause`, `unpause`, `blockIdentity`, `unblockIdentity`, `allowIdentity`, `unallowIdentity`, `setAccessMode`, `freeze`, `unfreeze`, `reissue` for full stablecoin lifecycle control.
+- **Extended `MandalaActionDetails`:** new optional fields `identityKey` (hex string), `outpoint` (string, `"<txid>.<vout>"`), `recipient` (hex string), `mode` (`'open' | 'allowlist' | 'blocklist'`), and `bankRef` (string) to carry per-action parameters without altering existing canonicalize/commitment logic.
+- **`MandalaAdmin` script template:** locking/unlocking script template for admin control outputs; signs over `MandalaActionDetails` payload using BRC-42 key derivation.
+
+### Changed
+- **MandalaToken assetId on-chain encoding (breaking on-chain format):** `encodeAssetId`
+  now writes the txid in outpoint (internal/reversed, `tx.hash()`) byte order followed
+  by the 4-byte little-endian vout, matching how an outpoint appears in a transaction.
+  `decodeAssetId` reverses it back, so the `"<txid>.<vout>"` display string is
+  unchanged. This lets smart contracts compare a token's embedded assetId directly
+  against the genesis transaction's outpoint. Tokens minted under the previous
+  (non-reversed) encoding will not decode to the same assetId.
 
 ---
 
