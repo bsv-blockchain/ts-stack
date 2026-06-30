@@ -42,10 +42,15 @@ export class MandalaTopicManager implements TopicManager {
   private async classifyOutputs (
     tx: Transaction,
     payload: ReturnType<typeof decodeLinkagePayload> & { admin?: Array<{ index: number, actionDetails: MandalaActionDetails }> }
-  ): Promise<{ ftOutputs: FtOutput[], adminIndices: number[], authorizedIssuance: Map<string, number> }> {
+  ): Promise<{ ftOutputs: FtOutput[], adminIndices: number[], authorizedIssuance: Map<string, number>, verifiedAdminAssetKinds: Map<string, MandalaActionDetails> }> {
     const ftOutputs: FtOutput[] = []
     const authorizedIssuance = new Map<string, number>()
     const adminIndices: number[] = []
+    // assetId -> actionDetails, populated ONLY from outputs that passed
+    // verifyAdminOutput (pkh + priorOutpoint). This — not the raw off-chain
+    // payload.admin[] — is the source of the control-gate admin exemption, so a
+    // forged admin entry over an FT output cannot bypass the pause/access gates.
+    const verifiedAdminAssetKinds = new Map<string, MandalaActionDetails>()
     const adminDetails = new Map<number, MandalaActionDetails>()
     for (const a of (payload as any).admin ?? []) adminDetails.set(a.index, a.actionDetails)
     for (let i = 0; i < tx.outputs.length; i++) {
@@ -58,12 +63,14 @@ export class MandalaTopicManager implements TopicManager {
       const admin = await this.verifyAdminOutput(tx, ls, adminDetails.get(i))
       if (!admin.admitted) continue
       adminIndices.push(i)
+      const details = adminDetails.get(i)
+      if (details != null && typeof details.assetId === 'string') verifiedAdminAssetKinds.set(details.assetId, details)
       if (admin.issuance != null) {
         const { assetId, amount } = admin.issuance
         authorizedIssuance.set(assetId, (authorizedIssuance.get(assetId) ?? 0) + amount)
       }
     }
-    return { ftOutputs, adminIndices, authorizedIssuance }
+    return { ftOutputs, adminIndices, authorizedIssuance, verifiedAdminAssetKinds }
   }
 
   private async verifyAdminOutput (
@@ -262,7 +269,7 @@ export class MandalaTopicManager implements TopicManager {
 
       const payload = offChainValues == null ? { inputs: [], outputs: [] } : decodeLinkagePayload(offChainValues)
 
-      const { ftOutputs, adminIndices, authorizedIssuance } = await this.classifyOutputs(tx, payload as any)
+      const { ftOutputs, adminIndices, authorizedIssuance, verifiedAdminAssetKinds } = await this.classifyOutputs(tx, payload as any)
 
       const outputLinkage = new Map<number, SpecificLinkage>()
       for (const o of payload.outputs) outputLinkage.set(o.index, o.linkage)
@@ -277,11 +284,7 @@ export class MandalaTopicManager implements TopicManager {
         return { outputsToAdmit: [], coinsToRetain: [] }
       }
 
-      const adminAssetKinds = new Map<string, MandalaActionDetails>()
-      for (const a of (payload as { admin?: Array<{ index: number, actionDetails: MandalaActionDetails }> }).admin ?? []) {
-        if (typeof a.actionDetails?.assetId === 'string') adminAssetKinds.set(a.actionDetails.assetId, a.actionDetails)
-      }
-      if (!(await this.controlGate(tx, admittedFt, adminAssetKinds, payload))) {
+      if (!(await this.controlGate(tx, admittedFt, verifiedAdminAssetKinds, payload))) {
         return { outputsToAdmit: [], coinsToRetain: [] }
       }
 
