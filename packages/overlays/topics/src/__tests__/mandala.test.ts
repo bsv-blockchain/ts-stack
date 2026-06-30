@@ -1,5 +1,5 @@
 import { MandalaTopicManager } from '../mandala/MandalaTopicManager.js'
-import { InMemoryScreeningProvider, encodeLinkagePayload } from '../mandala/types.js'
+import { InMemoryScreeningProvider, encodeLinkagePayload, decodeLinkagePayload } from '../mandala/types.js'
 import { AssetAdminState, defaultAssetState } from '../mandala/AssetStateReducer.js'
 import { MandalaTokenRecord } from '../mandala/types.js'
 import { MandalaToken, MandalaAdmin } from '@bsv/templates'
@@ -297,6 +297,42 @@ describe('MandalaTopicManager control gate', () => {
     const tmAdmin = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(paused) })
     const adminResult = await tmAdmin.identifyAdmissibleOutputs(adminTx.toBEEF(), [], adminOffChain)
     expect(adminResult.outputsToAdmit).toEqual([0])
+  })
+
+  it('rejects a forged-pause bypass: peer transfer of a paused asset with a forged admin entry over the FT output', async () => {
+    // SECURITY: a peer attaches a forged admin: [{ index: 0, kind: 'pause' }] to an
+    // ordinary FT transfer of a PAUSED asset. No real verified admin output exists
+    // (index 0 decodes as FT, never reaches verifyAdminOutput). The exemption must
+    // key on VERIFIED admin outputs only, so this must be rejected, not admitted.
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const assetId = `${'a'.repeat(64)}.0`
+    const paused: AssetAdminState = { ...defaultAssetState(assetId), isPaused: true }
+    const transfer = await buildPeerTransfer(assetId, 100, overlay)
+    const forgedOffChain = encodeLinkagePayload({
+      inputs: [],
+      outputs: [{ index: 0, linkage: (decodeLinkagePayload(transfer.offChainValues).outputs[0].linkage) as any }],
+      admin: [{ index: 0, actionDetails: { kind: 'pause', assetId } }]
+    } as any)
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(paused) })
+    const result = await tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)
+    expect(result.outputsToAdmit).toEqual([])
+  })
+
+  it('rejects a forged access-mode bypass: peer transfer to a denylisted recipient with a forged admin entry', async () => {
+    // SECURITY: same forgery, but the recipient is on the denylist. The access-mode
+    // gate must still fire because no verified admin output exempts this transfer.
+    const overlay = new ProtoWallet(PrivateKey.fromRandom())
+    const assetId = `${'a'.repeat(64)}.0`
+    const transfer = await buildPeerTransfer(assetId, 100, overlay)
+    const deny: AssetAdminState = { ...defaultAssetState(assetId), accessMode: 'denylist', blockedIdentities: [transfer.receiverKey] }
+    const forgedOffChain = encodeLinkagePayload({
+      inputs: [],
+      outputs: [{ index: 0, linkage: (decodeLinkagePayload(transfer.offChainValues).outputs[0].linkage) as any }],
+      admin: [{ index: 0, actionDetails: { kind: 'recover', assetId } }]
+    } as any)
+    const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(deny) })
+    const result = await tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)
+    expect(result.outputsToAdmit).toEqual([])
   })
 
   it('rejects any tx that spends a frozen outpoint (incl. would-be recover/redeem)', async () => {
