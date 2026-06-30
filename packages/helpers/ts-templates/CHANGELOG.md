@@ -33,8 +33,8 @@ All notable changes to this project will be documented in this file. The format 
 ## [1.8.0] - 2026-06-30
 
 ### Added
-- **Stablecoin admin action kinds in `MandalaActionKind`:** new values `pause`, `unpause`, `blockIdentity`, `unblockIdentity`, `allowIdentity`, `unallowIdentity`, `setAccessMode`, `freeze`, `unfreeze`, `reissue` for full stablecoin lifecycle control.
-- **Extended `MandalaActionDetails`:** new optional fields `identityKey` (hex string), `outpoint` (string, `"<txid>.<vout>"`), `recipient` (hex string), `mode` (`'open' | 'allowlist' | 'blocklist'`), and `bankRef` (string) to carry per-action parameters without altering existing canonicalize/commitment logic.
+- **Stablecoin admin action kinds in `MandalaActionKind`:** new values `pause`, `unpause`, `blockIdentity`, `unblockIdentity`, `allowIdentity`, `unallowIdentity`, `setAccessMode`, `freezeOutput`, `unfreezeOutput`, `reissue` for full stablecoin lifecycle control.
+- **Extended `MandalaActionDetails`:** new optional fields `identityKey` (hex string), `outpoint` (string, `"<txid>.<vout>"`), `recipient` (hex string), `mode` (`'denylist' | 'allowlist'`), and `bankRef` (string) to carry per-action parameters without altering existing canonicalize/commitment logic.
 - **`MandalaAdmin` script template:** locking/unlocking script template for admin control outputs; signs over `MandalaActionDetails` payload using BRC-42 key derivation.
 
 ### Changed
