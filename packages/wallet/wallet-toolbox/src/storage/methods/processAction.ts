@@ -33,6 +33,8 @@ import { TableTransaction } from '../schema/tables/TableTransaction'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableCommission } from '../schema/tables/TableCommission'
 import { asArray, asString } from '../../utility/utilityHelpers.noBuffer'
+import { WalletError } from '../../sdk/WalletError'
+import { classifyReqStatus } from '../storageProviderHelpers'
 
 export async function processAction (
   storage: StorageProvider,
@@ -158,6 +160,44 @@ async function verifyMergedBeef (
   logger?.log('beef is valid')
 }
 
+async function getReqDetailsForDelayedShare (
+  storage: StorageProvider,
+  txids: string[]
+): Promise<GetReqsAndBeefResult> {
+  const r: GetReqsAndBeefResult = {
+    beef: new Beef(),
+    details: []
+  }
+
+  for (const txid of txids) {
+    const d: GetReqsAndBeefDetail = {
+      txid,
+      status: 'unknown'
+    }
+    r.details.push(d)
+    try {
+      d.proven = verifyOneOrNone(await storage.findProvenTxs({ partial: { txid } }))
+      if (d.proven != null) {
+        d.status = 'alreadySent'
+        continue
+      }
+
+      d.req = verifyOneOrNone(await storage.findProvenTxReqs({ partial: { txid } }))
+      if (d.req == null) {
+        d.status = 'error'
+        d.error = `ERR_UNKNOWN_TXID: ${txid} was not found.`
+      } else {
+        classifyReqStatus(d, d.req)
+      }
+    } catch (error_: unknown) {
+      const e = WalletError.fromUnknown(error_)
+      d.error = `${e.name}: ${e.message}`
+    }
+  }
+
+  return r
+}
+
 export async function shareReqsWithWorld (
   storage: StorageProvider,
   userId: number,
@@ -171,7 +211,9 @@ export async function shareReqsWithWorld (
 
   if ((r == null) && txids.length < 1) return { swr, ndr }
 
-  r ||= await storage.getReqsAndBeefToShareWithWorld(txids, [])
+  r ||= isDelayed
+    ? await getReqDetailsForDelayedShare(storage, txids)
+    : await storage.getReqsAndBeefToShareWithWorld(txids, [])
 
   const readyToSendReqs: EntityProvenTxReq[] = []
   classifyReqDetails(r.details, swr, readyToSendReqs)

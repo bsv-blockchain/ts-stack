@@ -32,6 +32,25 @@ function makeStorageFake () {
 }
 
 describe('processAction shareReqsWithWorld', () => {
+  test('delayed sends do not build aggregate BEEF before scheduling', async () => {
+    const req = makeReadyReq()
+    const storage = {
+      ...makeStorageFake(),
+      findProvenTxs: jest.fn(async () => []),
+      findProvenTxReqs: jest.fn(async () => [req]),
+      getReqsAndBeefToShareWithWorld: jest.fn(async () => {
+        throw new Error('delayed BEEF should be rebuilt later')
+      })
+    }
+
+    const result = await shareReqsWithWorld(storage as any, 1, [req.txid], true)
+
+    expect(storage.getReqsAndBeefToShareWithWorld).not.toHaveBeenCalled()
+    expect(storage.updateProvenTxReq).toHaveBeenCalledWith([req.provenTxReqId], expect.objectContaining({ status: 'unsent' }), undefined)
+    expect(storage.updateTransaction).toHaveBeenCalledWith([22], { status: 'sending' }, undefined)
+    expect(result.swr).toEqual([{ txid: req.txid, status: 'sending' }])
+  })
+
   test('delayed sends do not validate the scheduling-time aggregate BEEF', async () => {
     const req = makeReadyReq()
     const beef = {
