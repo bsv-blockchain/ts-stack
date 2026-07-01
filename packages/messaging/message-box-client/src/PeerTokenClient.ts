@@ -29,8 +29,8 @@ function hexToBytes (hex: string): number[] {
 function safeParse<T> (input: any): T | undefined {
   try {
     return typeof input === 'string' ? JSON.parse(input) : input
-  } catch (_parseError) {
-    Logger.error('[PT CLIENT] Failed to parse input in safeParse:', input)
+  } catch (parseError) {
+    Logger.error('[PT CLIENT] Failed to parse input in safeParse:', input, parseError)
     return undefined
   }
 }
@@ -239,7 +239,7 @@ export class PeerTokenClient extends MessageBoxClient {
       keyID: requestId,
       counterparty: params.recipient
     }, this.originator)
-    const requestProof = Array.from(hmac).map(b => b.toString(16).padStart(2, '0')).join('')
+    const requestProof = Array.from(hmac).map((b: number) => b.toString(16).padStart(2, '0')).join('')
 
     const body: TokenRequestMessage = {
       requestId,

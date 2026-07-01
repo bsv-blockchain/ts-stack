@@ -34,46 +34,49 @@ export interface StasTokenDecoded {
 const P2PKH_PREFIX = '76a914'
 const STAS_MARKER = '88ac69'
 
+interface PushLength { len: number, dataStart: number }
+
+/** Resolves a push opcode's payload length + data offset, or null for a non-push opcode. */
+function pushDataLength (scriptHex: string, opcode: number, pos: number): PushLength | null {
+  if (opcode >= 0x01 && opcode <= 0x4b) return { len: opcode, dataStart: pos }
+  if (opcode === 0x4c) {
+    if (pos + 2 > scriptHex.length) return null
+    return { len: Number.parseInt(scriptHex.substring(pos, pos + 2), 16), dataStart: pos + 2 }
+  }
+  if (opcode === 0x4d) {
+    if (pos + 4 > scriptHex.length) return null
+    const b1 = scriptHex.substring(pos, pos + 2)
+    const b2 = scriptHex.substring(pos + 2, pos + 4)
+    return { len: Number.parseInt(b2 + b1, 16), dataStart: pos + 4 }
+  }
+  if (opcode === 0x4e) {
+    if (pos + 8 > scriptHex.length) return null
+    const b1 = scriptHex.substring(pos, pos + 2)
+    const b2 = scriptHex.substring(pos + 2, pos + 4)
+    const b3 = scriptHex.substring(pos + 4, pos + 6)
+    const b4 = scriptHex.substring(pos + 6, pos + 8)
+    return { len: Number.parseInt(b4 + b3 + b2 + b1, 16), dataStart: pos + 8 }
+  }
+  return null
+}
+
 /** Reads push-data slots starting at a hex offset (after OP_RETURN). */
 function readPushes (scriptHex: string, startPos: number, max = 8): string[] {
   const pushes: string[] = []
   let pos = startPos
   while (pos < scriptHex.length && pushes.length < max) {
     if (pos + 2 > scriptHex.length) break
-    const opcode = parseInt(scriptHex.substring(pos, pos + 2), 16)
-    if (isNaN(opcode)) break
+    const opcode = Number.parseInt(scriptHex.substring(pos, pos + 2), 16)
+    if (Number.isNaN(opcode)) break
     pos += 2
-    let len: number
-    let dataStart: number
     if (opcode === 0) {
       pushes.push('')
       continue
-    } else if (opcode >= 0x01 && opcode <= 0x4b) {
-      len = opcode
-      dataStart = pos
-    } else if (opcode === 0x4c) {
-      if (pos + 2 > scriptHex.length) break
-      len = parseInt(scriptHex.substring(pos, pos + 2), 16)
-      dataStart = pos + 2
-    } else if (opcode === 0x4d) {
-      if (pos + 4 > scriptHex.length) break
-      const b1 = scriptHex.substring(pos, pos + 2)
-      const b2 = scriptHex.substring(pos + 2, pos + 4)
-      len = parseInt(b2 + b1, 16)
-      dataStart = pos + 4
-    } else if (opcode === 0x4e) {
-      if (pos + 8 > scriptHex.length) break
-      const b1 = scriptHex.substring(pos, pos + 2)
-      const b2 = scriptHex.substring(pos + 2, pos + 4)
-      const b3 = scriptHex.substring(pos + 4, pos + 6)
-      const b4 = scriptHex.substring(pos + 6, pos + 8)
-      len = parseInt(b4 + b3 + b2 + b1, 16)
-      dataStart = pos + 8
-    } else {
-      break // non-push opcode after OP_RETURN — stop
     }
-    pushes.push(scriptHex.substring(dataStart, dataStart + len * 2))
-    pos = dataStart + len * 2
+    const push = pushDataLength(scriptHex, opcode, pos)
+    if (push === null) break // non-push opcode (or truncated length) after OP_RETURN — stop
+    pushes.push(scriptHex.substring(push.dataStart, push.dataStart + push.len * 2))
+    pos = push.dataStart + push.len * 2
   }
   return pushes
 }
