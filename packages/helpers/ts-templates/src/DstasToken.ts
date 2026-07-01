@@ -43,7 +43,7 @@ const OWNER_PUSH_OP = '14' // push 20 bytes
 const MIN_HEX_LEN = 4000
 
 function isSinglePush (op: string): boolean {
-  const code = parseInt(op, 16)
+  const code = Number.parseInt(op, 16)
   return code >= 0x01 && code <= 0x4b
 }
 
@@ -78,10 +78,10 @@ export class DstasToken {
     let flagsHex = ''
     const flagsLenOp = hex.substring(ri + 44, ri + 46)
     if (isSinglePush(flagsLenOp)) {
-      const len = parseInt(flagsLenOp, 16)
+      const len = Number.parseInt(flagsLenOp, 16)
       flagsHex = hex.substring(ri + 46, ri + 46 + len * 2)
     }
-    const flagsByte = flagsHex.length >= 2 ? parseInt(flagsHex.substring(0, 2), 16) : 0
+    const flagsByte = flagsHex.length >= 2 ? Number.parseInt(flagsHex.substring(0, 2), 16) : 0
     const freezeEnabled = (flagsByte & 0x01) !== 0
     const confiscationEnabled = (flagsByte & 0x02) !== 0
 

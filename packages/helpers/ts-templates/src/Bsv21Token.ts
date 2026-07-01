@@ -63,24 +63,24 @@ class HexReader {
   readPushHex (): string | null {
     const op = this.readByteHex()
     if (op === null) return null
-    const code = parseInt(op, 16)
+    const code = Number.parseInt(op, 16)
     if (code === 0) return ''
     if (code >= 0x01 && code <= 0x4b) return this.readBytesHex(code)
     if (code === 0x4c) {
       const lenHex = this.readByteHex()
       if (lenHex === null) return null
-      return this.readBytesHex(parseInt(lenHex, 16))
+      return this.readBytesHex(Number.parseInt(lenHex, 16))
     }
     if (code === 0x4d) {
       const b1 = this.readByteHex(); const b2 = this.readByteHex()
       if (b1 === null || b2 === null) return null
-      return this.readBytesHex(parseInt(b2 + b1, 16))
+      return this.readBytesHex(Number.parseInt(b2 + b1, 16))
     }
     if (code === 0x4e) {
       const b1 = this.readByteHex(); const b2 = this.readByteHex()
       const b3 = this.readByteHex(); const b4 = this.readByteHex()
       if (b1 === null || b2 === null || b3 === null || b4 === null) return null
-      return this.readBytesHex(parseInt(b4 + b3 + b2 + b1, 16))
+      return this.readBytesHex(Number.parseInt(b4 + b3 + b2 + b1, 16))
     }
     return null
   }
@@ -93,6 +93,63 @@ function hexToUtf8 (hex: string): string {
   } catch {
     return ''
   }
+}
+
+/** Reads the ord-inscription envelope up to and including OP_ENDIF, returning its JSON payload. */
+function readOrdEnvelope (r: HexReader): any {
+  if (r.readPushHex() !== ORD_TAG_HEX) throw new Error('not a BSV-21 script: missing "ord" tag')
+
+  // Content-type field id: accept canonical OP_1 (0x51) or non-minimal push-of-0x01.
+  const peek = r.hex.substring(r.pos, r.pos + 2)
+  if (peek === '51') {
+    r.pos += 2
+  } else if (r.readPushHex() !== '01') {
+    throw new Error('not a BSV-21 script: bad content-type field id')
+  }
+
+  const ctHex = r.readPushHex()
+  if (ctHex === null || hexToUtf8(ctHex) !== CONTENT_TYPE) throw new Error('not a BSV-21 script: wrong content-type')
+
+  if (r.readByteHex() !== '00') throw new Error('not a BSV-21 script: missing OP_0 separator')
+
+  const contentHex = r.readPushHex()
+  if (contentHex === null) throw new Error('not a BSV-21 script: missing JSON payload')
+  let payload: any
+  try {
+    payload = JSON.parse(hexToUtf8(contentHex))
+  } catch {
+    throw new Error('not a BSV-21 script: invalid JSON payload')
+  }
+  if (payload?.p !== 'bsv-20') throw new Error('not a BSV-21 script: not bsv-20')
+
+  if (r.readByteHex() !== OP_ENDIF_HEX) throw new Error('not a BSV-21 script: missing OP_ENDIF')
+  return payload
+}
+
+/** Reads the trailing standard P2PKH owner lock, returning the owner hash160 (hex). */
+function readP2pkhOwner (r: HexReader): string {
+  const dup = r.readByteHex()
+  const hash160Op = r.readByteHex()
+  const pushLen = r.readByteHex()
+  if (dup !== OP_DUP_HEX || hash160Op !== OP_HASH160_HEX || pushLen !== PKH_PUSH_LEN_HEX) {
+    throw new Error('not a BSV-21 script: bad P2PKH owner lock')
+  }
+  const ownerHash160 = r.readBytesHex(20)
+  if (ownerHash160 === null) throw new Error('not a BSV-21 script: truncated owner hash')
+  if (r.readByteHex() !== OP_EQUALVERIFY_HEX || r.readByteHex() !== OP_CHECKSIG_HEX) {
+    throw new Error('not a BSV-21 script: bad P2PKH tail')
+  }
+  return ownerHash160
+}
+
+/** Parses the optional `dec` field, accepted as a number or a digit string in [0, 18]. */
+function parseDecimals (payload: any): number | undefined {
+  if (typeof payload.dec === 'number' && Number.isFinite(payload.dec)) return payload.dec
+  if (typeof payload.dec === 'string' && /^\d+$/.test(payload.dec)) {
+    const n = Number.parseInt(payload.dec, 10)
+    if (n >= 0 && n <= 18) return n
+  }
+  return undefined
 }
 
 export class Bsv21Token {
@@ -117,60 +174,18 @@ export class Bsv21Token {
     const r = new HexReader(lower)
     r.pos = 4 // past OP_FALSE OP_IF
 
-    if (r.readPushHex() !== ORD_TAG_HEX) throw new Error('not a BSV-21 script: missing "ord" tag')
-
-    // Content-type field id: accept canonical OP_1 (0x51) or non-minimal push-of-0x01.
-    const peek = lower.substring(r.pos, r.pos + 2)
-    if (peek === '51') {
-      r.pos += 2
-    } else if (r.readPushHex() !== '01') {
-      throw new Error('not a BSV-21 script: bad content-type field id')
-    }
-
-    const ctHex = r.readPushHex()
-    if (ctHex === null || hexToUtf8(ctHex) !== CONTENT_TYPE) throw new Error('not a BSV-21 script: wrong content-type')
-
-    if (r.readByteHex() !== '00') throw new Error('not a BSV-21 script: missing OP_0 separator')
-
-    const contentHex = r.readPushHex()
-    if (contentHex === null) throw new Error('not a BSV-21 script: missing JSON payload')
-    let payload: any
-    try {
-      payload = JSON.parse(hexToUtf8(contentHex))
-    } catch {
-      throw new Error('not a BSV-21 script: invalid JSON payload')
-    }
-    if (payload == null || payload.p !== 'bsv-20') throw new Error('not a BSV-21 script: not bsv-20')
-
-    if (r.readByteHex() !== OP_ENDIF_HEX) throw new Error('not a BSV-21 script: missing OP_ENDIF')
-
-    const dup = r.readByteHex()
-    const hash160Op = r.readByteHex()
-    const pushLen = r.readByteHex()
-    if (dup !== OP_DUP_HEX || hash160Op !== OP_HASH160_HEX || pushLen !== PKH_PUSH_LEN_HEX) {
-      throw new Error('not a BSV-21 script: bad P2PKH owner lock')
-    }
-    const ownerHash160 = r.readBytesHex(20)
-    if (ownerHash160 === null) throw new Error('not a BSV-21 script: truncated owner hash')
-    if (r.readByteHex() !== OP_EQUALVERIFY_HEX || r.readByteHex() !== OP_CHECKSIG_HEX) {
-      throw new Error('not a BSV-21 script: bad P2PKH tail')
-    }
+    const payload = readOrdEnvelope(r)
+    const ownerHash160 = readP2pkhOwner(r)
 
     const amt: string | undefined = payload.amt
     if (typeof amt !== 'string' || !/^\d+$/.test(amt)) throw new Error('not a BSV-21 script: bad amount')
 
     const isMint = payload.op === 'deploy+mint'
-
-    let dec: number | undefined
-    if (typeof payload.dec === 'number' && Number.isFinite(payload.dec)) {
-      dec = payload.dec
-    } else if (typeof payload.dec === 'string' && /^\d+$/.test(payload.dec)) {
-      const n = parseInt(payload.dec, 10)
-      if (n >= 0 && n <= 18) dec = n
-    }
+    const dec = parseDecimals(payload)
+    const id = isMint ? '' : (typeof payload.id === 'string' ? payload.id : '')
 
     return {
-      id: isMint ? '' : (typeof payload.id === 'string' ? payload.id : ''),
+      id,
       amt,
       dec,
       sym: typeof payload.sym === 'string' ? payload.sym : undefined,
