@@ -182,7 +182,7 @@ export class Bsv21Token {
 
     const isMint = payload.op === 'deploy+mint'
     const dec = parseDecimals(payload)
-    const id = isMint ? '' : (typeof payload.id === 'string' ? payload.id : '')
+    const id = !isMint && typeof payload.id === 'string' ? payload.id : ''
 
     return {
       id,
