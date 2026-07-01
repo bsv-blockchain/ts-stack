@@ -26,6 +26,13 @@ export class StasStorageManager {
     return await this.indexInit
   }
 
+  /** Project a UTXO-reference cursor for a mongo filter (DRY for the finders). */
+  private async query (filter: Record<string, unknown>): Promise<UTXOReference[]> {
+    await this.ensureIndexes()
+    return await this.tokens.find(filter)
+      .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
+  }
+
   async storeToken (record: StasTokenRecord): Promise<void> {
     await this.ensureIndexes()
     await this.tokens.insertOne(record)
@@ -37,21 +44,15 @@ export class StasStorageManager {
   }
 
   async findByAssetId (assetId: string): Promise<UTXOReference[]> {
-    await this.ensureIndexes()
-    return await this.tokens.find({ assetId })
-      .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
+    return await this.query({ assetId })
   }
 
   async findByOwner (ownerHash160: string): Promise<UTXOReference[]> {
-    await this.ensureIndexes()
-    return await this.tokens.find({ ownerHash160 })
-      .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
+    return await this.query({ ownerHash160 })
   }
 
   async findByOutpoint (txid: string, outputIndex: number): Promise<UTXOReference[]> {
-    await this.ensureIndexes()
-    return await this.tokens.find({ txid, outputIndex })
-      .project<UTXOReference>({ txid: 1, outputIndex: 1, _id: 0 }).toArray()
+    return await this.query({ txid, outputIndex })
   }
 
   async getTokenRow (txid: string, outputIndex: number): Promise<StasTokenRecord | null> {

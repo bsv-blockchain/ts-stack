@@ -1,10 +1,7 @@
-import { TopicManager } from '@bsv/overlay'
-import { AdmittanceInstructions, Transaction } from '@bsv/sdk'
+import { Transaction } from '@bsv/sdk'
 import { DstasToken } from '@bsv/templates'
-import { TokenIssuerPolicy } from '../admission/issuerPolicy.js'
+import { BaseTokenTopicManager, DecodedTokenOutput } from '../shared/BaseTokenTopicManager.js'
 import docs from './DstasTopicDocs.md.js'
-
-interface DstasOutput { index: number, tokenId: string, amount: number }
 
 /**
  * Topic manager for DSTAS (Divisible STAS / STAS 3.0) token transfers.
@@ -22,18 +19,19 @@ interface DstasOutput { index: number, tokenId: string, amount: number }
  * Frozen UTXOs are real on-chain state and stay indexed (discoverable); the
  * lookup service surfaces the frozen flag. The one thing Script does NOT
  * constrain is issuance: minting is permissionless, so any output can claim any
- * protoID. The optional {@link TokenIssuerPolicy} gates which issuances are
- * indexed; omitted, the overlay stays permissionless (admits all issuances).
+ * protoID. The optional TokenIssuerPolicy gates which issuances are indexed;
+ * omitted, the overlay stays permissionless (admits all issuances).
  */
-export class DstasTopicManager implements TopicManager {
-  constructor (private readonly issuerPolicy: TokenIssuerPolicy = {}) {}
+export class DstasTopicManager extends BaseTokenTopicManager<number> {
+  protected readonly zero = 0
+  protected readonly logLabel = 'DstasTopicManager'
 
-  private decodeOutputs (tx: Transaction): DstasOutput[] {
-    const outputs: DstasOutput[] = []
+  protected decodeOutputs (tx: Transaction): Array<DecodedTokenOutput<number>> {
+    const outputs: Array<DecodedTokenOutput<number>> = []
     for (let i = 0; i < tx.outputs.length; i++) {
       try {
         const { tokenId } = DstasToken.decode(tx.outputs[i].lockingScript)
-        outputs.push({ index: i, tokenId, amount: tx.outputs[i].satoshis ?? 0 })
+        outputs.push({ index: i, key: tokenId, amount: tx.outputs[i].satoshis ?? 0 })
       } catch {
         // not a DSTAS output — ignore
       }
@@ -41,7 +39,7 @@ export class DstasTopicManager implements TopicManager {
     return outputs
   }
 
-  private inputTotals (tx: Transaction, previousCoins: number[]): Map<string, number> {
+  protected inputTotals (tx: Transaction, previousCoins: number[]): Map<string, number> {
     const inTotals = new Map<string, number>()
     for (const ci of previousCoins) {
       const input = tx.inputs[ci]
@@ -55,55 +53,8 @@ export class DstasTopicManager implements TopicManager {
     return inTotals
   }
 
-  /** Rejects only on inflation: outputs exceeding inputs for a token with inputs. */
-  private conservationHolds (outputs: DstasOutput[], inTotals: Map<string, number>): boolean {
-    const outTotals = new Map<string, number>()
-    for (const o of outputs) outTotals.set(o.tokenId, (outTotals.get(o.tokenId) ?? 0) + o.amount)
-    for (const [tokenId, outAmt] of outTotals) {
-      const inAmt = inTotals.get(tokenId) ?? 0
-      if (inAmt > 0 && outAmt > inAmt) return false
-    }
-    return true
-  }
-
-  /**
-   * Drop issuance outputs the issuer policy rejects. An output is an issuance
-   * when no input carries its tokenId (`inAmt === 0`); transfers are untouched.
-   * With no policy, every issuance passes (permissionless default).
-   */
-  private applyIssuerPolicy (outputs: DstasOutput[], inTotals: Map<string, number>): DstasOutput[] {
-    const allow = this.issuerPolicy.allowIssuance
-    if (allow === undefined) return outputs
-    return outputs.filter(o => {
-      const isIssuance = (inTotals.get(o.tokenId) ?? 0) === 0
-      return !isIssuance || allow(o.tokenId)
-    })
-  }
-
-  async identifyAdmissibleOutputs (
-    beef: number[],
-    previousCoins: number[]
-  ): Promise<AdmittanceInstructions> {
-    try {
-      const tx = Transaction.fromBEEF(beef)
-      const outputs = this.decodeOutputs(tx)
-      if (outputs.length === 0) return { outputsToAdmit: [], coinsToRetain: [] }
-
-      const inTotals = this.inputTotals(tx, previousCoins)
-      if (!this.conservationHolds(outputs, inTotals)) {
-        return { outputsToAdmit: [], coinsToRetain: [] }
-      }
-
-      const admissible = this.applyIssuerPolicy(outputs, inTotals)
-      return {
-        outputsToAdmit: admissible.map(o => o.index).sort((a, b) => a - b),
-        coinsToRetain: previousCoins
-      }
-    } catch (error) {
-      console.warn(`[DstasTopicManager] identifyAdmissibleOutputs failed: ${String(error)}`)
-      return { outputsToAdmit: [], coinsToRetain: [] }
-    }
-  }
+  protected add (a: number, b: number): number { return a + b }
+  protected gt (a: number, b: number): boolean { return a > b }
 
   async getDocumentation (): Promise<string> {
     return docs
