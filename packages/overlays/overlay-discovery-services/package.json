@@ -68,7 +68,7 @@
   "dependencies": {
     "@bsv/overlay": "^2.1.1",
     "@bsv/wallet-toolbox-client": "^2.3.3",
-    "mongodb": "^7.3.0"
+    "mongodb": "^7.4.0"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"
