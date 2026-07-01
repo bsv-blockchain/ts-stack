@@ -38,7 +38,7 @@ const remove = (xs: string[], x: string): string[] => xs.filter(v => v !== x)
 type Handler = (s: AssetAdminState, d: MandalaActionDetails, ctx: FoldContext) => void
 
 // Per-kind handlers mutate the COPY `s` and reassign array fields to NEW arrays,
-// never mutating the input state or its arrays. issue/redeem/recover and unknown
+// never mutating the input state or its arrays. issue/redeem and unknown
 // kinds have no handler: no control-state change.
 const HANDLERS: Partial<Record<MandalaActionKind, Handler>> = {
   register: (s, _d, ctx) => { if (typeof ctx.issuer === 'string') s.issuerIdentityKey = ctx.issuer },

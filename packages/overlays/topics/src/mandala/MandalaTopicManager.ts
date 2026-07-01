@@ -100,7 +100,7 @@ export class MandalaTopicManager implements TopicManager {
     if (!pkhMatches || !priorOutpointSpent(tx, details)) {
       return { admitted: false }
     }
-    if ((details.kind === 'issue' || details.kind === 'recover' || details.kind === 'reissue') && typeof details.assetId === 'string') {
+    if ((details.kind === 'issue' || details.kind === 'reissue') && typeof details.assetId === 'string') {
       return { admitted: true, issuance: { assetId: details.assetId, amount: details.amount ?? 0 } }
     }
     // A redeem authorizes destruction of `amount` units, i.e. a negative supply
@@ -227,7 +227,7 @@ export class MandalaTopicManager implements TopicManager {
     const frozen = new Set<string>([...state.frozenOutpoints.map(f => f.outpoint), ...state.evictedOutpoints])
 
     // Gate 1: frozen/evicted input spend — applies to ALL txs (blocks
-    // recover/redeem of a frozen coin too; only unfreeze/reissue resolve it).
+    // redeem of a frozen coin too; only unfreeze/reissue resolve it).
     if (inputOutpoints.some(op => frozen.has(op))) return false
 
     const adminAction = adminAssetKinds.get(assetId)

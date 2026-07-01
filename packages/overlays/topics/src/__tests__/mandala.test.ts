@@ -328,14 +328,14 @@ describe('MandalaTopicManager control gate', () => {
     const forgedOffChain = encodeLinkagePayload({
       inputs: [],
       outputs: [{ index: 0, linkage: (decodeLinkagePayload(transfer.offChainValues).outputs[0].linkage) as any }],
-      admin: [{ index: 0, actionDetails: { kind: 'recover', assetId } }]
+      admin: [{ index: 0, actionDetails: { kind: 'reissue', assetId } }]
     } as any)
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(deny) })
     const result = await tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)
     expect(result.outputsToAdmit).toEqual([])
   })
 
-  it('rejects any tx that spends a frozen outpoint (incl. would-be recover/redeem)', async () => {
+  it('rejects any tx that spends a frozen outpoint (incl. would-be redeem)', async () => {
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const assetId = `${'a'.repeat(64)}.0`
     const transfer = await buildPeerTransfer(assetId, 100, overlay)

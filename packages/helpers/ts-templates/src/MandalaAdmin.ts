@@ -9,7 +9,7 @@ import { createMinimallyEncodedScriptChunk } from './mandala-encoding.js'
 export interface AssetMetadata { label: string, ticker?: string, decimals?: number, [k: string]: unknown }
 
 export type MandalaActionKind =
-  | 'register' | 'issue' | 'redeem' | 'recover'
+  | 'register' | 'issue' | 'redeem'
   | 'pause' | 'unpause'
   | 'blockIdentity' | 'unblockIdentity'
   | 'allowIdentity' | 'unallowIdentity'
