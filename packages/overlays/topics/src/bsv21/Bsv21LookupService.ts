@@ -6,6 +6,7 @@ import { Db } from 'mongodb'
 import { Bsv21Token } from '@bsv/templates'
 import { Bsv21StorageManager } from './Bsv21StorageManager.js'
 import { Bsv21Query } from './types.js'
+import { lookupByOwnerOrOutpoint } from '../shared/tokenLookupTail.js'
 import docs from './Bsv21LookupDocs.md.js'
 
 export interface Bsv21LookupDeps {
@@ -56,13 +57,7 @@ export class Bsv21LookupService implements LookupService {
     if (typeof query.tokenId === 'string') {
       return await this.deps.storage.findByTokenId(query.tokenId)
     }
-    if (typeof query.ownerHash160 === 'string') {
-      return await this.deps.storage.findByOwner(query.ownerHash160)
-    }
-    if (typeof query.txid === 'string' && typeof query.outputIndex === 'number') {
-      return await this.deps.storage.findByOutpoint(query.txid, query.outputIndex)
-    }
-    throw new Error('Unsupported query')
+    return await lookupByOwnerOrOutpoint(this.deps.storage, query)
   }
 
   async getDocumentation (): Promise<string> {

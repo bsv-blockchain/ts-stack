@@ -6,6 +6,7 @@ import { Db } from 'mongodb'
 import { StasToken } from '@bsv/templates'
 import { StasStorageManager } from './StasStorageManager.js'
 import { StasQuery } from './types.js'
+import { lookupByOwnerOrOutpoint } from '../shared/tokenLookupTail.js'
 import docs from './StasLookupDocs.md.js'
 
 export interface StasLookupDeps {
@@ -50,13 +51,7 @@ export class StasLookupService implements LookupService {
     if (typeof query.assetId === 'string') {
       return await this.deps.storage.findByAssetId(query.assetId)
     }
-    if (typeof query.ownerHash160 === 'string') {
-      return await this.deps.storage.findByOwner(query.ownerHash160)
-    }
-    if (typeof query.txid === 'string' && typeof query.outputIndex === 'number') {
-      return await this.deps.storage.findByOutpoint(query.txid, query.outputIndex)
-    }
-    throw new Error('Unsupported query')
+    return await lookupByOwnerOrOutpoint(this.deps.storage, query)
   }
 
   async getDocumentation (): Promise<string> {
