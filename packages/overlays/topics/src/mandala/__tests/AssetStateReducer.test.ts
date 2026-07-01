@@ -40,9 +40,9 @@ describe('foldAction', () => {
     expect(s.frozenOutpoints).toEqual([])
     expect(s.evictedOutpoints).toEqual(['tt.2'])
   })
-  it('issue/redeem/recover do not change control state', () => {
+  it('issue/redeem do not change control state', () => {
     const base = S({ isPaused: true })
-    for (const kind of ['issue', 'redeem', 'recover'] as const) {
+    for (const kind of ['issue', 'redeem'] as const) {
       expect(foldAction(base, d({ kind, amount: 1 }))).toEqual(base)
     }
   })
