@@ -35,6 +35,14 @@ export function buildSignableTransaction (
   // output is echoed back by storage unchanged before anything is signed.
   verifyRequestedOutputsUnchanged(storageOutputs, args)
 
+  // SECURITY (GHSA-36f9-7rg5-cpf8): verifyRequestedOutputsUnchanged only protects
+  // the caller's own outputs. Storage could instead inject an ADDITIONAL output
+  // paying an attacker (funded by reducing change), which the loop below signs
+  // verbatim. Every output beyond the caller's must be either a change output
+  // (script re-derived client-side, so it can only pay the client) or the single
+  // bounded commission output. Anything else is rejected before signing.
+  verifyUnrequestedOutputsAreChangeOrCommission(storageOutputs, args)
+
   const tx = new Transaction(args.version, [], [], args.lockTime)
 
   // The order of outputs in storageOutputs is always:
@@ -112,8 +120,8 @@ export function buildSignableTransaction (
     if (argsInput != null) {
       // Type 1: User supplied input, with or without an explicit unlockingScript.
       // If without, signAction must be used to provide the actual unlockScript.
-      const hasUnlock = typeof argsInput.unlockingScript === 'string'
-      const unlock = hasUnlock ? asBsvSdkScript(argsInput.unlockingScript!) : new Script()
+      const unlock =
+        typeof argsInput.unlockingScript === 'string' ? asBsvSdkScript(argsInput.unlockingScript) : new Script()
       const sourceTransaction = args.isSignAction ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx : undefined
       const inputToAdd: TransactionInput = {
         sourceTXID: argsInput.outpoint.txid,
@@ -231,6 +239,80 @@ export function verifyRequestedOutputsUnchanged (
         `equal to the caller-requested satoshis. Storage returned ${provided.satoshis} for output index ${i}, caller requested ${requested.satoshis}.`
       )
     }
+  }
+}
+
+/**
+ * Default ceiling for a storage-provided commission (service-charge) output, in
+ * satoshis. The commission is the one output whose locking script is taken
+ * verbatim from storage and cannot be re-derived or verified client-side, so a
+ * malicious storage operator could point it at an attacker address. Capping it
+ * bounds the worst-case loss from that single output; honest commissions are far
+ * below this. (GHSA-36f9-7rg5-cpf8)
+ */
+export const MAX_STORAGE_COMMISSION_SATOSHIS = 500000
+
+/**
+ * Verify that every storage output beyond the caller's requested outputs is
+ * either a change output or the (single, bounded) commission output.
+ *
+ * The storage response is ordered `[caller outputs][commission?][change...]`;
+ * `verifyRequestedOutputsUnchanged` already validates the caller region (indices
+ * `< args.outputs.length`). This checks the remainder.
+ *
+ * Change outputs (`providedBy: 'storage', purpose: 'change'`) are safe at any
+ * amount: `buildSignableTransaction` ignores the storage-supplied script and
+ * re-derives it client-side (`makeChangeLock` / BRC-29 under the client's own
+ * change key), so a change output can only ever pay the client. A change output
+ * mislabeled by storage is therefore harmless.
+ *
+ * The commission output's script, by contrast, is taken verbatim from storage
+ * and cannot be verified client-side. A malicious storage could inject an extra
+ * output — or relabel one as commission — to redirect funds to an attacker while
+ * the caller/UI only sees the requested recipients. To bound that, at most one
+ * commission output is allowed and its amount must not exceed `maxCommission`.
+ * Any other unrecognized output is rejected outright.
+ *
+ * @throws WERR_INVALID_PARAMETER if storage returned an unrecognized output, more
+ *   than one commission output, or a commission exceeding `maxCommission`.
+ */
+export function verifyUnrequestedOutputsAreChangeOrCommission (
+  storageOutputs: StorageCreateTransactionSdkOutput[],
+  args: Validation.ValidCreateActionArgs,
+  maxCommission: number = MAX_STORAGE_COMMISSION_SATOSHIS
+): void {
+  let commissionCount = 0
+  for (let i = args.outputs.length; i < storageOutputs.length; i++) {
+    const out = storageOutputs[i]
+    const isChange = out.providedBy === 'storage' && out.purpose === 'change'
+    if (isChange) continue
+
+    // Honest storage remaps a service-charge to purpose 'storage-commission';
+    // accept the pre-remap label too so the check is robust across versions.
+    const isCommission =
+      out.providedBy === 'storage' && (out.purpose === 'storage-commission' || out.purpose === 'service-charge')
+    if (isCommission) {
+      commissionCount++
+      if (commissionCount > 1) {
+        throw new WERR_INVALID_PARAMETER(
+          'storage outputs',
+          `at most one commission output. Storage returned an extra commission output at index ${i}.`
+        )
+      }
+      if (out.satoshis > maxCommission) {
+        throw new WERR_INVALID_PARAMETER(
+          'output.satoshis',
+          `a commission no greater than ${maxCommission}. Storage returned a commission of ${out.satoshis} at index ${i}; funds could be redirected to an attacker.`
+        )
+      }
+      continue
+    }
+
+    throw new WERR_INVALID_PARAMETER(
+      'storage outputs',
+      'only change or commission beyond the requested outputs. Storage returned an unrecognized output ' +
+        `(providedBy='${out.providedBy}' purpose='${out.purpose ?? ''}') at index ${i}; funds could be redirected to an attacker.`
+    )
   }
 }
 
