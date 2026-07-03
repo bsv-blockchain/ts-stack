@@ -504,6 +504,70 @@ describe('BSV Overlay Services Engine', () => {
         topics: ['Hello']
       })).rejects.toHaveProperty('message', 'Invalid merkle path for transaction 3ecead27a44d013ad1aae40038acbb1883ac9242406808bb4667c15b4f164eac')
     })
+    describe('Broadcast gating (PHASE 2)', () => {
+      const makeBroadcaster = (): { broadcast: jest.Mock } => ({
+        broadcast: jest.fn(async () => ({ status: 'success', txid: exampleTXID, message: 'ok' }))
+      })
+      const makeEngine = (broadcaster: any): Engine => new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker,
+        undefined,
+        undefined,
+        undefined,
+        broadcaster
+      )
+
+      it('broadcasts when at least one topic admits outputs', async () => {
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
+      })
+
+      it('never broadcasts a transaction every topic manager rejected', async () => {
+        mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
+          outputsToAdmit: [],
+          coinsToRetain: []
+        }))
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(broadcaster.broadcast).not.toHaveBeenCalled()
+      })
+
+      it('never broadcasts when topic validation throws', async () => {
+        mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
+          throw new Error('rule violation')
+        })
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(broadcaster.broadcast).not.toHaveBeenCalled()
+      })
+
+      it('still broadcasts a duplicate (previously accepted) transaction', async () => {
+        mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => true)
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
+      })
+
+      it('broadcasts when outputs are consumed but none admitted (coinsToRetain only)', async () => {
+        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
+          outputsToAdmit: [],
+          coinsToRetain: [0]
+        }))
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
+      })
+    })
+
     describe('For each topic being processed', () => {
       it('Checks for duplicate transactions', async () => {
         const engine = new Engine(
