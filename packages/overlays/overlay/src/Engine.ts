@@ -593,8 +593,19 @@ export class Engine {
     // ===================================================================
     // PHASE 2: BROADCAST (before any mutations)
     // ===================================================================
+    // Only broadcast when at least one topic actually accepted the
+    // transaction (admitted outputs or retained coins), or it is a known
+    // duplicate (previously accepted). A transaction every topic manager
+    // rejected must never reach the network: submitters treat an empty STEAK
+    // as a rejection and release/abort their inputs, so broadcasting it
+    // anyway would desync their wallets from the chain.
+    const anyTopicAccepted = validations.some(v =>
+      v.isDupe ||
+      v.admissibleOutputs.outputsToAdmit.length > 0 ||
+      v.admissibleOutputs.coinsToRetain.length > 0
+    )
     this.startTime(`broadcast_${txid.substring(0, 10)}`)
-    if (mode !== 'historical-tx' && this.broadcaster !== undefined) {
+    if (mode !== 'historical-tx' && this.broadcaster !== undefined && anyTopicAccepted) {
       try {
         let response: BroadcastResponse | BroadcastFailure
         if (tx.merklePath !== undefined) {
