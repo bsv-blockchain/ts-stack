@@ -537,7 +537,10 @@ describe('BSV Overlay Services Engine', () => {
         expect(broadcaster.broadcast).not.toHaveBeenCalled()
       })
 
-      it('never broadcasts when topic validation throws', async () => {
+      it('never broadcasts when topic validation throws, even with tracked coins consumed', async () => {
+        // The rejected tx spends previously-admitted coins — a throw must
+        // still gate the broadcast (this is the rejected-transfer shape).
+        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
           throw new Error('rule violation')
         })
@@ -545,6 +548,21 @@ describe('BSV Overlay Services Engine', () => {
         const engine = makeEngine(broadcaster)
         await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
         expect(broadcaster.broadcast).not.toHaveBeenCalled()
+      })
+
+      it('broadcasts a consume-only transaction that retains nothing (history purge)', async () => {
+        // e.g. a KVStore remove that also purges history: previously-admitted
+        // coins are consumed, nothing admitted, nothing retained. That is an
+        // acceptance, not a rejection (rejection = throw).
+        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
+          outputsToAdmit: [],
+          coinsToRetain: []
+        }))
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
       })
 
       it('still broadcasts a duplicate (previously accepted) transaction', async () => {

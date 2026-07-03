@@ -303,16 +303,22 @@ export class MandalaTopicManager implements TopicManager {
 
       const admittedFt = await this.verifyFtOutputs(ftOutputs, outputLinkage)
 
+      // Rejections THROW rather than return empty instructions: the engine
+      // treats a thrown topic as failed and (with a broadcaster configured)
+      // never broadcasts a transaction every topic rejected. Returning empty
+      // here would be indistinguishable from a legitimate consume-only
+      // transaction, and a rejected transfer that still reaches the network
+      // desyncs the submitter's wallet (it aborts the action on rejection).
       if (!this.conservationHolds(admittedFt, previousCoins, tx, authorizedIssuance)) {
-        return { outputsToAdmit: [], coinsToRetain: [] }
+        throw new Error('conservation violated: outputs exceed authorized inputs/issuance')
       }
 
       if (await this.anySanctioned(admittedFt, payload)) {
-        return { outputsToAdmit: [], coinsToRetain: [] }
+        throw new Error('sanctioned party involved in transfer')
       }
 
       if (!(await this.controlGate(tx, admittedFt, verifiedAdminAssetKinds, payload))) {
-        return { outputsToAdmit: [], coinsToRetain: [] }
+        throw new Error('control gate rejected the transaction (paused asset or access mode)')
       }
 
       return {
@@ -320,8 +326,8 @@ export class MandalaTopicManager implements TopicManager {
         coinsToRetain: previousCoins
       }
     } catch (error) {
-      console.warn(`[MandalaTopicManager] identifyAdmissibleOutputs failed: ${String(error)}`)
-      return { outputsToAdmit: [], coinsToRetain: [] }
+      console.warn(`[MandalaTopicManager] identifyAdmissibleOutputs rejected: ${String(error)}`)
+      throw error
     }
   }
 
