@@ -1,6 +1,6 @@
 {
   "name": "@bsv/templates",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "type": "module",
   "description": "BSV Blockchain Script Templates",
   "main": "dist/cjs/mod.js",
