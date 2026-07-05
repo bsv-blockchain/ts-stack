@@ -1311,6 +1311,16 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .where('o.userId', userId)
           .where('o.spendable', true)
           .where('o.basketId', basketId)
+          // Only auto-allocate change the SABPPP signer can actually sign.
+          // `buildSignableTransaction` signs storage-selected inputs exclusively
+          // via the BRC-29 (`ScriptTemplateBRC29`) path, which requires
+          // `type === 'P2PKH'` (it needs the derivationPrefix/Suffix/senderIdentityKey
+          // to derive the key) and throws on anything else. Imported/foreign outputs
+          // are P2PKH by script but stored `type: 'custom'` (see `internalizeAction`),
+          // so without this predicate they can be auto-selected to fund a fee and then
+          // fail signing — most visibly on a fee-only (0-value) createAction, where the
+          // small target makes them likely to be chosen.
+          .where('o.type', 'P2PKH')
           .whereNull('o.spentBy')
           .whereIn('t.status', status)
           .select('o.*')
