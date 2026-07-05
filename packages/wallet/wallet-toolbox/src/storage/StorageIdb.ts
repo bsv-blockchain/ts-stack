@@ -259,7 +259,13 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const txStatus: TransactionStatus[] = ['completed', 'unproven']
       if (!excludeSending) txStatus.push('sending')
       const args: FindOutputsArgs = {
-        partial: { userId, basketId, spendable: true },
+        // `type: 'P2PKH'` — only auto-allocate change the SABPPP signer can sign.
+        // `buildSignableTransaction` signs storage-selected inputs solely via the
+        // BRC-29 template, which requires `type === 'P2PKH'`. Imported/foreign
+        // outputs are P2PKH by script but stored `type: 'custom'`, so without this
+        // they can be auto-selected to fund a fee and then fail signing (most visibly
+        // on a fee-only createAction). Mirrors the StorageKnex allocateChangeInput fix.
+        partial: { userId, basketId, spendable: true, type: 'P2PKH' },
         txStatus,
         // Skip per-output script hydration during the candidate scan — we only need
         // the locking script for the one we actually pick below. Matches Knex's
