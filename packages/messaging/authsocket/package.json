@@ -69,8 +69,8 @@
     "ts2md": "^0.2.5",
     "tsconfig-to-dual-package": "^1.2.0",
     "typescript": "^6.0.3",
-    "webpack": "^5.107.2",
-    "webpack-cli": "^7.0.3",
+    "webpack": "^5.108.4",
+    "webpack-cli": "^7.2.1",
     "@bsv/sdk": "workspace:^"
   },
   "peerDependencies": {
