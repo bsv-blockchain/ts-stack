@@ -53,7 +53,7 @@ A frontend + backend together produce a **monorepo** layout: `client/` and `serv
 
 | id | Description |
 | --- | --- |
-| `wallet-connect` | Base (auto-selected for new projects): connect any BRC-100 wallet — desktop or mobile/relay — and use it app-wide via React context, plus the `@bsv/auth` proof primitive. |
+| `wallet-connect` | Base (auto-selected for new projects): connect any BRC-100 wallet — desktop or mobile/relay — and use it app-wide via React context, plus the `@bsv/auth` proof primitive. In a monorepo it also mounts a `WalletRelayService` on the server (REST `/api/session` + a `/ws` upgrade) so the mobile-QR pairing path works; frontend-only projects get desktop connect only. |
 | `wallet-login` | Passwordless login — a signed proof (`action: 'login'`) verified server-side. Builds on `wallet-connect`. |
 | `signed-requests` | Per-call authentication — sign API requests bound to a route + body; verify with a framework-agnostic function. Builds on `wallet-connect`. |
 

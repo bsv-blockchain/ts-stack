@@ -66,11 +66,13 @@ const RELAY_CONTEXT = `// Relay-session context: wraps @bsv/wallet-relay's hook 
 // (mobile QR / remote wallet) lives above the router. Port/extend from your app as needed.
 import { createContext, useContext, type ReactNode } from 'react'
 import { useWalletRelayClient } from '@bsv/wallet-relay/react'
+import { API_BASE_URL } from './config.js'
 
 type RelayValue = ReturnType<typeof useWalletRelayClient>
 const Ctx = createContext<RelayValue | null>(null)
 
-export function WalletConnectionProvider ({ children, apiUrl }: { children: ReactNode, apiUrl?: string }) {
+export function WalletConnectionProvider ({ children, apiUrl = API_BASE_URL }: { children: ReactNode, apiUrl?: string }) {
+  // apiUrl points at the server running the WalletRelayService (REST /api/session + WS /ws).
   const relay = useWalletRelayClient({ apiUrl, autoCreate: false })
   return <Ctx.Provider value={relay}>{children}</Ctx.Provider>
 }
@@ -260,6 +262,7 @@ Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) o
 
 ### How it works
 - Connecting is a small state machine: it tries the desktop/extension wallet first; if none is found it opens a modal to pair a mobile wallet over a relay (QR) or install a desktop one. The connected wallet lives in React context, reachable anywhere via \`useWallet()\`.
+- The **mobile/relay path needs a server**: the base server entry runs \`new WalletRelayService({ app, server, wallet: serverWallet, origin })\` from \`@bsv/wallet-relay\`, which registers \`GET /api/session\` (+ \`/:id\`, \`POST /api/request/:id\`) and a \`/ws\` WebSocket upgrade on the raw HTTP server. The client (\`useWalletRelayClient\`, pointed at \`API_BASE_URL\`) creates a session, shows its QR, and pairs over \`/ws\`. Frontend-only projects (no server) get desktop connect only.
 - The proof primitive (\`auth.ts\`) uses the wallet to sign a message bound to \`{ counterparty, action, body? }\` and verifies it server-side (BRC-103). That's identity (and request auth) without passwords or shared secrets.
 - The server publishes its own identity key at \`GET /api/identity\`; the client fetches it (\`getServerIdentity()\`) to use as the proof \`counterparty\`, so no key is hard-coded anywhere.
 
@@ -283,7 +286,7 @@ export const walletConnect: Capability = {
   id: 'wallet-connect',
   title: 'Wallet connect (desktop + relay, app-wide context)',
   description: 'Base: connect any BRC-100 wallet (desktop or mobile/relay) and use it across the app, plus the @bsv/auth proof primitive.',
-  roles: ['shared', 'client'],
+  roles: ['shared', 'client', 'server'],
   defaultSelected: true,
   files: () => ({
     shared: [{ path: 'auth.ts', content: AUTH_UTIL }],
@@ -301,10 +304,15 @@ export const walletConnect: Capability = {
   baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
     builder.main.imports.push(`import { WalletProviders } from '${bsvImport(ctx, 'WalletProviders')}'`)
     builder.main.wraps.push({ open: '<WalletProviders>', close: '</WalletProviders>' })
+    // Server side of the relay: one service registers REST /api/session(+/:id, /request/:id) and the /ws upgrade.
+    builder.server.imports.push("import { WalletRelayService } from '@bsv/wallet-relay'")
+    builder.server.setup.push('new WalletRelayService({ app, server, wallet: serverWallet, origin: CLIENT_ORIGIN }) // mobile-wallet pairing relay (QR)')
   },
   npmDependencies: () => ({
     shared: { '@bsv/auth': '^0.1.0', '@bsv/sdk': '^2.1.0' },
-    client: { '@bsv/wallet-relay': '^0.2.0', react: '>=18', 'react-router-dom': '^7.0.0' }
+    client: { '@bsv/wallet-relay': '^0.2.0', react: '>=18', 'react-router-dom': '^7.0.0' },
+    // @bsv/wallet-relay's peer deps for the server-side WalletRelayService.
+    server: { '@bsv/wallet-relay': '^0.2.0', qrcode: '^1.5.0', ws: '^8.0.0' }
   }),
   agentsSection
 }

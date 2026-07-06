@@ -68,7 +68,7 @@ Unspecified fields default (`dir`→`.`, `bsvDir`→`src/bsv`, `glue`→`false` 
 
 | id | What it adds |
 | --- | --- |
-| `wallet-connect` | **Base** (auto-included for new projects). Connect any BRC-100 wallet (desktop or mobile/relay), app-wide React context, the `@bsv/auth` proof primitive, and a baseline `GET /api/identity` route. |
+| `wallet-connect` | **Base** (auto-included for new projects). Connect any BRC-100 wallet (desktop or mobile/relay), app-wide React context, the `@bsv/auth` proof primitive, and a baseline `GET /api/identity` route. With a backend it also mounts a server `WalletRelayService` (REST `/api/session` + `/ws`) for mobile-QR pairing (frontend-only = desktop connect only). |
 | `wallet-login` | Passwordless login: wallet signs a proof, server verifies it → trusted `identityKey`. Adds `/login` page + `/api/login`. Requires `wallet-connect`. |
 | `signed-requests` | Per-call auth: sign a proof bound to `{ action, body }`, verify server-side. Adds `/signed-demo` + `/api/echo`. Requires `wallet-connect`. |
 

@@ -70,6 +70,7 @@ describe('assembleAndWrite', () => {
       b.main.wraps.push({ open: '<W>', close: '</W>' })
       b.app.routes.push({ path: '/x', component: 'X', importPath: './bsv/X', label: 'X demo' })
       b.server.routes.push('app.get("/y", h)')
+      b.server.setup.push('attachWs(server)')
     })]
     const r = assembleAndWrite(caps, ctx, { clientDir: join(dir, 'client'), serverDir: join(dir, 'server') })
     const appTsx = readFileSync(join(dir, 'client/src/App.tsx'), 'utf8')
@@ -81,6 +82,11 @@ describe('assembleAndWrite', () => {
     expect(serverIndex).toContain("app.get('/api/identity'")
     expect(serverIndex).toContain('getPublicKey({ identityKey: true })')
     expect(serverIndex).toContain('cors({ origin: CLIENT_ORIGIN })')
+    // raw http server + setup slot so capabilities can attach a WS upgrade, then listen on it
+    expect(serverIndex).toContain('const server = http.createServer(app)')
+    expect(serverIndex).toContain('attachWs(server)')
+    expect(serverIndex).toContain('server.listen(PORT')
+    expect(serverIndex).not.toContain('app.listen(') // must listen on the http server, not app
     // generated Home hub links to each capability route by its label
     const home = readFileSync(join(dir, 'client/src/bsv/Home.tsx'), 'utf8')
     expect(home).toContain('<Link to="/x">X demo →</Link>')

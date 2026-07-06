@@ -52,11 +52,12 @@ function wiringSection (config: ProjectConfig, capabilities: Capability[], ctx: 
     blocks.push(`### \`src/App.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``)
   }
 
-  // server/src/index.ts: imports + routes
-  if (builder.server.imports.length > 0 || builder.server.routes.length > 0) {
+  // server/src/index.ts: imports + routes + setup (raw-server hooks like the relay's WS upgrade)
+  if (builder.server.imports.length > 0 || builder.server.routes.length > 0 || builder.server.setup.length > 0) {
     const lines: string[] = []
     if (builder.server.imports.length > 0) lines.push(builder.server.imports.join('\n'))
     if (builder.server.routes.length > 0) lines.push(`// Add after app setup in server/src/index.ts:\n${builder.server.routes.join('\n')}`)
+    if (builder.server.setup.length > 0) lines.push(`// Add after \`const server = http.createServer(app)\`, before server.listen():\n${builder.server.setup.join('\n')}`)
     blocks.push(`### \`server/src/index.ts\`\n\n\`\`\`ts\n${lines.join('\n')}\n\`\`\``)
   }
 
@@ -64,7 +65,7 @@ function wiringSection (config: ProjectConfig, capabilities: Capability[], ctx: 
 
   let out = `## Wiring (manual)\n\nAdd-mode or \`--no-glue\`: paste these snippets into the relevant base files.\n\n${blocks.join('\n\n')}\n`
 
-  if (builder.server.routes.length > 0) {
+  if (builder.server.routes.length > 0 || builder.server.setup.length > 0) {
     out += '\n> **`SERVER_PRIVATE_KEY`** — add to `.env`: the server template initialises `serverWallet` from this variable (e.g. `SERVER_PRIVATE_KEY=<your-private-key>`).\n'
   }
 

@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import type { Capability, CapabilityContext, BaseBuilder, RouteDef } from '../types.js'
 
 export function newBuilder (): BaseBuilder {
-  return { main: { imports: [], wraps: [] }, app: { imports: [], routes: [] }, server: { imports: [], routes: [] } }
+  return { main: { imports: [], wraps: [] }, app: { imports: [], routes: [] }, server: { imports: [], routes: [], setup: [] } }
 }
 
 // Relative import specifier from a base file (at `<target>/src/`) to a glue file
@@ -42,7 +42,8 @@ export default function App () {
 }
 `
 
-export const SERVER_TEMPLATE = `import express from 'express'
+export const SERVER_TEMPLATE = `import http from 'node:http'
+import express from 'express'
 import cors from 'cors'
 import { ProtoWallet, PrivateKey } from '@bsv/sdk'
 import { SERVER_PRIVATE_KEY, PORT, CLIENT_ORIGIN } from './bsv/config.js'
@@ -65,7 +66,10 @@ app.get('/api/identity', async (_req, res) => {
 })
 /*{{server.routes}}*/
 
-app.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`) })
+// Raw HTTP server so capabilities can attach WebSocket upgrades (e.g. the wallet relay).
+const server = http.createServer(app)
+/*{{server.setup}}*/
+server.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`) })
 `
 
 // Baseline server config — every env the server reads, in one place.
@@ -156,6 +160,7 @@ export function assembleBaseFile (template: string, b: BaseBuilder, ctx: Capabil
   sub('{/*{{app.routes}}*/}', routeJsx(b.app.routes))
   sub('/*{{server.imports}}*/', b.server.imports.join('\n'))
   sub('/*{{server.routes}}*/', b.server.routes.join('\n'))
+  sub('/*{{server.setup}}*/', b.server.setup.join('\n'))
   sub('/*{{home.imports}}*/', b.app.routes.length > 0 ? "import { Link } from 'react-router-dom'" : '')
   sub('{/*{{home.links}}*/}', homeLinks(b.app.routes))
   return out

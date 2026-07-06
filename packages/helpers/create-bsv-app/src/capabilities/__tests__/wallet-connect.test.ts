@@ -8,7 +8,7 @@ describe('wallet-connect', () => {
   test('id + defaultSelected + roles', () => {
     expect(walletConnect.id).toBe('wallet-connect')
     expect(walletConnect.defaultSelected).toBe(true)
-    expect(walletConnect.roles).toEqual(['shared', 'client'])
+    expect(walletConnect.roles).toEqual(['shared', 'client', 'server'])
   })
   test('shared helper is the @bsv/auth proof primitive (object-arg API)', () => {
     const shared = walletConnect.files(ctx).shared ?? []
@@ -50,12 +50,26 @@ describe('wallet-connect', () => {
     expect(b.main.imports.join()).toContain('WalletProviders')
     expect(b.main.wraps).toEqual([{ open: '<WalletProviders>', close: '</WalletProviders>' }])
   })
+  test('baseEdits mounts the WalletRelayService on the server (relay needs a backend)', () => {
+    const b = newBuilder()
+    walletConnect.baseEdits?.({ builder: b, ctx })
+    expect(b.server.imports.join()).toContain("import { WalletRelayService } from '@bsv/wallet-relay'")
+    expect(b.server.setup.join()).toContain('new WalletRelayService({ app, server, wallet: serverWallet')
+  })
+  test('relay client points at the server via API_BASE_URL', () => {
+    const provider = (walletConnect.files(ctx).client ?? []).find(f => f.path === 'WalletConnectionContext.tsx')
+    expect(provider?.content).toContain('apiUrl = API_BASE_URL')
+    expect(provider?.content).toContain("from './config.js'")
+  })
   test('deps name the right packages', () => {
     expect(Object.keys(walletConnect.npmDependencies(ctx).shared ?? {})).toContain('@bsv/auth')
     expect(Object.keys(walletConnect.npmDependencies(ctx).shared ?? {})).toContain('@bsv/sdk')
     const client = walletConnect.npmDependencies(ctx).client ?? {}
     expect(Object.keys(client)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'react']))
     expect(Object.keys(client)).not.toContain('@bsv/sdk')
+    // server gets the relay + its peer deps (qrcode, ws)
+    const server = walletConnect.npmDependencies(ctx).server ?? {}
+    expect(Object.keys(server)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'qrcode', 'ws']))
   })
   test('wallet-connect provides ConnectWallet + client config and only main.* baseEdits (Home is a generated base file)', () => {
     const ctx2 = { name: 'd', network: 'test' as const, bsvDir: 'src/bsv', stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } }, layout: 'frontend-only' as const }

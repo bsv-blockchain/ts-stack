@@ -28,7 +28,9 @@ export interface RouteDef {
 export interface BaseBuilder {
   main: { imports: string[], wraps: Array<{ open: string, close: string }> }
   app: { imports: string[], routes: RouteDef[] }
-  server: { imports: string[], routes: string[] }
+  // server.routes: express handlers on `app`. server.setup: code needing the raw
+  // `http.Server` (e.g. a WebSocket upgrade) — runs after `const server = http.createServer(app)`.
+  server: { imports: string[], routes: string[], setup: string[] }
 }
 
 export interface Capability {
