@@ -6,6 +6,8 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Release prep for `2.4.0`: security fix for `GHSA-36f9-7rg5-cpf8`. `buildSignableTransaction` now verifies that storage-returned outputs match the caller's requested `args.outputs` before signing (rejects substituted/altered/reclassified/missing outputs), and rejects any unrequested output that isn't client-derived change or a single commission output bounded by `MAX_STORAGE_COMMISSION_SATOSHIS`. `WalletPermissionsManager.createAction` independently verifies requested outputs are present in the signable transaction before authorizing, as defense-in-depth. Protects against a malicious or compromised `StorageClient` operator substituting or injecting outputs that would be signed and broadcast without the caller's knowledge.
+
 - Release prep for `2.3.3`: add Arcade-first wallet service wiring, go-chaintracks
   live client/SSE support, resilient ARC/Arcade status handling, monitor
   rebroadcast safeguards, and callback-token redaction for Arcade SSE logs.
