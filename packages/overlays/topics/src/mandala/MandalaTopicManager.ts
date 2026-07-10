@@ -57,11 +57,24 @@ export class MandalaTopicManager implements TopicManager {
       const ls = tx.outputs[i].lockingScript
       const ft = decodeFtOutput(ls)
       if (ft != null) {
+        // Token value lives in the script payload, never in the output's
+        // satoshis: every token output must carry exactly 1 satoshi, so sats
+        // cannot be stranded inside token outputs. Throwing here rejects the
+        // whole tx (see the rejection note in identifyAdmissibleOutputs).
+        if (tx.outputs[i].satoshis !== 1) {
+          throw new Error(`token output ${i} must carry exactly 1 satoshi`)
+        }
         ftOutputs.push({ index: i, ...ft })
         continue
       }
       const admin = await this.verifyAdminOutput(tx, ls, adminDetails.get(i))
       if (!admin.admitted) continue
+      // Same 1-satoshi rule for admin-auth outputs — enforced only AFTER
+      // verifyAdminOutput admits: MandalaAdmin.decode matches any bare
+      // P2PKH, so checking earlier would reject ordinary wallet change.
+      if (tx.outputs[i].satoshis !== 1) {
+        throw new Error(`admin output ${i} must carry exactly 1 satoshi`)
+      }
       adminIndices.push(i)
       const details = adminDetails.get(i)
       if (details != null && typeof details.assetId === 'string') verifiedAdminAssetKinds.set(details.assetId, details)
