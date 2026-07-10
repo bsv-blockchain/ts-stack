@@ -54,36 +54,61 @@ export class MandalaTopicManager implements TopicManager {
     const adminDetails = new Map<number, MandalaActionDetails>()
     for (const a of (payload as any).admin ?? []) adminDetails.set(a.index, a.actionDetails)
     for (let i = 0; i < tx.outputs.length; i++) {
-      const ls = tx.outputs[i].lockingScript
-      const ft = decodeFtOutput(ls)
-      if (ft != null) {
-        // Token value lives in the script payload, never in the output's
-        // satoshis: every token output must carry exactly 1 satoshi, so sats
-        // cannot be stranded inside token outputs. Throwing here rejects the
-        // whole tx (see the rejection note in identifyAdmissibleOutputs).
-        if (tx.outputs[i].satoshis !== 1) {
-          throw new Error(`token output ${i} must carry exactly 1 satoshi`)
-        }
-        ftOutputs.push({ index: i, ...ft })
+      const classified = await this.classifyOutput(tx, i, adminDetails.get(i))
+      if (classified.kind === 'skip') continue
+      if (classified.kind === 'ft') {
+        ftOutputs.push(classified.ft)
         continue
       }
-      const admin = await this.verifyAdminOutput(tx, ls, adminDetails.get(i))
-      if (!admin.admitted) continue
-      // Same 1-satoshi rule for admin-auth outputs — enforced only AFTER
-      // verifyAdminOutput admits: MandalaAdmin.decode matches any bare
-      // P2PKH, so checking earlier would reject ordinary wallet change.
-      if (tx.outputs[i].satoshis !== 1) {
-        throw new Error(`admin output ${i} must carry exactly 1 satoshi`)
+      adminIndices.push(classified.index)
+      if (classified.details != null && typeof classified.details.assetId === 'string') {
+        verifiedAdminAssetKinds.set(classified.details.assetId, classified.details)
       }
-      adminIndices.push(i)
-      const details = adminDetails.get(i)
-      if (details != null && typeof details.assetId === 'string') verifiedAdminAssetKinds.set(details.assetId, details)
-      if (admin.issuance != null) {
-        const { assetId, amount } = admin.issuance
+      if (classified.issuance != null) {
+        const { assetId, amount } = classified.issuance
         authorizedIssuance.set(assetId, (authorizedIssuance.get(assetId) ?? 0) + amount)
       }
     }
     return { ftOutputs, adminIndices, authorizedIssuance, verifiedAdminAssetKinds }
+  }
+
+  // Classifies a single output as an FT output, an admitted admin-auth output,
+  // or a skip (neither). Split out of classifyOutputs to keep the per-output
+  // branching (and its 1-satoshi guards) out of the loop body.
+  private async classifyOutput (
+    tx: Transaction,
+    i: number,
+    adminDetail: MandalaActionDetails | undefined
+  ): Promise<
+  { kind: 'ft', ft: FtOutput } |
+  { kind: 'admin', index: number, details: MandalaActionDetails | undefined, issuance?: { assetId: string, amount: number } } |
+  { kind: 'skip' }
+  > {
+    const ls = tx.outputs[i].lockingScript
+    const ft = decodeFtOutput(ls)
+    if (ft != null) {
+      // Token value lives in the script payload, never in the output's
+      // satoshis: every token output must carry exactly 1 satoshi, so sats
+      // cannot be stranded inside token outputs. Throwing here rejects the
+      // whole tx (see the rejection note in identifyAdmissibleOutputs).
+      this.requireOneSat(tx, i, 'token')
+      return { kind: 'ft', ft: { index: i, ...ft } }
+    }
+    const admin = await this.verifyAdminOutput(tx, ls, adminDetail)
+    if (!admin.admitted) return { kind: 'skip' }
+    // Same 1-satoshi rule for admin-auth outputs — enforced only AFTER
+    // verifyAdminOutput admits: MandalaAdmin.decode matches any bare
+    // P2PKH, so checking earlier would reject ordinary wallet change.
+    this.requireOneSat(tx, i, 'admin')
+    return { kind: 'admin', index: i, details: adminDetail, issuance: admin.issuance }
+  }
+
+  // Shared 1-satoshi guard for both token and admin outputs; throws with the
+  // same message shape either call site previously inlined.
+  private requireOneSat (tx: Transaction, i: number, label: 'token' | 'admin'): void {
+    if (tx.outputs[i].satoshis !== 1) {
+      throw new Error(`${label} output ${i} must carry exactly 1 satoshi`)
+    }
   }
 
   private async verifyAdminOutput (
