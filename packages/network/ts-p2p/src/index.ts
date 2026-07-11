@@ -14,8 +14,19 @@ import { multiaddr } from '@multiformats/multiaddr';
 import { generateKeyPair } from '@libp2p/crypto/keys';
 import type { PrivateKey } from '@libp2p/interface';
 
+import { tryDecodeMessage, type DecodedMessage } from './messages.js';
+
+// Re-export the wire-format message types and decoders for consumers.
+export * from './messages.js';
+
 // Type definitions
 type MessageCallback = (data: Uint8Array, topic: Topic, from: string) => void;
+
+/**
+ * Callback that receives a fully decoded message instead of raw bytes.
+ * Used when `decodeMessages: true` is set in the listener config.
+ */
+type DecodedMessageCallback = (message: DecodedMessage, topic: Topic, from: string) => void;
 
 /**
  * Topic types for Teranode P2P messages
@@ -41,7 +52,7 @@ export type Topic =
 'bitcoin/testnet-handshake' |
 'bitcoin/testnet-rejected_tx'
 
-type TopicCallbacks = Partial<Record<Topic, MessageCallback>>;
+type TopicCallbacks = Partial<Record<Topic, MessageCallback | DecodedMessageCallback>>;
 
 interface SubscriberConfig {
   bootstrapPeers?: string[]; // Array of bootstrap peer multiaddrs
@@ -51,6 +62,14 @@ interface SubscriberConfig {
   topics?: Topic[]; // Array of topics to subscribe to
   listenAddresses?: string[]; // Listening addresses
   usePrivateDHT?: boolean; // Whether to use private DHT
+  /**
+   * When true, raw GossipSub bytes are decoded from the two-layer JSON wire
+   * format before being handed to callbacks. Callbacks then receive a
+   * {@link DecodedMessage} (sender + typed payload) instead of a Uint8Array.
+   * Frames that fail to decode (e.g. libp2p control frames) are skipped.
+   * Defaults to false for backward compatibility.
+   */
+  decodeMessages?: boolean;
 }
 
 interface TeranodeListenerConfig extends Omit<SubscriberConfig, 'topics'> {
@@ -66,6 +85,7 @@ export class TeranodeListener {
   private readonly topicCallbacks: TopicCallbacks;
   private readonly config: TeranodeListenerConfig;
   private reconnectionInterval?: NodeJS.Timeout;
+  private readonly decodeMessages: boolean;
 
   /**
    * Creates a new TeranodeListener instance.
@@ -84,6 +104,7 @@ export class TeranodeListener {
   constructor(topicCallbacks: TopicCallbacks, config: TeranodeListenerConfig = {}) {
     this.topicCallbacks = topicCallbacks;
     this.config = config;
+    this.decodeMessages = config.decodeMessages ?? false;
   }
 
   /**
@@ -202,7 +223,7 @@ export class TeranodeListener {
   /**
    * Add a new topic callback
    */
-  addTopicCallback(topic: Topic, callback: MessageCallback): void {
+  addTopicCallback(topic: Topic, callback: MessageCallback | DecodedMessageCallback): void {
     this.topicCallbacks[topic] = callback;
     
     if (this.node) {
@@ -266,7 +287,17 @@ export class TeranodeListener {
       
       if (callback) {
         try {
-          callback(msg.data, topicKey, evt.detail.propagationSource.toString());
+          const from = evt.detail.propagationSource.toString();
+          if (this.decodeMessages) {
+            // Decode the two-layer JSON wire format before dispatch. Non-JSON
+            // frames (e.g. libp2p discovery probes) decode to null and are skipped.
+            const decoded = tryDecodeMessage(msg.data);
+            if (decoded) {
+              (callback as DecodedMessageCallback)(decoded, topicKey, from);
+            }
+          } else {
+            (callback as MessageCallback)(msg.data, topicKey, from);
+          }
         } catch (error) {
           console.error(`Error in callback for topic ${topicKey}:`, error);
         }
