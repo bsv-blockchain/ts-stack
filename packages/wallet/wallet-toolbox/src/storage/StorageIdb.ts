@@ -70,6 +70,7 @@ import {
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
+import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './methods/managedChange'
 
 export interface StorageIdbOptions extends StorageProviderOptions {}
 
@@ -235,7 +236,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
    * 3. Find an output that comes as close to funding as possible (targetSatoshis).
    * 4. Return undefined if no output is found.
    *
-   * Outputs must belong to userId and basketId and have spendable true.
+   * Outputs must belong to userId and basketId and satisfy the wallet-managed
+   * BRC-29 change policy.
    * Their corresponding transaction must have status of 'completed', 'unproven', or 'sending' (if excludeSending is false).
    *
    * @param userId
@@ -259,7 +261,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       const txStatus: TransactionStatus[] = ['completed', 'unproven']
       if (!excludeSending) txStatus.push('sending')
       const args: FindOutputsArgs = {
-        partial: { userId, basketId, spendable: true },
+        partial: { userId, basketId, spendable: true, ...managedChangeOutputFields },
         txStatus,
         // Skip per-output script hydration during the candidate scan — we only need
         // the locking script for the one we actually pick below. Matches Knex's
@@ -267,7 +269,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
         noScript: true,
         trx: dbTrx
       }
-      const outputs = (await this.findOutputs(args)).filter(o => o.spentBy == null)
+      const outputs = (await this.findOutputs(args)).filter(isAutoSpendableChangeOutput)
       let output: TableOutput | undefined
       let scores: Array<{ output: TableOutput, score: number }> = []
       for (const o of outputs) {
@@ -415,10 +417,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async countChangeInputs (userId: number, basketId: number, excludeSending: boolean): Promise<number> {
     const txStatus: TransactionStatus[] = ['completed', 'unproven']
     if (!excludeSending) txStatus.push('sending')
-    const args: FindOutputsArgs = { partial: { userId, basketId }, txStatus }
+    const args: FindOutputsArgs = {
+      partial: { userId, basketId, spendable: true, ...managedChangeOutputFields },
+      txStatus,
+      noScript: true
+    }
     let count = 0
     await this.filterOutputs(args, r => {
-      count++
+      if (isAutoSpendableChangeOutput(r)) count++
     })
     return count
   }

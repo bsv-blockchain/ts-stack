@@ -50,10 +50,13 @@ export class MockTransaction {
   }
 }
 
-;(MockTransaction as any).fromAtomicBEEF = jest.fn(() => {
-  // We skip real validation, returning a MockTransaction with minimal structure.
-  const tx = new MockTransaction()
-  return tx
+const mockTransactionsByAtomicBEEF = new WeakMap<number[], MockTransaction>()
+
+;(MockTransaction as any).fromAtomicBEEF = jest.fn((beef: number[]) => {
+  // Atomic BEEF is opaque to the permissions manager. Associate each mock byte
+  // array with the transaction it represents so tests exercise the same
+  // createAction contract without having to construct valid serialized BEEF.
+  return mockTransactionsByAtomicBEEF.get(beef) ?? new MockTransaction()
 })
 
 /**
@@ -73,6 +76,28 @@ export class MockLockingScript {
   static fromHex (hex: string): MockLockingScript {
     return new MockLockingScript(hex)
   }
+}
+
+/**
+ * Returns an opaque mock Atomic BEEF byte array that parses back to `tx`.
+ *
+ * Specialized tests can use this when they need to control fees or inputs on
+ * the transaction returned by the underlying wallet.
+ */
+export function mockAtomicBEEF (tx: MockTransaction): number[] {
+  const beef: number[] = []
+  mockTransactionsByAtomicBEEF.set(beef, tx)
+  return beef
+}
+
+/** Builds the transaction an underlying wallet would return for createAction. */
+function mockCreateActionTransaction (args: any): MockTransaction {
+  const tx = new MockTransaction()
+  tx.outputs = (args.outputs ?? []).map((output: any) => ({
+    lockingScript: new MockLockingScript(output.lockingScript),
+    satoshis: output.satoshis
+  }))
+  return tx
 }
 
 /**
@@ -208,8 +233,10 @@ export { MockedBsvSdk as MockedBSV_SDK }
  * A helper function returning a Jest-mocked `WalletInterface`.
  * This ensures all required methods exist and return plausible values.
  *
- * - By default, `createAction` returns a signableTransaction with empty arrays,
- *   so that the manager can call `Transaction.fromAtomicBEEF([])` without throwing.
+ * - By default, `createAction` returns an opaque Atomic BEEF byte array backed
+ *   by a mock transaction containing the caller-requested outputs. This models
+ *   the wallet contract closely enough for output-substitution checks while
+ *   still bypassing real BEEF serialization and validation.
  * - You can override or chain .mockResolvedValueOnce(...) inside individual tests
  *   if you want more specific behavior in certain test steps.
  */
@@ -242,14 +269,15 @@ export function mockUnderlyingWallet (): jest.Mocked<any> {
     verifySignature: jest.fn().mockResolvedValue({ valid: true }),
 
     createAction: jest.fn(async x => {
+      const tx = mockAtomicBEEF(mockCreateActionTransaction(x))
       if (x.options != null && x.options.signAndProcess === true) {
         return {
-          tx: []
+          tx
         }
       }
       return {
         signableTransaction: {
-          tx: [],
+          tx,
           reference: 'mockReference'
         }
       }

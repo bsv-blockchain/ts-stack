@@ -1,4 +1,4 @@
-import { mockUnderlyingWallet, MockedBSV_SDK, MockTransaction } from './WalletPermissionsManager.fixtures'
+import { mockAtomicBEEF, mockUnderlyingWallet, MockLockingScript, MockedBSV_SDK, MockTransaction } from './WalletPermissionsManager.fixtures'
 import { WalletPermissionsManager, PermissionsManagerConfig } from '../WalletPermissionsManager'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
@@ -82,15 +82,6 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
       // We'll control that by adjusting the mock signableTransaction in the underlying.
 
       // let's set a custom signableTransaction that returns 500 sat in inputs, 1000 in outputs, and 100 in fee
-      underlying.createAction.mockResolvedValueOnce({
-        signableTransaction: {
-          // The manager calls Transaction.fromAtomicBEEF() on this
-          tx: [0xde, 0xad], // not used in detail, but let's just pass some array
-          reference: 'test-ref'
-        }
-      })
-
-      // We also need to configure the fromAtomicBEEF mock so it returns a transaction with the specified inputs/outputs
       const mockTx = new MockTransaction()
       mockTx.fee = 100
       // We'll define exactly one input we consider "originator-provided" with 500 sat
@@ -103,12 +94,15 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
           }
         }
       ]
-      // We'll define 2 outputs. The manager will read the output amounts from the createAction call's "args.outputs" too,
-      // but we also set them here in case it cross-references them. We'll keep it consistent (2 outputs with total 1000).
-      mockTx.outputs = [{ satoshis: 600 }, { satoshis: 400 }]
-
-      // Now override fromAtomicBEEF to return our mockTx:
-      ;(MockedBSV_SDK.Transaction.fromAtomicBEEF as jest.Mock).mockReturnValue(mockTx)
+      // The returned transaction must contain the exact caller-requested
+      // script+amount pair; additional wallet-created outputs may differ.
+      mockTx.outputs = [{ lockingScript: new MockLockingScript('00abcd'), satoshis: 1000 }]
+      underlying.createAction.mockResolvedValueOnce({
+        signableTransaction: {
+          tx: mockAtomicBEEF(mockTx),
+          reference: 'test-ref'
+        }
+      })
 
       // Attempt to create an action from a non-admin origin
       await manager.createAction(
@@ -180,13 +174,6 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     })
 
     // We'll use the same approach: netSpent > 0 triggers the spending authorization check.
-    underlying.createAction.mockResolvedValueOnce({
-      signableTransaction: {
-        tx: [0xde],
-        reference: 'test-ref-2'
-      }
-    })
-
     // Mock parse tx for netSpent
     const mockTx = new MockTransaction()
     mockTx.fee = 100
@@ -199,8 +186,13 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
         }
       }
     ]
-    mockTx.outputs = [{ satoshis: 100 }]
-    ;(MockedBSV_SDK.Transaction.fromAtomicBEEF as jest.Mock).mockReturnValue(mockTx)
+    mockTx.outputs = [{ lockingScript: new MockLockingScript('abc123'), satoshis: 100 }]
+    underlying.createAction.mockResolvedValueOnce({
+      signableTransaction: {
+        tx: mockAtomicBEEF(mockTx),
+        reference: 'test-ref-2'
+      }
+    })
 
     await expect(
       manager.createAction(

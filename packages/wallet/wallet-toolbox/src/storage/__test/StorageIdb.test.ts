@@ -210,6 +210,8 @@ async function insertOutput (
     purpose: 'change',
     type: 'P2PKH',
     txid: partial.txid,
+    derivationPrefix: RandomDefault.reference(),
+    derivationSuffix: RandomDefault.reference(),
     spentBy: partial.spentBy,
     lockingScript: [0x51],
     scriptLength: 1,

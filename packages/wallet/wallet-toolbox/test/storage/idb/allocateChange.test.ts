@@ -29,18 +29,26 @@ describe('idb transactionAbort tests', () => {
     await storage.makeAvailable()
     const setup1 = await _tu.createTestSetup1(storage)
     const u1tx2 = (await _tu.insertTestTransaction(storage, setup1.u1, false, { status: 'completed' })).tx
+    const managed = {
+      type: 'P2PKH',
+      change: true,
+      providedBy: 'storage' as const,
+      purpose: 'change',
+      derivationPrefix: randomBytesBase64(16),
+      derivationSuffix: randomBytesBase64(16)
+    }
     const setup2: TestSetup2 = {
       ...setup1,
       u1tx2,
-      u1tx2o0: await _tu.insertTestOutput(storage, u1tx2, 0, 3, setup1.u1basket1),
-      u1tx2o1: await _tu.insertTestOutput(storage, u1tx2, 1, 13, setup1.u1basket1),
-      u1tx2o2: await _tu.insertTestOutput(storage, u1tx2, 2, 113, setup1.u1basket1),
-      u1tx2o3: await _tu.insertTestOutput(storage, u1tx2, 3, 1113, setup1.u1basket1),
-      u1tx2o4: await _tu.insertTestOutput(storage, u1tx2, 4, 11113, setup1.u1basket1),
-      u1tx2o5: await _tu.insertTestOutput(storage, u1tx2, 5, 111113, setup1.u1basket1),
-      u1tx2o6: await _tu.insertTestOutput(storage, u1tx2, 6, 1111113, setup1.u1basket1),
-      u1tx2o7: await _tu.insertTestOutput(storage, u1tx2, 7, 11111113, setup1.u1basket1),
-      u1tx2o8: await _tu.insertTestOutput(storage, u1tx2, 8, 111111113, setup1.u1basket1),
+      u1tx2o0: await _tu.insertTestOutput(storage, u1tx2, 0, 3, setup1.u1basket1, false, managed),
+      u1tx2o1: await _tu.insertTestOutput(storage, u1tx2, 1, 13, setup1.u1basket1, false, managed),
+      u1tx2o2: await _tu.insertTestOutput(storage, u1tx2, 2, 113, setup1.u1basket1, false, managed),
+      u1tx2o3: await _tu.insertTestOutput(storage, u1tx2, 3, 1113, setup1.u1basket1, false, managed),
+      u1tx2o4: await _tu.insertTestOutput(storage, u1tx2, 4, 11113, setup1.u1basket1, false, managed),
+      u1tx2o5: await _tu.insertTestOutput(storage, u1tx2, 5, 111113, setup1.u1basket1, false, managed),
+      u1tx2o6: await _tu.insertTestOutput(storage, u1tx2, 6, 1111113, setup1.u1basket1, false, managed),
+      u1tx2o7: await _tu.insertTestOutput(storage, u1tx2, 7, 11111113, setup1.u1basket1, false, managed),
+      u1tx2o8: await _tu.insertTestOutput(storage, u1tx2, 8, 111111113, setup1.u1basket1, false, managed),
       u1tx3: (await _tu.insertTestTransaction(storage, setup1.u1, false, { status: 'completed' })).tx,
       u1tx4: (await _tu.insertTestTransaction(storage, setup1.u1, false, { status: 'unproven' })).tx,
       u1tx5: (await _tu.insertTestTransaction(storage, setup1.u1, false, { status: 'sending' })).tx

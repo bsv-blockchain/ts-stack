@@ -112,7 +112,15 @@ export interface Brc29RemittanceModuleConfig {
    */
   minRefundSatoshis?: number
 
-  /** How wallet internalizes the payment. */
+  /**
+   * @deprecated BRC-29 settlements must be internalized as `wallet payment`.
+   * `basket insertion` never supplied the required insertion remittance and,
+   * more importantly, would classify recipient funds as custom application
+   * outputs that the wallet's automatic BRC-29 signer cannot spend.
+   *
+   * The property remains in the input type for source compatibility, but the
+   * constructor rejects `basket insertion` with an actionable error.
+   */
   internalizeProtocol?: 'wallet payment' | 'basket insertion'
 
   nonceProvider?: NonceProvider
@@ -138,7 +146,7 @@ export class Brc29RemittanceModule
   private readonly outputDescription: string
   private readonly refundFeeSatoshis: number
   private readonly minRefundSatoshis: number
-  private readonly internalizeProtocol: 'wallet payment' | 'basket insertion'
+  private readonly internalizeProtocol: 'wallet payment'
   private readonly nonceProvider: NonceProvider
   private readonly lockingScriptProvider: LockingScriptProvider
 
@@ -150,7 +158,13 @@ export class Brc29RemittanceModule
     this.outputDescription = cfg.outputDescription ?? 'Payment for remittance invoice'
     this.refundFeeSatoshis = cfg.refundFeeSatoshis ?? 1000
     this.minRefundSatoshis = cfg.minRefundSatoshis ?? 1000
-    this.internalizeProtocol = cfg.internalizeProtocol ?? 'wallet payment'
+    if (cfg.internalizeProtocol === 'basket insertion') {
+      throw new TypeError(
+        'BRC-29 settlements cannot be internalized as basket insertions. ' +
+        'Use wallet payment for spendable wallet balance, or implement a separate custom-output protocol with insertionRemittance.'
+      )
+    }
+    this.internalizeProtocol = 'wallet payment'
     this.nonceProvider = cfg.nonceProvider ?? DefaultNonceProvider
     this.lockingScriptProvider = cfg.lockingScriptProvider ?? DefaultLockingScriptProvider
   }
@@ -253,11 +267,9 @@ export class Brc29RemittanceModule
   ): Promise<{ action: 'accept'; receiptData?: Brc29ReceiptData } | { action: 'terminate'; termination: Termination }> {
     const { wallet, originator } = ctx
     const origin = originator as OriginatorDomainNameStringUnder250Bytes | undefined
-    console.log('acceptSettlement', args)
     try {
       const settlement = ensureValidSettlement(args.settlement)
       const outputIndex = settlement.outputIndex ?? 0
-      debugger
       const internalizeResult = await wallet.internalizeAction(
         {
           tx: settlement.transaction,

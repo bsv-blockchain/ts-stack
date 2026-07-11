@@ -48,6 +48,7 @@ import { throwDummyReviewActions } from '../../Wallet'
 import { createStorageServiceChargeScript } from './offsetKey'
 import { transactionSize } from './utils'
 import { WalletError } from '../../sdk'
+import { isAutoSpendableChangeOutput } from './managedChange'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest (v: boolean) {
@@ -767,16 +768,15 @@ async function validateNoSendChange (
           partial: { userId, txid: op.txid, vout: op.vout }
         })
       )
-      // noSendChange is not marked spendable until sent, may not already be spent, and must have a valid greater than zero satoshis
+      // noSendChange is signed through the same BRC-29 path as allocated change.
+      // It must satisfy the full managed-change policy, not merely share the
+      // default basket or have a P2PKH-shaped locking script.
       if (
-        output?.providedBy !== 'storage' ||
-        output.purpose !== 'change' ||
-        !output.spendable ||
-        Number.isInteger(output.spentBy) ||
+        !isAutoSpendableChangeOutput(output) ||
         !verifyNumber(output.satoshis) ||
         output.basketId !== changeBasket.basketId
       )
-        {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'valid')}
+        {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'wallet-managed BRC-29 change')}
       if (r.some(o => o.outputId === output.outputId))
         // noSendChange duplicate OutPoints are not allowed.
         {throw new WERR_INVALID_PARAMETER('noSendChange outpoint', 'unique. Duplicates are not allowed.')}
