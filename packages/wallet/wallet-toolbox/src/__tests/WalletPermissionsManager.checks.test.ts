@@ -667,14 +667,8 @@ describe('WalletPermissionsManager - Permission Checks', () => {
         seekSpendingPermissions: true
       })
 
-      // We’ll also mock the signableTransaction return to help manager compute netSpent
-      underlying.createAction.mockResolvedValueOnce({
-        signableTransaction: {
-          tx: [0x00], // minimal
-          reference: 'ref1'
-        }
-      })
-      // The manager tries to parse the transaction to find netSpent.
+      // The shared wallet fixture returns a signable transaction containing the
+      // requested output, allowing the manager to compute netSpent.
       // By default, netSpent = totalOutput + fee - totalExplicitInputs
       // We haven't provided any explicit inputs in the createAction call, so netSpent = 200 + fee
 
