@@ -224,6 +224,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
+- Release prep for `2.1.7`: fix `Brc29RemittanceModule` settlement acceptance to always use the
+  `wallet payment` internalization protocol. The deprecated
+  `internalizeProtocol: 'basket insertion'` configuration now fails fast with
+  recovery guidance instead of constructing an invalid remittance and
+  misclassifying recipient funds as custom outputs.
+
 ### Security
 
 ---

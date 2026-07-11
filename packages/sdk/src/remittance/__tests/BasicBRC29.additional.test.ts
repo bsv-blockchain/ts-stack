@@ -570,22 +570,9 @@ describe('Brc29RemittanceModule – acceptSettlement validation', () => {
     )
   })
 
-  it('uses basket insertion internalizeProtocol when configured', async () => {
-    const internalizeAction = jest.fn(async () => ({ accepted: true as const }))
-    const wallet = makeWallet({ internalizeAction })
-    const module = new Brc29RemittanceModule({ internalizeProtocol: 'basket insertion' })
-
-    const result = await module.acceptSettlement(
-      { threadId: 'tid', settlement: { ...validSettlement }, sender: 'sender-key' },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('accept')
-    expect(internalizeAction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        outputs: [expect.objectContaining({ protocol: 'basket insertion' })]
-      }),
-      'example.com'
-    )
+  it('rejects the unsafe basket insertion internalizeProtocol', () => {
+    expect(() => new Brc29RemittanceModule({ internalizeProtocol: 'basket insertion' }))
+      .toThrow('BRC-29 settlements cannot be internalized as basket insertions')
   })
 })
 
@@ -618,7 +605,7 @@ describe('Brc29RemittanceModule – constructor defaults', () => {
       outputDescription: 'out-desc',
       refundFeeSatoshis: 500,
       minRefundSatoshis: 200,
-      internalizeProtocol: 'basket insertion',
+      internalizeProtocol: 'wallet payment',
       nonceProvider: customNonce,
       lockingScriptProvider: customScript
     })
@@ -628,7 +615,7 @@ describe('Brc29RemittanceModule – constructor defaults', () => {
     expect((module as any).outputDescription).toBe('out-desc')
     expect((module as any).refundFeeSatoshis).toBe(500)
     expect((module as any).minRefundSatoshis).toBe(200)
-    expect((module as any).internalizeProtocol).toBe('basket insertion')
+    expect((module as any).internalizeProtocol).toBe('wallet payment')
     expect((module as any).nonceProvider).toBe(customNonce)
     expect((module as any).lockingScriptProvider).toBe(customScript)
   })

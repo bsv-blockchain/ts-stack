@@ -31,12 +31,14 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
  *
  * "basket insertion" Merge Rules:
  * 1. The "default" basket may not be specified as the insertion basket.
- * 2. A change output in the "default" basket may not be target of an insertion into a different basket.
- * 3. These baskets do not affect the wallet's balance and are typed "custom".
+ * 2. Managed change may not be reclassified as a basket insertion.
+ * 3. Basket insertions do not affect wallet balance and are typed "custom".
  *
  * "wallet payment" Merge Rules:
- * 1. Targetting an existing change "default" basket output results in a no-op. No error. No alterations made.
- * 2. Targetting a previously "custom" non-change output converts it into a change output. This alters the transaction's `amount`, and the wallet balance.
+ * 1. Targeting an existing managed output is idempotent.
+ * 2. Targeting a custom output converts it to managed BRC-29 change after
+ *    the locking script is verified. This is the only supported in-place
+ *    recovery path for a misclassified BRC-29 payment.
  *
  */
 export async function internalizeAction (
@@ -80,9 +82,11 @@ export async function internalizeAction (
   }
 
   function setupBasketInsertionForOutput (o: InternalizeOutput, dargs: Validation.ValidInternalizeActionArgs) {
-    /*
-    No additional validations...
-    */
+    const insertion = o.insertionRemittance
+    if (insertion == null) throw new WERR_INVALID_PARAMETER('insertionRemittance', `valid for protocol ${o.protocol}`)
+    if (insertion.basket === 'default') {
+      throw new WERR_INVALID_PARAMETER('insertionRemittance.basket', 'a non-default basket')
+    }
   }
 
   /**

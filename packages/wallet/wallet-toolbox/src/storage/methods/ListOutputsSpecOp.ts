@@ -2,7 +2,12 @@ import { ListOutputsResult, Validation } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { TableOutput } from '../schema/tables/TableOutput'
-import { specOpInvalidChange, specOpSetWalletChangeParams, specOpWalletBalance } from '../../sdk/types'
+import {
+  specOpInvalidChange,
+  specOpSetWalletChangeParams,
+  specOpWalletBalance,
+  specOpWalletManagedUtxos
+} from '../../sdk/types'
 import { verifyId, verifyInteger, verifyOne } from '../../utility/utilityHelpers'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
@@ -16,6 +21,8 @@ export interface ListOutputsSpecOp {
    * If true, and supported by storage, maximum performance optimization, computing balance done in the query itself.
    */
   totalOutputsIsSumOfSatoshis?: boolean
+  /** Restrict the operation to wallet-managed, BRC-29-signable change. */
+  managedChangeOnly?: boolean
   resultFromTags?: (
     s: StorageProvider,
     auth: AuthId,
@@ -76,6 +83,7 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
       useBasket: 'default',
       ignoreLimit: true,
       totalOutputsIsSumOfSatoshis: true,
+      managedChangeOnly: true,
       resultFromOutputs: async (
         s: StorageProvider,
         auth: AuthId,
@@ -87,6 +95,11 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         for (const o of outputs) totalOutputs += o.satoshis
         return { totalOutputs, outputs: [] }
       }
+    },
+    [specOpWalletManagedUtxos]: {
+      name: 'walletManagedUtxos',
+      useBasket: 'default',
+      managedChangeOnly: true
     },
     [specOpInvalidChange]: {
       name: 'invalidChangeOutputs',
@@ -206,7 +219,13 @@ export function getListOutputsSpecOp (
       specOp = _tagSpecOps[tag]
       if (specOp) {
         if (!basket && specOp.useBasket) basket = specOp.useBasket
-        return { specOp, basket, tags: tags.filter(t => t !== tag) }
+        // The balance tag is also used to sum application baskets. Preserve
+        // that behavior, while treating the default basket as wallet balance
+        // and therefore restricting it to managed BRC-29 change.
+        const resolvedSpecOp = specOp === _tagSpecOps[specOpWalletBalance] && basket === 'default'
+          ? { ...specOp, managedChangeOnly: true }
+          : specOp
+        return { specOp: resolvedSpecOp, basket, tags: tags.filter(t => t !== tag) }
       }
     }
   }

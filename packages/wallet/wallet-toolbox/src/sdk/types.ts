@@ -156,6 +156,16 @@ export const specOpWalletBalance = '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7
 /**
  * `listOutputs` special operation basket name value.
  *
+ * Lists only spendable wallet-managed BRC-29 change from the `default`
+ * basket. Raw administrative `listOutputs({ basket: 'default' })` remains
+ * intentionally unfiltered so legacy incompatible rows stay discoverable
+ * for recovery instead of being hidden or silently mutated.
+ */
+export const specOpWalletManagedUtxos = '284570a6213a74ba861c38b1cf790e1e400d9cf9324454b76ea98860b6031c1a'
+
+/**
+ * `listOutputs` special operation basket name value.
+ *
  * Returns currently spendable wallet change outputs that fail to validate as unspent transaction outputs.
  *
  * Optional tag value 'release'. If present, updates invalid change outputs to not spendable.
@@ -180,7 +190,12 @@ export const specOpSetWalletChangeParams = 'a4979d28ced8581e9c1c92f1001cc7cb3aab
  * @returns true iff the `basket` name is a reserved `listOutputs` special operation identifier.
  */
 export function isListOutputsSpecOp (basket: string): boolean {
-  return [specOpWalletBalance, specOpInvalidChange, specOpSetWalletChangeParams].includes(basket)
+  return [
+    specOpWalletBalance,
+    specOpWalletManagedUtxos,
+    specOpInvalidChange,
+    specOpSetWalletChangeParams
+  ].includes(basket)
 }
 
 /**
