@@ -1,101 +1,58 @@
-# Storage + Arcade E2E Load Tests
+# Production Storage + Arcade + Monitor E2E
 
-End-to-end test suite for measuring wallet-storage-server throughput and validating Arcade SSE proof delivery. Tests run against real BSV mainnet and require a pre-funded key.
+This manual mainnet suite validates the complete production path:
 
-## Test Suites
+1. authenticated BRC-100 reads and writes go to the target Storage server;
+2. Arcade is the first broadcaster and receives the shared callback token;
+3. no-send concurrency tests are reconciled through Storage with `sendWith`;
+4. the production Monitor receives Arcade SSE status events and acquires proofs;
+5. every tracked action must reach `completed` in Storage and have a merkle path in Arcade.
 
-| Suite | Tests | What it measures |
-|-------|-------|-----------------|
-| 1 · Read TPS | 1a–1e | Raw HTTP throughput, BRC-100 listOutputs, babbage baseline |
-| 2 · Write TPS | 2a–2c | createAction sequential, single-user parallel (noSend + Arcade), multi-user parallel |
-| 3 · SSE throughput | 3a–3c | Sequential delivery, concurrent Arcade ingestion, ceiling escalation |
+The suite provisions deterministic child identities with BRC-29 wallet payments, so the multi-user write test uses genuinely independent, funded Storage users. It does not rely on an external funding script.
 
-## Environment Variables
+## Safety gate
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `STORAGE_E2E_ROOT_KEY` | **yes** | — | Funded mainnet private key hex (root/funding wallet) |
-| `STORAGE_E2E_ARCADE_TOKEN` | **yes** for SSE | — | Arcade callbackToken for SSE routing |
-| `STORAGE_E2E_TARGET_URL` | no | `https://storage.fletchindustries.com` | Storage server under test |
-| `STORAGE_E2E_ARCADE_URL` | no | `https://arcade-v2-us-1.bsvblockchain.tech` | Arcade broadcaster base URL |
-| `STORAGE_E2E_BABBAGE_URL` | no | `https://storage.babbage.systems` | Funded wallet storage backend (holds UTXOs) |
-| `STORAGE_E2E_USER_COUNT` | no | `5` | Parallel wallet count for multi-user tests |
-| `STORAGE_E2E_TX_COUNT` | no | `10` | Transactions per write/SSE test |
-| `STORAGE_E2E_OUTPUT_SATS` | no | `300` | Satoshis per test output |
+The suite is skipped unless `STORAGE_E2E_ALLOW_MAINNET=true`. It requires a funded test key and spends real sats. Use a bounded, dedicated test identity where possible; never commit or print its private key or the Arcade token.
 
-## Pre-Funding
-
-The `ROOT_KEY` wallet (on `BABBAGE_URL`) must have enough confirmed UTXOs to fund all test transactions. Rough estimate:
-
-```
-sats_needed ≈ TX_COUNT × USER_COUNT × (OUTPUT_SATS + 200)  # 200 sats fee buffer per tx
-```
-
-For the defaults (10 txs × 5 users × 500 sats) that's ~25,000 sats minimum. Fund generously — unconfirmed UTXOs can be used with `acceptDelayedBroadcast: true`, which the suite enables automatically.
-
-**Important**: The key is passed in plaintext via env var. Rotate it after testing. Never commit it to the repo.
-
-## Running
-
-### All suites
+## Run
 
 ```bash
-export STORAGE_E2E_ROOT_KEY=<your_funded_key_hex>
-export STORAGE_E2E_ARCADE_TOKEN=<your_arcade_callback_token>
+export STORAGE_E2E_ALLOW_MAINNET=true
+export STORAGE_E2E_ROOT_KEY=<funded-mainnet-private-key-hex>
+export STORAGE_E2E_ARCADE_TOKEN=<token-shared-with-production-monitor>
+export STORAGE_E2E_TARGET_URL=https://storage.babbage.systems
+export STORAGE_E2E_USER_COUNT=3
+export STORAGE_E2E_TX_COUNT=3
+export STORAGE_E2E_CEILING_BATCHES=2,4,8
+export STORAGE_E2E_EVIDENCE_FILE=/tmp/storage-e2e-evidence.json
 
 cd packages/wallet/wallet-toolbox
-node_modules/.bin/jest --runTestsByPath \
+pnpm exec jest --runTestsByPath \
   src/services/__tests/StorageE2E.man.test.ts \
-  --verbose --testTimeout=900000
+  --runInBand --verbose
 ```
 
-### Single suite (by name pattern)
+## Configuration
 
-```bash
-# Read TPS only
-node_modules/.bin/jest --runTestsByPath src/services/__tests/StorageE2E.man.test.ts \
-  -t "1 · Read TPS" --verbose
+| Variable | Default | Meaning |
+|---|---:|---|
+| `STORAGE_E2E_TARGET_URL` | `https://storage.babbage.systems` | The only Storage backend used by authenticated cases. |
+| `STORAGE_E2E_ARCADE_URL` | mainnet Arcade | Arcade broadcaster and proof API. |
+| `STORAGE_E2E_USER_COUNT` | `3` | Independent derived identities. |
+| `STORAGE_E2E_TX_COUNT` | `3` | Transactions in each fixed-size write case. |
+| `STORAGE_E2E_OUTPUT_SATS` | `100` | Sats in each explicit test output. |
+| `STORAGE_E2E_USER_FUNDING_SATS` | `2000` | BRC-29 funding per derived identity. |
+| `STORAGE_E2E_CEILING_BATCHES` | `2,4,8` | Bounded concurrent Arcade batches. |
+| `STORAGE_E2E_PROOF_TIMEOUT_MS` | `2700000` | Maximum wait for mining and Monitor reconciliation. |
+| `STORAGE_E2E_PROOF_POLL_MS` | `30000` | Arcade and Storage polling interval. |
+| `STORAGE_E2E_EVIDENCE_FILE` | unset | Optional mode-0600 JSON evidence artifact. |
 
-# Write TPS only
-node_modules/.bin/jest --runTestsByPath src/services/__tests/StorageE2E.man.test.ts \
-  -t "2 · Write TPS" --verbose
+## What counts as passing
 
-# SSE throughput only (requires ARCADE_TOKEN)
-node_modules/.bin/jest --runTestsByPath src/services/__tests/StorageE2E.man.test.ts \
-  -t "3 · SSE throughput" --verbose
-```
+HTTP timing alone is not enough. A run passes only if every transaction created by setup and the write/SSE cases:
 
-### Against a local server
+- is accepted through the Arcade-first service path;
+- later reports `MINED` or `IMMUTABLE` with a non-empty Arcade merkle path; and
+- is returned by the originating wallet's authenticated `listActions` call with status `completed`.
 
-```bash
-export STORAGE_E2E_TARGET_URL=http://localhost:3000
-export STORAGE_E2E_BABBAGE_URL=http://localhost:3000  # if self-funded
-```
-
-## Docker (local wallet-storage-server)
-
-> **TODO**: Docker Compose for running a local wallet-storage-server instance is a planned addition. Contributions welcome — see `e2e/storage/docker-compose.yml` (not yet present).
-
-The intent is:
-1. `docker compose up` spins up wallet-storage-server + Postgres
-2. Tests point `STORAGE_E2E_TARGET_URL` at `http://localhost:3000`
-3. A seed script pre-funds the local wallet so no mainnet funds are needed for read/write TPS tests (SSE tests will still require Arcade + mainnet)
-
-## Key Design Notes
-
-- **noSend + Arcade pattern**: Suite 2b and all of Suite 3 use `createAction({ noSend: true, acceptDelayedBroadcast: true })` to obtain an AtomicBEEF, then call `arcade.postBeef(beef, [txid])` directly. This bypasses the storage server's own broadcaster (TAAL/WoC) and routes through Arcade, which is what triggers the SSE callback to `TARGET_URL/arc-ingest`.
-- **Multi-user key derivation**: `deriveUserKey(rootHex, i)` uses BIP-32 child derivation (`m/0/i`) to produce deterministic per-user keys from the root key. Each user gets an independent wallet identity.
-- **acceptDelayedBroadcast**: Set to `true` throughout so tests can run even when all UTXOs are unconfirmed (common after consecutive test runs).
-- **SSE ceiling test (3c)**: Doubles batch size (5→10→20→40…) until ≥20% of txs fail to receive a merkle proof within the polling window. The last passing batch size is the measured throughput ceiling.
-
-## Observed Baselines (2026-06-27, storage.fletchindustries.com)
-
-| Metric | Value |
-|--------|-------|
-| Raw HTTP sequential | ~66–75 req/s |
-| Raw HTTP parallel (30 concurrent) | ~65–66 req/s |
-| BRC-100 listOutputs | ~6.1 req/s |
-| Sequential write TPS | ~0.60–0.68 tx/s |
-| Arcade broadcast latency (10 txs) | avg 138ms, p95 318ms |
-| Arcade broadcast throughput | 7.2 tx/s |
-| SSE delivery (10 txs, block confirm) | 10/10 proofs, ~6 min to mine |
+That final condition is the externally observable proof that Monitor updated production Storage. Operators may additionally correlate the emitted txids against Monitor logs and the `proven_tx_reqs`/`proven_txs` rows for deployment-level evidence.

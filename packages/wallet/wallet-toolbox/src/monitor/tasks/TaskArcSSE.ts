@@ -130,7 +130,8 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       switch (event.txStatus) {
         case 'SENT_TO_NETWORK':
         case 'ACCEPTED_BY_NETWORK':
-        case 'SEEN_ON_NETWORK': {
+        case 'SEEN_ON_NETWORK':
+        case 'SEEN_MULTIPLE_NODES': {
           if (['unsent', 'sending', 'callback'].includes(req.status)) {
             req.status = 'unmined'
             req.wasBroadcast = true
@@ -237,6 +238,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       req.apiHistory = r.history
       req.provenTxId = r.provenTxId
       req.notified = true
+      await req.updateStorageDynamicProperties(this.storage)
 
       this.monitor.callOnProvenTransaction({
         txid,

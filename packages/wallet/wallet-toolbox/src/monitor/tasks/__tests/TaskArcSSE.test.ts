@@ -62,7 +62,8 @@ function makeStorageWithReqs (reqApis: any[]): any {
   return {
     isStorageProvider: jest.fn().mockReturnValue(false),
     findProvenTxReqs: jest.fn().mockResolvedValue(reqApis),
-    runAsStorageProvider: jest.fn(async (fn: any) => fn(sp))
+    runAsStorageProvider: jest.fn(async (fn: any) => fn(sp)),
+    sp
   }
 }
 
@@ -257,6 +258,11 @@ describe('TaskArcadeSSE', () => {
       expect(log).toContain('=> unmined')
     })
 
+    test('SEEN_MULTIPLE_NODES is accepted without an unhandled warning', async () => {
+      const { log } = await runWithStatus('SEEN_MULTIPLE_NODES', 'unmined')
+      expect(log).not.toContain('unhandled status')
+    })
+
     test('DOUBLE_SPEND_ATTEMPTED sets req to doubleSpend', async () => {
       const { log } = await runWithStatus('DOUBLE_SPEND_ATTEMPTED', 'unmined')
       expect(log).toContain('=> doubleSpend')
@@ -313,6 +319,11 @@ describe('TaskArcadeSSE', () => {
       expect(getMerklePath).toHaveBeenCalledWith(reqApi.txid)
       expect(fromReq).toHaveBeenCalledWith(expect.anything(), proof, false, expect.any(Number))
       expect(storage.runAsStorageProvider).toHaveBeenCalled()
+      expect(storage.sp.updateProvenTxReqDynamics).toHaveBeenLastCalledWith(
+        reqApi.provenTxReqId,
+        expect.objectContaining({ notified: true }),
+        undefined
+      )
       expect(monitor.callOnProvenTransaction).toHaveBeenCalledWith(expect.objectContaining({
         txid: reqApi.txid,
         txIndex: 7,
