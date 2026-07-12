@@ -28,6 +28,18 @@ beforeAll(() => {
       }
       return jsonResponse({ status: 'success' })
     }
+    if (url.includes('chaintracks.babbage.systems/findHeaderHexForBlockHash')) {
+      const hash = new URL(url).searchParams.get('hash')
+      if (hash === HEADER_877595.hash) {
+        return jsonResponse({ status: 'success', value: HEADER_877595 })
+      }
+      // Some deployed services answer a miss with an error payload rather
+      // than a success with an undefined value.
+      return jsonResponse({ status: 'error', code: 'ERR_NOT_FOUND', description: `header for ${hash} not found` })
+    }
+    if (url.includes('chaintracks.babbage.systems/getPresentHeight')) {
+      return jsonResponse({ status: 'error', code: 'ERR_INTERNAL', description: 'An internal error has occurred.' })
+    }
     return realFetch(input, init)
   }) as any
 })
@@ -51,6 +63,23 @@ describe('ChaintracksServiceClient tests', () => {
     const r = await client.findHeaderForHeight(1651723)
     expect(r?.hash).toBe('0000000049686fe721f70614c89df146e410240f838b8f3ef8e6471c6dfdd153')
     expect(await client.findHeaderForHeight(999999999)).toBe(undefined)
+  })
+
+  test('2 mainNet findHeaderForBlockHash', async () => {
+    const client = makeClient('main')
+    const r = await client.findHeaderForBlockHash(HEADER_877595.hash)
+    expect(r?.height).toBe(877595)
+  })
+
+  test('3 findHeaderForBlockHash returns undefined on ERR_NOT_FOUND error payload', async () => {
+    const client = makeClient('main')
+    const r = await client.findHeaderForBlockHash('00'.repeat(32))
+    expect(r).toBe(undefined)
+  })
+
+  test('4 other error payloads still throw', async () => {
+    const client = makeClient('main')
+    await expect(client.getPresentHeight()).rejects.toThrow('ERR_INTERNAL')
   })
 })
 
