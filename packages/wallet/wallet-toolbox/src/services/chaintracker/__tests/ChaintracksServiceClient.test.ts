@@ -74,7 +74,7 @@ describe('ChaintracksServiceClient tests', () => {
   test('3 findHeaderForBlockHash returns undefined on ERR_NOT_FOUND error payload', async () => {
     const client = makeClient('main')
     const r = await client.findHeaderForBlockHash('00'.repeat(32))
-    expect(r).toBe(undefined)
+    expect(r).toBeUndefined()
   })
 
   test('4 other error payloads still throw', async () => {
