@@ -20,6 +20,7 @@ import { WalletStorageManager } from '../../storage/WalletStorageManager'
 import { StorageClient } from '../../storage/remoting/StorageClient'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
+import { ARCADE_POST_BEEF_CONCURRENCY } from '../providers/Arcade'
 
 const ALLOW_MAINNET = process.env.STORAGE_E2E_ALLOW_MAINNET === 'true'
 const ROOT_KEY_HEX = process.env.STORAGE_E2E_ROOT_KEY ?? ''
@@ -27,9 +28,11 @@ const TARGET_URL = (process.env.STORAGE_E2E_TARGET_URL ?? 'https://storage.babba
 const ARCADE_URL = (process.env.STORAGE_E2E_ARCADE_URL ?? 'https://arcade-v2-us-1.bsvblockchain.tech').replace(/\/$/, '')
 const ARCADE_TOKEN = process.env.STORAGE_E2E_ARCADE_TOKEN ?? ''
 const USER_COUNT = integerEnv('STORAGE_E2E_USER_COUNT', 3, 2, 20)
+const USER_OFFSET = integerEnv('STORAGE_E2E_USER_OFFSET', 0, 0, 1000000)
 const TX_COUNT = integerEnv('STORAGE_E2E_TX_COUNT', 3, 1, 100)
 const OUTPUT_SATS = integerEnv('STORAGE_E2E_OUTPUT_SATS', 100, 1, 100000)
-const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 2000, OUTPUT_SATS + 500, 1000000)
+const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPUT_SATS + 200, 1000000)
+const MULTI_USER_ROUNDS = integerEnv('STORAGE_E2E_MULTI_USER_ROUNDS', 1, 1, 20)
 const PROOF_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_TIMEOUT_MS', 45 * 60 * 1000, 60 * 1000, 4 * 60 * 60 * 1000)
 const PROOF_POLL_MS = integerEnv('STORAGE_E2E_PROOF_POLL_MS', 30 * 1000, 5000, 5 * 60 * 1000)
 const RAW_REQUEST_COUNT = integerEnv('STORAGE_E2E_READ_COUNT', 30, 1, 1000)
@@ -38,6 +41,8 @@ const RUN_ID = process.env.STORAGE_E2E_RUN_ID ?? new Date().toISOString().replac
 const RUN_LABEL = `storage-e2e-${RUN_ID}`
 const RUN_BASKET = `storage-e2e-${RUN_ID}`
 const CEILING_BATCHES = parseBatches(process.env.STORAGE_E2E_CEILING_BATCHES ?? '2,4,8')
+const LOAD_REPEATS = integerEnv('STORAGE_E2E_LOAD_REPEATS', 1, 1, 10)
+const REQUIRED_USER_UTXOS = requiredUserUtxos()
 
 interface Stats {
   count: number
@@ -60,6 +65,41 @@ interface TrackedTransaction {
   test: string
   walletIndex: number
   broadcastAt: string
+}
+
+interface PreparedTransaction {
+  txid: string
+  beef: Beef
+  wallet: TestWallet
+  elapsedMs: number
+}
+
+interface BatchResult {
+  txids: string[]
+  identityCount: number
+  prepareWallMs: number
+  prepareTimings: number[]
+  arcadeWallMs: number
+  reconciliationWallMs: number
+  reconciliationTimings: number[]
+  totalWallMs: number
+}
+
+interface BatchMetrics {
+  transactionCount: number
+  identityCount: number
+  preparation: Stats & { wallMs: number, transactionsPerSecond: number }
+  arcadeSubmission: { httpRequests: number, configuredMaxConcurrency: number, wallMs: number, transactionsPerSecond: number }
+  storageReconciliation: Stats & { rpcRequests: number, wallMs: number, transactionsPerSecond: number }
+  submissionThroughStorage: { wallMs: number, transactionsPerSecond: number }
+  clientEndToEnd: { wallMs: number, transactionsPerSecond: number }
+}
+
+interface LoadRun {
+  batchSize: number
+  repeat: number
+  result: BatchResult
+  metrics: BatchMetrics
 }
 
 interface ProofObservation {
@@ -91,10 +131,14 @@ const evidence: {
   arcadeUrl: ARCADE_URL,
   sizing: {
     userCount: USER_COUNT,
+    userOffset: USER_OFFSET,
     txCount: TX_COUNT,
     outputSats: OUTPUT_SATS,
     userFundingSats: USER_FUNDING_SATS,
-    ceilingBatches: CEILING_BATCHES
+    requiredUserUtxos: REQUIRED_USER_UTXOS,
+    multiUserRounds: MULTI_USER_ROUNDS,
+    ceilingBatches: CEILING_BATCHES,
+    loadRepeats: LOAD_REPEATS
   },
   metrics: {},
   transactions: [],
@@ -120,6 +164,20 @@ function parseBatches (value: string): number[] {
   return batches
 }
 
+function requiredUserUtxos (): number[] {
+  const required = Array.from({ length: USER_COUNT }, () => MULTI_USER_ROUNDS)
+  const transactionsPerSingleIdentity = CEILING_BATCHES.reduce((sum, count) => sum + count, 0) * LOAD_REPEATS
+  required[0] += transactionsPerSingleIdentity
+
+  const shardedIdentityCount = USER_COUNT - 1
+  for (const count of CEILING_BATCHES) {
+    for (let repeat = 0; repeat < LOAD_REPEATS; repeat++) {
+      for (let index = 0; index < count; index++) required[1 + (index % shardedIdentityCount)]++
+    }
+  }
+  return required
+}
+
 function calcStats (timings: number[]): Stats {
   if (timings.length === 0) throw new Error('Cannot calculate statistics for an empty sample')
   const sorted = [...timings].sort((a, b) => a - b)
@@ -139,6 +197,62 @@ function throughput (count: number, wallMs: number): number {
   return Math.round((count / (wallMs / 1000)) * 10) / 10
 }
 
+function batchMetrics (result: BatchResult): BatchMetrics {
+  const transactionCount = result.txids.length
+  const submissionWallMs = result.arcadeWallMs + result.reconciliationWallMs
+  return {
+    transactionCount,
+    identityCount: result.identityCount,
+    preparation: {
+      ...calcStats(result.prepareTimings),
+      wallMs: result.prepareWallMs,
+      transactionsPerSecond: throughput(transactionCount, result.prepareWallMs)
+    },
+    arcadeSubmission: {
+      httpRequests: transactionCount,
+      configuredMaxConcurrency: ARCADE_POST_BEEF_CONCURRENCY,
+      wallMs: result.arcadeWallMs,
+      transactionsPerSecond: throughput(transactionCount, result.arcadeWallMs)
+    },
+    storageReconciliation: {
+      ...calcStats(result.reconciliationTimings),
+      rpcRequests: result.reconciliationTimings.length,
+      wallMs: result.reconciliationWallMs,
+      transactionsPerSecond: throughput(transactionCount, result.reconciliationWallMs)
+    },
+    submissionThroughStorage: {
+      wallMs: submissionWallMs,
+      transactionsPerSecond: throughput(transactionCount, submissionWallMs)
+    },
+    clientEndToEnd: {
+      wallMs: result.totalWallMs,
+      transactionsPerSecond: throughput(transactionCount, result.totalWallMs)
+    }
+  }
+}
+
+function summarizeLoadRuns (runs: LoadRun[]): Array<Record<string, number>> {
+  return CEILING_BATCHES.filter(batchSize => runs.some(run => run.batchSize === batchSize)).map(batchSize => {
+    const matches = runs.filter(run => run.batchSize === batchSize)
+    const totalTransactions = matches.reduce((sum, run) => sum + run.result.txids.length, 0)
+    const sum = (field: keyof Pick<BatchResult, 'prepareWallMs' | 'arcadeWallMs' | 'reconciliationWallMs' | 'totalWallMs'>): number =>
+      matches.reduce((total, run) => total + run.result[field], 0)
+    const arcadeWallMs = sum('arcadeWallMs')
+    const reconciliationWallMs = sum('reconciliationWallMs')
+    return {
+      batchSize,
+      repeats: matches.length,
+      totalTransactions,
+      identityCount: matches[0]?.result.identityCount ?? 0,
+      preparationTps: throughput(totalTransactions, sum('prepareWallMs')),
+      arcadeSubmissionTps: throughput(totalTransactions, arcadeWallMs),
+      storageReconciliationTps: throughput(totalTransactions, reconciliationWallMs),
+      submissionThroughStorageTps: throughput(totalTransactions, arcadeWallMs + reconciliationWallMs),
+      clientEndToEndTps: throughput(totalTransactions, sum('totalWallMs'))
+    }
+  })
+}
+
 function errorMessage (error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -147,7 +261,7 @@ function deriveUserKey (userIndex: number): PrivateKey {
   const rootKey = PrivateKey.fromHex(ROOT_KEY_HEX)
   return new CachedKeyDeriver(rootKey).derivePrivateKey(
     [2, 'storage e2e user'],
-    String(userIndex),
+    String(userIndex + USER_OFFSET),
     'self'
   )
 }
@@ -195,25 +309,36 @@ function track (txid: string | undefined, test: string, walletIndex: number): st
 }
 
 async function fundUsers (): Promise<string | undefined> {
-  const balances = await Promise.all(users.map(async user => ({ user, balance: await user.wallet.balance() })))
-  const recipients = balances.filter(({ balance }) => balance < USER_FUNDING_SATS)
-  if (recipients.length === 0) {
-    console.log(`[setup] all ${users.length} derived users already have at least ${USER_FUNDING_SATS} sats`)
+  const inventories = await Promise.all(users.map(async user => ({
+    user,
+    outputs: (await user.wallet.listOutputs({ basket: 'default', limit: 10000 })).totalOutputs
+  })))
+  const shortages = inventories.map(({ user, outputs }) => ({
+    user,
+    count: Math.max(0, REQUIRED_USER_UTXOS[user.index - 1] - outputs)
+  }))
+  const totalShortage = shortages.reduce((sum, shortage) => sum + shortage.count, 0)
+  if (totalShortage === 0) {
+    console.log(`[setup] derived users have required independent UTXOs ${JSON.stringify(REQUIRED_USER_UTXOS)}`)
     return undefined
   }
 
-  const payments = recipients.map(({ user }) => {
-    const { wallet } = user
-    const template = new ScriptTemplateBRC29({
-      derivationPrefix: randomBytesBase64(8),
-      derivationSuffix: randomBytesBase64(8),
-      keyDeriver: root.wallet.keyDeriver
-    })
-    return {
-      template,
-      lockingScript: template.lock(ROOT_KEY_HEX, wallet.identityKey).toHex()
+  const payments: Array<{ user: TestWallet, template: ScriptTemplateBRC29, lockingScript: string }> = []
+  for (const shortage of shortages) {
+    for (let index = 0; index < shortage.count; index++) {
+      const template = new ScriptTemplateBRC29({
+        derivationPrefix: randomBytesBase64(8),
+        derivationSuffix: randomBytesBase64(8),
+        keyDeriver: root.wallet.keyDeriver
+      })
+      payments.push({
+        user: shortage.user,
+        template,
+        lockingScript: template.lock(ROOT_KEY_HEX, shortage.user.wallet.identityKey).toHex()
+      })
     }
-  })
+  }
+  console.log(`[setup] provisioning ${payments.length} independent UTXOs; required=${JSON.stringify(REQUIRED_USER_UTXOS)}`)
 
   const created = await root.wallet.createAction({
     description: `${RUN_LABEL} fund users`.slice(0, 50),
@@ -221,7 +346,7 @@ async function fundUsers (): Promise<string | undefined> {
     outputs: payments.map((payment, index) => ({
       lockingScript: payment.lockingScript,
       satoshis: USER_FUNDING_SATS,
-      outputDescription: `fund e2e user ${index}`,
+      outputDescription: `fund e2e user ${payment.user.index} output ${index + 1}`.slice(0, 50),
       tags: [RUN_LABEL]
     })),
     options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
@@ -231,22 +356,31 @@ async function fundUsers (): Promise<string | undefined> {
   if (created.tx == null) throw new Error('User funding did not return Atomic BEEF')
   const fundingBeef = created.tx
 
-  await Promise.all(recipients.map(async ({ user: { wallet } }, index) => {
-    const payment = payments[index]
-    const derivationPrefix = payment.template.params.derivationPrefix
-    const derivationSuffix = payment.template.params.derivationSuffix
-    if (derivationPrefix == null || derivationSuffix == null) throw new Error(`Missing BRC-29 derivation for user ${index}`)
+  const paymentsByUser = new Map<number, Array<{ payment: typeof payments[number], outputIndex: number }>>()
+  payments.forEach((payment, outputIndex) => {
+    const group = paymentsByUser.get(payment.user.index) ?? []
+    group.push({ payment, outputIndex })
+    paymentsByUser.set(payment.user.index, group)
+  })
+
+  await Promise.all([...paymentsByUser.values()].map(async group => {
+    const { wallet } = group[0].payment.user
     await wallet.internalizeAction({
       tx: fundingBeef,
-      outputs: [{
-        outputIndex: index,
-        protocol: 'wallet payment',
-        paymentRemittance: {
-          derivationPrefix,
-          derivationSuffix,
-          senderIdentityKey: root.wallet.identityKey
+      outputs: group.map(({ payment, outputIndex }) => {
+        const derivationPrefix = payment.template.params.derivationPrefix
+        const derivationSuffix = payment.template.params.derivationSuffix
+        if (derivationPrefix == null || derivationSuffix == null) throw new Error(`Missing BRC-29 derivation for output ${outputIndex}`)
+        return {
+          outputIndex,
+          protocol: 'wallet payment' as const,
+          paymentRemittance: {
+            derivationPrefix,
+            derivationSuffix,
+            senderIdentityKey: root.wallet.identityKey
+          }
         }
-      }],
+      }),
       description: `${RUN_LABEL} funding`.slice(0, 50),
       labels: [RUN_LABEL]
     })
@@ -254,9 +388,75 @@ async function fundUsers (): Promise<string | undefined> {
   return txid
 }
 
-async function createNoSendBatch (wallet: TestWallet, count: number, test: string): Promise<Array<{ txid: string, beef: Beef }>> {
-  const created: Array<{ txid: string, beef: Beef }> = []
+async function assertConfirmedSpendableState (wallets: TestWallet[], context: string): Promise<void> {
+  for (const item of wallets) {
+    const [listed, actions] = await Promise.all([
+      item.wallet.listOutputs({ basket: 'default', include: 'locking scripts', limit: 10000 }),
+      item.wallet.listActions({ labels: [], limit: 10000 })
+    ])
+    const statusByTxid = new Map(actions.actions.map(action => [action.txid, action.status]))
+    const problems: string[] = []
+    const networkCandidates = listed.outputs.filter(output => {
+      const txid = output.outpoint.slice(0, 64)
+      const storageStatus = statusByTxid.get(txid)
+      if (storageStatus !== 'completed') {
+        problems.push(`${output.outpoint}:Storage=${storageStatus ?? 'missing'}`)
+        return false
+      }
+      if (output.lockingScript == null) {
+        problems.push(`${output.outpoint}:missing locking script`)
+        return false
+      }
+      return true
+    })
+    let nextCandidate = 0
+    let confirmed = 0
+    const worker = async (): Promise<void> => {
+      while (nextCandidate < networkCandidates.length && problems.length === 0) {
+        const output = networkCandidates[nextCandidate++]
+        const network = await item.services.getUtxoStatus(
+          item.services.hashOutputScript(output.lockingScript ?? ''),
+          undefined,
+          output.outpoint
+        )
+        if (network.status !== 'success' || network.isUtxo !== true) {
+          problems.push(`${output.outpoint}:${network.name}=${network.status}/${String(network.isUtxo)}`)
+        } else {
+          confirmed++
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(4, networkCandidates.length) }, worker))
+    console.log(`[setup] ${context} wallet=${item.index} confirmedSpendable=${confirmed}/${listed.outputs.length}`)
+    if (problems.length > 0) {
+      throw new Error(`${context} wallet ${item.index} has unresolved or network-spent Storage outputs; wait for Monitor or use a clean identity: ${problems.join(', ')}`)
+    }
+  }
+}
+
+async function recoverNoSendActions (): Promise<number> {
+  let recoveredCount = 0
+  await Promise.all([root, ...users].map(async item => {
+    const listed = await item.wallet.listActions({ labels: [RUN_LABEL], limit: 1000 })
+    const txids = listed.actions.filter(action => action.status === 'nosend').map(action => action.txid)
+    if (txids.length === 0) return
+    recoveredCount += txids.length
+    console.log(`[setup] recovering ${txids.length} noSend action(s) for wallet ${item.index}`)
+    for (const txid of txids) track(txid, 'setup-nosend-recovery', item.index)
+    const recovered = await item.wallet.createAction({
+      description: `${RUN_LABEL} recover wallet ${item.index}`.slice(0, 50),
+      options: { sendWith: txids, acceptDelayedBroadcast: false }
+    })
+    const failures = recovered.sendWithResults?.filter(result => result.status !== 'unproven') ?? []
+    if (failures.length > 0) throw new Error(`noSend recovery failures: ${JSON.stringify(failures)}`)
+  }))
+  return recoveredCount
+}
+
+async function createNoSendBatch (wallet: TestWallet, count: number, test: string): Promise<PreparedTransaction[]> {
+  const created: PreparedTransaction[] = []
   for (let i = 0; i < count; i++) {
+    const started = Date.now()
     const result = await wallet.wallet.createAction({
       description: `${RUN_LABEL} ${test} ${i + 1}`.slice(0, 50),
       labels: [RUN_LABEL],
@@ -264,39 +464,66 @@ async function createNoSendBatch (wallet: TestWallet, count: number, test: strin
       options: { noSend: true, randomizeOutputs: false, acceptDelayedBroadcast: false }
     })
     if (result.tx == null) throw new Error(`${test} transaction ${i + 1} did not return Atomic BEEF`)
-    created.push({ txid: track(result.txid, test, wallet.index), beef: Beef.fromBinary(result.tx) })
+    if (result.txid == null || result.txid === '') throw new Error(`${test} transaction ${i + 1} did not return a txid`)
+    created.push({ txid: result.txid, beef: Beef.fromBinary(result.tx), wallet, elapsedMs: Date.now() - started })
   }
   return created
 }
 
 async function broadcastConcurrentlyAndReconcile (
-  wallet: TestWallet,
+  batchWallets: TestWallet[],
   count: number,
   test: string
-): Promise<{ txids: string[], wallMs: number, timings: number[] }> {
-  const created = await createNoSendBatch(wallet, count, test)
-  const started = Date.now()
-  const results = await Promise.all(created.map(async ({ txid, beef }) => {
-    const requestStarted = Date.now()
-    const responses = await wallet.services.postBeef(beef, [txid])
-    const arcade = responses.find(response => response.name === 'arcade')
-    return {
-      txid,
-      elapsed: Date.now() - requestStarted,
-      ok: arcade?.status === 'success' && arcade.txidResults.some(result => result.txid === txid && result.status === 'success')
-    }
-  }))
-  const wallMs = Date.now() - started
-  const failed = results.filter(result => !result.ok)
-  if (failed.length > 0) throw new Error(`${test} Arcade failures: ${failed.map(result => result.txid).join(', ')}`)
+): Promise<BatchResult> {
+  if (batchWallets.length === 0) throw new Error(`${test} requires at least one wallet`)
+  const totalStarted = Date.now()
+  const assignments = batchWallets
+    .map((wallet, index) => ({ wallet, count: Math.floor(count / batchWallets.length) + (index < count % batchWallets.length ? 1 : 0) }))
+    .filter(assignment => assignment.count > 0)
 
-  const reconciliation = await wallet.wallet.createAction({
-    description: `${RUN_LABEL} reconcile ${test}`.slice(0, 50),
-    options: { sendWith: created.map(item => item.txid), acceptDelayedBroadcast: false }
-  })
-  const sendFailures = reconciliation.sendWithResults?.filter(result => result.status !== 'unproven') ?? []
-  if (sendFailures.length > 0) throw new Error(`${test} Storage reconciliation failures: ${JSON.stringify(sendFailures)}`)
-  return { txids: created.map(item => item.txid), wallMs, timings: results.map(result => result.elapsed) }
+  const prepareStarted = Date.now()
+  const created = (await Promise.all(assignments.map(async assignment =>
+    await createNoSendBatch(assignment.wallet, assignment.count, test)
+  ))).flat()
+  const prepareWallMs = Date.now() - prepareStarted
+
+  const mergedBeef = new Beef()
+  for (const item of created) mergedBeef.mergeBeef(item.beef)
+  const txids = created.map(item => item.txid)
+  const arcadeStarted = Date.now()
+  const responses = await root.services.postBeef(mergedBeef, txids)
+  const arcadeWallMs = Date.now() - arcadeStarted
+  const arcade = responses.find(response => response.name === 'arcade')
+  const failed = arcade == null
+    ? txids
+    : txids.filter(txid => !arcade.txidResults.some(result => result.txid === txid && result.status === 'success'))
+  if (arcade?.status !== 'success' || failed.length > 0) throw new Error(`${test} Arcade failures: ${failed.join(', ')}`)
+  for (const item of created) track(item.txid, test, item.wallet.index)
+
+  const reconciliationStarted = Date.now()
+  const reconciliationTimings = await Promise.all(assignments.map(async ({ wallet }) => {
+    const walletTxids = created.filter(item => item.wallet.index === wallet.index).map(item => item.txid)
+    const requestStarted = Date.now()
+    const reconciliation = await wallet.wallet.createAction({
+      description: `${RUN_LABEL} reconcile ${test} wallet ${wallet.index}`.slice(0, 50),
+      options: { sendWith: walletTxids, acceptDelayedBroadcast: false }
+    })
+    const sendFailures = reconciliation.sendWithResults?.filter(result => result.status !== 'unproven') ?? []
+    if (sendFailures.length > 0) throw new Error(`${test} Storage reconciliation failures: ${JSON.stringify(sendFailures)}`)
+    return Date.now() - requestStarted
+  }))
+  const reconciliationWallMs = Date.now() - reconciliationStarted
+
+  return {
+    txids,
+    identityCount: assignments.length,
+    prepareWallMs,
+    prepareTimings: created.map(item => item.elapsedMs),
+    arcadeWallMs,
+    reconciliationWallMs,
+    reconciliationTimings,
+    totalWallMs: Date.now() - totalStarted
+  }
 }
 
 async function actionStatus (tracked: TrackedTransaction): Promise<string | undefined> {
@@ -370,12 +597,40 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
     root = await makeWallet(PrivateKey.fromHex(ROOT_KEY_HEX), 0)
     users = await Promise.all(Array.from({ length: USER_COUNT }, async (_, index) => await makeWallet(deriveUserKey(index + 1), index + 1)))
     expect(root.services.postBeefServices.services[0].name).toBe('ArcadeBeef')
+    const recoveredCount = await recoverNoSendActions()
+    if (recoveredCount > 0) {
+      const recoveryProofs = await waitForProofs()
+      const recoveryFailures = recoveryProofs.filter(proof => !proof.arcadeProof || proof.storageStatus !== 'completed')
+      evidence.metrics.setupRecoveryConvergence = {
+        total: recoveryProofs.length,
+        completed: recoveryProofs.length - recoveryFailures.length,
+        failures: recoveryFailures.length
+      }
+      if (recoveryFailures.length > 0) throw new Error(`Recovered noSend transactions did not converge: ${JSON.stringify(recoveryFailures)}`)
+    }
+    await assertConfirmedSpendableState([root, ...users], 'preflight')
 
     const balance = await root.wallet.balance()
-    const estimatedMinimum = USER_COUNT * USER_FUNDING_SATS + (TX_COUNT * 5 + CEILING_BATCHES.reduce((sum, n) => sum + n, 0)) * (OUTPUT_SATS + 500)
+    // Test outputs return to their originating wallets, so reserve the user
+    // fan-out plus the largest direct case rather than treating every output as
+    // permanently consumed.
+    const largestLiveChain = Math.max(TX_COUNT, ...CEILING_BATCHES)
+    const estimatedMinimum = REQUIRED_USER_UTXOS.reduce((sum, count) => sum + count, 0) * USER_FUNDING_SATS +
+      largestLiveChain * (OUTPUT_SATS + 500)
     console.log(`[setup] run=${RUN_ID} target=${TARGET_URL} rootBalance=${balance} estimatedMinimum=${estimatedMinimum}`)
     expect(balance).toBeGreaterThan(estimatedMinimum)
-    await fundUsers()
+    const fundingTxid = await fundUsers()
+    if (fundingTxid != null) {
+      const setupProofs = await waitForProofs()
+      const setupFailures = setupProofs.filter(proof => !proof.arcadeProof || proof.storageStatus !== 'completed')
+      evidence.metrics.setupFundingConvergence = {
+        total: setupProofs.length,
+        completed: setupProofs.length - setupFailures.length,
+        failures: setupFailures.length
+      }
+      if (setupFailures.length > 0) throw new Error(`Funding did not converge: ${JSON.stringify(setupFailures)}`)
+    }
+    await assertConfirmedSpendableState(users, 'funded')
   })
 
   afterAll(async () => {
@@ -475,31 +730,36 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   })
 
   test(`2b concurrent Arcade submission with Storage reconciliation (${TX_COUNT})`, async () => {
-    const result = await broadcastConcurrentlyAndReconcile(root, TX_COUNT, '2b-concurrent')
-    evidence.metrics.concurrentWrites = {
-      ...calcStats(result.timings),
-      wallMs: result.wallMs,
-      transactionsPerSecond: throughput(result.txids.length, result.wallMs)
-    }
+    const result = await broadcastConcurrentlyAndReconcile([root], TX_COUNT, '2b-concurrent')
+    evidence.metrics.concurrentWrites = batchMetrics(result)
     console.log(`[write:concurrent] ${JSON.stringify(evidence.metrics.concurrentWrites)}`)
     expect(result.txids).toHaveLength(TX_COUNT)
   })
 
-  test(`2c concurrent multi-identity Storage writes (${USER_COUNT})`, async () => {
+  test(`2c concurrent multi-identity Storage writes (${USER_COUNT} identities x ${MULTI_USER_ROUNDS} rounds)`, async () => {
     const started = Date.now()
-    const results = await Promise.all(users.map(async user => {
-      const requestStarted = Date.now()
-      const result = await user.wallet.createAction({
-        description: `${RUN_LABEL} user ${user.index}`.slice(0, 50),
-        labels: [RUN_LABEL],
-        outputs: [output(user, `multi user ${user.index}`)],
-        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-      })
-      return { txid: track(result.txid, '2c-multi-user', user.index), elapsed: Date.now() - requestStarted }
-    }))
+    const results: Array<{ txid: string, elapsed: number }> = []
+    const roundWallTimes: number[] = []
+    for (let round = 0; round < MULTI_USER_ROUNDS; round++) {
+      const roundStarted = Date.now()
+      results.push(...await Promise.all(users.map(async user => {
+        const requestStarted = Date.now()
+        const result = await user.wallet.createAction({
+          description: `${RUN_LABEL} user ${user.index} round ${round + 1}`.slice(0, 50),
+          labels: [RUN_LABEL],
+          outputs: [output(user, `multi user ${user.index} round ${round + 1}`)],
+          options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+        })
+        return { txid: track(result.txid, '2c-multi-user', user.index), elapsed: Date.now() - requestStarted }
+      })))
+      roundWallTimes.push(Date.now() - roundStarted)
+    }
     const wallMs = Date.now() - started
     evidence.metrics.multiUserWrites = {
       ...calcStats(results.map(result => result.elapsed)),
+      identities: USER_COUNT,
+      rounds: MULTI_USER_ROUNDS,
+      roundWallTimes,
       wallMs,
       transactionsPerSecond: throughput(results.length, wallMs)
     }
@@ -525,27 +785,44 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   })
 
   test(`3b concurrent Arcade-token ingestion (${TX_COUNT})`, async () => {
-    const result = await broadcastConcurrentlyAndReconcile(root, TX_COUNT, '3b-sse-concurrent')
-    evidence.metrics.sseConcurrent = {
-      ...calcStats(result.timings),
-      wallMs: result.wallMs,
-      transactionsPerSecond: throughput(result.txids.length, result.wallMs)
-    }
+    const result = await broadcastConcurrentlyAndReconcile([root], TX_COUNT, '3b-sse-concurrent')
+    evidence.metrics.sseConcurrent = batchMetrics(result)
     expect(result.txids).toHaveLength(TX_COUNT)
   })
 
-  test(`3c bounded concurrent ceiling batches (${CEILING_BATCHES.join(',')})`, async () => {
-    const batches: Array<Record<string, number>> = []
+  test(`3c single-identity phase load (${CEILING_BATCHES.join(',')} x ${LOAD_REPEATS})`, async () => {
+    const runs: LoadRun[] = []
+    const recorded: { runs: Array<Record<string, unknown>>, summary: Array<Record<string, number>> } = { runs: [], summary: [] }
+    evidence.metrics.singleIdentityLoad = recorded
     for (const count of CEILING_BATCHES) {
-      const result = await broadcastConcurrentlyAndReconcile(root, count, `3c-ceiling-${count}`)
-      batches.push({ count, wallMs: result.wallMs, transactionsPerSecond: throughput(count, result.wallMs), p95: calcStats(result.timings).p95 })
+      for (let repeat = 1; repeat <= LOAD_REPEATS; repeat++) {
+        const result = await broadcastConcurrentlyAndReconcile([users[0]], count, `3c-single-${count}-r${repeat}`)
+        runs.push({ batchSize: count, repeat, result, metrics: batchMetrics(result) })
+        recorded.runs = runs.map(({ batchSize, repeat, metrics }) => ({ batchSize, repeat, ...metrics }))
+        recorded.summary = summarizeLoadRuns(runs)
+      }
     }
-    evidence.metrics.ceilingBatches = batches
-    console.log(`[write:ceiling] ${JSON.stringify(batches)}`)
-    expect(batches).toHaveLength(CEILING_BATCHES.length)
+    console.log(`[write:load:single] ${JSON.stringify(evidence.metrics.singleIdentityLoad)}`)
+    expect(runs).toHaveLength(CEILING_BATCHES.length * LOAD_REPEATS)
   })
 
-  test('3d every broadcast receives an Arcade proof and reaches completed in Storage', async () => {
+  test(`3d sharded phase load (${CEILING_BATCHES.join(',')} x ${LOAD_REPEATS})`, async () => {
+    const runs: LoadRun[] = []
+    const recorded: { runs: Array<Record<string, unknown>>, summary: Array<Record<string, number>> } = { runs: [], summary: [] }
+    evidence.metrics.shardedIdentityLoad = recorded
+    for (const count of CEILING_BATCHES) {
+      for (let repeat = 1; repeat <= LOAD_REPEATS; repeat++) {
+        const result = await broadcastConcurrentlyAndReconcile(users.slice(1), count, `3d-sharded-${count}-r${repeat}`)
+        runs.push({ batchSize: count, repeat, result, metrics: batchMetrics(result) })
+        recorded.runs = runs.map(({ batchSize, repeat, metrics }) => ({ batchSize, repeat, ...metrics }))
+        recorded.summary = summarizeLoadRuns(runs)
+      }
+    }
+    console.log(`[write:load:sharded] ${JSON.stringify(evidence.metrics.shardedIdentityLoad)}`)
+    expect(runs).toHaveLength(CEILING_BATCHES.length * LOAD_REPEATS)
+  })
+
+  test('3e every broadcast receives an Arcade proof and reaches completed in Storage', async () => {
     evidence.proofs = await waitForProofs()
     const failures = evidence.proofs.filter(proof => !proof.arcadeProof || proof.storageStatus !== 'completed')
     evidence.metrics.proofConvergence = {
