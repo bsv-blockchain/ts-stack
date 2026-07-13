@@ -64,6 +64,13 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
         const r = await fetch(`${this.serviceUrl}${path}`)
         const v = await r.json() as FetchStatus<T>
         if (v.status === 'success') return v.value
+        // Some deployed chaintracks services report a missing resource as an
+        // error payload instead of a success with an undefined value. That is
+        // this method's "or undefined" case, not an exception: callers such as
+        // findHeaderForBlockHash are typed to return undefined on a miss, and
+        // Services.hashToHeader relies on that to reach its WhatsOnChain
+        // fallback. Genuine service errors still throw below.
+        else if (v.code === 'ERR_NOT_FOUND') return undefined
         else e = new Error(JSON.stringify(v))
       } catch (error_: unknown) {
         e = error_ as Error
