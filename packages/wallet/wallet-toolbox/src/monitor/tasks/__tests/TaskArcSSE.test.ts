@@ -1,6 +1,7 @@
 import { TaskArcadeSSE } from '../TaskArcSSE'
 import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
 import { EntityProvenTx } from '../../../storage/schema/entities'
+import { TaskUnFail } from '../TaskUnFail'
 
 // ── Fake EventSource ─────────────────────────────────────────────────────────
 
@@ -62,7 +63,8 @@ function makeStorageWithReqs (reqApis: any[]): any {
   return {
     isStorageProvider: jest.fn().mockReturnValue(false),
     findProvenTxReqs: jest.fn().mockResolvedValue(reqApis),
-    runAsStorageProvider: jest.fn(async (fn: any) => fn(sp))
+    runAsStorageProvider: jest.fn(async (fn: any) => fn(sp)),
+    sp
   }
 }
 
@@ -257,14 +259,49 @@ describe('TaskArcadeSSE', () => {
       expect(log).toContain('=> unmined')
     })
 
+    test('SEEN_MULTIPLE_NODES is accepted without an unhandled warning', async () => {
+      const { log } = await runWithStatus('SEEN_MULTIPLE_NODES', 'unmined')
+      expect(log).not.toContain('unhandled status')
+    })
+
     test('DOUBLE_SPEND_ATTEMPTED sets req to doubleSpend', async () => {
       const { log } = await runWithStatus('DOUBLE_SPEND_ATTEMPTED', 'unmined')
       expect(log).toContain('=> doubleSpend')
     })
 
-    test('REJECTED sets req to invalid', async () => {
-      const { log } = await runWithStatus('REJECTED', 'unmined')
-      expect(log).toContain('=> invalid')
+    test('REJECTED records the event without releasing wallet inputs', async () => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined')
+      expect(log).toContain('rejection recorded; awaiting resolution')
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'unmined' }),
+        undefined
+      )
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('SEEN_MULTIPLE_NODES recovers a req previously marked invalid', async () => {
+      const unfailReq = jest.spyOn(TaskUnFail.prototype, 'unfailReq').mockResolvedValue('inputs re-reserved\n')
+      const { log, monitor } = await runWithStatus('SEEN_MULTIPLE_NODES', 'invalid')
+      expect(log).toContain('=> unmined')
+      expect(unfailReq).toHaveBeenCalledWith(expect.anything(), 4)
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
+        undefined
+      )
+    })
+
+    test('MINED recovers an invalid req before fetching its proof', async () => {
+      const unfailReq = jest.spyOn(TaskUnFail.prototype, 'unfailReq').mockResolvedValue('inputs re-reserved\n')
+      const { log, monitor } = await runWithStatus('MINED', 'invalid')
+      expect(log).not.toContain('already terminal')
+      expect(unfailReq).toHaveBeenCalledWith(expect.anything(), 4)
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
+        undefined
+      )
     })
 
     test('unknown status produces unhandled log entry', async () => {
@@ -273,8 +310,9 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('does not process already-terminal reqs', async () => {
-      // ProvenTxReqTerminalStatus = ['completed', 'invalid', 'doubleSpend']
-      const terminalStatuses = ['completed', 'invalid', 'doubleSpend']
+      // A positive network event may recover invalid; the other terminal
+      // statuses remain immutable.
+      const terminalStatuses = ['completed', 'doubleSpend']
       for (const s of terminalStatuses) {
         const { log } = await runWithStatus('MINED', s)
         expect(log).toContain(`already terminal: ${s}`)
@@ -313,6 +351,11 @@ describe('TaskArcadeSSE', () => {
       expect(getMerklePath).toHaveBeenCalledWith(reqApi.txid)
       expect(fromReq).toHaveBeenCalledWith(expect.anything(), proof, false, expect.any(Number))
       expect(storage.runAsStorageProvider).toHaveBeenCalled()
+      expect(storage.sp.updateProvenTxReqDynamics).toHaveBeenLastCalledWith(
+        reqApi.provenTxReqId,
+        expect.objectContaining({ notified: true }),
+        undefined
+      )
       expect(monitor.callOnProvenTransaction).toHaveBeenCalledWith(expect.objectContaining({
         txid: reqApi.txid,
         txIndex: 7,
