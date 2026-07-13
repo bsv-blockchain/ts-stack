@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import type { IncomingMessage, Server } from 'node:http'
+import type { Duplex } from 'node:stream'
 import type { WireEnvelope } from '../types.js'
 import { compileOriginMatcher, type AllowedOrigins } from '../shared/originMatcher.js'
 
@@ -38,6 +39,14 @@ export interface WebSocketRelayOptions {
    * When unset and `allowedOrigin` is also unset, no origin validation runs.
    */
   allowedOrigins?: AllowedOrigins
+  /** Path this relay claims. Default '/ws'. */
+  path?: string
+  /**
+   * When true, attach NO 'upgrade' listener to the server. Call
+   * `handleUpgrade(req, socket, head)` from your own dispatcher instead.
+   * Use when routing multiple WS services on one HTTP server.
+   */
+  noServer?: boolean
 }
 
 /**
@@ -63,15 +72,41 @@ export class WebSocketRelay {
   private onMobileConnectCb: ConnectHandler | null = null
   private isOriginAllowed: ((origin: string) => boolean) | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private readonly server: Server
+  private readonly path: string
+  private upgradeListener: ((req: IncomingMessage, socket: Duplex, head: Buffer) => void) | null = null
 
   constructor(server: Server, options?: WebSocketRelayOptions) {
     // `allowedOrigins` (new) wins over `allowedOrigin` (legacy) when both set.
     this.isOriginAllowed = compileOriginMatcher(
       options?.allowedOrigins ?? options?.allowedOrigin
     )
-    this.wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 })
+    this.server = server
+    this.path = options?.path ?? '/ws'
+    this.wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 })
     this.wss.on('connection', (ws, req) => this.handleConnection(ws, req))
+
+    // Default mode: claim our path only, ignore everything else so other
+    // upgrade listeners on this server can handle their own routes.
+    if (!options?.noServer) {
+      this.upgradeListener = (req, socket, head) => {
+        const { pathname } = new URL(req.url ?? '', 'http://localhost')
+        if (pathname !== this.path) return
+        this.handleUpgrade(req, socket, head)
+      }
+      this.server.on('upgrade', this.upgradeListener)
+    }
+
     this.heartbeatTimer = setInterval(() => this.runHeartbeat(), HEARTBEAT_INTERVAL_MS)
+  }
+
+  /**
+   * Perform the WS upgrade for this relay. Called by the built-in listener in
+   * default mode; call it yourself from a custom dispatcher when `noServer` is
+   * set. Does not re-check the path — the caller has already routed by path.
+   */
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    this.wss.handleUpgrade(req, socket, head, ws => this.wss.emit('connection', ws, req))
   }
 
   /** Register a callback for every inbound message from either side. */
@@ -142,6 +177,7 @@ export class WebSocketRelay {
 
   close(): void {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer)
+    if (this.upgradeListener) this.server.removeListener('upgrade', this.upgradeListener)
     this.wss.close()
   }
 

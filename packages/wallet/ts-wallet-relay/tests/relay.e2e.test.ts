@@ -717,4 +717,39 @@ describe('WalletRelayService E2E', () => {
       }
     }, 10_000)
   })
+
+  // ── Upgrade routing passthrough ──────────────────────────────────────────────
+
+  describe('upgrade routing passthrough', () => {
+    it('noServer mode: no upgrade listener until dispatched via service.handleUpgrade', async () => {
+      const { app, server } = makeServer()
+      const before = server.listenerCount('upgrade')
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app, server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        noServer: true,
+      })
+      // Service attached no upgrade listener of its own.
+      expect(server.listenerCount('upgrade')).toBe(before)
+      server.on('upgrade', (req, socket, head) => {
+        const { pathname } = new URL(req.url ?? '', 'http://localhost')
+        if (pathname === '/ws') svc.handleUpgrade(req, socket, head)
+      })
+      try {
+        const opened = await new Promise<boolean>(resolve => {
+          const ws = new WebSocket(`ws://localhost:${port}/ws?topic=t&role=mobile`)
+          const timer = setTimeout(() => { ws.terminate(); resolve(false) }, 1500)
+          ws.on('open',  () => { clearTimeout(timer); ws.close(); resolve(true) })
+          ws.on('error', () => { clearTimeout(timer); resolve(false) })
+        })
+        expect(opened).toBe(true)
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+  })
 })

@@ -49,7 +49,9 @@ new WalletRelayService(options: WalletRelayServiceOptions)
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `app` | `RouterLike` | No | — | Express-compatible app with `get`, `post`, and `delete` methods. REST routes are registered on it. Omit when using Next.js or another framework — call `createSession()`, `getSession()`, `sendRequest()`, and `deleteSession()` from your own route handlers instead. Uses a structural duck-type to avoid nominal type conflicts in monorepos. |
-| `server` | `http.Server` | **Yes** | — | HTTP server. The WebSocket upgrade handler is attached here. |
+| `server` | `http.Server` | **Yes** | — | HTTP server. In default mode a non-greedy `upgrade` listener is attached here — it claims only `path` and ignores other upgrades, so other WebSocket services can share the same server. |
+| `path` | `string` | No | `'/ws'` | Path the WebSocket relay claims. Forwarded to `WebSocketRelay`. Set this to mount the relay somewhere other than `/ws` (e.g. to free `/ws` for another service). Exact match only. |
+| `noServer` | `boolean` | No | `false` | When `true`, no `upgrade` listener is attached. Route upgrades yourself and call `service.handleUpgrade(req, socket, head)` for this relay's path. Use when running several WebSocket services from one dispatcher. |
 | `wallet` | `WalletLike` | **Yes** | — | Backend wallet for encrypting/decrypting messages. Use `ProtoWallet` with a stable private key: `new ProtoWallet(PrivateKey.fromHex(process.env.WALLET_PRIVATE_KEY!))`. The same key must be used across restarts — the mobile derives its ECDH shared secret from the backend identity key embedded in the QR code. |
 | `relayUrl` | `string` | No | `process.env.RELAY_URL` → `ws://localhost:3000` | `ws://` or `wss://` base URL of this server. Returned by `GET /api/session/:id` so the mobile can resolve it after scanning the QR. Not embedded in the QR itself. |
 | `origin` | `string` | No | `process.env.ORIGIN` → `http://localhost:5173` | Default `http://` or `https://` URL embedded in the QR pairing URI when `createSession()` is called without a per-session `origin` override. The mobile calls `{origin}/api/session/{topic}` over HTTPS to resolve the relay URL — this is the trust anchor. In production this is your app domain. For multi-app deployments (one relay shared by N webapps) leave this unset or set a sensible fallback, and pass `origin` per-call to `createSession({ origin })` instead. In local dev with a split Vite/Node setup, set this to the backend's LAN address so the mobile device can reach it (see `MOBILE_ORIGIN` in the quickstart). |
@@ -125,6 +127,16 @@ stop(): void
 ```
 
 Stops the session GC timer and closes the WebSocket server. Call on process shutdown.
+
+---
+
+**`handleUpgrade(req, socket, head)`**
+
+```ts
+handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void
+```
+
+Dispatches a WebSocket upgrade to the relay. Use when the service is constructed with `noServer: true` and you route upgrades from your own `server.on('upgrade', …)` handler across multiple WebSocket services. Delegates to `WebSocketRelay.handleUpgrade`.
 
 ---
 
@@ -763,7 +775,7 @@ These classes are exported from '@bsv/wallet-relay' (server entry) and can be co
 
 `import { WebSocketRelay } from '@bsv/wallet-relay'`
 
-Topic-keyed WebSocket bridge. Mounts at `/ws`. Connections use `?topic=<sessionId>&role=desktop|mobile`.
+Topic-keyed WebSocket bridge. Mounts at `/ws` by default (configurable via `path`). Connections use `?topic=<sessionId>&role=desktop|mobile`.
 
 - Messages from each side are forwarded to the other (or buffered for up to 60 s if the other side is not yet connected)
 - Buffer cap: 50 messages per topic
@@ -778,6 +790,8 @@ new WebSocketRelay(server: http.Server, options?: WebSocketRelayOptions)
 interface WebSocketRelayOptions {
   allowedOrigin?:  string           // legacy single-string match — kept for backward compatibility
   allowedOrigins?: AllowedOrigins   // string | string[] | RegExp | (origin: string) => boolean
+  path?:           string           // path this relay claims (default '/ws')
+  noServer?:       boolean          // when true, attach no upgrade listener — dispatch via handleUpgrade
 }
 ```
 
@@ -785,8 +799,10 @@ interface WebSocketRelayOptions {
 |--------|------|-------------|
 | `allowedOrigins` | `AllowedOrigins` | Origin allowlist for browser WS upgrades (`role=desktop`). Accepts a `string`, `string[]`, `RegExp`, or `(origin: string) => boolean` predicate. Connections whose `Origin` header does not match are rejected with close code `1008`. Native clients (React Native, server-to-server) omit `Origin` and are exempt. |
 | `allowedOrigin` | `string` | Legacy single-value form, kept for backward compatibility. Equivalent to passing the same string as `allowedOrigins`. If both are set, `allowedOrigins` takes precedence. |
+| `path` | `string` | Path this relay claims. Default `'/ws'`. In default mode the relay's `upgrade` listener claims only this path (exact match) and ignores others, so other WebSocket services can share the server. |
+| `noServer` | `boolean` | When `true`, attach no `upgrade` listener. Route upgrades yourself and call `handleUpgrade(req, socket, head)`. Use when running several WebSocket services from one dispatcher. Default `false`. |
 
-When neither option is set, no origin validation runs.
+When neither origin option is set, no origin validation runs.
 
 #### Methods
 
@@ -860,13 +876,35 @@ Removes all state for a topic. Call when the corresponding session is deleted.
 
 ---
 
+**`handleUpgrade(req, socket, head)`**
+
+```ts
+handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void
+```
+
+Performs the WebSocket upgrade for this relay. Called automatically by the built-in listener in default mode; call it yourself from a custom `server.on('upgrade', …)` dispatcher when constructed with `noServer: true`. Does not re-check the path — the caller has already routed by path.
+
+```ts
+const relay  = new WebSocketRelay(server, { noServer: true })
+const msgWss = new WebSocketServer({ noServer: true })
+
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url ?? '', 'http://localhost')
+  if (pathname === '/ws')             relay.handleUpgrade(req, socket, head)
+  else if (pathname === '/messaging') msgWss.handleUpgrade(req, socket, head, ws => msgWss.emit('connection', ws, req))
+  else                                socket.destroy()
+})
+```
+
+---
+
 **`close()`**
 
 ```ts
 close(): void
 ```
 
-Stops the heartbeat timer and closes the WebSocket server.
+Stops the heartbeat timer, removes the `upgrade` listener it registered (default mode only), and closes the WebSocket server.
 
 ---
 

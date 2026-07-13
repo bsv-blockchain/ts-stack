@@ -155,6 +155,32 @@ The built-in `GET /api/session` route forwards the request's `Origin` header int
 
 > **CORS:** if your frontend and backend run on different origins, you must include `X-Desktop-Token` in your CORS `allowedHeaders`. Without it the browser's preflight check blocks every `POST /api/request/:id` call. The example above already includes it — don't remove it.
 
+#### Sharing the server with other WebSocket services
+
+The relay mounts at `/ws` and is **non-greedy**: it claims only its own path and ignores every other upgrade request, so a messaging service — or any other WebSocket endpoint — can share the same HTTP server without being rejected.
+
+Change the path with `path`, or take over upgrade routing entirely with `noServer`:
+
+```ts
+import { WebSocketServer } from 'ws'
+
+// Mount the relay at a different path
+new WalletRelayService({ app, server, wallet, path: '/wallet-ws' })
+
+// Or run your own upgrade dispatcher across several WS services
+const relay  = new WalletRelayService({ app, server, wallet, noServer: true })
+const msgWss = new WebSocketServer({ noServer: true })
+
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url ?? '', 'http://localhost')
+  if (pathname === '/ws')             relay.handleUpgrade(req, socket, head)
+  else if (pathname === '/messaging') msgWss.handleUpgrade(req, socket, head, ws => msgWss.emit('connection', ws, req))
+  else                                socket.destroy()
+})
+```
+
+In `noServer` mode the relay attaches no `upgrade` listener of its own — you dispatch to `relay.handleUpgrade()`. In default mode, unmatched upgrade paths are left untouched for other listeners; if nothing ever claims a path, that socket stays open until the client times out (add an `else socket.destroy()` in your own dispatcher to reject it eagerly).
+
 #### Frontend
 
 `@bsv/wallet-relay/react` exports everything needed for wallet detection and QR pairing:
@@ -441,6 +467,8 @@ relay.onValidateTopic(topic => sessions.getSession(topic) !== null)
 relay.onIncoming((topic, envelope, role) => { /* custom logic */ })
 sessions.onSessionExpired(id => relay.removeTopic(id))
 ```
+
+`WebSocketRelay` accepts the same `path` and `noServer` options as the facade (see [Sharing the server with other WebSocket services](#sharing-the-server-with-other-websocket-services)); in `noServer` mode, dispatch upgrades to `relay.handleUpgrade(req, socket, head)`.
 
 The high-level facades (`WalletRelayService`, `WalletPairingSession`) follow semver strictly. The building blocks are stable but may have more targeted breaking changes between minor versions.
 
