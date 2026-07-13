@@ -238,6 +238,49 @@ describe('Arcade broadcaster', () => {
       return { beef, spendTxid: spendTx.id('hex'), orphanTxid: orphan.id('hex') }
     }
 
+    function buildBeefBatch (count: number): { beef: Beef, txids: string[] } {
+      const priv = PrivateKey.fromHex('22'.repeat(32))
+      const lock = new P2PKH().lock(priv.toPublicKey().toAddress())
+
+      const sourceTx = new Transaction()
+      for (let i = 0; i < count; i++) sourceTx.addOutput({ satoshis: 5000, lockingScript: lock })
+      sourceTx.merklePath = new MerklePath(800000, [[{ offset: 0, hash: sourceTx.id('hex'), txid: true }]])
+
+      const beef = new Beef()
+      beef.mergeTransaction(sourceTx)
+      const txids: string[] = []
+      for (let i = 0; i < count; i++) {
+        const spendTx = new Transaction()
+        spendTx.addInput({ sourceTransaction: sourceTx, sourceOutputIndex: i, unlockingScript: new UnlockingScript() })
+        spendTx.addOutput({ satoshis: 4000, lockingScript: lock })
+        beef.mergeTransaction(spendTx)
+        txids.push(spendTx.id('hex'))
+      }
+      return { beef, txids }
+    }
+
+    function buildBeefChain (count: number): { beef: Beef, txids: string[] } {
+      const priv = PrivateKey.fromHex('33'.repeat(32))
+      const lock = new P2PKH().lock(priv.toPublicKey().toAddress())
+
+      let sourceTx = new Transaction()
+      sourceTx.addOutput({ satoshis: 5000, lockingScript: lock })
+      sourceTx.merklePath = new MerklePath(800000, [[{ offset: 0, hash: sourceTx.id('hex'), txid: true }]])
+
+      const beef = new Beef()
+      beef.mergeTransaction(sourceTx)
+      const txids: string[] = []
+      for (let i = 0; i < count; i++) {
+        const spendTx = new Transaction()
+        spendTx.addInput({ sourceTransaction: sourceTx, sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
+        spendTx.addOutput({ satoshis: 4000 - i, lockingScript: lock })
+        beef.mergeTransaction(spendTx)
+        txids.push(spendTx.id('hex'))
+        sourceTx = spendTx
+      }
+      return { beef, txids }
+    }
+
     test('Arcade posts EF hex (with EF marker, not a BEEF prefix) to /tx', async () => {
       const captured: CapturedRequest[] = []
       const http = mockHttpClient(
@@ -288,6 +331,68 @@ describe('Arcade broadcaster', () => {
       const tr = r.txidResults.find(t => t.txid === orphanTxid)
       expect(tr?.serviceError).toBe(true)
       expect(captured).toHaveLength(0)
+    })
+
+    test('submits a multi-transaction BEEF with bounded concurrency and stable result ordering', async () => {
+      const { beef, txids } = buildBeefBatch(8)
+      let callIndex = 0
+      let inFlight = 0
+      let maxInFlight = 0
+      const http: HttpClient = {
+        async request<D> (): Promise<HttpClientResponse<D>> {
+          const txid = txids[callIndex++]
+          inFlight++
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise(resolve => setTimeout(resolve, 10))
+          inFlight--
+          const response = {
+            ok: true,
+            status: 202,
+            statusText: 'Accepted',
+            data: { txid, status: 202, txStatus: 'RECEIVED' }
+          }
+          return response as HttpClientResponse<D>
+        }
+      }
+      const arc = new Arcade('https://arcade.example', { httpClient: http })
+
+      const r = await arc.postBeef(beef, txids)
+
+      expect(maxInFlight).toBe(4)
+      expect(callIndex).toBe(8)
+      expect(r.status).toBe('success')
+      expect(r.txidResults.map(result => result.txid)).toEqual(txids)
+    })
+
+    test('preserves parent-before-child order for a chained BEEF', async () => {
+      const { beef, txids } = buildBeefChain(5)
+      const callOrder: string[] = []
+      let inFlight = 0
+      let maxInFlight = 0
+      const http: HttpClient = {
+        async request<D> (): Promise<HttpClientResponse<D>> {
+          const txid = txids[callOrder.length]
+          callOrder.push(txid)
+          inFlight++
+          maxInFlight = Math.max(maxInFlight, inFlight)
+          await new Promise(resolve => setTimeout(resolve, 5))
+          inFlight--
+          const response = {
+            ok: true,
+            status: 202,
+            statusText: 'Accepted',
+            data: { txid, status: 202, txStatus: 'RECEIVED' }
+          }
+          return response as HttpClientResponse<D>
+        }
+      }
+      const arc = new Arcade('https://arcade.example', { httpClient: http })
+
+      const r = await arc.postBeef(beef, txids)
+
+      expect(maxInFlight).toBe(1)
+      expect(callOrder).toEqual(txids)
+      expect(r.status).toBe('success')
     })
   })
 
