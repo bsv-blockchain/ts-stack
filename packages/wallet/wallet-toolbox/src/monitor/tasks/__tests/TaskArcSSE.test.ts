@@ -268,9 +268,26 @@ describe('TaskArcadeSSE', () => {
       expect(log).toContain('=> doubleSpend')
     })
 
-    test('REJECTED sets req to invalid', async () => {
-      const { log } = await runWithStatus('REJECTED', 'unmined')
-      expect(log).toContain('=> invalid')
+    test('REJECTED records the event without releasing wallet inputs', async () => {
+      const { log, monitor } = await runWithStatus('REJECTED', 'unmined')
+      expect(log).toContain('rejection recorded; awaiting resolution')
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'unmined' }),
+        undefined
+      )
+      expect(monitor.storage.sp.updateTransactionsStatus).not.toHaveBeenCalled()
+    })
+
+    test('SEEN_MULTIPLE_NODES recovers a req previously marked invalid', async () => {
+      const { log, monitor } = await runWithStatus('SEEN_MULTIPLE_NODES', 'invalid')
+      expect(log).toContain('=> unmined')
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
+        undefined
+      )
+      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'unproven')
     })
 
     test('unknown status produces unhandled log entry', async () => {

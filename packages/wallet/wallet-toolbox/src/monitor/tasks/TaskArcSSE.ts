@@ -116,7 +116,17 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     for (const reqApi of reqs) {
       const req = new EntityProvenTxReq(reqApi)
 
-      if (ProvenTxReqTerminalStatus.includes(req.status)) {
+      const acceptedByNetwork = [
+        'SENT_TO_NETWORK',
+        'ACCEPTED_BY_NETWORK',
+        'SEEN_ON_NETWORK',
+        'SEEN_MULTIPLE_NODES'
+      ].includes(event.txStatus)
+      // Arcade can emit REJECTED before another node accepts the same transaction.
+      // Permit a later positive network observation to heal requests that an older
+      // Monitor version prematurely marked invalid.
+      const canRecoverRejectedRequest = req.status === 'invalid' && acceptedByNetwork
+      if (ProvenTxReqTerminalStatus.includes(req.status) && !canRecoverRejectedRequest) {
         log += `  req ${req.id} already terminal: ${req.status}\n`
         continue
       }
@@ -132,7 +142,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         case 'ACCEPTED_BY_NETWORK':
         case 'SEEN_ON_NETWORK':
         case 'SEEN_MULTIPLE_NODES': {
-          if (['unsent', 'sending', 'callback'].includes(req.status)) {
+          if (['unsent', 'sending', 'callback', 'invalid'].includes(req.status)) {
             req.status = 'unmined'
             req.wasBroadcast = true
             req.addHistoryNote(note)
@@ -171,16 +181,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         }
 
         case 'REJECTED': {
-          req.status = 'invalid'
+          // REJECTED is not a final consensus result: production Arcade has
+          // subsequently reported SEEN_MULTIPLE_NODES for the same txid. Keep
+          // wallet inputs reserved while proof/rebroadcast processing resolves
+          // the transaction authoritatively.
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
-          const ids = req.notify.transactionIds
-          if (ids != null) {
-            await this.storage.runAsStorageProvider(async sp => {
-              await sp.updateTransactionsStatus(ids, 'failed')
-            })
-          }
-          log += `  req ${req.id} => invalid\n`
+          log += `  req ${req.id} rejection recorded; awaiting resolution\n`
           break
         }
 
