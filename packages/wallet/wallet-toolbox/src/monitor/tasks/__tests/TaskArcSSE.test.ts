@@ -1,6 +1,7 @@
 import { TaskArcadeSSE } from '../TaskArcSSE'
 import { ArcSSEEvent } from '../../../services/providers/ArcSSEClient'
 import { EntityProvenTx } from '../../../storage/schema/entities'
+import { TaskUnFail } from '../TaskUnFail'
 
 // ── Fake EventSource ─────────────────────────────────────────────────────────
 
@@ -280,14 +281,27 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('SEEN_MULTIPLE_NODES recovers a req previously marked invalid', async () => {
+      const unfailReq = jest.spyOn(TaskUnFail.prototype, 'unfailReq').mockResolvedValue('inputs re-reserved\n')
       const { log, monitor } = await runWithStatus('SEEN_MULTIPLE_NODES', 'invalid')
       expect(log).toContain('=> unmined')
+      expect(unfailReq).toHaveBeenCalledWith(expect.anything(), 4)
       expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
         1,
         expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
         undefined
       )
-      expect(monitor.storage.sp.updateTransactionsStatus).toHaveBeenCalledWith([1], 'unproven')
+    })
+
+    test('MINED recovers an invalid req before fetching its proof', async () => {
+      const unfailReq = jest.spyOn(TaskUnFail.prototype, 'unfailReq').mockResolvedValue('inputs re-reserved\n')
+      const { log, monitor } = await runWithStatus('MINED', 'invalid')
+      expect(log).not.toContain('already terminal')
+      expect(unfailReq).toHaveBeenCalledWith(expect.anything(), 4)
+      expect(monitor.storage.sp.updateProvenTxReqDynamics).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'unmined', wasBroadcast: true }),
+        undefined
+      )
     })
 
     test('unknown status produces unhandled log entry', async () => {
@@ -296,8 +310,9 @@ describe('TaskArcadeSSE', () => {
     })
 
     test('does not process already-terminal reqs', async () => {
-      // ProvenTxReqTerminalStatus = ['completed', 'invalid', 'doubleSpend']
-      const terminalStatuses = ['completed', 'invalid', 'doubleSpend']
+      // A positive network event may recover invalid; the other terminal
+      // statuses remain immutable.
+      const terminalStatuses = ['completed', 'doubleSpend']
       for (const s of terminalStatuses) {
         const { log } = await runWithStatus('MINED', s)
         expect(log).toContain(`already terminal: ${s}`)

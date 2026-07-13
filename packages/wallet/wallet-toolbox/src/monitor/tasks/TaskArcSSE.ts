@@ -5,6 +5,7 @@ import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
+import { TaskUnFail } from './TaskUnFail'
 
 /**
  * Monitor task that receives transaction status updates from Arcade via SSE
@@ -122,10 +123,11 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         'SEEN_ON_NETWORK',
         'SEEN_MULTIPLE_NODES'
       ].includes(event.txStatus)
+      const confirmedByNetwork = ['MINED', 'IMMUTABLE'].includes(event.txStatus)
       // Arcade can emit REJECTED before another node accepts the same transaction.
       // Permit a later positive network observation to heal requests that an older
       // Monitor version prematurely marked invalid.
-      const canRecoverRejectedRequest = req.status === 'invalid' && acceptedByNetwork
+      const canRecoverRejectedRequest = req.status === 'invalid' && (acceptedByNetwork || confirmedByNetwork)
       if (ProvenTxReqTerminalStatus.includes(req.status) && !canRecoverRejectedRequest) {
         log += `  req ${req.id} already terminal: ${req.status}\n`
         continue
@@ -143,16 +145,21 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         case 'SEEN_ON_NETWORK':
         case 'SEEN_MULTIPLE_NODES': {
           if (['unsent', 'sending', 'callback', 'invalid'].includes(req.status)) {
+            const wasInvalid = req.status === 'invalid'
             req.status = 'unmined'
+            if (wasInvalid) req.attempts = 0
             req.wasBroadcast = true
             req.addHistoryNote(note)
-            await req.updateStorageDynamicProperties(this.storage)
-            const ids = req.notify.transactionIds
-            if (ids != null) {
+            if (wasInvalid) {
+              // Restore transaction state, re-reserve wallet inputs, and verify
+              // output spendability using the established unfail repair path.
+              log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
+            } else if (req.notify.transactionIds != null) {
               await this.storage.runAsStorageProvider(async sp => {
-                await sp.updateTransactionsStatus(ids, 'unproven')
+                await sp.updateTransactionsStatus(req.notify.transactionIds ?? [], 'unproven')
               })
             }
+            await req.updateStorageDynamicProperties(this.storage)
             log += `  req ${req.id} => unmined\n`
           }
           break
@@ -160,6 +167,12 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
         case 'MINED':
         case 'IMMUTABLE': {
+          if (req.status === 'invalid') {
+            req.status = 'unmined'
+            req.attempts = 0
+            req.wasBroadcast = true
+            log += await new TaskUnFail(this.monitor).unfailReq(req, 4)
+          }
           req.addHistoryNote(note)
           await req.updateStorageDynamicProperties(this.storage)
           log += await this.fetchProofFromServices(req)
