@@ -4,6 +4,7 @@ import { AuthId, ReviewActionResult } from '../../sdk/WalletStorage.interfaces'
 import { completeSignedTransaction, verifyUnlockScripts } from './completeSignedTransaction'
 import { Wallet } from '../../Wallet'
 import { WERR_INTERNAL, WERR_NOT_IMPLEMENTED } from '../../sdk/WERR_errors'
+import { setResultBeef } from './resultBeef'
 
 export interface SignActionResultX extends SignActionResult {
   txid?: TXIDHexString
@@ -24,7 +25,9 @@ export async function signAction (wallet: Wallet, auth: AuthId, args: SignAction
   const { sendWithResults, notDelayedResults } = await processAction(prior, wallet, auth, vargs)
 
   const txid = prior.tx.id('hex')
-  const beef = Beef.fromBinary(prior.dcr.inputBeef)
+  const beef = prior.dcr.inputBeef instanceof Uint8Array
+    ? Beef.fromBinaryView(prior.dcr.inputBeef)
+    : Beef.fromBinary(prior.dcr.inputBeef)
   beef.mergeTransaction(prior.tx)
 
   verifyUnlockScripts(txid, beef)
@@ -35,6 +38,9 @@ export async function signAction (wallet: Wallet, auth: AuthId, args: SignAction
     sendWithResults,
     notDelayedResults
   }
+
+  beef.atomicTxid = txid
+  setResultBeef(r, beef)
 
   return r
 }

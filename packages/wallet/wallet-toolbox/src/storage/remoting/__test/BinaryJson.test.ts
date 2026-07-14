@@ -1,0 +1,101 @@
+import {
+  BINARY_ENCODING,
+  BINARY_ENCODING_HEADER,
+  binaryJsonReviver,
+  decodeBinaryJsonValue,
+  parseJsonRpc,
+  stringifyJsonRpc
+} from '../BinaryJson'
+import { StorageClient } from '../StorageClient'
+import type { WalletInterface } from '@bsv/sdk'
+
+describe('binary JSON-RPC encoding', () => {
+  it('round-trips nested Uint8Arrays through compact base64 tags', () => {
+    const bytes = new Uint8Array(1024 * 1024)
+    for (let i = 0; i < bytes.length; i++) bytes[i] = i & 0xff
+    const encoded = stringifyJsonRpc({ result: { bytes } }, true)
+    const decoded = parseJsonRpc(encoded)
+
+    expect(encoded).toContain(`"$bsvBinary":"${BINARY_ENCODING}"`)
+    expect(encoded.length).toBeLessThan(bytes.length * 1.4)
+    expect(decoded.result.bytes).toBeInstanceOf(Uint8Array)
+    expect(decoded.result.bytes).toEqual(bytes)
+  })
+
+  it('compacts Node Buffer values after Buffer.toJSON has run', () => {
+    const BufferCtor = (globalThis as any).Buffer
+    if (BufferCtor == null) return
+    const encoded = stringifyJsonRpc({ bytes: BufferCtor.from([1, 2, 3]) }, true)
+    const decoded = parseJsonRpc(encoded)
+
+    expect(encoded).toContain(`"$bsvBinary":"${BINARY_ENCODING}"`)
+    expect(decoded.bytes).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  it('round-trips bytes with the browser-native codecs when Buffer is absent', () => {
+    const globals = globalThis as any
+    const originalBuffer = globals.Buffer
+    try {
+      globals.Buffer = undefined
+      const bytes = new Uint8Array([0, 1, 127, 128, 254, 255])
+      expect(parseJsonRpc(stringifyJsonRpc({ bytes }, true)).bytes).toEqual(bytes)
+    } finally {
+      globals.Buffer = originalBuffer
+    }
+  })
+
+  it('round-trips bytes with the pure mobile fallback when native codecs are absent', () => {
+    const globals = globalThis as any
+    const original = { Buffer: globals.Buffer, btoa: globals.btoa, atob: globals.atob }
+    try {
+      globals.Buffer = undefined
+      globals.btoa = undefined
+      globals.atob = undefined
+      const encoded = stringifyJsonRpc({ bytes: new Uint8Array([0, 1, 2, 253, 254, 255]) }, true)
+      expect(parseJsonRpc(encoded).bytes).toEqual(new Uint8Array([0, 1, 2, 253, 254, 255]))
+    } finally {
+      globals.Buffer = original.Buffer
+      globals.btoa = original.btoa
+      globals.atob = original.atob
+    }
+  })
+
+  it('keeps legacy peers on numeric arrays', () => {
+    const encoded = stringifyJsonRpc({ bytes: new Uint8Array([1, 2, 3]) }, false)
+    expect(JSON.parse(encoded)).toEqual({ bytes: [1, 2, 3] })
+  })
+
+  it('decodes tagged values after Express has parsed the request', () => {
+    const parsed = JSON.parse(stringifyJsonRpc({ params: [{ bytes: new Uint8Array([4, 5, 6]) }] }, true))
+    const decoded = decodeBinaryJsonValue(parsed) as any
+    expect(decoded.params[0].bytes).toEqual(new Uint8Array([4, 5, 6]))
+  })
+
+  it('leaves ordinary JSON values untouched', () => {
+    const value = JSON.parse('{"data":"plain","items":[1,2]}', binaryJsonReviver)
+    expect(value).toEqual({ data: 'plain', items: [1, 2] })
+  })
+
+  it('negotiates compact binary without breaking the first request to a legacy server', async () => {
+    const requests: string[] = []
+    const fetch = async (_input: string, init?: RequestInit): Promise<Response> => {
+      requests.push(String(init?.body))
+      const id = requests.length
+      return new Response(stringifyJsonRpc({ jsonrpc: '2.0', id, result: { bytes: new Uint8Array([id, 2, 3]) } }, true), {
+        headers: { [BINARY_ENCODING_HEADER]: BINARY_ENCODING }
+      })
+    }
+    const wallet = Object.create(null) as WalletInterface
+    const client = new StorageClient(wallet, 'https://storage.example')
+    Reflect.set(client, 'authClient', { fetch })
+    const rpcCall = Reflect.get(client, 'rpcCall').bind(client)
+
+    const first = await rpcCall('first', [{ bytes: new Uint8Array([1, 2, 3]) }])
+    const second = await rpcCall('second', [{ bytes: new Uint8Array([4, 5, 6]) }])
+
+    expect(JSON.parse(requests[0]).params[0].bytes).toEqual([1, 2, 3])
+    expect(requests[1]).toContain(`"$bsvBinary":"${BINARY_ENCODING}"`)
+    expect(first.bytes).toEqual(new Uint8Array([1, 2, 3]))
+    expect(second.bytes).toEqual(new Uint8Array([2, 2, 3]))
+  })
+})

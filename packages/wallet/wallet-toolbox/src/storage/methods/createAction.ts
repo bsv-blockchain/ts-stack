@@ -996,12 +996,12 @@ async function fundNewTransactionSdk (
  * in the `beef` to txidOnly.
  * @returns undefined if `vargs.options.returnTXIDOnly` or trimmed `Beef`
  */
-function trimInputBeef (beef: Beef, vargs: Validation.ValidCreateActionArgs): number[] | undefined {
+function trimInputBeef (beef: Beef, vargs: Validation.ValidCreateActionArgs): Uint8Array | undefined {
   if (vargs.options.returnTXIDOnly) return undefined
   const knownTxids: Record<string, boolean> = {}
   for (const txid of vargs.options.knownTxids || []) knownTxids[txid] = true
   for (const txid of beef.txs.map(btx => btx.txid)) if (knownTxids[txid]) beef.makeTxidOnly(txid)
-  return beef.toBinary()
+  return beef.toUint8Array()
 }
 
 async function mergeAllocatedChangeBeefs (
@@ -1010,7 +1010,7 @@ async function mergeAllocatedChangeBeefs (
   vargs: Validation.ValidCreateActionArgs,
   allocatedChange: TableOutput[],
   beef: Beef
-): Promise<number[] | undefined> {
+): Promise<Uint8Array | undefined> {
   const options: StorageGetBeefOptions = {
     trustSelf: undefined,
     knownTxids: vargs.options.knownTxids,
@@ -1021,10 +1021,22 @@ async function mergeAllocatedChangeBeefs (
     minProofLevel: undefined
   }
   if (vargs.options.returnTXIDOnly) return undefined
-  for (const o of allocatedChange) {
-    if ((beef.findTxid(o.txid!) == null) && !(vargs.options.knownTxids ?? []).some(txid => txid === o.txid)) {
-      await storage.getBeefForTransaction(o.txid!, options)
+  const known = new Set(vargs.options.knownTxids ?? [])
+  const missing = Array.from(new Set(allocatedChange
+    .map(o => o.txid!)
+    .filter(txid => beef.findTxid(txid) == null && !known.has(txid))))
+  const fetched: Array<Beef | undefined> = new Array(missing.length)
+  const concurrency = Math.min(8, Math.max(1, missing.length))
+  let cursor = 0
+  await Promise.all(Array.from({ length: concurrency }, async () => {
+    while (cursor < missing.length) {
+      const index = cursor++
+      fetched[index] = await storage.getBeefForTransaction(missing[index], { ...options, mergeToBeef: undefined })
     }
+  }))
+  for (const fetchedBeef of fetched) {
+    if (fetchedBeef == null) continue
+    beef.mergeBeef(fetchedBeef)
   }
   return trimInputBeef(beef, vargs)
 }

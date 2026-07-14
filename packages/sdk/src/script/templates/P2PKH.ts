@@ -22,7 +22,7 @@ export default class P2PKH implements ScriptTemplate {
    * @param {number[] | string} pubkeyhash or address - An array or address representing the public key hash.
    * @returns {LockingScript} - A P2PKH locking script.
    */
-  lock(pubkeyhash: string | number[]): LockingScript {
+  lock (pubkeyhash: string | number[]): LockingScript {
     let data: number[]
     if (typeof pubkeyhash === 'string') {
       const hash = fromBase58Check(pubkeyhash)
@@ -60,16 +60,16 @@ export default class P2PKH implements ScriptTemplate {
    * @param {Script} lockingScript - Optional. The lockinScript. Otherwise the input.sourceTransaction is required.
    * @returns {Object} - An object containing the `sign` and `estimateLength` functions.
    */
-  unlock(
+  unlock (
     privateKey: PrivateKey,
     signOutputs: 'all' | 'none' | 'single' = 'all',
     anyoneCanPay: boolean = false,
     sourceSatoshis?: number,
     lockingScript?: Script
   ): {
-    sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-    estimateLength: () => Promise<108>
-  } {
+      sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
+      estimateLength: () => Promise<108>
+    } {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
         const signatureScope = computeSignatureScope(signOutputs, anyoneCanPay)
@@ -78,9 +78,13 @@ export default class P2PKH implements ScriptTemplate {
         lockingScript = resolved.lockingScript
 
         const preimage = formatPreimage({
-          tx, inputIndex, signatureScope,
-          sourceTXID: resolved.sourceTXID, sourceSatoshis: resolved.sourceSatoshis,
-          lockingScript: resolved.lockingScript, otherInputs: resolved.otherInputs
+          tx,
+          inputIndex,
+          signatureScope,
+          sourceTXID: resolved.sourceTXID,
+          sourceSatoshis: resolved.sourceSatoshis,
+          lockingScript: resolved.lockingScript,
+          allInputs: resolved.allInputs
         })
 
         const rawSignature = privateKey.sign(sha256(preimage))

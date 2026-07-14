@@ -6,7 +6,7 @@ import { verifyNotNull } from '../../primitives/utils.js'
 /**
  * Computes the signature scope flags from the given signing parameters.
  */
-export function computeSignatureScope(
+export function computeSignatureScope (
   signOutputs: 'all' | 'none' | 'single',
   anyoneCanPay: boolean
 ): number {
@@ -30,22 +30,19 @@ export function computeSignatureScope(
  * Resolves and validates the source transaction details needed for signing.
  * Returns the resolved sourceTXID, sourceSatoshis, lockingScript, and otherInputs.
  */
-export function resolveSourceDetails(
+export function resolveSourceDetails (
   tx: Transaction,
   inputIndex: number,
   providedSourceSatoshis?: number,
   providedLockingScript?: Script
 ): {
-  sourceTXID: string
-  sourceSatoshis: number
-  lockingScript: Script
-  otherInputs: typeof tx.inputs
-} {
+    sourceTXID: string
+    sourceSatoshis: number
+    lockingScript: Script
+    otherInputs: typeof tx.inputs
+    allInputs: typeof tx.inputs
+  } {
   const input = tx.inputs[inputIndex]
-
-  const otherInputs = tx.inputs.filter(
-    (_, index) => index !== inputIndex
-  )
 
   const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
   if (sourceTXID == null || sourceTXID === undefined) {
@@ -74,7 +71,17 @@ export function resolveSourceDetails(
     )
   }
 
-  return { sourceTXID, sourceSatoshis, lockingScript, otherInputs }
+  return {
+    sourceTXID,
+    sourceSatoshis,
+    lockingScript,
+    allInputs: tx.inputs,
+    // Preserve the public helper's legacy result without paying for it unless a
+    // caller explicitly reads the property.
+    get otherInputs () {
+      return tx.inputs.filter((_, index) => index !== inputIndex)
+    }
+  }
 }
 
 /** Parameters for formatting the transaction preimage */
@@ -85,27 +92,30 @@ export interface FormatPreimageParams {
   sourceTXID: string
   sourceSatoshis: number
   lockingScript: Script
-  otherInputs: Transaction['inputs']
+  otherInputs?: Transaction['inputs']
+  allInputs?: Transaction['inputs']
   inputSequence?: number
 }
 
 /**
  * Formats the transaction preimage for signing.
  */
-export function formatPreimage(params: FormatPreimageParams): number[] {
-  const { tx, inputIndex, signatureScope, sourceTXID, sourceSatoshis, lockingScript, otherInputs, inputSequence } = params
+export function formatPreimage (params: FormatPreimageParams): number[] {
+  const { tx, inputIndex, signatureScope, sourceTXID, sourceSatoshis, lockingScript, otherInputs, allInputs, inputSequence } = params
   const input = tx.inputs[inputIndex]
   return TransactionSignature.format({
     sourceTXID,
     sourceOutputIndex: verifyNotNull(input.sourceOutputIndex, 'input.sourceOutputIndex must have value'),
     sourceSatoshis,
     transactionVersion: tx.version,
-    otherInputs,
+    otherInputs: otherInputs ?? [],
+    allInputs,
     inputIndex,
     outputs: tx.outputs,
     inputSequence: inputSequence ?? verifyNotNull(input.sequence, 'input.sequence must have value'),
     subscript: lockingScript,
     lockTime: tx.lockTime,
-    scope: signatureScope
+    scope: signatureScope,
+    cache: tx.getSignatureHashCache()
   })
 }

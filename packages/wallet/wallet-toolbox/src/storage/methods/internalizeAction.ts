@@ -285,7 +285,7 @@ class InternalizeActionContext {
   }
 
   async asyncSetup () {
-    ;({ ab: this.ab, tx: this.tx, txid: this.txid } = await this.validateAtomicBeef(Utils.toArray(this.args.tx)))
+    ;({ ab: this.ab, tx: this.tx, txid: this.txid } = await this.validateAtomicBeef(this.args.tx))
 
     for (const o of this.args.outputs) {
       if (o.outputIndex < 0 || o.outputIndex >= this.tx.outputs.length) {
@@ -406,8 +406,8 @@ class InternalizeActionContext {
    * @param atomicBeef
    * @returns
    */
-  async validateAtomicBeef (atomicBeef: number[]) {
-    const ab = Beef.fromBinary(atomicBeef)
+  async validateAtomicBeef (atomicBeef: number[] | Uint8Array) {
+    const ab = atomicBeef instanceof Uint8Array ? Beef.fromBinaryView(atomicBeef) : Beef.fromBinary(atomicBeef)
     const txValid = await ab.verify(await this.storage.getServices().getChainTracker(), false)
     if (!txValid || !ab.atomicTxid) throw new WERR_INVALID_PARAMETER('tx', 'valid AtomicBEEF')
     const txid = ab.atomicTxid
@@ -619,7 +619,7 @@ class InternalizeActionContext {
       // The beef may contain additional unbroadcast transactions which
       // we don't care about.
       const r: GetReqsAndBeefResult = {
-        beef: Beef.fromBinary(this.args.tx),
+        beef: this.ab,
         details: [{ txid: this.txid, status: 'readyToSend', req: pr.req }]
       }
       const { swr, ndr } = await shareReqsWithWorld(this.storage, this.userId, [], false, r)

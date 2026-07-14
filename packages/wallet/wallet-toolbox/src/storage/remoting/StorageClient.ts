@@ -5,6 +5,7 @@ import {
 import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { logWalletError } from '../../WalletLogger'
 import { StorageClientBase } from './StorageClientBase'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
 
 /**
  * `StorageClient` implements the `WalletStorageProvider` interface which allows it to
@@ -57,8 +58,8 @@ export class StorageClient extends StorageClientBase {
       try {
         response = await this.authClient.fetch(this.endpointUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          headers: { 'Content-Type': 'application/json', [BINARY_ENCODING_HEADER]: BINARY_ENCODING },
+          body: stringifyJsonRpc(body, this.serverSupportsBinary)
         })
       } catch (error_: unknown) {
         logWalletError(error_, logger, 'error requesting remote service')
@@ -69,7 +70,8 @@ export class StorageClient extends StorageClientBase {
         throw new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
       }
 
-      const json = await response.json()
+      if (response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING) this.serverSupportsBinary = true
+      const json = parseJsonRpc(await response.text())
       if (json.error) {
         logWalletError(json.error, logger, 'error from remote service')
         const werr = WalletErrorFromJson(json.error)

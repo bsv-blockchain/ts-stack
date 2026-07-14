@@ -17,6 +17,7 @@ import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { logWalletError } from '../../WalletLogger'
+import { BINARY_ENCODING, BINARY_ENCODING_HEADER, decodeBinaryJsonValue, stringifyJsonRpc } from './BinaryJson'
 
 export interface WalletStorageServerOptions {
   port: number
@@ -95,6 +96,10 @@ export class StorageServer {
   }
 
   private setupRoutes (): void {
+    // Escape HTML-significant characters in JSON responses. This preserves the
+    // decoded JSON value while keeping user-controlled strings inert even if a
+    // consumer embeds a response in an HTML context.
+    this.app.set('json escape', true)
     this.app.use(express.json({ limit: '30mb' }))
 
     // This allows the API to be used everywhere when CORS is enforced
@@ -137,10 +142,19 @@ export class StorageServer {
 
     // A single POST endpoint for JSON-RPC:
     this.app.post('/', async (req: Request, res: Response) => {
-      const { jsonrpc, method, params, id } = req.body
+      const useBinary = req.header(BINARY_ENCODING_HEADER) === BINARY_ENCODING
+      if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
+      const { jsonrpc, method, id } = req.body
+      const params = decodeBinaryJsonValue(req.body.params) as any[]
+      const sendRpc = (payload: unknown, status: number = 200): Response => {
+        res.set('X-Content-Type-Options', 'nosniff')
+        // Normalize with the negotiated binary replacer, then let Express emit
+        // the JSON response through its escaping-aware JSON sink.
+        return res.status(status).json(JSON.parse(stringifyJsonRpc(payload, useBinary)))
+      }
       // Basic JSON-RPC protocol checks:
       if (jsonrpc !== '2.0' || !method || typeof method !== 'string') {
-        return res.status(400).json({ error: { code: -32600, message: 'Invalid Request' } })
+        return sendRpc({ error: { code: -32600, message: 'Invalid Request' } }, 400)
       }
 
       const logObj = {
@@ -169,7 +183,7 @@ export class StorageServer {
               logObj['result'] = undefined
               logObj['comment'] = 'IGNORED'
               console.log(JSON.stringify(logObj))
-              return res.json({ jsonrpc: '2.0', result: undefined, id })
+              return sendRpc({ jsonrpc: '2.0', result: undefined, id })
             }
             case 'getSettings':
               /** */
@@ -220,7 +234,7 @@ export class StorageServer {
               }
             }
 
-            return res.json({ jsonrpc: '2.0', result, id })
+            return sendRpc({ jsonrpc: '2.0', result, id })
           } catch (error_: unknown) {
             logWalletError(error_, logger, 'error executing requested method')
             logger?.flush?.()
@@ -228,11 +242,11 @@ export class StorageServer {
           }
         } else {
           // Unknown method
-          return res.status(400).json({
+          return sendRpc({
             jsonrpc: '2.0',
             error: { code: -32601, message: `Method not found: ${method}` },
             id
-          })
+          }, 400)
         }
       } catch (error: unknown) {
         /**
@@ -245,7 +259,7 @@ export class StorageServer {
          * an error object of the right class and properties.
          */
         const json = WalletError.unknownToJson(error)
-        return res.status(200).json({
+        return sendRpc({
           jsonrpc: '2.0',
           error: JSON.parse(json),
           id

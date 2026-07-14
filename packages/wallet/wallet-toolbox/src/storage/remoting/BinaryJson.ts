@@ -1,0 +1,107 @@
+export const BINARY_ENCODING_HEADER = 'X-BSV-Binary-Encoding'
+export const BINARY_ENCODING = 'base64'
+
+const TAG = '$bsvBinary'
+const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+function getBufferCtor (): any {
+  return typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
+}
+
+function toBase64 (bytes: Uint8Array): string {
+  const BufferCtor = getBufferCtor()
+  if (BufferCtor != null) return BufferCtor.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('base64')
+  if (typeof globalThis.btoa === 'function') {
+    let binary = ''
+    const chunkSize = 0x8000
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)))
+    }
+    return globalThis.btoa(binary)
+  }
+  let encoded = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const first = bytes[i]
+    const second = bytes[i + 1] ?? 0
+    const third = bytes[i + 2] ?? 0
+    encoded += BASE64[first >>> 2]
+    encoded += BASE64[((first & 3) << 4) | (second >>> 4)]
+    encoded += i + 1 < bytes.length ? BASE64[((second & 15) << 2) | (third >>> 6)] : '='
+    encoded += i + 2 < bytes.length ? BASE64[third & 63] : '='
+  }
+  return encoded
+}
+
+function fromBase64 (base64: string): Uint8Array {
+  const BufferCtor = getBufferCtor()
+  if (BufferCtor != null) {
+    const buffer = BufferCtor.from(base64, 'base64')
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+  }
+  if (typeof globalThis.atob === 'function') {
+    const binary = globalThis.atob(base64)
+    // Uint8Array.from performs the conversion in the native collection
+    // primitive and avoids an attacker-controlled JavaScript loop bound.
+    return Uint8Array.from(binary, character => character.charCodeAt(0))
+  }
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  const bytes = new Uint8Array(Math.floor(base64.length * 3 / 4) - padding)
+  let offset = 0
+  for (let i = 0; i < base64.length; i += 4) {
+    const first = BASE64.indexOf(base64[i])
+    const second = BASE64.indexOf(base64[i + 1])
+    const third = base64[i + 2] === '=' ? 0 : BASE64.indexOf(base64[i + 2])
+    const fourth = base64[i + 3] === '=' ? 0 : BASE64.indexOf(base64[i + 3])
+    const value = (first << 18) | (second << 12) | (third << 6) | fourth
+    if (offset < bytes.length) bytes[offset++] = value >>> 16
+    if (offset < bytes.length) bytes[offset++] = value >>> 8
+    if (offset < bytes.length) bytes[offset++] = value
+  }
+  return bytes
+}
+
+function isTaggedBinary (value: unknown): value is { [TAG]: typeof BINARY_ENCODING, data: string } {
+  return value != null && typeof value === 'object' &&
+    (value as any)[TAG] === BINARY_ENCODING && typeof (value as any).data === 'string'
+}
+
+function isBufferJson (value: unknown): value is { type: 'Buffer', data: number[] } {
+  return value != null && typeof value === 'object' &&
+    (value as any).type === 'Buffer' && Array.isArray((value as any).data)
+}
+
+export function binaryJsonReplacer (_key: string, value: unknown): unknown {
+  if (value instanceof Uint8Array) return { [TAG]: BINARY_ENCODING, data: toBase64(value) }
+  // Buffer.toJSON runs before a JSON replacer. Recognize that representation so
+  // Node storage backends receive the same compact transport as Uint8Array.
+  if (isBufferJson(value)) return { [TAG]: BINARY_ENCODING, data: toBase64(Uint8Array.from(value.data)) }
+  return value
+}
+
+export function legacyBinaryJsonReplacer (_key: string, value: unknown): unknown {
+  if (value instanceof Uint8Array) return Array.from(value)
+  return value
+}
+
+export function binaryJsonReviver (_key: string, value: unknown): unknown {
+  return isTaggedBinary(value) ? fromBase64(value.data) : value
+}
+
+export function decodeBinaryJsonValue (value: unknown): unknown {
+  if (isTaggedBinary(value)) return fromBase64(value.data)
+  if (Array.isArray(value)) return value.map(decodeBinaryJsonValue)
+  if (value != null && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      ;(value as Record<string, unknown>)[key] = decodeBinaryJsonValue(child)
+    }
+  }
+  return value
+}
+
+export function stringifyJsonRpc (value: unknown, binary: boolean): string {
+  return JSON.stringify(value, binary ? binaryJsonReplacer : legacyBinaryJsonReplacer)
+}
+
+export function parseJsonRpc (text: string): any {
+  return JSON.parse(text, binaryJsonReviver)
+}
