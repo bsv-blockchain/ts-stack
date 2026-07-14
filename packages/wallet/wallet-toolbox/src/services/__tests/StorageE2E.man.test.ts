@@ -32,6 +32,7 @@ const USER_OFFSET = integerEnv('STORAGE_E2E_USER_OFFSET', 0, 0, 1000000)
 const TX_COUNT = integerEnv('STORAGE_E2E_TX_COUNT', 3, 1, 100)
 const OUTPUT_SATS = integerEnv('STORAGE_E2E_OUTPUT_SATS', 100, 1, 100000)
 const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPUT_SATS + 200, 1000000)
+const FUNDING_BATCH_SIZE = integerEnv('STORAGE_E2E_FUNDING_BATCH_SIZE', 12, 1, 100)
 const MULTI_USER_ROUNDS = integerEnv('STORAGE_E2E_MULTI_USER_ROUNDS', 1, 1, 20)
 const PROOF_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_TIMEOUT_MS', 45 * 60 * 1000, 60 * 1000, 4 * 60 * 60 * 1000)
 const PROOF_POLL_MS = integerEnv('STORAGE_E2E_PROOF_POLL_MS', 30 * 1000, 5000, 5 * 60 * 1000)
@@ -140,6 +141,7 @@ const evidence: {
     txCount: TX_COUNT,
     outputSats: OUTPUT_SATS,
     userFundingSats: USER_FUNDING_SATS,
+    fundingBatchSize: FUNDING_BATCH_SIZE,
     requiredUserUtxos: REQUIRED_USER_UTXOS,
     multiUserRounds: MULTI_USER_ROUNDS,
     ceilingBatches: CEILING_BATCHES,
@@ -373,52 +375,58 @@ async function fundUsers (): Promise<string | undefined> {
   }
   console.log(`[setup] provisioning ${payments.length} independent UTXOs; required=${JSON.stringify(REQUIRED_USER_UTXOS)}`)
 
-  const created = await root.wallet.createAction({
-    description: `${RUN_LABEL} fund users`.slice(0, 50),
-    labels: [RUN_LABEL],
-    outputs: payments.map((payment, index) => ({
-      lockingScript: payment.lockingScript,
-      satoshis: USER_FUNDING_SATS,
-      outputDescription: `fund e2e user ${payment.user.index} output ${index + 1}`.slice(0, 50),
-      tags: [RUN_LABEL]
-    })),
-    options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
-  })
-
-  const txid = track(created.txid, 'setup-user-funding', root.index)
-  if (created.tx == null) throw new Error('User funding did not return Atomic BEEF')
-  const fundingBeef = created.tx
-
-  const paymentsByUser = new Map<number, Array<{ payment: typeof payments[number], outputIndex: number }>>()
-  payments.forEach((payment, outputIndex) => {
-    const group = paymentsByUser.get(payment.user.index) ?? []
-    group.push({ payment, outputIndex })
-    paymentsByUser.set(payment.user.index, group)
-  })
-
-  await Promise.all([...paymentsByUser.values()].map(async group => {
-    const { wallet } = group[0].payment.user
-    await wallet.internalizeAction({
-      tx: fundingBeef,
-      outputs: group.map(({ payment, outputIndex }) => {
-        const derivationPrefix = payment.template.params.derivationPrefix
-        const derivationSuffix = payment.template.params.derivationSuffix
-        if (derivationPrefix == null || derivationSuffix == null) throw new Error(`Missing BRC-29 derivation for output ${outputIndex}`)
-        return {
-          outputIndex,
-          protocol: 'wallet payment' as const,
-          paymentRemittance: {
-            derivationPrefix,
-            derivationSuffix,
-            senderIdentityKey: root.wallet.identityKey
-          }
-        }
-      }),
-      description: `${RUN_LABEL} funding`.slice(0, 50),
-      labels: [RUN_LABEL]
+  let firstTxid: string | undefined
+  for (let offset = 0; offset < payments.length; offset += FUNDING_BATCH_SIZE) {
+    const batch = payments.slice(offset, offset + FUNDING_BATCH_SIZE)
+    const batchNumber = Math.floor(offset / FUNDING_BATCH_SIZE) + 1
+    const created = await root.wallet.createAction({
+      description: `${RUN_LABEL} fund users ${batchNumber}`.slice(0, 50),
+      labels: [RUN_LABEL],
+      outputs: batch.map((payment, index) => ({
+        lockingScript: payment.lockingScript,
+        satoshis: USER_FUNDING_SATS,
+        outputDescription: `fund e2e user ${payment.user.index} output ${offset + index + 1}`.slice(0, 50),
+        tags: [RUN_LABEL]
+      })),
+      options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
     })
-  }))
-  return txid
+
+    const txid = track(created.txid, `setup-user-funding-${batchNumber}`, root.index)
+    firstTxid ??= txid
+    if (created.tx == null) throw new Error(`User funding batch ${batchNumber} did not return Atomic BEEF`)
+    const fundingBeef = created.tx
+
+    const paymentsByUser = new Map<number, Array<{ payment: typeof payments[number], outputIndex: number }>>()
+    batch.forEach((payment, outputIndex) => {
+      const group = paymentsByUser.get(payment.user.index) ?? []
+      group.push({ payment, outputIndex })
+      paymentsByUser.set(payment.user.index, group)
+    })
+
+    await Promise.all([...paymentsByUser.values()].map(async group => {
+      const { wallet } = group[0].payment.user
+      await wallet.internalizeAction({
+        tx: fundingBeef,
+        outputs: group.map(({ payment, outputIndex }) => {
+          const derivationPrefix = payment.template.params.derivationPrefix
+          const derivationSuffix = payment.template.params.derivationSuffix
+          if (derivationPrefix == null || derivationSuffix == null) throw new Error(`Missing BRC-29 derivation for output ${outputIndex}`)
+          return {
+            outputIndex,
+            protocol: 'wallet payment' as const,
+            paymentRemittance: {
+              derivationPrefix,
+              derivationSuffix,
+              senderIdentityKey: root.wallet.identityKey
+            }
+          }
+        }),
+        description: `${RUN_LABEL} funding ${batchNumber}`.slice(0, 50),
+        labels: [RUN_LABEL]
+      })
+    }))
+  }
+  return firstTxid
 }
 
 async function assertConfirmedSpendableState (wallets: TestWallet[], context: string): Promise<void> {
