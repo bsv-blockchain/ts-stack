@@ -12,7 +12,9 @@ import { MANIFEST_FILE } from '../config/project-manifest.js'
 import type { RunCommand } from '../scaffold/base-scaffolder.js'
 import { listCapabilities, resolveCapabilities } from '../registry.js'
 import { planPlacement } from '../engine.js'
+import type { Layout, ProjectConfig } from '../config/model.js'
 import { layoutOf } from '../config/model.js'
+import type { Capability } from '../types.js'
 
 export interface UiServer { url: string, done: Promise<RunResult>, close: () => void }
 
@@ -25,6 +27,71 @@ async function readBody (req: IncomingMessage): Promise<string> {
 function sendJson (res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' })
   res.end(JSON.stringify(body))
+}
+
+function serveIndex (res: ServerResponse, html: string): void {
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+  res.end(html)
+}
+
+async function handleGenerate (
+  req: IncomingMessage,
+  res: ServerResponse,
+  existing: ProjectManifest | null,
+  targetDir: string,
+  runCommand: RunCommand | undefined,
+  resolveDone: (r: RunResult) => void
+): Promise<void> {
+  try {
+    const draft = JSON.parse(await readBody(req)) as ConfigDraft
+    const config = resolveDraft(seedDraft(existing, draft))
+    // force:false — preserve existing capability files, matching the CLI default (the user re-runs with intent but we never clobber their edits)
+    const result = applyConfig(config, targetDir, { runCommand, force: false })
+    sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
+    resolveDone(result)
+  } catch (err) {
+    const status = err instanceof ConfigError ? 400 : 500
+    sendJson(res, status, { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+// Base files touched by glue-wiring in new-mode: main.tsx/App.tsx (frontend) and server/src/index.ts (backend).
+function baseGluePaths (layout: Layout): string[] {
+  const paths: string[] = []
+  if (layout === 'frontend-only' || layout === 'monorepo') {
+    const cp = layout === 'monorepo' ? 'client/' : ''
+    paths.push(cp + 'src/main.tsx', cp + 'src/App.tsx')
+  }
+  if (layout === 'monorepo' || layout === 'backend-only') {
+    const sp = layout === 'monorepo' ? 'server/' : ''
+    paths.push(sp + 'src/index.ts')
+  }
+  return paths
+}
+
+function planPaths (config: ProjectConfig, caps: Capability[]): string[] {
+  const placement = planPlacement(config, caps)
+  const rawPaths: string[] = [...placement.utilFiles, ...placement.glueFiles].map(f => f.path)
+  rawPaths.push('AGENTS.md', MANIFEST_FILE)
+  if (config.mode === 'new' && config.glue) rawPaths.push(...baseGluePaths(layoutOf(config.stack)))
+  return [...new Set(rawPaths)]
+}
+
+async function handlePlan (
+  req: IncomingMessage,
+  res: ServerResponse,
+  existing: ProjectManifest | null,
+  targetDir: string
+): Promise<void> {
+  try {
+    const draft = JSON.parse(await readBody(req)) as ConfigDraft
+    const config = resolveDraft(seedDraft(existing, draft))
+    const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
+    const files = planPaths(config, caps).map(p => ({ path: p, status: existsSync(join(targetDir, p)) ? 'edit' as const : 'new' as const }))
+    sendJson(res, 200, { files })
+  } catch (err) {
+    sendJson(res, 200, { files: [], error: err instanceof Error ? err.message : String(err) })
+  }
 }
 
 export async function startUiServer (
@@ -41,61 +108,9 @@ export async function startUiServer (
 
   const server = createServer((req, res) => {
     void (async () => {
-      if (req.method === 'GET' && (req.url === '/' || req.url === '')) {
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-        res.end(html)
-        return
-      }
-      if (req.method === 'POST' && req.url === '/generate') {
-        try {
-          const draft = JSON.parse(await readBody(req)) as ConfigDraft
-          const config = resolveDraft(seedDraft(existing, draft))
-          // force:false — preserve existing capability files, matching the CLI default (the user re-runs with intent but we never clobber their edits)
-          const result = applyConfig(config, targetDir, {
-            runCommand: opts.deps?.runCommand,
-            force: false
-          })
-          sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
-          resolveDone(result)
-          return
-        } catch (err) {
-          const status = err instanceof ConfigError ? 400 : 500
-          sendJson(res, status, { error: err instanceof Error ? err.message : String(err) })
-          return
-        }
-      }
-      if (req.method === 'POST' && req.url === '/plan') {
-        try {
-          const draft = JSON.parse(await readBody(req)) as ConfigDraft
-          const config = resolveDraft(seedDraft(existing, draft))
-          const caps = resolveCapabilities(config.capabilities, { expandRequires: config.mode === 'new' })
-          const placement = planPlacement(config, caps)
-          const rawPaths: string[] = [...placement.utilFiles, ...placement.glueFiles].map(f => f.path)
-          rawPaths.push('AGENTS.md', MANIFEST_FILE)
-          if (config.mode === 'new' && config.glue) {
-            const layout = layoutOf(config.stack)
-            if (layout === 'frontend-only' || layout === 'monorepo') {
-              const cp = layout === 'monorepo' ? 'client/' : ''
-              rawPaths.push(cp + 'src/main.tsx', cp + 'src/App.tsx')
-            }
-            if (layout === 'monorepo' || layout === 'backend-only') {
-              const sp = layout === 'monorepo' ? 'server/' : ''
-              rawPaths.push(sp + 'src/index.ts')
-            }
-          }
-          const seen = new Set<string>()
-          const dedupedPaths: string[] = []
-          for (const p of rawPaths) {
-            if (!seen.has(p)) { seen.add(p); dedupedPaths.push(p) }
-          }
-          const files = dedupedPaths.map(p => ({ path: p, status: existsSync(join(targetDir, p)) ? 'edit' as const : 'new' as const }))
-          sendJson(res, 200, { files })
-          return
-        } catch (err) {
-          sendJson(res, 200, { files: [], error: err instanceof Error ? err.message : String(err) })
-          return
-        }
-      }
+      if (req.method === 'GET' && (req.url === '/' || req.url === '')) return serveIndex(res, html)
+      if (req.method === 'POST' && req.url === '/generate') return await handleGenerate(req, res, existing, targetDir, opts.deps?.runCommand, resolveDone)
+      if (req.method === 'POST' && req.url === '/plan') return await handlePlan(req, res, existing, targetDir)
       sendJson(res, 404, { error: 'not found' })
     })()
   })

@@ -15,7 +15,7 @@ function optionsFor (field: ConfigField, existing: ProjectManifest | null, mode:
     const all = listCapabilities()
     let ids: string[]
     if (mode === 'add') {
-      ids = existing != null ? remainingCapabilityIds(existing, all.map(c => c.id)) : all.map(c => c.id)
+      ids = existing == null ? all.map(c => c.id) : remainingCapabilityIds(existing, all.map(c => c.id))
     } else {
       // new mode: defaultSelected base capabilities are always included (floor) → don't offer them as toggles
       ids = all.filter(c => c.defaultSelected !== true).map(c => c.id)
@@ -45,7 +45,7 @@ export async function runPrompts (ctx: { existing: ProjectManifest | null, flags
 export const interactiveConfigPrompt: ConfigProvider = async (ctx) => {
   const p = await import('@clack/prompts') // lazy: keep clack out of the Jest transform
   p.intro('create-bsv-app')
-  const mode = ctx.flags.mode ?? (ctx.existing != null ? 'add' : 'new')
+  const mode = ctx.flags.mode ?? (ctx.existing == null ? 'new' : 'add')
   if (mode === 'new') {
     const base = listCapabilities().filter(c => c.defaultSelected === true)
     if (base.length > 0) p.note(base.map(c => `• ${c.title}`).join('\n'), 'Always included')

@@ -1,7 +1,7 @@
 // src/agents-md.ts
 import type { ProjectConfig } from './config/model.js'
 import { layoutOf } from './config/model.js'
-import type { Capability, CapabilityContext } from './types.js'
+import type { Capability, CapabilityContext, BaseBuilder } from './types.js'
 import { planPlacement } from './engine.js'
 import { newBuilder, routeImports, routeJsx } from './scaffold/base-app.js'
 
@@ -14,53 +14,52 @@ function installBlock (label: string, deps: Record<string, string>): string {
   return `${head}Dependencies are already in \`package.json\` — just install:\n\n\`\`\`\n${cmd}\n\`\`\`\n\nIncluded:\n${ranges}\n\n`
 }
 
+// main.tsx: imports + wrap
+function mainBlock (builder: BaseBuilder): string | null {
+  if (builder.main.imports.length === 0 && builder.main.wraps.length === 0) return null
+  const lines: string[] = []
+  if (builder.main.imports.length > 0) lines.push(builder.main.imports.join('\n'))
+  if (builder.main.wraps.length > 0) {
+    const opens = builder.main.wraps.map(w => w.open).join('\n')
+    const closes = builder.main.wraps.map(w => w.close).reverse().join('\n')
+    lines.push(`// Wrap <App /> in src/main.tsx:\n${opens}\n<App />\n${closes}`)
+  }
+  return `### \`src/main.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``
+}
+
+// App.tsx: route imports + <Route> JSX
+function appBlock (builder: BaseBuilder): string | null {
+  if (builder.app.routes.length === 0 && builder.app.imports.length === 0) return null
+  const lines: string[] = []
+  const allImports = [...builder.app.imports]
+  const generatedImports = routeImports(builder.app.routes)
+  if (generatedImports.length > 0) allImports.push(generatedImports)
+  if (allImports.length > 0) lines.push(allImports.join('\n'))
+  const jsx = routeJsx(builder.app.routes)
+  if (jsx.length > 0) lines.push(`// Add inside <Routes> in src/App.tsx:\n${jsx}`)
+  return `### \`src/App.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``
+}
+
+// server/src/index.ts: imports + routes + setup (raw-server hooks like the relay's WS upgrade)
+function serverBlock (builder: BaseBuilder): string | null {
+  if (builder.server.imports.length === 0 && builder.server.routes.length === 0 && builder.server.setup.length === 0) return null
+  const lines: string[] = []
+  if (builder.server.imports.length > 0) lines.push(builder.server.imports.join('\n'))
+  if (builder.server.routes.length > 0) lines.push(`// Add after app setup in server/src/index.ts:\n${builder.server.routes.join('\n')}`)
+  if (builder.server.setup.length > 0) lines.push(`// Add after \`const server = http.createServer(app)\`, before server.listen():\n${builder.server.setup.join('\n')}`)
+  return `### \`server/src/index.ts\`\n\n\`\`\`ts\n${lines.join('\n')}\n\`\`\``
+}
+
 function wiringSection (config: ProjectConfig, capabilities: Capability[], ctx: CapabilityContext): string {
   const builder = newBuilder()
   for (const cap of capabilities) cap.baseEdits?.({ builder, ctx })
 
   const isManual = config.mode !== 'new' || !config.glue
-
   if (!isManual) {
     return '## Wiring\n\nBase files (`main.tsx`, `App.tsx`, `server`) were wired automatically.\n'
   }
 
-  const blocks: string[] = []
-
-  // main.tsx: imports + wrap
-  if (builder.main.imports.length > 0 || builder.main.wraps.length > 0) {
-    const lines: string[] = []
-    if (builder.main.imports.length > 0) {
-      lines.push(builder.main.imports.join('\n'))
-    }
-    if (builder.main.wraps.length > 0) {
-      const opens = builder.main.wraps.map(w => w.open).join('\n')
-      const closes = builder.main.wraps.map(w => w.close).reverse().join('\n')
-      lines.push(`// Wrap <App /> in src/main.tsx:\n${opens}\n<App />\n${closes}`)
-    }
-    blocks.push(`### \`src/main.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``)
-  }
-
-  // App.tsx: route imports + <Route> JSX
-  if (builder.app.routes.length > 0 || builder.app.imports.length > 0) {
-    const lines: string[] = []
-    const allImports = [...builder.app.imports]
-    const generatedImports = routeImports(builder.app.routes)
-    if (generatedImports.length > 0) allImports.push(generatedImports)
-    if (allImports.length > 0) lines.push(allImports.join('\n'))
-    const jsx = routeJsx(builder.app.routes)
-    if (jsx.length > 0) lines.push(`// Add inside <Routes> in src/App.tsx:\n${jsx}`)
-    blocks.push(`### \`src/App.tsx\`\n\n\`\`\`tsx\n${lines.join('\n')}\n\`\`\``)
-  }
-
-  // server/src/index.ts: imports + routes + setup (raw-server hooks like the relay's WS upgrade)
-  if (builder.server.imports.length > 0 || builder.server.routes.length > 0 || builder.server.setup.length > 0) {
-    const lines: string[] = []
-    if (builder.server.imports.length > 0) lines.push(builder.server.imports.join('\n'))
-    if (builder.server.routes.length > 0) lines.push(`// Add after app setup in server/src/index.ts:\n${builder.server.routes.join('\n')}`)
-    if (builder.server.setup.length > 0) lines.push(`// Add after \`const server = http.createServer(app)\`, before server.listen():\n${builder.server.setup.join('\n')}`)
-    blocks.push(`### \`server/src/index.ts\`\n\n\`\`\`ts\n${lines.join('\n')}\n\`\`\``)
-  }
-
+  const blocks = [mainBlock(builder), appBlock(builder), serverBlock(builder)].filter((b): b is string => b !== null)
   if (blocks.length === 0) return ''
 
   let out = `## Wiring (manual)\n\nAdd-mode or \`--no-glue\`: paste these snippets into the relevant base files.\n\n${blocks.join('\n\n')}\n`

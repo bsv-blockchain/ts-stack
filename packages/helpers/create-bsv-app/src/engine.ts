@@ -26,6 +26,47 @@ function roleTargetsFor (layout: Layout): Record<Role, TargetKey[]> {
 
 const joinRel = (...parts: string[]): string => parts.filter(p => p.length > 0).join('/')
 
+type AddFile = (map: Map<string, FileSpec>, path: string, content: string) => void
+
+function placeCapabilityFiles (
+  cap: Capability,
+  ctx: CapabilityContext,
+  roleTargets: Record<Role, TargetKey[]>,
+  bsvDir: string,
+  utilByPath: Map<string, FileSpec>,
+  deps: Record<TargetKey, Record<string, string>>,
+  add: AddFile
+): void {
+  const roleFiles = cap.files(ctx)
+  const roleDeps = cap.npmDependencies(ctx)
+  for (const role of ROLES) {
+    const targets = roleTargets[role]
+    if (targets.length === 0) continue
+    const files = roleFiles[role] ?? []
+    const rdeps = roleDeps[role] ?? {}
+    for (const t of targets) {
+      for (const f of files) add(utilByPath, joinRel(targetRoot(t), bsvDir, f.path), f.content)
+      Object.assign(deps[t], rdeps)
+    }
+  }
+}
+
+function placeCapabilityGlue (
+  cap: Capability,
+  ctx: CapabilityContext,
+  roleTargets: Record<Role, TargetKey[]>,
+  glueByPath: Map<string, FileSpec>,
+  add: AddFile
+): void {
+  if (cap.glue == null) return
+  const glue = cap.glue(ctx)
+  for (const role of ROLES) {
+    for (const t of roleTargets[role]) {
+      for (const f of glue[role] ?? []) add(glueByPath, joinRel(targetRoot(t), f.path), f.content)
+    }
+  }
+}
+
 export function planPlacement (config: ProjectConfig, capabilities: Capability[]): PlacementResult {
   const layout = layoutOf(config.stack)
   const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
@@ -34,33 +75,15 @@ export function planPlacement (config: ProjectConfig, capabilities: Capability[]
   const glueByPath = new Map<string, FileSpec>()
   const deps: Record<TargetKey, Record<string, string>> = { root: {}, client: {}, server: {} }
 
-  const add = (map: Map<string, FileSpec>, path: string, content: string): void => {
+  const add: AddFile = (map, path, content) => {
     const existing = map.get(path)
     if (existing != null && existing.content !== content) throw new Error(`file conflict at ${path} between capabilities`)
     map.set(path, { path, content })
   }
 
   for (const cap of capabilities) {
-    const roleFiles = cap.files(ctx)
-    const roleDeps = cap.npmDependencies(ctx)
-    for (const role of ROLES) {
-      const targets = roleTargets[role]
-      if (targets.length === 0) continue
-      const files = roleFiles[role] ?? []
-      const rdeps = roleDeps[role] ?? {}
-      for (const t of targets) {
-        for (const f of files) add(utilByPath, joinRel(targetRoot(t), config.bsvDir, f.path), f.content)
-        Object.assign(deps[t], rdeps)
-      }
-    }
-    if (config.glue && cap.glue != null) {
-      const glue = cap.glue(ctx)
-      for (const role of ROLES) {
-        for (const t of roleTargets[role]) {
-          for (const f of glue[role] ?? []) add(glueByPath, joinRel(targetRoot(t), f.path), f.content)
-        }
-      }
-    }
+    placeCapabilityFiles(cap, ctx, roleTargets, config.bsvDir, utilByPath, deps, add)
+    if (config.glue) placeCapabilityGlue(cap, ctx, roleTargets, glueByPath, add)
   }
   return { utilFiles: [...utilByPath.values()], glueFiles: [...glueByPath.values()], deps }
 }

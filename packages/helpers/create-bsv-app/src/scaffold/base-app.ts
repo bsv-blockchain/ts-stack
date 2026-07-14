@@ -164,7 +164,7 @@ export function assembleBaseFile (template: string, b: BaseBuilder, ctx: Capabil
   sub('/*{{home.imports}}*/', b.app.routes.length > 0 ? "import { Link } from 'react-router-dom'" : '')
   sub('{/*{{home.links}}*/}', homeLinks(b.app.routes))
   return out
-    .replace(/[ \t]+$/gm, '') // drop trailing whitespace left by removed markers
+    .split('\n').map(line => line.trimEnd()).join('\n') // drop trailing whitespace left by removed markers
     .replace(/\n{3,}/g, '\n\n') // collapse blank-line runs
 }
 

@@ -39,14 +39,14 @@ export function resolveDraft (d: ConfigDraft): ProjectConfig {
 }
 
 export function seedDraft (existing: ProjectManifest | null, flags: ConfigDraft): ConfigDraft {
-  const mode = flags.mode ?? (existing != null ? 'add' : 'new')
+  const mode = flags.mode ?? (existing == null ? 'new' : 'add')
   if (mode === 'add' && existing != null) {
     return {
       mode: 'add',
       name: existing.name,
-      frontend: existing.stack.frontend != null ? 'react' : 'none',
+      frontend: existing.stack.frontend == null ? 'none' : 'react',
       frontendVariant: existing.stack.frontend?.variant,
-      backend: existing.stack.backend != null ? 'express' : 'none',
+      backend: existing.stack.backend == null ? 'none' : 'express',
       bsvDir: existing.bsvDir,
       network: existing.network,
       glue: flags.glue,

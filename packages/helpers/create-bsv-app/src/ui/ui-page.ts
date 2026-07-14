@@ -3,10 +3,10 @@ import { listCapabilities } from '../registry.js'
 import { remainingCapabilityIds, type ProjectManifest } from '../config/project-manifest.js'
 export function serializeSchema (existing: ProjectManifest | null): ConfigSchema {
   const allIds = listCapabilities().map(c => c.id)
-  const defaultIds = listCapabilities().filter(c => c.defaultSelected === true).map(c => c.id)
-  const offerable = existing !== null
-    ? remainingCapabilityIds(existing, allIds)
-    : allIds.filter(id => !defaultIds.includes(id))
+  const defaultIds = new Set(listCapabilities().filter(c => c.defaultSelected === true).map(c => c.id))
+  const offerable = existing === null
+    ? allIds.filter(id => !defaultIds.has(id))
+    : remainingCapabilityIds(existing, allIds)
   return configSchema.map(section => ({
     ...section,
     fields: section.fields.map(field => {
@@ -114,7 +114,7 @@ body { background: #0b0e13; color: #cdd4de; font: 14px/1.5 system-ui, -apple-sys
 
 const LOGO_SVG = '<svg id="logo-svg" width="450" height="450" viewBox="0 0 450 450" xmlns="http://www.w3.org/2000/svg"><line x1="405" y1="225" x2="352.27922061357856" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="405" y1="225" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="225" y2="405" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="352.27922061357856" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642146" y2="352.27922061357856" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="225" y1="405" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="45" y2="225.00000000000003" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642146" y1="352.27922061357856" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="97.72077938642141" y2="97.72077938642146" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="45" y1="225.00000000000003" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="224.99999999999997" y2="45" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="97.72077938642141" y1="97.72077938642146" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><line x1="224.99999999999997" y1="45" x2="352.2792206135785" y2="97.72077938642141" stroke="#2196F3" stroke-opacity="1" stroke-width="2"></line><circle cx="405" cy="225" r="8" fill="#2196F3"></circle><circle cx="352.27922061357856" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="225" cy="405" r="8" fill="#2196F3"></circle><circle cx="97.72077938642146" cy="352.27922061357856" r="8" fill="#2196F3"></circle><circle cx="45" cy="225.00000000000003" r="8" fill="#2196F3"></circle><circle cx="97.72077938642141" cy="97.72077938642146" r="8" fill="#2196F3"></circle><circle cx="224.99999999999997" cy="45" r="8" fill="#2196F3"></circle><circle cx="352.2792206135785" cy="97.72077938642141" r="8" fill="#2196F3"></circle></svg>'
 
-const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no dependencies).
+const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static page (no dependencies).
  * Reads window.__SCHEMA__ / __SEED__ / __INCLUDED__ and POSTs the draft to /generate.
  * Optional globals: __ACCENT__ (hex), __CMD_LABEL__ (string), __DEMO__ (bool, skips server). */
 (function () {
@@ -254,11 +254,11 @@ const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no de
         var last = i === keys.length - 1;
         var child = node[k];
         var isFile = !!child.__file;
-        var conn = last ? '\\u2514\\u2500 ' : '\\u251c\\u2500 ';
+        var conn = last ? '\u2514\u2500 ' : '\u251c\u2500 ';
         /* RECONCILIATION 3: read child.status (not child.st) */
         var color = isFile ? (child.status === 'edit' ? '#e0b25a' : '#7fd6a0') : '#cfe0ee';
         lines.push({ prefix: prefix + conn, name: isFile ? k : k + '/', color: color });
-        if (!isFile) walk(child, prefix + (last ? '   ' : '\\u2502  '));
+        if (!isFile) walk(child, prefix + (last ? '   ' : '\u2502  '));
       });
     })(root, '');
     return lines;
@@ -305,7 +305,7 @@ const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no de
       var on = (draft[f.key] || []).indexOf(o.value) !== -1;
       var txt = el('span', {}, [el('span', { class: 'ot', text: o.label })]);
       if (o.hint) txt.appendChild(el('span', { class: 'oh', text: o.hint }));
-      var card = el('button', { class: 'opt-card' + (on ? ' on' : '') }, [el('span', { class: 'box', text: on ? '\\u2713' : '' }), txt]);
+      var card = el('button', { class: 'opt-card' + (on ? ' on' : '') }, [el('span', { class: 'box', text: on ? '\u2713' : '' }), txt]);
       card.onclick = function () {
         var set = {};
         (draft[f.key] || []).forEach(function (v) { set[v] = true; });
@@ -338,7 +338,7 @@ const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no de
     vs.forEach(function (s, i) {
       var cls = i < ai ? 'done' : (i === ai ? 'active' : 'todo');
       /* RECONCILIATION 1: use s.id for navigation (was s.key) */
-      var b = el('button', { class: 'nav-item ' + cls }, [el('span', { class: 'ic', text: i < ai ? '\\u2713' : String(i + 1) }), s.title]);
+      var b = el('button', { class: 'nav-item ' + cls }, [el('span', { class: 'ic', text: i < ai ? '\u2713' : String(i + 1) }), s.title]);
       b.onclick = function () { state.active = s.id; renderNav(); renderForm(); renderProgress(); };
       nav.appendChild(b);
     });
@@ -397,9 +397,9 @@ const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no de
     var impact = el('div', { class: 'impact' });
     var head = el('button', { class: 'impact-head' + (state.impactOpen ? ' open' : '') });
     head.onclick = function () { state.impactOpen = !state.impactOpen; renderRail(); };
-    var ht = el('span', { class: 'ht' }, [el('span', { class: 'chev', text: state.impactOpen ? '\\u25be' : '\\u25b8' }), 'Project impact']);
+    var ht = el('span', { class: 'ht' }, [el('span', { class: 'chev', text: state.impactOpen ? '\u25be' : '\u25b8' }), 'Project impact']);
     var cnt = el('span', { class: 'cnt' });
-    cnt.appendChild(document.createTextNode(files.length + ' \\u00b7 '));
+    cnt.appendChild(document.createTextNode(files.length + ' \u00b7 '));
     cnt.appendChild(el('b', { text: newCount + ' new' }));
     head.appendChild(ht); head.appendChild(cnt);
     impact.appendChild(head);
@@ -441,7 +441,7 @@ const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no de
     if (state.error) actions.appendChild(el('div', { class: 'err', text: state.error }));
     var copy = el('button', { class: 'btn', text: state.copied ? 'Copied!' : 'Copy command' });
     copy.onclick = copyCmd;
-    var gen = el('button', { class: 'btn-primary', text: state.generating ? 'Generating\\u2026' : 'Generate' });
+    var gen = el('button', { class: 'btn-primary', text: state.generating ? 'Generating\u2026' : 'Generate' });
     gen.onclick = generate;
     actions.appendChild(copy); actions.appendChild(gen);
     rail.appendChild(actions);
@@ -475,9 +475,9 @@ const CLIENT_SCRIPT = `/* create-bsv-app --ui : schema-driven static page (no de
     hideOverlay();
     var host = document.getElementById('overlayHost') || document.body;
     var card = el('div', { class: 'card' }, [
-      el('div', { class: 'ok', text: '\\u2713' }),
+      el('div', { class: 'ok', text: '\u2713' }),
       el('h2', { text: 'Project generated' }),
-      el('p', { text: 'Wrote ' + written.length + ' file(s) to ' + dir + '. See AGENTS.md for wiring \\u2014 you can close this tab.' })
+      el('p', { text: 'Wrote ' + written.length + ' file(s) to ' + dir + '. See AGENTS.md for wiring \u2014 you can close this tab.' })
     ]);
     var btn = el('button', { class: 'btn', text: 'Start over' });
     btn.onclick = hideOverlay;
@@ -511,8 +511,8 @@ export function buildPage (opts: {
     'window.__SCHEMA__ = ' + JSON.stringify(opts.schema) + ';\n' +
     'window.__SEED__ = ' + JSON.stringify(opts.seed) + ';\n' +
     'window.__INCLUDED__ = ' + JSON.stringify(opts.included ?? []) + ';\n' +
-    (opts.accent != null ? 'window.__ACCENT__ = ' + JSON.stringify(opts.accent) + ';\n' : '') +
-    (opts.commandLabel != null ? 'window.__CMD_LABEL__ = ' + JSON.stringify(opts.commandLabel) + ';\n' : '')
+    (opts.accent == null ? '' : 'window.__ACCENT__ = ' + JSON.stringify(opts.accent) + ';\n') +
+    (opts.commandLabel == null ? '' : 'window.__CMD_LABEL__ = ' + JSON.stringify(opts.commandLabel) + ';\n')
 
   return `<!doctype html>
 <html lang="en">

@@ -9,7 +9,7 @@ export class ConfigError extends Error {
   }
 }
 
-const PACKAGE_MANAGERS: PackageManager[] = ['npm', 'pnpm', 'yarn', 'bun']
+const PACKAGE_MANAGERS: Set<PackageManager> = new Set(['npm', 'pnpm', 'yarn', 'bun'])
 
 function asObject (input: unknown, label: string): Record<string, unknown> {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
@@ -42,27 +42,21 @@ export function validBsvDir (dir: string): boolean {
   return !dir.split(/[/\\]/).includes('..')
 }
 
-export function resolveConfig (input: unknown, opts: { overrideMode?: Mode } = {}): ProjectConfig {
-  const raw = asObject(input, 'config')
-
-  // An explicit caller override (e.g. the --mode flag on the --file door) wins over the
-  // config's own "mode" field. Resolved here so the new-mode floor + validation below
-  // run against the effective mode.
-  const mode: Mode = opts.overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
-
+function resolveName (raw: Record<string, unknown>): string {
   const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   if (name.length === 0) throw new ConfigError('name is required')
+  return name
+}
 
-  const dir = typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
-
-  const stack = resolveStack(raw.stack)
-  if (mode === 'new' && stack.frontend === undefined && stack.backend === undefined) {
-    throw new ConfigError('a new project needs at least a frontend or a backend')
-  }
-
+function resolveBsvDir (raw: Record<string, unknown>): string {
   const bsvDir = typeof raw.bsvDir === 'string' && raw.bsvDir.length > 0 ? raw.bsvDir : 'src/bsv'
   if (!validBsvDir(bsvDir)) throw new ConfigError(`invalid bsvDir: ${bsvDir}`)
+  return bsvDir
+}
 
+// new-mode floor: a new project always gets at least the defaultSelected baseline (e.g. wallet-connect),
+// even when the config names zero capabilities. add mode has no floor.
+function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode): string[] {
   const capsRaw = raw.capabilities === undefined ? [] : raw.capabilities
   if (!Array.isArray(capsRaw)) throw new ConfigError('capabilities must be an array')
   const capabilities: string[] = []
@@ -71,21 +65,38 @@ export function resolveConfig (input: unknown, opts: { overrideMode?: Mode } = {
     if (getCapability(c) === undefined) throw new ConfigError(`unknown capability: ${c}`)
     if (!capabilities.includes(c)) capabilities.push(c)
   }
-
-  // new-mode floor: a new project always gets at least the defaultSelected baseline (e.g. wallet-connect),
-  // even when the config names zero capabilities. add mode has no floor.
   if (mode === 'new') {
     for (const c of listCapabilities()) {
       if (c.defaultSelected === true && !capabilities.includes(c.id)) capabilities.push(c.id)
     }
   }
+  return capabilities
+}
 
+function resolvePackageManager (raw: Record<string, unknown>): PackageManager {
+  return PACKAGE_MANAGERS.has(raw.packageManager as PackageManager) ? raw.packageManager as PackageManager : 'npm'
+}
+
+export function resolveConfig (input: unknown, opts: { overrideMode?: Mode } = {}): ProjectConfig {
+  const raw = asObject(input, 'config')
+
+  // An explicit caller override (e.g. the --mode flag on the --file door) wins over the
+  // config's own "mode" field. Resolved here so the new-mode floor + validation below
+  // run against the effective mode.
+  const mode: Mode = opts.overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
+
+  const name = resolveName(raw)
+  const dir = typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
+
+  const stack = resolveStack(raw.stack)
+  if (mode === 'new' && stack.frontend === undefined && stack.backend === undefined) {
+    throw new ConfigError('a new project needs at least a frontend or a backend')
+  }
+
+  const bsvDir = resolveBsvDir(raw)
+  const capabilities = resolveCapabilityIds(raw, mode)
   const glue = raw.glue !== false
-
-  const packageManager: PackageManager = PACKAGE_MANAGERS.includes(raw.packageManager as PackageManager)
-    ? raw.packageManager as PackageManager
-    : 'npm'
-
+  const packageManager = resolvePackageManager(raw)
   const network: Network = raw.network === 'main' ? 'main' : 'test'
 
   return { mode, name, dir, stack, bsvDir, capabilities, glue, packageManager, network }
