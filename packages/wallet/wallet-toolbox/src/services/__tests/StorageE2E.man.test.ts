@@ -510,6 +510,7 @@ async function createNoSendBatch (wallet: TestWallet, count: number, test: strin
     })
     if (result.tx == null) throw new Error(`${test} transaction ${i + 1} did not return Atomic BEEF`)
     if (result.txid == null || result.txid === '') throw new Error(`${test} transaction ${i + 1} did not return a txid`)
+    track(result.txid, test, wallet.index)
     created.push({ txid: result.txid, beef: Beef.fromBinary(result.tx), wallet, elapsedMs: Date.now() - started })
   }
   return created

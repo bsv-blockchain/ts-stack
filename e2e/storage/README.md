@@ -74,6 +74,8 @@ That final condition is the externally observable proof that Monitor updated pro
 
 The proof loop reads `listActions` once per wallet per poll, rather than once per transaction, and observes independent Arcade txids with bounded concurrency. Each evidence row records the first poll that observed an Arcade proof, the first poll that observed Storage `completed`, and convergence time from broadcast. Those timestamps have `STORAGE_E2E_PROOF_POLL_MS` resolution; use database timestamps when sub-poll proof-ingestion latency matters.
 
+No-send txids are added to evidence as soon as `createAction` returns, before the batch is merged or submitted. If a later transaction in the same preparation batch fails, the partial work remains visible to the next same-run recovery instead of becoming an untracked `nosend` residue.
+
 ## Throughput methodology
 
 The suite reports several rates because there is no honest single “Storage TPS” number for this path:
