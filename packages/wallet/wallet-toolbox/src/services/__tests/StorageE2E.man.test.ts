@@ -35,6 +35,8 @@ const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPU
 const MULTI_USER_ROUNDS = integerEnv('STORAGE_E2E_MULTI_USER_ROUNDS', 1, 1, 20)
 const PROOF_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_TIMEOUT_MS', 45 * 60 * 1000, 60 * 1000, 4 * 60 * 60 * 1000)
 const PROOF_POLL_MS = integerEnv('STORAGE_E2E_PROOF_POLL_MS', 30 * 1000, 5000, 5 * 60 * 1000)
+const PROOF_REQUEST_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_REQUEST_TIMEOUT_MS', 30 * 1000, 1000, 5 * 60 * 1000)
+const PROOF_ARCADE_CONCURRENCY = integerEnv('STORAGE_E2E_PROOF_ARCADE_CONCURRENCY', 8, 1, 32)
 const RAW_REQUEST_COUNT = integerEnv('STORAGE_E2E_READ_COUNT', 30, 1, 1000)
 const EVIDENCE_FILE = process.env.STORAGE_E2E_EVIDENCE_FILE
 const RUN_ID = process.env.STORAGE_E2E_RUN_ID ?? new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)
@@ -109,8 +111,11 @@ interface ProofObservation {
   arcadeStatus?: string
   blockHeight?: number
   arcadeProof: boolean
+  arcadeProofObservedAt?: string
   storageStatus?: string
+  storageCompletedObservedAt?: string
   completedAt?: string
+  convergenceMs?: number
   error?: string
 }
 
@@ -138,7 +143,10 @@ const evidence: {
     requiredUserUtxos: REQUIRED_USER_UTXOS,
     multiUserRounds: MULTI_USER_ROUNDS,
     ceilingBatches: CEILING_BATCHES,
-    loadRepeats: LOAD_REPEATS
+    loadRepeats: LOAD_REPEATS,
+    proofPollMs: PROOF_POLL_MS,
+    proofRequestTimeoutMs: PROOF_REQUEST_TIMEOUT_MS,
+    proofArcadeConcurrency: PROOF_ARCADE_CONCURRENCY
   },
   metrics: {},
   transactions: [],
@@ -255,6 +263,31 @@ function summarizeLoadRuns (runs: LoadRun[]): Array<Record<string, number>> {
 
 function errorMessage (error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+async function withTimeout<T> (description: string, operation: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${description} timed out after ${PROOF_REQUEST_TIMEOUT_MS}ms`)), PROOF_REQUEST_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timer != null) clearTimeout(timer)
+  }
+}
+
+async function forEachWithConcurrency<T> (items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let next = 0
+  const run = async (): Promise<void> => {
+    while (next < items.length) {
+      const item = items[next++]
+      await worker(item)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run))
 }
 
 function deriveUserKey (userIndex: number): PrivateKey {
@@ -412,7 +445,7 @@ async function assertConfirmedSpendableState (wallets: TestWallet[], context: st
     let nextCandidate = 0
     let confirmed = 0
     const worker = async (): Promise<void> => {
-      while (nextCandidate < networkCandidates.length && problems.length === 0) {
+      while (nextCandidate < networkCandidates.length) {
         const output = networkCandidates[nextCandidate++]
         const network = await item.services.getUtxoStatus(
           item.services.hashOutputScript(output.lockingScript ?? ''),
@@ -526,14 +559,8 @@ async function broadcastConcurrentlyAndReconcile (
   }
 }
 
-async function actionStatus (tracked: TrackedTransaction): Promise<string | undefined> {
-  const wallet = tracked.walletIndex === root.index ? root : users.find(user => user.index === tracked.walletIndex)
-  if (wallet == null) return undefined
-  const result = await wallet.wallet.listActions({ labels: [RUN_LABEL], limit: 1000 })
-  return result.actions.find(action => action.txid === tracked.txid)?.status
-}
-
 async function waitForProofs (): Promise<ProofObservation[]> {
+  const transactions = new Map(evidence.transactions.map(transaction => [transaction.txid, transaction]))
   const pending = new Set(evidence.transactions.map(transaction => transaction.txid))
   const observations = new Map<string, ProofObservation>()
   for (const transaction of evidence.transactions) {
@@ -547,30 +574,62 @@ async function waitForProofs (): Promise<ProofObservation[]> {
 
   const started = Date.now()
   while (pending.size > 0 && Date.now() - started < PROOF_TIMEOUT_MS) {
-    for (const txid of [...pending]) {
-      const transaction = evidence.transactions.find(item => item.txid === txid)
-      const observation = observations.get(txid)
-      if (transaction == null || observation == null) throw new Error(`Missing evidence for ${txid}`)
+    const pendingTransactions = [...pending].map(txid => {
+      const transaction = transactions.get(txid)
+      if (transaction == null) throw new Error(`Missing transaction evidence for ${txid}`)
+      return transaction
+    })
+    for (const transaction of pendingTransactions) {
+      const observation = observations.get(transaction.txid)
+      if (observation != null) observation.error = undefined
+    }
+    const storageStatuses = new Map<string, string>()
+    await Promise.all([root, ...users].map(async item => {
+      try {
+        const result = await withTimeout(
+          `Storage listActions wallet ${item.index}`,
+          item.wallet.listActions({ labels: [RUN_LABEL], limit: 1000 })
+        )
+        for (const action of result.actions) storageStatuses.set(action.txid, action.status)
+      } catch (error: unknown) {
+        for (const transaction of pendingTransactions.filter(transaction => transaction.walletIndex === item.index)) {
+          const observation = observations.get(transaction.txid)
+          if (observation != null) observation.error = `Storage: ${errorMessage(error)}`
+        }
+      }
+    }))
+
+    await forEachWithConcurrency(pendingTransactions, PROOF_ARCADE_CONCURRENCY, async transaction => {
+      const observation = observations.get(transaction.txid)
+      if (observation == null) throw new Error(`Missing proof observation for ${transaction.txid}`)
       try {
         const arcadeService = root.services.arcade
         if (arcadeService == null) throw new Error('Arcade is not configured')
-        const arcade = await arcadeService.getTxData(txid)
+        const arcade = await withTimeout(`Arcade getTxData ${transaction.txid}`, arcadeService.getTxData(transaction.txid))
         observation.arcadeStatus = arcade.txStatus
         observation.blockHeight = arcade.blockHeight === 0 ? undefined : arcade.blockHeight
         observation.arcadeProof = (arcade.txStatus === 'MINED' || arcade.txStatus === 'IMMUTABLE') && arcade.merklePath != null && arcade.merklePath !== ''
+        if (observation.arcadeProof && observation.arcadeProofObservedAt == null) {
+          observation.arcadeProofObservedAt = new Date().toISOString()
+        }
       } catch (error: unknown) {
-        observation.error = `Arcade: ${errorMessage(error)}`
+        const arcadeError = `Arcade: ${errorMessage(error)}`
+        observation.error = observation.error == null ? arcadeError : `${observation.error}; ${arcadeError}`
       }
-      try {
-        observation.storageStatus = await actionStatus(transaction)
-      } catch (error: unknown) {
-        observation.error = `Storage: ${errorMessage(error)}`
+
+      const storageStatus = storageStatuses.get(transaction.txid)
+      if (storageStatus != null) observation.storageStatus = storageStatus
+      if (observation.storageStatus === 'completed' && observation.storageCompletedObservedAt == null) {
+        observation.storageCompletedObservedAt = new Date().toISOString()
       }
       if (observation.arcadeProof && observation.storageStatus === 'completed') {
-        observation.completedAt = new Date().toISOString()
-        pending.delete(txid)
+        if (observation.completedAt == null) {
+          observation.completedAt = new Date().toISOString()
+          observation.convergenceMs = Date.parse(observation.completedAt) - Date.parse(transaction.broadcastAt)
+        }
+        pending.delete(transaction.txid)
       }
-    }
+    })
 
     const statusCounts: Record<string, number> = {}
     for (const observation of observations.values()) {
