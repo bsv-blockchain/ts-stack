@@ -29,6 +29,10 @@ const getJestConfig = async (): Promise<Config> => {
         }
       }]
     },
+    moduleNameMapper: {
+      '^@bsv/sdk$': '<rootDir>/../../sdk/mod.ts',
+      '^(\\.{1,2}/.*)\\.js$': '$1'
+    },
     testTimeout: 30000,
   }
 }

@@ -51,6 +51,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   readonly endpointUrl: string
   protected readonly authClient: AuthFetch
   protected nextId = 1
+  protected serverSupportsBinary = false
 
   // Track ephemeral (in-memory) "settings" if you wish to align with isAvailable() checks
   public settings?: TableSettings

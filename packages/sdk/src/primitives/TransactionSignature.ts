@@ -6,6 +6,13 @@ import Script from '../script/Script.js'
 import TransactionInput from '../transaction/TransactionInput.js'
 import TransactionOutput from '../transaction/TransactionOutput.js'
 
+/**
+ * Reusable BIP143 hash components for one immutable transaction context.
+ *
+ * Callers sharing a cache across inputs must not mutate transaction prevouts,
+ * sequences, outputs, or other signed fields until that signing or verification
+ * pass is complete. Create a fresh cache for a changed transaction context.
+ */
 export interface SignatureHashCache {
   hashPrevouts?: number[]
   hashSequence?: number[]
@@ -19,6 +26,12 @@ interface TransactionSignatureFormatParams {
   sourceSatoshis: number
   transactionVersion: number
   otherInputs: TransactionInput[]
+  /**
+   * Complete transaction input list. When supplied, formatting avoids rebuilding
+   * the list from `otherInputs` for every signature while preserving the legacy
+   * `otherInputs` calling convention.
+   */
+  allInputs?: TransactionInput[]
   outputs: TransactionOutput[]
   inputIndex: number
   subscript: Script
@@ -93,13 +106,22 @@ export default class TransactionSignature extends Signature {
     const emptyScript = new Script().toBinary()
 
     if (!isAnyoneCanPay) {
-      const inputs = params.otherInputs.map(input => ({
-        sourceTXID: input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '',
-        sourceOutputIndex: input.sourceOutputIndex,
-        sequence: (isSingle || isNone) ? 0 : (input.sequence ?? 0xffffffff), // Default to max sequence number
-        script: emptyScript
-      }))
-      inputs.splice(params.inputIndex, 0, currentInput)
+      const inputs = params.allInputs == null
+        ? params.otherInputs.map(input => ({
+          sourceTXID: input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '',
+          sourceOutputIndex: input.sourceOutputIndex,
+          sequence: (isSingle || isNone) ? 0 : (input.sequence ?? 0xffffffff),
+          script: emptyScript
+        }))
+        : params.allInputs.map((input, index) => index === params.inputIndex
+          ? currentInput
+          : {
+              sourceTXID: input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '',
+              sourceOutputIndex: input.sourceOutputIndex,
+              sequence: (isSingle || isNone) ? 0 : (input.sequence ?? 0xffffffff),
+              script: emptyScript
+            })
+      if (params.allInputs == null) inputs.splice(params.inputIndex, 0, currentInput)
       writeInputs(inputs)
     } else if (isAnyoneCanPay) {
       writeInputs([currentInput])
@@ -141,18 +163,22 @@ export default class TransactionSignature extends Signature {
    */
   static formatBip143 (params: TransactionSignatureFormatParams): Uint8Array {
     const cache = params.cache
-    const currentInput = {
+    const currentInput: TransactionInput = {
       sourceTXID: params.sourceTXID,
       sourceOutputIndex: params.sourceOutputIndex,
       sequence: params.inputSequence
     }
-    const inputs = [...params.otherInputs]
-    inputs.splice(params.inputIndex, 0, currentInput)
+    const inputs = params.allInputs ?? (() => {
+      const reconstructed = [...params.otherInputs]
+      reconstructed.splice(params.inputIndex, 0, currentInput)
+      return reconstructed
+    })()
 
     const getPrevoutHash = (): number[] => {
       const writer = new Writer()
 
-      for (const input of inputs) {
+      for (let index = 0; index < inputs.length; index++) {
+        const input = index === params.inputIndex ? currentInput : inputs[index]
         if (input.sourceTXID === undefined) {
           if (input.sourceTransaction == null) {
             throw new Error('Missing sourceTransaction for input')
@@ -172,7 +198,8 @@ export default class TransactionSignature extends Signature {
     const getSequenceHash = (): number[] => {
       const writer = new Writer()
 
-      for (const input of inputs) {
+      for (let index = 0; index < inputs.length; index++) {
+        const input = index === params.inputIndex ? currentInput : inputs[index]
         const sequence = input.sequence ?? 0xffffffff // Default to max sequence number
         writer.writeUInt32LE(sequence)
       }

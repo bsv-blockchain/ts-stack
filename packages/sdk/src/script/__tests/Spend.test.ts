@@ -14,6 +14,7 @@ import Script from '../../script/Script'
 import BigNumber from '../../primitives/BigNumber'
 import ScriptChunk from '../../script/ScriptChunk'
 import OP from '../../script/OP'
+import { type SignatureHashCache } from '../../primitives/TransactionSignature'
 
 export class MockChain implements ChainTracker {
   mock: { blockheaders: string[] }
@@ -33,6 +34,40 @@ export class MockChain implements ChainTracker {
   async currentHeight(): Promise<number> {
     return this.mock.blockheaders.length
   }
+}
+
+async function makeReusableP2PKHSpend (sigHashCache?: SignatureHashCache): Promise<Spend> {
+  const privateKey = new PrivateKey(1)
+  const p2pkh = new P2PKH()
+  const lockingScript = p2pkh.lock(privateKey.toPublicKey().toHash())
+  const sourceTx = new Transaction(1, [], [{ lockingScript, satoshis: 2000 }], 0)
+  const siblingSourceTx = new Transaction(1, [], [{ lockingScript, satoshis: 500 }], 0)
+  const spendTx = new Transaction(
+    1,
+    [
+      { sourceTransaction: sourceTx, sourceOutputIndex: 0, sequence: 0xffffffff },
+      { sourceTransaction: siblingSourceTx, sourceOutputIndex: 0, sequence: 0xfffffffe }
+    ],
+    [{ lockingScript, satoshis: 999 }],
+    10
+  )
+  const unlockingScript = await p2pkh.unlock(privateKey).sign(spendTx, 0)
+
+  return new Spend({
+    sourceTXID: sourceTx.id('hex'),
+    sourceOutputIndex: 0,
+    sourceSatoshis: 2000,
+    lockingScript,
+    transactionVersion: spendTx.version,
+    otherInputs: [spendTx.inputs[1]],
+    allInputs: spendTx.inputs,
+    inputIndex: 0,
+    unlockingScript,
+    outputs: spendTx.outputs,
+    inputSequence: spendTx.inputs[0].sequence ?? 0xffffffff,
+    lockTime: spendTx.lockTime,
+    sigHashCache
+  })
 }
 
 const ZERO_TXID = '0'.repeat(64)
@@ -92,6 +127,42 @@ const createSpendWithPushes = (lockingAsm: string, unlockingPushes: number[][]):
 const scriptNumBytes = (value: bigint): number[] => new BigNumber(value).toScriptNum()
 
 describe('Spend', () => {
+  describe('signature-hash cache lifetime', () => {
+    it.each([
+      ['output value', (spend: Spend) => { spend.outputs[0].satoshis = 998 }],
+      ['current input sequence', (spend: Spend) => { spend.inputSequence = 0xfffffffd }],
+      ['sibling input outpoint', (spend: Spend) => {
+        const siblingInput = spend.allInputs?.[1]
+        if (siblingInput == null) throw new Error('Expected a sibling input')
+        siblingInput.sourceOutputIndex = 1
+      }],
+      ['lock time', (spend: Spend) => { spend.lockTime++ }]
+    ])('invalidates an owned cache after %s mutation', async (_name, mutate) => {
+      const spend = await makeReusableP2PKHSpend()
+      expect(spend.validate()).toBe(true)
+
+      mutate(spend)
+
+      expect(() => spend.validate()).toThrow()
+    })
+
+    it('preserves an externally shared cache across reset for an immutable transaction pass', async () => {
+      const cache: SignatureHashCache = { hashOutputsSingle: new Map() }
+      const spend = await makeReusableP2PKHSpend(cache)
+
+      expect(spend.validate()).toBe(true)
+      expect(cache.hashPrevouts).toBeDefined()
+      expect(cache.hashSequence).toBeDefined()
+      expect(cache.hashOutputsAll).toBeDefined()
+
+      spend.reset()
+
+      expect(cache.hashPrevouts).toBeDefined()
+      expect(cache.hashSequence).toBeDefined()
+      expect(cache.hashOutputsAll).toBeDefined()
+    })
+  })
+
   it('Successfully validates a P2PKH spend', async () => {
     const privateKey = new PrivateKey(1)
     const publicKey = privateKey.toPublicKey()

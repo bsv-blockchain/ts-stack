@@ -6,6 +6,17 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Release prep for `2.4.2`: transaction-pipeline, BEEF fetching, and binary transport
+  performance improvements described below, published in lockstep for Node, browser, and mobile.
+- Transaction pipeline performance: reuse parsed BEEF through `createAction`/`signAction`, retain
+  typed bytes internally until persistence compatibility boundaries, and avoid reparsing Atomic
+  BEEF during internalization and broadcast preparation.
+- Fetch independent BEEF ancestor frontiers and allocated-change proofs with bounded concurrency,
+  deterministic merge order, Set-based deduplication, and configurable `maxConcurrency`.
+- Negotiate compact base64 JSON-RPC binary values across Node, browser, and mobile clients while
+  preserving numeric-array requests and responses for old servers and clients. A 1 MiB payload is
+  62.7% smaller on the wire than legacy byte-array JSON.
+
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.
   Only complete BRC-29 signer metadata is eligible; custom rows remain visible

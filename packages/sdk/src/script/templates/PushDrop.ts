@@ -225,9 +225,13 @@ export default class PushDrop implements ScriptTemplate {
         lockingScript = resolved.lockingScript as LockingScript
 
         const preimage = formatPreimage({
-          tx, inputIndex, signatureScope,
-          sourceTXID: resolved.sourceTXID, sourceSatoshis: resolved.sourceSatoshis,
-          lockingScript: resolved.lockingScript, otherInputs: resolved.otherInputs,
+          tx,
+          inputIndex,
+          signatureScope,
+          sourceTXID: resolved.sourceTXID,
+          sourceSatoshis: resolved.sourceSatoshis,
+          lockingScript: resolved.lockingScript,
+          allInputs: resolved.allInputs,
           inputSequence: tx.inputs[inputIndex].sequence ?? 0xffffffff
         })
 

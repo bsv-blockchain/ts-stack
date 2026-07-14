@@ -1,4 +1,4 @@
-import { Beef, SignActionSpend, Spend, Transaction } from '@bsv/sdk'
+import { Beef, SignActionSpend, Spend, Transaction, type SignatureHashCache } from '@bsv/sdk'
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { asBsvSdkScript } from '../../utility/utilityHelpers'
@@ -83,11 +83,10 @@ export function verifyUnlockScripts (txid: string, beef: Beef): void {
     }
   }
 
+  const sigHashCache: SignatureHashCache = { hashOutputsSingle: new Map() }
   for (let i = 0; i < tx.inputs.length; i++) {
     const input = tx.inputs[i]
     const sourceOutput = input.sourceTransaction!.outputs[input.sourceOutputIndex]
-
-    const otherInputs = tx.inputs.filter((_, idx) => idx !== i)
 
     const spend = new Spend({
       sourceTXID: input.sourceTXID!,
@@ -95,12 +94,14 @@ export function verifyUnlockScripts (txid: string, beef: Beef): void {
       lockingScript: sourceOutput.lockingScript,
       sourceSatoshis: sourceOutput.satoshis ?? 0,
       transactionVersion: tx.version,
-      otherInputs,
+      otherInputs: [],
+      allInputs: tx.inputs,
       unlockingScript: input.unlockingScript!,
       inputSequence: input.sequence ?? 0,
       inputIndex: i,
       outputs: tx.outputs,
-      lockTime: tx.lockTime
+      lockTime: tx.lockTime,
+      sigHashCache
     })
 
     try {

@@ -16,7 +16,10 @@
     "declaration": true,
     "declarationMap": true,
     "composite": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "paths": {
+      "@bsv/sdk": ["../../sdk/dist/types/mod.d.ts"]
+    }
   },
   "include": [
     "src/**/*",

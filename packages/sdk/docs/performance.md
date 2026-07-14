@@ -1,4 +1,48 @@
-# BigNumber Benchmarks
+# Performance Benchmarks
+
+## Transaction and BEEF pipeline (July 2026)
+
+The transaction pipeline benchmark uses built ESM artifacts and is intentionally runnable against another build through `SDK_DIST_ROOT`. Measurements below were taken on the same Apple Silicon host with Node.js v25.9.0. Each comparison uses identical generated transactions and benchmark code.
+
+Commands:
+
+```bash
+# 4.17 MB Atomic BEEF, 1,000-transaction spend chain
+CHAIN_DEPTH=1000 SCRIPT_BYTES=4096 BENCH_SAMPLES=5 \
+  node benchmarks/transaction-pipeline-bench.js
+
+# 1,000-input P2PKH transaction
+CHAIN_DEPTH=10 SCRIPT_BYTES=1 WIDE_INPUTS=1000 BENCH_SAMPLES=3 \
+  node benchmarks/transaction-pipeline-bench.js
+```
+
+| Workload (median) | `main` | Optimized | Improvement |
+| --- | ---: | ---: | ---: |
+| 4.17 MB cold Atomic BEEF serialize | 150.80 ms | 16.11 ms | 89.3% faster |
+| 4.17 MB warm Atomic BEEF serialize | 132.47 ms | 1.46 ms | 98.9% faster |
+| 4.17 MB copy-safe structural parse | 3.77 ms | 0.95 ms | 74.8% faster |
+| 4.17 MB zero-copy structural parse | unavailable | 0.51 ms | 86.4% faster than baseline copy-safe parse |
+| 4.17 MB linked Atomic BEEF parse | 13.60 ms | 12.62 ms | 7.2% faster |
+| 1,000-link spend-chain verification | 1.82 ms | 0.73 ms | 60.0% faster |
+| 4.17 MB parse and topological sort | 12.40 ms | 5.71 ms | 54.0% faster |
+| 1,000-input P2PKH sign | 1,266.19 ms | 1,161.64 ms | 8.3% faster |
+| 1,000-input P2PKH verify | 2,090.32 ms | 1,213.03 ms | 42.0% faster |
+
+The default 2,000-link, 4.24 MB workload completes cold serialization, zero-copy structural parsing, linked parsing, verification, and sorting in roughly 69 ms of measured median/one-shot work on the optimized build. The same workload overflows the JavaScript stack on `main`; the iterative implementation is also regression-tested at 3,000 links.
+
+Wallet Toolbox has a separate reproducible frontier benchmark:
+
+```bash
+node ../wallet/wallet-toolbox/benchmarks/ancestor-fetch-bench.mjs
+```
+
+With 32 independent ancestors and a fixed 10 ms mock service latency, sequential `main` takes 358.55 ms. The bounded eight-way implementation takes 54.34 ms (84.8% faster, 6.6x throughput) while preserving deterministic merge order. Negotiated base64 JSON-RPC reduces a representative 1 MiB binary payload from 3,743,755 bytes to 1,398,147 bytes, a 62.7% wire-size reduction; legacy peers continue to receive numeric arrays.
+
+### Signature-hash cache lifetime
+
+`Spend` invalidates its internally owned signature-hash cache at the start of every validation, so a standalone instance remains safe to reuse after transaction fields are mutated. A `SignatureHashCache` supplied to `Spend` is externally owned and may be shared across inputs only for a single immutable signing or verification pass. Callers must create a fresh cache after mutating prevouts, sequences, outputs, or any other signed transaction field.
+
+## BigNumber Benchmarks
 
 The benchmark scripts measure extremely large number operations and script number serialization performance.
 

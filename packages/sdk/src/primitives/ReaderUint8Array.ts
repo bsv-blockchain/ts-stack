@@ -42,6 +42,32 @@ export class ReaderUint8Array {
     return this.bin.slice(start, end)
   }
 
+  /**
+   * Reads a zero-copy view over the backing buffer. The view is valid for the
+   * lifetime of the backing `Uint8Array`; callers that require isolation should
+   * continue to use {@link read}.
+   */
+  public readView (len = this.length - this.pos): Uint8Array {
+    if (!Number.isSafeInteger(len) || len < 0 || this.pos + len > this.length) {
+      throw new RangeError('ReaderUint8Array read exceeds available data')
+    }
+    const start = this.pos
+    this.pos += len
+    return this.bin.subarray(start, this.pos)
+  }
+
+  /** Advances without allocating. */
+  public skip (len: number): void {
+    if (!Number.isSafeInteger(len) || len < 0 || this.pos + len > this.length) {
+      throw new RangeError('ReaderUint8Array skip exceeds available data')
+    }
+    this.pos += len
+  }
+
+  public remaining (): number {
+    return this.length - this.pos
+  }
+
   public readReverse (len = this.length): Uint8Array {
     const buf2 = new Uint8Array(len)
     for (let i = 0; i < len; i++) {
@@ -76,7 +102,7 @@ export class ReaderUint8Array {
     return (val & 0x8000) === 0 ? val : val - 0x10000
   }
 
-  public readUInt16LE(): number {
+  public readUInt16LE (): number {
     const val = this.bin[this.pos] | (this.bin[this.pos + 1] << 8)
     this.pos += 2
     return val
