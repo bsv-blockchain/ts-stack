@@ -26,6 +26,7 @@ export STORAGE_E2E_TARGET_URL=https://storage.babbage.systems
 export STORAGE_E2E_USER_COUNT=3
 export STORAGE_E2E_USER_OFFSET=0
 export STORAGE_E2E_USER_FUNDING_SATS=400
+export STORAGE_E2E_FUNDING_BATCH_SIZE=12
 export STORAGE_E2E_TX_COUNT=3
 export STORAGE_E2E_CEILING_BATCHES=2,4,8
 export STORAGE_E2E_LOAD_REPEATS=1
@@ -51,6 +52,7 @@ pnpm exec jest --runTestsByPath \
 | `STORAGE_E2E_TX_COUNT` | `3` | Transactions in each fixed-size write case. |
 | `STORAGE_E2E_OUTPUT_SATS` | `100` | Sats in each explicit test output. |
 | `STORAGE_E2E_USER_FUNDING_SATS` | `400` | Sats in each independent BRC-29 funding UTXO. |
+| `STORAGE_E2E_FUNDING_BATCH_SIZE` | `12` | Maximum BRC-29 outputs in one setup transaction; bounds coin-selection and fee pressure. |
 | `STORAGE_E2E_MULTI_USER_ROUNDS` | `1` | Full `createAction` rounds run concurrently across the derived identities. |
 | `STORAGE_E2E_CEILING_BATCHES` | `2,4,8` | Transaction counts for single-identity and sharded phase load. |
 | `STORAGE_E2E_LOAD_REPEATS` | `1` | Repetitions per phase-load batch size; use at least 3 for comparison runs. |
