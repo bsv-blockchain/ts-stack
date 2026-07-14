@@ -6,6 +6,11 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox (unreleased)
 
+- Release prep for `2.4.2`: proof completion now discovers every local
+  transaction row sharing the proven txid, repairs notification-set drift from
+  concurrent multi-user `internalizeAction` calls, and idempotently completes
+  any local copy omitted by a last-writer-wins notification update.
+
 - Release prep for `2.4.1`: define one managed-change policy across Knex and IndexedDB allocation,
   counting, default balance reporting, `balanceAndUtxos`, and `noSendChange`.
   Only complete BRC-29 signer metadata is eligible; custom rows remain visible

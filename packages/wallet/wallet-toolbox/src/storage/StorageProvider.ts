@@ -804,10 +804,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (req.provenTxId != null && req.provenTxId > 0) {
       // Someone beat us to it, grab what we need for results...
       proven = new EntityProvenTx(verifyOne(await this.findProvenTxs({ partial: { txid: args.txid } })))
+      if (req.status !== 'completed' || req.provenTxId !== proven.provenTxId) {
+        req.status = 'completed'
+        req.provenTxId = proven.provenTxId
+        await req.updateStorageDynamicProperties(this)
+      }
     } else {
-      let isNew: boolean
-      ;({ proven, isNew } = await this.transaction(async trx => {
-        const { proven: api, isNew } = await this.findOrInsertProvenTx(
+      proven = await this.transaction(async trx => {
+        const { proven: api } = await this.findOrInsertProvenTx(
           {
             created_at: new Date(),
             updated_at: new Date(),
@@ -822,24 +826,45 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
           },
           trx
         )
-        proven = new EntityProvenTx(api)
-        if (isNew) {
+        const found = new EntityProvenTx(api)
+        if (req.status !== 'completed' || req.provenTxId !== found.provenTxId) {
           req.status = 'completed'
-          req.provenTxId = proven.provenTxId
+          req.provenTxId = found.provenTxId
           await req.updateStorageDynamicProperties(this, trx)
-          // upate the transaction notifications outside of storage transaction....
         }
-        return { proven, isNew }
-      }))
-      if (isNew) {
-        await notifyTransactionsOfProof(
-          req.notify.transactionIds ?? [],
-          proven.provenTxId,
-          note => req.addHistoryNote(note),
-          async () => { await req.updateStorageDynamicProperties(this) },
-          async (id, update) => { await this.updateTransaction(id, update) }
-        )
+        return found
+      })
+    }
+
+    // A transaction can be internalized concurrently by several users. Their
+    // transaction rows share a txid but race while merging the JSON notify
+    // list, so a last-writer-wins update can omit one local copy. A valid proof
+    // is authoritative for every local transaction with this txid: discover
+    // them from the indexed transaction table and heal both the durable notify
+    // set and any row that did not receive the original completion update.
+    const transactions = await this.findTransactions({ partial: { txid: args.txid } })
+    const knownNotificationIds = new Set(req.notify.transactionIds ?? [])
+    let notificationSetChanged = false
+    for (const transaction of transactions) {
+      if (!knownNotificationIds.has(transaction.transactionId)) {
+        req.addNotifyTransactionId(transaction.transactionId)
+        knownNotificationIds.add(transaction.transactionId)
+        notificationSetChanged = true
       }
+    }
+    const transactionIdsNeedingProof = transactions
+      .filter(transaction => transaction.status !== 'completed' || transaction.provenTxId !== proven.provenTxId)
+      .map(transaction => transaction.transactionId)
+    if (transactionIdsNeedingProof.length > 0) {
+      await notifyTransactionsOfProof(
+        transactionIdsNeedingProof,
+        proven.provenTxId,
+        note => req.addHistoryNote(note),
+        async () => { await req.updateStorageDynamicProperties(this) },
+        async (id, update) => { await this.updateTransaction(id, update) }
+      )
+    } else if (notificationSetChanged) {
+      await req.updateStorageDynamicProperties(this)
     }
     const r: UpdateProvenTxReqWithNewProvenTxResult = {
       status: req.status,
