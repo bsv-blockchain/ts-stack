@@ -31,7 +31,7 @@ const USER_COUNT = integerEnv('STORAGE_E2E_USER_COUNT', 3, 2, 20)
 const USER_OFFSET = integerEnv('STORAGE_E2E_USER_OFFSET', 0, 0, 1000000)
 const TX_COUNT = integerEnv('STORAGE_E2E_TX_COUNT', 3, 1, 100)
 const OUTPUT_SATS = integerEnv('STORAGE_E2E_OUTPUT_SATS', 100, 1, 100000)
-const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPUT_SATS + 200, 1000000)
+const USER_FUNDING_SATS = integerEnv('STORAGE_E2E_USER_FUNDING_SATS', 400, OUTPUT_SATS + 300, 1000000)
 const FUNDING_BATCH_SIZE = integerEnv('STORAGE_E2E_FUNDING_BATCH_SIZE', 12, 1, 100)
 const MULTI_USER_ROUNDS = integerEnv('STORAGE_E2E_MULTI_USER_ROUNDS', 1, 1, 20)
 const PROOF_TIMEOUT_MS = integerEnv('STORAGE_E2E_PROOF_TIMEOUT_MS', 45 * 60 * 1000, 60 * 1000, 4 * 60 * 60 * 1000)
@@ -176,6 +176,7 @@ function parseBatches (value: string): number[] {
 
 function requiredUserUtxos (): number[] {
   const required = Array.from({ length: USER_COUNT }, () => MULTI_USER_ROUNDS)
+  required[0] += TX_COUNT * 4
   const transactionsPerSingleIdentity = CEILING_BATCHES.reduce((sum, count) => sum + count, 0) * LOAD_REPEATS
   required[0] += transactionsPerSingleIdentity
 
@@ -344,10 +345,13 @@ function track (txid: string | undefined, test: string, walletIndex: number): st
 }
 
 async function fundUsers (): Promise<string | undefined> {
-  const inventories = await Promise.all(users.map(async user => ({
-    user,
-    outputs: (await user.wallet.listOutputs({ basket: 'default', limit: 10000 })).totalOutputs
-  })))
+  const inventories = await Promise.all(users.map(async user => {
+    const listed = await user.wallet.listOutputs({ basket: 'default', limit: 10000 })
+    return {
+      user,
+      outputs: listed.outputs.filter(output => output.satoshis >= USER_FUNDING_SATS).length
+    }
+  }))
   const shortages = inventories.map(({ user, outputs }) => ({
     user,
     count: Math.max(0, REQUIRED_USER_UTXOS[user.index - 1] - outputs)
@@ -779,17 +783,18 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   })
 
   test(`2a sequential Storage writes (${TX_COUNT})`, async () => {
+    const writer = users[0]
     const timings: number[] = []
     for (let i = 0; i < TX_COUNT; i++) {
       const started = Date.now()
-      const result = await root.wallet.createAction({
+      const result = await writer.wallet.createAction({
         description: `${RUN_LABEL} sequential ${i + 1}`.slice(0, 50),
         labels: [RUN_LABEL],
-        outputs: [output(root, `sequential ${i + 1}`)],
+        outputs: [output(writer, `sequential ${i + 1}`)],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       timings.push(Date.now() - started)
-      track(result.txid, '2a-sequential', root.index)
+      track(result.txid, '2a-sequential', writer.index)
     }
     const stats = calcStats(timings)
     evidence.metrics.sequentialWrites = { ...stats, transactionsPerSecond: throughput(TX_COUNT, timings.reduce((sum, n) => sum + n, 0)) }
@@ -797,7 +802,7 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
   })
 
   test(`2b concurrent Arcade submission with Storage reconciliation (${TX_COUNT})`, async () => {
-    const result = await broadcastConcurrentlyAndReconcile([root], TX_COUNT, '2b-concurrent')
+    const result = await broadcastConcurrentlyAndReconcile([users[0]], TX_COUNT, '2b-concurrent')
     evidence.metrics.concurrentWrites = batchMetrics(result)
     console.log(`[write:concurrent] ${JSON.stringify(evidence.metrics.concurrentWrites)}`)
     expect(result.txids).toHaveLength(TX_COUNT)
@@ -831,28 +836,29 @@ describeMainnet('Production Storage + Arcade + Monitor E2E', () => {
       transactionsPerSecond: throughput(results.length, wallMs)
     }
     console.log(`[write:multi-user] ${JSON.stringify(evidence.metrics.multiUserWrites)}`)
-    expect(results).toHaveLength(USER_COUNT)
+    expect(results).toHaveLength(USER_COUNT * MULTI_USER_ROUNDS)
   })
 
   test(`3a sequential Arcade-token ingestion (${TX_COUNT})`, async () => {
+    const writer = users[0]
     const timings: number[] = []
     for (let i = 0; i < TX_COUNT; i++) {
       const started = Date.now()
-      const result = await root.wallet.createAction({
+      const result = await writer.wallet.createAction({
         description: `${RUN_LABEL} sse sequential ${i + 1}`.slice(0, 50),
         labels: [RUN_LABEL],
-        outputs: [output(root, `sse sequential ${i + 1}`)],
+        outputs: [output(writer, `sse sequential ${i + 1}`)],
         options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
       })
       timings.push(Date.now() - started)
-      track(result.txid, '3a-sse-sequential', root.index)
+      track(result.txid, '3a-sse-sequential', writer.index)
     }
     evidence.metrics.sseSequential = calcStats(timings)
     expect(timings).toHaveLength(TX_COUNT)
   })
 
   test(`3b concurrent Arcade-token ingestion (${TX_COUNT})`, async () => {
-    const result = await broadcastConcurrentlyAndReconcile([root], TX_COUNT, '3b-sse-concurrent')
+    const result = await broadcastConcurrentlyAndReconcile([users[0]], TX_COUNT, '3b-sse-concurrent')
     evidence.metrics.sseConcurrent = batchMetrics(result)
     expect(result.txids).toHaveLength(TX_COUNT)
   })

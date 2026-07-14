@@ -51,7 +51,7 @@ pnpm exec jest --runTestsByPath \
 | `STORAGE_E2E_USER_OFFSET` | `0` | Offset added to deterministic child derivation indexes; use a new offset to isolate a load run from prior wallet state. |
 | `STORAGE_E2E_TX_COUNT` | `3` | Transactions in each fixed-size write case. |
 | `STORAGE_E2E_OUTPUT_SATS` | `100` | Sats in each explicit test output. |
-| `STORAGE_E2E_USER_FUNDING_SATS` | `400` | Sats in each independent BRC-29 funding UTXO. |
+| `STORAGE_E2E_USER_FUNDING_SATS` | `400` | Sats in each independent BRC-29 funding UTXO; must be at least `OUTPUT_SATS + 300` so one BRC-29 input covers its unlocking fee. |
 | `STORAGE_E2E_FUNDING_BATCH_SIZE` | `12` | Maximum BRC-29 outputs in one setup transaction; bounds coin-selection and fee pressure. |
 | `STORAGE_E2E_MULTI_USER_ROUNDS` | `1` | Full `createAction` rounds run concurrently across the derived identities. |
 | `STORAGE_E2E_CEILING_BATCHES` | `2,4,8` | Transaction counts for single-identity and sharded phase load. |
