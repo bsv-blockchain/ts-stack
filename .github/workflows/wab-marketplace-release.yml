@@ -1,21 +1,31 @@
 name: WAB → AWS Marketplace
 
-# Publishes infra/wab to the AWS Marketplace listing (ContainerProduct prod-67ziqtkrihz34).
+# Additive Marketplace path for infra/wab. Does NOT replace the general image release.
 #
-# VERSION SOURCE OF TRUTH: infra/wab/package.json `version`. The published Marketplace version
-# name is ALWAYS derived from package.json — the `infra/v*` git tag is ONLY the trigger (it is
-# date-based, e.g. infra/v2026-June-26, and is never parsed for a version). These two MUST stay
-# decoupled. `version_override` is a manual escape hatch (e.g. the one-time 1.0.8 -> 1.4.7
+# Dual publish on the same `infra/v*` tag:
+#   1. General OCI image → GHCR via .github/workflows/infra-release.yaml
+#      (ghcr.io/<owner>/wab:v<version>) — for self-hosters and any registry consumers
+#   2. This workflow → AWS Marketplace ECR + Catalog registration (listing only)
+#
+# VERSION SOURCE OF TRUTH: infra/wab/package.json `version` (same as infra-release.yaml).
+# The `infra/v*` git tag is ONLY the trigger (date-based, e.g. infra/v2026-June-26) and is
+# never parsed for a version. `version_override` is a manual escape hatch (e.g. a one-time
 # catch-up), not the normal path.
 #
-# Naming mirrors the existing listing exactly:
-#   package.json   1.4.7
-#   ECR image tag  bsv-blockchain/wab:1.4.7   (bare, like the existing wab:1.0.7)
-#   Marketplace    VersionTitle "v1.4.7"      (v-prefixed, like the existing v1.0.7 / v1.0.8)
+# Naming mirrors the existing Marketplace listing:
+#   package.json   X.Y.Z
+#   Marketplace ECR tag  bsv-blockchain/wab:X.Y.Z   (bare, like wab:1.0.7)
+#   Marketplace title    VersionTitle "vX.Y.Z"      (v-prefixed, like v1.0.7 / v1.0.8)
+#   GHCR tag (separate)  ghcr.io/<owner>/wab:vX.Y.Z  (via infra-release.yaml)
+#
+# Prerequisites (seller account / repo settings — not provisioned by this workflow):
+#   - Repo variable WAB_MP_ROLE_ARN: IAM role ARN in seller account (OIDC trust on
+#     token.actions.githubusercontent.com, scoped to this repo; permissions for Marketplace
+#     ECR push to 709825985650/bsv-blockchain/wab and marketplace-catalog Describe*/StartChangeSet).
+#   - Job needs permissions.id-token: write for OIDC (no static AWS keys).
 #
 # IMPORTANT: this file MUST live in the repo ROOT .github/workflows/. GitHub never runs workflow
-# files placed in subdirectories such as infra/wab/.github/workflows/ — that is exactly why the old
-# build-and-push.yml stopped firing when WAB moved into the monorepo.
+# files placed in subdirectories such as infra/wab/.github/workflows/.
 
 on:
   push:
@@ -50,6 +60,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Require WAB_MP_ROLE_ARN
+        run: |
+          if [ -z "${{ vars.WAB_MP_ROLE_ARN }}" ]; then
+            echo "::error::Repository variable WAB_MP_ROLE_ARN is not set. Create the seller-account OIDC role and set the var before running this workflow."
+            exit 1
+          fi
+
       - name: Resolve version from package.json
         id: ver
         run: |
@@ -70,18 +87,26 @@ jobs:
           role-to-assume: ${{ vars.WAB_MP_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Fail closed: if we cannot prove the title list, do not publish again.
+      # Immutable Marketplace version titles must not be re-submitted on API/parse errors.
       - name: Skip if this version is already published
         id: exists
         run: |
+          set -euo pipefail
           TITLE="${{ steps.ver.outputs.title }}"
           # Use DetailsDocument (clean JSON). The legacy `Details` field returns non-strict JSON
-          # (raw newlines in release notes) which breaks `jq fromjson` and would make this check
-          # silently match nothing.
-          TITLES="$(aws marketplace-catalog describe-entity \
+          # (raw newlines in release notes) which breaks jq.
+          DOC="$(aws marketplace-catalog describe-entity \
             --catalog AWSMarketplace \
             --entity-id "${PRODUCT_ID}" \
-            --query DetailsDocument --output json 2>/dev/null \
-            | jq -r '.Versions[]?.VersionTitle' 2>/dev/null || true)"
+            --query DetailsDocument --output json)"
+          TITLES="$(echo "$DOC" | jq -r '
+            (if type == "string" then fromjson else . end)
+            | .Versions as $v
+            | if $v == null then error("DetailsDocument.Versions missing") else $v end
+            | .[]?
+            | .VersionTitle // empty
+          ')"
           if echo "$TITLES" | grep -qx "$TITLE"; then
             echo "already=true" >> "$GITHUB_OUTPUT"
             echo "Version $TITLE already exists on the listing — nothing to do."
@@ -89,6 +114,18 @@ jobs:
             echo "already=false" >> "$GITHUB_OUTPUT"
             echo "Version $TITLE not present — will build, push, and register."
           fi
+
+      # Same safety net as infra-release.yaml: infra lockfiles lag @bsv/* publishes and
+      # Dockerfile `npm ci` hard-fails (or builds stale deps) without a refresh.
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        if: steps.exists.outputs.already == 'false'
+        with:
+          node-version: 24
+
+      - name: Refresh package-lock.json
+        if: steps.exists.outputs.already == 'false'
+        working-directory: ${{ env.WAB_DIR }}
+        run: npm install --package-lock-only --ignore-scripts
 
       - name: Log in to AWS Marketplace ECR
         if: steps.exists.outputs.already == 'false'
@@ -102,7 +139,7 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           IMAGE="${MP_ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${MP_ECR_REPO}:${VERSION}"
-          # context = infra/wab (self-contained Dockerfile; same recipe infra-release.yaml uses).
+          # context = infra/wab (self-contained Dockerfile; same context infra-release.yaml uses).
           docker build --platform linux/amd64 -t "$IMAGE" "${WAB_DIR}"
           docker push "$IMAGE"
           echo "Pushed $IMAGE"
@@ -151,7 +188,9 @@ jobs:
       - name: Wait for change set to settle (scan can take minutes–hours)
         if: steps.exists.outputs.already == 'false'
         run: |
+          set -euo pipefail
           CS_ID="${{ steps.changeset.outputs.change_set_id }}"
+          [ -n "$CS_ID" ] || { echo "No change_set_id from previous step"; exit 1; }
           for i in $(seq 1 60); do
             STATUS=$(aws marketplace-catalog describe-change-set \
               --catalog AWSMarketplace --change-set-id "$CS_ID" \
@@ -164,8 +203,13 @@ jobs:
                 aws marketplace-catalog describe-change-set --catalog AWSMarketplace \
                   --change-set-id "$CS_ID" --query 'ChangeSet[].ErrorDetailList'
                 exit 1 ;;
+              None|null|"")
+                echo "Empty/unknown change-set status; failing closed."
+                exit 1 ;;
             esac
             sleep 60
           done
-          echo "Still PREPARING/APPLYING after timeout; check the Requests log in the portal."
+          echo "::error::Still PREPARING/APPLYING after ~60m; listing is not confirmed live."
+          echo "Check the Requests log in the AWS Marketplace portal."
           echo "Change set: $CS_ID"
+          exit 1

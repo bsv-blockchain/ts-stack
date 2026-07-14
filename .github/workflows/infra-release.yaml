@@ -1,8 +1,14 @@
 name: Infra Release
 
+# Primary general image release for all infra/* components.
 # Builds a Docker image for every component in ./infra whose
 # package.json version is not yet published to GHCR, and pushes
 # the image as ghcr.io/<owner>/<component>:v<version>.
+#
+# This is the normal OCI path for self-hosters and third-party systems.
+# WAB additionally publishes to AWS Marketplace via
+# wab-marketplace-release.yml on the same tag — that path is additive
+# and does not replace this workflow.
 #
 # Trigger: push of an `infra/v*` tag (the version embedded in the tag
 # is informational only — each component is released based on its
