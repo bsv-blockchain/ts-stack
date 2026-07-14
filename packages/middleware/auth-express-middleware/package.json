@@ -1,6 +1,6 @@
 {
   "name": "@bsv/auth-express-middleware",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "BSV Blockchain mutual-authentication express middleware",
   "repository": {
     "type": "git",
@@ -67,7 +67,8 @@
     "@bsv/sdk": "workspace:^"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mime-types": "^3.0.2"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"

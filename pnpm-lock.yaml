@@ -689,6 +689,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      mime-types:
+        specifier: ^3.0.2
+        version: 3.0.2
     devDependencies:
       '@bsv/sdk':
         specifier: 2.1.3
@@ -1288,6 +1291,12 @@ importers:
       better-sqlite3:
         specifier: 12.10.0
         version: 12.10.0
+      body-parser:
+        specifier: ^2.3.0
+        version: 2.3.0
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -1340,9 +1349,6 @@ importers:
       cors:
         specifier: ^2.8.5
         version: 2.8.6
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
       fake-indexeddb:
         specifier: ^6.0.0
         version: 6.2.5
