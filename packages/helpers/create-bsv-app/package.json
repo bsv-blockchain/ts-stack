@@ -4,7 +4,7 @@
   "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",
   "main": "dist/index.js",
-  "bin": { "create-bsv-app": "./dist/index.js" },
+  "bin": { "create-bsv-app": "dist/index.js" },
   "files": ["dist", ".claude", "LICENSE.txt"],
   "scripts": {
     "build": "tsc",
