@@ -23,19 +23,14 @@ export class SHIPStorage {
   }
 
   /**
-   * Checks if a duplicate SHIP record exists with the same field values
+   * Checks if a SHIP record exists for the same provider and topic.
    * @param {string} identityKey identity key
    * @param {string} domain domain name
    * @param {string} topic topic name
-   * @returns {Promise<boolean>} true if a duplicate exists
+   * @returns {Promise<boolean>} true if a matching record exists
    */
   async hasDuplicateRecord (identityKey: string, domain: string, topic: string): Promise<boolean> {
-    const existingRecord = await this.shipRecords.findOne({
-      identityKey,
-      domain,
-      topic
-    })
-    return existingRecord !== null
+    return await this.shipRecords.findOne({ identityKey, domain, topic }) !== null
   }
 
   /**
@@ -47,14 +42,20 @@ export class SHIPStorage {
    * @param {string} topic topic name
    */
   async storeSHIPRecord (txid: string, outputIndex: number, identityKey: string, domain: string, topic: string): Promise<void> {
-    await this.shipRecords.insertOne({
-      txid,
-      outputIndex,
-      identityKey,
-      domain,
-      topic,
-      createdAt: new Date()
-    })
+    await this.shipRecords.updateOne(
+      { identityKey, domain, topic },
+      {
+        $set: {
+          txid,
+          outputIndex,
+          identityKey,
+          domain,
+          topic,
+          createdAt: new Date()
+        }
+      },
+      { upsert: true }
+    )
   }
 
   /**

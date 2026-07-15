@@ -23,19 +23,14 @@ export class SLAPStorage {
   }
 
   /**
-   * Checks if a duplicate SLAP record exists with the same field values
+   * Checks if a SLAP record exists for the same provider and service.
    * @param {string} identityKey identity key
    * @param {string} domain domain name
    * @param {string} service service name
-   * @returns {Promise<boolean>} true if a duplicate exists
+   * @returns {Promise<boolean>} true if a matching record exists
    */
   async hasDuplicateRecord (identityKey: string, domain: string, service: string): Promise<boolean> {
-    const existingRecord = await this.slapRecords.findOne({
-      identityKey,
-      domain,
-      service
-    })
-    return existingRecord !== null
+    return await this.slapRecords.findOne({ identityKey, domain, service }) !== null
   }
 
   /**
@@ -47,14 +42,20 @@ export class SLAPStorage {
    * @param {string} service service name
    */
   async storeSLAPRecord (txid: string, outputIndex: number, identityKey: string, domain: string, service: string): Promise<void> {
-    await this.slapRecords.insertOne({
-      txid,
-      outputIndex,
-      identityKey,
-      domain,
-      service,
-      createdAt: new Date()
-    })
+    await this.slapRecords.updateOne(
+      { identityKey, domain, service },
+      {
+        $set: {
+          txid,
+          outputIndex,
+          identityKey,
+          domain,
+          service,
+          createdAt: new Date()
+        }
+      },
+      { upsert: true }
+    )
   }
 
   /**
