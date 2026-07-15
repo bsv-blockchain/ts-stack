@@ -4,6 +4,7 @@ import Knex from 'knex'
 import { MongoClient } from 'mongodb'
 import { TopicManager, LookupService } from '@bsv/overlay'
 import { ChainTracker } from '@bsv/sdk'
+import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 
 // Mock dependencies
 jest.mock('knex')
@@ -501,6 +502,43 @@ describe('OverlayExpress', () => {
       expect(overlayExpress.managers.tm_slap).toBeDefined()
       expect(overlayExpress.services.ls_ship).toBeDefined()
       expect(overlayExpress.services.ls_slap).toBeDefined()
+    })
+
+    it('should initialize SHIP/SLAP indexes before completing engine configuration', async () => {
+      const shipEnsureIndexes = jest.fn<any>().mockResolvedValue(undefined)
+      const slapEnsureIndexes = jest.fn<any>().mockResolvedValue(undefined)
+      ;(DiscoveryServices.SHIPStorage as any).mockImplementationOnce(() => ({
+        ensureIndexes: shipEnsureIndexes
+      }))
+      ;(DiscoveryServices.SLAPStorage as any).mockImplementationOnce(() => ({
+        ensureIndexes: slapEnsureIndexes
+      }))
+
+      await overlayExpress.configureEngine(true)
+
+      expect(shipEnsureIndexes).toHaveBeenCalledTimes(1)
+      expect(slapEnsureIndexes).toHaveBeenCalledTimes(1)
+      expect(overlayExpress.engine).toBeDefined()
+    })
+
+    it('should fail engine configuration when discovery index initialization fails', async () => {
+      const indexError = new Error('discovery index migration failed')
+      const shipEnsureIndexes = jest.fn<any>().mockRejectedValue(indexError)
+      const slapEnsureIndexes = jest.fn<any>().mockResolvedValue(undefined)
+      ;(DiscoveryServices.SHIPStorage as any).mockImplementationOnce(() => ({
+        ensureIndexes: shipEnsureIndexes
+      }))
+      ;(DiscoveryServices.SLAPStorage as any).mockImplementationOnce(() => ({
+        ensureIndexes: slapEnsureIndexes
+      }))
+
+      await expect(overlayExpress.configureEngine(true)).rejects.toThrow(indexError)
+
+      expect(shipEnsureIndexes).toHaveBeenCalledTimes(1)
+      expect(slapEnsureIndexes).not.toHaveBeenCalled()
+      expect(overlayExpress.engine).toBeUndefined()
+      expect(overlayExpress.services.ls_ship).toBeUndefined()
+      expect(overlayExpress.services.ls_slap).toBeUndefined()
     })
 
     it('should configure engine without auto SHIP/SLAP', async () => {
