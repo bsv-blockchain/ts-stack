@@ -27,6 +27,11 @@ function defaultDeploymentId (): string {
   return `ts-sdk-${Utils.toHex(Random(16))}`
 }
 
+// Storage sendWith can aggregate many transactions into one BEEF. Arcade accepts
+// one EF transaction per request, so submit independent transactions concurrently
+// while preserving dependency order and avoiding an unbounded burst.
+export const ARCADE_POST_BEEF_CONCURRENCY = 4
+
 /**
  * Broadcaster for bsv-blockchain/arcade — the Teranode-native, ARC-compatible broadcaster.
  *
@@ -134,7 +139,7 @@ export class Arcade {
     }
 
     const url = `${this.URL}/tx`
-    const nn = () => ({ name: this.name, when: new Date().toISOString() })
+    const nn = (): { name: string, when: string } => ({ name: this.name, when: new Date().toISOString() })
     const nne = () => ({ ...nn(), rawTx, txids: txids.join(','), url })
 
     try {
@@ -240,33 +245,58 @@ export class Arcade {
     const r: PostBeefResult = {
       name: this.name,
       status: 'success',
-      txidResults: [],
+      txidResults: new Array<PostTxResultForTxid>(txids.length),
       notes: []
     }
-    const nn = () => ({ name: this.name, when: new Date().toISOString() })
+    const nn = (): { name: string, when: string } => ({ name: this.name, when: new Date().toISOString() })
     const beefBin = beef.toBinary()
 
-    for (const txid of txids) {
-      let efHex: string
+    const txidSet = new Set(txids)
+    const prepared = txids.map(txid => {
       try {
-        efHex = Transaction.fromBEEF(beefBin, txid).toHexEF()
+        const tx = Transaction.fromBEEF(beefBin, txid)
+        const dependencies = tx.inputs
+          .map(input => input.sourceTXID ?? input.sourceTransaction?.id('hex'))
+          .filter((sourceTxid): sourceTxid is string => sourceTxid != null && sourceTxid !== txid && txidSet.has(sourceTxid))
+        return { txid, efHex: tx.toHexEF(), dependencies }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
-        r.status = 'error'
-        const tr: PostTxResultForTxid = {
+        const error: PostTxResultForTxid = {
           txid,
           status: 'error',
           serviceError: true,
           notes: [{ ...nn(), what: 'arcadeEfBuildFailed', txid, code: e.code, description: e.description }]
         }
-        r.txidResults.push(tr)
-        continue
+        return { txid, dependencies: [] as string[], error }
+      }
+    })
+    const indexByTxid = new Map(txids.map((txid, index) => [txid, index]))
+    const pending = new Set(txids.map((_, index) => index))
+
+    while (pending.size > 0) {
+      let ready = [...pending].filter(index => prepared[index].dependencies.every(dependency => {
+        const dependencyIndex = indexByTxid.get(dependency)
+        return dependencyIndex == null || !pending.has(dependencyIndex)
+      }))
+      // A valid transaction graph is acyclic. Preserve forward progress for a
+      // malformed/cyclic graph and let Arcade return the authoritative error.
+      if (ready.length === 0) ready = [[...pending][0]]
+
+      let nextReady = 0
+      const worker = async (): Promise<void> => {
+        while (nextReady < ready.length) {
+          const index = ready[nextReady++]
+          const item = prepared[index]
+          r.txidResults[index] = item.error ?? await this.postRawTx(item.efHex, [item.txid])
+        }
       }
 
-      const prtr = await this.postRawTx(efHex, [txid])
-      r.txidResults.push(prtr)
-      if (prtr.status === 'error') r.status = 'error'
+      await Promise.all(
+        Array.from({ length: Math.min(ARCADE_POST_BEEF_CONCURRENCY, ready.length) }, worker)
+      )
+      for (const index of ready) pending.delete(index)
     }
+    if (r.txidResults.some(result => result.status === 'error')) r.status = 'error'
 
     return r
   }

@@ -92,6 +92,7 @@ import {
   specOpSetWalletChangeParams,
   specOpThrowReviewActions,
   specOpWalletBalance,
+  specOpWalletManagedUtxos,
   StorageIdentity,
   WalletBalance
 } from './sdk/types'
@@ -1101,15 +1102,20 @@ export class Wallet implements WalletInterface, ProtoWallet {
    * Uses `listOutputs` to iterate over chunks of up to 1000 outputs to
    * compute the sum of output satoshis.
    *
+   * For `default`, only wallet-managed BRC-29 change is included. Raw
+   * administrative `listOutputs({ basket: 'default' })` remains available to
+   * discover legacy incompatible rows for recovery.
+   *
    * @param {string} basket - Optional. Defaults to 'default', the wallet change basket.
    * @returns {WalletBalance} total sum of output satoshis and utxo details (satoshis and outpoints)
    */
   async balanceAndUtxos (basket: string = 'default'): Promise<WalletBalance> {
     const r: WalletBalance = { total: 0, utxos: [] }
+    const listBasket = basket === 'default' ? specOpWalletManagedUtxos : basket
     let offset = 0
     for (;;) {
       const change = await this.listOutputs({
-        basket,
+        basket: listBasket,
         limit: 1000,
         offset
       })

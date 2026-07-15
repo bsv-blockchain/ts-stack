@@ -29,6 +29,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ---
 
+## [1.6.0] - 2026-07-10
+
+### Added
+- **1-satoshi rule in `MandalaTopicManager`:** every Mandala token output and every verified admin-auth output must carry exactly 1 satoshi; `identifyAdmissibleOutputs` now rejects (throws) any transaction violating this. Token value is payload-denominated — satoshis carried by token outputs are dead weight and can be stranded. Ordinary wallet-change P2PKH outputs are unaffected (the admin check applies only after `verifyAdminOutput` admits, since a bare P2PKH also decodes as `MandalaAdmin`).
+
+---
+
 ## [1.4.0] - 2026-06-30
 
 ### Added

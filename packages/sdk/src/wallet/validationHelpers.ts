@@ -443,6 +443,7 @@ export function validateCreateActionOptions (options?: CreateActionOptions): Val
   const vo: ValidCreateActionOptions = {
     signAndProcess: defaultTrue(o.signAndProcess),
     acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast),
+    trustSelf: o.trustSelf,
     knownTxids: defaultEmpty(o.knownTxids),
     returnTXIDOnly: defaultFalse(o.returnTXIDOnly),
     noSend: defaultFalse(o.noSend),

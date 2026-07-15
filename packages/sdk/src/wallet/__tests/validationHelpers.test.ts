@@ -486,6 +486,16 @@ describe('validateCreateActionOptions', () => {
     expect(v.noSendChange).toHaveLength(1)
     expect(v.noSendChange[0].txid).toHaveLength(64)
   })
+
+  it('preserves trustSelf when set to known', () => {
+    const v = validateCreateActionOptions({ trustSelf: 'known' })
+    expect(v.trustSelf).toBe('known')
+  })
+
+  it('leaves trustSelf undefined when not provided', () => {
+    const v = validateCreateActionOptions({})
+    expect(v.trustSelf).toBeUndefined()
+  })
 })
 
 // ============================================================================

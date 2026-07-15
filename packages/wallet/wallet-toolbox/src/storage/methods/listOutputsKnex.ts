@@ -8,6 +8,7 @@ import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { managedChangeOutputFields } from './managedChange'
 export async function listOutputs (
   dsk: StorageKnex,
   auth: AuthId,
@@ -134,6 +135,19 @@ export async function listOutputs (
     q.whereIn('t.status', txStatusAllowed)
     if (basketId) q.where('o.basketId', basketId)
     if (!includeSpent) q.where('o.spendable', true)
+    if (specOp?.managedChangeOnly) {
+      q.where({
+        'o.type': managedChangeOutputFields.type,
+        'o.change': managedChangeOutputFields.change,
+        'o.providedBy': managedChangeOutputFields.providedBy,
+        'o.purpose': managedChangeOutputFields.purpose
+      })
+        .whereNotNull('o.derivationPrefix')
+        .whereNot('o.derivationPrefix', '')
+        .whereNotNull('o.derivationSuffix')
+        .whereNot('o.derivationSuffix', '')
+        .whereNull('o.spentBy')
+    }
   }
 
   const makeWithTagsQuery = () => {

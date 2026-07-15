@@ -59,6 +59,7 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUT
 import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
 
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
+import { managedChangeOutputFields } from './methods/managedChange'
 
 export interface StorageKnexOptions extends StorageProviderOptions {
   /**
@@ -1169,7 +1170,8 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   }
 
   /**
-   * Counts the outputs for userId in basketId that are spendable: true
+   * Counts wallet-managed BRC-29 change outputs for userId in basketId that
+   * are currently eligible for automatic allocation
    * AND whose transaction status is one of:
    * - completed
    * - unproven
@@ -1180,7 +1182,20 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     if (!excludeSending) status.push('sending')
     const q = this.knex<TableOutput>('outputs as o')
       .join('transactions as t', 'o.transactionId', 't.transactionId')
-      .where({ 'o.userId': userId, 'o.spendable': true, 'o.basketId': basketId })
+      .where({
+        'o.userId': userId,
+        'o.spendable': true,
+        'o.basketId': basketId,
+        'o.type': managedChangeOutputFields.type,
+        'o.change': managedChangeOutputFields.change,
+        'o.providedBy': managedChangeOutputFields.providedBy,
+        'o.purpose': managedChangeOutputFields.purpose
+      })
+      .whereNull('o.spentBy')
+      .whereNotNull('o.derivationPrefix')
+      .whereNot('o.derivationPrefix', '')
+      .whereNotNull('o.derivationSuffix')
+      .whereNot('o.derivationSuffix', '')
       .whereIn('t.status', status)
     const count = await this.getCount(q)
     return count
@@ -1311,6 +1326,16 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
           .where('o.userId', userId)
           .where('o.spendable', true)
           .where('o.basketId', basketId)
+          .where({
+            'o.type': managedChangeOutputFields.type,
+            'o.change': managedChangeOutputFields.change,
+            'o.providedBy': managedChangeOutputFields.providedBy,
+            'o.purpose': managedChangeOutputFields.purpose
+          })
+          .whereNotNull('o.derivationPrefix')
+          .whereNot('o.derivationPrefix', '')
+          .whereNotNull('o.derivationSuffix')
+          .whereNot('o.derivationSuffix', '')
           .whereNull('o.spentBy')
           .whereIn('t.status', status)
           .select('o.*')

@@ -75,6 +75,10 @@ const result = await wallet.createAction({
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.
 
+See [Managed change, sweeping, and recovery](./docs/managed-change-policy.md)
+for the default-basket invariant, automatic funding policy, and supported
+`internalizeAction` repair paths.
+
 The codebase has detailed JSDoc annotations throughout — these will surface inline in editors like VS Code.
 
 ## Development

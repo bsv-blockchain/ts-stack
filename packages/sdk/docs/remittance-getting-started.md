@@ -98,6 +98,12 @@ await manager.init()
   await testSyncThreads(manager)
 ```
 
+`Brc29RemittanceModule` internalizes a received settlement as a `wallet payment`.
+That classification is required: the wallet verifies the BRC-29 derivation and
+records the output as spendable managed change in its default balance. Do not
+use `basket insertion` for BRC-29 settlement funds; basket insertion is reserved
+for application-managed custom outputs and cannot target the default basket.
+
 ## Event Hooks
 
 Use `onEvent` or the per-event `events` callbacks to react to each step.

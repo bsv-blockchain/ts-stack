@@ -68,8 +68,7 @@ describe('MandalaTopicManager', () => {
 
   it('rejects the whole tx when a party is sanctioned', async () => {
     const { tm, beef, offChainValues } = await buildTransfer({ sanctioned: true })
-    const result = await tm.identifyAdmissibleOutputs(beef, [0], offChainValues)
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(beef, [0], offChainValues)).rejects.toThrow('sanctioned')
   })
 
   it('does not admit FT outputs lacking valid linkage', async () => {
@@ -92,8 +91,7 @@ describe('MandalaTopicManager', () => {
     const linkage = await sender.revealSpecificKeyLinkage({ counterparty: receiverKey, verifier: verifierKey, protocolID, keyID })
     const offChainValues = encodeLinkagePayload({ inputs: [], outputs: [{ index: 0, linkage: linkage as any }] })
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: [2, 'mandala admin'], stateStore: defaultStore() })
-    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)).rejects.toThrow('conservation')
   })
 })
 
@@ -160,8 +158,8 @@ describe('MandalaTopicManager admin chain', () => {
     } as any)
 
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto as any, stateStore: defaultStore() })
-    const result = await tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)
-    expect(result.outputsToAdmit).toEqual([]) // asset A is unauthorized -> whole tx rejected
+    // asset A is unauthorized -> whole tx rejected
+    await expect(tm.identifyAdmissibleOutputs(tx.toBEEF(), [], offChainValues)).rejects.toThrow('conservation')
   })
 
   it('admits an authorized issuance that mints exactly the declared amount', async () => {
@@ -282,8 +280,7 @@ describe('MandalaTopicManager control gate', () => {
     // Peer transfer of a paused asset -> rejected.
     const transfer = await buildPeerTransfer(assetId, 100, overlay)
     const tmTransfer = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(paused) })
-    const transferResult = await tmTransfer.identifyAdmissibleOutputs(transfer.beef, [0], transfer.offChainValues)
-    expect(transferResult.outputsToAdmit).toEqual([])
+    await expect(tmTransfer.identifyAdmissibleOutputs(transfer.beef, [0], transfer.offChainValues)).rejects.toThrow('control gate')
 
     // Admin pause action on the same asset -> admitted (admin actions exempt).
     const priorDetails = { kind: 'register' as const, assetId }
@@ -314,8 +311,7 @@ describe('MandalaTopicManager control gate', () => {
       admin: [{ index: 0, actionDetails: { kind: 'pause', assetId } }]
     } as any)
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(paused) })
-    const result = await tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)).rejects.toThrow('control gate')
   })
 
   it('rejects a forged access-mode bypass: peer transfer to a denylisted recipient with a forged admin entry', async () => {
@@ -328,14 +324,13 @@ describe('MandalaTopicManager control gate', () => {
     const forgedOffChain = encodeLinkagePayload({
       inputs: [],
       outputs: [{ index: 0, linkage: (decodeLinkagePayload(transfer.offChainValues).outputs[0].linkage) as any }],
-      admin: [{ index: 0, actionDetails: { kind: 'recover', assetId } }]
+      admin: [{ index: 0, actionDetails: { kind: 'reissue', assetId } }]
     } as any)
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(deny) })
-    const result = await tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(transfer.beef, [0], forgedOffChain)).rejects.toThrow('control gate')
   })
 
-  it('rejects any tx that spends a frozen outpoint (incl. would-be recover/redeem)', async () => {
+  it('rejects any tx that spends a frozen outpoint (incl. would-be redeem)', async () => {
     const overlay = new ProtoWallet(PrivateKey.fromRandom())
     const assetId = `${'a'.repeat(64)}.0`
     const transfer = await buildPeerTransfer(assetId, 100, overlay)
@@ -344,8 +339,7 @@ describe('MandalaTopicManager control gate', () => {
       frozenOutpoints: [{ outpoint: transfer.inputOutpoint, amount: 100, owner: 'someone' }]
     }
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(frozen) })
-    const result = await tm.identifyAdmissibleOutputs(transfer.beef, [0], transfer.offChainValues)
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(transfer.beef, [0], transfer.offChainValues)).rejects.toThrow('control gate')
   })
 
   it('denylist rejects a transfer whose recipient is blocked; allowlist rejects a non-listed recipient', async () => {
@@ -356,13 +350,13 @@ describe('MandalaTopicManager control gate', () => {
     const t1 = await buildPeerTransfer(assetId, 100, overlay)
     const deny: AssetAdminState = { ...defaultAssetState(assetId), accessMode: 'denylist', blockedIdentities: [t1.receiverKey] }
     const tmDeny = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(deny) })
-    expect((await tmDeny.identifyAdmissibleOutputs(t1.beef, [0], t1.offChainValues)).outputsToAdmit).toEqual([])
+    await expect(tmDeny.identifyAdmissibleOutputs(t1.beef, [0], t1.offChainValues)).rejects.toThrow('control gate')
 
     // Allowlist: recipient not on the list -> rejected.
     const t2 = await buildPeerTransfer(assetId, 100, overlay)
     const allow: AssetAdminState = { ...defaultAssetState(assetId), accessMode: 'allowlist', allowedIdentities: ['someone-else'] }
     const tmAllow = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: overlay as any, adminProtocolID: adminProto, stateStore: stubStore(allow) })
-    expect((await tmAllow.identifyAdmissibleOutputs(t2.beef, [0], t2.offChainValues)).outputsToAdmit).toEqual([])
+    await expect(tmAllow.identifyAdmissibleOutputs(t2.beef, [0], t2.offChainValues)).rejects.toThrow('control gate')
 
     // Allowlist: recipient IS on the list -> admitted.
     const t3 = await buildPeerTransfer(assetId, 100, overlay)
@@ -433,13 +427,13 @@ describe('MandalaTopicManager control gate', () => {
     const rA = await buildReissue(assetId, 50, targetOutpoint, overlay, issuer)
     const stateNotFrozen: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [] }
     const tmA = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateNotFrozen) })
-    expect((await tmA.identifyAdmissibleOutputs(rA.beef, [], rA.offChainValues)).outputsToAdmit).toEqual([])
+    await expect(tmA.identifyAdmissibleOutputs(rA.beef, [], rA.offChainValues)).rejects.toThrow()
 
     // (b) amount mismatch (frozen row says 99, reissue mints 50) -> rejected.
     const rB = await buildReissue(assetId, 50, targetOutpoint, overlay, issuer)
     const stateWrongAmount: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 99, owner: 'evictee' }] }
     const tmB = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateWrongAmount) })
-    expect((await tmB.identifyAdmissibleOutputs(rB.beef, [], rB.offChainValues)).outputsToAdmit).toEqual([])
+    await expect(tmB.identifyAdmissibleOutputs(rB.beef, [], rB.offChainValues)).rejects.toThrow()
 
     // (c) tx has an FT input of the asset -> rejected.
     const sender = new ProtoWallet(PrivateKey.fromRandom())
@@ -463,7 +457,7 @@ describe('MandalaTopicManager control gate', () => {
     const offChainC = encodeLinkagePayload({ inputs: [], outputs: [{ index: 0, linkage: linkageC as any }], admin: [{ index: 1, actionDetails: reissueDetailsC }] } as any)
     const stateFrozenC: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 50, owner: 'evictee' }] }
     const tmC = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(stateFrozenC) })
-    expect((await tmC.identifyAdmissibleOutputs(txC.toBEEF(), [0], offChainC)).outputsToAdmit).toEqual([])
+    await expect(tmC.identifyAdmissibleOutputs(txC.toBEEF(), [0], offChainC)).rejects.toThrow()
 
     // Positive: frozen, amount matches, zero FT inputs -> admitted.
     const rOk = await buildReissue(assetId, 50, targetOutpoint, overlay, issuer)
@@ -482,8 +476,7 @@ describe('MandalaTopicManager control gate', () => {
     // (sanctions is universal and applies even to admin actions).
     const state: AssetAdminState = { ...defaultAssetState(assetId), frozenOutpoints: [{ outpoint: targetOutpoint, amount: 50, owner: 'evictee' }] }
     const tm = new MandalaTopicManager({ verifierWallet: overlay as any, screeningProvider: new InMemoryScreeningProvider([r.receiverKey]), adminWallet: issuer as any, adminProtocolID: adminProto, stateStore: stubStore(state) })
-    const result = await tm.identifyAdmissibleOutputs(r.beef, [], r.offChainValues)
-    expect(result.outputsToAdmit).toEqual([])
+    await expect(tm.identifyAdmissibleOutputs(r.beef, [], r.offChainValues)).rejects.toThrow('sanctioned')
   })
 })
 

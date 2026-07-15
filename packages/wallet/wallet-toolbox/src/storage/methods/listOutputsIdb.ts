@@ -6,6 +6,7 @@ import { verifyId } from '../../utility/utilityHelpers'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TransactionStatus } from '../../sdk/types'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { isManagedChangeOutput, managedChangeOutputFields } from './managedChange'
 
 export async function listOutputsIdb (
   storage: StorageIdb,
@@ -107,16 +108,32 @@ export async function listOutputsIdb (
     partial: {
       userId,
       basketId,
-      spendable: includeSpent ? undefined : true
+      spendable: includeSpent ? undefined : true,
+      ...(specOp?.managedChangeOnly ? managedChangeOutputFields : {})
     },
     txStatus: stati,
     noScript: true,
     orderDescending
   }
-  if (!specOp?.ignoreLimit) args.paged = { limit, offset }
+  // IndexedDB partial matching cannot express the non-empty derivation and
+  // unspent constraints. For the managed-UTXO operation, filter the complete
+  // candidate set before applying pagination so `totalOutputs` stays exact.
+  const pageManagedChange = specOp?.managedChangeOnly === true && specOp.ignoreLimit !== true
+  if (!specOp?.ignoreLimit && !pageManagedChange) args.paged = { limit, offset }
 
   let outputs = await storage.findOutputs(args, tagIds, isQueryModeAll)
-  if (outputs.length === vargs.limit) {
+  if (specOp?.managedChangeOnly) {
+    outputs = outputs.filter(o => isManagedChangeOutput(o) && o.spentBy == null)
+  }
+  if (pageManagedChange) {
+    const totalManagedOutputs = outputs.length
+    outputs = outputs.slice(offset, offset + limit)
+    // Preserve listOutputs' existing page semantics: it reports the complete
+    // count only for a full page, otherwise the current page length. In
+    // particular, a page beyond the tail must report zero so iterative callers
+    // such as balanceAndUtxos terminate.
+    r.totalOutputs = outputs.length === limit ? totalManagedOutputs : outputs.length
+  } else if (outputs.length === vargs.limit) {
     args.paged = undefined
     r.totalOutputs = await storage.countOutputs(args, tagIds, isQueryModeAll)
   } else {

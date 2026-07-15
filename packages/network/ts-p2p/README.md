@@ -70,6 +70,27 @@ await listener.start();
 console.log('Listener started and waiting for messages...');
 ```
 
+### Decoding messages
+
+By default, callbacks receive the raw GossipSub bytes (`Uint8Array`). Pass `decodeMessages: true` to have the listener decode the two-layer JSON wire format for you. Callbacks then receive a typed `DecodedMessage` (the sender name plus a typed payload):
+
+```typescript
+import { TeranodeListener, type BlockMessage, type DecodedMessage } from '@bsv/teranode-listener';
+
+const listener = new TeranodeListener(
+  {
+    'bitcoin/mainnet-block': (msg: DecodedMessage<BlockMessage>, topic, from) => {
+      console.log(`Block #${msg.payload.Height} (${msg.payload.Hash}) from ${msg.sender}`);
+    }
+  },
+  { decodeMessages: true }
+);
+
+await listener.start();
+```
+
+The exported `decodeMessage()` / `tryDecodeMessage()` helpers can also be used to decode a message manually. Frames that are not valid JSON (e.g. libp2p control frames) are skipped when `decodeMessages` is on.
+
 ### Function-Based API
 
 Alternatively, you can use the original function-based API:
@@ -400,16 +421,30 @@ npm install
 npm run build
 ```
 
+### Testing
+
+This package uses [Jest](https://jestjs.io/) with `ts-jest`. Run the suite with:
+
+```bash
+npm test
+```
+
+The tests exercise the message decoder (`decodeMessage` / `tryDecodeMessage`) end to end, building real two-layer wire frames and decoding them back: the PascalCase (block) and snake_case (node_status) payload shapes, multi-byte UTF-8, every base64 padding length, and the malformed / non-JSON frame paths.
+
 ### Project Structure
 
 ```
 ts-p2p/
 ├── src/
-│   └── index.ts          # Main library code
+│   ├── index.ts          # Main library and listener
+│   └── messages.ts       # Wire-format types and decoder
+├── test/
+│   └── messages.test.ts  # Decoder test suite
 ├── dist/                 # Compiled JavaScript output
+├── jest.config.js        # Jest (ts-jest) configuration
 ├── package.json          # Package configuration
 ├── tsconfig.json         # TypeScript configuration
-└── README.md            # This file
+└── README.md             # This file
 ```
 
 ### Dependencies

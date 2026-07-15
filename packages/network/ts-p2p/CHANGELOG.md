@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 ### Added
-- (Include new features or significant user-visible enhancements here.)
+- Optional typed decoder for the two-layer JSON wire format. New `decodeMessage()` / `tryDecodeMessage()` helpers and topic payload interfaces (`MessageEnvelope`, `BlockMessage`, `SubtreeMessage`, `RejectedTxMessage`, `NodeStatusMessage`, `FeePolicy`). Set `decodeMessages: true` on the listener to receive a typed `DecodedMessage` instead of raw `Uint8Array`. Backward compatible (defaults to off).
 
 ### Changed
 - (Detail modifications that are non-breaking but relevant to the end-users.)

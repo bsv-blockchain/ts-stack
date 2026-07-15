@@ -4798,12 +4798,12 @@ When the transaction already exists, the description is updated. The isOutgoing 
 
 "basket insertion" Merge Rules:
 1. The "default" basket may not be specified as the insertion basket.
-2. A change output in the "default" basket may not be target of an insertion into a different basket.
-3. These baskets do not affect the wallet's balance and are typed "custom".
+2. Managed change may not be reclassified as a basket insertion.
+3. Basket insertions do not affect wallet balance and are typed "custom".
 
 "wallet payment" Merge Rules:
-1. Targetting an existing change "default" basket output results in a no-op. No error. No alterations made.
-2. Targetting a previously "custom" non-change output converts it into a change output. This alters the transaction's `satoshis`, and the wallet balance.
+1. Targeting existing managed change in the default basket is idempotent.
+2. Targeting a custom output promotes it to managed BRC-29 change and increases wallet balance. This includes recovery of a legacy custom row incorrectly stored in the default basket.
 
 ```ts
 export async function internalizeAction(storage: StorageProvider, auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> 

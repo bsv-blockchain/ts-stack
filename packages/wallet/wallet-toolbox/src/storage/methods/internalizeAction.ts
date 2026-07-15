@@ -22,6 +22,7 @@ import { TransactionStatus } from '../../sdk/types'
 import { EntityProvenTxReq } from '../schema/entities/EntityProvenTxReq'
 import { blockHash } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
+import { isManagedChangeOutput } from './managedChange'
 
 /**
  * Record of a spent-input transition this internalize call performed.
@@ -158,12 +159,14 @@ export async function restoreInputsToSpendable (
  *
  * "basket insertion" Merge Rules:
  * 1. The "default" basket may not be specified as the insertion basket.
- * 2. A change output in the "default" basket may not be target of an insertion into a different basket.
- * 3. These baskets do not affect the wallet's balance and are typed "custom".
+ * 2. Managed change may not be reclassified as a basket insertion.
+ * 3. Basket insertions do not affect wallet balance and are typed "custom".
  *
  * "wallet payment" Merge Rules:
- * 1. Targetting an existing change "default" basket output results in a no-op. No error. No alterations made.
- * 2. Targetting a previously "custom" non-change output converts it into a change output. This alters the transaction's `satoshis`, and the wallet balance.
+ * 1. Targeting an existing managed output is idempotent.
+ * 2. Targeting an existing custom output converts it to managed BRC-29
+ *    change and increases wallet balance. This includes verified recovery of
+ *    a legacy custom row that was incorrectly placed in the default basket.
  */
 export async function internalizeAction (
   storage: StorageProvider,
@@ -271,6 +274,9 @@ class InternalizeActionContext {
   }
 
   async getBasket (basketName: string): Promise<TableOutputBasket> {
+    if (basketName === 'default') {
+      throw new WERR_INVALID_PARAMETER('insertionRemittance.basket', 'a non-default basket')
+    }
     let b = this.baskets[basketName]
     if (b) return b
     b = await this.storage.findOrInsertOutputBasket(this.userId, basketName)
@@ -292,6 +298,9 @@ class InternalizeActionContext {
       switch (o.protocol) {
         case 'basket insertion':
           if ((o.insertionRemittance == null) || (o.paymentRemittance != null)) { throw new WERR_INVALID_PARAMETER('basket insertion', 'valid insertionRemittance and no paymentRemittance') }
+          if (o.insertionRemittance.basket === 'default') {
+            throw new WERR_INVALID_PARAMETER('insertionRemittance.basket', 'a non-default basket')
+          }
           this.basketInsertions.push({
             ...o.insertionRemittance,
             txo,
@@ -347,23 +356,28 @@ class InternalizeActionContext {
 
     for (const basket of this.basketInsertions) {
       if (this.isMerge && (basket.eo != null)) {
-        // merging with an existing user output
-        if (basket.eo.basketId === this.changeBasket.basketId) {
-          // converting a change output to a user basket custom output
-          this.satoshis -= basket.txo.satoshis!
+        if (isManagedChangeOutput(basket.eo)) {
+          throw new WERR_INVALID_PARAMETER(
+            'outputs',
+            `output ${basket.vout} is wallet-managed change and cannot be reclassified as a basket insertion`
+          )
         }
+        // An incompatible legacy row in the default basket may be moved to a
+        // non-default recovery basket. It was not part of managed balance, so
+        // this metadata repair has no satoshi adjustment.
       }
     }
 
     for (const payment of this.walletPayments) {
       if (this.isMerge) {
         if (payment.eo != null) {
-          // merging with an existing user output
-          if (payment.eo.basketId === this.changeBasket.basketId) {
-            // ignore attempts to internalize an existing change output.
+          if (isManagedChangeOutput(payment.eo) && payment.eo.basketId === this.changeBasket.basketId) {
+            // Re-internalizing managed change is idempotent.
             payment.ignore = true
           } else {
-            // converting an existing non-change output to change... increases net satoshis
+            // Verified signer processing established that this is BRC-29.
+            // Promote a custom row (including legacy custom-in-default rows)
+            // to managed change and add it to balance.
             this.satoshis += payment.txo.satoshis!
           }
         } else {

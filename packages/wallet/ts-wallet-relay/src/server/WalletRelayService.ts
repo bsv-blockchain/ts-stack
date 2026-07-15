@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express'
-import type { Server } from 'node:http'
+import type { Server, IncomingMessage } from 'node:http'
+import type { Duplex } from 'node:stream'
 
 /**
  * Minimal Express-compatible router interface.
@@ -31,6 +32,13 @@ export interface WalletRelayServiceOptions {
   app?: RouterLike
   /** HTTP server — WebSocket upgrade handler is attached here. */
   server: Server
+  /** Path the WebSocket relay claims. Default '/ws'. Forwarded to WebSocketRelay. */
+  path?: string
+  /**
+   * When true, the relay attaches no 'upgrade' listener. Call
+   * `service.handleUpgrade(req, socket, head)` from your own dispatcher.
+   */
+  noServer?: boolean
   /**
    * Backend wallet used to encrypt/decrypt messages with mobile.
    * Use `ProtoWallet` with a private key stored in an environment variable:
@@ -160,7 +168,11 @@ export class WalletRelayService {
     this.isOriginAllowed = compileOriginMatcher(matcherSource)
 
     this.sessions = new QRSessionManager({ maxSessions: opts.maxSessions })
-    this.relay = new WebSocketRelay(opts.server, { allowedOrigins: matcherSource })
+    this.relay = new WebSocketRelay(opts.server, {
+      allowedOrigins: matcherSource,
+      path: opts.path,
+      noServer: opts.noServer,
+    })
 
     // B6: clean up relay topic when a session is GC'd
     this.sessions.onSessionExpired(id => this.relay.removeTopic(id))
@@ -269,6 +281,14 @@ export class WalletRelayService {
   getSession(id: string): { sessionId: string; status: string; relay: string } | null {
     const s = this.sessions.getSession(id)
     return s ? { sessionId: s.id, status: s.status, relay: this.relayUrl } : null
+  }
+
+  /**
+   * Dispatch a WS upgrade to the relay. Use when constructed with `noServer`
+   * and routing multiple WS services from your own 'upgrade' handler.
+   */
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    this.relay.handleUpgrade(req, socket, head)
   }
 
   /**
