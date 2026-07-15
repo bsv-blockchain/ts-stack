@@ -1,28 +1,39 @@
 // src/config/project-manifest.ts
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Network, Stack, ProjectConfig } from './model.js'
+import type { Network, Stack, ProjectConfig, TargetPaths } from './model.js'
+import type { StarterKind } from '../starters.js'
 import { validBsvDir } from './validate.js'
 
 export const MANIFEST_FILE = 'bsv-scaffold.json'
 
 export interface ProjectManifest {
-  version: 1
+  version: 1 | 2
   name: string
   network: Network
   stack: Stack
   bsvDir: string
   capabilities: string[]
+  targets?: TargetPaths
+  starter?: {
+    id: string
+    kind: StarterKind
+    repository?: string
+    ref?: string
+    commit?: string
+  }
 }
 
-export function manifestFromConfig (config: ProjectConfig): ProjectManifest {
+export function manifestFromConfig (config: ProjectConfig, starter?: ProjectManifest['starter']): ProjectManifest {
   return {
-    version: 1,
+    version: 2,
     name: config.name,
     network: config.network,
     stack: config.stack,
+    targets: config.targets,
     bsvDir: config.bsvDir,
-    capabilities: [...config.capabilities]
+    capabilities: [...config.capabilities],
+    starter: starter ?? { id: config.starter, kind: 'generated' }
   }
 }
 
@@ -52,11 +63,17 @@ export function readValidManifest (dir: string): ProjectManifest | null {
   const stackOk = m.stack !== null && typeof m.stack === 'object' &&
     (m.stack.frontend == null || m.stack.frontend.framework === 'react') &&
     (m.stack.backend == null || m.stack.backend.framework === 'express')
-  const ok = m.version === 1 && typeof m.name === 'string' &&
+  const targetsOk = m.targets === undefined || (m.targets !== null && typeof m.targets === 'object' &&
+    (m.targets.client === undefined || (typeof m.targets.client === 'string' && validBsvDir(m.targets.client === '' ? '.' : m.targets.client))) &&
+    (m.targets.server === undefined || (typeof m.targets.server === 'string' && validBsvDir(m.targets.server === '' ? '.' : m.targets.server))))
+  const starterOk = m.starter === undefined || (m.starter !== null && typeof m.starter === 'object' &&
+    typeof m.starter.id === 'string' && (m.starter.kind === 'generated' || m.starter.kind === 'repository'))
+  const ok = (m.version === 1 || m.version === 2) && typeof m.name === 'string' &&
     (m.network === 'main' || m.network === 'test') &&
     stackOk &&
     typeof m.bsvDir === 'string' && validBsvDir(m.bsvDir) &&
-    Array.isArray(m.capabilities) && m.capabilities.every(c => typeof c === 'string')
+    Array.isArray(m.capabilities) && m.capabilities.every(c => typeof c === 'string') &&
+    targetsOk && starterOk
   if (!ok) throw new Error('malformed bsv-scaffold.json')
   return m
 }

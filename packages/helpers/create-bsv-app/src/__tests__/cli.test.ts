@@ -39,8 +39,25 @@ describe('parseArgs', () => {
     expect(a.draft.mode).toBe('add')
   })
 
-  test('trailing --dir flag with no value does not blow up', () => {
-    expect(() => parseArgs(['--dir'])).not.toThrow()
+  test('new/add subcommands set the mode and allow one positional target', () => {
+    expect(parseArgs(['new', 'my-app']).draft.mode).toBe('new')
+    expect(parseArgs(['new', 'my-app']).dir).toBe('my-app')
+    expect(parseArgs(['add']).draft.mode).toBe('add')
+  })
+
+  test('rejects unknown options, invalid enum values, and extra positionals', () => {
+    expect(() => parseArgs(['--wat'])).toThrow(/unknown option/i)
+    expect(() => parseArgs(['--network', 'regtest'])).toThrow(/main or test/i)
+    expect(() => parseArgs(['one', 'two'])).toThrow(/unexpected argument/i)
+  })
+
+  test('--starter selects a registry entry and rejects missing ids', () => {
+    expect(parseArgs(['--starter', 'meter']).draft.starter).toBe('meter')
+    expect(() => parseArgs(['--starter', 'convo'])).toThrow(/unknown starter/i)
+  })
+
+  test('trailing --dir flag with no value is rejected', () => {
+    expect(() => parseArgs(['--dir'])).toThrow(/requires a value/i)
   })
 
   test('--capabilities splits comma-separated values into array', () => {
@@ -70,6 +87,14 @@ describe('parseArgs', () => {
 })
 
 describe('run --yes new (flags)', () => {
+  test('modern new <dir> form derives the project name from the target', async () => {
+    const target = join(dir, 'friendly-name')
+    await run(['new', target, '--starter', 'express', '--skip-install', '--yes'], undefined, { runCommand: () => {} })
+    const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.name).toBe('friendly-name')
+    expect(manifest.starter.id).toBe('express')
+  })
+
   test('scaffolds new react project with wallet-connect via fake runCommand', async () => {
     const calls: string[][] = []
     const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
@@ -78,13 +103,13 @@ describe('run --yes new (flags)', () => {
       undefined,
       { runCommand: fake }
     )
-    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     expect(res.written).toContain('src/bsv/auth.ts')
     expect(res.written).toContain('src/bsv/walletAcquisition.ts')
-    expect(res.deps.root).toHaveProperty('@bsv/sdk')
+    expect(res.deps.client).toHaveProperty('@bsv/sdk')
     expect(existsSync(join(dir, 'AGENTS.md'))).toBe(true)
     const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.version).toBe(1)
+    expect(manifest.version).toBe(2)
     expect(manifest.stack.frontend.framework).toBe('react')
     expect(manifest.capabilities).toContain('wallet-connect')
   })
@@ -98,7 +123,7 @@ describe('run --yes new (flags)', () => {
       undefined,
       { runCommand: fake }
     )
-    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     // auth.ts comes from wallet-connect (expanded from wallet-login requires)
     expect(res.written).toContain('src/bsv/auth.ts')
     // wallet-login client file
@@ -143,7 +168,7 @@ describe('run --yes add (existing manifest)', () => {
     const addCalls: string[][] = []
     const fakeAdd: RunCommand = () => { addCalls.push([]); throw new Error('runCommand should not be called in add mode') }
     await run(
-      ['--dir', dir, '--capabilities', 'wallet-connect', '--yes'],
+      ['--dir', dir, '--capabilities', 'wallet-connect', '--skip-install', '--yes'],
       undefined,
       { runCommand: fakeAdd }
     )
@@ -191,7 +216,7 @@ describe('run --file (direct manifest door)', () => {
       capabilities: ['wallet-login']
     }), 'utf8')
     const res = await run(['--dir', target, '--file', cfgPath], undefined, { runCommand: fake })
-    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     // new-mode expands requires: wallet-login → wallet-connect + wallet-login, auth.ts from wallet-connect
     expect(res.written).toContain('src/bsv/auth.ts')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
@@ -232,7 +257,7 @@ describe('run --file (direct manifest door)', () => {
     const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
     // A lone manifest must NOT trip the empty-dir guard; new mode runs the base generator.
     const res = await run(['--dir', target, '--file', manifestPath], undefined, { runCommand: fake })
-    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     expect(res.written).toContain('src/bsv/auth.ts')
     // the existing manifest is rewritten (regenerated from the config)
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
@@ -264,7 +289,7 @@ describe('run --file (direct manifest door)', () => {
     const cfgPath = join(dir, 'newish.json')
     // file declares mode:new + a frontend, but --mode add must override → add path
     writeFileSync(cfgPath, JSON.stringify({
-      mode: 'new', name: 'ov', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: ['wallet-login']
+      mode: 'new', name: 'ov', stack: { frontend: { framework: 'react', variant: 'react-ts' } }, capabilities: ['wallet-login'], install: false
     }), 'utf8')
     const res = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'], undefined, { runCommand: fakeAdd })
     // add mode: only wallet-login's own files, no wallet-connect floor pulled in
@@ -281,7 +306,8 @@ describe('run --file (direct manifest door)', () => {
       mode: 'add',
       name: 'add-from-file',
       stack: { frontend: { framework: 'react', variant: 'react-ts' } },
-      capabilities: ['wallet-login']
+      capabilities: ['wallet-login'],
+      install: false
     }), 'utf8')
     const res = await run(['--dir', dir, '--file', cfgPath], undefined, { runCommand: fakeAdd })
     // wallet-login in add-mode: no auth.ts (that's wallet-connect's file)
@@ -305,15 +331,18 @@ describe('run interactive (no --yes)', () => {
       mode: 'new',
       name: 'interactive-test',
       dir: '.',
+      starter: 'custom',
       stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+      targets: { client: '' },
       bsvDir: 'src/bsv',
       capabilities: ['wallet-login'],
       glue: false,
+      install: false,
       packageManager: 'npm',
       network: 'test'
     })
     const res = await run(['--dir', dir], provider, { runCommand: fake })
-    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     // new-mode expands requires: wallet-login → wallet-connect + wallet-login, so auth.ts is placed
     expect(res.written).toContain('src/bsv/auth.ts')
   })

@@ -41,6 +41,12 @@ describe('wallet-connect', () => {
     expect(helper?.content).toContain('export async function getServerIdentity')
     expect(helper?.content).toContain('/api/identity')
   })
+  test('server ships bounded nonce replay protection shared by auth routes', () => {
+    const nonceStore = (walletConnect.files(ctx).server ?? []).find(f => f.path === 'nonceStore.ts')
+    expect(nonceStore?.content).toContain('MAX_NONCES = 10_000')
+    expect(nonceStore?.content).toContain('pruneExpired')
+    expect(nonceStore?.content).toContain('usedNonces.has(nonce)')
+  })
   test('glue is undefined (contexts moved to core files)', () => {
     expect(walletConnect.glue).toBeUndefined()
   })

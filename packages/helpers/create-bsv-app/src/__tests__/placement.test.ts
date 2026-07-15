@@ -10,10 +10,13 @@ const monorepoConfig: ProjectConfig = {
   mode: 'add',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } },
+  targets: { client: 'client', server: 'server' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }
@@ -22,10 +25,13 @@ const customBsvDirConfig: ProjectConfig = {
   mode: 'add',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } },
+  targets: { client: 'client', server: 'server' },
   bsvDir: 'lib/bsv',
   capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }

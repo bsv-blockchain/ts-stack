@@ -9,10 +9,13 @@ const frontendConfig: ProjectConfig = {
   mode: 'add',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+  targets: { client: '' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }
@@ -21,10 +24,13 @@ const backendConfig: ProjectConfig = {
   mode: 'add',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { backend: { framework: 'express' } },
+  targets: { server: '' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }
@@ -41,10 +47,10 @@ describe('planPlacement', () => {
     expect(paths).not.toContain('src/bsv/loginRoute.ts')
   })
 
-  test('frontend-only: deps.root has @bsv/auth and @bsv/sdk', () => {
+  test('frontend-only: logical client deps target the root client package', () => {
     const result = planPlacement(frontendConfig, bothCaps)
-    expect(result.deps.root).toHaveProperty('@bsv/auth')
-    expect(result.deps.root).toHaveProperty('@bsv/sdk')
+    expect(result.deps.client).toHaveProperty('@bsv/auth')
+    expect(result.deps.client).toHaveProperty('@bsv/sdk')
   })
 
   test('backend-only: shared + server files placed at root bsvDir, no client files', () => {

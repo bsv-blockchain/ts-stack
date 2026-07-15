@@ -38,19 +38,20 @@ test('POST /generate (valid new draft) scaffolds, resolves done, and 200s', asyn
   const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
   const target = join(dir, 'app')
   const srv: UiServer = await startUiServer({ existing: null, targetDir: target, deps: { runCommand: fake } })
-  const srvUrl: string = srv.url
-  const res = await fetch(`${srvUrl}/generate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react', capabilities: ['wallet-connect'] })
-  })
-  const data = await res.json()
-  expect(res.status).toBe(200)
-  expect(data.written).toContain('src/bsv/auth.ts')
-  expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
-  expect(existsSync(join(target, 'bsv-scaffold.json'))).toBe(true)
-  const result = await srv.done
-  expect(result.targetDir).toBe(target)
+  try {
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react', capabilities: ['wallet-connect'] })
+    })
+    const data = await res.json()
+    expect(res.status).toBe(200)
+    expect(data.written).toContain('src/bsv/auth.ts')
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
+    expect(existsSync(join(target, 'bsv-scaffold.json'))).toBe(true)
+    const result = await srv.done
+    expect(result.targetDir).toBe(target)
+  } finally { srv.close() }
 })
 
 // Item 5: new-mode POST /generate with wallet-login — confirms wallet-login file is written
@@ -59,22 +60,23 @@ test('POST /generate (new, wallet-login) scaffolds and includes useWalletLogin.t
   const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
   const target = join(dir, 'app2')
   const srv: UiServer = await startUiServer({ existing: null, targetDir: target, deps: { runCommand: fake } })
-  const srvUrl: string = srv.url
-  const res = await fetch(`${srvUrl}/generate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react', capabilities: ['wallet-login'] })
-  })
-  const data = await res.json()
-  expect(res.status).toBe(200)
-  // wallet-login requires wallet-connect; new-mode expands, so auth.ts (wallet-connect) is placed
-  expect(data.written).toContain('src/bsv/auth.ts')
-  // wallet-login's own client file
-  expect(data.written).toContain('src/bsv/useWalletLogin.tsx')
-  expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
-  expect(existsSync(join(target, 'bsv-scaffold.json'))).toBe(true)
-  const result = await srv.done
-  expect(result.targetDir).toBe(target)
+  try {
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react', capabilities: ['wallet-login'] })
+    })
+    const data = await res.json()
+    expect(res.status).toBe(200)
+    // wallet-login requires wallet-connect; new-mode expands, so auth.ts (wallet-connect) is placed
+    expect(data.written).toContain('src/bsv/auth.ts')
+    // wallet-login's own client file
+    expect(data.written).toContain('src/bsv/useWalletLogin.tsx')
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
+    expect(existsSync(join(target, 'bsv-scaffold.json'))).toBe(true)
+    const result = await srv.done
+    expect(result.targetDir).toBe(target)
+  } finally { srv.close() }
 })
 
 test('POST /generate (invalid: new with no targets) returns 400 and stays up', async () => {

@@ -27,7 +27,7 @@ describe('evaluateWhen', () => {
 
 describe('config schema', () => {
   test('has the expected sections', () => {
-    expect(configSchema.map(s => s.id)).toEqual(['mode', 'project', 'stack', 'bsv', 'tooling'])
+    expect(configSchema.map(s => s.id)).toEqual(['mode', 'starter', 'project', 'stack', 'bsv', 'tooling'])
   })
 
   test('mode is the first section', () => {
@@ -36,22 +36,22 @@ describe('config schema', () => {
   })
 
   test('when conditions are declarative objects', () => {
-    expect(field('frontend').when).toEqual({ mode: 'new' })
-    expect(field('frontendVariant').when).toEqual({ mode: 'new', frontend: 'react' })
-    expect(field('capabilities').when).toBeUndefined()
+    expect(field('frontend').when).toEqual({ mode: 'new', starter: 'custom' })
+    expect(field('frontendVariant').when).toEqual({ mode: 'new', starter: 'custom', frontend: 'react' })
+    expect(field('capabilities').when).toEqual({ starter: expect.any(Array) })
   })
 
   test('new-only fields are hidden in add mode', () => {
     expect(isFieldVisible(field('frontend'), { mode: 'add' })).toBe(false)
-    expect(isFieldVisible(field('frontend'), { mode: 'new' })).toBe(true)
-    expect(isFieldVisible(field('capabilities'), { mode: 'add' })).toBe(true)
+    expect(isFieldVisible(field('frontend'), { mode: 'new', starter: 'custom' })).toBe(true)
+    expect(isFieldVisible(field('capabilities'), { mode: 'add', starter: 'custom' })).toBe(true)
   })
 
   test('frontendVariant is hidden unless mode is new and frontend is react', () => {
     const f = field('frontendVariant')
-    expect(isFieldVisible(f, { mode: 'new', frontend: 'none' })).toBe(false)
-    expect(isFieldVisible(f, { mode: 'new', frontend: 'react' })).toBe(true)
-    expect(isFieldVisible(f, { mode: 'add', frontend: 'react' })).toBe(false)
+    expect(isFieldVisible(f, { mode: 'new', starter: 'custom', frontend: 'none' })).toBe(false)
+    expect(isFieldVisible(f, { mode: 'new', starter: 'custom', frontend: 'react' })).toBe(true)
+    expect(isFieldVisible(f, { mode: 'add', starter: 'custom', frontend: 'react' })).toBe(false)
   })
 
   test('capabilities options come from the registry (includes wallet-login)', () => {
@@ -61,8 +61,8 @@ describe('config schema', () => {
   test('visibleFields filters the stack section by the draft', () => {
     const stack = configSchema.find(s => s.id === 'stack')
     if (stack === undefined) throw new Error('no stack section')
-    expect(visibleFields(stack, { mode: 'new', frontend: 'none' }).map(f => f.key)).not.toContain('frontendVariant')
-    expect(visibleFields(stack, { mode: 'new', frontend: 'react' }).map(f => f.key)).toContain('frontendVariant')
+    expect(visibleFields(stack, { mode: 'new', starter: 'custom', frontend: 'none' }).map(f => f.key)).not.toContain('frontendVariant')
+    expect(visibleFields(stack, { mode: 'new', starter: 'custom', frontend: 'react' }).map(f => f.key)).toContain('frontendVariant')
   })
 })
 
@@ -80,7 +80,7 @@ describe('schema ui/desc hints', () => {
   test('hints do not affect visibility logic', () => {
     const frontend = configSchema.flatMap(s => s.fields).find(x => x.key === 'frontend')
     if (frontend === undefined) throw new Error('no frontend field')
-    expect(isFieldVisible(frontend, { mode: 'new' })).toBe(true)
-    expect(isFieldVisible(frontend, { mode: 'add' })).toBe(false)
+    expect(isFieldVisible(frontend, { mode: 'new', starter: 'custom' })).toBe(true)
+    expect(isFieldVisible(frontend, { mode: 'add', starter: 'custom' })).toBe(false)
   })
 })

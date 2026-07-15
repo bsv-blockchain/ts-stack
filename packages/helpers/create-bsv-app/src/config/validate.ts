@@ -1,6 +1,8 @@
 // src/config/validate.ts
-import type { ProjectConfig, PackageManager, Network, Mode, Stack } from './model.js'
+import type { ProjectConfig, PackageManager, Network, Mode, Stack, TargetPaths } from './model.js'
+import { defaultTargetPaths } from './model.js'
 import { getCapability, listCapabilities } from '../registry.js'
+import { getStarter } from '../starters.js'
 
 export class ConfigError extends Error {
   constructor (message: string) {
@@ -36,6 +38,25 @@ function resolveStack (raw: unknown): Stack {
   return stack
 }
 
+function validRelativePath (path: string): boolean {
+  if (path === '') return true
+  if (path.startsWith('/') || /^[A-Za-z]:/.test(path)) return false
+  return !path.split(/[/\\]/).includes('..')
+}
+
+function resolveTargets (raw: unknown, fallback: TargetPaths): TargetPaths {
+  if (raw === undefined) return { ...fallback }
+  const value = asObject(raw, 'targets')
+  const out: TargetPaths = { ...fallback }
+  for (const key of ['client', 'server'] as const) {
+    const path = value[key]
+    if (path === undefined) continue
+    if (typeof path !== 'string' || !validRelativePath(path)) throw new ConfigError(`targets.${key} must be a safe relative path`)
+    out[key] = path
+  }
+  return out
+}
+
 export function validBsvDir (dir: string): boolean {
   if (dir.length === 0) return false
   if (dir.startsWith('/') || /^[A-Za-z]:/.test(dir)) return false
@@ -56,7 +77,7 @@ function resolveBsvDir (raw: Record<string, unknown>): string {
 
 // new-mode floor: a new project always gets at least the defaultSelected baseline (e.g. wallet-connect),
 // even when the config names zero capabilities. add mode has no floor.
-function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode): string[] {
+function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode, starterId: string): string[] {
   const capsRaw = raw.capabilities === undefined ? [] : raw.capabilities
   if (!Array.isArray(capsRaw)) throw new ConfigError('capabilities must be an array')
   const capabilities: string[] = []
@@ -65,7 +86,8 @@ function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode): string
     if (getCapability(c) === undefined) throw new ConfigError(`unknown capability: ${c}`)
     if (!capabilities.includes(c)) capabilities.push(c)
   }
-  if (mode === 'new') {
+  const starter = getStarter(starterId)
+  if (mode === 'new' && starter?.supportsCapabilities === true) {
     for (const c of listCapabilities()) {
       if (c.defaultSelected === true && !capabilities.includes(c.id)) capabilities.push(c.id)
     }
@@ -88,18 +110,29 @@ export function resolveConfig (input: unknown, opts: { overrideMode?: Mode } = {
   const name = resolveName(raw)
   const dir = typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
 
-  const stack = resolveStack(raw.stack)
+  const starterId = typeof raw.starter === 'string' && raw.starter.length > 0 ? raw.starter : 'custom'
+  const starter = getStarter(starterId)
+  if (starter === undefined) throw new ConfigError(`unknown starter: ${starterId}`)
+
+  const requestedStack = resolveStack(raw.stack)
+  const stack = mode === 'new' && starter.id !== 'custom' ? starter.stack : requestedStack
   if (mode === 'new' && stack.frontend === undefined && stack.backend === undefined) {
     throw new ConfigError('a new project needs at least a frontend or a backend')
   }
 
+  const targets = resolveTargets(raw.targets, mode === 'new' && starter.id !== 'custom' ? starter.targets : defaultTargetPaths(stack))
+
   const bsvDir = resolveBsvDir(raw)
-  const capabilities = resolveCapabilityIds(raw, mode)
+  const capabilities = resolveCapabilityIds(raw, mode, starterId)
+  if (mode === 'new' && !starter.supportsCapabilities && capabilities.length > 0) {
+    throw new ConfigError(`starter ${starter.id} is a complete example and does not accept generated capabilities`)
+  }
   const glue = raw.glue !== false
+  const install = raw.install !== false
   const packageManager = resolvePackageManager(raw)
   const network: Network = raw.network === 'main' ? 'main' : 'test'
 
-  return { mode, name, dir, stack, bsvDir, capabilities, glue, packageManager, network }
+  return { mode, name, dir, starter: starterId, stack, targets, bsvDir, capabilities, glue, install, packageManager, network }
 }
 
 export function formatConfigError (err: unknown): string {

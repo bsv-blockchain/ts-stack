@@ -176,7 +176,9 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
 
   function whenOk(when) {
     if (!when) return true;
-    return Object.keys(when).every(function (k) { return draft[k] === when[k]; });
+    return Object.keys(when).every(function (k) {
+      return Array.isArray(when[k]) ? when[k].indexOf(String(draft[k])) !== -1 : draft[k] === when[k];
+    });
   }
 
   /* ---- command ---- */
@@ -184,12 +186,14 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     var p = ['npx create-bsv-app', '--mode', d.mode || 'new'];
     if ((d.mode || 'new') === 'new') {
       if (d.name) p.push('--name', JSON.stringify(d.name));
+      if (d.starter) p.push('--starter', d.starter);
       if (d.frontend && d.frontend !== 'none') p.push('--frontend', d.frontend);
       if (d.frontend === 'react' && d.frontendVariant) p.push('--variant', d.frontendVariant);
       if (d.backend && d.backend !== 'none') p.push('--backend', d.backend);
       if (d.bsvDir) p.push('--bsv-dir', d.bsvDir);
       if (d.packageManager) p.push('--package-manager', d.packageManager);
       if (d.network) p.push('--network', d.network);
+      if (d.install === false) p.push('--skip-install');
       /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false in new mode */
       if ((d.mode || 'new') === 'new' && d.glue === false) p.push('--no-glue');
     }
@@ -205,12 +209,14 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     flag('--mode', d.mode || 'new');
     if ((d.mode || 'new') === 'new') {
       if (d.name) flag('--name', '"' + d.name + '"', STR);
+      if (d.starter) flag('--starter', d.starter);
       if (d.frontend && d.frontend !== 'none') flag('--frontend', d.frontend);
       if (d.frontend === 'react' && d.frontendVariant) flag('--variant', d.frontendVariant);
       if (d.backend && d.backend !== 'none') flag('--backend', d.backend);
       if (d.bsvDir) flag('--bsv-dir', d.bsvDir);
       if (d.packageManager) flag('--package-manager', d.packageManager);
       if (d.network) flag('--network', d.network);
+      if (d.install === false) flag('--skip-install');
       /* RECONCILIATION 4: glue defaults on — emit --no-glue only when explicitly false in new mode */
       if ((d.mode || 'new') === 'new' && d.glue === false) flag('--no-glue');
     }

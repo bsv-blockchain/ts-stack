@@ -1,11 +1,11 @@
 {
   "name": "create-bsv-app",
-  "version": "0.1.0",
-  "description": "CLI that installs BSV capabilities (util files built on the abstraction libs) into a project",
+  "version": "1.0.0",
+  "description": "The unified CLI and starter catalogue for creating BSV applications",
   "type": "module",
   "main": "dist/index.js",
   "bin": { "create-bsv-app": "./dist/index.js" },
-  "files": ["dist"],
+  "files": ["dist", ".claude", "LICENSE.txt"],
   "scripts": {
     "build": "tsc",
     "test": "jest",
@@ -25,6 +25,15 @@
     "typescript": "^6.0.3"
   },
   "publishConfig": { "access": "public" },
+  "engines": { "node": ">=22" },
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/helpers/create-bsv-app"
+  },
+  "keywords": ["bsv", "bitcoin", "scaffolding", "starter", "wallet"],
   "ts-standard": {
     "project": "tsconfig.eslint.json",
     "ignore": [

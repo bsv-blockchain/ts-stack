@@ -13,12 +13,15 @@ export interface PlacementResult {
 }
 
 const ROLES: Role[] = ['shared', 'client', 'server']
-const targetRoot = (t: TargetKey): string => (t === 'root' ? '' : t)
+const targetRoot = (config: ProjectConfig, t: TargetKey): string => {
+  if (t === 'root') return ''
+  return config.targets[t] ?? t
+}
 
 function roleTargetsFor (layout: Layout): Record<Role, TargetKey[]> {
   switch (layout) {
-    case 'frontend-only': return { shared: ['root'], client: ['root'], server: [] }
-    case 'backend-only': return { shared: ['root'], client: [], server: ['root'] }
+    case 'frontend-only': return { shared: ['client'], client: ['client'], server: [] }
+    case 'backend-only': return { shared: ['server'], client: [], server: ['server'] }
     case 'monorepo': return { shared: ['client', 'server'], client: ['client'], server: ['server'] }
     default: return { shared: [], client: [], server: [] }
   }
@@ -30,6 +33,7 @@ type AddFile = (map: Map<string, FileSpec>, path: string, content: string) => vo
 
 function placeCapabilityFiles (
   cap: Capability,
+  config: ProjectConfig,
   ctx: CapabilityContext,
   roleTargets: Record<Role, TargetKey[]>,
   bsvDir: string,
@@ -45,7 +49,7 @@ function placeCapabilityFiles (
     const files = roleFiles[role] ?? []
     const rdeps = roleDeps[role] ?? {}
     for (const t of targets) {
-      for (const f of files) add(utilByPath, joinRel(targetRoot(t), bsvDir, f.path), f.content)
+      for (const f of files) add(utilByPath, joinRel(targetRoot(config, t), bsvDir, f.path), f.content)
       Object.assign(deps[t], rdeps)
     }
   }
@@ -53,6 +57,7 @@ function placeCapabilityFiles (
 
 function placeCapabilityGlue (
   cap: Capability,
+  config: ProjectConfig,
   ctx: CapabilityContext,
   roleTargets: Record<Role, TargetKey[]>,
   glueByPath: Map<string, FileSpec>,
@@ -62,7 +67,7 @@ function placeCapabilityGlue (
   const glue = cap.glue(ctx)
   for (const role of ROLES) {
     for (const t of roleTargets[role]) {
-      for (const f of glue[role] ?? []) add(glueByPath, joinRel(targetRoot(t), f.path), f.content)
+      for (const f of glue[role] ?? []) add(glueByPath, joinRel(targetRoot(config, t), f.path), f.content)
     }
   }
 }
@@ -82,8 +87,8 @@ export function planPlacement (config: ProjectConfig, capabilities: Capability[]
   }
 
   for (const cap of capabilities) {
-    placeCapabilityFiles(cap, ctx, roleTargets, config.bsvDir, utilByPath, deps, add)
-    if (config.glue) placeCapabilityGlue(cap, ctx, roleTargets, glueByPath, add)
+    placeCapabilityFiles(cap, config, ctx, roleTargets, config.bsvDir, utilByPath, deps, add)
+    if (config.glue) placeCapabilityGlue(cap, config, ctx, roleTargets, glueByPath, add)
   }
   return { utilFiles: [...utilByPath.values()], glueFiles: [...glueByPath.values()], deps }
 }

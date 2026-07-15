@@ -11,10 +11,13 @@ describe('resolveConfig', () => {
       mode: 'new',
       name: 'demo',
       dir: '.',
+      starter: 'custom',
       stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+      targets: { client: '' },
       bsvDir: 'src/bsv',
       capabilities: ['wallet-connect'],
       glue: true,
+      install: true,
       packageManager: 'npm',
       network: 'test'
     })

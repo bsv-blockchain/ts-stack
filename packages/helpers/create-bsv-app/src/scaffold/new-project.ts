@@ -12,6 +12,10 @@ import { defaultRunCommand } from './run-command.js'
 import { applyCapabilityDeps } from './package-json.js'
 import type { Capability, CapabilityContext } from '../types.js'
 import { assembleAndWrite } from './base-app.js'
+import { getStarter } from '../starters.js'
+import { scaffoldRepositoryStarter } from './repository.js'
+import { writeRootRunner } from './root-runner.js'
+import { installProject } from './install.js'
 
 // Entries that don't count against an "empty" target dir:
 // - .git: a fresh `git init` (or cloned empty repo) is a common pre-scaffold step.
@@ -30,21 +34,21 @@ function ensureEmpty (dir: string): void {
   }
 }
 
-// Independent packages: client/ and server/ are standalone (own package.json,
-// node_modules, lockfile) — no root workspace, so neither app can resolve the
-// other's deps and each is deployable on its own.
+// Client and server stay independently installable/deployable. A tiny root
+// runner is added for generated full-stack projects so one command can run both.
 function scaffoldFrameworks (
   layout: Layout,
   stack: Stack,
   targetDir: string,
+  targets: ProjectConfig['targets'],
   packageManager: PackageManager,
   runCommand: RunCommand
 ): void {
   const opts = { packageManager, runCommand }
   const { frontend: fe, backend: be } = stack
   if (layout === 'monorepo') {
-    if (fe != null) scaffolderFor('react').scaffold({ kind: 'frontend', target: fe }, join(targetDir, 'client'), opts)
-    if (be != null) scaffolderFor('express').scaffold({ kind: 'backend', target: be }, join(targetDir, 'server'), opts)
+    if (fe != null) scaffolderFor('react').scaffold({ kind: 'frontend', target: fe }, join(targetDir, targets.client ?? 'client'), opts)
+    if (be != null) scaffolderFor('express').scaffold({ kind: 'backend', target: be }, join(targetDir, targets.server ?? 'server'), opts)
     return
   }
   if (fe != null) {
@@ -54,26 +58,24 @@ function scaffoldFrameworks (
   }
 }
 
-function resolveClientDir (layout: Layout, targetDir: string): string | undefined {
-  if (layout === 'monorepo') return join(targetDir, 'client')
-  if (layout === 'frontend-only') return targetDir
+function resolveClientDir (layout: Layout, targetDir: string, targets: ProjectConfig['targets']): string | undefined {
+  if (layout === 'monorepo' || layout === 'frontend-only') return join(targetDir, targets.client ?? (layout === 'monorepo' ? 'client' : ''))
   return undefined
 }
 
-function resolveServerDir (layout: Layout, targetDir: string): string | undefined {
-  if (layout === 'monorepo') return join(targetDir, 'server')
-  if (layout === 'backend-only') return targetDir
+function resolveServerDir (layout: Layout, targetDir: string, targets: ProjectConfig['targets']): string | undefined {
+  if (layout === 'monorepo' || layout === 'backend-only') return join(targetDir, targets.server ?? (layout === 'monorepo' ? 'server' : ''))
   return undefined
 }
 
 function writeBaseAppGlue (config: ProjectConfig, layout: Layout, caps: Capability[], targetDir: string): string[] {
   if (!config.glue || layout === 'none') return []
   const ctx: CapabilityContext = { name: config.name, network: config.network, bsvDir: config.bsvDir, stack: config.stack, layout }
-  const clientDir = resolveClientDir(layout, targetDir)
-  const serverDir = resolveServerDir(layout, targetDir)
+  const clientDir = resolveClientDir(layout, targetDir, config.targets)
+  const serverDir = resolveServerDir(layout, targetDir, config.targets)
   const r = assembleAndWrite(caps, ctx, { clientDir, serverDir })
-  const cp = layout === 'monorepo' ? 'client/' : ''
-  const sp = layout === 'monorepo' ? 'server/' : ''
+  const cp = config.targets.client == null || config.targets.client === '' ? '' : `${config.targets.client}/`
+  const sp = config.targets.server == null || config.targets.server === '' ? '' : `${config.targets.server}/`
   return [...r.client.map(p => cp + p), ...r.server.map(p => sp + p)]
 }
 
@@ -84,10 +86,21 @@ export function scaffoldNewProject (
 ): { written: string[], deps: Record<TargetKey, Record<string, string>> } {
   const runCommand = deps.runCommand ?? defaultRunCommand
   const layout = layoutOf(config.stack)
+  const starter = getStarter(config.starter)
+  if (starter === undefined) throw new Error(`unknown starter: ${config.starter}`)
 
   ensureEmpty(targetDir)
   mkdirSync(targetDir, { recursive: true })
-  scaffoldFrameworks(layout, config.stack, targetDir, config.packageManager, runCommand)
+  if (starter.kind === 'repository') {
+    const source = scaffoldRepositoryStarter(starter, targetDir, runCommand)
+    const manifest = manifestFromConfig(config, source)
+    writeProjectManifest(targetDir, manifest)
+    installProject(config, targetDir, runCommand)
+    return { written: [MANIFEST_FILE], deps: { root: {}, client: {}, server: {} } }
+  }
+
+  scaffoldFrameworks(layout, config.stack, targetDir, config.targets, config.packageManager, runCommand)
+  const rootRunner = layout === 'monorepo' ? writeRootRunner(config.name, targetDir, config.packageManager) : []
 
   const caps = resolveCapabilities(config.capabilities)
   const placement = planPlacement(config, caps)
@@ -95,11 +108,12 @@ export function scaffoldNewProject (
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
   const agents = writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
   const baseAppGlue = writeBaseAppGlue(config, layout, caps, targetDir)
-  const written: string[] = [...util.written, ...glue.written, ...agents.written, ...baseAppGlue]
+  const written: string[] = [...util.written, ...glue.written, ...agents.written, ...rootRunner, ...baseAppGlue]
 
-  writeProjectManifest(targetDir, { ...manifestFromConfig(config), capabilities: caps.map(c => c.id) })
+  writeProjectManifest(targetDir, { ...manifestFromConfig(config, { id: starter.id, kind: 'generated' }), capabilities: caps.map(c => c.id) })
   written.push(MANIFEST_FILE)
-  applyCapabilityDeps(targetDir, placement.deps)
+  applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  installProject(config, targetDir, runCommand)
 
   return { written, deps: placement.deps }
 }

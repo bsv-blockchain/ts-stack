@@ -7,18 +7,23 @@ import { manifestFromConfig, writeProjectManifest, MANIFEST_FILE } from './confi
 import { scaffoldNewProject } from './scaffold/new-project.js'
 import { applyCapabilityDeps } from './scaffold/package-json.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
+import { defaultRunCommand } from './scaffold/run-command.js'
+import { installProject } from './scaffold/install.js'
 
 export interface RunResult {
   targetDir: string
   deps: Record<TargetKey, Record<string, string>>
   written: string[]
   skipped: string[]
+  installed?: boolean
+  packageManager?: ProjectConfig['packageManager']
+  starter?: string
 }
 
 export function addCapabilities (
   config: ProjectConfig,
   targetDir: string,
-  opts: { force: boolean }
+  opts: { force: boolean, runCommand?: RunCommand }
 ): { deps: Record<TargetKey, Record<string, string>> } & WriteResult {
   const caps = resolveCapabilities(config.capabilities, { expandRequires: false })
   const placement = planPlacement(config, caps)
@@ -26,7 +31,8 @@ export function addCapabilities (
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
   const agents = writeFiles([{ path: 'AGENTS.md', content: renderAgentsMd(config, caps) }], targetDir, { force: true })
   writeProjectManifest(targetDir, manifestFromConfig(config))
-  applyCapabilityDeps(targetDir, placement.deps)
+  applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  installProject(config, targetDir, opts.runCommand ?? defaultRunCommand)
   return { deps: placement.deps, written: [...util.written, ...glue.written, ...agents.written, MANIFEST_FILE], skipped: util.skipped }
 }
 
@@ -37,8 +43,8 @@ export function applyConfig (
 ): RunResult {
   if (config.mode === 'new') {
     const r = scaffoldNewProject(config, targetDir, { runCommand: opts.runCommand })
-    return { targetDir, deps: r.deps, written: r.written, skipped: [] }
+    return { targetDir, deps: r.deps, written: r.written, skipped: [], installed: config.install, packageManager: config.packageManager, starter: config.starter }
   }
-  const r = addCapabilities(config, targetDir, { force: opts.force ?? false })
-  return { targetDir, deps: r.deps, written: r.written, skipped: r.skipped }
+  const r = addCapabilities(config, targetDir, { force: opts.force ?? false, runCommand: opts.runCommand })
+  return { targetDir, deps: r.deps, written: r.written, skipped: r.skipped, installed: config.install, packageManager: config.packageManager, starter: config.starter }
 }

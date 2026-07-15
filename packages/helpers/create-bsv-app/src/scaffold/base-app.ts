@@ -73,7 +73,8 @@ server.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`)
 `
 
 // Baseline server config — every env the server reads, in one place.
-export const SERVER_CONFIG = `// Centralized server configuration, read from the environment.
+export function serverConfig (ctx: CapabilityContext): string {
+  return `// Centralized server configuration, read from the environment.
 import { PrivateKey } from '@bsv/sdk'
 
 // Server wallet key. Set SERVER_PRIVATE_KEY for a stable identity; a random key is
@@ -84,7 +85,10 @@ export const PORT = Number(process.env.PORT ?? 3000)
 
 // Browser origin allowed by CORS — your client's dev URL by default.
 export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
+
+export const BSV_NETWORK = process.env.BSV_NETWORK ?? '${ctx.network}'
 `
+}
 
 // Default home: connect a wallet, then link out to each installed capability's demo page.
 export const HOME_TEMPLATE = `import { ConnectWallet } from './ConnectWallet.js'
@@ -189,7 +193,7 @@ export function assembleAndWrite (
   }
   if (dirs.serverDir != null) {
     write(dirs.serverDir, 'src/index.ts', assembleBaseFile(SERVER_TEMPLATE, builder, ctx), result.server)
-    write(dirs.serverDir, `${ctx.bsvDir}/config.ts`, SERVER_CONFIG, result.server)
+    write(dirs.serverDir, `${ctx.bsvDir}/config.ts`, serverConfig(ctx), result.server)
   }
   return result
 }

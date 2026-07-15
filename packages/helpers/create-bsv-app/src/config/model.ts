@@ -9,15 +9,19 @@ export type Layout = 'frontend-only' | 'backend-only' | 'monorepo' | 'none'
 export interface FrontendTarget { framework: FrontendFramework, variant: string }
 export interface BackendTarget { framework: BackendFramework }
 export interface Stack { frontend?: FrontendTarget, backend?: BackendTarget }
+export interface TargetPaths { client?: string, server?: string }
 
 export interface ProjectConfig {
   mode: Mode
   name: string
   dir: string
+  starter: string
   stack: Stack
+  targets: TargetPaths
   bsvDir: string
   capabilities: string[]
   glue: boolean
+  install: boolean
   packageManager: PackageManager
   network: Network
 }
@@ -33,4 +37,12 @@ export function layoutOf (stack: Stack): Layout {
   if (fe) return 'frontend-only'
   if (be) return 'backend-only'
   return 'none'
+}
+
+export function defaultTargetPaths (stack: Stack): TargetPaths {
+  const layout = layoutOf(stack)
+  if (layout === 'frontend-only') return { client: '' }
+  if (layout === 'backend-only') return { server: '' }
+  if (layout === 'monorepo') return { client: 'client', server: 'server' }
+  return {}
 }

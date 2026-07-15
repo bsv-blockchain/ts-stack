@@ -43,7 +43,7 @@ describe('serializeSchema', () => {
   test('when conditions survive serialization as plain objects', () => {
     const schema = serializeSchema(null)
     const variant = schema.flatMap(s => s.fields).find(f => f.key === 'frontendVariant')
-    expect(variant?.when).toEqual({ mode: 'new', frontend: 'react' })
+    expect(variant?.when).toEqual({ mode: 'new', starter: 'custom', frontend: 'react' })
   })
 
   test('serializeSchema still excludes the defaultSelected base in new mode and carries ui/desc', () => {
@@ -55,7 +55,7 @@ describe('serializeSchema', () => {
     // backend is its own segmented selector, independent of frontend (backend-only is selectable)
     const backend = schema.flatMap(s => s.fields).find(f => f.key === 'backend')
     expect(backend?.ui).toBe('segmented')
-    expect(backend?.when).toEqual({ mode: 'new' }) // not gated on frontend
+    expect(backend?.when).toEqual({ mode: 'new', starter: 'custom' }) // not gated on frontend
   })
 })
 

@@ -14,17 +14,29 @@ const config: ProjectConfig = {
   mode: 'new',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } },
+  targets: { client: 'client', server: 'server' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }
 
 describe('project manifest', () => {
-  test('manifestFromConfig keeps stack/name/network/bsvDir/capabilities and sets version 1', () => {
-    expect(manifestFromConfig(config)).toEqual({ version: 1, name: 'demo', network: 'test', stack: config.stack, bsvDir: 'src/bsv', capabilities: ['wallet-login'] })
+  test('manifestFromConfig keeps project config and writes v2 starter provenance', () => {
+    expect(manifestFromConfig(config)).toEqual({
+      version: 2,
+      name: 'demo',
+      network: 'test',
+      stack: config.stack,
+      targets: config.targets,
+      bsvDir: 'src/bsv',
+      capabilities: ['wallet-login'],
+      starter: { id: 'custom', kind: 'generated' }
+    })
   })
 
   test('round-trips through disk', () => {
@@ -76,7 +88,7 @@ describe('manifest ops', () => {
 
   test('readValidManifest throws on wrong version', () => {
     writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify({
-      version: 2, name: 'test', network: 'test', stack: {}, bsvDir: 'src/bsv', capabilities: []
+      version: 3, name: 'test', network: 'test', stack: {}, bsvDir: 'src/bsv', capabilities: []
     }) + '\n')
     expect(() => readValidManifest(dir)).toThrow('malformed bsv-scaffold.json')
   })

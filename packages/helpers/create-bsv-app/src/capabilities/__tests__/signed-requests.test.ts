@@ -41,6 +41,8 @@ describe('signed-requests (variant)', () => {
     signedRequests.baseEdits?.({ builder, ctx })
     expect(builder.app.routes).toContainEqual({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: './bsv/SignedRequestDemo', label: 'Signed request demo' })
     expect(builder.server.routes.join()).toContain('verifySignedRequest')
+    expect(builder.server.routes.join()).toContain('consumeNonce')
+    expect(builder.server.routes.join()).not.toContain('async () => true')
   })
   test('demo page renders a removable step-by-step activity log', () => {
     const page = (signedRequests.files(ctx).client ?? []).find(f => f.path === 'SignedRequestDemo.tsx')

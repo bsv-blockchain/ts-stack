@@ -39,10 +39,35 @@ export async function connectDesktopWallet (): Promise<{ wallet: WalletInterface
 }
 `
 
-const CLIENT_CONFIG = `// Centralized client configuration. Vite loads VITE_-prefixed vars from client/.env.
+function clientConfig (ctx: CapabilityContext): string {
+  return `// Centralized client configuration. Vite loads VITE_-prefixed vars from client/.env.
 // Base URL of the server API. Defaults to the dev server; set VITE_API_URL in production
 // (or whenever the client is served from a different origin than the API).
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+
+// The scaffolded network default is concrete and can be overridden per deployment.
+export const BSV_NETWORK = import.meta.env.VITE_BSV_NETWORK ?? '${ctx.network}'
+`
+}
+
+const NONCE_STORE = `// Bounded in-memory replay protection for the generated development server.
+// Replace this with an atomic Redis/DB implementation before horizontally scaling.
+const usedNonces = new Map<string, number>()
+const MAX_NONCES = 10_000
+
+function pruneExpired (now: number): void {
+  for (const [nonce, expiresAt] of usedNonces) {
+    if (expiresAt <= now) usedNonces.delete(nonce)
+  }
+}
+
+export function consumeNonce (nonce: string, expiresAt: Date): boolean {
+  const now = Date.now()
+  pruneExpired(now)
+  if (expiresAt.getTime() <= now || usedNonces.has(nonce) || usedNonces.size >= MAX_NONCES) return false
+  usedNonces.set(nonce, expiresAt.getTime())
+  return true
+}
 `
 
 const SERVER_IDENTITY = `// Fetch the server's identity public key (its wallet's identityKey) once, and cache it.
@@ -288,7 +313,7 @@ export const walletConnect: Capability = {
   description: 'Base: connect any BRC-100 wallet (desktop or mobile/relay) and use it across the app, plus the @bsv/auth proof primitive.',
   roles: ['shared', 'client', 'server'],
   defaultSelected: true,
-  files: () => ({
+  files: (ctx) => ({
     shared: [{ path: 'auth.ts', content: AUTH_UTIL }],
     client: [
       { path: 'walletAcquisition.ts', content: ACQUISITION },
@@ -297,9 +322,10 @@ export const walletConnect: Capability = {
       { path: 'WalletContext.tsx', content: WALLET_CONTEXT },
       { path: 'WalletProviders.tsx', content: PROVIDERS },
       { path: 'ConnectWallet.tsx', content: CONNECT_WALLET },
-      { path: 'config.ts', content: CLIENT_CONFIG },
+      { path: 'config.ts', content: clientConfig(ctx) },
       { path: 'bsv.css', content: BSV_CSS }
-    ]
+    ],
+    server: [{ path: 'nonceStore.ts', content: NONCE_STORE }]
   }),
   baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
     builder.main.imports.push(`import { WalletProviders } from '${bsvImport(ctx, 'WalletProviders')}'`)

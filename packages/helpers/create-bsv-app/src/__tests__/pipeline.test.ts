@@ -14,10 +14,13 @@ const newConfig: ProjectConfig = {
   mode: 'new',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+  targets: { client: '' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }
@@ -26,7 +29,7 @@ test('applyConfig new-mode scaffolds via runCommand and reports skipped=[]', () 
   const calls: string[][] = []
   const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
   const res = applyConfig(newConfig, dir, { runCommand: fake })
-  expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+  expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
   // new-mode expands requires: wallet-login → wallet-connect + wallet-login, so auth.ts comes from wallet-connect
   expect(res.written).toContain('src/bsv/auth.ts')
   expect(res.skipped).toEqual([])

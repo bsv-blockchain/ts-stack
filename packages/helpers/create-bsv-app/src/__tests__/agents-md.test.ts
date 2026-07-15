@@ -9,10 +9,13 @@ const config: ProjectConfig = {
   mode: 'add',
   name: 'demo',
   dir: '.',
+  starter: 'custom',
   stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+  targets: { client: '' },
   bsvDir: 'src/bsv',
   capabilities: ['wallet-connect', 'wallet-login'],
   glue: false,
+  install: false,
   packageManager: 'npm',
   network: 'test'
 }

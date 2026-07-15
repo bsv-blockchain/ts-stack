@@ -15,6 +15,7 @@ import { planPlacement } from '../engine.js'
 import type { Layout, ProjectConfig } from '../config/model.js'
 import { layoutOf } from '../config/model.js'
 import type { Capability } from '../types.js'
+import { getStarter } from '../starters.js'
 
 export interface UiServer { url: string, done: Promise<RunResult>, close: () => void }
 
@@ -70,6 +71,7 @@ function baseGluePaths (layout: Layout): string[] {
 }
 
 function planPaths (config: ProjectConfig, caps: Capability[]): string[] {
+  if (getStarter(config.starter)?.kind === 'repository') return [MANIFEST_FILE]
   const placement = planPlacement(config, caps)
   const rawPaths: string[] = [...placement.utilFiles, ...placement.glueFiles].map(f => f.path)
   rawPaths.push('AGENTS.md', MANIFEST_FILE)

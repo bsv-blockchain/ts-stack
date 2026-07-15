@@ -45,11 +45,6 @@ export async function runPrompts (ctx: { existing: ProjectManifest | null, flags
 export const interactiveConfigPrompt: ConfigProvider = async (ctx) => {
   const p = await import('@clack/prompts') // lazy: keep clack out of the Jest transform
   p.intro('create-bsv-app')
-  const mode = ctx.flags.mode ?? (ctx.existing == null ? 'new' : 'add')
-  if (mode === 'new') {
-    const base = listCapabilities().filter(c => c.defaultSelected === true)
-    if (base.length > 0) p.note(base.map(c => `• ${c.title}`).join('\n'), 'Always included')
-  }
   const ask: Ask = async (field, options) => {
     let res: unknown
     if (field.type === 'text') res = await p.text({ message: field.label, placeholder: typeof field.default === 'string' ? field.default : undefined })

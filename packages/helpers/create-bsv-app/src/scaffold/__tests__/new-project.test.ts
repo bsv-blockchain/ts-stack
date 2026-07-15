@@ -6,13 +6,15 @@ import { join } from 'node:path'
 import { scaffoldNewProject } from '../new-project'
 import type { RunCommand } from '../base-scaffolder'
 import type { ProjectConfig } from '../../config/model'
+import { defaultTargetPaths } from '../../config/model'
 
 let base: string
 beforeEach(() => { base = mkdtempSync(join(tmpdir(), 'cba-np-')) })
 afterEach(() => { rmSync(base, { recursive: true, force: true }) })
 
 function cfg (over: Partial<ProjectConfig>): ProjectConfig {
-  return { mode: 'new', name: 'demo', dir: '.', stack: {}, bsvDir: 'src/bsv', capabilities: ['wallet-login'], glue: false, packageManager: 'npm', network: 'test', ...over }
+  const stack = over.stack ?? {}
+  return { mode: 'new', name: 'demo', dir: '.', starter: 'custom', stack, targets: defaultTargetPaths(stack), bsvDir: 'src/bsv', capabilities: ['wallet-login'], glue: false, install: false, packageManager: 'npm', network: 'test', ...over }
 }
 
 describe('scaffoldNewProject', () => {
@@ -21,7 +23,7 @@ describe('scaffoldNewProject', () => {
     const calls: string[][] = []
     const fake: RunCommand = (command, args) => { calls.push([command, ...args]) }
     scaffoldNewProject(cfg({ stack: { frontend: { framework: 'react', variant: 'react-ts' } } }), dir, { runCommand: fake })
-    expect(calls.some(c => c.includes('vite@latest'))).toBe(true)
+    expect(calls.some(c => c.includes('vite@9.1.1'))).toBe(true)
     expect(existsSync(join(dir, 'src/bsv/auth.ts'))).toBe(true)
     expect(existsSync(join(dir, 'src/bsv/useWalletLogin.tsx'))).toBe(true)
     expect(JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8')).stack.frontend.framework).toBe('react')
@@ -36,7 +38,7 @@ describe('scaffoldNewProject', () => {
     expect(existsSync(join(dir, 'src/bsv/loginRoute.ts'))).toBe(true)
   })
 
-  test('monorepo: client/ (vite) + server/ (skeleton) + duplicated shared, independent packages (no root workspace)', () => {
+  test('monorepo: client/ + server/ + duplicated shared files and a root dev runner', () => {
     const dir = join(base, 'full')
     const fake: RunCommand = () => {}
     scaffoldNewProject(cfg({ stack: { frontend: { framework: 'react', variant: 'react-ts' }, backend: { framework: 'express' } } }), dir, { runCommand: fake })
@@ -44,8 +46,9 @@ describe('scaffoldNewProject', () => {
     expect(existsSync(join(dir, 'client/src/bsv/auth.ts'))).toBe(true)
     expect(existsSync(join(dir, 'server/src/bsv/auth.ts'))).toBe(true) // shared duplicated
     expect(existsSync(join(dir, 'server/src/bsv/loginRoute.ts'))).toBe(true)
-    // Independent packages: no root package.json / workspace stitching them together.
-    expect(existsSync(join(dir, 'package.json'))).toBe(false)
+    const rootPackage = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+    expect(rootPackage.scripts.dev).toBe('node scripts/run-apps.mjs dev')
+    expect(existsSync(join(dir, 'scripts/run-apps.mjs'))).toBe(true)
     expect(existsSync(join(dir, 'pnpm-workspace.yaml'))).toBe(false)
   })
 

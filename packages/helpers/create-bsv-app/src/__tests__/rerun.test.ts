@@ -16,7 +16,7 @@ describe('re-run add flow', () => {
     // First run: scaffold new project with wallet-connect + wallet-login (monorepo with backend)
     const fake: RunCommand = () => {}
     await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--backend', 'express', '--frontend', 'react', '--capabilities', 'wallet-connect,wallet-login', '--yes'],
+      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--backend', 'express', '--frontend', 'react', '--capabilities', 'wallet-connect,wallet-login', '--skip-install', '--yes'],
       undefined,
       { runCommand: fake }
     )
@@ -32,7 +32,7 @@ describe('re-run add flow', () => {
 
     // Second run: --yes add (mode auto-detected from manifest), same capabilities — union with dedup
     await run(
-      ['--dir', dir, '--capabilities', 'wallet-connect,wallet-login', '--yes']
+      ['--dir', dir, '--capabilities', 'wallet-connect,wallet-login', '--skip-install', '--yes']
     )
 
     const after = readValidManifest(dir)
@@ -49,7 +49,7 @@ describe('re-run add flow', () => {
   test('second run via provider: existing manifest passed, capabilities unioned', async () => {
     const fake: RunCommand = () => {}
     await run(
-      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--backend', 'express', '--capabilities', 'wallet-connect,wallet-login', '--yes'],
+      ['--dir', dir, '--mode', 'new', '--name', 'demo', '--backend', 'express', '--capabilities', 'wallet-connect,wallet-login', '--skip-install', '--yes'],
       undefined,
       { runCommand: fake }
     )
@@ -61,10 +61,13 @@ describe('re-run add flow', () => {
         mode: 'add',
         name: existing.name,
         dir: '.',
+        starter: existing.starter?.id ?? 'custom',
         stack: existing.stack,
+        targets: existing.targets ?? {},
         bsvDir: existing.bsvDir,
         capabilities: [...existing.capabilities], // same caps, union handled by seedDraft when using --yes, here provider owns it
         glue: false,
+        install: false,
         packageManager: 'npm',
         network: existing.network
       }

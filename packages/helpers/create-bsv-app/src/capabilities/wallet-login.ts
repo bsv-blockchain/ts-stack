@@ -85,16 +85,11 @@ export function useWalletLogin (opts: UseWalletLoginOptions = {}) {
 const ROUTE = `// Express login route. Mount: app.post('/api/login', loginRoute(serverWallet))
 import type { Request, Response } from 'express'
 import { verifyAuthProof } from './auth.js'
-
-const usedNonces = new Map<string, number>()
+import { consumeNonce } from './nonceStore.js'
 
 export function loginRoute (serverWallet: { verifySignature: (args: any) => Promise<{ valid: boolean }> }) {
   return async (req: Request, res: Response): Promise<void> => {
-    const result = await verifyAuthProof(serverWallet, req.body, { action: 'login' }, (nonce, expiresAt) => {
-      if (usedNonces.has(nonce)) return false
-      usedNonces.set(nonce, expiresAt.getTime())
-      return true
-    })
+    const result = await verifyAuthProof(serverWallet, req.body, { action: 'login' }, consumeNonce)
     if (!result.valid) { res.status(401).json({ error: result.error ?? 'invalid proof' }); return }
     res.json({ identityKey: result.identityKey })
   }

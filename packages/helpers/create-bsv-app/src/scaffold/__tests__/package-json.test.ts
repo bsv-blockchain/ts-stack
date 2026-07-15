@@ -36,7 +36,7 @@ describe('applyCapabilityDeps integration', () => {
     // pre-create client package.json with react already present
     mkdirSync(clientDir, { recursive: true })
     writeFileSync(join(clientDir, 'package.json'), JSON.stringify({ dependencies: { react: '^19.0.0' } }), 'utf8')
-    applyCapabilityDeps(dir, {
+    applyCapabilityDeps(dir, { client: 'client', server: 'server' }, {
       root: {},
       client: { '@bsv/sdk': '^1.0.0', react: '>=18' },
       server: { '@bsv/auth': '^0.1.0' }
