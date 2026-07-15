@@ -135,8 +135,10 @@ export const signedRequests: Capability = {
   }),
   baseEdits: ({ builder, ctx }: { builder: BaseBuilder, ctx: CapabilityContext }) => {
     builder.app.routes.push({ path: '/signed-demo', component: 'SignedRequestDemo', importPath: bsvImport(ctx, 'SignedRequestDemo'), label: 'Signed request demo' })
-    builder.server.imports.push(`import { verifySignedRequest } from '${bsvImport(ctx, 'verifySignedRequest.js')}'`)
-    builder.server.imports.push(`import { consumeNonce } from '${bsvImport(ctx, 'nonceStore.js')}'`)
+    builder.server.imports.push(
+      `import { verifySignedRequest } from '${bsvImport(ctx, 'verifySignedRequest.js')}'`,
+      `import { consumeNonce } from '${bsvImport(ctx, 'nonceStore.js')}'`
+    )
     builder.server.routes.push("app.post('/api/echo', async (req, res) => { const { proof, body } = req.body; const r = await verifySignedRequest(serverWallet, proof, { action: 'echo', body }, consumeNonce); res.status(r.valid ? 200 : 401).json(r) })")
   },
   npmDependencies: () => ({

@@ -11,46 +11,43 @@ function readPackage (dir: string): Record<string, unknown> | null {
 
 function dependenciesOf (pkg: Record<string, unknown> | null): Record<string, string> {
   if (pkg === null) return {}
-  return {
-    ...((pkg.dependencies as Record<string, string> | undefined) ?? {}),
-    ...((pkg.devDependencies as Record<string, string> | undefined) ?? {})
-  }
+  const dependencies = pkg.dependencies as Record<string, string> | undefined
+  const devDependencies = pkg.devDependencies as Record<string, string> | undefined
+  return Object.assign(Object.create(null), dependencies, devDependencies)
 }
 
 function packageName (pkg: Record<string, unknown> | null, dir: string): string {
   return typeof pkg?.name === 'string' && pkg.name.length > 0 ? pkg.name : basename(dir)
 }
 
-/** Infer the common project layouts supported by add mode. */
-export function detectExistingProject (dir: string): ProjectManifest | null {
-  const root = readPackage(dir)
-  const pairs: Array<{ client: string, server: string }> = [
-    { client: 'client', server: 'server' },
-    { client: 'frontend', server: 'backend' }
-  ]
+interface PackagePair { client: string, server: string }
 
-  for (const pair of pairs) {
-    const client = readPackage(join(dir, pair.client))
-    const server = readPackage(join(dir, pair.server))
-    if (client !== null || server !== null) {
-      const stack: Stack = {}
-      const targets: TargetPaths = {}
-      if (client !== null) { stack.frontend = { framework: 'react', variant: 'react-ts' }; targets.client = pair.client }
-      if (server !== null) { stack.backend = { framework: 'express' }; targets.server = pair.server }
-      return {
-        version: 2,
-        name: packageName(root, dir),
-        network: 'test',
-        stack,
-        targets,
-        bsvDir: 'src/bsv',
-        capabilities: [],
-        starter: { id: 'custom', kind: 'generated' }
-      }
-    }
+function manifestForPair (dir: string, root: Record<string, unknown> | null, pair: PackagePair): ProjectManifest | null {
+  const client = readPackage(join(dir, pair.client))
+  const server = readPackage(join(dir, pair.server))
+  if (client === null && server === null) return null
+
+  const stack: Stack = {}
+  const targets: TargetPaths = {}
+  if (client !== null) { stack.frontend = { framework: 'react', variant: 'react-ts' }; targets.client = pair.client }
+  if (server !== null) { stack.backend = { framework: 'express' }; targets.server = pair.server }
+  return projectManifest(packageName(root, dir), stack, targets)
+}
+
+function projectManifest (name: string, stack: Stack, targets: TargetPaths): ProjectManifest {
+  return {
+    version: 2,
+    name,
+    network: 'test',
+    stack,
+    targets,
+    bsvDir: 'src/bsv',
+    capabilities: [],
+    starter: { id: 'custom', kind: 'generated' }
   }
+}
 
-  if (root === null) return null
+function manifestForRoot (dir: string, root: Record<string, unknown>): ProjectManifest | null {
   const deps = dependenciesOf(root)
   const hasReact = deps.react !== undefined
   const hasExpress = deps.express !== undefined
@@ -63,14 +60,21 @@ export function detectExistingProject (dir: string): ProjectManifest | null {
     ? { frontend: { framework: 'react', variant: 'react-ts' } }
     : { backend: { framework: 'express' } }
   const targets: TargetPaths = hasReact ? { client: '' } : { server: '' }
-  return {
-    version: 2,
-    name: packageName(root, dir),
-    network: 'test',
-    stack,
-    targets,
-    bsvDir: 'src/bsv',
-    capabilities: [],
-    starter: { id: 'custom', kind: 'generated' }
+  return projectManifest(packageName(root, dir), stack, targets)
+}
+
+/** Infer the common project layouts supported by add mode. */
+export function detectExistingProject (dir: string): ProjectManifest | null {
+  const root = readPackage(dir)
+  const pairs: PackagePair[] = [
+    { client: 'client', server: 'server' },
+    { client: 'frontend', server: 'backend' }
+  ]
+
+  for (const pair of pairs) {
+    const manifest = manifestForPair(dir, root, pair)
+    if (manifest !== null) return manifest
   }
+
+  return root === null ? null : manifestForRoot(dir, root)
 }

@@ -75,9 +75,7 @@ function resolveBsvDir (raw: Record<string, unknown>): string {
   return bsvDir
 }
 
-// new-mode floor: a new project always gets at least the defaultSelected baseline (e.g. wallet-connect),
-// even when the config names zero capabilities. add mode has no floor.
-function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode, starterId: string): string[] {
+function requestedCapabilityIds (raw: Record<string, unknown>): string[] {
   const capsRaw = raw.capabilities === undefined ? [] : raw.capabilities
   if (!Array.isArray(capsRaw)) throw new ConfigError('capabilities must be an array')
   const capabilities: string[] = []
@@ -86,12 +84,20 @@ function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode, starter
     if (getCapability(c) === undefined) throw new ConfigError(`unknown capability: ${c}`)
     if (!capabilities.includes(c)) capabilities.push(c)
   }
-  const starter = getStarter(starterId)
-  if (mode === 'new' && starter?.supportsCapabilities === true) {
-    for (const c of listCapabilities()) {
-      if (c.defaultSelected === true && !capabilities.includes(c.id)) capabilities.push(c.id)
-    }
-  }
+  return capabilities
+}
+
+// New generated projects always get the defaultSelected baseline even when the
+// config names zero capabilities. Add mode and complete examples have no floor.
+function resolveCapabilityIds (raw: Record<string, unknown>, mode: Mode, starterId: string): string[] {
+  const capabilities = requestedCapabilityIds(raw)
+  const includeDefaults = mode === 'new' && getStarter(starterId)?.supportsCapabilities === true
+  if (!includeDefaults) return capabilities
+
+  const defaults = listCapabilities()
+    .filter(capability => capability.defaultSelected === true)
+    .map(capability => capability.id)
+  for (const id of defaults) if (!capabilities.includes(id)) capabilities.push(id)
   return capabilities
 }
 

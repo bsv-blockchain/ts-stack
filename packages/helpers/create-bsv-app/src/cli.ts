@@ -1,3 +1,4 @@
+import { basename, resolve } from 'node:path'
 import type { ProjectConfig, PackageManager } from './config/model.js'
 import { readValidManifest, type ProjectManifest } from './config/project-manifest.js'
 import { detectExistingProject } from './config/detect.js'
@@ -8,7 +9,6 @@ import type { ConfigProvider } from './prompts.js'
 import { applyConfig, type RunResult } from './pipeline.js'
 import { ConfigError } from './config/validate.js'
 import { getStarter } from './starters.js'
-import { basename, resolve } from 'node:path'
 
 export type StartUi = (opts: { existing: ProjectManifest | null, targetDir: string, runCommand?: RunCommand }) => Promise<RunResult>
 
@@ -60,34 +60,64 @@ const BOOLEAN_FLAGS: Record<string, BooleanFlagHandler> = {
   '--skip-install': (args) => { args.draft.install = false }
 }
 
+function assignModeOrTarget (args: CliArgs, token: string): void {
+  if (token === 'new' || token === 'add') {
+    if (args.draft.mode !== undefined && args.draft.mode !== token) throw new ConfigError('conflicting mode arguments')
+    args.draft.mode = token
+    return
+  }
+  if (token.startsWith('--')) throw new ConfigError(`unknown option: ${token}`)
+  if (args.dir !== undefined) throw new ConfigError(`unexpected argument: ${token}`)
+  args.dir = token
+}
+
+function consumeArgument (args: CliArgs, argv: string[], index: number): number {
+  const token = argv[index]
+  const valueHandler = VALUE_FLAGS[token]
+  if (valueHandler !== undefined) {
+    const value = argv[index + 1]
+    if (value === undefined || value.startsWith('--')) throw new ConfigError(`${token} requires a value`)
+    valueHandler(args, value)
+    return 2
+  }
+
+  const booleanHandler = BOOLEAN_FLAGS[token]
+  if (booleanHandler !== undefined) {
+    booleanHandler(args)
+    return 1
+  }
+
+  assignModeOrTarget(args, token)
+  return 1
+}
+
 export function parseArgs (argv: string[]): CliArgs {
   const args: CliArgs = { yes: false, force: false, ui: false, draft: {} }
   let i = 0
-  while (i < argv.length) {
-    const a = argv[i]
-    if (a in VALUE_FLAGS) {
-      if (argv[i + 1] === undefined || argv[i + 1].startsWith('--')) throw new ConfigError(`${a} requires a value`)
-      VALUE_FLAGS[a](args, argv[i + 1])
-      i += 2
-      continue
-    }
-    if (a in BOOLEAN_FLAGS) {
-      BOOLEAN_FLAGS[a](args)
-      i += 1
-      continue
-    }
-    if (a === 'new' || a === 'add') {
-      if (args.draft.mode !== undefined && args.draft.mode !== a) throw new ConfigError('conflicting mode arguments')
-      args.draft.mode = a
-      i += 1
-      continue
-    }
-    if (a.startsWith('--')) throw new ConfigError(`unknown option: ${a}`)
-    if (args.dir === undefined) args.dir = a
-    else throw new ConfigError(`unexpected argument: ${a}`)
-    i += 1
-  }
+  while (i < argv.length) i += consumeArgument(args, argv, i)
   return args
+}
+
+function existingProject (targetDir: string): ProjectManifest | null {
+  return readValidManifest(targetDir) ?? detectExistingProject(targetDir)
+}
+
+function flagsWithDefaultName (args: CliArgs, existing: ProjectManifest | null, targetDir: string): ConfigDraft {
+  const flags = { ...args.draft }
+  const mode = flags.mode ?? (existing == null ? 'new' : 'add')
+  if (mode === 'new' && flags.name === undefined) flags.name = basename(resolve(targetDir))
+  return flags
+}
+
+async function resolveCliConfig (args: CliArgs, targetDir: string, provider?: ConfigProvider): Promise<ProjectConfig> {
+  if (args.file !== undefined) {
+    return resolveConfigFromFile(args.file, { overrideMode: args.draft.mode })
+  }
+
+  const existing = existingProject(targetDir)
+  if (args.yes) return resolveDraft(seedDraft(existing, flagsWithDefaultName(args, existing, targetDir)))
+  if (provider === undefined) throw new Error('interactive run requires a config provider')
+  return await provider({ existing, flags: args.draft })
 }
 
 export async function run (
@@ -99,29 +129,12 @@ export async function run (
   const initialTargetDir = args.dir ?? '.'
 
   if (args.ui) {
-    const existing = readValidManifest(initialTargetDir) ?? detectExistingProject(initialTargetDir)
+    const existing = existingProject(initialTargetDir)
     const startUi = deps?.startUi ?? (async (o: { existing: ProjectManifest | null, targetDir: string, runCommand?: RunCommand }) => { return await (await import('./ui/ui-server.js')).runUi(o) })
     return await startUi({ existing, targetDir: initialTargetDir, runCommand: deps?.runCommand })
   }
 
-  let config: ProjectConfig
-  if (args.file === undefined) {
-    const existing = readValidManifest(initialTargetDir) ?? detectExistingProject(initialTargetDir)
-    if (args.yes) {
-      const flags = { ...args.draft }
-      if ((flags.mode ?? (existing == null ? 'new' : 'add')) === 'new' && flags.name === undefined) {
-        flags.name = basename(resolve(initialTargetDir))
-      }
-      config = resolveDraft(seedDraft(existing, flags))
-    } else {
-      if (provider === undefined) throw new Error('interactive run requires a config provider')
-      config = await provider({ existing, flags: args.draft })
-    }
-  } else {
-    // The file is the source of truth, but an explicit --mode flag overrides its "mode".
-    config = resolveConfigFromFile(args.file, { overrideMode: args.draft.mode })
-  }
-
+  const config = await resolveCliConfig(args, initialTargetDir, provider)
   const targetDir = args.dir ?? config.dir
   return applyConfig(config, targetDir, { runCommand: deps?.runCommand, force: args.force })
 }

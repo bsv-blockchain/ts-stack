@@ -31,26 +31,27 @@ const joinRel = (...parts: string[]): string => parts.filter(p => p.length > 0).
 
 type AddFile = (map: Map<string, FileSpec>, path: string, content: string) => void
 
-function placeCapabilityFiles (
-  cap: Capability,
-  config: ProjectConfig,
-  ctx: CapabilityContext,
-  roleTargets: Record<Role, TargetKey[]>,
-  bsvDir: string,
-  utilByPath: Map<string, FileSpec>,
-  deps: Record<TargetKey, Record<string, string>>,
+interface FilePlacementState {
+  config: ProjectConfig
+  ctx: CapabilityContext
+  roleTargets: Record<Role, TargetKey[]>
+  bsvDir: string
+  utilByPath: Map<string, FileSpec>
+  deps: Record<TargetKey, Record<string, string>>
   add: AddFile
-): void {
-  const roleFiles = cap.files(ctx)
-  const roleDeps = cap.npmDependencies(ctx)
+}
+
+function placeCapabilityFiles (cap: Capability, state: FilePlacementState): void {
+  const roleFiles = cap.files(state.ctx)
+  const roleDeps = cap.npmDependencies(state.ctx)
   for (const role of ROLES) {
-    const targets = roleTargets[role]
+    const targets = state.roleTargets[role]
     if (targets.length === 0) continue
     const files = roleFiles[role] ?? []
     const rdeps = roleDeps[role] ?? {}
     for (const t of targets) {
-      for (const f of files) add(utilByPath, joinRel(targetRoot(config, t), bsvDir, f.path), f.content)
-      Object.assign(deps[t], rdeps)
+      for (const f of files) state.add(state.utilByPath, joinRel(targetRoot(state.config, t), state.bsvDir, f.path), f.content)
+      Object.assign(state.deps[t], rdeps)
     }
   }
 }
@@ -85,9 +86,10 @@ export function planPlacement (config: ProjectConfig, capabilities: Capability[]
     if (existing != null && existing.content !== content) throw new Error(`file conflict at ${path} between capabilities`)
     map.set(path, { path, content })
   }
+  const filePlacement: FilePlacementState = { config, ctx, roleTargets, bsvDir: config.bsvDir, utilByPath, deps, add }
 
   for (const cap of capabilities) {
-    placeCapabilityFiles(cap, config, ctx, roleTargets, config.bsvDir, utilByPath, deps, add)
+    placeCapabilityFiles(cap, filePlacement)
     if (config.glue) placeCapabilityGlue(cap, config, ctx, roleTargets, glueByPath, add)
   }
   return { utilFiles: [...utilByPath.values()], glueFiles: [...glueByPath.values()], deps }
