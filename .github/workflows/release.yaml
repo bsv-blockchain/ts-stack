@@ -148,6 +148,7 @@ jobs:
       # 5 min is conservative; needed because the downstream `pnpm install --lockfile-only`
       # below would otherwise miss a freshly published version on some mirrors.
       - name: Wait for npm registry propagation
+        if: steps.plan.outputs.mode == 'cascade'
         run: sleep 300
 
       # After publish, the workspace's `^X.Y.Z` cross-references for *downstream* packages
@@ -155,6 +156,7 @@ jobs:
       # newly-published versions and opens a PR with the diff + lockfile update. The PR is
       # idempotent — re-running the workflow updates the existing branch in place.
       - name: Sync published workspace versions
+        if: steps.plan.outputs.mode == 'cascade'
         id: sync-versions
         env:
           SYNC_BRANCH: automation/sync-published-versions
