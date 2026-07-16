@@ -1,76 +1,88 @@
 # @bsv/verifast
 
-Optional C++/WASM (BSV [BDK](https://github.com/bitcoin-sv/bdk)) backend for
-transaction script verification with `@bsv/sdk`.
+Real BSV BDK script verification in WebAssembly for `@bsv/sdk`, with the same
+package working in Node and modern browsers.
 
-## Why
+## Use
 
-`@bsv/sdk` verifies transactions with a pure-TypeScript script interpreter
-(`Spend`). For high-throughput verification you can offload script checks to the
-BSV BDK engine compiled to WASM. This package implements the SDK's
-`BdkVerifierInterface` and plugs into `Transaction.verify`:
+The validated WASM module is bundled and loaded lazily. No artifact path or
+factory is required:
 
 ```ts
 import { Transaction } from '@bsv/sdk'
 import { BdkVerifier } from '@bsv/verifast'
-import createBdkModule from './wasm/bdk-core.mjs' // your build
 
-const verifier = new BdkVerifier(async () => await createBdkModule())
+const verifier = new BdkVerifier()
+const tx = Transaction.fromEF(extendedFormatBytes)
 
-// 4th arg routes script verification through BDK instead of the JS interpreter.
-const ok = await tx.verify('scripts only', undefined, undefined, verifier)
+// The fourth argument replaces the SDK Spend loop with one whole-tx BDK call.
+const valid = await tx.verify('scripts only', undefined, undefined, verifier)
 ```
 
-Strict: the backend's verdict is authoritative; load/marshalling failures throw
-(no silent fallback to the JS interpreter).
+`BdkVerifier` memoises the WebAssembly instance. Keep one verifier for a stream
+of transactions instead of constructing one per transaction.
 
-## How it hooks in
+The same import works through browser bundlers that preserve the emitted WASM
+asset. The repository's Chrome integration test exercises the built package,
+not a browser-specific mock.
 
-`Transaction.verify(chainTracker, feeModel, memoryLimit, verifier?)` gained an
-optional 4th argument (an object implementing `BdkVerifierInterface`). When
-present, the per-input `Spend` loop is skipped and the whole transaction is handed
-to the backend once — BDK operates at whole-transaction granularity, not per input.
+## Verdicts and diagnostics
 
-## Supplying the WASM artifact
+`verifyScripts()` returns `true` for BDK domain `0` and `false` for script or DoS
+failures (domains `1` and `2`). BDK exception responses and unknown ABI domains
+throw `BdkVerificationError`; load and marshalling failures also propagate. The
+adapter never silently falls back to the TypeScript interpreter.
 
-This package ships **no** `.wasm`. The artifact in the BDK repo
-(`module/typesbdk/wasm/bdk-core.{mjs,wasm}`) is a smoke-test stub whose
-verification logic is unvalidated. Build a real one from the BDK C++ source
-(emscripten + boost 1.85 + openssl 3.4) — see the BDK repo
-`module/typesbdk/examples/README.md` — and drop the outputs into
-`src/wasm/bdk-core.mjs` and `src/wasm/bdk-core.wasm` (both gitignored).
+Use the detailed API when the BDK domain and code matter:
 
-The BDK WASM exposes:
-
+```ts
+const result = await verifier.verifyScriptsDetailed({
+  tx,
+  blockHeight: 943816,
+  consensus: true
+})
+// { domain: 0, code: 0 } on success
 ```
-VerifyScript(extendedTX: VectorUInt8, utxoHeights: VectorInt32,
-             blockHeight: int32, consensus: bool, customFlags: VectorUInt32) -> int
+
+An optional custom WASM factory is still supported:
+
+```ts
+const verifier = new BdkVerifier(async () => await createMyBdkModule())
 ```
 
-`BdkVerifier` marshals `tx.toEF()`, per-input source UTXO heights
-(`merklePath.blockHeight`, else `943816`), and a flag bitfield (see
-`src/flags.ts`), then frees the embind vectors.
+## Data and flags
 
-## Scripts
+The adapter marshals `tx.toEF()`, one UTXO height per input, and either an empty
+custom-flags vector (letting BDK calculate era flags) or one identical flag word
+per input. Missing source heights use the post-Chronicle fallback `943816`.
+
+Flag names in `src/flags.ts` map directly to the pinned BSV
+`script_flags.h`, including `MINIMALIF`, `NULLFAIL`, compressed-key, Genesis, and
+Chronicle bits. Unknown names throw instead of being ignored.
+
+## Reproducibility and validation
+
+The bundled module is built from BDK 1.2.2 plus `bitcoin-sv` commit
+`879fc8b42168dd0e608dafd51b39c6dabad37d4d`, Emscripten 4.0.23, Boost 1.85.0,
+and OpenSSL 3.4.0. BDK's `module/typesbdk/wasm/build.sh` downloads hashed inputs,
+performs a clean build, and validates a real mainnet P2PKH spend plus a corrupt
+signature before installing the artifacts.
+
+The VeriFast suite then checks nine deterministic positive and negative vectors
+against both the SDK interpreter and BDK in Node and Chrome.
 
 ```bash
-pnpm --filter @bsv/verifast test       # unit tests (mock wasm) — no artifact needed
-pnpm --filter @bsv/verifast build      # emit dist/ (src only)
-pnpm --filter @bsv/verifast typecheck  # full type check (src + tests)
-pnpm --filter @bsv/verifast bench      # inputs/sec; BDK path runs only if a wasm is present
+pnpm --filter @bsv/verifast typecheck
+pnpm --filter @bsv/verifast build
+pnpm --filter @bsv/verifast test
+pnpm --filter @bsv/verifast test:browser
+pnpm --filter @bsv/verifast bench
 ```
 
-`bench/equivalence.test.ts` asserts the BDK backend agrees with the pure-JS
-interpreter across the corpus; it auto-skips when no wasm is present.
+The benchmark reports median and p95 end-to-end `Transaction.verify` time over
+multiple samples. It deliberately includes EF serialization, WASM boundary
+cost, and BDK parsing; results should be measured on the deployment hardware,
+and the BDK backend should not be assumed faster for every script shape.
 
-> Note: tests/benchmarks resolve `@bsv/sdk` to the **local** monorepo source (via a
-> jest `moduleNameMapper` / tsx) so the new `verify(verifier)` signature is visible
-> despite the repo-wide `@bsv/sdk` version pin. See the design spec's "Monorepo
-> linkage constraint" section.
-
-## Caveats to confirm against a real build
-
-- The `extendedTX` format is assumed to be the BSV EF (BRC-30) emitted by `tx.toEF()`.
-- The flag bit values in `src/flags.ts` follow canonical bsv ordering; confirm against
-  the BDK headers. The equivalence corpus is the guard.
-- `BDK_SUCCESS` is assumed to be `1`; confirm the success return code.
+The retained Apple M3 Max Node and Chrome baseline is in
+`bench/results/2026-07-15-m3-max.md`.

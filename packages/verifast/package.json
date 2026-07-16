@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
@@ -12,8 +12,6 @@
   "types": "dist/mod.d.ts",
   "files": [
     "dist",
-    "src",
-    "mod.ts",
     "README.md"
   ],
   "exports": {
@@ -23,22 +21,24 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-wasm.mjs",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "bench": "tsx bench/benchmark.ts",
+    "test:browser": "pnpm build && node browser/test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@bsv/sdk": "workspace:^",
     "@jest/globals": "^30.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.0.0",
     "jest": "^30.0.0",
+    "puppeteer-core": "^24.42.0",
     "ts-jest": "^29.2.0",
     "ts-standard": "^12.0.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "@bsv/sdk": "workspace:^"
+    "vite": "^8.0.16"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.6"
@@ -47,5 +47,8 @@
     "@bsv/sdk": {
       "optional": false
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

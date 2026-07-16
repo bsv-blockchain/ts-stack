@@ -5,7 +5,7 @@
     "rootDir": ".",
     "declaration": true,
     "types": ["node"],
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "tsBuildInfoFile": "node_modules/.cache/verifast.tsbuildinfo"
   },
   "include": ["mod.ts", "src/**/*.ts"],
   "exclude": ["bench/**", "src/**/__tests/**", "dist", "node_modules"]

@@ -1,12 +1,37 @@
 import type { Transaction } from '@bsv/sdk'
+import createBdkModule from './wasm/bdk-core.mjs'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
 import { mapVerifyFlags } from './flags.js'
 
 /** Height used when an input's source UTXO mined-height is unobtainable (post-Chronicle). */
 const POST_CHRONICLE_HEIGHT_FALLBACK = 943816
 
-/** Return code from BDK VerifyScript that denotes "all scripts valid". */
-const BDK_SUCCESS = 1
+export enum BdkErrorDomain {
+  OK = 0,
+  SCRIPT = 1,
+  DOS = 2,
+  EXCEPTION = 3
+}
+
+export interface BdkVerificationResult {
+  domain: number
+  code: number
+}
+
+export interface BdkVerifyParams {
+  tx: Transaction
+  blockHeight: number
+  consensus: boolean
+  verifyFlags?: string | string[]
+}
+
+/** Raised when BDK reports an exception domain or an unknown ABI domain. */
+export class BdkVerificationError extends Error {
+  constructor (public readonly result: BdkVerificationResult) {
+    super(`BDK verification failed in domain ${result.domain} with code ${result.code}`)
+    this.name = 'BdkVerificationError'
+  }
+}
 
 /** Minimal embind vector surface used by the adapter. */
 interface EmbindVector<T> {
@@ -27,67 +52,71 @@ export interface BdkWasmModule {
     blockHeight: number,
     consensus: boolean,
     customFlags: EmbindVector<number>
-  ) => number
+  ) => BdkVerificationResult
 }
 
-/** Async factory that loads/instantiates the BDK WASM module (e.g. `createBdkModule`). */
+/** Async factory that loads/instantiates the BDK WASM module. */
 export type BdkWasmFactory = () => Promise<BdkWasmModule>
 
 function toVector<T> (ctor: EmbindVectorCtor<T>, values: T[]): EmbindVector<T> {
   const vec = new ctor()
-  for (const v of values) vec.push_back(v)
+  for (const value of values) vec.push_back(value)
   return vec
 }
 
 /**
- * BdkVerifierInterface implementation backed by the BSV BDK engine compiled to WASM.
- * Strict: a non-success return code => false; any thrown error propagates.
+ * Transaction script verifier backed by the BSV BDK engine compiled to WASM.
+ * The bundled module is loaded lazily and memoised. A custom factory remains
+ * supported for testing or for callers that maintain their own BDK build.
  */
 export default class BdkVerifier implements BdkVerifierInterface {
   private module: BdkWasmModule | undefined
   private loading: Promise<BdkWasmModule> | undefined
 
-  /** @param factory loads the WASM module; invoked once, memoised. */
-  constructor (private readonly factory: BdkWasmFactory) {}
+  constructor (private readonly factory: BdkWasmFactory = createBdkModule) {}
 
   private async getModule (): Promise<BdkWasmModule> {
     if (this.module !== undefined) return this.module
-    this.loading ??= this.factory().then((m) => { this.module = m; return m })
+    this.loading ??= this.factory().then((module) => {
+      this.module = module
+      return module
+    })
     return await this.loading
   }
 
-  async verifyScripts (params: {
-    tx: Transaction
-    blockHeight: number
-    consensus: boolean
-    verifyFlags?: string | string[]
-  }): Promise<boolean> {
+  /** Return BDK's structured result without collapsing its error domain. */
+  async verifyScriptsDetailed (params: BdkVerifyParams): Promise<BdkVerificationResult> {
     const bdk = await this.getModule()
-
     const heights = params.tx.inputs.map(
       (input) => input.sourceTransaction?.merklePath?.blockHeight ?? POST_CHRONICLE_HEIGHT_FALLBACK
     )
+    const customFlagValues = params.verifyFlags === undefined
+      ? []
+      : Array<number>(params.tx.inputs.length).fill(mapVerifyFlags(params.verifyFlags))
 
     const extendedTX = toVector(bdk.VectorUInt8, params.tx.toEF())
     const utxoHeights = toVector(bdk.VectorInt32, heights)
-    const customFlags = toVector(
-      bdk.VectorUInt32,
-      [mapVerifyFlags(params.verifyFlags)].filter((f) => f !== 0)
-    )
+    const customFlags = toVector(bdk.VectorUInt32, customFlagValues)
 
     try {
-      const result = bdk.VerifyScript(
+      return bdk.VerifyScript(
         extendedTX,
         utxoHeights,
         params.blockHeight,
         params.consensus,
         customFlags
       )
-      return result === BDK_SUCCESS
     } finally {
       extendedTX.delete()
       utxoHeights.delete()
       customFlags.delete()
     }
+  }
+
+  async verifyScripts (params: BdkVerifyParams): Promise<boolean> {
+    const result = await this.verifyScriptsDetailed(params)
+    if (result.domain === BdkErrorDomain.OK) return true
+    if (result.domain === BdkErrorDomain.SCRIPT || result.domain === BdkErrorDomain.DOS) return false
+    throw new BdkVerificationError(result)
   }
 }
